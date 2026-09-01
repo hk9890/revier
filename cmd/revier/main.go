@@ -9,13 +9,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"text/tabwriter"
 	"time"
 
 	"github.com/hk9890/revier/internal/build"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -26,6 +29,7 @@ usage:
   revier [list] [--json]        list projects, agent state, and targets
   revier open [name]            run-or-raise a project's workspace
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
+  revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
   revier version
@@ -36,6 +40,12 @@ flags:
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
+		// An action's own exit status passes through, so whatever bound the
+		// key sees the failure the command reported and not a generic one.
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.ExitCode())
+		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)
 	}
@@ -71,6 +81,8 @@ func run(args []string) error {
 		return cmdOpen(ctx, a, args)
 	case "go":
 		return cmdGo(ctx, a, args)
+	case "run":
+		return cmdRun(ctx, a, args)
 	case "attach":
 		return cmdAttach(ctx, a, args)
 	case "status":
@@ -247,6 +259,58 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
+}
+
+func cmdRun(ctx context.Context, a *app, args []string) error {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	project := projectFlag(fs)
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 1 {
+		return fmt.Errorf("usage: revier run <action> [-p project]")
+	}
+	p, err := a.resolveProject(*project)
+	if err != nil {
+		return err
+	}
+	argv, err := a.action(p, pos[0])
+	if err != nil {
+		return err
+	}
+	a.remember(p.Name)
+	return runAction(ctx, p, argv)
+}
+
+// action renders the named action's argv against the project. An unknown name
+// is an error naming it: a key bound to nothing must say so, not do nothing.
+func (a *app) action(p core.Project, name string) ([]string, error) {
+	for _, act := range a.cfg.Actions {
+		if act.Name != name {
+			continue
+		}
+		argv, err := core.RenderArgv(p.Project, act.Run)
+		if err != nil {
+			return nil, fmt.Errorf("action %q: %w", name, err)
+		}
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("action %q has an empty run argv", name)
+		}
+		return argv, nil
+	}
+	return nil, fmt.Errorf("no action named %q", name)
+}
+
+// runAction executes an argv in the project directory with the terminal
+// attached, and returns the command's own error so its exit status survives.
+// No shell: the argv is a list, so there is nothing to quote and nothing to
+// inject into.
+func runAction(ctx context.Context, p core.Project, argv []string) error {
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	c.Dir = p.Path
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return c.Run()
 }
 
 func cmdAttach(ctx context.Context, a *app, args []string) error {

@@ -97,3 +97,18 @@ func expand(p revier.Project, s string) (string, error) {
 	}
 	return b.String(), nil
 }
+
+// RenderArgv expands an argv list against a project, for a configured action.
+// It is the one templating route out of this package: an action's run argv
+// and a realization's launch argv are rendered by the same rules, so a user
+// learns one template language.
+func RenderArgv(p revier.Project, argv []string) ([]string, error) {
+	out := make([]string, len(argv))
+	for i, arg := range argv {
+		var err error
+		if out[i], err = expand(p, arg); err != nil {
+			return nil, fmt.Errorf("argv[%d]: %w", i, err)
+		}
+	}
+	return out, nil
+}
