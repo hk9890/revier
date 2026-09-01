@@ -66,6 +66,9 @@ one adapter.
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must
   stay green on a machine without sway.
+- Substrates are not pinned in `.mise.toml`. The live layer exists to run
+  against whatever tmux or sway is installed; pinning one would have hidden the
+  3.4-versus-3.7 format difference that CI caught.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

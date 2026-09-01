@@ -1,6 +1,10 @@
+# tmux and sway are deliberately NOT pinned here. They are the substrates the
+# live test layer drives, and the point of that layer is to run against whatever
+# version is installed: pinning tmux would have hidden the format-output
+# difference between 3.4 and 3.7 that CI caught and a pinned local build never
+# would. Tests skip when a substrate is absent (docs/TESTING.md).
 [tools]
 go = "1.27.0"
-tmux = "3.7"
 "go:gotest.tools/gotestsum" = "1.13.0"
 "go:golang.org/x/tools/cmd/goimports" = "0.30.0"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "2.1.6"
