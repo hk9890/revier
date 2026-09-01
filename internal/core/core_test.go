@@ -3,12 +3,24 @@ package core_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// prepared is the form Go and Survey take: rendered and compiled once, as
+// config.Load does for a real project file.
+func prepared(t *testing.T, p revier.Project) core.Project {
+	t.Helper()
+	out, err := core.PrepareProject(p)
+	if err != nil {
+		t.Fatalf("PrepareProject: %v", err)
+	}
+	return out
+}
 
 // editor is a window-realized target; diff has both realizations; home is the
 // project's workspace on the runtime.
@@ -100,7 +112,7 @@ func TestGoRaisesAnExistingInstance(t *testing.T) {
 	wm.Add("Visual Studio Code", "code")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	ref, err := c.Go(context.Background(), project(), "editor")
+	ref, err := c.Go(context.Background(), prepared(t, project()), "editor")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -116,7 +128,7 @@ func TestGoOpensWhenNothingMatches(t *testing.T) {
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	if _, err := c.Go(context.Background(), project(), "editor"); err != nil {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "editor"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(wm.Opened) != 1 {
@@ -137,7 +149,7 @@ func TestGoTogglesBackToHome(t *testing.T) {
 	wm.SetFocus(editorRef)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), project(), "editor")
+	got, err := c.Go(context.Background(), prepared(t, project()), "editor")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -158,7 +170,7 @@ func TestGoOnHomeDoesNotToggle(t *testing.T) {
 	rt.SetFocus(homeRef)
 	c := &core.Core{Runtime: rt}
 
-	if _, err := c.Go(context.Background(), project(), "home"); err != nil {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(rt.Focuses) != 1 {
@@ -168,23 +180,66 @@ func TestGoOnHomeDoesNotToggle(t *testing.T) {
 
 func TestGoRejectsUnknownTarget(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	if _, err := c.Go(context.Background(), project(), "absent"); !errors.Is(err, core.ErrNoTarget) {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "absent"); !errors.Is(err, core.ErrNoTarget) {
 		t.Errorf("err = %v, want ErrNoTarget", err)
 	}
 }
 
 // A match that constrains nothing would select whichever instance the host
-// happened to list first, so it is refused rather than acted on.
-func TestGoRejectsUnboundedMatch(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("anything", "")
-	c := &core.Core{Runtime: rt}
-	p := revier.Project{Targets: []revier.Target{
+// happened to list first, so it is refused at load rather than acted on.
+func TestPrepareRejectsUnboundedMatch(t *testing.T) {
+	p := revier.Project{Name: "loose", Targets: []revier.Target{
 		{Name: "loose", Runtime: &revier.Realization{Launch: []string{"x"}}},
 	}}
 
-	if _, err := c.Go(context.Background(), p, "loose"); !errors.Is(err, core.ErrUnboundedMatch) {
-		t.Errorf("err = %v, want ErrUnboundedMatch", err)
+	_, err := core.PrepareProject(p)
+	if !errors.Is(err, core.ErrUnboundedMatch) {
+		t.Fatalf("err = %v, want ErrUnboundedMatch", err)
+	}
+	if !strings.Contains(err.Error(), `"loose"`) || !strings.Contains(err.Error(), "runtime") {
+		t.Errorf("error should name the target and the realization: %v", err)
+	}
+}
+
+// A pattern that does not parse and a template that does not render are load
+// failures naming the project, not keystroke failures and not a silently
+// unavailable project on the dashboard.
+func TestPrepareReportsBadPatternsAndTemplates(t *testing.T) {
+	cases := []struct {
+		name string
+		real revier.Realization
+		want string
+	}{
+		{"bad regex", revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "("}}, "error parsing regexp"},
+		{"missing key", revier.Realization{Launch: []string{"{{.Vars.absent}}"}, Match: revier.Match{Class: "^x$"}}, "absent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := revier.Project{Name: "broken", Targets: []revier.Target{{Name: "home", Home: true, Window: &tc.real}}}
+			_, err := core.Prepare([]revier.Project{p})
+			if err == nil {
+				t.Fatal("want an error")
+			}
+			for _, want := range []string{tc.want, `"broken"`, `"home"`} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q should mention %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// Prepare hands hosts literals: after it, no realization carries a template.
+func TestPreparedProjectIsRendered(t *testing.T) {
+	p := prepared(t, revier.Project{
+		Name: "revier", Path: "/p",
+		Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "{{.Name}}", Launch: []string{"x", "{{.Path}}"}, Match: revier.Match{Title: "^{{.Name}}$"},
+		}}},
+	})
+	r := p.Targets[0].Runtime
+	if r.Name != "revier" || r.Launch[1] != "/p" || r.Match.Title != "^revier$" {
+		t.Errorf("realization not rendered: %+v", r)
 	}
 }
 
@@ -193,7 +248,7 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	c := &core.Core{Runtime: rt} // no window host
 
-	views, err := c.Survey(context.Background(), []revier.Project{project()})
+	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -227,7 +282,7 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 		}},
 	}
 
-	views, err := c.Survey(context.Background(), []revier.Project{project()})
+	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -249,7 +304,7 @@ func TestSurveySurvivesAProbeError(t *testing.T) {
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
 	}
 
-	views, err := c.Survey(context.Background(), []revier.Project{project()})
+	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey should not fail: %v", err)
 	}
@@ -277,7 +332,7 @@ func TestToggleBackIgnoresOtherHostsIDs(t *testing.T) {
 			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
 	}}
 
-	got, err := c.Go(context.Background(), p, "diff")
+	got, err := c.Go(context.Background(), prepared(t, p), "diff")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -305,7 +360,7 @@ func TestToggleBackWorksOnRuntimeWhenItIsTheAuthority(t *testing.T) {
 			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
 	}}
 
-	got, err := c.Go(context.Background(), p, "diff")
+	got, err := c.Go(context.Background(), prepared(t, p), "diff")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}

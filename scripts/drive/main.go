@@ -62,10 +62,12 @@ func main() {
 
 	host := &tmux.Host{Socket: socket, Session: "revier-drive"}
 	c := &core.Core{Runtime: host}
+	project, err := core.PrepareProject(demoProject())
+	fatal(err)
 
 	switch os.Args[1] {
 	case "survey":
-		views, err := c.Survey(ctx, []revier.Project{demoProject()})
+		views, err := c.Survey(ctx, []core.Project{project})
 		fatal(err)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -76,7 +78,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: drive go <target>")
 			os.Exit(2)
 		}
-		ref, err := c.Go(ctx, demoProject(), revier.TargetName(os.Args[2]))
+		ref, err := c.Go(ctx, project, revier.TargetName(os.Args[2]))
 		fatal(err)
 		fmt.Printf("focused %s (%s) on %s\n", ref.Title, ref.ID, ref.Host)
 

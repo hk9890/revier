@@ -52,6 +52,13 @@ func (c *Core) hosts() []revier.Host {
 // Resolve reports which host and realization serve a target. It returns
 // ErrNoHost when the target declares no realization for any configured host.
 func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error) {
+	host, real, _, err := c.resolve(t)
+	return host, real, err
+}
+
+// resolve is Resolve plus which side of the host split answered, so the caller
+// can pick the compiled match that belongs to the winning realization.
+func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier.HostKind, error) {
 	window, hasWindow := revier.Host(nil), false
 	if c.Window != nil && t.Window != nil {
 		window, hasWindow = c.Window, true
@@ -63,17 +70,31 @@ func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error)
 
 	switch {
 	case t.Prefer == revier.HostRuntime && hasRuntime:
-		return runtime, *t.Runtime, nil
+		return runtime, *t.Runtime, revier.HostRuntime, nil
 	case t.Prefer == revier.HostWindow && hasWindow:
-		return window, *t.Window, nil
+		return window, *t.Window, revier.HostWindow, nil
 	case hasWindow:
 		// The default rule. A separate window is what a desktop user expects;
 		// `prefer = "runtime"` on the target overrides it.
-		return window, *t.Window, nil
+		return window, *t.Window, revier.HostWindow, nil
 	case hasRuntime:
-		return runtime, *t.Runtime, nil
+		return runtime, *t.Runtime, revier.HostRuntime, nil
 	}
-	return nil, revier.Realization{}, ErrNoHost
+	return nil, revier.Realization{}, "", ErrNoHost
+}
+
+// resolveAt resolves the i-th target of a prepared project, returning the
+// compiled match of the realization that won.
+func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
+	host, real, kind, err := c.resolve(p.Targets[i])
+	if err != nil {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, err
+	}
+	m := p.compiled[i].runtime
+	if kind == revier.HostWindow {
+		m = p.compiled[i].window
+	}
+	return host, real, m, nil
 }
 
 // snapshot is one bulk listing per host, taken once and matched against every
@@ -93,36 +114,27 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 	return s, nil
 }
 
-// find returns the first instance of the host that satisfies the realization.
-func find(s snapshot, h revier.Host, r revier.Realization) (revier.Instance, bool, error) {
-	if r.Match.IsZero() {
-		return revier.Instance{}, false, ErrUnboundedMatch
-	}
-	m, err := r.Match.Compile()
-	if err != nil {
-		return revier.Instance{}, false, err
-	}
+// find returns the first instance of the host that satisfies the match. The
+// match was compiled at load, so this is a scan and nothing else.
+func find(s snapshot, h revier.Host, m revier.CompiledMatch) (revier.Instance, bool) {
 	for _, i := range s[h.Name()] {
 		if m.Matches(i) {
-			return i, true, nil
+			return i, true
 		}
 	}
-	return revier.Instance{}, false, nil
+	return revier.Instance{}, false
 }
 
 // Go runs-or-raises a target. Pressing the same key twice returns to the
 // project's home target, which is what makes a binding a round trip rather than
 // a one-way jump.
-func (c *Core) Go(ctx context.Context, p revier.Project, name revier.TargetName) (revier.TargetRef, error) {
-	p, err := Render(p)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
-	t, ok := p.Target(name)
+func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName) (revier.TargetRef, error) {
+	i, ok := p.index(name)
 	if !ok {
 		return revier.TargetRef{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
 	}
-	host, real, err := c.Resolve(t)
+	t := p.Targets[i]
+	host, real, m, err := c.resolveAt(p, i)
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
@@ -131,10 +143,7 @@ func (c *Core) Go(ctx context.Context, p revier.Project, name revier.TargetName)
 		return revier.TargetRef{}, err
 	}
 
-	inst, found, err := find(snap, host, real)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
+	inst, found := find(snap, host, m)
 	if !found {
 		ref, err := host.Open(ctx, real)
 		if err != nil {
@@ -205,27 +214,24 @@ func (c *Core) focusedOn(ctx context.Context, ref revier.TargetRef) bool {
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
 // local matching for every project.
-func (c *Core) Survey(ctx context.Context, projects []revier.Project) ([]revier.ProjectView, error) {
+//
+// Every project here is already rendered and compiled; a project that could
+// not be was refused at load, so the survey has no per-project error path and
+// does no work that a previous refresh did not also have to do.
+func (c *Core) Survey(ctx context.Context, projects []Project) ([]revier.ProjectView, error) {
 	snap, err := c.snapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	views := make([]revier.ProjectView, 0, len(projects))
 	for _, p := range projects {
-		rendered, err := Render(p)
-		if err != nil {
-			// One unrenderable project must not blank the dashboard; it is
-			// reported as a project with no available targets.
-			views = append(views, revier.ProjectView{Project: p})
-			continue
-		}
-		views = append(views, c.view(ctx, snap, rendered))
+		views = append(views, c.view(ctx, snap, p))
 	}
 	return views, nil
 }
 
-func (c *Core) view(ctx context.Context, snap snapshot, p revier.Project) revier.ProjectView {
-	v := revier.ProjectView{Project: p}
+func (c *Core) view(ctx context.Context, snap snapshot, p Project) revier.ProjectView {
+	v := revier.ProjectView{Project: p.Project}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
@@ -233,13 +239,13 @@ func (c *Core) view(ctx context.Context, snap snapshot, p revier.Project) revier
 	// been given its own window.
 	seen := map[string]bool{}
 
-	for _, t := range p.Targets {
+	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
-		host, real, err := c.Resolve(t)
+		host, _, m, err := c.resolveAt(p, i)
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()
-			if inst, found, err := find(snap, host, real); err == nil && found {
+			if inst, found := find(snap, host, m); found {
 				tv.Ref = inst.Ref
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref

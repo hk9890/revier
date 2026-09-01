@@ -3,7 +3,9 @@
 //
 // Validation happens here rather than at the keystroke. A match that
 // constrains nothing, a project with no home target, or two targets sharing a
-// key are all rejected at load, where the message can name the file.
+// key are all rejected at load, where the message can name the file. So is a
+// template that does not render or a pattern that does not compile: projects
+// leave this package prepared (core.Project), with that work done once.
 package config
 
 import (
@@ -16,6 +18,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -62,7 +65,7 @@ func Root() (string, error) {
 // Load reads the global config and every project under <root>/projects.
 // A missing root or a missing config.toml is not an error: revier starts with
 // no projects rather than refusing to run.
-func Load(root string) (*Config, []revier.Project, error) {
+func Load(root string) (*Config, []core.Project, error) {
 	cfg := &Config{}
 	cfgPath := filepath.Join(root, "config.toml")
 	if _, err := toml.DecodeFile(cfgPath, cfg); err != nil && !os.IsNotExist(err) {
@@ -78,7 +81,7 @@ func Load(root string) (*Config, []revier.Project, error) {
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
 // across machines.
-func LoadProjects(dir string) ([]revier.Project, error) {
+func LoadProjects(dir string) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -95,7 +98,7 @@ func LoadProjects(dir string) ([]revier.Project, error) {
 	}
 	sort.Strings(names)
 
-	projects := make([]revier.Project, 0, len(names))
+	projects := make([]core.Project, 0, len(names))
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -112,11 +115,13 @@ func LoadProjects(dir string) ([]revier.Project, error) {
 	return projects, nil
 }
 
-// LoadProject reads and validates one project file.
-func LoadProject(path string) (revier.Project, error) {
+// LoadProject reads, validates, and prepares one project file. Every error
+// names the file: a rendering or compile failure is reported here, at load,
+// and never reaches a keystroke.
+func LoadProject(path string) (core.Project, error) {
 	var p revier.Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
-		return revier.Project{}, fmt.Errorf("%s: %w", path, err)
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
 	if p.Name == "" {
 		// Fall back to the file stem so a project file need not repeat its own
@@ -124,14 +129,19 @@ func LoadProject(path string) (revier.Project, error) {
 		p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 	}
 	if err := Validate(p); err != nil {
-		return revier.Project{}, fmt.Errorf("%s: %w", path, err)
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
-	return p, nil
+	prepared, err := core.PrepareProject(p)
+	if err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return prepared, nil
 }
 
-// Validate rejects a project that would fail at the keystroke instead of at
-// load. Every rule here names a failure that is invisible until the key is
-// pressed.
+// Validate rejects a project whose structure would fail at the keystroke
+// instead of at load. Every rule here names a failure that is invisible until
+// the key is pressed. Whether a template renders and a pattern compiles is
+// core.PrepareProject's to check; LoadProject runs both.
 func Validate(p revier.Project) error {
 	var errs []error
 
@@ -177,9 +187,6 @@ func Validate(p revier.Project) error {
 				// happens to list first, so run-or-raise would raise a random
 				// window.
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
-			}
-			if _, err := r.Match.Compile(); err != nil {
-				errs = append(errs, fmt.Errorf("target %q %s realization: %w", t.Name, kind, err))
 			}
 			if len(r.Launch) == 0 {
 				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv", t.Name, kind))

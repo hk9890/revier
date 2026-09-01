@@ -166,11 +166,15 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 		},
 	}
 
-	homeRef, err := cr.Go(c, p, "home")
+	prepared, err := core.PrepareProject(p)
+	if err != nil {
+		t.Fatalf("PrepareProject: %v", err)
+	}
+	homeRef, err := cr.Go(c, prepared, "home")
 	if err != nil {
 		t.Fatalf("open home: %v", err)
 	}
-	diffRef, err := cr.Go(c, p, "diff")
+	diffRef, err := cr.Go(c, prepared, "diff")
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
@@ -179,7 +183,7 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 
 	// Opening left diff focused, so the second press is the round trip home.
-	back, err := cr.Go(c, p, "diff")
+	back, err := cr.Go(c, prepared, "diff")
 	if err != nil {
 		t.Fatalf("toggle back: %v", err)
 	}
@@ -188,7 +192,7 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 
 	// Third press raises the existing window rather than opening a duplicate.
-	again, err := cr.Go(c, p, "diff")
+	again, err := cr.Go(c, prepared, "diff")
 	if err != nil {
 		t.Fatalf("raise diff: %v", err)
 	}

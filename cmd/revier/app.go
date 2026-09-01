@@ -17,7 +17,7 @@ import (
 // core wired to the hosts this machine actually has.
 type app struct {
 	cfg       *config.Config
-	projects  []revier.Project
+	projects  []core.Project
 	state     *state.State
 	stateRoot string
 	core      *core.Core
@@ -50,13 +50,13 @@ func newApp(ctx context.Context) (*app, error) {
 	}, nil
 }
 
-func (a *app) project(name revier.ProjectName) (revier.Project, bool) {
+func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 	for _, p := range a.projects {
 		if p.Name == name {
 			return p, true
 		}
 	}
-	return revier.Project{}, false
+	return core.Project{}, false
 }
 
 // resolveProject decides which project a command acts on, in the order a user
@@ -70,11 +70,11 @@ func (a *app) project(name revier.ProjectName) (revier.Project, bool) {
 // Step 3 is why state exists. A keybinding pressed while the editor is focused
 // has no working directory and no focused workspace to read, so without a
 // remembered project "go back to the terminal" could not be answered.
-func (a *app) resolveProject(explicit string) (revier.Project, error) {
+func (a *app) resolveProject(explicit string) (core.Project, error) {
 	if explicit != "" {
 		p, ok := a.project(revier.ProjectName(explicit))
 		if !ok {
-			return revier.Project{}, fmt.Errorf("no project named %q", explicit)
+			return core.Project{}, fmt.Errorf("no project named %q", explicit)
 		}
 		return p, nil
 	}
@@ -88,14 +88,14 @@ func (a *app) resolveProject(explicit string) (revier.Project, error) {
 			return p, nil
 		}
 	}
-	return revier.Project{}, fmt.Errorf("no project for this directory, and none remembered; pass --project")
+	return core.Project{}, fmt.Errorf("no project for this directory, and none remembered; pass --project")
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
 // longest match so a project nested inside another wins.
-func (a *app) projectForPath(dir string) (revier.Project, bool) {
+func (a *app) projectForPath(dir string) (core.Project, bool) {
 	dir = expandHome(dir)
-	best, bestLen := revier.Project{}, -1
+	best, bestLen := core.Project{}, -1
 	for _, p := range a.projects {
 		root := filepath.Clean(expandHome(p.Path))
 		if root == "" {

@@ -135,15 +135,6 @@ func TestValidateRejects(t *testing.T) {
 			"declares no realization",
 		},
 		{
-			"bad regex",
-			revier.Project{Path: "/p", Targets: []revier.Target{
-				{Name: "a", Home: true, Window: &revier.Realization{
-					Launch: []string{"x"}, Match: revier.Match{Class: "("},
-				}},
-			}},
-			"error parsing regexp",
-		},
-		{
 			"no path",
 			revier.Project{Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
 			"no path",
@@ -166,6 +157,46 @@ func TestValidateRejects(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A pattern that does not compile and a template that does not render are
+// refused at load, naming the file, like every other invalid project.
+func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
+	cases := map[string]string{
+		"bad regex":   strings.Replace(valid, `class = "^code$"`, `class = "("`, 1),
+		"missing key": strings.Replace(valid, `"{{.Path}}"`, `"{{.Vars.absent}}"`, 1),
+		"empty match": strings.Replace(valid, `match = { class = "^code$" }`, `match = { }`, 1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := write(t, dir, "broken.toml", body)
+			_, err := config.LoadProject(path)
+			if err == nil {
+				t.Fatal("want an error")
+			}
+			if !strings.Contains(err.Error(), path) {
+				t.Errorf("error should name the file: %v", err)
+			}
+		})
+	}
+}
+
+// Projects leave Load prepared: templates rendered, so a host never sees one.
+func TestLoadProjectRendersTemplates(t *testing.T) {
+	dir := t.TempDir()
+	p, err := config.LoadProject(write(t, dir, "revier.toml", valid))
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	home, _ := p.Home()
+	if home.Runtime.Match.Title != "^session:revier$" {
+		t.Errorf("match title = %q, want it rendered", home.Runtime.Match.Title)
+	}
+	editor, _ := p.Target("editor")
+	if editor.Window.Launch[1] != "/home/hans/dev/github/revier" {
+		t.Errorf("launch = %v, want it rendered", editor.Window.Launch)
 	}
 }
 
