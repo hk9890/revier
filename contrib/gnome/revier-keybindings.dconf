@@ -1,0 +1,29 @@
+# revier's GNOME keybindings, in the shape gsettings-daemon stores them.
+#
+# Load them under /org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/
+# with install-keybindings.sh, which also appends these four paths to the
+# custom-keybindings list. The bindings already in that list stay as they are.
+#
+# The commands run through a login shell so revier is found on the same PATH a
+# terminal has. Each is one process per keypress: it does its one thing and
+# exits.
+
+[revier-popup]
+binding='<Alt>space'
+command='sh -lc "revier-popup"'
+name='revier: picker'
+
+[revier-home]
+binding='<Shift><Control>u'
+command='sh -lc "revier go home"'
+name='revier: workspace'
+
+[revier-editor]
+binding='<Shift><Control>o'
+command='sh -lc "revier go editor"'
+name='revier: editor'
+
+[revier-web]
+binding='<Shift><Control>i'
+command='sh -lc "revier go web"'
+name='revier: web'

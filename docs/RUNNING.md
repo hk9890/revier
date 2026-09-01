@@ -152,3 +152,17 @@ kitten @ close-window --match 'title:^session:demo$'      # or close-window per 
 Every `kitten @` command above addresses the socket of the kitty it runs
 inside. Pass `--to unix:@kitty-<pid>` to reach another process; the pids are
 the kitty entries in `wctl list --json`.
+
+## Verify a keybinding without pressing it
+
+A binding is a command in `contrib/gnome/revier-keybindings.dconf`. Run that
+command by hand, with the same login shell the binding uses, and watch focus:
+
+```bash
+sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title
+sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title   # back at the workspace
+hyperfine --warmup 3 -N './bin/revier go home -p demo'               # the keypress budget
+```
+
+Installing the bindings is the user's step, never a verification step: it
+rewrites their desktop configuration.

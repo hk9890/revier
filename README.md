@@ -17,9 +17,9 @@ territory.
 Early, but usable. There is no release yet; build from source.
 
 Working: project files, run-or-raise with toggle-back, agent state for Claude
-Code (opencode is recognised but reports no state), kitty and tmux runtime
-hosts, a GNOME window host, the TUI, and every command below. Not built yet:
-desktop keybinding integration.
+Code (opencode is recognised but reports no state), external probes, kitty and
+tmux runtime hosts, a GNOME window host, the TUI, every command below, and the
+GNOME keybindings under `contrib/`.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
@@ -43,6 +43,32 @@ project.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
+
+## Keybindings
+
+revier is one process per keypress: a desktop binding runs `revier go
+<target>` and exits. `contrib/gnome/` holds the GNOME bindings that replace
+the shell implementation's `os-*` shortcuts, on the same keys:
+
+| Key | Runs |
+|---|---|
+| `Alt+Space` | `revier-popup`: the TUI in a kitty window of class `revier-popup`, or the one already open |
+| `Ctrl+Shift+U` | `revier go home` |
+| `Ctrl+Shift+O` | `revier go editor` |
+| `Ctrl+Shift+I` | `revier go web` |
+
+To install:
+
+1. Put `revier` and `contrib/gnome/revier-popup` on the PATH a login shell
+   has, for example in `~/.local/bin/`.
+2. Run `contrib/gnome/install-keybindings.sh`. It loads
+   `revier-keybindings.dconf` and appends its four entries to the
+   custom-keybindings list; the entries already there are left as they are.
+3. Disable the `os-*` bindings that use the same keys, in Settings > Keyboard,
+   or GNOME fires both.
+
+Placement of the popup is a compositor rule, not revier's: on GNOME, a
+`wctl place` line in `revier-popup` after the launch.
 
 ## How it works
 
