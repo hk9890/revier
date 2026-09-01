@@ -8,6 +8,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/internal/adapter/kitty"
+	"github.com/hk9890/revier/internal/adapter/opencode"
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -31,7 +32,7 @@ func windowAdapters() map[string]revier.WindowController {
 }
 
 func probes() []revier.AgentProbe {
-	return []revier.AgentProbe{&claude.Probe{}}
+	return []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
 }
 
 // preference order used when config names none.
