@@ -85,13 +85,8 @@ go test -run='^$' -bench='Survey|Render|MatchCompile' -benchtime=200x ./internal
 ```
 
 `BenchmarkSurvey90` is the size that matters: ninety projects is what this
-machine actually has. Measured at that size, host calls stay constant - the
-design's central claim - while `Render` and `Match.Compile` are recomputed every
-refresh from inputs that never change.
-
-Matching is O(targets x instances), and instances grow with the number of open
-projects. It is inexpensive at ninety and it is still quadratic; measure before
-assuming it stays free.
+machine actually has. What the numbers mean, and what follows from them, is
+[design/performance.md](design/performance.md).
 
 A change is green when `mise run quality:full` passes. Driving the product by
 hand is [RUNNING.md](RUNNING.md)'s, and it is never a substitute for a layer.
