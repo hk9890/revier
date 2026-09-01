@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
@@ -45,24 +46,26 @@ const hostNone = "none"
 
 // selectHosts picks the adapters for this machine.
 //
-// A host named in config that fails Probe is a hard error: the user asked for
-// it by name and silently using another would hide a broken setup. An
-// unnamed preference list is a search, so a failure there just moves on.
+// A configured list is a preference order: each name is tried until one probes
+// successfully. If none does, that is a hard error naming all of them - the
+// user asked for these by name, and silently falling back to an adapter they
+// did not list would hide a broken setup. With no list configured the defaults
+// are searched and finding nothing is survivable.
 func selectHosts(ctx context.Context, cfg *config.Config) (revier.Runtime, revier.WindowController, error) {
-	rt, err := selectRuntime(ctx, cfg.Hosts.Runtime)
+	rt, err := selectRuntime(ctx, cfg.Hosts.Runtime, runtimeAdapters())
 	if err != nil {
 		return nil, nil, err
 	}
-	win, err := selectWindow(ctx, cfg.Hosts.Window)
+	win, err := selectWindow(ctx, cfg.Hosts.Window, windowAdapters())
 	if err != nil {
 		return nil, nil, err
 	}
 	return rt, win, nil
 }
 
-func selectRuntime(ctx context.Context, want []string) (revier.Runtime, error) {
-	adapters := runtimeAdapters()
+func selectRuntime(ctx context.Context, want []string, adapters map[string]revier.Runtime) (revier.Runtime, error) {
 	if len(want) > 0 {
+		var errs []error
 		for _, name := range want {
 			if name == hostNone {
 				return nil, nil
@@ -72,10 +75,12 @@ func selectRuntime(ctx context.Context, want []string) (revier.Runtime, error) {
 				return nil, fmt.Errorf("unknown runtime host %q", name)
 			}
 			if err := h.Probe(ctx); err != nil {
-				return nil, fmt.Errorf("runtime host %q is configured but unusable: %w", name, err)
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
+				continue
 			}
 			return h, nil
 		}
+		return nil, fmt.Errorf("no configured runtime host is usable: %w", errors.Join(errs...))
 	}
 	for _, name := range defaultRuntimeOrder {
 		if h := adapters[name]; h != nil && h.Probe(ctx) == nil {
@@ -86,9 +91,9 @@ func selectRuntime(ctx context.Context, want []string) (revier.Runtime, error) {
 	return nil, nil
 }
 
-func selectWindow(ctx context.Context, want []string) (revier.WindowController, error) {
-	adapters := windowAdapters()
+func selectWindow(ctx context.Context, want []string, adapters map[string]revier.WindowController) (revier.WindowController, error) {
 	if len(want) > 0 {
+		var errs []error
 		for _, name := range want {
 			if name == hostNone {
 				return nil, nil
@@ -98,10 +103,12 @@ func selectWindow(ctx context.Context, want []string) (revier.WindowController, 
 				return nil, fmt.Errorf("unknown window host %q", name)
 			}
 			if err := h.Probe(ctx); err != nil {
-				return nil, fmt.Errorf("window host %q is configured but unusable: %w", name, err)
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
+				continue
 			}
 			return h, nil
 		}
+		return nil, fmt.Errorf("no configured window host is usable: %w", errors.Join(errs...))
 	}
 	for _, name := range defaultWindowOrder {
 		if h := adapters[name]; h != nil && h.Probe(ctx) == nil {

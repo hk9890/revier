@@ -108,7 +108,7 @@ func capture(t *testing.T, args ...string) string {
 	}()
 
 	runErr := run(args)
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 	out := <-done
 

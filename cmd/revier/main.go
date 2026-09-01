@@ -147,9 +147,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
+	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
 	for _, v := range views {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 			v.Project.Name, runState(v), agentSummary(v), targetSummary(v))
 	}
 	return w.Flush()

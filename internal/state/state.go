@@ -86,9 +86,9 @@ func (s *State) Save(root string) error {
 	if err != nil {
 		return fmt.Errorf("create temp state: %w", err)
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write temp state: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
