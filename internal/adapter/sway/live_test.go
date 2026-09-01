@@ -8,10 +8,10 @@ package sway_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -60,18 +60,28 @@ func compositor(t *testing.T) *sway.Host {
 		_ = cmd.Wait()
 		_ = logf.Close()
 	})
+	// Clients reach the compositor through the Wayland socket it announces
+	// in its log, in the runtime dir it was given; both go to every client
+	// the host launches.
 	h := &sway.Host{Socket: socket}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := h.Probe(context.Background()); err == nil {
+		log, _ := os.ReadFile(filepath.Join(dir, "sway.log"))
+		display := displayPattern.FindSubmatch(log)
+		if display != nil && h.Probe(context.Background()) == nil {
+			h.Env = []string{"WAYLAND_DISPLAY=" + string(display[1]), "XDG_RUNTIME_DIR=" + runtime}
 			return h
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	log, _ := os.ReadFile(filepath.Join(dir, "sway.log"))
-	t.Fatalf("sway did not answer on %s within 15s:\n%s", socket, log)
+	t.Fatalf("sway did not announce a display and answer on %s within 15s:\n%s", socket, log)
 	return nil
 }
+
+// sway logs "Starting backend on wayland display 'wayland-1'" once its socket
+// exists; that name is what a client needs.
+var displayPattern = regexp.MustCompile(`wayland display '([^']+)'`)
 
 func ctx(t *testing.T) context.Context {
 	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -214,7 +224,7 @@ func TestWatchReportsAnOpenedWindow(t *testing.T) {
 				return
 			}
 		case <-deadline:
-			t.Fatal(fmt.Sprintf("no open event for %s within 3s", "revier-test-watched"))
+			t.Fatalf("no open event for %s within 3s", "revier-test-watched")
 		}
 	}
 }

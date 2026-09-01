@@ -30,6 +30,10 @@ import (
 type Host struct {
 	// Socket overrides $SWAYSOCK, for a test that starts its own compositor.
 	Socket string
+	// Env is added to the environment of every launched client, for the same
+	// test: the client must find that compositor's WAYLAND_DISPLAY and
+	// XDG_RUNTIME_DIR, not the machine's.
+	Env []string
 }
 
 func (h *Host) Name() string { return "sway" }
@@ -152,9 +156,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	c := exec.Command(r.Launch[0], r.Launch[1:]...)
 	c.Dir = r.Dir
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
-	if h.Socket != "" {
-		// A compositor of the test's own: point the client at it.
-		c.Env = append(os.Environ(), "SWAYSOCK="+h.Socket)
+	if len(h.Env) > 0 {
+		c.Env = append(os.Environ(), h.Env...)
 	}
 	if err := c.Start(); err != nil {
 		return revier.TargetRef{}, fmt.Errorf("sway: launch %s: %w", r.Launch[0], err)
