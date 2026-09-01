@@ -38,11 +38,13 @@ which L2 could not see because the fake had no opinion about what launching
 does to focus. An adapter layer proves the tool is actually driven; the fake
 proves only that the core is self-consistent.
 
-L5 is why the sway host is worth writing before Hyprland or KWin: `sway` on the
-headless wlroots backend gives a real compositor with real IPC and no display,
-so window control gets the same treatment as tmux. GNOME cannot be tested this
-way — `wctl` needs a live logged-in session — and neither can a kitty window
-opening, which is what L6 holds.
+L5 is why the sway host exists before Hyprland or KWin: `sway` on the headless
+wlroots backend gives a real compositor with real IPC and no display, so window
+control gets the same treatment as tmux. Each test starts its own sway on its
+own socket and opens windows with `foot`; both are installed in CI and the
+tests skip where either is missing. GNOME cannot be tested this way — `wctl`
+needs a live logged-in session — and neither can a kitty window opening, which
+is what L6 holds.
 
 ## Two invariants every host test must cover
 

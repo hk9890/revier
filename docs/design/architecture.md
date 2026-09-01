@@ -116,7 +116,10 @@ internal/adapter/
     kitty/
     tmux/
     gnome/
+    sway/
     claude/
+    opencode/
+    execprobe/
 internal/tui/          the one TUI surface
 docs/design/
 ```
