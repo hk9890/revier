@@ -86,7 +86,9 @@ go test -run='^$' -bench='Survey|Render|MatchCompile' -benchtime=200x ./internal
 
 `BenchmarkSurvey90` is the size that matters: ninety projects is what this
 machine actually has. What the numbers mean, and what follows from them, is
-[design/performance.md](design/performance.md).
+`taskmgr show revier-ledpxj` in the revier store - measurements are a record of one run on
+one machine, so they live in the tracker rather than in the repository, where
+they would age silently.
 
 A change is green when `mise run quality:full` passes. Driving the product by
 hand is [RUNNING.md](RUNNING.md)'s, and it is never a substitute for a layer.
