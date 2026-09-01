@@ -39,9 +39,13 @@ Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
 that assign their own identity — a tmux window name, a browser `--class`. See
 `internal/adapter/tmux.Host.Open`.
 
-**`Instances` must be one bulk call.** It runs on every TUI refresh. One call
-per project turns a refresh into O(projects), and this repository expects
-roughly ninety. `tmux list-panes -a` in `internal/adapter/tmux` is the shape.
+**`Instances` must cost the same whatever the project count.** It runs on every
+TUI refresh, and one call per project turns a refresh into O(projects) - this
+repository expects roughly ninety. Bulk queries only: `tmux list-panes -a`,
+`kitten @ ls`, `wctl list --json`. The tmux host uses two bulk calls, because
+tmux format output allows only one free-text field per line and it needs window
+names as well as pane titles; two constant calls is fine, one per project is
+not.
 
 ## Errors
 

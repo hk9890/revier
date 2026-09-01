@@ -102,3 +102,6 @@ func (s *Status) UnmarshalJSON(b []byte) error {
 	}
 	return fmt.Errorf("unknown agent status %q", name)
 }
+
+// String makes a PanelID usable where a host expects a plain target argument.
+func (p PanelID) String() string { return string(p) }

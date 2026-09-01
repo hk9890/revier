@@ -49,8 +49,14 @@ one adapter.
 - **`Open` produces what `Match` finds.** Otherwise run-or-raise opens a second
   instance every time. `TestOpenThenMatchFindsIt` is the shape; a new host owes
   the same test.
-- **`Instances` is one call.** A host that queries per project turns a refresh
-  into O(projects). Assert on the tool invocation count, not on timing.
+- **`Instances` does not scale with the project count.** A host that queries
+  per project turns a refresh into O(projects). Assert on the tool invocation
+  count, not on timing.
+- **Free text survives the round trip.** Window and pane titles carry arbitrary
+  characters, including whatever a host uses as a field separator. tmux 3.4 also
+  escapes non-printable bytes that 3.7 passes through, so a control-character
+  delimiter passes locally and fails in CI. Test a title containing the
+  separator.
 
 ## Conventions
 

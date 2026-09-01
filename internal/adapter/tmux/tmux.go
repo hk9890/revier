@@ -21,9 +21,19 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// unit separator: tmux format output is split on it, so titles containing
-// spaces or tabs survive intact.
-const sep = "\x1f"
+// sep separates fields in tmux format output.
+//
+// It is a printable character on purpose. tmux escapes non-printable bytes in
+// format output on some versions and passes them through on others - 3.4 turns
+// a raw \x1f into the literal text "\037" while 3.7 emits the byte - so a
+// control character is not a portable delimiter.
+//
+// Free text can still contain this character, so every query below places its
+// one free-text field LAST and splits with a fixed field count, letting that
+// field absorb any separators it contains. That is why window names and pane
+// titles are fetched by two separate calls rather than one: a single line
+// cannot have two free-text fields at the end.
+const sep = "|"
 
 // Host is a tmux Runtime. Socket selects a private tmux server; an empty
 // Socket uses the user's default server.
@@ -75,19 +85,27 @@ func (h *Host) Probe(ctx context.Context) error {
 	return nil
 }
 
-// Instances lists every window on the server, panes included, in one call.
-// This is the hot path; adding a second tmux invocation per window would make
-// a refresh cost O(windows).
+// Instances lists every window on the server, panes included.
+//
+// Two calls, both bulk: one for window names and one for panes. The cost is
+// constant, not per project, which is the property the hot path actually needs.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
+	names, err := h.windowNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if names == nil {
+		return nil, nil
+	}
+
+	// pane_title is free text and comes last, so SplitN gives it whatever it
+	// contains.
 	format := strings.Join([]string{
-		"#{window_id}", "#{window_name}", "#{pane_id}",
-		"#{pane_title}", "#{pane_pid}", "#{pane_current_command}",
+		"#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}", "#{pane_title}",
 	}, sep)
 
 	out, err := h.run(ctx, "list-panes", "-a", "-F", format)
 	if err != nil {
-		// No server running is an empty list, not a failure: the survey must
-		// render on a machine where nothing has been opened yet.
 		if noServer(err) {
 			return nil, nil
 		}
@@ -100,17 +118,21 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if line == "" {
 			continue
 		}
-		f := strings.Split(line, sep)
-		if len(f) != 6 {
-			return nil, fmt.Errorf("tmux list-panes: want 6 fields, got %d in %q", len(f), line)
+		f := strings.SplitN(line, sep, 5)
+		if len(f) != 5 {
+			// A malformed line is skipped, never fatal. Panes belonging to
+			// other tools share this server, and one odd line must not blank
+			// every project revier knows about.
+			continue
 		}
-		winID, winName, paneID, paneTitle, panePID, paneCmd := f[0], f[1], f[2], f[3], f[4], f[5]
+		winID, paneID, panePID, paneCmd, paneTitle := f[0], f[1], f[2], f[3], f[4]
 
 		inst, ok := byWindow[winID]
 		if !ok {
+			name := names[winID]
 			inst = &revier.Instance{
-				Ref:   revier.TargetRef{Host: h.Name(), ID: winID, Title: winName},
-				Title: winName,
+				Ref:   revier.TargetRef{Host: h.Name(), ID: winID, Title: name},
+				Title: name,
 			}
 			byWindow[winID] = inst
 			order = append(order, winID)
@@ -130,6 +152,30 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		instances = append(instances, *byWindow[id])
 	}
 	return instances, nil
+}
+
+// windowNames maps window id to window name. window_name is free text, so it
+// is the last field of its own query.
+func (h *Host) windowNames(ctx context.Context) (map[string]string, error) {
+	out, err := h.run(ctx, "list-windows", "-a", "-F", "#{window_id}"+sep+"#{window_name}")
+	if err != nil {
+		if noServer(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	names := map[string]string{}
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		f := strings.SplitN(line, sep, 2)
+		if len(f) != 2 {
+			continue
+		}
+		names[f[0]] = f[1]
+	}
+	return names, nil
 }
 
 // kindOf classifies a pane by its foreground command. The agent kind is what
@@ -189,7 +235,7 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 		}
 		return revier.TargetRef{}, err
 	}
-	f := strings.Split(strings.TrimSpace(out), sep)
+	f := strings.SplitN(strings.TrimRight(out, "\n"), sep, 2)
 	if len(f) != 2 {
 		return revier.TargetRef{}, fmt.Errorf("tmux display-message: unexpected %q", out)
 	}

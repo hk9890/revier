@@ -203,3 +203,47 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 		t.Fatalf("got %d windows, want 2: run-or-raise must not duplicate", len(instances))
 	}
 }
+
+// tmux escapes non-printable bytes in format output on some versions and not
+// others: 3.4 renders a raw \x1f as the literal text "\037" while 3.7 emits the
+// byte. A control-character delimiter therefore parsed on the author's machine
+// and failed in CI. The separator is printable now, and free text is the last
+// field of its query so it may contain the separator itself.
+func TestFreeTextContainingTheSeparatorSurvives(t *testing.T) {
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "a|b", Launch: []string{"sh", "-c", "sleep 30"},
+		Match: revier.Match{Title: `^a\|b$`},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 {
+		t.Fatalf("got %d instances, want 1", len(instances))
+	}
+	if instances[0].Title != "a|b" {
+		t.Errorf("window title = %q, want %q", instances[0].Title, "a|b")
+	}
+
+	// A pane title carrying the separator must arrive byte-exact: the Claude
+	// probe reads it as the agent's activity line.
+	title := "⠧ Working on a|b now"
+	if _, err := h.Focused(c); err != nil {
+		t.Fatalf("Focused: %v", err)
+	}
+	if err := exec.Command("tmux", "-L", h.Socket, "select-pane",
+		"-t", instances[0].Panels[0].ID.String(), "-T", title).Run(); err != nil {
+		t.Fatalf("set pane title: %v", err)
+	}
+	again, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if got := again[0].Panels[0].Title; got != title {
+		t.Errorf("pane title = %q, want %q", got, title)
+	}
+}
