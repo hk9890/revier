@@ -149,6 +149,12 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName) (revie
 		if err != nil {
 			return revier.TargetRef{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
 		}
+		if ref.IsZero() {
+			// The host launched a process and cannot name the window it will
+			// produce; a window host is like this. The compositor focuses a
+			// new window itself, and the next keypress finds it through Match.
+			return ref, nil
+		}
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
@@ -161,7 +167,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName) (revie
 
 	// Toggle back: the target is already where focus is, so the second press
 	// returns home instead of doing nothing.
-	if !t.Home && c.focusedOn(ctx, inst.Ref) {
+	if !t.Home && c.focusedOn(ctx, snap, inst) {
 		if home, ok := p.Home(); ok {
 			return c.Go(ctx, p, home.Name)
 		}
@@ -169,7 +175,38 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName) (revie
 	if err := host.Focus(ctx, inst.Ref); err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: focus %s: %w", host.Name(), name, err)
 	}
+	// A terminal cannot always raise the OS window it lives in - kitty on
+	// Wayland cannot - so when the window host sees that window, it raises it.
+	if osw, ok := c.osWindowOf(snap, inst); ok {
+		if err := c.Window.Focus(ctx, osw.Ref); err != nil {
+			return revier.TargetRef{}, fmt.Errorf("%s: raise %s: %w", c.Window.Name(), name, err)
+		}
+	}
 	return inst.Ref, nil
+}
+
+// osWindowOf finds the window-host instance that is the OS window of a runtime
+// instance. Only a runtime that reports OSWindows takes part: it gives each
+// instance the title a window host reports for the same window, so the two
+// listings describe one window from two sides. The pid is a filter on top -
+// every OS window of one kitty process shares it - never the identity.
+func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
+	if c.Window == nil || c.Runtime == nil || inst.Ref.Host != c.Runtime.Name() || inst.Title == "" {
+		return revier.Instance{}, false
+	}
+	if !c.Runtime.Capabilities().OSWindows {
+		return revier.Instance{}, false
+	}
+	for _, w := range snap[c.Window.Name()] {
+		if w.Title != inst.Title {
+			continue
+		}
+		if w.PID != 0 && inst.PID != 0 && w.PID != inst.PID {
+			continue
+		}
+		return w, true
+	}
+	return revier.Instance{}, false
 }
 
 // focusAuthority is the host whose Focused answer describes where the user
@@ -185,31 +222,39 @@ func (c *Core) focusAuthority() revier.Host {
 	return nil
 }
 
-// focusedOn reports whether ref is certainly where the user is standing.
+// focusedOn reports whether inst is certainly where the user is standing.
 //
 // Certainty matters more than coverage here, because the consequence of a
 // false positive is a keypress that goes home when the user asked to go
 // somewhere: strictly worse than a keypress that does nothing surprising.
 //
-// So a ref counts only when its own host is the focus authority. Ids are
-// host-scoped - a GNOME window id and a tmux pane id are unrelated numbers -
-// so comparing across hosts is meaningless, and comparing a runtime's "current
-// pane" against global OS focus is wrong in the common case: a runtime target
-// can be tmux's current window while the user is looking at the editor.
+// So only the focus authority's answer counts, and only about its own ids.
+// Ids are host-scoped - a GNOME window id and a tmux pane id are unrelated
+// numbers - so comparing across hosts is meaningless, and a runtime's "current
+// pane" says nothing about OS focus: a tmux window can be current while the
+// user is looking at the editor.
 //
-// The cost is that toggle-back does not fire for runtime targets on a machine
-// that has a window host. Recovering it needs a mapping from a runtime
-// instance to the OS window containing it, which the ports do not carry yet.
-func (c *Core) focusedOn(ctx context.Context, ref revier.TargetRef) bool {
+// A runtime instance is therefore judged through the OS window that holds it,
+// when the runtime can name one (osWindowOf). A multiplexer cannot, and for it
+// toggle-back does not fire on a machine that has a window host.
+func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instance) bool {
 	auth := c.focusAuthority()
-	if auth == nil || ref.ID == "" || ref.Host != auth.Name() {
+	if auth == nil || inst.Ref.ID == "" {
 		return false
+	}
+	want := inst.Ref
+	if want.Host != auth.Name() {
+		osw, ok := c.osWindowOf(snap, inst)
+		if !ok {
+			return false
+		}
+		want = osw.Ref
 	}
 	cur, err := auth.Focused(ctx)
 	if err != nil {
 		return false
 	}
-	return cur.Host == ref.Host && cur.ID == ref.ID
+	return cur.Host == want.Host && cur.ID == want.ID
 }
 
 // Survey builds the view every renderer reads: one bulk listing per host, then

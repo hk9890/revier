@@ -94,10 +94,9 @@ func (a *app) resolveProject(explicit string) (core.Project, error) {
 // projectForPath returns the project whose path contains dir, preferring the
 // longest match so a project nested inside another wins.
 func (a *app) projectForPath(dir string) (core.Project, bool) {
-	dir = expandHome(dir)
 	best, bestLen := core.Project{}, -1
 	for _, p := range a.projects {
-		root := filepath.Clean(expandHome(p.Path))
+		root := filepath.Clean(p.Path)
 		if root == "" {
 			continue
 		}
@@ -108,17 +107,6 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 		}
 	}
 	return best, bestLen >= 0
-}
-
-func expandHome(p string) string {
-	if !strings.HasPrefix(p, "~") {
-		return p
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return p
-	}
-	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }
 
 // remember records the project a command acted on, so the next keybinding

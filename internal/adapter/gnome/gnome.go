@@ -126,6 +126,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("gnome: realization has no launch argv")
 	}
 	c := exec.CommandContext(ctx, r.Launch[0], r.Launch[1:]...)
+	c.Dir = r.Dir
 	// Detach: the launched application outlives the revier process that
 	// started it, and must not die when a keypress-sized process exits.
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil

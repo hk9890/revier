@@ -168,7 +168,73 @@ which is worse than a key that simply goes there. Recovering it needs a mapping
 from a runtime instance to the OS window containing it, which the ports do not
 carry.
 
+*The mapping is D19's, and the cost is recovered for a runtime that claims it.*
+
 **Agents are discovered in every target, not only home.** The survey probed the
 home instance alone, so an agent given a target of its own was invisible — which
 defeats the product's purpose. Every matched instance is now probed, deduplicated
 by ref, because one instance can back two targets.
+
+## 2026-09-02
+
+### D17 — projects are prepared at load — Accepted
+
+`config.Load` returns projects with every template rendered and every match
+compiled. `Survey` and `Go` take that form and derive nothing per call.
+
+The refresh path used to re-render ninety projects and re-compile four hundred
+and fifty patterns every second, from inputs that had not changed since load.
+The measured cost was garbage, not time, and would not have been noticed. The
+reason to move the work is where errors surface: a template naming a missing
+key passed validation, loaded, and either failed at the keystroke or was
+swallowed by the survey as a project with no available targets. Both were
+breaches of the rule this design already applies to every other validation
+failure, that a bad file is refused at load, naming the file.
+
+The consequence for a long-lived surface: the TUI holds prepared projects for
+its lifetime, so a project file edited while it runs is read on restart, not on
+the next refresh.
+
+### D18 — a realization starts in the project directory, and a home target is its panels — Accepted
+
+`Realization` gains `Dir`. The core fills it with the project path when the
+config leaves it empty, and the path itself is tilde-expanded once at load, so
+no host receives a literal `~`. A runtime realization with panels needs no
+`launch`: the panels are what is launched, as the Level 1 example in
+[extending.md](extending.md) always showed and the validator until now refused.
+
+Without this the first kitty workspace opened in whatever directory the kitty
+process happened to have, which is the one thing a session file never got
+wrong.
+
+### D19 — a runtime that owns OS windows says so, and the window host raises them — Accepted
+
+Amends D16, whose cost this recovers.
+
+`Capabilities` gains `OSWindows`. A runtime that reports it promises that
+every instance is an OS window and carries the title a window host reports for
+the same window. The core then does two things it could not do before:
+
+- **Raise.** After focusing a runtime instance it finds the OS window by title
+  in the window host's listing and activates it there. kitty needs this: under
+  GNOME on Wayland `kitten @ focus-window` moves focus inside kitty and the
+  compositor refuses to raise the window, because the request did not come
+  from user input. Verified on this machine before the design was written.
+- **Toggle back.** A runtime target's second press is judged by whether its OS
+  window holds focus, asked of the window host, which stays the only focus
+  authority. The false positive D16 refused stays refused: the OS window, not
+  the pane, must be focused.
+
+Two mappings were considered and rejected. PID lineage - walk from the pane's
+process to the terminal's - fails both ways: every OS window of one kitty
+process shares the kitty pid, so lineage cannot tell them apart, and a tmux
+pane's ancestry ends at the daemonised server, never reaching a terminal.
+Trusting the runtime's own focus report was D16's refusal and stays refused,
+although kitty could in fact answer it; one authority is simpler than two that
+must agree.
+
+kitty gives each OS window its identity through `--os-window-name`, read back
+as `wm_name`, and sets the OS window title to the same value. A window kitty
+opened from a session file has neither and is invisible to revier, which is
+the accepted cost of not parsing what `kitten @ ls` does not report. tmux
+cannot claim `OSWindows`, so for it D16's cost stands.

@@ -27,7 +27,7 @@ Only L6 ever reaches one.
 | L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `swaymsg -t get_tree`, `wctl list --json` |
 | L4 | real tmux, private socket | `live` | the tmux host, and the core against a real substrate |
 | L5 | real sway, `WLR_BACKENDS=headless` | `live` | a real window host with no screen |
-| L6 | the user's GNOME session | manual | the GNOME host only |
+| L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
@@ -41,8 +41,8 @@ proves only that the core is self-consistent.
 L5 is why the sway host is worth writing before Hyprland or KWin: `sway` on the
 headless wlroots backend gives a real compositor with real IPC and no display,
 so window control gets the same treatment as tmux. GNOME cannot be tested this
-way — `wctl` needs a live logged-in session — which is what confines L6 to that
-one adapter.
+way — `wctl` needs a live logged-in session — and neither can a kitty window
+opening, which is what L6 holds.
 
 ## Two invariants every host test must cover
 

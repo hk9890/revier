@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "wm_name": "kitty",
+    "wm_class": "kitty",
+    "is_active": false,
+    "is_focused": false,
+    "platform_window_id": null,
+    "tabs": [
+      {
+        "id": 1,
+        "title": "Claude Code",
+        "title_overridden": false,
+        "is_active": true,
+        "layout": "horizontal",
+        "windows": [
+          {
+            "id": 1,
+            "pid": 4001,
+            "title": "✳ Ready",
+            "cwd": "/home/user/dev/legacy",
+            "is_active": true,
+            "is_focused": false,
+            "user_vars": {"CS_TAB": "1", "CS_STATE": "attn"},
+            "foreground_processes": [
+              {"pid": 4001, "cmdline": ["/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh", "/usr/bin/sh", "-lc", "agent.sh"], "cwd": "/home/user/dev/legacy"},
+              {"pid": 4002, "cmdline": ["/usr/bin/sh", "-lc", "agent.sh"], "cwd": "/home/user/dev/legacy"},
+              {"pid": 4003, "cmdline": ["claude"], "cwd": "/home/user/dev/legacy"}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "wm_name": "session:revier",
+    "wm_class": "kitty",
+    "is_active": true,
+    "is_focused": true,
+    "platform_window_id": null,
+    "tabs": [
+      {
+        "id": 2,
+        "title": "session:revier",
+        "title_overridden": true,
+        "is_active": false,
+        "layout": "horizontal",
+        "windows": [
+          {
+            "id": 2,
+            "pid": 5001,
+            "title": "⠧ Investigating setup",
+            "cwd": "/home/user/dev/revier",
+            "is_active": true,
+            "is_focused": false,
+            "user_vars": {"CS_TAB": "1", "CS_STATE": "busy"},
+            "foreground_processes": [
+              {"pid": 5001, "cmdline": ["/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh", "/usr/bin/sh", "-lc", "agent.sh"], "cwd": "/home/user/dev/revier"},
+              {"pid": 5002, "cmdline": ["claude"], "cwd": "/home/user/dev/revier"},
+              {"pid": 5003, "cmdline": ["git", "status"], "cwd": "/home/user/dev/revier"}
+            ]
+          },
+          {
+            "id": 3,
+            "pid": 5010,
+            "title": "shell",
+            "cwd": "/home/user/dev/revier",
+            "is_active": false,
+            "is_focused": false,
+            "user_vars": {},
+            "foreground_processes": [
+              {"pid": 5010, "cmdline": ["/usr/bin/zsh"], "cwd": "/home/user/dev/revier"}
+            ]
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "tickets",
+        "title_overridden": true,
+        "is_active": true,
+        "layout": "horizontal",
+        "windows": [
+          {
+            "id": 4,
+            "pid": 5020,
+            "title": "tickets",
+            "cwd": "/home/user/dev/revier",
+            "is_active": true,
+            "is_focused": true,
+            "user_vars": {},
+            "foreground_processes": [
+              {"pid": 5020, "cmdline": ["/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh", "taskmgr-ui"], "cwd": "/home/user/dev/revier"},
+              {"pid": 5021, "cmdline": ["taskmgr-ui"], "cwd": "/home/user/dev/revier"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

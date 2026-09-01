@@ -40,7 +40,8 @@ type Realization struct {
     // a host that assigns its own identity satisfies the Open invariant.
     Name string
 
-    Launch []string   // argv, used when Match finds nothing
+    Launch []string   // argv, used when Match finds nothing; a runtime realization with Panels may omit it
+    Dir    string     // working directory for Launch and every panel; the project path when empty
     Match  Match      // how to recognise an existing instance
     Panels []PanelSpec // runtime hosts only: the layout for a Home target
 }
@@ -121,6 +122,11 @@ type Runtime interface {
 type Capabilities struct {
     Layout     bool // can arrange panels from a PanelSpec list
     Persistent bool // an instance survives its client exiting
+
+    // OSWindows: every instance is an OS window, titled as a WindowController
+    // reports it. The core then raises a runtime instance through the window
+    // host and judges its toggle-back by OS focus. A multiplexer cannot claim it.
+    OSWindows bool
 }
 
 // WindowController hosts foreign OS windows. It adds nothing to Host; the

@@ -62,11 +62,11 @@ func scratch(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(projects, "demo.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Disable the window host explicitly. This machine may have a working
-	// GNOME adapter, and a test that behaves differently depending on the
-	// ambient desktop is not a test. It also keeps the suite from ever
-	// touching a real window.
-	cfg := "[hosts]\nwindow = [\"none\"]\n"
+	// Pin the runtime to tmux and disable the window host. This machine may
+	// have a working kitty and a working GNOME adapter, and a test that
+	// behaves differently depending on the ambient desktop is not a test. It
+	// also keeps the suite from ever opening or touching a real window.
+	cfg := "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"
 	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}

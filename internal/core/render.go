@@ -13,7 +13,7 @@ import (
 // never sees a `{{ }}`, which is what keeps templating out of every adapter.
 //
 // The fields available are those of revier.Project: {{.Name}}, {{.Path}}, and
-// {{.Vars.<key>}}.
+// {{.Vars.<key>}}. A realization that names no Dir gets the project path.
 func Render(p revier.Project) (revier.Project, error) {
 	out := p
 	out.Targets = make([]revier.Target, len(p.Targets))
@@ -40,6 +40,12 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 
 	if out.Name, err = expand(p, r.Name); err != nil {
 		return revier.Realization{}, fmt.Errorf("name: %w", err)
+	}
+	if out.Dir, err = expand(p, r.Dir); err != nil {
+		return revier.Realization{}, fmt.Errorf("dir: %w", err)
+	}
+	if out.Dir == "" {
+		out.Dir = p.Path
 	}
 	if out.Match.Class, err = expand(p, r.Match.Class); err != nil {
 		return revier.Realization{}, fmt.Errorf("match class: %w", err)

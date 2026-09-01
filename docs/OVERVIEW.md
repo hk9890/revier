@@ -9,12 +9,12 @@ A findability map. What revier *is* and why it is shaped this way is
 |---|---|
 | `pkg/revier/` | The ports and every type that crosses them. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `tmux` (runtime), `gnome` (window), `claude` (probe). |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` and `tmux` (runtime), `gnome` (window), `claude` (probe). |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
 | `scripts/drive/` | Manual headless driver ([RUNNING.md](RUNNING.md)). |
-| `cmd/revier/` | CLI entry point. A stub: there is no config loader yet. |
+| `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 | `docs/design/` | The specification and the decision log. |
 
 ## The two ports

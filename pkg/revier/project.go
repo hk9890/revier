@@ -79,8 +79,15 @@ type Realization struct {
 	Name string `toml:"name" json:"name,omitempty"`
 
 	// Launch is the argv used when Match finds nothing. It reaches a host
-	// already rendered: an adapter never sees a template.
+	// already rendered: an adapter never sees a template. A runtime
+	// realization with Panels may leave it empty; the panels are then what is
+	// launched.
 	Launch []string `toml:"launch" json:"launch,omitempty"`
+
+	// Dir is the working directory Launch and every panel start in. The core
+	// fills it with the project path when the config leaves it empty, so a
+	// workspace opens where the project lives without every file saying so.
+	Dir string `toml:"dir" json:"dir,omitempty"`
 
 	Match Match `toml:"match" json:"match"`
 

@@ -252,3 +252,46 @@ func TestRootHonoursOverride(t *testing.T) {
 		t.Errorf("Root = %q", got)
 	}
 }
+
+// A tilde is expanded once at load so no consumer hands a literal "~" to a
+// program that does not expand it.
+func TestLoadProjectExpandsHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	dir := t.TempDir()
+	body := strings.Replace(valid, `path = "/home/hans/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
+	p, err := config.LoadProject(write(t, dir, "revier.toml", body))
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if want := filepath.Join(home, "dev/github/revier"); p.Path != want {
+		t.Errorf("path = %q, want %q", p.Path, want)
+	}
+	editor, _ := p.Target("editor")
+	if editor.Window.Launch[1] != p.Path {
+		t.Errorf("{{.Path}} rendered %q, want the expanded path", editor.Window.Launch[1])
+	}
+	if editor.Window.Dir != p.Path {
+		t.Errorf("dir = %q, want the expanded path", editor.Window.Dir)
+	}
+}
+
+// A home target is its panels; it needs no launch of its own. A window
+// realization cannot have panels, because a window host cannot see inside.
+func TestValidatePanelsStandInForLaunch(t *testing.T) {
+	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}
+	ok := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Match: revier.Match{Title: "^h$"}, Panels: panels}},
+	}}
+	if err := config.Validate(ok); err != nil {
+		t.Errorf("a runtime realization with panels and no launch should validate: %v", err)
+	}
+	bad := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}, Panels: panels}},
+	}}
+	if err := config.Validate(bad); err == nil || !strings.Contains(err.Error(), "panels") {
+		t.Errorf("a window realization with panels should be rejected, got %v", err)
+	}
+}

@@ -106,3 +106,25 @@ func TestRenderLeavesPlainStringsAlone(t *testing.T) {
 		t.Errorf("launch = %v", out.Targets[0].Window.Launch)
 	}
 }
+
+// A realization starts in the project directory unless it says otherwise, so
+// a workspace opens where the project lives without every file repeating it.
+func TestRenderFillsDirFromTheProjectPath(t *testing.T) {
+	p := revier.Project{
+		Name: "x", Path: "/home/user/dev/x",
+		Targets: []revier.Target{
+			{Name: "home", Runtime: &revier.Realization{Launch: []string{"sh"}, Match: revier.Match{Title: "^x$"}}},
+			{Name: "notes", Runtime: &revier.Realization{Dir: "{{.Path}}/docs", Launch: []string{"sh"}, Match: revier.Match{Title: "^n$"}}},
+		},
+	}
+	out, err := core.Render(p)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got := out.Targets[0].Runtime.Dir; got != "/home/user/dev/x" {
+		t.Errorf("default dir = %q, want the project path", got)
+	}
+	if got := out.Targets[1].Runtime.Dir; got != "/home/user/dev/x/docs" {
+		t.Errorf("explicit dir = %q, want it rendered", got)
+	}
+}

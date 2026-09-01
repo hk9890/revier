@@ -203,6 +203,9 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	} else {
 		args = append(args, "-t", h.session()+":")
 	}
+	if r.Dir != "" {
+		args = append(args, "-c", r.Dir)
+	}
 	args = append(args, r.Launch...)
 
 	out, err := h.run(ctx, args...)

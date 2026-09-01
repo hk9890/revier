@@ -124,6 +124,34 @@ func TestGoRaisesAnExistingInstance(t *testing.T) {
 	}
 }
 
+// A window host launches a process and cannot name the window it produces.
+// Go must not then fail on focusing nothing: the compositor focuses the new
+// window, and the next press finds it through Match.
+func TestGoAcceptsADetachedOpen(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Detached = true
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	ref, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if !ref.IsZero() {
+		t.Errorf("ref = %+v, want zero: the host could not name the window", ref)
+	}
+	if len(wm.Focuses) != 0 {
+		t.Errorf("focuses = %v, want none: there is no ref to focus", wm.Focuses)
+	}
+	// The window exists now, so the next press raises it.
+	again, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	if err != nil {
+		t.Fatalf("second Go: %v", err)
+	}
+	if again.IsZero() || len(wm.Opened) != 1 {
+		t.Errorf("second press: ref %+v, opened %d; want the existing window raised", again, len(wm.Opened))
+	}
+}
+
 func TestGoOpensWhenNothingMatches(t *testing.T) {
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
@@ -366,5 +394,139 @@ func TestToggleBackWorksOnRuntimeWhenItIsTheAuthority(t *testing.T) {
 	}
 	if got != homeRef {
 		t.Errorf("returned %v, want home %v", got, homeRef)
+	}
+}
+
+// osWindowProject is a workspace and a runtime-only diff target, as a kitty
+// user has them: both are OS windows a window host also lists.
+func osWindowProject() revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
+		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
+	}}
+}
+
+// osWindowHosts builds a runtime that reports OSWindows and a window host that
+// sees the same two windows, and returns the window host's refs for them.
+func osWindowHosts() (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef, revier.TargetRef) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	wm := hosttest.New("wm")
+	homeRt := rt.Add("session:revier", "kitty")
+	diffRt := rt.Add("diff:revier", "kitty")
+	_ = homeRt
+	_ = diffRt
+	// The window host reports the pid the runtime reports (hosttest assigns
+	// 1000+id), because every OS window of one kitty process shares it.
+	homeWm := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	diffWm := wm.AddInstance(revier.Instance{Title: "diff:revier", Class: "kitty", PID: 1002})
+	wm.AddInstance(revier.Instance{Title: "Some Editor", Class: "code", PID: 4242})
+	return rt, wm, homeWm, diffWm
+}
+
+// A terminal on Wayland cannot raise its own OS window, so focusing a runtime
+// target also raises that window through the window host.
+func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
+	rt, wm, _, diffWm := osWindowHosts()
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got.Host != "kitty" {
+		t.Fatalf("landed on %s, want the runtime target", got.Host)
+	}
+	if len(rt.Focuses) != 1 {
+		t.Errorf("runtime focuses = %v, want the diff window", rt.Focuses)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != diffWm {
+		t.Errorf("window focuses = %v, want the OS window holding diff (%v)", wm.Focuses, diffWm)
+	}
+}
+
+// Toggle-back for a runtime target on a desktop, resolved: the window host is
+// still the only authority on focus, and it is asked about the OS window that
+// holds the runtime instance.
+func TestToggleBackThroughTheOSWindow(t *testing.T) {
+	rt, wm, homeWm, diffWm := osWindowHosts()
+	wm.SetFocus(diffWm)
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got.Title != "session:revier" {
+		t.Errorf("returned %v, want home: the diff OS window had focus", got)
+	}
+	if n := len(wm.Focuses); n != 1 || wm.Focuses[0] != homeWm {
+		t.Errorf("window focuses = %v, want home's OS window raised", wm.Focuses)
+	}
+}
+
+// The false positive D16 refuses: the runtime target exists but the user is
+// looking at the editor, so the key goes to the target and never home.
+func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
+	rt, wm, _, diffWm := osWindowHosts()
+	editor := revier.TargetRef{Host: "wm", ID: "3"}
+	wm.SetFocus(editor)
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: nothing of this project had focus", got)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != diffWm {
+		t.Errorf("window focuses = %v, want diff's OS window raised", wm.Focuses)
+	}
+}
+
+// A runtime that does not report OSWindows - a multiplexer - keeps the D16
+// behaviour: its refs are never judged by the window host, and never raised.
+func TestNoBridgeWithoutOSWindows(t *testing.T) {
+	rt, wm, _, diffWm := osWindowHosts()
+	rt.SetCapabilities(revier.Capabilities{Layout: true})
+	wm.SetFocus(diffWm)
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: a multiplexer's windows are not OS windows", got)
+	}
+	if len(wm.Focuses) != 0 {
+		t.Errorf("window focuses = %v, want none", wm.Focuses)
+	}
+}
+
+// Same title, different process: not the same window. The pid filter is what
+// keeps a stray window with a matching title from being raised.
+func TestBridgeRejectsAPIDMismatch(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	wm := hosttest.New("wm")
+	rt.Add("diff:revier", "kitty") // pid 1001
+	rt.Add("session:revier", "kitty")
+	other := wm.AddInstance(revier.Instance{Title: "diff:revier", Class: "kitty", PID: 9999})
+	wm.SetFocus(other)
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: the focused window belongs to another process", got)
+	}
+	if len(wm.Focuses) != 0 {
+		t.Errorf("window focuses = %v, want none", wm.Focuses)
 	}
 }

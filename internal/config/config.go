@@ -128,6 +128,10 @@ func LoadProject(path string) (core.Project, error) {
 		// name, and so a renamed file cannot silently keep the old identity.
 		p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 	}
+	// A path is expanded once, here, so every consumer - templates, working
+	// directories, the cwd lookup - sees an absolute path and none of them
+	// hands a literal "~" to a program that does not expand it.
+	p.Path = expandHome(p.Path)
 	if err := Validate(p); err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
@@ -188,8 +192,11 @@ func Validate(p revier.Project) error {
 				// window.
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
 			}
-			if len(r.Launch) == 0 {
-				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv", t.Name, kind))
+			if len(r.Launch) == 0 && len(r.Panels) == 0 {
+				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no panels", t.Name, kind))
+			}
+			if len(r.Panels) > 0 && kind == revier.HostWindow {
+				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
 			}
 		}
 		if t.Prefer != "" && t.Prefer != revier.HostWindow && t.Prefer != revier.HostRuntime {
@@ -207,4 +214,16 @@ func Validate(p revier.Project) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// expandHome resolves a leading "~" against the user's home directory.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }
