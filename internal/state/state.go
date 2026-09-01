@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -28,6 +29,18 @@ type State struct {
 	// do not survive an application restart, so these are validated against
 	// live instances on read and dropped when stale.
 	Attached map[revier.ProjectName][]revier.TargetRef `json:"attached,omitempty"`
+
+	// Launch is the last time revier launched a window for a project without
+	// getting a ref to it, so a window that appears shortly after can be
+	// claimed for that project (claim-on-appear). The process that launches
+	// exits at once; the one that sees the window appear reads this.
+	Launch *Launch `json:"launch,omitempty"`
+}
+
+// Launch is one detached launch: which project, and when.
+type Launch struct {
+	Project revier.ProjectName `json:"project"`
+	At      time.Time          `json:"at"`
 }
 
 // Root reports the state directory, honouring REVIER_STATE_HOME and then

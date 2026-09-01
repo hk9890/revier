@@ -136,7 +136,7 @@ func cmdTUI(a *app) error {
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		return cmdList(context.Background(), a, nil)
 	}
-	m := tui.New(a.core, a.projects, a.state.Attached, a.cfg.Actions, time.Second)
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second)
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }
@@ -148,10 +148,11 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	views, err := a.core.Survey(ctx, a.projects)
+	report, err := a.core.Survey(ctx, a.projects)
 	if err != nil {
 		return err
 	}
+	views := report.Views
 
 	// Drop attachments whose windows are gone, so state does not accumulate
 	// refs to closed windows forever.
@@ -252,6 +253,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	a.launched(p.Name, ref)
 	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
@@ -275,6 +277,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	a.launched(p.Name, ref)
 	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil

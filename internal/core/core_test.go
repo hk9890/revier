@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -276,10 +277,11 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	c := &core.Core{Runtime: rt} // no window host
 
-	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
+	views := report.Views
 	v := views[0]
 	if !v.Running {
 		t.Error("project should be running: its home instance exists")
@@ -310,10 +312,11 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 		}},
 	}
 
-	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
+	views := report.Views
 	if len(views[0].Agents) != 1 {
 		t.Fatalf("agents = %d, want 1: only agent panels are probed", len(views[0].Agents))
 	}
@@ -332,11 +335,11 @@ func TestSurveySurvivesAProbeError(t *testing.T) {
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
 	}
 
-	views, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey should not fail: %v", err)
 	}
-	if got := views[0].Agents[0].State.Status; got != revier.StatusUnknown {
+	if got := report.Views[0].Agents[0].State.Status; got != revier.StatusUnknown {
 		t.Errorf("status = %v, want unknown", got)
 	}
 }
@@ -528,5 +531,44 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	}
 	if len(wm.Focuses) != 0 {
 		t.Errorf("window focuses = %v, want none", wm.Focuses)
+	}
+}
+
+// Claim binds exactly the window that appeared after a launch and nothing
+// else; every bound is a way of claiming nothing rather than the wrong thing.
+func TestClaimBounds(t *testing.T) {
+	c := &core.Core{Window: hosttest.New("wm")}
+	p := prepared(t, project())
+	projects := []core.Project{p}
+	ref := func(id string) revier.TargetRef { return revier.TargetRef{Host: "wm", ID: id} }
+	before := []revier.Instance{{Ref: ref("1"), Title: "old", Class: "x"}}
+	stray := revier.Instance{Ref: ref("2"), Title: "Pull requests", Class: "chromium"}
+	editor := revier.Instance{Ref: ref("3"), Title: "Visual Studio Code", Class: "code"}
+	now := time.Now()
+
+	got, ok := c.Claim(before, append(before, stray), now.Add(-time.Second), now, projects)
+	if !ok || got != stray.Ref {
+		t.Errorf("Claim = %+v, %v; want the stray window", got, ok)
+	}
+	if _, ok := c.Claim(before, append(before, stray), now.Add(-core.ClaimWindow-time.Second), now, projects); ok {
+		t.Error("a launch older than the claim window must not claim")
+	}
+	if _, ok := c.Claim(before, append(before, stray), time.Time{}, now, projects); ok {
+		t.Error("no launch, no claim")
+	}
+	if _, ok := c.Claim(before, append(before, editor), now, now, projects); ok {
+		t.Error("a window a declared target matches is that target, not a stray")
+	}
+	if _, ok := c.Claim(before, append(before, stray, revier.Instance{Ref: ref("4"), Class: "other"}), now, now, projects); ok {
+		t.Error("two candidates at once is ambiguity, and claims nothing")
+	}
+	if _, ok := c.Claim(append(before, stray), append(before, stray), now, now, projects); ok {
+		t.Error("a window already present is not new")
+	}
+	if !c.ClaimEvent(stray, now.Add(-time.Second), now, projects) {
+		t.Error("the event path should claim the same stray window")
+	}
+	if c.ClaimEvent(editor, now, now, projects) {
+		t.Error("the event path must not claim a declared target")
 	}
 }

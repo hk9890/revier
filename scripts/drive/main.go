@@ -67,11 +67,11 @@ func main() {
 
 	switch os.Args[1] {
 	case "survey":
-		views, err := c.Survey(ctx, []core.Project{project})
+		report, err := c.Survey(ctx, []core.Project{project})
 		fatal(err)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		fatal(enc.Encode(views))
+		fatal(enc.Encode(report.Views))
 
 	case "go":
 		if len(os.Args) < 3 {

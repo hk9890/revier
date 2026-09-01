@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -107,6 +108,15 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 		}
 	}
 	return best, bestLen >= 0
+}
+
+// launched records a detached launch - a window host started a process and
+// could not name the window - so the TUI can claim the window that appears
+// next for this project. remember saves it.
+func (a *app) launched(p revier.ProjectName, ref revier.TargetRef) {
+	if ref.IsZero() {
+		a.state.Launch = &state.Launch{Project: p, At: time.Now()}
+	}
 }
 
 // remember records the project a command acted on, so the next keybinding

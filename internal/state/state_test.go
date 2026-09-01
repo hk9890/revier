@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -93,5 +94,22 @@ func TestRootHonoursOverride(t *testing.T) {
 	}
 	if got != "/tmp/scratch-state" {
 		t.Errorf("Root = %q", got)
+	}
+}
+
+// The launch record crosses processes: written by revier go, read by the TUI.
+func TestLaunchRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	at := time.Now().Truncate(time.Second)
+	s := &state.State{Launch: &state.Launch{Project: "revier", At: at}}
+	if err := s.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	got, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Launch == nil || got.Launch.Project != "revier" || !got.Launch.At.Equal(at) {
+		t.Errorf("launch = %+v", got.Launch)
 	}
 }

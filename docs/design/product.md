@@ -71,8 +71,13 @@ promise, which is why the two tiers exist.
 The third mechanism exists because the interesting case is the unreliable one.
 Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
-window. Claim-on-appear needs window-created events, which GNOME, sway, and
-Hyprland all emit.
+window. Claim-on-appear runs in the TUI, the one long-lived process, and its
+latency depends on the window host. A host that reports window events (sway)
+claims within a second of the window appearing. GNOME reports none through
+`wctl`, so there the TUI diffs successive surveys and the claim lands within two
+refresh intervals, about two seconds. In both cases the claim happens only while
+the TUI is open, only within five seconds of the launch, only for a window no
+declared target matches, and only when one such window appeared.
 
 Declared targets live in the project's TOML as match rules. Attachments are
 per-session and live in revier's own state, because instance ids do not survive

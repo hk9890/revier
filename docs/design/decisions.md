@@ -238,3 +238,27 @@ as `wm_name`, and sets the OS window title to the same value. A window kitty
 opened from a session file has neither and is invisible to revier, which is
 the accepted cost of not parsing what `kitten @ ls` does not report. tmux
 cannot claim `OSWindows`, so for it D16's cost stands.
+
+
+### D20 — claim-on-appear is the TUI's, and claims nothing before the wrong thing — Accepted
+
+The launch that starts the clock and the window that ends it are seen by
+different processes: `revier go` exits at once, and the window appears later.
+So the launch is a record in state, `Launch{Project, At}`, written by whatever
+launched, and the claim is made by the TUI, which is the one process alive to
+see the window arrive. It re-reads state on every refresh for that reason.
+
+Two paths, one policy. A window host that implements `WindowWatcher` - sway,
+the first - delivers the window as an event and the claim is immediate. A host
+that does not - GNOME, through `wctl` - is diffed between successive surveys,
+and the claim takes up to two refresh intervals. The survey therefore returns
+the window listing it was built from (`core.Report`) rather than the TUI
+asking for a second one, which keeps a refresh at one call per host.
+
+The bounds are the decision. A wrong claim binds an unrelated window to a
+project and is only found later, when a key goes somewhere surprising, so:
+five seconds after the launch and no more; never a window a declared target of
+any project matches, since that window is reached by its key already; and
+when two candidate windows appear at once, neither, because the launch does
+not say which. `revier list` never claims: a one-shot process has no previous
+listing to diff and no window to wait for.

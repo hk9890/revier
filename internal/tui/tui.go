@@ -6,6 +6,13 @@
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action
 // goes through the same core paths the CLI commands use.
+//
+// It is also where claim-on-appear runs, because it is the one long-lived
+// process. A window host that reports events (revier.WindowWatcher) is
+// subscribed to, and a window that opens shortly after a launch is claimed at
+// once; otherwise successive surveys are diffed, and the claim lands within
+// two refresh intervals. State is re-read on every refresh, because the
+// launch that starts the clock is written by another process.
 package tui
 
 import (
@@ -21,6 +28,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -33,32 +41,41 @@ const (
 
 // Model is the bubbletea model. Construct it with New.
 type Model struct {
-	core     *core.Core
-	projects []core.Project
-	attached map[revier.ProjectName][]revier.TargetRef
-	actions  []config.Action
-	refresh  time.Duration
+	core      *core.Core
+	projects  []core.Project
+	stateRoot string
+	actions   []config.Action
+	refresh   time.Duration
 
-	views   []revier.ProjectView // attention first, then config order
-	err     error                // the last failure, shown in the footer
-	level   level
-	filter  string
-	cursor  int                // row at the project level, into rows()
-	tcursor int                // row at the target level
-	current revier.ProjectName // the project drilled into
-	width   int
-	height  int
+	views    []revier.ProjectView // attention first, then config order
+	windows  []revier.Instance    // the window host's listing at the last survey
+	attached map[revier.ProjectName][]revier.TargetRef
+	err      error // the last failure, shown in the footer
+	level    level
+	filter   string
+	cursor   int                // row at the project level, into rows()
+	tcursor  int                // row at the target level
+	current  revier.ProjectName // the project drilled into
+	width    int
+	height   int
 }
 
-// New builds the surface over prepared projects. attached is the state's
-// hand-bound instances, listed under their project without a key.
-func New(c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef, actions []config.Action, refresh time.Duration) Model {
-	return Model{core: c, projects: projects, attached: attached, actions: actions, refresh: refresh, width: 80, height: 24}
+// New builds the surface over prepared projects. stateRoot is where revier's
+// state lives: attached instances are read from it on every refresh and
+// claims are written to it.
+func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration) Model {
+	return Model{core: c, projects: projects, stateRoot: stateRoot, actions: actions, refresh: refresh, width: 80, height: 24}
 }
 
 type surveyMsg struct {
-	views []revier.ProjectView
-	err   error
+	report core.Report
+	err    error
+}
+
+// windowMsg is one event from a watching window host.
+type windowMsg struct {
+	event revier.WindowEvent
+	ok    bool
 }
 
 type tickMsg struct{}
@@ -68,7 +85,24 @@ type tickMsg struct{}
 type actedMsg struct{ err error }
 
 // Init surveys immediately; the timer starts once the first survey answers.
-func (m Model) Init() tea.Cmd { return m.Survey() }
+// A window host that can report events is watched from the start.
+func (m Model) Init() tea.Cmd {
+	if w, ok := m.core.Window.(revier.WindowWatcher); ok {
+		events, err := w.Watch(context.Background())
+		if err == nil {
+			return tea.Batch(m.Survey(), waitEvent(events))
+		}
+	}
+	return m.Survey()
+}
+
+// waitEvent delivers the next window event as a message, then re-arms.
+func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-events
+		return windowMsg{event: ev, ok: ok}
+	}
+}
 
 // Survey is one refresh: one bulk listing per host, matched locally. It is a
 // command so the terminal stays responsive while hosts answer, and it
@@ -78,8 +112,8 @@ func (m Model) Survey() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		views, err := c.Survey(ctx, projects)
-		return surveyMsg{views: views, err: err}
+		report, err := c.Survey(ctx, projects)
+		return surveyMsg{report: report, err: err}
 	}
 }
 
@@ -95,10 +129,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.err = msg.err
 		if msg.err == nil {
-			m.views = sorted(msg.views)
+			m.claimByPolling(msg.report.Windows)
+			m.views = sorted(msg.report.Views)
+			m.windows = msg.report.Windows
 		}
 		m.clamp()
 		return m, tick(m.refresh)
+	case windowMsg:
+		if !msg.ok {
+			return m, nil // the watcher ended; polling still claims
+		}
+		if msg.event.Kind == revier.WindowOpened {
+			m.claimByEvent(msg.event.Instance)
+		}
+		return m, m.rearm(msg)
 	case tickMsg:
 		return m, m.Survey()
 	case actedMsg:
@@ -108,6 +152,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.key(msg)
 	}
 	return m, nil
+}
+
+// rearm keeps receiving from the watcher after an event.
+func (m Model) rearm(windowMsg) tea.Cmd {
+	w, ok := m.core.Window.(revier.WindowWatcher)
+	if !ok {
+		return nil
+	}
+	events, err := w.Watch(context.Background())
+	if err != nil {
+		return nil
+	}
+	return waitEvent(events)
+}
+
+// claimByPolling diffs the window listing against the previous survey's and
+// attaches a window that appeared within the claim window after the last
+// launch. State is re-read because the launch was written by another process.
+func (m *Model) claimByPolling(windows []revier.Instance) {
+	st, err := state.Load(m.stateRoot)
+	if err != nil {
+		return
+	}
+	m.attached = st.Attached
+	if st.Launch == nil || m.windows == nil {
+		return
+	}
+	now := time.Now()
+	ref, ok := m.core.Claim(m.windows, windows, st.Launch.At, now, m.projects)
+	if ok {
+		st.Attach(st.Launch.Project, ref)
+		m.attached = st.Attached
+	}
+	if ok || now.Sub(st.Launch.At) > core.ClaimWindow {
+		st.Launch = nil // consumed, or expired
+		_ = st.Save(m.stateRoot)
+	}
+}
+
+// claimByEvent is the same decision for a window a watching host reported.
+func (m *Model) claimByEvent(inst revier.Instance) {
+	st, err := state.Load(m.stateRoot)
+	if err != nil || st.Launch == nil {
+		return
+	}
+	if !m.core.ClaimEvent(inst, st.Launch.At, time.Now(), m.projects) {
+		return
+	}
+	st.Attach(st.Launch.Project, inst.Ref)
+	st.Launch = nil
+	if err := st.Save(m.stateRoot); err == nil {
+		m.attached = st.Attached
+	}
 }
 
 // sorted puts projects needing attention first and otherwise keeps config
@@ -279,10 +376,18 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		}
 	}
 	name := row.target.Name
+	root := m.stateRoot
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		_, err := c.Go(ctx, p, name)
+		ref, err := c.Go(ctx, p, name)
+		if err == nil && ref.IsZero() {
+			// A detached launch: the window that appears next may be claimed.
+			if st, err := state.Load(root); err == nil {
+				st.Launch = &state.Launch{Project: p.Name, At: time.Now()}
+				_ = st.Save(root)
+			}
+		}
 		return actedMsg{err: err}
 	}
 }

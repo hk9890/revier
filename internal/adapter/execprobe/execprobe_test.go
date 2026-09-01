@@ -92,10 +92,11 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	views, err := c.Survey(context.Background(), []core.Project{p})
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
+	views := report.Views
 	agents := views[0].Agents
 	if len(agents) != 2 {
 		t.Fatalf("got %d agents, want 2", len(agents))

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -269,22 +270,97 @@ func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instanc
 	return cur.Host == want.Host && cur.ID == want.ID
 }
 
+// Report is one survey: the view every renderer reads, and the window host's
+// listing it was built from, which claim-on-appear diffs between refreshes.
+// Carrying the listing out keeps a refresh at one Instances call per host.
+type Report struct {
+	Views   []revier.ProjectView
+	Windows []revier.Instance
+}
+
 // Survey builds the view every renderer reads: one bulk listing per host, then
 // local matching for every project.
 //
 // Every project here is already rendered and compiled; a project that could
 // not be was refused at load, so the survey has no per-project error path and
 // does no work that a previous refresh did not also have to do.
-func (c *Core) Survey(ctx context.Context, projects []Project) ([]revier.ProjectView, error) {
+func (c *Core) Survey(ctx context.Context, projects []Project) (Report, error) {
 	snap, err := c.snapshot(ctx)
 	if err != nil {
-		return nil, err
+		return Report{}, err
 	}
-	views := make([]revier.ProjectView, 0, len(projects))
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
-		views = append(views, c.view(ctx, snap, p))
+		r.Views = append(r.Views, c.view(ctx, snap, p))
 	}
-	return views, nil
+	if c.Window != nil {
+		r.Windows = snap[c.Window.Name()]
+	}
+	return r, nil
+}
+
+// ClaimWindow is how long after a detached launch a window that appears is
+// attributed to the project that launched. Short on purpose: a wrong claim
+// binds an unrelated window to a project and is only visible later, when a
+// key goes somewhere surprising.
+const ClaimWindow = 5 * time.Second
+
+// Claim decides claim-on-appear on the polling path: among the windows in
+// after that were not in before, the one to attach to the project that
+// launched at launchedAt. It claims nothing rather than the wrong thing:
+//
+//   - nothing outside ClaimWindow after the launch,
+//   - never a window a declared target of any project matches; that window
+//     is reached by its key already and is not what this exists for,
+//   - nothing when more than one candidate appeared at once, because then the
+//     launch does not say which.
+func (c *Core) Claim(before, after []revier.Instance, launchedAt, now time.Time, projects []Project) (revier.TargetRef, bool) {
+	if !c.withinClaimWindow(launchedAt, now) {
+		return revier.TargetRef{}, false
+	}
+	seen := map[string]bool{}
+	for _, inst := range before {
+		seen[inst.Ref.Host+"\x00"+inst.Ref.ID] = true
+	}
+	var candidates []revier.Instance
+	for _, inst := range after {
+		if seen[inst.Ref.Host+"\x00"+inst.Ref.ID] || c.declared(inst, projects) {
+			continue
+		}
+		candidates = append(candidates, inst)
+	}
+	if len(candidates) != 1 {
+		return revier.TargetRef{}, false
+	}
+	return candidates[0].Ref, true
+}
+
+// ClaimEvent decides claim-on-appear on the event path: whether a window that
+// just appeared is the one to attach to the project that launched at
+// launchedAt. The same bounds as Claim, for one window at a time.
+func (c *Core) ClaimEvent(inst revier.Instance, launchedAt, now time.Time, projects []Project) bool {
+	return c.withinClaimWindow(launchedAt, now) && !c.declared(inst, projects)
+}
+
+func (c *Core) withinClaimWindow(launchedAt, now time.Time) bool {
+	if launchedAt.IsZero() {
+		return false
+	}
+	age := now.Sub(launchedAt)
+	return age >= 0 && age <= ClaimWindow
+}
+
+// declared reports whether any project's window realization matches the
+// instance: it is then a declared target, not a stray.
+func (c *Core) declared(inst revier.Instance, projects []Project) bool {
+	for _, p := range projects {
+		for i, t := range p.Targets {
+			if t.Window != nil && p.compiled[i].window.Matches(inst) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c *Core) view(ctx context.Context, snap snapshot, p Project) revier.ProjectView {

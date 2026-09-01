@@ -11,6 +11,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -44,10 +45,28 @@ func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Co
 	return rt, wm, c, projects
 }
 
-// refreshed builds the model and applies one survey, as the timer does.
-func refreshed(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef, actions []config.Action) tui.Model {
+// stateWith writes a state file holding the given attachments and returns
+// its root.
+func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef) string {
 	t.Helper()
-	m := tui.New(c, projects, attached, actions, time.Second)
+	root := t.TempDir()
+	st := &state.State{Attached: attached}
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// refreshed builds the model over a state root and applies one survey, as the
+// timer does.
+func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
+	t.Helper()
+	m := tui.New(c, projects, root, actions, time.Second)
+	next, _ := m.Update(m.Survey()())
+	return next.(tui.Model)
+}
+
+func survey(m tui.Model) tui.Model {
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
 }
@@ -76,7 +95,7 @@ func lines(m tui.Model) []string { return strings.Split(m.View(), "\n") }
 // config order.
 func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	_, _, c, projects := world(t, 4)
-	m := refreshed(t, c, projects, nil, nil)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	first := lines(m)[1]
 	if !strings.Contains(first, "project-03") || !strings.Contains(first, "attention") {
@@ -93,7 +112,7 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 // A refresh costs one Instances call per host however many projects exist.
 func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 	rt, wm, c, projects := world(t, 60)
-	refreshed(t, c, projects, nil, nil)
+	refreshed(t, c, projects, stateWith(t, nil), nil)
 	if rt.InstancesCalls != 1 || wm.InstancesCalls != 1 {
 		t.Fatalf("Instances calls: runtime %d, window %d; want 1 each for 60 projects", rt.InstancesCalls, wm.InstancesCalls)
 	}
@@ -101,7 +120,7 @@ func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 
 func TestEnterDrillsIntoTargetsAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := refreshed(t, c, projects, nil, nil)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	m, _ = press(m, "enter")
 	view := m.View()
@@ -120,7 +139,7 @@ func TestEnterDrillsIntoTargetsAndEscReturns(t *testing.T) {
 // next refresh shows the result.
 func TestEnterOnATargetRunsGo(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
-	m := refreshed(t, c, projects, nil, nil)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "enter") // project-01, the running one, is first
 	m, _ = press(m, "down")  // editor
 	_, cmd := press(m, "enter")
@@ -144,7 +163,7 @@ func TestEnterOnATargetRunsGo(t *testing.T) {
 // Typing narrows the list by name; backspace widens it; esc clears it.
 func TestTypingFiltersProjects(t *testing.T) {
 	_, _, c, projects := world(t, 12)
-	m := refreshed(t, c, projects, nil, nil)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "1")
 	m, _ = press(m, "1")
 	body := strings.Join(lines(m)[1:], "\n")
@@ -166,7 +185,7 @@ func TestTypingFiltersProjects(t *testing.T) {
 func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	ref := wm.Add("Pull requests", "chrome")
-	m := refreshed(t, c, projects, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}, nil)
+	m := refreshed(t, c, projects, stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}), nil)
 	m, _ = press(m, "enter")
 	if view := m.View(); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
 		t.Fatalf("attached instance not listed:\n%s", view)
@@ -186,11 +205,115 @@ func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
 // A survey that fails leaves the last good view and reports in the footer.
 func TestSurveyErrorIsShownNotFatal(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
-	m := refreshed(t, c, projects, nil, nil)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	rt.InstancesErr = fmt.Errorf("kitty went away")
 	next, _ := m.Update(m.Survey()())
 	m = next.(tui.Model)
 	if view := m.View(); !strings.Contains(view, "kitty went away") || !strings.Contains(view, "project-00") {
 		t.Errorf("want the error in the footer and the rows kept:\n%s", view)
+	}
+}
+
+// Claim-on-appear on the polling path: a window that appears within the claim
+// window after a launch, matching no declared target, is attached to the
+// launching project by the next refresh; the launch is consumed.
+func TestPollingClaimsTheWindowThatAppearsAfterALaunch(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil) // the "before" listing
+
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	stray := wm.Add("Pull requests - Chromium", "chromium")
+	m = survey(m)
+
+	got, _ := state.Load(root)
+	if refs := got.Attached["project-00"]; len(refs) != 1 || refs[0] != stray {
+		t.Fatalf("attached = %+v, want the stray window on project-00", got.Attached)
+	}
+	if got.Launch != nil {
+		t.Error("a claim must consume the launch")
+	}
+	m, _ = press(m, "0")
+	m, _ = press(m, "0") // project-00; project-01 sorts first, its agent wants the human
+	m, _ = press(m, "enter")
+	if view := m.View(); !strings.Contains(view, "Pull requests") {
+		t.Errorf("the claimed window should be listed under the project:\n%s", view)
+	}
+}
+
+// The bounds: no launch, a stale launch, a declared target, or two windows at
+// once claim nothing.
+func TestPollingClaimsNothingOutsideTheBounds(t *testing.T) {
+	cases := map[string]func(root string, wm *hosttest.Fake){
+		"no launch": func(root string, wm *hosttest.Fake) {
+			wm.Add("stray", "chromium")
+		},
+		"stale launch": func(root string, wm *hosttest.Fake) {
+			st, _ := state.Load(root)
+			st.Launch = &state.Launch{Project: "project-00", At: time.Now().Add(-time.Minute)}
+			_ = st.Save(root)
+			wm.Add("stray", "chromium")
+		},
+		"a declared target": func(root string, wm *hosttest.Fake) {
+			st, _ := state.Load(root)
+			st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
+			_ = st.Save(root)
+			wm.Add("editor", "code-project-01") // project-01's editor, by class
+		},
+		"two windows at once": func(root string, wm *hosttest.Fake) {
+			st, _ := state.Load(root)
+			st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
+			_ = st.Save(root)
+			wm.Add("stray one", "chromium")
+			wm.Add("stray two", "chromium")
+		},
+	}
+	for name, arrange := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, wm, c, projects := world(t, 2)
+			root := stateWith(t, nil)
+			m := refreshed(t, c, projects, root, nil)
+			arrange(root, wm)
+			survey(m)
+			got, _ := state.Load(root)
+			if len(got.Attached) != 0 {
+				t.Errorf("attached = %+v, want nothing claimed", got.Attached)
+			}
+		})
+	}
+}
+
+// Claim-on-appear on the event path: a watching host reports the window and
+// the claim lands without waiting for a refresh.
+func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
+	rt, _, c, projects := world(t, 1)
+	wm := hosttest.NewWatcher("wm")
+	c.Window = wm
+	_ = rt
+	root := stateWith(t, nil)
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
+	_ = st.Save(root)
+
+	m := tui.New(c, projects, root, nil, time.Second)
+	stray := wm.Add("Pull requests - Chromium", "chromium")
+	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
+
+	// Init batches the first survey with the watcher; run what it returns.
+	batch, ok := m.Init()().(tea.BatchMsg)
+	if !ok {
+		t.Fatal("Init should batch the survey and the watcher for a watching host")
+	}
+	for _, cmd := range batch {
+		next, _ := m.Update(cmd())
+		m = next.(tui.Model)
+	}
+	got, _ := state.Load(root)
+	if refs := got.Attached["project-00"]; len(refs) != 1 || refs[0] != stray {
+		t.Fatalf("attached = %+v, want the opened window on project-00", got.Attached)
 	}
 }
