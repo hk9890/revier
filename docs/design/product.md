@@ -84,6 +84,7 @@ an application restart.
 revier                 the TUI: every project, its agent state, its targets
 revier open [name]     run-or-raise the home target, without UI
 revier go <target>     run-or-raise a named target in the current project
+revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
 revier list [--json]   machine-readable inventory
 revier status          the project for the current directory

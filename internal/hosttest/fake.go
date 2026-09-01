@@ -42,6 +42,9 @@ type Fake struct {
 	Opened []revier.Realization
 	// Focuses records every ref passed to Focus, in order.
 	Focuses []revier.TargetRef
+	// InstancesCalls counts Instances calls, so a test can assert that a
+	// refresh costs one call whatever the project count.
+	InstancesCalls int
 
 	caps revier.Capabilities
 }
@@ -113,6 +116,7 @@ func (f *Fake) Probe(context.Context) error { return f.ProbeErr }
 func (f *Fake) Instances(context.Context) ([]revier.Instance, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.InstancesCalls++
 	if f.InstancesErr != nil {
 		return nil, f.InstancesErr
 	}

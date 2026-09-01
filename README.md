@@ -17,12 +17,32 @@ territory.
 Early, but usable. There is no release yet; build from source.
 
 Working: project files, run-or-raise with toggle-back, agent state for Claude
-Code, a tmux runtime host, a GNOME window host, and the `list`/`open`/`go`/
-`attach`/`status` commands. Not built yet: the TUI, a kitty runtime host, and
+Code (opencode is recognised but reports no state), kitty and tmux runtime
+hosts, a GNOME window host, the TUI, and every command below. Not built yet:
 desktop keybinding integration.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
+
+## Usage
+
+```
+revier                        the TUI: every project, its agent state, its targets
+revier list [--json]          the same, printed once
+revier open [name]            run-or-raise a project's workspace
+revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
+revier run <action> [-p name] run a configured action in the project
+revier attach [-p name]       bind the focused window to a project
+revier status                 which project this directory resolves to
+```
+
+In the TUI, projects whose agent is waiting for you sort first. Type to filter
+by name, Enter opens a project's targets, Enter on a target runs-or-raises it,
+Esc goes back. A configured action key runs the action against the selected
+project.
+
+Projects are TOML files under `~/.config/revier/projects/`; the format, with a
+worked example, is [docs/design/extending.md](docs/design/extending.md).
 
 ## How it works
 

@@ -1,0 +1,196 @@
+package tui_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// world is a runtime, a window host, and n projects; the last project's
+// workspace is running with an agent that wants the human.
+func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	wm := hosttest.New("wm")
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
+	}}}
+	var raw []revier.Project
+	for i := 0; i < n; i++ {
+		name := revier.ProjectName(fmt.Sprintf("project-%02d", i))
+		raw = append(raw, revier.Project{Name: name, Path: "/p/" + string(name), Targets: []revier.Target{
+			{Name: "home", Home: true, Key: "ctrl-shift-u", Runtime: &revier.Realization{
+				Name: "session:" + string(name), Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + string(name) + "$"}}},
+			{Name: "editor", Key: "ctrl-shift-o", Window: &revier.Realization{
+				Launch: []string{"code"}, Match: revier.Match{Class: "^code-" + string(name) + "$"}}},
+		}})
+	}
+	last := raw[n-1].Name
+	rt.Add("session:"+string(last), "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rt, wm, c, projects
+}
+
+// refreshed builds the model and applies one survey, as the timer does.
+func refreshed(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef, actions []config.Action) tui.Model {
+	t.Helper()
+	m := tui.New(c, projects, attached, actions, time.Second)
+	next, _ := m.Update(m.Survey()())
+	return next.(tui.Model)
+}
+
+func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
+	var msg tea.KeyMsg
+	switch key {
+	case "enter":
+		msg = tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		msg = tea.KeyMsg{Type: tea.KeyEsc}
+	case "down":
+		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "backspace":
+		msg = tea.KeyMsg{Type: tea.KeyBackspace}
+	default:
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+	}
+	next, cmd := m.Update(msg)
+	return next.(tui.Model), cmd
+}
+
+func lines(m tui.Model) []string { return strings.Split(m.View(), "\n") }
+
+// The project the human is waiting on sorts above every other, whatever its
+// config order.
+func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
+	_, _, c, projects := world(t, 4)
+	m := refreshed(t, c, projects, nil, nil)
+
+	first := lines(m)[1]
+	if !strings.Contains(first, "project-03") || !strings.Contains(first, "attention") {
+		t.Fatalf("first row = %q, want project-03 with attention", first)
+	}
+	if !strings.Contains(first, "needs a decision") {
+		t.Errorf("first row = %q, want the activity line", first)
+	}
+	if second := lines(m)[2]; !strings.Contains(second, "project-00") {
+		t.Errorf("second row = %q, want config order to resume", second)
+	}
+}
+
+// A refresh costs one Instances call per host however many projects exist.
+func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
+	rt, wm, c, projects := world(t, 60)
+	refreshed(t, c, projects, nil, nil)
+	if rt.InstancesCalls != 1 || wm.InstancesCalls != 1 {
+		t.Fatalf("Instances calls: runtime %d, window %d; want 1 each for 60 projects", rt.InstancesCalls, wm.InstancesCalls)
+	}
+}
+
+func TestEnterDrillsIntoTargetsAndEscReturns(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := refreshed(t, c, projects, nil, nil)
+
+	m, _ = press(m, "enter")
+	view := m.View()
+	for _, want := range []string{"project-02", "home", "editor", "ctrl-shift-o"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("target level lacks %q:\n%s", want, view)
+		}
+	}
+	m, _ = press(m, "esc")
+	if !strings.Contains(lines(m)[0], "3 projects") {
+		t.Errorf("esc did not return to the project level:\n%s", m.View())
+	}
+}
+
+// Enter on a target is core.Go: the same run-or-raise the CLI does, and the
+// next refresh shows the result.
+func TestEnterOnATargetRunsGo(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, nil, nil)
+	m, _ = press(m, "enter") // project-01, the running one, is first
+	m, _ = press(m, "down")  // editor
+	_, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a target returned no command")
+	}
+	msg := cmd()
+	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
+		t.Fatalf("Opened = %v, want the editor launched through core.Go", wm.Opened)
+	}
+	next, _ := m.Update(msg)
+	m = next.(tui.Model)
+	next, _ = m.Update(m.Survey()())
+	m = next.(tui.Model)
+	if view := m.View(); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
+		t.Errorf("after Go the editor should show running:\n%s", view)
+	}
+	_ = rt
+}
+
+// Typing narrows the list by name; backspace widens it; esc clears it.
+func TestTypingFiltersProjects(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, nil, nil)
+	m, _ = press(m, "1")
+	m, _ = press(m, "1")
+	body := strings.Join(lines(m)[1:], "\n")
+	if !strings.Contains(body, "project-11") || strings.Contains(body, "project-10") {
+		t.Errorf("filter '11' should leave only project-11:\n%s", m.View())
+	}
+	m, _ = press(m, "backspace")
+	if body := m.View(); !strings.Contains(body, "project-10") {
+		t.Errorf("filter '1' should include project-10:\n%s", body)
+	}
+	m, _ = press(m, "esc")
+	if body := m.View(); !strings.Contains(body, "project-00") {
+		t.Errorf("esc should clear the filter:\n%s", body)
+	}
+}
+
+// An attached instance is listed under its project without a key and is
+// focused through the host that produced it.
+func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	ref := wm.Add("Pull requests", "chrome")
+	m := refreshed(t, c, projects, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}, nil)
+	m, _ = press(m, "enter")
+	if view := m.View(); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
+		t.Fatalf("attached instance not listed:\n%s", view)
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	_, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("no command")
+	}
+	cmd()
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != ref {
+		t.Errorf("Focuses = %v, want the attached ref", wm.Focuses)
+	}
+}
+
+// A survey that fails leaves the last good view and reports in the footer.
+func TestSurveyErrorIsShownNotFatal(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, nil, nil)
+	rt.InstancesErr = fmt.Errorf("kitty went away")
+	next, _ := m.Update(m.Survey()())
+	m = next.(tui.Model)
+	if view := m.View(); !strings.Contains(view, "kitty went away") || !strings.Contains(view, "project-00") {
+		t.Errorf("want the error in the footer and the rows kept:\n%s", view)
+	}
+}

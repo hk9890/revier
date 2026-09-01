@@ -1,9 +1,10 @@
-// Command revier is the CLI.
+// Command revier is the CLI, and with no arguments the TUI.
 //
-// The TUI is not built yet, so `revier` with no arguments lists projects. Every
-// command here is one process per invocation: a keybinding spawns it, does one
-// thing, and exits. There is no daemon, which is why the commands avoid work
-// they do not need - `go` never surveys every project, only the one it acts on.
+// Every command here is one process per invocation: a keybinding spawns it,
+// does one thing, and exits. There is no daemon, which is why the commands
+// avoid work they do not need - `go` never surveys every project, only the one
+// it acts on. The TUI is the one long-lived process, and it refreshes through
+// the same Survey `list` prints once.
 package main
 
 import (
@@ -17,16 +18,21 @@ import (
 	"text/tabwriter"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/term"
+
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 const usage = `revier - a project-grouped control surface for running agents
 
 usage:
-  revier [list] [--json]        list projects, agent state, and targets
+  revier                        the TUI: every project, its agent state, its targets
+  revier list [--json]          the same, printed once
   revier open [name]            run-or-raise a project's workspace
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
   revier run <action> [-p name] run a configured action in the project
@@ -52,7 +58,7 @@ func main() {
 }
 
 func run(args []string) error {
-	cmd := "list"
+	cmd := ""
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]
 	}
@@ -75,6 +81,8 @@ func run(args []string) error {
 	}
 
 	switch cmd {
+	case "":
+		return cmdTUI(a)
 	case "list":
 		return cmdList(ctx, a, args)
 	case "open":
@@ -120,6 +128,17 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 		positional = append(positional, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
+}
+
+// cmdTUI runs the surface. Without a terminal - `revier | grep` - it prints
+// the table instead, so a script sees what it always saw.
+func cmdTUI(a *app) error {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return cmdList(context.Background(), a, nil)
+	}
+	m := tui.New(a.core, a.projects, a.state.Attached, a.cfg.Actions, time.Second)
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	return err
 }
 
 func cmdList(ctx context.Context, a *app, args []string) error {

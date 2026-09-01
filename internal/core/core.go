@@ -209,6 +209,18 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 	return revier.Instance{}, false
 }
 
+// Focus activates a bare ref on the host that produced it. The picker uses it
+// for an attached instance, which has no target to resolve: the ref is all
+// revier knows about it.
+func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
+	for _, h := range c.hosts() {
+		if h.Name() == ref.Host {
+			return h.Focus(ctx, ref)
+		}
+	}
+	return fmt.Errorf("%w: no host named %q", ErrNoHost, ref.Host)
+}
+
 // focusAuthority is the host whose Focused answer describes where the user
 // actually is. OS focus is global, so a window host outranks a runtime, which
 // knows only which of its own panes is current.

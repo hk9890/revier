@@ -56,6 +56,27 @@ tmux select-pane -t agent -T '⠧ Working on it'   # spinner -> running
 tmux select-pane -t agent -T '✳ Ready'           # at rest  -> idle
 ```
 
+## Drive the TUI without a screen
+
+The TUI needs a terminal, and a tmux pane is one. Run it on a private server
+against the scratch configuration above and read the screen back:
+
+```bash
+T="tmux -L revier-tui"
+$T new-session -d -s tui -x 100 -y 20 "REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"
+$T capture-pane -p -t tui                       # the rows, as rendered
+$T send-keys -t tui d e m Enter                 # type to filter, Enter to drill in
+$T send-keys -t tui Escape q                    # back, quit
+$T kill-server
+```
+
+To see the agent line change without a keypress, retitle the agent pane on the
+scratch server while the TUI runs, then capture again after a refresh:
+
+```bash
+tmux select-pane -t agent -T '⠧ Working on it'
+```
+
 ## Drive the core without any configuration
 
 `scripts/drive` builds a project in memory and runs it against a tmux server on
