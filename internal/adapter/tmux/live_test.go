@@ -1,0 +1,205 @@
+//go:build live
+
+// Layer L4: a real tmux server, headless.
+//
+// Every test here runs against a private server on its own socket (`tmux -L`),
+// started and killed by the test. Nothing attaches a client, nothing reaches a
+// display, and the user's own tmux sessions are never visible to it. This is
+// the layer that proves an adapter actually drives its tool, without which L2
+// only proves the core is self-consistent.
+package tmux_test
+
+import (
+	"context"
+	"os/exec"
+	"testing"
+	"time"
+
+	"github.com/hk9890/revier/internal/adapter/tmux"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// server returns a Host on a socket private to this test, and kills the server
+// when the test ends.
+func server(t *testing.T) *tmux.Host {
+	t.Helper()
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed; L4 needs it")
+	}
+	socket := "revier-test-" + t.Name()
+	h := &tmux.Host{Socket: socket, Session: "revier-test"}
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
+	})
+	return h
+}
+
+func ctx(t *testing.T) context.Context {
+	c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	t.Cleanup(cancel)
+	return c
+}
+
+func TestProbeFindsTmux(t *testing.T) {
+	if err := server(t).Probe(ctx(t)); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+}
+
+// A server with nothing on it is an empty list, not an error: the survey has
+// to render on a machine where nothing has been opened yet.
+func TestInstancesOnAnEmptyServer(t *testing.T) {
+	got, err := server(t).Instances(ctx(t))
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d instances, want 0", len(got))
+	}
+}
+
+// The invariant every host owes the core: what Open creates, Match finds.
+func TestOpenThenMatchFindsIt(t *testing.T) {
+	h, c := server(t), ctx(t)
+	real := revier.Realization{
+		Name:   "diff",
+		Launch: []string{"sh", "-c", "sleep 30"},
+		Match:  revier.Match{Title: "^diff$"},
+	}
+
+	ref, err := h.Open(c, real)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if ref.Host != "tmux" || ref.ID == "" {
+		t.Fatalf("ref = %+v, want a tmux ref with an id", ref)
+	}
+
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	m, err := real.Match.Compile()
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	for _, inst := range instances {
+		if m.Matches(inst) {
+			return
+		}
+	}
+	t.Fatalf("no instance matched %q; got %+v", real.Match.Title, instances)
+}
+
+func TestFocusAndFocusedRoundTrip(t *testing.T) {
+	h, c := server(t), ctx(t)
+	first, err := h.Open(c, revier.Realization{
+		Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+		Match: revier.Match{Title: "^home$"},
+	})
+	if err != nil {
+		t.Fatalf("Open home: %v", err)
+	}
+	second, err := h.Open(c, revier.Realization{
+		Name: "diff", Launch: []string{"sh", "-c", "sleep 30"},
+		Match: revier.Match{Title: "^diff$"},
+	})
+	if err != nil {
+		t.Fatalf("Open diff: %v", err)
+	}
+
+	for _, want := range []revier.TargetRef{first, second, first} {
+		if err := h.Focus(c, want); err != nil {
+			t.Fatalf("Focus %s: %v", want.ID, err)
+		}
+		got, err := h.Focused(c)
+		if err != nil {
+			t.Fatalf("Focused: %v", err)
+		}
+		if got.ID != want.ID {
+			t.Fatalf("Focused = %s, want %s", got.ID, want.ID)
+		}
+	}
+}
+
+func TestInstancesReportPanels(t *testing.T) {
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+		Match: revier.Match{Title: "^home$"},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 {
+		t.Fatalf("got %d instances, want 1", len(instances))
+	}
+	if len(instances[0].Panels) == 0 {
+		t.Fatal("want at least one panel: a probe reads nothing else")
+	}
+	if instances[0].Panels[0].ID == "" {
+		t.Error("panel has no id")
+	}
+}
+
+// The whole product against a real substrate: run-or-raise opens the target the
+// first time, raises it the second, and toggles home on the third.
+func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
+	h, c := server(t), ctx(t)
+	cr := &core.Core{Runtime: h}
+	p := revier.Project{
+		Name: "revier",
+		Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+				Match: revier.Match{Title: "^home$"},
+			}},
+			{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+				Name: "diff", Launch: []string{"sh", "-c", "sleep 30"},
+				Match: revier.Match{Title: "^diff$"},
+			}},
+		},
+	}
+
+	homeRef, err := cr.Go(c, p, "home")
+	if err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	diffRef, err := cr.Go(c, p, "diff")
+	if err != nil {
+		t.Fatalf("open diff: %v", err)
+	}
+	if diffRef.ID == homeRef.ID {
+		t.Fatal("diff and home must be different windows")
+	}
+
+	// Opening left diff focused, so the second press is the round trip home.
+	back, err := cr.Go(c, p, "diff")
+	if err != nil {
+		t.Fatalf("toggle back: %v", err)
+	}
+	if back.ID != homeRef.ID {
+		t.Fatalf("toggle-back returned %s, want home %s", back.ID, homeRef.ID)
+	}
+
+	// Third press raises the existing window rather than opening a duplicate.
+	again, err := cr.Go(c, p, "diff")
+	if err != nil {
+		t.Fatalf("raise diff: %v", err)
+	}
+	if again.ID != diffRef.ID {
+		t.Errorf("raise returned %s, want the existing %s", again.ID, diffRef.ID)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 2 {
+		t.Fatalf("got %d windows, want 2: run-or-raise must not duplicate", len(instances))
+	}
+}

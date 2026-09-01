@@ -1,0 +1,103 @@
+[tools]
+go = "1.27.0"
+tmux = "3.7"
+"go:gotest.tools/gotestsum" = "1.13.0"
+"go:golang.org/x/tools/cmd/goimports" = "0.30.0"
+"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "2.1.6"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.1.4"
+
+[env]
+CGO_ENABLED = "0"
+
+# ---- build & run -----------------------------------------------------------
+
+[tasks.build]
+description = "Build the revier binary into ./bin"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+PKG=github.com/hk9890/revier/internal/build
+go build -ldflags "-s -w -X $PKG.Version=$VERSION -X $PKG.Commit=$COMMIT -X $PKG.Date=$DATE" -o bin/revier ./cmd/revier
+"""
+
+[tasks.revier]
+description = "Build from source and run in your shell's directory. Usage: mise run revier -- <args>"
+run = 'cd "$MISE_PROJECT_ROOT" && go build -o bin/revier ./cmd/revier && cd "${MISE_ORIGINAL_CWD:-$PWD}" && exec "$MISE_PROJECT_ROOT/bin/revier"'
+
+# ---- format / vet / lint / tidy --------------------------------------------
+
+[tasks.fmt]
+description = "Format Go source (goimports)"
+run = "goimports -local github.com/hk9890/revier -w cmd internal pkg"
+
+[tasks."fmt:check"]
+description = "Fail if any file is not formatted"
+run = """
+# 2>&1 folds goimports' own diagnostics into $OUT so a broken run cannot pass.
+OUT=$(goimports -local github.com/hk9890/revier -l cmd internal pkg 2>&1) || { echo "goimports failed:"; echo "$OUT"; exit 1; }
+if [ -n "$OUT" ]; then echo "unformatted:"; echo "$OUT"; exit 1; fi
+"""
+
+[tasks.vet]
+description = "go vet, every build tag"
+run = "go vet ./... && go vet -tags=integration ./... && go vet -tags=live ./..."
+
+[tasks.lint]
+description = "golangci-lint at the pinned version"
+run = "golangci-lint run --timeout=5m ./..."
+
+[tasks.tidy]
+run = "go mod tidy"
+
+[tasks.vuln]
+description = "govulncheck (reaches the network; CI-only gate)"
+run = "govulncheck ./..."
+
+# ---- tests -----------------------------------------------------------------
+# Layer model: docs/TESTING.md. L1+L2 are the default suite and touch nothing
+# outside the process. L3 parses recorded adapter output. L4/L5 drive a real
+# headless substrate. L6 is manual and is the only layer that reaches a screen.
+
+[tasks.test]
+description = "L1 pure + L2 fake host — fast, no processes, no display"
+run = "gotestsum --format pkgname-and-test-fails -- -race ./..."
+[tasks.test.env]
+CGO_ENABLED = "1"
+
+[tasks."test:integration"]
+description = "L3 adapter parsing against recorded fixtures — no tools needed"
+run = "gotestsum --format pkgname-and-test-fails -- -race -tags=integration ./..."
+[tasks."test:integration".env]
+CGO_ENABLED = "1"
+
+[tasks."test:live"]
+description = "L4 tmux + L5 sway, both headless. Skips any substrate not installed."
+run = "gotestsum --format pkgname-and-test-fails -- -race -tags=live -timeout=120s ./..."
+[tasks."test:live".env]
+CGO_ENABLED = "1"
+
+[tasks."test:all"]
+depends = ["test", "test:integration", "test:live"]
+
+[tasks."test:coverage:summary"]
+description = "Per-package coverage, least-covered first. Reports; gates nothing."
+run = """
+set -e
+go test -tags=integration -coverprofile=coverage.out -covermode=atomic ./... >/dev/null 2>&1 || true
+go tool cover -func=coverage.out | awk '$1 != "total:" {print}' | sort -k3 -n | head -25
+go tool cover -func=coverage.out | grep total:
+rm -f coverage.out
+"""
+[tasks."test:coverage:summary".env]
+CGO_ENABLED = "1"
+
+# ---- gates -----------------------------------------------------------------
+
+[tasks.quality]
+description = "Pre-commit gate: fmt + vet + lint + build + L1/L2/L3"
+depends = ["fmt:check", "vet", "lint", "build", "test", "test:integration"]
+
+[tasks."quality:full"]
+description = "Pre-handoff gate: quality + the live headless substrates"
+depends = ["fmt:check", "vet", "lint", "build", "test", "test:integration", "test:live"]

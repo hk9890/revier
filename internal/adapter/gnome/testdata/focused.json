@@ -1,0 +1,20 @@
+{
+  "id": 3811157401,
+  "title": "revier - Visual Studio Code",
+  "wm_class": "code",
+  "wm_class_instance": "code",
+  "sandboxed_app_id": "",
+  "gtk_application_id": "",
+  "has_focus": true,
+  "appears_focused": true,
+  "is_hidden": false,
+  "is_minimized": false,
+  "is_maximized": false,
+  "is_fullscreen": false,
+  "is_above": false,
+  "is_on_all_workspaces": false,
+  "is_skip_taskbar": false,
+  "workspace_index": 0,
+  "monitor_index": 0,
+  "pid": 162100
+}

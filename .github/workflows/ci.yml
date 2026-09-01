@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Least-privilege default token: build, test and lint need read access only.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Formatting is checked in the Lint job, which already has mise. It cannot
+      # run here: mise-action exports .mise.toml's [env], including
+      # CGO_ENABLED=0, into the job - and the race detector needs cgo.
+
+      - name: vet (every build tag)
+        run: go vet ./... && go vet -tags=integration ./... && go vet -tags=live ./...
+
+      - name: L1 + L2
+        run: CGO_ENABLED=1 go test -race ./...
+
+      - name: L3 adapter parsing
+        run: CGO_ENABLED=1 go test -race -tags=integration ./...
+
+      # ubuntu-latest ships tmux, which is all L4 needs: every test starts a
+      # private server on its own socket and kills it in cleanup. L5 needs sway
+      # and is not installed here yet - there is no sway adapter to test, and a
+      # dependency nothing exercises is assurance with nothing behind it.
+      - name: L4 live tmux
+        run: |
+          tmux -V
+          CGO_ENABLED=1 go test -race -tags=live -timeout=180s ./...
+
+      - name: build
+        run: go build -o bin/revier ./cmd/revier
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up mise (pins go, goimports, golangci-lint)
+        uses: jdx/mise-action@f10502fc09dadecfefb962fff68ce77213930204 # v4.2.2
+
+      # The format gate is defined once, in .mise.toml, and run from there -
+      # never re-spelled as `gofmt`. goimports with -local also enforces the
+      # import grouping plain gofmt has no opinion on, so a gofmt-shaped copy
+      # accepts files the canonical gate rejects.
+      - name: fmt-check
+        run: mise run fmt:check
+
+      - name: golangci-lint
+        run: mise run lint
+
+      # Reaches the network for the vulnerability database, so it runs here
+      # rather than in the pre-commit gate.
+      - name: vuln
+        run: mise run vuln
