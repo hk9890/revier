@@ -295,3 +295,23 @@ func TestValidatePanelsStandInForLaunch(t *testing.T) {
 		t.Errorf("a window realization with panels should be rejected, got %v", err)
 	}
 }
+
+// A [[probe]] entry is loaded with its binary path expanded; a half-declared
+// one is refused at load.
+func TestLoadProbes(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\nexec = \"~/bin/aider-probe\"\n")
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	home, _ := os.UserHomeDir()
+	if len(cfg.Probes) != 1 || cfg.Probes[0].Name != "aider" || cfg.Probes[0].Exec != filepath.Join(home, "bin/aider-probe") {
+		t.Errorf("probes = %+v", cfg.Probes)
+	}
+
+	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\n")
+	if _, _, err := config.Load(root); err == nil {
+		t.Error("a probe without exec should be refused at load")
+	}
+}

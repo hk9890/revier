@@ -22,11 +22,20 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Config is the global configuration: which adapters to prefer, and the
-// actions the TUI exposes.
+// Config is the global configuration: which adapters to prefer, the actions
+// the TUI exposes, and the external agent probes.
 type Config struct {
 	Hosts   Hosts    `toml:"hosts"`
 	Actions []Action `toml:"action"`
+	Probes  []Probe  `toml:"probe"`
+}
+
+// Probe declares an external agent probe: a binary that reads one panel as
+// JSON and answers with one agent state. Name is the harness, and the
+// foreground command the probe claims; Exec is the binary.
+type Probe struct {
+	Name string `toml:"name"`
+	Exec string `toml:"exec"`
 }
 
 // Hosts names adapter preference in order. An empty list means "the first
@@ -70,6 +79,12 @@ func Load(root string) (*Config, []core.Project, error) {
 	cfgPath := filepath.Join(root, "config.toml")
 	if _, err := toml.DecodeFile(cfgPath, cfg); err != nil && !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+	}
+	for i, pr := range cfg.Probes {
+		if pr.Name == "" || pr.Exec == "" {
+			return nil, nil, fmt.Errorf("%s: probe %d needs both name and exec", cfgPath, i+1)
+		}
+		cfg.Probes[i].Exec = expandHome(pr.Exec)
 	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"))

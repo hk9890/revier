@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
+	"github.com/hk9890/revier/internal/adapter/execprobe"
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
@@ -31,8 +32,14 @@ func windowAdapters() map[string]revier.WindowController {
 	}
 }
 
-func probes() []revier.AgentProbe {
-	return []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
+// probes lists the compiled-in probes first, then the ones config declares
+// as subprocesses, so a compiled probe wins for the harness it knows.
+func probes(cfg *config.Config) []revier.AgentProbe {
+	out := []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
+	for _, pr := range cfg.Probes {
+		out = append(out, execprobe.New(pr.Name, pr.Exec))
+	}
+	return out
 }
 
 // preference order used when config names none.
@@ -122,6 +129,6 @@ func selectWindow(ctx context.Context, want []string, adapters map[string]revier
 	return nil, nil
 }
 
-func newCore(rt revier.Runtime, win revier.WindowController) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes()}
+func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController) *core.Core {
+	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg)}
 }
