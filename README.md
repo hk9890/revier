@@ -18,8 +18,9 @@ Early, but usable. There is no release yet; build from source.
 
 Working: project files, run-or-raise with toggle-back, agent state for Claude
 Code (opencode is recognised but reports no state), external probes, kitty and
-tmux runtime hosts, a GNOME window host, the TUI, every command below, and the
-GNOME keybindings under `contrib/`.
+tmux runtime hosts, GNOME and sway window hosts, claim-on-appear for windows
+opened after a launch, the TUI, every command below, and the GNOME keybindings
+under `contrib/`.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
