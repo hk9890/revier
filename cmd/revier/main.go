@@ -155,16 +155,17 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	views := report.Views
 
 	// Drop attachments whose windows are gone, so state does not accumulate
-	// refs to closed windows forever.
-	live := map[string]bool{}
-	for _, v := range views {
-		for _, t := range v.Targets {
-			if !t.Ref.IsZero() {
-				live[state.Key(t.Ref)] = true
-			}
+	// refs to closed windows forever. An attachment is always a window-host
+	// ref, so the window listing is the live set.
+	if a.core.Window != nil {
+		live := map[string]bool{}
+		for _, w := range report.Windows {
+			live[state.Key(w.Ref)] = true
+		}
+		if a.state.Prune(live) {
+			a.commit(a.state.Current, nil)
 		}
 	}
-	a.state.Prune(live)
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -254,7 +255,6 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	a.launched(p.Name, ref)
-	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -278,7 +278,6 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	a.launched(p.Name, ref)
-	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -301,8 +300,8 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	a.remember(p.Name)
-	return runAction(ctx, p, argv)
+	a.commit(p.Name, nil)
+	return runAction(p, argv)
 }
 
 // action renders the named action's argv against the project. An unknown name
@@ -327,9 +326,10 @@ func (a *app) action(p core.Project, name string) ([]string, error) {
 // runAction executes an argv in the project directory with the terminal
 // attached, and returns the command's own error so its exit status survives.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
-// inject into.
-func runAction(ctx context.Context, p core.Project, argv []string) error {
-	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+// inject into. No context either: the command's 30s deadline is for host
+// calls, and an action - an editor, a long pull - runs as long as it runs.
+func runAction(p core.Project, argv []string) error {
+	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = p.Path
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return c.Run()
@@ -355,8 +355,7 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	if ref.IsZero() {
 		return fmt.Errorf("no window is focused")
 	}
-	a.state.Attach(p.Name, ref)
-	a.remember(p.Name)
+	a.commit(p.Name, func(s *state.State) { s.Attach(p.Name, ref) })
 	fmt.Printf("%s: attached %s\n", p.Name, describe(ref))
 	return nil
 }

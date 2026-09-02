@@ -66,10 +66,7 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	in, err := json.Marshal(panel)
-	if err != nil {
-		return revier.AgentState{}, fmt.Errorf("probe %s: encode panel: %w", p.name, err)
-	}
+	in, _ := json.Marshal(panel) // strings, ints, and a map: cannot fail
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, p.exec)
 	c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(in), &out, &errb

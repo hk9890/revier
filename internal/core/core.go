@@ -320,11 +320,11 @@ func (c *Core) Claim(before, after []revier.Instance, launchedAt, now time.Time,
 	}
 	seen := map[string]bool{}
 	for _, inst := range before {
-		seen[inst.Ref.Host+"\x00"+inst.Ref.ID] = true
+		seen[key(inst.Ref)] = true
 	}
 	var candidates []revier.Instance
 	for _, inst := range after {
-		if seen[inst.Ref.Host+"\x00"+inst.Ref.ID] || c.declared(inst, projects) {
+		if seen[key(inst.Ref)] || c.declared(inst, projects) {
 			continue
 		}
 		candidates = append(candidates, inst)
@@ -385,9 +385,8 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project) revier.Projec
 				}
 				// One instance can back two targets; probing it twice would
 				// report the same agent twice.
-				key := inst.Ref.Host + "\x00" + inst.Ref.ID
-				if !seen[key] {
-					seen[key] = true
+				if k := key(inst.Ref); !seen[k] {
+					seen[k] = true
 					v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 				}
 			}
@@ -397,13 +396,16 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project) revier.Projec
 	return v
 }
 
-// inspect runs the first matching probe over every agent panel of an instance.
+// key is the identity of a ref within one survey.
+func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
+
+// inspect runs the first matching probe over every panel of an instance. A
+// probe's Match decides what an agent panel is, not the host's PanelKind: a
+// host knows only the harnesses it was written with, and a probe declared in
+// config exists for the one it was not.
 func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.AgentView {
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
-		if panel.Kind != revier.PanelAgent {
-			continue
-		}
 		for _, probe := range c.Probes {
 			if !probe.Match(panel) {
 				continue

@@ -175,42 +175,38 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
-// Focused reports the focused window, or a zero ref when none is.
+// Focused reports the focused window, or a zero ref when none is. One
+// get_tree: the focused node is in the same tree Instances reads.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
-	instances, err := h.Instances(ctx)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
 	raw, err := h.run(ctx, "-t", "get_tree")
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
 	var root node
 	if err := json.Unmarshal(raw, &root); err != nil {
-		return revier.TargetRef{}, err
+		return revier.TargetRef{}, fmt.Errorf("swaymsg -t get_tree: %w", err)
 	}
-	id, ok := focusedID(root)
-	if !ok {
-		return revier.TargetRef{}, nil
-	}
-	for _, inst := range instances {
-		if inst.Ref.ID == id {
-			return inst.Ref, nil
-		}
+	if n, ok := focusedWindow(root); ok {
+		return h.instance(n).Ref, nil
 	}
 	return revier.TargetRef{}, nil
 }
 
-func focusedID(n node) (string, bool) {
-	if n.isWindow() && n.Focused {
-		return strconv.FormatInt(n.ID, 10), true
+func focusedWindow(n node) (node, bool) {
+	if n.isWindow() {
+		return n, n.Focused
 	}
-	for _, c := range append(n.Nodes, n.Floating...) {
-		if id, ok := focusedID(c); ok {
-			return id, true
+	for _, c := range n.Nodes {
+		if w, ok := focusedWindow(c); ok {
+			return w, true
 		}
 	}
-	return "", false
+	for _, c := range n.Floating {
+		if w, ok := focusedWindow(c); ok {
+			return w, true
+		}
+	}
+	return node{}, false
 }
 
 // event is one line of `swaymsg -t subscribe -m '["window"]'`.

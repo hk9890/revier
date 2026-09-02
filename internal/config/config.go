@@ -147,6 +147,13 @@ func LoadProject(path string) (core.Project, error) {
 	// directories, the cwd lookup - sees an absolute path and none of them
 	// hands a literal "~" to a program that does not expand it.
 	p.Path = expandHome(p.Path)
+	for _, t := range p.Targets {
+		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
+			if r != nil {
+				r.Dir = expandHome(r.Dir)
+			}
+		}
+	}
 	if err := Validate(p); err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}

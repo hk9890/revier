@@ -296,6 +296,26 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 			}
 		}
 	}
+
+	// Open produces what Match finds: the listing kitty gives back after the
+	// launch decodes to an instance the realization's match selects.
+	instances, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	m, err := revier.Match{Title: "^session:demo$"}.Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, inst := range instances {
+		if m.Matches(inst) && inst.Ref == ref {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Match does not find what Open produced: %+v", instances)
+	}
 }
 
 func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {

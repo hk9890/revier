@@ -164,6 +164,32 @@ func (h *Host) kitten(ctx context.Context, socket string, args ...string) ([]byt
 	return out.Bytes(), nil
 }
 
+// ls lists one socket's OS windows.
+func (h *Host) ls(ctx context.Context, socket string) ([]osWindow, error) {
+	raw, err := h.kitten(ctx, socket, "ls")
+	if err != nil {
+		return nil, err
+	}
+	var windows []osWindow
+	if err := json.Unmarshal(raw, &windows); err != nil {
+		return nil, fmt.Errorf("kitten @ --to %s ls: %w", socket, err)
+	}
+	return windows, nil
+}
+
+// launch runs `kitten @ launch` and returns the id of the window it made.
+func (h *Host) launch(ctx context.Context, socket string, args ...string) (int, error) {
+	out, err := h.kitten(ctx, socket, append([]string{"launch"}, args...)...)
+	if err != nil {
+		return 0, err
+	}
+	id, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("kitty: launch reported %q, not a window id", strings.TrimSpace(string(out)))
+	}
+	return id, nil
+}
+
 func (h *Host) socketList() []string {
 	if h.sockets != nil {
 		return h.sockets()
@@ -218,14 +244,9 @@ func (h *Host) list(ctx context.Context) ([]listing, error) {
 		wg.Add(1)
 		go func(i int, s string) {
 			defer wg.Done()
-			raw, err := h.kitten(ctx, s, "ls")
+			windows, err := h.ls(ctx, s)
 			if err != nil {
 				errs[i] = err
-				return
-			}
-			var windows []osWindow
-			if err := json.Unmarshal(raw, &windows); err != nil {
-				errs[i] = fmt.Errorf("kitten @ --to %s ls: %w", s, err)
 				return
 			}
 			results[i] = listing{socket: s, windows: windows}
@@ -389,18 +410,14 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	for _, p := range panels[1:] {
-		args := []string{"launch", "--type=window", "--match", "id:" + strconv.Itoa(first), "--hold"}
+		args := []string{"--type=window", "--match", "id:" + strconv.Itoa(first), "--hold"}
 		if r.Dir != "" {
 			args = append(args, "--cwd", r.Dir)
 		}
 		args = append(args, p.Command...)
-		out, err := h.kitten(ctx, socket, args...)
+		id, err := h.launch(ctx, socket, args...)
 		if err != nil {
 			return revier.TargetRef{}, err
-		}
-		id, err := strconv.Atoi(strings.TrimSpace(string(out)))
-		if err != nil {
-			return revier.TargetRef{}, fmt.Errorf("kitty: launch reported %q, not a window id", strings.TrimSpace(string(out)))
 		}
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
 			return revier.TargetRef{}, err
@@ -408,13 +425,9 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 
 	// The launch reports a window id; the instance is the OS window around it.
-	raw, err := h.kitten(ctx, socket, "ls")
+	windows, err := h.ls(ctx, socket)
 	if err != nil {
 		return revier.TargetRef{}, err
-	}
-	var windows []osWindow
-	if err := json.Unmarshal(raw, &windows); err != nil {
-		return revier.TargetRef{}, fmt.Errorf("kitten @ ls: %w", err)
 	}
 	for _, w := range windows {
 		for _, t := range w.Tabs {
@@ -448,19 +461,15 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 		// The class is set explicitly so the window is a kitty window whatever
 		// process it lands in: a kitty started as `--class revier-popup` would
 		// otherwise pass that class, and its window rule, on to the workspace.
-		args := []string{"launch", "--type=os-window",
+		args := []string{"--type=os-window",
 			"--os-window-name", r.Name, "--os-window-title", r.Name, "--os-window-class", "kitty", "--hold"}
 		if r.Dir != "" {
 			args = append(args, "--cwd", r.Dir)
 		}
 		args = append(args, p.Command...)
-		out, err := h.kitten(ctx, socket, args...)
+		id, err := h.launch(ctx, socket, args...)
 		if err != nil {
 			return "", 0, err
-		}
-		id, err := strconv.Atoi(strings.TrimSpace(string(out)))
-		if err != nil {
-			return "", 0, fmt.Errorf("kitty: launch reported %q, not a window id", strings.TrimSpace(string(out)))
 		}
 		return socket, id, nil
 	}
@@ -492,12 +501,8 @@ func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.Pa
 			if before[s] {
 				continue
 			}
-			raw, err := h.kitten(ctx, s, "ls")
+			windows, err := h.ls(ctx, s)
 			if err != nil {
-				continue
-			}
-			var windows []osWindow
-			if err := json.Unmarshal(raw, &windows); err != nil {
 				continue
 			}
 			for _, w := range windows {
@@ -536,13 +541,9 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	if err != nil {
 		return err
 	}
-	raw, err := h.kitten(ctx, socket, "ls")
+	windows, err := h.ls(ctx, socket)
 	if err != nil {
 		return err
-	}
-	var windows []osWindow
-	if err := json.Unmarshal(raw, &windows); err != nil {
-		return fmt.Errorf("kitten @ ls: %w", err)
 	}
 	for _, w := range windows {
 		if w.ID != id {

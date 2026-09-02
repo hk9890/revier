@@ -110,24 +110,36 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 	return best, bestLen >= 0
 }
 
-// launched records a detached launch - a window host started a process and
-// could not name the window - so the TUI can claim the window that appears
-// next for this project. remember saves it.
-func (a *app) launched(p revier.ProjectName, ref revier.TargetRef) {
-	if ref.IsZero() {
-		a.state.Launch = &state.Launch{Project: p, At: time.Now()}
+// commit records the project a command acted on, so the next keybinding
+// pressed away from a terminal still knows where it is, plus whatever else
+// the command learned. It re-reads the file first: the TUI writes claims to
+// it while a command runs, and a launch can take seconds waiting for a
+// socket, so saving the state loaded at startup would overwrite them.
+func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
+	st, err := state.Load(a.stateRoot)
+	if err != nil {
+		st = a.state
 	}
-}
-
-// remember records the project a command acted on, so the next keybinding
-// pressed away from a terminal still knows where it is.
-func (a *app) remember(p revier.ProjectName) {
-	a.state.Current = p
-	if err := a.state.Save(a.stateRoot); err != nil {
+	st.Current = p
+	if apply != nil {
+		apply(st)
+	}
+	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
 		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
 	}
+}
+
+// launched is the commit after a Go: a zero ref is a detached launch - a
+// window host started a process and could not name the window - and is
+// recorded so the TUI can claim the window that appears next.
+func (a *app) launched(p revier.ProjectName, ref revier.TargetRef) {
+	a.commit(p, func(s *state.State) {
+		if ref.IsZero() {
+			s.Launch = &state.Launch{Project: p, At: time.Now()}
+		}
+	})
 }
 
 // configRootForMessage is the config root, for a message that has nowhere to

@@ -123,9 +123,10 @@ func (s *State) Attach(p revier.ProjectName, ref revier.TargetRef) {
 	s.Attached[p] = append(s.Attached[p], ref)
 }
 
-// Prune drops attachments whose instances are gone. live holds the refs a
-// survey found, keyed "host\x00id".
-func (s *State) Prune(live map[string]bool) {
+// Prune drops attachments whose instances are gone and reports whether any
+// were. live holds the refs a survey found, keyed "host\x00id".
+func (s *State) Prune(live map[string]bool) bool {
+	changed := false
 	for project, refs := range s.Attached {
 		kept := refs[:0]
 		for _, ref := range refs {
@@ -133,12 +134,16 @@ func (s *State) Prune(live map[string]bool) {
 				kept = append(kept, ref)
 			}
 		}
+		if len(kept) != len(refs) {
+			changed = true
+		}
 		if len(kept) == 0 {
 			delete(s.Attached, project)
 			continue
 		}
 		s.Attached[project] = kept
 	}
+	return changed
 }
 
 // Key is the identity used to compare refs across a save and load.
