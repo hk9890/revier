@@ -85,7 +85,7 @@ func benchmarkSurvey(b *testing.B, n int) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := c.Survey(ctx, projects); err != nil {
+		if _, err := c.Survey(ctx, projects, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

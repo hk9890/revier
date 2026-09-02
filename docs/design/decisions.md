@@ -262,3 +262,37 @@ any project matches, since that window is reached by its key already; and
 when two candidate windows appear at once, neither, because the launch does
 not say which. `revier list` never claims: a one-shot process has no previous
 listing to diff and no window to wait for.
+
+### D21 — a key binds to the instance it landed on, and a launch waits for its window — Accepted
+
+Amends D20, whose claim rule now covers actions only.
+
+A rule - class and title - is how a target is found the first time, and how it
+is found again after revier restarts. It is not how a key stays on its window.
+Titles move: IntelliJ opens with no project in its title and gains one seconds
+later, a browser window is "New Tab" before it is the page. Matching on every
+press meant the key was weakest right after the launch, and D20's claim rule
+attached the target's own window as a stray in that gap.
+
+So every successful press pins its target to the instance id it landed on,
+in state, beside the attachments and pruned with them. The next press finds
+the target by id and consults the rule only when the binding is gone. A
+detached launch - a window host started a process and could not name the
+window - waits for the window in the launching process, up to thirty seconds
+as the shell implementation did, and binds the first new window the target's
+rule accepts by class alone, which is right from the first frame. A window the
+full rule matches is taken at once; two class candidates at once bind nothing.
+Bind raises the window through the window host, which also settles the
+question of a compositor that opens a new window behind.
+
+The launch is recorded before the wait, so a second press during it reports
+that the target is coming up rather than launching a second copy, and so the
+TUI can bind a window that took longer than the wait - a cold editor start -
+on a later refresh, within a minute. Claim-on-appear keeps only the case D12
+named: an action, `xdg-open` among them, whose window no target declares.
+
+The pid was considered as a second witness and left out: a window host reports
+it, and a fresh process is the launched one or its child, but the single-
+instance applications this exists for - browsers, an editor already running -
+hand the new window to a process that was already there. Class and time do
+the same work for both kinds.

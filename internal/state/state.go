@@ -30,16 +30,24 @@ type State struct {
 	// live instances on read and dropped when stale.
 	Attached map[revier.ProjectName][]revier.TargetRef `json:"attached,omitempty"`
 
-	// Launch is the last time revier launched a window for a project without
-	// getting a ref to it, so a window that appears shortly after can be
-	// claimed for that project (claim-on-appear). The process that launches
-	// exits at once; the one that sees the window appear reads this.
+	// Bound maps a project's targets to the instance each last landed on.
+	// A key is stable across an application's title changes because of it:
+	// the rule finds a window once, the binding finds it after. Pruned like
+	// attachments.
+	Bound map[revier.ProjectName]map[revier.TargetName]revier.TargetRef `json:"bound,omitempty"`
+
+	// Launch is the last time revier launched a window without getting a ref
+	// to it, so the window that appears shortly after can be bound to the
+	// target, or attached to the project when an action launched it. The
+	// process that launches may exit before the window appears; the TUI
+	// reads this and finishes the job.
 	Launch *Launch `json:"launch,omitempty"`
 }
 
-// Launch is one detached launch: which project, and when.
+// Launch is one detached launch: which project, which target if any, when.
 type Launch struct {
 	Project revier.ProjectName `json:"project"`
+	Target  revier.TargetName  `json:"target,omitempty"`
 	At      time.Time          `json:"at"`
 }
 
@@ -123,10 +131,32 @@ func (s *State) Attach(p revier.ProjectName, ref revier.TargetRef) {
 	s.Attached[p] = append(s.Attached[p], ref)
 }
 
-// Prune drops attachments whose instances are gone and reports whether any
-// were. live holds the refs a survey found, keyed "host\x00id".
+// Bind records where a target last landed.
+func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+	if s.Bound == nil {
+		s.Bound = map[revier.ProjectName]map[revier.TargetName]revier.TargetRef{}
+	}
+	if s.Bound[p] == nil {
+		s.Bound[p] = map[revier.TargetName]revier.TargetRef{}
+	}
+	s.Bound[p][t] = ref
+}
+
+// Prune drops attachments and bindings whose instances are gone and reports
+// whether any were. live holds the refs a survey found, keyed "host\x00id".
 func (s *State) Prune(live map[string]bool) bool {
 	changed := false
+	for project, targets := range s.Bound {
+		for t, ref := range targets {
+			if !live[Key(ref)] {
+				delete(targets, t)
+				changed = true
+			}
+		}
+		if len(targets) == 0 {
+			delete(s.Bound, project)
+		}
+	}
 	for project, refs := range s.Attached {
 		kept := refs[:0]
 		for _, ref := range refs {

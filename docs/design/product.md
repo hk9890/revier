@@ -64,20 +64,25 @@ promise, which is why the two tiers exist.
 
 | Mechanism | Reliability | Used for |
 |---|---|---|
-| revier launches it | Deterministic. revier controls the invocation and marks it, e.g. `--class=revier-<project>` | Keyed targets |
+| revier launches it | Deterministic. revier launches, waits for the window of the target's class to appear, and binds it by id; every later press finds it by that id, whatever its title becomes | Keyed targets |
 | You attach it | Deterministic. `revier attach` binds the focused instance to the current project | Anything |
-| Claim on appear | Best effort. After a launch revier claims the next new instance for a short interval | `xdg-open` from the terminal |
+| Claim on appear | Best effort. After an action runs, revier claims the next new instance no target matches, for a short interval | `xdg-open` from the terminal, as an action |
 
 The third mechanism exists because the interesting case is the unreliable one.
 Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
-window. Claim-on-appear runs in the TUI, the one long-lived process, and its
-latency depends on the window host. A host that reports window events (sway)
-claims within a second of the window appearing. GNOME reports none through
-`wctl`, so there the TUI diffs successive surveys and the claim lands within two
-refresh intervals, about two seconds. In both cases the claim happens only while
-the TUI is open, only within five seconds of the launch, only for a window no
-declared target matches, and only when one such window appeared.
+window. Claim-on-appear settles an action's launch, and it runs in the TUI, the
+one long-lived process. Its latency depends on the window host. A host that
+reports window events (sway) claims within a second of the window appearing.
+GNOME reports none through `wctl`, so there the TUI diffs successive surveys and
+the claim lands within two refresh intervals, about two seconds. In both cases
+the claim happens only while the TUI is open, only within five seconds of the
+action, only for a window no declared target matches, and only when one such
+window appeared.
+
+A keyed target's launch is settled the same way but by the launching process
+itself, which waits for the window and binds it, so it needs no TUI. The TUI
+finishes the binding only when the window took longer than that wait.
 
 Declared targets live in the project's TOML as match rules. Attachments are
 per-session and live in revier's own state, because instance ids do not survive

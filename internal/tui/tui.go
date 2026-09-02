@@ -51,7 +51,8 @@ type Model struct {
 	windows  []revier.Instance    // the window host's listing at the last survey
 	surveyed bool                 // whether windows holds a listing yet
 	attached map[revier.ProjectName][]revier.TargetRef
-	err      error // the last failure, shown in the footer
+	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
+	err      error                                // the last failure, shown in the footer
 	level    level
 	filter   string
 	cursor   int                // row at the project level, into rows()
@@ -84,11 +85,19 @@ type windowMsg struct {
 type tickMsg struct{}
 
 // actedMsg follows a Go, a Focus, or an action; the next survey shows the
-// result. launch is set when the Go was a detached launch, so the record is
-// written here, on the update loop, and never races the claim paths.
+// result. Its state changes are applied here, on the update loop, and never
+// race the claim paths: launch records a launch still coming up, bind pins
+// where a target landed.
 type actedMsg struct {
 	err    error
 	launch *state.Launch
+	bind   *binding
+}
+
+type binding struct {
+	project revier.ProjectName
+	target  revier.TargetName
+	ref     revier.TargetRef
 }
 
 // Init surveys immediately; the timer starts once the first survey answers.
@@ -117,11 +126,11 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 // command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects := m.core, m.projects
+	c, projects, bound := m.core, m.projects, m.bound
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		report, err := c.Survey(ctx, projects)
+		report, err := c.Survey(ctx, projects, bound)
 		return surveyMsg{report: report, err: err}
 	}
 }
@@ -138,7 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.err = msg.err
 		if msg.err == nil {
-			m.claimByPolling(msg.report.Windows)
+			m.claimByPolling(msg.report)
 			m.views = sorted(msg.report.Views)
 			m.windows, m.surveyed = msg.report.Windows, true
 		}
@@ -158,7 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends.
 		m.err = msg.err
-		m.recordLaunch(msg.launch)
+		m.apply(msg)
 		return m, nil
 	case tea.KeyMsg:
 		return m.key(msg)
@@ -167,64 +176,106 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // claimByPolling diffs the window listing against the previous survey's and
-// attaches a window that appeared within the claim window after the last
-// launch. State is re-read because the launch was written by another process.
-// The same pass drops attachments whose windows are gone, so a claim made
-// on every detached launch does not accumulate for the life of the machine.
-func (m *Model) claimByPolling(windows []revier.Instance) {
+// settles the last launch with a window that appeared since: bound to its
+// target, or attached to the project when an action launched. State is
+// re-read because the launch was written by another process. The same pass
+// drops attachments and bindings whose instances are gone.
+func (m *Model) claimByPolling(report core.Report) {
 	st, err := state.Load(m.stateRoot)
 	if err != nil {
 		return
 	}
-	changed := false
-	if m.core.Window != nil {
-		live := map[string]bool{}
-		for _, w := range windows {
-			live[state.Key(w.Ref)] = true
-		}
-		changed = st.Prune(live)
+	live := map[string]bool{}
+	for _, inst := range report.Instances {
+		live[state.Key(inst.Ref)] = true
 	}
-	if st.Launch != nil && m.surveyed {
+	changed := st.Prune(live)
+	if l, ok := m.launch(st); ok && m.surveyed {
 		now := time.Now()
-		if ref, ok := m.core.Claim(m.windows, windows, st.Launch.At, now, m.projects); ok {
-			st.Attach(st.Launch.Project, ref)
-			st.Launch, changed = nil, true // consumed
-		} else if now.Sub(st.Launch.At) > core.ClaimWindow {
+		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
+			settle(st, claimed)
+			changed = true
+		} else if _, ok := m.core.Claim(nil, nil, l, now, m.projects); !ok && !m.within(l, now) {
 			st.Launch, changed = nil, true // expired
 		}
 	}
 	if changed {
 		_ = st.Save(m.stateRoot)
 	}
-	m.attached = st.Attached
+	m.attached, m.bound = st.Attached, st.Bound
 }
 
 // claimByEvent is the same decision for a window a watching host reported.
 func (m *Model) claimByEvent(inst revier.Instance) {
 	st, err := state.Load(m.stateRoot)
-	if err != nil || st.Launch == nil {
+	if err != nil {
 		return
 	}
-	if !m.core.ClaimEvent(inst, st.Launch.At, time.Now(), m.projects) {
+	l, ok := m.launch(st)
+	if !ok {
 		return
 	}
-	st.Attach(st.Launch.Project, inst.Ref)
-	st.Launch = nil
+	claimed, ok := m.core.ClaimEvent(inst, l, time.Now(), m.projects)
+	if !ok {
+		return
+	}
+	settle(st, claimed)
 	_ = st.Save(m.stateRoot)
-	m.attached = st.Attached
+	m.attached, m.bound = st.Attached, st.Bound
 }
 
-// recordLaunch starts the claim-on-appear clock for a detached launch.
-func (m *Model) recordLaunch(l *state.Launch) {
-	if l == nil {
+// launch is the pending launch in state as the core sees it.
+func (m Model) launch(st *state.State) (core.Launch, bool) {
+	if st.Launch == nil {
+		return core.Launch{}, false
+	}
+	p, ok := m.project(st.Launch.Project)
+	if !ok {
+		return core.Launch{}, false
+	}
+	return core.Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}, true
+}
+
+// within reports whether a launch can still be settled.
+func (m Model) within(l core.Launch, now time.Time) bool {
+	limit := core.ClaimWindow
+	if l.Target != "" {
+		limit = core.BindWindow
+	}
+	return now.Sub(l.At) <= limit
+}
+
+// settle writes a claim into state and consumes the launch.
+func settle(st *state.State, c core.Claimed) {
+	if c.Target != "" {
+		st.Bind(st.Launch.Project, c.Target, c.Ref)
+	} else {
+		st.Attach(st.Launch.Project, c.Ref)
+	}
+	st.Launch = nil
+}
+
+// apply writes what an activation learned: a launch still coming up, or the
+// ref a target landed on.
+func (m *Model) apply(msg actedMsg) {
+	if msg.launch == nil && msg.bind == nil {
 		return
 	}
 	st, err := state.Load(m.stateRoot)
 	if err != nil {
 		return
 	}
-	st.Launch = l
+	if msg.launch != nil {
+		st.Launch = msg.launch
+	}
+	if b := msg.bind; b != nil {
+		st.Bind(b.project, b.target, b.ref)
+		if st.Launch != nil && st.Launch.Project == b.project && st.Launch.Target == b.target {
+			st.Launch = nil
+		}
+	}
 	_ = st.Save(m.stateRoot)
+	m.attached, m.bound = st.Attached, st.Bound
 }
 
 // sorted puts projects needing attention first and otherwise keeps config
@@ -396,18 +447,36 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		}
 	}
 	name := row.target.Name
+	bound := m.bound[p.Name]
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*bindWait)
 		defer cancel()
-		ref, err := c.Go(ctx, p, name)
-		msg := actedMsg{err: err}
-		if err == nil && ref.IsZero() {
-			// A detached launch: the window that appears next may be claimed.
-			msg.launch = &state.Launch{Project: p.Name, At: time.Now()}
+		res, err := c.Go(ctx, p, name, bound)
+		if err != nil {
+			return actedMsg{err: err}
 		}
+		ref := res.Ref
+		msg := actedMsg{}
+		if res.Launched && ref.IsZero() {
+			// A detached launch: wait for its window and bind it; if it takes
+			// longer than the wait, the launch record lets a later refresh
+			// bind it.
+			msg.launch = &state.Launch{Project: p.Name, Target: name, At: time.Now()}
+			inst, ok, err := c.Bind(ctx, p, name, res.Before, bindWait)
+			if err != nil || !ok {
+				msg.err = err
+				return msg
+			}
+			ref = inst.Ref
+		}
+		msg.bind = &binding{project: p.Name, target: name, ref: ref}
 		return msg
 	}
 }
+
+// bindWait is how long an activation waits for a launched window. The wait
+// runs in a command, off the update loop, so the surface stays live.
+const bindWait = 30 * time.Second
 
 // action runs the configured action bound to the key, if any, against the
 // selected project. The terminal is handed to the command while it runs, and
@@ -432,7 +501,12 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Dir = p.Path
-		return tea.ExecProcess(cmd, func(err error) tea.Msg { return actedMsg{err: err} }), true
+		project := p.Name
+		return tea.ExecProcess(cmd, func(err error) tea.Msg {
+			// An action may open anything; the window that appears next is
+			// the project's (claim-on-appear).
+			return actedMsg{err: err, launch: &state.Launch{Project: project, At: time.Now()}}
+		}), true
 	}
 	return nil, false
 }

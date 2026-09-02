@@ -174,11 +174,11 @@ func TestCoreRunOrRaiseAgainstSway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Go(ctx(t), p, "home"); err != nil {
+	if _, err := c.Go(ctx(t), p, "home", nil); err != nil {
 		t.Fatalf("open home: %v", err)
 	}
 	homeInst := waitFor(t, h, home.Match)
-	if _, err := c.Go(ctx(t), p, "diff"); err != nil {
+	if _, err := c.Go(ctx(t), p, "diff", nil); err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
 	diffInst := waitFor(t, h, diff.Match)
@@ -186,19 +186,19 @@ func TestCoreRunOrRaiseAgainstSway(t *testing.T) {
 	if err := h.Focus(ctx(t), diffInst.Ref); err != nil {
 		t.Fatal(err)
 	}
-	back, err := c.Go(ctx(t), p, "diff")
+	back, err := c.Go(ctx(t), p, "diff", nil)
 	if err != nil {
 		t.Fatalf("toggle back: %v", err)
 	}
-	if back.ID != homeInst.Ref.ID {
-		t.Fatalf("toggle-back returned %s, want home %s", back.ID, homeInst.Ref.ID)
+	if back.Ref.ID != homeInst.Ref.ID {
+		t.Fatalf("toggle-back returned %s, want home %s", back.Ref.ID, homeInst.Ref.ID)
 	}
-	again, err := c.Go(ctx(t), p, "diff")
+	again, err := c.Go(ctx(t), p, "diff", nil)
 	if err != nil {
 		t.Fatalf("raise diff: %v", err)
 	}
-	if again.ID != diffInst.Ref.ID {
-		t.Errorf("raise returned %s, want the existing %s", again.ID, diffInst.Ref.ID)
+	if again.Ref.ID != diffInst.Ref.ID {
+		t.Errorf("raise returned %s, want the existing %s", again.Ref.ID, diffInst.Ref.ID)
 	}
 	instances, _ := h.Instances(ctx(t))
 	if len(instances) != 2 {
@@ -252,7 +252,7 @@ func TestClaimOnAppearAgainstSway(t *testing.T) {
 	}
 	projects := []core.Project{p}
 
-	before, err := c.Survey(ctx(t), projects)
+	before, err := c.Survey(ctx(t), projects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,18 +264,20 @@ func TestClaimOnAppearAgainstSway(t *testing.T) {
 		t.Fatal(err)
 	}
 	strayInst := waitFor(t, h, stray.Match)
-	after, err := c.Survey(ctx(t), projects)
+	after, err := c.Survey(ctx(t), projects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, ok := c.Claim(before.Windows, after.Windows, launchedAt, time.Now(), projects)
-	if !ok || ref.ID != strayInst.Ref.ID {
-		t.Fatalf("Claim = %+v, %v; want the stray window %s", ref, ok, strayInst.Ref.ID)
+	action := core.Launch{Project: p, At: launchedAt}
+	got, ok := c.Claim(before.Windows, after.Windows, action, time.Now(), projects)
+	if !ok || got.Ref.ID != strayInst.Ref.ID || got.Target != "" {
+		t.Fatalf("Claim = %+v, %v; want the stray window %s attached", got, ok, strayInst.Ref.ID)
 	}
-	if _, ok := c.Claim(before.Windows, after.Windows, launchedAt.Add(-time.Minute), time.Now(), projects); ok {
+	stale := core.Launch{Project: p, At: launchedAt.Add(-time.Minute)}
+	if _, ok := c.Claim(before.Windows, after.Windows, stale, time.Now(), projects); ok {
 		t.Error("a window appearing a minute after the launch must not be claimed")
 	}
-	if _, ok := c.Claim(after.Windows, after.Windows, time.Now(), time.Now(), projects); ok {
+	if _, ok := c.Claim(after.Windows, after.Windows, core.Launch{Project: p, At: time.Now()}, time.Now(), projects); ok {
 		t.Error("with no new window there is nothing to claim")
 	}
 
@@ -302,15 +304,65 @@ func TestClaimOnAppearAgainstSway(t *testing.T) {
 			if ev.Instance.Class != "revier-test-stray-2" {
 				continue
 			}
-			if !c.ClaimEvent(ev.Instance, launchedAt, time.Now(), projects) {
+			if _, ok := c.ClaimEvent(ev.Instance, core.Launch{Project: p, At: launchedAt}, time.Now(), projects); !ok {
 				t.Fatal("the window that appeared after the launch should be claimed")
 			}
-			if c.ClaimEvent(ev.Instance, launchedAt.Add(-time.Minute), time.Now(), projects) {
+			if _, ok := c.ClaimEvent(ev.Instance, core.Launch{Project: p, At: launchedAt.Add(-time.Minute)}, time.Now(), projects); ok {
 				t.Error("a stale launch must not claim")
 			}
 			return
 		case <-deadline:
 			t.Fatal("no open event within 3s")
 		}
+	}
+}
+
+// Bind on launch against a real compositor: a target whose rule names the
+// class but a title the window never carries - an editor before its title
+// settles - is launched, its window bound by class, raised, and found by the
+// binding on the next press without a second launch.
+func TestBindOnLaunchAgainstSway(t *testing.T) {
+	h := compositor(t)
+	c := &core.Core{Window: h}
+	notes := window("revier-test-notes")
+	notes.Match = revier.Match{Class: "^revier-test-notes$", Title: "^never the title it has$"}
+	home := window("revier-test-home")
+	p, err := core.PrepareProject(revier.Project{Name: "revier", Path: t.TempDir(), Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &home},
+		{Name: "notes", Key: "ctrl-n", Window: &notes},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := c.Go(ctx(t), p, "notes", nil)
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if !res.Launched || !res.Ref.IsZero() {
+		t.Fatalf("result = %+v, want a detached launch", res)
+	}
+	inst, ok, err := c.Bind(ctx(t), p, "notes", res.Before, 10*time.Second)
+	if err != nil || !ok {
+		t.Fatalf("Bind = %+v, %v, %v; want the notes window bound by class", inst, ok, err)
+	}
+	if inst.Class != "revier-test-notes" {
+		t.Errorf("bound %+v, want the launched class", inst)
+	}
+	focused, _ := h.Focused(ctx(t))
+	if focused.ID != inst.Ref.ID {
+		t.Errorf("focused = %s, want the bound window %s raised", focused.ID, inst.Ref.ID)
+	}
+
+	again, err := c.Go(ctx(t), p, "notes", core.Bindings{"notes": inst.Ref})
+	if err != nil {
+		t.Fatalf("second Go: %v", err)
+	}
+	if again.Launched || again.Ref.ID != inst.Ref.ID {
+		t.Errorf("second press = %+v, want the binding used and no second launch", again)
+	}
+	windows, _ := h.Instances(ctx(t))
+	if len(windows) != 1 {
+		t.Errorf("got %d windows, want 1", len(windows))
 	}
 }

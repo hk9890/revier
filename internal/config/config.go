@@ -217,6 +217,11 @@ func Validate(p revier.Project) error {
 			if len(r.Launch) == 0 && len(r.Panels) == 0 {
 				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no panels", t.Name, kind))
 			}
+			if len(r.Launch) > 0 && len(r.Panels) > 0 {
+				// A host opens one or the other; a launch beside panels would
+				// be dropped silently, and the agent it named never started.
+				errs = append(errs, fmt.Errorf("target %q %s realization has both launch and panels; panels are what is launched, so drop launch", t.Name, kind))
+			}
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
 			}

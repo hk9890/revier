@@ -171,34 +171,34 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareProject: %v", err)
 	}
-	homeRef, err := cr.Go(c, prepared, "home")
+	homeRef, err := cr.Go(c, prepared, "home", nil)
 	if err != nil {
 		t.Fatalf("open home: %v", err)
 	}
-	diffRef, err := cr.Go(c, prepared, "diff")
+	diffRef, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
-	if diffRef.ID == homeRef.ID {
+	if diffRef.Ref.ID == homeRef.Ref.ID {
 		t.Fatal("diff and home must be different windows")
 	}
 
 	// Opening left diff focused, so the second press is the round trip home.
-	back, err := cr.Go(c, prepared, "diff")
+	back, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("toggle back: %v", err)
 	}
-	if back.ID != homeRef.ID {
-		t.Fatalf("toggle-back returned %s, want home %s", back.ID, homeRef.ID)
+	if back.Ref.ID != homeRef.Ref.ID {
+		t.Fatalf("toggle-back returned %s, want home %s", back.Ref.ID, homeRef.Ref.ID)
 	}
 
 	// Third press raises the existing window rather than opening a duplicate.
-	again, err := cr.Go(c, prepared, "diff")
+	again, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("raise diff: %v", err)
 	}
-	if again.ID != diffRef.ID {
-		t.Errorf("raise returned %s, want the existing %s", again.ID, diffRef.ID)
+	if again.Ref.ID != diffRef.Ref.ID {
+		t.Errorf("raise returned %s, want the existing %s", again.Ref.ID, diffRef.Ref.ID)
 	}
 	instances, err := h.Instances(c)
 	if err != nil {

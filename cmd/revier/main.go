@@ -72,7 +72,9 @@ func run(args []string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Long enough for a detached launch's wait (bindWait) on top of the
+	// host calls around it.
+	ctx, cancel := context.WithTimeout(context.Background(), bindWait+30*time.Second)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -148,7 +150,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	report, err := a.core.Survey(ctx, a.projects)
+	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
 	if err != nil {
 		return err
 	}
@@ -159,8 +161,8 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// ref, so the window listing is the live set.
 	if a.core.Window != nil {
 		live := map[string]bool{}
-		for _, w := range report.Windows {
-			live[state.Key(w.Ref)] = true
+		for _, inst := range report.Instances {
+			live[state.Key(inst.Ref)] = true
 		}
 		if a.state.Prune(live) {
 			a.commit(a.state.Current, nil)
@@ -250,11 +252,10 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if !ok {
 		return fmt.Errorf("project %q has no home target", p.Name)
 	}
-	ref, err := a.core.Go(ctx, p, home.Name)
+	ref, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {
 		return err
 	}
-	a.launched(p.Name, ref)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -273,11 +274,10 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	ref, err := a.core.Go(ctx, p, revier.TargetName(pos[0]))
+	ref, err := a.goTarget(ctx, p, revier.TargetName(pos[0]))
 	if err != nil {
 		return err
 	}
-	a.launched(p.Name, ref)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -300,7 +300,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	a.commit(p.Name, nil)
+	a.launchedAction(p.Name)
 	return runAction(p, argv)
 }
 
@@ -387,7 +387,7 @@ func hostName(h revier.Host) string {
 
 func describe(ref revier.TargetRef) string {
 	if ref.IsZero() {
-		return "launched (no window yet)"
+		return "launching"
 	}
 	if ref.Title == "" {
 		return ref.Host + "/" + ref.ID

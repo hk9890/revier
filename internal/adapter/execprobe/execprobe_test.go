@@ -92,7 +92,7 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := c.Survey(context.Background(), []core.Project{p})
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

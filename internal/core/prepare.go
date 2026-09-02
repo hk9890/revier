@@ -22,6 +22,13 @@ type Project struct {
 
 type compiledTarget struct {
 	window, runtime revier.CompiledMatch
+
+	// windowClass is the window rule's class alone, for binding a window
+	// that has just appeared and whose title has not settled. hasClass is
+	// false when the rule constrains no class, and then any new window may
+	// be the one.
+	windowClass revier.CompiledMatch
+	hasClass    bool
 }
 
 // index returns the position of the named target.
@@ -71,6 +78,11 @@ func PrepareProject(p revier.Project) (Project, error) {
 		if t.Window != nil {
 			if compiled[i].window, err = compileMatch(t.Name, revier.HostWindow, t.Window.Match); err != nil {
 				return Project{}, err
+			}
+			if class := t.Window.Match.Class; class != "" {
+				// Already known to compile: the full match did.
+				compiled[i].windowClass, _ = revier.Match{Class: class}.Compile()
+				compiled[i].hasClass = true
 			}
 		}
 		if t.Runtime != nil {

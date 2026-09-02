@@ -22,7 +22,6 @@ name = "home"
 home = true
   [target.runtime]
   name = "home"
-  launch = ["kitty"]
   match = { title = "^session:{{.Name}}$" }
     [[target.runtime.panels]]
     kind = "agent"
@@ -293,6 +292,14 @@ func TestValidatePanelsStandInForLaunch(t *testing.T) {
 	}}
 	if err := config.Validate(bad); err == nil || !strings.Contains(err.Error(), "panels") {
 		t.Errorf("a window realization with panels should be rejected, got %v", err)
+	}
+	// A launch beside panels would be dropped silently by every host, and
+	// the agent it named never started; it is refused instead.
+	both := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"claude"}, Match: revier.Match{Title: "^h$"}, Panels: panels}},
+	}}
+	if err := config.Validate(both); err == nil || !strings.Contains(err.Error(), "both launch and panels") {
+		t.Errorf("launch beside panels should be rejected, got %v", err)
 	}
 }
 

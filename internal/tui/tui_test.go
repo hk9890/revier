@@ -317,3 +317,49 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 		t.Fatalf("attached = %+v, want the opened window on project-00", got.Attached)
 	}
 }
+
+// A target's launch that outlived the activation's wait is bound by a later
+// refresh, by class, and the target then shows as running.
+func TestPollingBindsALaunchedTargetByClass(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "project-00", Target: "editor", At: time.Now().Add(-20 * time.Second)}
+	_ = st.Save(root)
+	// The editor's class, a title the rule does not match yet.
+	unsettled := wm.AddInstance(revier.Instance{Title: "", Class: "code-project-00"})
+	unsettled.Title = ""
+	m = survey(m)
+
+	got, _ := state.Load(root)
+	if ref := got.Bound["project-00"]["editor"]; ref.ID != unsettled.ID {
+		t.Fatalf("bound = %+v, want the editor window bound by class", got.Bound)
+	}
+	if got.Launch != nil {
+		t.Error("a binding must consume the launch")
+	}
+	m = survey(m)
+	m, _ = press(m, "enter")
+	if view := m.View(); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
+		t.Errorf("the bound editor should show running:\n%s", view)
+	}
+}
+
+// Enter on a target pins where it landed, so the next survey and press use
+// the binding.
+func TestEnterPinsTheTarget(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	wm.Add("Visual Studio Code", "code-project-00")
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+	m, _ = press(m, "enter")
+	m, _ = press(m, "down")
+	_, cmd := press(m, "enter")
+	m.Update(cmd()) // applies the binding on the update loop
+	got, _ := state.Load(root)
+	if ref := got.Bound["project-00"]["editor"]; ref.IsZero() {
+		t.Fatalf("bound = %+v, want the editor pinned after Enter", got.Bound)
+	}
+}

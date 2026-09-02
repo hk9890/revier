@@ -131,14 +131,61 @@ func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
 	}
 }
 
-// launched is the commit after a Go: a zero ref is a detached launch - a
-// window host started a process and could not name the window - and is
-// recorded so the TUI can claim the window that appears next.
-func (a *app) launched(p revier.ProjectName, ref revier.TargetRef) {
-	a.commit(p, func(s *state.State) {
-		if ref.IsZero() {
-			s.Launch = &state.Launch{Project: p, At: time.Now()}
+// bindWait is how long a keypress process waits for the window a detached
+// launch produces before giving up and leaving the rest to the TUI. Long,
+// because an editor's cold start takes this long and the wait is invisible:
+// the process lingers, the user sees the window come up.
+const bindWait = 30 * time.Second
+
+// goTarget is the whole run-or-raise for one target: Go with the project's
+// bindings, then, for a detached launch, the wait that binds the window and
+// raises it. Every ref it lands on is pinned in state, so the next press finds
+// the target by id whatever the application has done to its title since.
+//
+// A second press during the wait must not launch again: the pending launch
+// is recorded before waiting, and a press that finds one still inside
+// core.BindWindow reports it rather than opening a second window.
+func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
+	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
+		if _, alive := a.state.Bound[p.Name][name]; !alive {
+			return revier.TargetRef{}, nil // still coming up; the first press is waiting for it
 		}
+	}
+	res, err := a.core.Go(ctx, p, name, a.state.Bound[p.Name])
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
+	ref := res.Ref
+	if res.Launched && ref.IsZero() {
+		at := time.Now()
+		a.commit(p.Name, func(s *state.State) {
+			s.Launch = &state.Launch{Project: p.Name, Target: name, At: at}
+		})
+		inst, ok, err := a.core.Bind(ctx, p, name, res.Before, bindWait)
+		if err != nil {
+			return revier.TargetRef{}, err
+		}
+		if !ok {
+			return revier.TargetRef{}, nil // the TUI binds it if it appears later
+		}
+		ref = inst.Ref
+	}
+	a.commit(p.Name, func(s *state.State) {
+		s.Bind(p.Name, name, ref)
+		if s.Launch != nil && s.Launch.Project == p.Name && s.Launch.Target == name {
+			s.Launch = nil
+		}
+	})
+	return ref, nil
+}
+
+// launchedAction records that an action ran, so a window that appears within
+// core.ClaimWindow and matches no declared target is attached to the project:
+// the link opened from the terminal that claim-on-appear exists for.
+func (a *app) launchedAction(p revier.ProjectName) {
+	at := time.Now()
+	a.commit(p, func(s *state.State) {
+		s.Launch = &state.Launch{Project: p, At: at}
 	})
 }
 

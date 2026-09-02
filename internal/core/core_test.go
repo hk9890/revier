@@ -113,10 +113,11 @@ func TestGoRaisesAnExistingInstance(t *testing.T) {
 	wm.Add("Visual Studio Code", "code")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	ref, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
+	ref := res.Ref
 	if len(wm.Opened) != 0 {
 		t.Errorf("Open called %d times; an existing instance must be raised, not launched", len(wm.Opened))
 	}
@@ -133,23 +134,23 @@ func TestGoAcceptsADetachedOpen(t *testing.T) {
 	wm.Detached = true
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	ref, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if !ref.IsZero() {
-		t.Errorf("ref = %+v, want zero: the host could not name the window", ref)
+	if !res.Ref.IsZero() || !res.Launched {
+		t.Errorf("result = %+v, want a launch with no ref: the host could not name the window", res)
 	}
 	if len(wm.Focuses) != 0 {
 		t.Errorf("focuses = %v, want none: there is no ref to focus", wm.Focuses)
 	}
 	// The window exists now, so the next press raises it.
-	again, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	again, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
 	if err != nil {
 		t.Fatalf("second Go: %v", err)
 	}
-	if again.IsZero() || len(wm.Opened) != 1 {
-		t.Errorf("second press: ref %+v, opened %d; want the existing window raised", again, len(wm.Opened))
+	if again.Ref.IsZero() || len(wm.Opened) != 1 {
+		t.Errorf("second press: ref %+v, opened %d; want the existing window raised", again.Ref, len(wm.Opened))
 	}
 }
 
@@ -157,7 +158,7 @@ func TestGoOpensWhenNothingMatches(t *testing.T) {
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	if _, err := c.Go(context.Background(), prepared(t, project()), "editor"); err != nil {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "editor", nil); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(wm.Opened) != 1 {
@@ -178,12 +179,12 @@ func TestGoTogglesBackToHome(t *testing.T) {
 	wm.SetFocus(editorRef)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, project()), "editor")
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got != homeRef {
-		t.Errorf("returned %v, want the home ref %v", got, homeRef)
+	if res.Ref != homeRef {
+		t.Errorf("returned %v, want the home ref %v", res.Ref, homeRef)
 	}
 	if len(rt.Focuses) != 1 || rt.Focuses[0] != homeRef {
 		t.Errorf("runtime focuses = %v, want one call for home", rt.Focuses)
@@ -199,7 +200,7 @@ func TestGoOnHomeDoesNotToggle(t *testing.T) {
 	rt.SetFocus(homeRef)
 	c := &core.Core{Runtime: rt}
 
-	if _, err := c.Go(context.Background(), prepared(t, project()), "home"); err != nil {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "home", nil); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(rt.Focuses) != 1 {
@@ -209,7 +210,7 @@ func TestGoOnHomeDoesNotToggle(t *testing.T) {
 
 func TestGoRejectsUnknownTarget(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	if _, err := c.Go(context.Background(), prepared(t, project()), "absent"); !errors.Is(err, core.ErrNoTarget) {
+	if _, err := c.Go(context.Background(), prepared(t, project()), "absent", nil); !errors.Is(err, core.ErrNoTarget) {
 		t.Errorf("err = %v, want ErrNoTarget", err)
 	}
 }
@@ -277,7 +278,7 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	c := &core.Core{Runtime: rt} // no window host
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -312,7 +313,7 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 		}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -335,7 +336,7 @@ func TestSurveySurvivesAProbeError(t *testing.T) {
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
 	if err != nil {
 		t.Fatalf("Survey should not fail: %v", err)
 	}
@@ -363,12 +364,12 @@ func TestToggleBackIgnoresOtherHostsIDs(t *testing.T) {
 			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
 	}}
 
-	got, err := c.Go(context.Background(), prepared(t, p), "diff")
+	res, err := c.Go(context.Background(), prepared(t, p), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Host != "rt" {
-		t.Fatalf("landed on %s, want the runtime target", got.Host)
+	if res.Ref.Host != "rt" {
+		t.Fatalf("landed on %s, want the runtime target", res.Ref.Host)
 	}
 	if len(rt.Focuses) != 1 {
 		t.Errorf("runtime focuses = %v, want exactly one: the diff target", rt.Focuses)
@@ -391,12 +392,12 @@ func TestToggleBackWorksOnRuntimeWhenItIsTheAuthority(t *testing.T) {
 			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
 	}}
 
-	got, err := c.Go(context.Background(), prepared(t, p), "diff")
+	res, err := c.Go(context.Background(), prepared(t, p), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got != homeRef {
-		t.Errorf("returned %v, want home %v", got, homeRef)
+	if res.Ref != homeRef {
+		t.Errorf("returned %v, want home %v", res.Ref, homeRef)
 	}
 }
 
@@ -435,12 +436,12 @@ func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Host != "kitty" {
-		t.Fatalf("landed on %s, want the runtime target", got.Host)
+	if res.Ref.Host != "kitty" {
+		t.Fatalf("landed on %s, want the runtime target", res.Ref.Host)
 	}
 	if len(rt.Focuses) != 1 {
 		t.Errorf("runtime focuses = %v, want the diff window", rt.Focuses)
@@ -458,12 +459,12 @@ func TestToggleBackThroughTheOSWindow(t *testing.T) {
 	wm.SetFocus(diffWm)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Title != "session:revier" {
-		t.Errorf("returned %v, want home: the diff OS window had focus", got)
+	if res.Ref.Title != "session:revier" {
+		t.Errorf("returned %v, want home: the diff OS window had focus", res.Ref)
 	}
 	if n := len(wm.Focuses); n != 1 || wm.Focuses[0] != homeWm {
 		t.Errorf("window focuses = %v, want home's OS window raised", wm.Focuses)
@@ -478,12 +479,12 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 	wm.SetFocus(editor)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Title != "diff:revier" {
-		t.Errorf("returned %v, want diff: nothing of this project had focus", got)
+	if res.Ref.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: nothing of this project had focus", res.Ref)
 	}
 	if len(wm.Focuses) != 1 || wm.Focuses[0] != diffWm {
 		t.Errorf("window focuses = %v, want diff's OS window raised", wm.Focuses)
@@ -498,12 +499,12 @@ func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	wm.SetFocus(diffWm)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Title != "diff:revier" {
-		t.Errorf("returned %v, want diff: a multiplexer's windows are not OS windows", got)
+	if res.Ref.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: a multiplexer's windows are not OS windows", res.Ref)
 	}
 	if len(wm.Focuses) != 0 {
 		t.Errorf("window focuses = %v, want none", wm.Focuses)
@@ -522,20 +523,124 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	wm.SetFocus(other)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	got, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff")
+	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got.Title != "diff:revier" {
-		t.Errorf("returned %v, want diff: the focused window belongs to another process", got)
+	if res.Ref.Title != "diff:revier" {
+		t.Errorf("returned %v, want diff: the focused window belongs to another process", res.Ref)
 	}
 	if len(wm.Focuses) != 0 {
 		t.Errorf("window focuses = %v, want none", wm.Focuses)
 	}
 }
 
-// Claim binds exactly the window that appeared after a launch and nothing
-// else; every bound is a way of claiming nothing rather than the wrong thing.
+// A binding wins over the rule: once a key landed on an instance, the next
+// press finds it by id, whatever the application did to its title since.
+func TestGoPrefersTheBoundRef(t *testing.T) {
+	wm := hosttest.New("wm")
+	// The editor's title no longer matches the rule; the class still does
+	// not either, because IntelliJ names every window jetbrains-idea and the
+	// rule here is on class ^code$ - a binding is the only way back.
+	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "other"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": editor})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref != editor || len(wm.Opened) != 0 {
+		t.Errorf("result = %+v, opened %d; want the bound window raised", res, len(wm.Opened))
+	}
+}
+
+// A binding whose instance is gone falls back to the rule, and to the launch.
+func TestGoIgnoresADeadBinding(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	dead := revier.TargetRef{Host: "wm", ID: "999"}
+
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": dead})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if !res.Launched || len(wm.Opened) != 1 {
+		t.Errorf("result = %+v, opened %d; want the editor launched", res, len(wm.Opened))
+	}
+}
+
+// Bind takes the window of the launched class even while its title has not
+// settled, and never one of another class.
+func TestBindTakesTheNewWindowOfTheClass(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Add("Some Window", "other")
+	c := &core.Core{Window: wm}
+	p := prepared(t, project())
+	before, _ := wm.Instances(context.Background())
+
+	stray := wm.AddInstance(revier.Instance{Title: "Pull requests", Class: "chromium"})
+	splash := wm.AddInstance(revier.Instance{Title: "Visual Studio Code", Class: "code"})
+	inst, ok, err := c.Bind(context.Background(), p, "editor", before, 0)
+	if err != nil || !ok {
+		t.Fatalf("Bind = %v, %v, %v; want the code window", inst, ok, err)
+	}
+	if inst.Ref != splash {
+		t.Errorf("bound %v, want the code window %v, not the chromium one %v", inst.Ref, splash, stray)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != splash {
+		t.Errorf("focuses = %v, want the bound window raised", wm.Focuses)
+	}
+}
+
+func TestBindLeavesAmbiguityAlone(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+	// A rule on class and title: two windows of the class whose titles have
+	// not settled are two class candidates, and the launch does not say which.
+	p := prepared(t, revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"x"}, Match: revier.Match{Title: "^h$"}}},
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$", Title: "revier"}}},
+	}})
+	wm.AddInstance(revier.Instance{Title: "one", Class: "code"})
+	wm.AddInstance(revier.Instance{Title: "two", Class: "code"})
+	if _, ok, _ := c.Bind(context.Background(), p, "editor", nil, 0); ok {
+		t.Error("two new windows of the class at once must bind nothing")
+	}
+	// One of them settles into the full rule: that one is it.
+	wm.AddInstance(revier.Instance{Title: "main.go - revier", Class: "code"})
+	inst, ok, _ := c.Bind(context.Background(), p, "editor", nil, 0)
+	if !ok || inst.Title != "main.go - revier" {
+		t.Errorf("Bind = %+v, %v; want the window the full rule matches", inst, ok)
+	}
+	if _, ok, _ := c.Bind(context.Background(), p, "home", nil, 0); ok {
+		t.Error("a runtime target has no window to bind")
+	}
+}
+
+// A survey reports a bound instance as the target's, ahead of the rule.
+func TestSurveyUsesBindings(t *testing.T) {
+	wm := hosttest.New("wm")
+	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "other"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
+		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tv := range report.Views[0].Targets {
+		if tv.Name == "editor" && tv.Ref != editor {
+			t.Errorf("editor ref = %+v, want the bound %v", tv.Ref, editor)
+		}
+	}
+	if len(report.Instances) != 1 {
+		t.Errorf("instances = %d, want every host's listing for pruning", len(report.Instances))
+	}
+}
+
+// Claim settles a launch with the one window that appeared after it. A
+// target's launch binds by class, title settled or not; an action's launch
+// attaches a window no declared target matches. Every bound is a way of
+// claiming nothing rather than the wrong thing.
 func TestClaimBounds(t *testing.T) {
 	c := &core.Core{Window: hosttest.New("wm")}
 	p := prepared(t, project())
@@ -544,31 +649,43 @@ func TestClaimBounds(t *testing.T) {
 	before := []revier.Instance{{Ref: ref("1"), Title: "old", Class: "x"}}
 	stray := revier.Instance{Ref: ref("2"), Title: "Pull requests", Class: "chromium"}
 	editor := revier.Instance{Ref: ref("3"), Title: "Visual Studio Code", Class: "code"}
+	unsettled := revier.Instance{Ref: ref("4"), Title: "", Class: "code"}
 	now := time.Now()
+	action := core.Launch{Project: p, At: now.Add(-time.Second)}
+	target := core.Launch{Project: p, Target: "editor", At: now.Add(-20 * time.Second)}
 
-	got, ok := c.Claim(before, append(before, stray), now.Add(-time.Second), now, projects)
-	if !ok || got != stray.Ref {
-		t.Errorf("Claim = %+v, %v; want the stray window", got, ok)
+	got, ok := c.Claim(before, append(before, stray), action, now, projects)
+	if !ok || got.Ref != stray.Ref || got.Target != "" {
+		t.Errorf("action claim = %+v, %v; want the stray attached", got, ok)
 	}
-	if _, ok := c.Claim(before, append(before, stray), now.Add(-core.ClaimWindow-time.Second), now, projects); ok {
-		t.Error("a launch older than the claim window must not claim")
+	if _, ok := c.Claim(before, append(before, editor), action, now, projects); ok {
+		t.Error("an action's launch must not attach a declared target's window")
 	}
-	if _, ok := c.Claim(before, append(before, stray), time.Time{}, now, projects); ok {
-		t.Error("no launch, no claim")
+	got, ok = c.Claim(before, append(before, unsettled), target, now, projects)
+	if !ok || got.Ref != unsettled.Ref || got.Target != "editor" {
+		t.Errorf("target claim = %+v, %v; want the unsettled code window bound to editor", got, ok)
 	}
-	if _, ok := c.Claim(before, append(before, editor), now, now, projects); ok {
-		t.Error("a window a declared target matches is that target, not a stray")
+	if _, ok := c.Claim(before, append(before, stray), target, now, projects); ok {
+		t.Error("a target's launch must not bind a window of another class")
 	}
-	if _, ok := c.Claim(before, append(before, stray, revier.Instance{Ref: ref("4"), Class: "other"}), now, now, projects); ok {
+	stale := core.Launch{Project: p, At: now.Add(-core.ClaimWindow - time.Second)}
+	if _, ok := c.Claim(before, append(before, stray), stale, now, projects); ok {
+		t.Error("an action's launch older than the claim window must not claim")
+	}
+	old := core.Launch{Project: p, Target: "editor", At: now.Add(-core.BindWindow - time.Second)}
+	if _, ok := c.Claim(before, append(before, unsettled), old, now, projects); ok {
+		t.Error("a target's launch older than the bind window must not bind")
+	}
+	if _, ok := c.Claim(before, append(before, stray, revier.Instance{Ref: ref("5"), Class: "other"}), action, now, projects); ok {
 		t.Error("two candidates at once is ambiguity, and claims nothing")
 	}
-	if _, ok := c.Claim(append(before, stray), append(before, stray), now, now, projects); ok {
+	if _, ok := c.Claim(append(before, stray), append(before, stray), action, now, projects); ok {
 		t.Error("a window already present is not new")
 	}
-	if !c.ClaimEvent(stray, now.Add(-time.Second), now, projects) {
-		t.Error("the event path should claim the same stray window")
+	if got, ok := c.ClaimEvent(unsettled, target, now, projects); !ok || got.Target != "editor" {
+		t.Errorf("event path = %+v, %v; want the same binding", got, ok)
 	}
-	if c.ClaimEvent(editor, now, now, projects) {
-		t.Error("the event path must not claim a declared target")
+	if _, ok := c.ClaimEvent(editor, action, now, projects); ok {
+		t.Error("the event path must not attach a declared target's window")
 	}
 }
