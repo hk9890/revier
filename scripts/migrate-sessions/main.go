@@ -215,6 +215,13 @@ func render(s session) (string, error) {
 	// IntelliJ has no per-project window class, so the title carries the
 	// identity. KT_IDEA_NAME overrides it where the project name on disk and
 	// the name IntelliJ shows differ.
+	//
+	// The title is the project name, then whatever IntelliJ appends: " - <file>"
+	// usually, " [<path>] - <file>" when it disambiguates. So the pattern ends
+	// at a space or at the end of the title, and not at the dash the two
+	// hand-converted files assumed - that form missed a real window on this
+	// desktop. Project names carry no spaces, so a following space always
+	// separates the name from IntelliJ's own text.
 	editor := pattern(s.name)
 	if idea := s.vars["KT_IDEA_NAME"]; idea != "" {
 		editor = regexp.QuoteMeta(idea)
@@ -222,7 +229,7 @@ func render(s session) (string, error) {
 	p("[[target]]\nname = \"editor\"\nkey = \"ctrl-shift-o\"\n")
 	p("  [target.window]\n")
 	p("  launch = [\"snap\", \"run\", \"intellij-idea\", \"{{.Path}}\"]\n")
-	p("  match = { class = \"^jetbrains-idea\", title = %s }\n\n", q("^"+editor+"( – |$)"))
+	p("  match = { class = \"^jetbrains-idea\", title = %s }\n\n", q("^"+editor+"( |$)"))
 
 	if raw := s.vars["KT_WEB_URL"]; raw != "" {
 		class, err := chromeClass(raw)
