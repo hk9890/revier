@@ -168,7 +168,131 @@ which is worse than a key that simply goes there. Recovering it needs a mapping
 from a runtime instance to the OS window containing it, which the ports do not
 carry.
 
+*The mapping is D19's, and the cost is recovered for a runtime that claims it.*
+
 **Agents are discovered in every target, not only home.** The survey probed the
 home instance alone, so an agent given a target of its own was invisible — which
 defeats the product's purpose. Every matched instance is now probed, deduplicated
 by ref, because one instance can back two targets.
+
+## 2026-09-02
+
+### D17 — projects are prepared at load — Accepted
+
+`config.Load` returns projects with every template rendered and every match
+compiled. `Survey` and `Go` take that form and derive nothing per call.
+
+The refresh path used to re-render ninety projects and re-compile four hundred
+and fifty patterns every second, from inputs that had not changed since load.
+The measured cost was garbage, not time, and would not have been noticed. The
+reason to move the work is where errors surface: a template naming a missing
+key passed validation, loaded, and either failed at the keystroke or was
+swallowed by the survey as a project with no available targets. Both were
+breaches of the rule this design already applies to every other validation
+failure, that a bad file is refused at load, naming the file.
+
+The consequence for a long-lived surface: the TUI holds prepared projects for
+its lifetime, so a project file edited while it runs is read on restart, not on
+the next refresh.
+
+### D18 — a realization starts in the project directory, and a home target is its panels — Accepted
+
+`Realization` gains `Dir`. The core fills it with the project path when the
+config leaves it empty, and the path itself is tilde-expanded once at load, so
+no host receives a literal `~`. A runtime realization with panels needs no
+`launch`: the panels are what is launched, as the Level 1 example in
+[extending.md](extending.md) always showed and the validator until now refused.
+
+Without this the first kitty workspace opened in whatever directory the kitty
+process happened to have, which is the one thing a session file never got
+wrong.
+
+### D19 — a runtime that owns OS windows says so, and the window host raises them — Accepted
+
+Amends D16, whose cost this recovers.
+
+`Capabilities` gains `OSWindows`. A runtime that reports it promises that
+every instance is an OS window and carries the title a window host reports for
+the same window. The core then does two things it could not do before:
+
+- **Raise.** After focusing a runtime instance it finds the OS window by title
+  in the window host's listing and activates it there. kitty needs this: under
+  GNOME on Wayland `kitten @ focus-window` moves focus inside kitty and the
+  compositor refuses to raise the window, because the request did not come
+  from user input. Verified on this machine before the design was written.
+- **Toggle back.** A runtime target's second press is judged by whether its OS
+  window holds focus, asked of the window host, which stays the only focus
+  authority. The false positive D16 refused stays refused: the OS window, not
+  the pane, must be focused.
+
+Two mappings were considered and rejected. PID lineage - walk from the pane's
+process to the terminal's - fails both ways: every OS window of one kitty
+process shares the kitty pid, so lineage cannot tell them apart, and a tmux
+pane's ancestry ends at the daemonised server, never reaching a terminal.
+Trusting the runtime's own focus report was D16's refusal and stays refused,
+although kitty could in fact answer it; one authority is simpler than two that
+must agree.
+
+kitty gives each OS window its identity through `--os-window-name`, read back
+as `wm_name`, and sets the OS window title to the same value. A window kitty
+opened from a session file has neither and is invisible to revier, which is
+the accepted cost of not parsing what `kitten @ ls` does not report. tmux
+cannot claim `OSWindows`, so for it D16's cost stands.
+
+
+### D20 — claim-on-appear is the TUI's, and claims nothing before the wrong thing — Accepted
+
+The launch that starts the clock and the window that ends it are seen by
+different processes: `revier go` exits at once, and the window appears later.
+So the launch is a record in state, `Launch{Project, At}`, written by whatever
+launched, and the claim is made by the TUI, which is the one process alive to
+see the window arrive. It re-reads state on every refresh for that reason.
+
+Two paths, one policy. A window host that implements `WindowWatcher` - sway,
+the first - delivers the window as an event and the claim is immediate. A host
+that does not - GNOME, through `wctl` - is diffed between successive surveys,
+and the claim takes up to two refresh intervals. The survey therefore returns
+the window listing it was built from (`core.Report`) rather than the TUI
+asking for a second one, which keeps a refresh at one call per host.
+
+The bounds are the decision. A wrong claim binds an unrelated window to a
+project and is only found later, when a key goes somewhere surprising, so:
+five seconds after the launch and no more; never a window a declared target of
+any project matches, since that window is reached by its key already; and
+when two candidate windows appear at once, neither, because the launch does
+not say which. `revier list` never claims: a one-shot process has no previous
+listing to diff and no window to wait for.
+
+### D21 — a key binds to the instance it landed on, and a launch waits for its window — Accepted
+
+Amends D20, whose claim rule now covers actions only.
+
+A rule - class and title - is how a target is found the first time, and how it
+is found again after revier restarts. It is not how a key stays on its window.
+Titles move: IntelliJ opens with no project in its title and gains one seconds
+later, a browser window is "New Tab" before it is the page. Matching on every
+press meant the key was weakest right after the launch, and D20's claim rule
+attached the target's own window as a stray in that gap.
+
+So every successful press pins its target to the instance id it landed on,
+in state, beside the attachments and pruned with them. The next press finds
+the target by id and consults the rule only when the binding is gone. A
+detached launch - a window host started a process and could not name the
+window - waits for the window in the launching process, up to thirty seconds
+as the shell implementation did, and binds the first new window the target's
+rule accepts by class alone, which is right from the first frame. A window the
+full rule matches is taken at once; two class candidates at once bind nothing.
+Bind raises the window through the window host, which also settles the
+question of a compositor that opens a new window behind.
+
+The launch is recorded before the wait, so a second press during it reports
+that the target is coming up rather than launching a second copy, and so the
+TUI can bind a window that took longer than the wait - a cold editor start -
+on a later refresh, within a minute. Claim-on-appear keeps only the case D12
+named: an action, `xdg-open` among them, whose window no target declares.
+
+The pid was considered as a second witness and left out: a window host reports
+it, and a fresh process is the launched one or its child, but the single-
+instance applications this exists for - browsers, an editor already running -
+hand the new window to a process that was already there. Class and time do
+the same work for both kinds.

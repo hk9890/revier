@@ -119,12 +119,15 @@ revier writes one `Panel` as JSON on the probe's stdin and reads one
 `status` is one of `unknown`, `idle`, `running`, `attention`. A non-zero exit,
 malformed JSON, or a timeout means the panel reports `unknown`. One process per
 panel per refresh, so a probe stays cheap or it becomes the reason the TUI feels
-slow.
+slow; the timeout is half a second, and a probe that overruns it is killed with
+everything it started.
+
+`name` is also the foreground command the probe claims. A probe named `aider`
+reads panels running `aider` and no others, so an unrelated agent pane never
+costs a process, and a compiled-in probe for the same harness wins.
 
 Only `AgentProbe` has a subprocess form. A `Host` is stateful and sits in the
 latency path of every keystroke, so it is Go or nothing.
-
-*Designed, not built in the first version.*
 
 ## Level 3 — a Go host
 

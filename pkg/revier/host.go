@@ -55,6 +55,14 @@ type WindowController interface {
 type Capabilities struct {
 	Layout     bool // can arrange panels from a PanelSpec list
 	Persistent bool // an instance survives its client exiting
+
+	// OSWindows reports that every instance is an OS window, and that the
+	// host gives it the same title a WindowController reports for it. The
+	// core then treats the two listings as one window seen from two sides:
+	// it raises the OS window through the window host, which a terminal on
+	// Wayland cannot do for itself, and it judges toggle-back for a runtime
+	// target by OS focus. A multiplexer inside a terminal cannot claim this.
+	OSWindows bool
 }
 
 // Instance is one live thing a host holds: a kitty OS window, a tmux pane, a

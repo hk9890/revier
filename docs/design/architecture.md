@@ -59,8 +59,8 @@ Three things that look like ports and are not:
 
 The core owns everything that is not tool-specific:
 
-- **Template rendering.** A `Realization` is rendered before it reaches a host,
-  so no adapter ever sees `{{.Path}}`.
+- **Template rendering.** A `Realization` is rendered once, at load, before it
+  reaches a host, so no adapter ever sees `{{.Path}}` and no refresh renders.
 - **Matching.** Each host returns its instances in one bulk call; the core
   matches them against every project's realizations locally. This is why the
   TUI refresh costs one call per host rather than one per project.
@@ -74,6 +74,10 @@ The core owns everything that is not tool-specific:
   the core focuses explicitly on the run path. Without it the raise half of
   run-or-raise holds only by accident of the host: the instance opens behind on
   every host that does not focus its own launches.
+- **Raising a terminal's OS window.** A runtime whose instances are OS windows
+  says so (`Capabilities.OSWindows`), and the core raises the window through
+  the window host after focusing inside the runtime. A terminal on Wayland
+  cannot raise itself.
 
 An adapter implements five methods and holds no policy.
 
@@ -93,7 +97,7 @@ Detection signals the adapters use:
 
 | Adapter | Signal |
 |---|---|
-| kitty | `$KITTY_WINDOW_ID`, `kitten` on PATH |
+| kitty | `kitten` on PATH or beside `kitty`; a `@kitty-<pid>` control socket answers, or no kitty runs yet |
 | tmux | `$TMUX`, `tmux` on PATH |
 | wezterm | `$WEZTERM_PANE` |
 | gnome | `$XDG_CURRENT_DESKTOP` contains GNOME, `wctl` on PATH |
@@ -110,8 +114,12 @@ internal/config/       TOML load, template rendering, validation
 internal/state/        per-session attachments, which do not belong in config
 internal/adapter/
     kitty/
+    tmux/
     gnome/
+    sway/
     claude/
+    opencode/
+    execprobe/
 internal/tui/          the one TUI surface
 docs/design/
 ```

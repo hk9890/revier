@@ -12,6 +12,7 @@ package tmux_test
 import (
 	"context"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,34 +167,38 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 		},
 	}
 
-	homeRef, err := cr.Go(c, p, "home")
+	prepared, err := core.PrepareProject(p)
+	if err != nil {
+		t.Fatalf("PrepareProject: %v", err)
+	}
+	homeRef, err := cr.Go(c, prepared, "home", nil)
 	if err != nil {
 		t.Fatalf("open home: %v", err)
 	}
-	diffRef, err := cr.Go(c, p, "diff")
+	diffRef, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
-	if diffRef.ID == homeRef.ID {
+	if diffRef.Ref.ID == homeRef.Ref.ID {
 		t.Fatal("diff and home must be different windows")
 	}
 
 	// Opening left diff focused, so the second press is the round trip home.
-	back, err := cr.Go(c, p, "diff")
+	back, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("toggle back: %v", err)
 	}
-	if back.ID != homeRef.ID {
-		t.Fatalf("toggle-back returned %s, want home %s", back.ID, homeRef.ID)
+	if back.Ref.ID != homeRef.Ref.ID {
+		t.Fatalf("toggle-back returned %s, want home %s", back.Ref.ID, homeRef.Ref.ID)
 	}
 
 	// Third press raises the existing window rather than opening a duplicate.
-	again, err := cr.Go(c, p, "diff")
+	again, err := cr.Go(c, prepared, "diff", nil)
 	if err != nil {
 		t.Fatalf("raise diff: %v", err)
 	}
-	if again.ID != diffRef.ID {
-		t.Errorf("raise returned %s, want the existing %s", again.ID, diffRef.ID)
+	if again.Ref.ID != diffRef.Ref.ID {
+		t.Errorf("raise returned %s, want the existing %s", again.Ref.ID, diffRef.Ref.ID)
 	}
 	instances, err := h.Instances(c)
 	if err != nil {
@@ -245,5 +250,44 @@ func TestFreeTextContainingTheSeparatorSurvives(t *testing.T) {
 	}
 	if got := again[0].Panels[0].Title; got != title {
 		t.Errorf("pane title = %q, want %q", got, title)
+	}
+}
+
+// A home target is its panels: each becomes a pane of the one window, in the
+// project directory, with its title and its command, and the probe can tell
+// the agent pane from the shell beside it.
+func TestOpenBuildsThePanels(t *testing.T) {
+	h, c := server(t), ctx(t)
+	dir := t.TempDir()
+	ref, err := h.Open(c, revier.Realization{
+		Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"sh", "-c", "sleep 30"}},
+			{Kind: revier.PanelShell, Title: "shell", Command: []string{"sh", "-c", "sleep 30"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || instances[0].Ref.ID != ref.ID {
+		t.Fatalf("instances = %+v, want the one window opened", instances)
+	}
+	panels := instances[0].Panels
+	if len(panels) != 2 {
+		t.Fatalf("got %d panels, want 2: one pane per panel spec", len(panels))
+	}
+	if panels[0].Title != "agent" || panels[1].Title != "shell" {
+		t.Errorf("titles = %q, %q", panels[0].Title, panels[1].Title)
+	}
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", panels[1].ID.String(), "#{pane_current_path}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(out)); got != dir {
+		t.Errorf("pane cwd = %q, want the realization's dir %q", got, dir)
 	}
 }

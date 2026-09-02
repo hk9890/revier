@@ -106,3 +106,44 @@ func TestRenderLeavesPlainStringsAlone(t *testing.T) {
 		t.Errorf("launch = %v", out.Targets[0].Window.Launch)
 	}
 }
+
+// A realization starts in the project directory unless it says otherwise, so
+// a workspace opens where the project lives without every file repeating it.
+func TestRenderFillsDirFromTheProjectPath(t *testing.T) {
+	p := revier.Project{
+		Name: "x", Path: "/home/user/dev/x",
+		Targets: []revier.Target{
+			{Name: "home", Runtime: &revier.Realization{Launch: []string{"sh"}, Match: revier.Match{Title: "^x$"}}},
+			{Name: "notes", Runtime: &revier.Realization{Dir: "{{.Path}}/docs", Launch: []string{"sh"}, Match: revier.Match{Title: "^n$"}}},
+		},
+	}
+	out, err := core.Render(p)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got := out.Targets[0].Runtime.Dir; got != "/home/user/dev/x" {
+		t.Errorf("default dir = %q, want the project path", got)
+	}
+	if got := out.Targets[1].Runtime.Dir; got != "/home/user/dev/x/docs" {
+		t.Errorf("explicit dir = %q, want it rendered", got)
+	}
+}
+
+// An action's argv renders by the same rules as a launch: one template
+// language, and a missing key is refused rather than dropped.
+func TestRenderArgv(t *testing.T) {
+	p := revier.Project{Name: "revier", Path: "/p", Vars: map[string]string{"url": "https://example.invalid"}}
+	got, err := core.RenderArgv(p, []string{"wl-copy", "{{.Path}}", "{{.Name}}", "{{.Vars.url}}", "plain"})
+	if err != nil {
+		t.Fatalf("RenderArgv: %v", err)
+	}
+	want := []string{"wl-copy", "/p", "revier", "https://example.invalid", "plain"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("argv[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if _, err := core.RenderArgv(p, []string{"{{.Vars.absent}}"}); err == nil {
+		t.Error("a missing key must be an error, not an empty argument")
+	}
+}

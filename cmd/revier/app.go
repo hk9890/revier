@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -17,7 +18,7 @@ import (
 // core wired to the hosts this machine actually has.
 type app struct {
 	cfg       *config.Config
-	projects  []revier.Project
+	projects  []core.Project
 	state     *state.State
 	stateRoot string
 	core      *core.Core
@@ -46,17 +47,17 @@ func newApp(ctx context.Context) (*app, error) {
 	}
 	return &app{
 		cfg: cfg, projects: projects, state: st,
-		stateRoot: stateRoot, core: newCore(rt, win),
+		stateRoot: stateRoot, core: newCore(cfg, rt, win),
 	}, nil
 }
 
-func (a *app) project(name revier.ProjectName) (revier.Project, bool) {
+func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 	for _, p := range a.projects {
 		if p.Name == name {
 			return p, true
 		}
 	}
-	return revier.Project{}, false
+	return core.Project{}, false
 }
 
 // resolveProject decides which project a command acts on, in the order a user
@@ -70,11 +71,11 @@ func (a *app) project(name revier.ProjectName) (revier.Project, bool) {
 // Step 3 is why state exists. A keybinding pressed while the editor is focused
 // has no working directory and no focused workspace to read, so without a
 // remembered project "go back to the terminal" could not be answered.
-func (a *app) resolveProject(explicit string) (revier.Project, error) {
+func (a *app) resolveProject(explicit string) (core.Project, error) {
 	if explicit != "" {
 		p, ok := a.project(revier.ProjectName(explicit))
 		if !ok {
-			return revier.Project{}, fmt.Errorf("no project named %q", explicit)
+			return core.Project{}, fmt.Errorf("no project named %q", explicit)
 		}
 		return p, nil
 	}
@@ -88,16 +89,15 @@ func (a *app) resolveProject(explicit string) (revier.Project, error) {
 			return p, nil
 		}
 	}
-	return revier.Project{}, fmt.Errorf("no project for this directory, and none remembered; pass --project")
+	return core.Project{}, fmt.Errorf("no project for this directory, and none remembered; pass --project")
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
 // longest match so a project nested inside another wins.
-func (a *app) projectForPath(dir string) (revier.Project, bool) {
-	dir = expandHome(dir)
-	best, bestLen := revier.Project{}, -1
+func (a *app) projectForPath(dir string) (core.Project, bool) {
+	best, bestLen := core.Project{}, -1
 	for _, p := range a.projects {
-		root := filepath.Clean(expandHome(p.Path))
+		root := filepath.Clean(p.Path)
 		if root == "" {
 			continue
 		}
@@ -110,26 +110,83 @@ func (a *app) projectForPath(dir string) (revier.Project, bool) {
 	return best, bestLen >= 0
 }
 
-func expandHome(p string) string {
-	if !strings.HasPrefix(p, "~") {
-		return p
-	}
-	home, err := os.UserHomeDir()
+// commit records the project a command acted on, so the next keybinding
+// pressed away from a terminal still knows where it is, plus whatever else
+// the command learned. It re-reads the file first: the TUI writes claims to
+// it while a command runs, and a launch can take seconds waiting for a
+// socket, so saving the state loaded at startup would overwrite them.
+func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
+	st, err := state.Load(a.stateRoot)
 	if err != nil {
-		return p
+		st = a.state
 	}
-	return filepath.Join(home, strings.TrimPrefix(p, "~"))
-}
-
-// remember records the project a command acted on, so the next keybinding
-// pressed away from a terminal still knows where it is.
-func (a *app) remember(p revier.ProjectName) {
-	a.state.Current = p
-	if err := a.state.Save(a.stateRoot); err != nil {
+	st.Current = p
+	if apply != nil {
+		apply(st)
+	}
+	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
 		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
 	}
+}
+
+// bindWait is how long a keypress process waits for the window a detached
+// launch produces before giving up and leaving the rest to the TUI. Long,
+// because an editor's cold start takes this long and the wait is invisible:
+// the process lingers, the user sees the window come up.
+const bindWait = 30 * time.Second
+
+// goTarget is the whole run-or-raise for one target: Go with the project's
+// bindings, then, for a detached launch, the wait that binds the window and
+// raises it. Every ref it lands on is pinned in state, so the next press finds
+// the target by id whatever the application has done to its title since.
+//
+// A second press during the wait must not launch again: the pending launch
+// is recorded before waiting, and a press that finds one still inside
+// core.BindWindow reports it rather than opening a second window.
+func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
+	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
+		if _, alive := a.state.Bound[p.Name][name]; !alive {
+			return revier.TargetRef{}, nil // still coming up; the first press is waiting for it
+		}
+	}
+	res, err := a.core.Go(ctx, p, name, a.state.Bound[p.Name])
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
+	ref := res.Ref
+	if res.Launched && ref.IsZero() {
+		at := time.Now()
+		a.commit(p.Name, func(s *state.State) {
+			s.Launch = &state.Launch{Project: p.Name, Target: name, At: at}
+		})
+		inst, ok, err := a.core.Bind(ctx, p, name, res.Before, bindWait)
+		if err != nil {
+			return revier.TargetRef{}, err
+		}
+		if !ok {
+			return revier.TargetRef{}, nil // the TUI binds it if it appears later
+		}
+		ref = inst.Ref
+	}
+	a.commit(p.Name, func(s *state.State) {
+		s.Bind(p.Name, name, ref)
+		if s.Launch != nil && s.Launch.Project == p.Name && s.Launch.Target == name {
+			s.Launch = nil
+		}
+	})
+	return ref, nil
+}
+
+// launchedAction records that an action ran, so a window that appears within
+// core.ClaimWindow and matches no declared target is attached to the project:
+// the link opened from the terminal that claim-on-appear exists for.
+func (a *app) launchedAction(p revier.ProjectName) {
+	at := time.Now()
+	a.commit(p, func(s *state.State) {
+		s.Launch = &state.Launch{Project: p, At: at}
+	})
 }
 
 // configRootForMessage is the config root, for a message that has nowhere to

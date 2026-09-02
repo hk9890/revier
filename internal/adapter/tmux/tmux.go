@@ -191,26 +191,72 @@ func kindOf(cmd string) revier.PanelKind {
 }
 
 // Open creates a window named r.Name, starting the server and the session when
-// neither exists yet.
+// neither exists yet. With panels, the first panel is the window's pane and
+// every later one is split into it, side by side; without, the window runs
+// r.Launch alone.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the window")
 	}
+	panels := r.Panels
+	if len(panels) == 0 {
+		panels = []revier.PanelSpec{{Command: r.Launch}}
+	}
 
-	args := []string{"new-window", "-P", "-F", "#{window_id}", "-n", r.Name}
+	args := []string{"new-window", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-n", r.Name}
 	if !h.hasSession(ctx) {
-		args = []string{"new-session", "-d", "-P", "-F", "#{window_id}", "-s", h.session(), "-n", r.Name}
+		args = []string{"new-session", "-d", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-s", h.session(), "-n", r.Name}
 	} else {
 		args = append(args, "-t", h.session()+":")
 	}
-	args = append(args, r.Launch...)
+	if r.Dir != "" {
+		args = append(args, "-c", r.Dir)
+	}
+	args = append(args, panels[0].Command...)
 
 	out, err := h.run(ctx, args...)
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	id := strings.TrimSpace(out)
-	return revier.TargetRef{Host: h.Name(), ID: id, Title: r.Name}, nil
+	f := strings.SplitN(strings.TrimSpace(out), sep, 2)
+	if len(f) != 2 {
+		return revier.TargetRef{}, fmt.Errorf("tmux new-window: unexpected %q", out)
+	}
+	window, pane := f[0], f[1]
+	if err := h.title(ctx, pane, panels[0].Title); err != nil {
+		return revier.TargetRef{}, err
+	}
+
+	for _, p := range panels[1:] {
+		args := []string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}
+		if r.Dir != "" {
+			args = append(args, "-c", r.Dir)
+		}
+		args = append(args, p.Command...)
+		out, err := h.run(ctx, args...)
+		if err != nil {
+			return revier.TargetRef{}, err
+		}
+		if err := h.title(ctx, strings.TrimSpace(out), p.Title); err != nil {
+			return revier.TargetRef{}, err
+		}
+	}
+	if len(panels) > 1 {
+		if _, err := h.run(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
+			return revier.TargetRef{}, err
+		}
+	}
+	return revier.TargetRef{Host: h.Name(), ID: window, Title: r.Name}, nil
+}
+
+// title sets a pane's initial title. The program inside may still repaint it,
+// which is what the Claude probe reads.
+func (h *Host) title(ctx context.Context, pane, title string) error {
+	if title == "" {
+		return nil
+	}
+	_, err := h.run(ctx, "select-pane", "-t", pane, "-T", title)
+	return err
 }
 
 func (h *Host) hasSession(ctx context.Context) bool {

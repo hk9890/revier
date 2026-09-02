@@ -1,31 +1,41 @@
-// Command revier is the CLI.
+// Command revier is the CLI, and with no arguments the TUI.
 //
-// The TUI is not built yet, so `revier` with no arguments lists projects. Every
-// command here is one process per invocation: a keybinding spawns it, does one
-// thing, and exits. There is no daemon, which is why the commands avoid work
-// they do not need - `go` never surveys every project, only the one it acts on.
+// Every command here is one process per invocation: a keybinding spawns it,
+// does one thing, and exits. There is no daemon, which is why the commands
+// avoid work they do not need - `go` never surveys every project, only the one
+// it acts on. The TUI is the one long-lived process, and it refreshes through
+// the same Survey `list` prints once.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"text/tabwriter"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/term"
+
 	"github.com/hk9890/revier/internal/build"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 const usage = `revier - a project-grouped control surface for running agents
 
 usage:
-  revier [list] [--json]        list projects, agent state, and targets
+  revier                        the TUI: every project, its agent state, its targets
+  revier list [--json]          the same, printed once
   revier open [name]            run-or-raise a project's workspace
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
+  revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
   revier version
@@ -36,13 +46,19 @@ flags:
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
+		// An action's own exit status passes through, so whatever bound the
+		// key sees the failure the command reported and not a generic one.
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.ExitCode())
+		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string) error {
-	cmd := "list"
+	cmd := ""
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]
 	}
@@ -56,7 +72,9 @@ func run(args []string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Long enough for a detached launch's wait (bindWait) on top of the
+	// host calls around it.
+	ctx, cancel := context.WithTimeout(context.Background(), bindWait+30*time.Second)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -65,12 +83,16 @@ func run(args []string) error {
 	}
 
 	switch cmd {
+	case "":
+		return cmdTUI(a)
 	case "list":
 		return cmdList(ctx, a, args)
 	case "open":
 		return cmdOpen(ctx, a, args)
 	case "go":
 		return cmdGo(ctx, a, args)
+	case "run":
+		return cmdRun(ctx, a, args)
 	case "attach":
 		return cmdAttach(ctx, a, args)
 	case "status":
@@ -110,6 +132,17 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// cmdTUI runs the surface. Without a terminal - `revier | grep` - it prints
+// the table instead, so a script sees what it always saw.
+func cmdTUI(a *app) error {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return cmdList(context.Background(), a, nil)
+	}
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second)
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	return err
+}
+
 func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
@@ -117,22 +150,24 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	views, err := a.core.Survey(ctx, a.projects)
+	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
 	if err != nil {
 		return err
 	}
+	views := report.Views
 
 	// Drop attachments whose windows are gone, so state does not accumulate
-	// refs to closed windows forever.
-	live := map[string]bool{}
-	for _, v := range views {
-		for _, t := range v.Targets {
-			if !t.Ref.IsZero() {
-				live[state.Key(t.Ref)] = true
-			}
+	// refs to closed windows forever. An attachment is always a window-host
+	// ref, so the window listing is the live set.
+	if a.core.Window != nil {
+		live := map[string]bool{}
+		for _, inst := range report.Instances {
+			live[state.Key(inst.Ref)] = true
+		}
+		if a.state.Prune(live) {
+			a.commit(a.state.Current, nil)
 		}
 	}
-	a.state.Prune(live)
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -217,11 +252,10 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if !ok {
 		return fmt.Errorf("project %q has no home target", p.Name)
 	}
-	ref, err := a.core.Go(ctx, p, home.Name)
+	ref, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {
 		return err
 	}
-	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -240,13 +274,65 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	ref, err := a.core.Go(ctx, p, revier.TargetName(pos[0]))
+	ref, err := a.goTarget(ctx, p, revier.TargetName(pos[0]))
 	if err != nil {
 		return err
 	}
-	a.remember(p.Name)
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
+}
+
+func cmdRun(ctx context.Context, a *app, args []string) error {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	project := projectFlag(fs)
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 1 {
+		return fmt.Errorf("usage: revier run <action> [-p project]")
+	}
+	p, err := a.resolveProject(*project)
+	if err != nil {
+		return err
+	}
+	argv, err := a.action(p, pos[0])
+	if err != nil {
+		return err
+	}
+	a.launchedAction(p.Name)
+	return runAction(p, argv)
+}
+
+// action renders the named action's argv against the project. An unknown name
+// is an error naming it: a key bound to nothing must say so, not do nothing.
+func (a *app) action(p core.Project, name string) ([]string, error) {
+	for _, act := range a.cfg.Actions {
+		if act.Name != name {
+			continue
+		}
+		argv, err := core.RenderArgv(p.Project, act.Run)
+		if err != nil {
+			return nil, fmt.Errorf("action %q: %w", name, err)
+		}
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("action %q has an empty run argv", name)
+		}
+		return argv, nil
+	}
+	return nil, fmt.Errorf("no action named %q", name)
+}
+
+// runAction executes an argv in the project directory with the terminal
+// attached, and returns the command's own error so its exit status survives.
+// No shell: the argv is a list, so there is nothing to quote and nothing to
+// inject into. No context either: the command's 30s deadline is for host
+// calls, and an action - an editor, a long pull - runs as long as it runs.
+func runAction(p core.Project, argv []string) error {
+	c := exec.Command(argv[0], argv[1:]...)
+	c.Dir = p.Path
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return c.Run()
 }
 
 func cmdAttach(ctx context.Context, a *app, args []string) error {
@@ -269,8 +355,7 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	if ref.IsZero() {
 		return fmt.Errorf("no window is focused")
 	}
-	a.state.Attach(p.Name, ref)
-	a.remember(p.Name)
+	a.commit(p.Name, func(s *state.State) { s.Attach(p.Name, ref) })
 	fmt.Printf("%s: attached %s\n", p.Name, describe(ref))
 	return nil
 }
@@ -302,7 +387,7 @@ func hostName(h revier.Host) string {
 
 func describe(ref revier.TargetRef) string {
 	if ref.IsZero() {
-		return "launched (no window yet)"
+		return "launching"
 	}
 	if ref.Title == "" {
 		return ref.Host + "/" + ref.ID

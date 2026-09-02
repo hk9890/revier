@@ -6,7 +6,11 @@ import (
 	"fmt"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
+	"github.com/hk9890/revier/internal/adapter/execprobe"
 	"github.com/hk9890/revier/internal/adapter/gnome"
+	"github.com/hk9890/revier/internal/adapter/kitty"
+	"github.com/hk9890/revier/internal/adapter/opencode"
+	"github.com/hk9890/revier/internal/adapter/sway"
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -18,24 +22,32 @@ import (
 // one place.
 func runtimeAdapters() map[string]revier.Runtime {
 	return map[string]revier.Runtime{
-		"tmux": &tmux.Host{},
+		"kitty": &kitty.Host{},
+		"tmux":  &tmux.Host{},
 	}
 }
 
 func windowAdapters() map[string]revier.WindowController {
 	return map[string]revier.WindowController{
 		"gnome": &gnome.Host{},
+		"sway":  &sway.Host{},
 	}
 }
 
-func probes() []revier.AgentProbe {
-	return []revier.AgentProbe{&claude.Probe{}}
+// probes lists the compiled-in probes first, then the ones config declares
+// as subprocesses, so a compiled probe wins for the harness it knows.
+func probes(cfg *config.Config) []revier.AgentProbe {
+	out := []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
+	for _, pr := range cfg.Probes {
+		out = append(out, execprobe.New(pr.Name, pr.Exec))
+	}
+	return out
 }
 
 // preference order used when config names none.
 var (
-	defaultRuntimeOrder = []string{"tmux"}
-	defaultWindowOrder  = []string{"gnome"}
+	defaultRuntimeOrder = []string{"kitty", "tmux"}
+	defaultWindowOrder  = []string{"gnome", "sway"}
 )
 
 // hostNone disables a host class. Listing it is how a machine that HAS a usable
@@ -119,6 +131,6 @@ func selectWindow(ctx context.Context, want []string, adapters map[string]revier
 	return nil, nil
 }
 
-func newCore(rt revier.Runtime, win revier.WindowController) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes()}
+func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController) *core.Core {
+	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg)}
 }

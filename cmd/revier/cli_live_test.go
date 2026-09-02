@@ -10,6 +10,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,11 +63,13 @@ func scratch(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(projects, "demo.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Disable the window host explicitly. This machine may have a working
-	// GNOME adapter, and a test that behaves differently depending on the
-	// ambient desktop is not a test. It also keeps the suite from ever
-	// touching a real window.
-	cfg := "[hosts]\nwindow = [\"none\"]\n"
+	// Pin the runtime to tmux and disable the window host. This machine may
+	// have a working kitty and a working GNOME adapter, and a test that
+	// behaves differently depending on the ambient desktop is not a test. It
+	// also keeps the suite from ever opening or touching a real window.
+	cfg := "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n" +
+		"[[action]]\nkey = \"ctrl-y\"\nname = \"say\"\nrun = [\"sh\", \"-c\", \"echo action:$0:$1\", \"{{.Name}}\", \"{{.Path}}\"]\n" +
+		"[[action]]\nkey = \"ctrl-x\"\nname = \"fail\"\nrun = [\"sh\", \"-c\", \"exit 3\"]\n"
 	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -238,5 +241,34 @@ func TestOpenNamedProjectWins(t *testing.T) {
 	out := capture(t, "open", "second")
 	if !strings.HasPrefix(out, "second:") {
 		t.Fatalf("open acted on the wrong project:\n%s", out)
+	}
+}
+
+// An action runs its rendered argv in the project and needs no host at all:
+// the scratch config disables the window host, and the argv sees the project.
+func TestRunExecutesAnAction(t *testing.T) {
+	workdir := scratch(t)
+	out := capture(t, "run", "say", "-p", "demo")
+	if want := "action:demo:" + workdir; !strings.Contains(out, want) {
+		t.Fatalf("run printed %q, want %q: the argv must be rendered against the project", out, want)
+	}
+}
+
+// The action's own exit status is the command's, so a binding sees the failure
+// the action reported.
+func TestRunPropagatesTheExitStatus(t *testing.T) {
+	scratch(t)
+	err := run([]string{"run", "fail", "-p", "demo"})
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 3 {
+		t.Fatalf("err = %v, want the action's exit status 3", err)
+	}
+}
+
+func TestRunUnknownActionIsAnError(t *testing.T) {
+	scratch(t)
+	err := run([]string{"run", "nosuch", "-p", "demo"})
+	if err == nil || !strings.Contains(err.Error(), "nosuch") {
+		t.Fatalf("err = %v, want an error naming the action", err)
 	}
 }

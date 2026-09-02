@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -52,6 +53,13 @@ func (c *Core) hosts() []revier.Host {
 // Resolve reports which host and realization serve a target. It returns
 // ErrNoHost when the target declares no realization for any configured host.
 func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error) {
+	host, real, _, err := c.resolve(t)
+	return host, real, err
+}
+
+// resolve is Resolve plus which side of the host split answered, so the caller
+// can pick the compiled match that belongs to the winning realization.
+func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier.HostKind, error) {
 	window, hasWindow := revier.Host(nil), false
 	if c.Window != nil && t.Window != nil {
 		window, hasWindow = c.Window, true
@@ -63,17 +71,31 @@ func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error)
 
 	switch {
 	case t.Prefer == revier.HostRuntime && hasRuntime:
-		return runtime, *t.Runtime, nil
+		return runtime, *t.Runtime, revier.HostRuntime, nil
 	case t.Prefer == revier.HostWindow && hasWindow:
-		return window, *t.Window, nil
+		return window, *t.Window, revier.HostWindow, nil
 	case hasWindow:
 		// The default rule. A separate window is what a desktop user expects;
 		// `prefer = "runtime"` on the target overrides it.
-		return window, *t.Window, nil
+		return window, *t.Window, revier.HostWindow, nil
 	case hasRuntime:
-		return runtime, *t.Runtime, nil
+		return runtime, *t.Runtime, revier.HostRuntime, nil
 	}
-	return nil, revier.Realization{}, ErrNoHost
+	return nil, revier.Realization{}, "", ErrNoHost
+}
+
+// resolveAt resolves the i-th target of a prepared project, returning the
+// compiled match of the realization that won.
+func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
+	host, real, kind, err := c.resolve(p.Targets[i])
+	if err != nil {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, err
+	}
+	m := p.compiled[i].runtime
+	if kind == revier.HostWindow {
+		m = p.compiled[i].window
+	}
+	return host, real, m, nil
 }
 
 // snapshot is one bulk listing per host, taken once and matched against every
@@ -93,74 +115,223 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 	return s, nil
 }
 
-// find returns the first instance of the host that satisfies the realization.
-func find(s snapshot, h revier.Host, r revier.Realization) (revier.Instance, bool, error) {
-	if r.Match.IsZero() {
-		return revier.Instance{}, false, ErrUnboundedMatch
-	}
-	m, err := r.Match.Compile()
-	if err != nil {
-		return revier.Instance{}, false, err
-	}
+// find returns the first instance of the host that satisfies the match. The
+// match was compiled at load, so this is a scan and nothing else.
+func find(s snapshot, h revier.Host, m revier.CompiledMatch) (revier.Instance, bool) {
 	for _, i := range s[h.Name()] {
 		if m.Matches(i) {
-			return i, true, nil
+			return i, true
 		}
 	}
-	return revier.Instance{}, false, nil
+	return revier.Instance{}, false
+}
+
+// byRef returns the instance a ref points at, if the host still lists it.
+func byRef(s snapshot, ref revier.TargetRef) (revier.Instance, bool) {
+	if ref.IsZero() {
+		return revier.Instance{}, false
+	}
+	for _, i := range s[ref.Host] {
+		if i.Ref.ID == ref.ID {
+			return i, true
+		}
+	}
+	return revier.Instance{}, false
+}
+
+// Bindings is where a project's targets last landed, by instance id: the
+// state a caller keeps between keypresses. A bound instance that is still
+// listed is the target, whatever its title says now; the rule is consulted
+// only when there is no binding, which is after a restart or for a window
+// revier did not launch. This is what makes a key stable across the title
+// changes an application makes after it opens.
+type Bindings = map[revier.TargetName]revier.TargetRef
+
+// locate finds the instance backing a target: its binding when alive, else
+// the first instance the rule matches.
+func (c *Core) locate(snap snapshot, host revier.Host, m revier.CompiledMatch, bound revier.TargetRef) (revier.Instance, bool) {
+	if bound.Host == host.Name() {
+		if inst, ok := byRef(snap, bound); ok {
+			return inst, true
+		}
+	}
+	return find(snap, host, m)
+}
+
+// Result is what Go did. Ref is where the key landed. Launched reports that
+// the run half ran; with a zero Ref the host could not name the window it
+// started, and Before is the window listing from before the launch, which
+// Bind diffs against.
+type Result struct {
+	Ref      revier.TargetRef
+	Launched bool
+	Before   []revier.Instance
 }
 
 // Go runs-or-raises a target. Pressing the same key twice returns to the
 // project's home target, which is what makes a binding a round trip rather than
-// a one-way jump.
-func (c *Core) Go(ctx context.Context, p revier.Project, name revier.TargetName) (revier.TargetRef, error) {
-	p, err := Render(p)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
-	t, ok := p.Target(name)
+// a one-way jump. bound is where the project's targets last landed; the caller
+// records Result.Ref there afterwards, so the next press needs no rule.
+func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
+	i, ok := p.index(name)
 	if !ok {
-		return revier.TargetRef{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
 	}
-	host, real, err := c.Resolve(t)
+	t := p.Targets[i]
+	host, real, m, err := c.resolveAt(p, i)
 	if err != nil {
-		return revier.TargetRef{}, err
+		return Result{}, err
 	}
 	snap, err := c.snapshot(ctx)
 	if err != nil {
-		return revier.TargetRef{}, err
+		return Result{}, err
 	}
 
-	inst, found, err := find(snap, host, real)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
+	inst, found := c.locate(snap, host, m, bound[name])
 	if !found {
+		res := Result{Launched: true}
+		if c.Window != nil {
+			res.Before = snap[c.Window.Name()]
+		}
 		ref, err := host.Open(ctx, real)
 		if err != nil {
-			return revier.TargetRef{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
+			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
+		}
+		if ref.IsZero() {
+			// The host launched a process and cannot name the window it will
+			// produce; a window host is like this. Bind waits for it.
+			return res, nil
 		}
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
 		// not. Go always leaves the target focused.
 		if err := host.Focus(ctx, ref); err != nil {
-			return revier.TargetRef{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+			return Result{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
-		return ref, nil
+		res.Ref = ref
+		return res, nil
 	}
 
 	// Toggle back: the target is already where focus is, so the second press
 	// returns home instead of doing nothing.
-	if !t.Home && c.focusedOn(ctx, inst.Ref) {
+	if !t.Home && c.focusedOn(ctx, snap, inst) {
 		if home, ok := p.Home(); ok {
-			return c.Go(ctx, p, home.Name)
+			return c.Go(ctx, p, home.Name, bound)
 		}
 	}
 	if err := host.Focus(ctx, inst.Ref); err != nil {
-		return revier.TargetRef{}, fmt.Errorf("%s: focus %s: %w", host.Name(), name, err)
+		return Result{}, fmt.Errorf("%s: focus %s: %w", host.Name(), name, err)
 	}
-	return inst.Ref, nil
+	// A terminal cannot always raise the OS window it lives in - kitty on
+	// Wayland cannot - so when the window host sees that window, it raises it.
+	if osw, ok := c.osWindowOf(snap, inst); ok {
+		if err := c.Window.Focus(ctx, osw.Ref); err != nil {
+			return Result{}, fmt.Errorf("%s: raise %s: %w", c.Window.Name(), name, err)
+		}
+	}
+	return Result{Ref: inst.Ref}, nil
+}
+
+// BindPoll is how often Bind asks the window host while waiting.
+const BindPoll = 250 * time.Millisecond
+
+// Bind waits for the window a detached launch produces and binds it, then
+// raises it. The window is the first one, new since before, that the target's
+// rule accepts by class alone: the class is right from the first frame while
+// a title settles later, which is exactly when a rule would miss it. A window
+// the full rule matches is taken at once; otherwise a single class candidate
+// is taken and two at once are left alone, because the launch does not say
+// which. It gives up after wait and reports false.
+func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (revier.Instance, bool, error) {
+	i, ok := p.index(name)
+	if !ok || c.Window == nil || p.Targets[i].Window == nil {
+		return revier.Instance{}, false, nil
+	}
+	seen := map[string]bool{}
+	for _, inst := range before {
+		seen[key(inst.Ref)] = true
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		windows, err := c.Window.Instances(ctx)
+		if err != nil {
+			return revier.Instance{}, false, err
+		}
+		var candidates []revier.Instance
+		for _, w := range windows {
+			if seen[key(w.Ref)] {
+				continue
+			}
+			if p.compiled[i].window.Matches(w) {
+				candidates = []revier.Instance{w}
+				break
+			}
+			if c.classOK(p, i, w) {
+				candidates = append(candidates, w)
+			}
+		}
+		if len(candidates) == 1 {
+			w := candidates[0]
+			if err := c.Window.Focus(ctx, w.Ref); err != nil {
+				return revier.Instance{}, false, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
+			}
+			return w, true, nil
+		}
+		if len(candidates) > 1 || !time.Now().Before(deadline) {
+			return revier.Instance{}, false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return revier.Instance{}, false, ctx.Err()
+		case <-time.After(BindPoll):
+		}
+	}
+}
+
+// classOK reports whether a window could be the i-th target's by class: the
+// rule's class matches, or the rule constrains none.
+func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
+	if !p.compiled[i].hasClass {
+		return true
+	}
+	return p.compiled[i].windowClass.Matches(w)
+}
+
+// osWindowOf finds the window-host instance that is the OS window of a runtime
+// instance. Only a runtime that reports OSWindows takes part: it gives each
+// instance the title a window host reports for the same window, so the two
+// listings describe one window from two sides. The pid is a filter on top -
+// every OS window of one kitty process shares it - never the identity.
+func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
+	if c.Window == nil || c.Runtime == nil || inst.Ref.Host != c.Runtime.Name() || inst.Title == "" {
+		return revier.Instance{}, false
+	}
+	if !c.Runtime.Capabilities().OSWindows {
+		return revier.Instance{}, false
+	}
+	for _, w := range snap[c.Window.Name()] {
+		if w.Title != inst.Title {
+			continue
+		}
+		if w.PID != 0 && inst.PID != 0 && w.PID != inst.PID {
+			continue
+		}
+		return w, true
+	}
+	return revier.Instance{}, false
+}
+
+// Focus activates a bare ref on the host that produced it. The picker uses it
+// for an attached instance, which has no target to resolve: the ref is all
+// revier knows about it.
+func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
+	for _, h := range c.hosts() {
+		if h.Name() == ref.Host {
+			return h.Focus(ctx, ref)
+		}
+	}
+	return fmt.Errorf("%w: no host named %q", ErrNoHost, ref.Host)
 }
 
 // focusAuthority is the host whose Focused answer describes where the user
@@ -176,56 +347,178 @@ func (c *Core) focusAuthority() revier.Host {
 	return nil
 }
 
-// focusedOn reports whether ref is certainly where the user is standing.
+// focusedOn reports whether inst is certainly where the user is standing.
 //
 // Certainty matters more than coverage here, because the consequence of a
 // false positive is a keypress that goes home when the user asked to go
 // somewhere: strictly worse than a keypress that does nothing surprising.
 //
-// So a ref counts only when its own host is the focus authority. Ids are
-// host-scoped - a GNOME window id and a tmux pane id are unrelated numbers -
-// so comparing across hosts is meaningless, and comparing a runtime's "current
-// pane" against global OS focus is wrong in the common case: a runtime target
-// can be tmux's current window while the user is looking at the editor.
+// So only the focus authority's answer counts, and only about its own ids.
+// Ids are host-scoped - a GNOME window id and a tmux pane id are unrelated
+// numbers - so comparing across hosts is meaningless, and a runtime's "current
+// pane" says nothing about OS focus: a tmux window can be current while the
+// user is looking at the editor.
 //
-// The cost is that toggle-back does not fire for runtime targets on a machine
-// that has a window host. Recovering it needs a mapping from a runtime
-// instance to the OS window containing it, which the ports do not carry yet.
-func (c *Core) focusedOn(ctx context.Context, ref revier.TargetRef) bool {
+// A runtime instance is therefore judged through the OS window that holds it,
+// when the runtime can name one (osWindowOf). A multiplexer cannot, and for it
+// toggle-back does not fire on a machine that has a window host.
+func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instance) bool {
 	auth := c.focusAuthority()
-	if auth == nil || ref.ID == "" || ref.Host != auth.Name() {
+	if auth == nil || inst.Ref.ID == "" {
 		return false
+	}
+	want := inst.Ref
+	if want.Host != auth.Name() {
+		osw, ok := c.osWindowOf(snap, inst)
+		if !ok {
+			return false
+		}
+		want = osw.Ref
 	}
 	cur, err := auth.Focused(ctx)
 	if err != nil {
 		return false
 	}
-	return cur.Host == ref.Host && cur.ID == ref.ID
+	return cur.Host == want.Host && cur.ID == want.ID
+}
+
+// Report is one survey: the view every renderer reads, every instance it was
+// built from, and the window host's part of that, which claim-on-appear diffs
+// between refreshes. Carrying the listings out keeps a refresh at one
+// Instances call per host, and gives state the live set to prune against.
+type Report struct {
+	Views     []revier.ProjectView
+	Instances []revier.Instance
+	Windows   []revier.Instance
 }
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
-// local matching for every project.
-func (c *Core) Survey(ctx context.Context, projects []revier.Project) ([]revier.ProjectView, error) {
+// local matching for every project. bound is where each project's targets
+// last landed; a bound instance that is still listed is its target.
+//
+// Every project here is already rendered and compiled; a project that could
+// not be was refused at load, so the survey has no per-project error path and
+// does no work that a previous refresh did not also have to do.
+func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings) (Report, error) {
 	snap, err := c.snapshot(ctx)
 	if err != nil {
-		return nil, err
+		return Report{}, err
 	}
-	views := make([]revier.ProjectView, 0, len(projects))
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
-		rendered, err := Render(p)
-		if err != nil {
-			// One unrenderable project must not blank the dashboard; it is
-			// reported as a project with no available targets.
-			views = append(views, revier.ProjectView{Project: p})
-			continue
-		}
-		views = append(views, c.view(ctx, snap, rendered))
+		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name]))
 	}
-	return views, nil
+	for _, h := range c.hosts() {
+		r.Instances = append(r.Instances, snap[h.Name()]...)
+	}
+	if c.Window != nil {
+		r.Windows = snap[c.Window.Name()]
+	}
+	return r, nil
 }
 
-func (c *Core) view(ctx context.Context, snap snapshot, p revier.Project) revier.ProjectView {
-	v := revier.ProjectView{Project: p}
+// Launch is what a window that appears is attributed to: the project that
+// launched, the target if the launch was one (else an action's, which may
+// open anything), and when.
+type Launch struct {
+	Project Project
+	Target  revier.TargetName
+	At      time.Time
+}
+
+// Claimed is the outcome of a claim: the window, and the target it was bound
+// to, or none for an attachment.
+type Claimed struct {
+	Ref    revier.TargetRef
+	Target revier.TargetName
+}
+
+// ClaimWindow is how long after an action's launch a window that appears is
+// attached to the project. Short on purpose: a wrong claim binds an unrelated
+// window to a project and is only visible later, when a key goes somewhere
+// surprising.
+const ClaimWindow = 5 * time.Second
+
+// BindWindow is how long after a target's launch a window of its class is
+// still bound to it. Longer than ClaimWindow because the class filter makes
+// a wrong binding unlikely and an editor's cold start takes this long.
+const BindWindow = 60 * time.Second
+
+// Claim decides what a window that is new since the previous survey means
+// for the last launch. For a target's launch it is a binding: the window the
+// target's rule accepts by class, which Bind may have missed because the
+// window took longer than its wait. For an action's launch it is an
+// attachment: a window no declared target of any project matches, since a
+// declared one is reached by its key already. Either way it claims nothing
+// rather than the wrong thing: nothing outside the window after the launch,
+// and nothing when more than one candidate appeared at once.
+func (c *Core) Claim(before, after []revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
+	if !c.within(l, now) {
+		return Claimed{}, false
+	}
+	seen := map[string]bool{}
+	for _, inst := range before {
+		seen[key(inst.Ref)] = true
+	}
+	var candidates []revier.Instance
+	for _, inst := range after {
+		if !seen[key(inst.Ref)] && c.candidate(inst, l, projects) {
+			candidates = append(candidates, inst)
+		}
+	}
+	if len(candidates) != 1 {
+		return Claimed{}, false
+	}
+	return Claimed{Ref: candidates[0].Ref, Target: l.Target}, true
+}
+
+// ClaimEvent is Claim for one window a watching host just reported.
+func (c *Core) ClaimEvent(inst revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
+	if !c.within(l, now) || !c.candidate(inst, l, projects) {
+		return Claimed{}, false
+	}
+	return Claimed{Ref: inst.Ref, Target: l.Target}, true
+}
+
+func (c *Core) candidate(inst revier.Instance, l Launch, projects []Project) bool {
+	if l.Target == "" {
+		return !c.declared(inst, projects)
+	}
+	i, ok := l.Project.index(l.Target)
+	if !ok || l.Project.Targets[i].Window == nil {
+		return false
+	}
+	return l.Project.compiled[i].window.Matches(inst) || c.classOK(l.Project, i, inst)
+}
+
+// within reports whether now is still inside the launch's window.
+func (c *Core) within(l Launch, now time.Time) bool {
+	if l.At.IsZero() {
+		return false
+	}
+	limit := ClaimWindow
+	if l.Target != "" {
+		limit = BindWindow
+	}
+	age := now.Sub(l.At)
+	return age >= 0 && age <= limit
+}
+
+// declared reports whether any project's window realization matches the
+// instance: it is then a declared target, not a stray.
+func (c *Core) declared(inst revier.Instance, projects []Project) bool {
+	for _, p := range projects {
+		for i, t := range p.Targets {
+			if t.Window != nil && p.compiled[i].window.Matches(inst) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings) revier.ProjectView {
+	v := revier.ProjectView{Project: p.Project}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
@@ -233,22 +526,21 @@ func (c *Core) view(ctx context.Context, snap snapshot, p revier.Project) revier
 	// been given its own window.
 	seen := map[string]bool{}
 
-	for _, t := range p.Targets {
+	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
-		host, real, err := c.Resolve(t)
+		host, _, m, err := c.resolveAt(p, i)
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()
-			if inst, found, err := find(snap, host, real); err == nil && found {
+			if inst, found := c.locate(snap, host, m, bound[t.Name]); found {
 				tv.Ref = inst.Ref
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref
 				}
 				// One instance can back two targets; probing it twice would
 				// report the same agent twice.
-				key := inst.Ref.Host + "\x00" + inst.Ref.ID
-				if !seen[key] {
-					seen[key] = true
+				if k := key(inst.Ref); !seen[k] {
+					seen[k] = true
 					v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 				}
 			}
@@ -258,13 +550,16 @@ func (c *Core) view(ctx context.Context, snap snapshot, p revier.Project) revier
 	return v
 }
 
-// inspect runs the first matching probe over every agent panel of an instance.
+// key is the identity of a ref within one survey.
+func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
+
+// inspect runs the first matching probe over every panel of an instance. A
+// probe's Match decides what an agent panel is, not the host's PanelKind: a
+// host knows only the harnesses it was written with, and a probe declared in
+// config exists for the one it was not.
 func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.AgentView {
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
-		if panel.Kind != revier.PanelAgent {
-			continue
-		}
 		for _, probe := range c.Probes {
 			if !probe.Match(panel) {
 				continue

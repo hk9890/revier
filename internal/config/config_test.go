@@ -22,7 +22,6 @@ name = "home"
 home = true
   [target.runtime]
   name = "home"
-  launch = ["kitty"]
   match = { title = "^session:{{.Name}}$" }
     [[target.runtime.panels]]
     kind = "agent"
@@ -135,15 +134,6 @@ func TestValidateRejects(t *testing.T) {
 			"declares no realization",
 		},
 		{
-			"bad regex",
-			revier.Project{Path: "/p", Targets: []revier.Target{
-				{Name: "a", Home: true, Window: &revier.Realization{
-					Launch: []string{"x"}, Match: revier.Match{Class: "("},
-				}},
-			}},
-			"error parsing regexp",
-		},
-		{
 			"no path",
 			revier.Project{Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
 			"no path",
@@ -166,6 +156,46 @@ func TestValidateRejects(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A pattern that does not compile and a template that does not render are
+// refused at load, naming the file, like every other invalid project.
+func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
+	cases := map[string]string{
+		"bad regex":   strings.Replace(valid, `class = "^code$"`, `class = "("`, 1),
+		"missing key": strings.Replace(valid, `"{{.Path}}"`, `"{{.Vars.absent}}"`, 1),
+		"empty match": strings.Replace(valid, `match = { class = "^code$" }`, `match = { }`, 1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := write(t, dir, "broken.toml", body)
+			_, err := config.LoadProject(path)
+			if err == nil {
+				t.Fatal("want an error")
+			}
+			if !strings.Contains(err.Error(), path) {
+				t.Errorf("error should name the file: %v", err)
+			}
+		})
+	}
+}
+
+// Projects leave Load prepared: templates rendered, so a host never sees one.
+func TestLoadProjectRendersTemplates(t *testing.T) {
+	dir := t.TempDir()
+	p, err := config.LoadProject(write(t, dir, "revier.toml", valid))
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	home, _ := p.Home()
+	if home.Runtime.Match.Title != "^session:revier$" {
+		t.Errorf("match title = %q, want it rendered", home.Runtime.Match.Title)
+	}
+	editor, _ := p.Target("editor")
+	if editor.Window.Launch[1] != "/home/hans/dev/github/revier" {
+		t.Errorf("launch = %v, want it rendered", editor.Window.Launch)
 	}
 }
 
@@ -219,5 +249,76 @@ func TestRootHonoursOverride(t *testing.T) {
 	}
 	if got != "/tmp/scratch-revier" {
 		t.Errorf("Root = %q", got)
+	}
+}
+
+// A tilde is expanded once at load so no consumer hands a literal "~" to a
+// program that does not expand it.
+func TestLoadProjectExpandsHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	dir := t.TempDir()
+	body := strings.Replace(valid, `path = "/home/hans/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
+	p, err := config.LoadProject(write(t, dir, "revier.toml", body))
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if want := filepath.Join(home, "dev/github/revier"); p.Path != want {
+		t.Errorf("path = %q, want %q", p.Path, want)
+	}
+	editor, _ := p.Target("editor")
+	if editor.Window.Launch[1] != p.Path {
+		t.Errorf("{{.Path}} rendered %q, want the expanded path", editor.Window.Launch[1])
+	}
+	if editor.Window.Dir != p.Path {
+		t.Errorf("dir = %q, want the expanded path", editor.Window.Dir)
+	}
+}
+
+// A home target is its panels; it needs no launch of its own. A window
+// realization cannot have panels, because a window host cannot see inside.
+func TestValidatePanelsStandInForLaunch(t *testing.T) {
+	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}
+	ok := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Match: revier.Match{Title: "^h$"}, Panels: panels}},
+	}}
+	if err := config.Validate(ok); err != nil {
+		t.Errorf("a runtime realization with panels and no launch should validate: %v", err)
+	}
+	bad := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}, Panels: panels}},
+	}}
+	if err := config.Validate(bad); err == nil || !strings.Contains(err.Error(), "panels") {
+		t.Errorf("a window realization with panels should be rejected, got %v", err)
+	}
+	// A launch beside panels would be dropped silently by every host, and
+	// the agent it named never started; it is refused instead.
+	both := revier.Project{Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"claude"}, Match: revier.Match{Title: "^h$"}, Panels: panels}},
+	}}
+	if err := config.Validate(both); err == nil || !strings.Contains(err.Error(), "both launch and panels") {
+		t.Errorf("launch beside panels should be rejected, got %v", err)
+	}
+}
+
+// A [[probe]] entry is loaded with its binary path expanded; a half-declared
+// one is refused at load.
+func TestLoadProbes(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\nexec = \"~/bin/aider-probe\"\n")
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	home, _ := os.UserHomeDir()
+	if len(cfg.Probes) != 1 || cfg.Probes[0].Name != "aider" || cfg.Probes[0].Exec != filepath.Join(home, "bin/aider-probe") {
+		t.Errorf("probes = %+v", cfg.Probes)
+	}
+
+	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\n")
+	if _, _, err := config.Load(root); err == nil {
+		t.Error("a probe without exec should be refused at load")
 	}
 }

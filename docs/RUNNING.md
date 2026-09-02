@@ -21,7 +21,7 @@ user's projects and state. Set both, every time.
 
 ```bash
 S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"
-printf '[hosts]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
+printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
 name = "demo"
 path = "$S"
@@ -43,9 +43,10 @@ export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 tmux kill-session -t revier; rm -rf "$S"
 ```
 
-`window = ["none"]` is the important line. This machine has a working GNOME
-adapter, so without it a window target would launch a real application and move
-the user's focus.
+The `[hosts]` line is the important one. This machine has a working kitty and a
+working GNOME adapter: without `runtime = ["tmux"]` the workspace opens as a
+real kitty OS window, and without `window = ["none"]` a window target launches
+a real application and moves the user's focus.
 
 To exercise the agent monitor, give a pane a Claude-style title. The leading
 glyph is the state signal:
@@ -53,6 +54,27 @@ glyph is the state signal:
 ```bash
 tmux select-pane -t agent -T '⠧ Working on it'   # spinner -> running
 tmux select-pane -t agent -T '✳ Ready'           # at rest  -> idle
+```
+
+## Drive the TUI without a screen
+
+The TUI needs a terminal, and a tmux pane is one. Run it on a private server
+against the scratch configuration above and read the screen back:
+
+```bash
+T="tmux -L revier-tui"
+$T new-session -d -s tui -x 100 -y 20 "REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"
+$T capture-pane -p -t tui                       # the rows, as rendered
+$T send-keys -t tui d e m Enter                 # type to filter, Enter to drill in
+$T send-keys -t tui Escape q                    # back, quit
+$T kill-server
+```
+
+To see the agent line change without a keypress, retitle the agent pane on the
+scratch server while the TUI runs, then capture again after a refresh:
+
+```bash
+tmux select-pane -t agent -T '⠧ Working on it'
 ```
 
 ## Drive the core without any configuration
@@ -97,17 +119,50 @@ server. Any substrate that is not installed skips rather than fails.
 
 ## When a screen is unavoidable
 
-Only the GNOME window host needs the user's live session: `wctl` talks to a
-GNOME Shell extension, which needs a real logged-in desktop. Nothing else does.
+Two hosts need the user's live session: GNOME, because `wctl` talks to a Shell
+extension in a logged-in desktop, and kitty's `Open` and `Focus`, because they
+create and raise real OS windows. Everything else is reachable headless.
 
 Before asking for a manual check, exhaust the substrates above — the core, the
-resolution rules, run-or-raise, toggle-back, and every adapter except GNOME are
-all reachable without one. Then hand the user a specific command and say what
-to look for, rather than running it yourself:
+resolution rules, run-or-raise, toggle-back, and every adapter except those two
+are all reachable without a screen. Then hand the user a specific command and
+say what to look for, rather than running it yourself:
 
 ```bash
-wctl list --json | jq '.[] | {id, title, class}'   # read-only, safe to run
+wctl list --json | jq '.[] | {id, title, wm_class}'   # read-only, safe to run
+kitten @ ls | jq '.[] | {id, wm_name, is_focused}'    # read-only, safe to run
 ```
 
-`wctl list` reads and never activates. Any `wctl activate` moves the user's
-focus, so it belongs in a command they run, not one you run for them.
+`wctl list` and `kitten @ ls` read and never activate. Any `wctl activate`,
+`revier open`, or `revier go` against a real host moves the user's focus, so it
+belongs in a command they run, not one you run for them.
+
+When the user has handed over the screen, verify the kitty host on a scratch
+project whose name collides with none of theirs, and close what it opened:
+
+```bash
+export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above, with runtime = ["kitty"]
+./bin/revier open demo                                    # a kitty OS window titled by the home realization's name
+kitten @ ls | jq '.[] | select(.wm_name=="session:demo") | .tabs[].windows[] | {title, user_vars}'
+wctl focused --json | jq .title                           # session:demo
+./bin/revier go editor -p demo; ./bin/revier go editor -p demo   # away, and back to the workspace
+kitten @ close-window --match 'title:^session:demo$'      # or close-window per window id from ls
+```
+
+Every `kitten @` command above addresses the socket of the kitty it runs
+inside. Pass `--to unix:@kitty-<pid>` to reach another process; the pids are
+the kitty entries in `wctl list --json`.
+
+## Verify a keybinding without pressing it
+
+A binding is a command in `contrib/gnome/revier-keybindings.dconf`. Run that
+command by hand, with the same login shell the binding uses, and watch focus:
+
+```bash
+sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title
+sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title   # back at the workspace
+hyperfine --warmup 3 -N './bin/revier go home -p demo'               # the keypress budget
+```
+
+Installing the bindings is the user's step, never a verification step: it
+rewrites their desktop configuration.

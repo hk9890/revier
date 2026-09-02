@@ -3,7 +3,9 @@
 //
 // Validation happens here rather than at the keystroke. A match that
 // constrains nothing, a project with no home target, or two targets sharing a
-// key are all rejected at load, where the message can name the file.
+// key are all rejected at load, where the message can name the file. So is a
+// template that does not render or a pattern that does not compile: projects
+// leave this package prepared (core.Project), with that work done once.
 package config
 
 import (
@@ -16,14 +18,24 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Config is the global configuration: which adapters to prefer, and the
-// actions the TUI exposes.
+// Config is the global configuration: which adapters to prefer, the actions
+// the TUI exposes, and the external agent probes.
 type Config struct {
 	Hosts   Hosts    `toml:"hosts"`
 	Actions []Action `toml:"action"`
+	Probes  []Probe  `toml:"probe"`
+}
+
+// Probe declares an external agent probe: a binary that reads one panel as
+// JSON and answers with one agent state. Name is the harness, and the
+// foreground command the probe claims; Exec is the binary.
+type Probe struct {
+	Name string `toml:"name"`
+	Exec string `toml:"exec"`
 }
 
 // Hosts names adapter preference in order. An empty list means "the first
@@ -62,11 +74,17 @@ func Root() (string, error) {
 // Load reads the global config and every project under <root>/projects.
 // A missing root or a missing config.toml is not an error: revier starts with
 // no projects rather than refusing to run.
-func Load(root string) (*Config, []revier.Project, error) {
+func Load(root string) (*Config, []core.Project, error) {
 	cfg := &Config{}
 	cfgPath := filepath.Join(root, "config.toml")
 	if _, err := toml.DecodeFile(cfgPath, cfg); err != nil && !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+	}
+	for i, pr := range cfg.Probes {
+		if pr.Name == "" || pr.Exec == "" {
+			return nil, nil, fmt.Errorf("%s: probe %d needs both name and exec", cfgPath, i+1)
+		}
+		cfg.Probes[i].Exec = expandHome(pr.Exec)
 	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"))
@@ -78,7 +96,7 @@ func Load(root string) (*Config, []revier.Project, error) {
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
 // across machines.
-func LoadProjects(dir string) ([]revier.Project, error) {
+func LoadProjects(dir string) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -95,7 +113,7 @@ func LoadProjects(dir string) ([]revier.Project, error) {
 	}
 	sort.Strings(names)
 
-	projects := make([]revier.Project, 0, len(names))
+	projects := make([]core.Project, 0, len(names))
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -112,26 +130,44 @@ func LoadProjects(dir string) ([]revier.Project, error) {
 	return projects, nil
 }
 
-// LoadProject reads and validates one project file.
-func LoadProject(path string) (revier.Project, error) {
+// LoadProject reads, validates, and prepares one project file. Every error
+// names the file: a rendering or compile failure is reported here, at load,
+// and never reaches a keystroke.
+func LoadProject(path string) (core.Project, error) {
 	var p revier.Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
-		return revier.Project{}, fmt.Errorf("%s: %w", path, err)
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
 	if p.Name == "" {
 		// Fall back to the file stem so a project file need not repeat its own
 		// name, and so a renamed file cannot silently keep the old identity.
 		p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 	}
-	if err := Validate(p); err != nil {
-		return revier.Project{}, fmt.Errorf("%s: %w", path, err)
+	// A path is expanded once, here, so every consumer - templates, working
+	// directories, the cwd lookup - sees an absolute path and none of them
+	// hands a literal "~" to a program that does not expand it.
+	p.Path = expandHome(p.Path)
+	for _, t := range p.Targets {
+		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
+			if r != nil {
+				r.Dir = expandHome(r.Dir)
+			}
+		}
 	}
-	return p, nil
+	if err := Validate(p); err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+	}
+	prepared, err := core.PrepareProject(p)
+	if err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return prepared, nil
 }
 
-// Validate rejects a project that would fail at the keystroke instead of at
-// load. Every rule here names a failure that is invisible until the key is
-// pressed.
+// Validate rejects a project whose structure would fail at the keystroke
+// instead of at load. Every rule here names a failure that is invisible until
+// the key is pressed. Whether a template renders and a pattern compiles is
+// core.PrepareProject's to check; LoadProject runs both.
 func Validate(p revier.Project) error {
 	var errs []error
 
@@ -178,11 +214,16 @@ func Validate(p revier.Project) error {
 				// window.
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
 			}
-			if _, err := r.Match.Compile(); err != nil {
-				errs = append(errs, fmt.Errorf("target %q %s realization: %w", t.Name, kind, err))
+			if len(r.Launch) == 0 && len(r.Panels) == 0 {
+				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no panels", t.Name, kind))
 			}
-			if len(r.Launch) == 0 {
-				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv", t.Name, kind))
+			if len(r.Launch) > 0 && len(r.Panels) > 0 {
+				// A host opens one or the other; a launch beside panels would
+				// be dropped silently, and the agent it named never started.
+				errs = append(errs, fmt.Errorf("target %q %s realization has both launch and panels; panels are what is launched, so drop launch", t.Name, kind))
+			}
+			if len(r.Panels) > 0 && kind == revier.HostWindow {
+				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
 			}
 		}
 		if t.Prefer != "" && t.Prefer != revier.HostWindow && t.Prefer != revier.HostRuntime {
@@ -200,4 +241,16 @@ func Validate(p revier.Project) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// expandHome resolves a leading "~" against the user's home directory.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }

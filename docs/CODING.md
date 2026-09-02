@@ -44,8 +44,9 @@ TUI refresh, and one call per project turns a refresh into O(projects) - this
 repository expects roughly ninety. Bulk queries only: `tmux list-panes -a`,
 `kitten @ ls`, `wctl list --json`. The tmux host uses two bulk calls, because
 tmux format output allows only one free-text field per line and it needs window
-names as well as pane titles; two constant calls is fine, one per project is
-not.
+names as well as pane titles. The kitty host issues one `ls` per kitty process,
+concurrently, because each process has its own socket. Constant calls, or calls
+that scale with something other than projects, are fine; one per project is not.
 
 ## Errors
 

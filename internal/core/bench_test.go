@@ -75,12 +75,17 @@ func benchCore(n int) *core.Core {
 func benchmarkSurvey(b *testing.B, n int) {
 	b.Helper()
 	c := benchCore(n)
-	projects := benchProjects(n)
+	// Preparation is load-time work and stays outside the timed loop: the
+	// benchmark measures what a refresh costs, and a refresh prepares nothing.
+	projects, err := core.Prepare(benchProjects(n))
+	if err != nil {
+		b.Fatal(err)
+	}
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := c.Survey(ctx, projects); err != nil {
+		if _, err := c.Survey(ctx, projects, nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -90,7 +95,20 @@ func BenchmarkSurvey1(b *testing.B)   { benchmarkSurvey(b, 1) }
 func BenchmarkSurvey90(b *testing.B)  { benchmarkSurvey(b, 90) }
 func BenchmarkSurvey360(b *testing.B) { benchmarkSurvey(b, 360) }
 
-// Render is called once per project per Survey.
+// Prepare is the load-time cost per project: one render plus one compile per
+// realization. It is paid once per process, never per refresh.
+func BenchmarkPrepare(b *testing.B) {
+	p := benchProject(0)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := core.PrepareProject(p); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Render is the templating half of Prepare.
 func BenchmarkRender(b *testing.B) {
 	p := benchProject(0)
 	b.ReportAllocs()
@@ -102,7 +120,7 @@ func BenchmarkRender(b *testing.B) {
 	}
 }
 
-// Compile is called once per target per Survey, inside find.
+// Compile is the pattern half of Prepare, once per realization at load.
 func BenchmarkMatchCompile(b *testing.B) {
 	m := revier.Match{Class: "^revier-project-000$", Title: "^project-000$"}
 	b.ReportAllocs()

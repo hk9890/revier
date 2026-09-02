@@ -31,6 +31,10 @@ type Fake struct {
 	InstancesErr error
 	// OpenErr makes Open fail, for the run half of run-or-raise.
 	OpenErr error
+	// Detached makes Open launch without a ref, as a window host does: the
+	// window does not exist yet when the process starts, so there is nothing
+	// to name.
+	Detached bool
 
 	// Opened records every realization passed to Open, in order. A test
 	// asserts on it to prove the core rendered templates before the host saw
@@ -38,6 +42,9 @@ type Fake struct {
 	Opened []revier.Realization
 	// Focuses records every ref passed to Focus, in order.
 	Focuses []revier.TargetRef
+	// InstancesCalls counts Instances calls, so a test can assert that a
+	// refresh costs one call whatever the project count.
+	InstancesCalls int
 
 	caps revier.Capabilities
 }
@@ -71,6 +78,18 @@ func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef
 	return ref
 }
 
+// AddInstance registers an instance as given, assigning only its id. Tests of
+// the OS-window bridge use it to make a window host report the title and pid
+// a runtime instance carries.
+func (f *Fake) AddInstance(inst revier.Instance) revier.TargetRef {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	inst.Ref = revier.TargetRef{Host: f.name, ID: strconv.Itoa(f.nextID), Title: inst.Title}
+	f.instances = append(f.instances, inst)
+	return inst.Ref
+}
+
 // Remove drops an instance, for tests that assert on a target disappearing.
 func (f *Fake) Remove(ref revier.TargetRef) {
 	f.mu.Lock()
@@ -97,6 +116,7 @@ func (f *Fake) Probe(context.Context) error { return f.ProbeErr }
 func (f *Fake) Instances(context.Context) ([]revier.Instance, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.InstancesCalls++
 	if f.InstancesErr != nil {
 		return nil, f.InstancesErr
 	}
@@ -114,8 +134,8 @@ func (f *Fake) Open(_ context.Context, r revier.Realization) (revier.TargetRef, 
 	if f.OpenErr != nil {
 		return revier.TargetRef{}, f.OpenErr
 	}
-	if len(r.Launch) == 0 {
-		return revier.TargetRef{}, fmt.Errorf("%s: realization has no launch argv", f.name)
+	if len(r.Launch) == 0 && len(r.Panels) == 0 {
+		return revier.TargetRef{}, fmt.Errorf("%s: realization has no launch argv and no panels", f.name)
 	}
 	// Honour the invariant every real host must honour: what Open creates,
 	// this realization's Match finds. Name wins when set, as it does for tmux;
@@ -124,7 +144,11 @@ func (f *Fake) Open(_ context.Context, r revier.Realization) (revier.TargetRef, 
 	if r.Name != "" {
 		title = r.Name
 	}
-	return f.Add(title, literal(r.Match.Class)), nil
+	ref := f.Add(title, literal(r.Match.Class))
+	if f.Detached {
+		return revier.TargetRef{}, nil
+	}
+	return ref, nil
 }
 
 func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
@@ -155,6 +179,20 @@ func literal(pattern string) string {
 	}
 	return s
 }
+
+// Watcher is a Fake that also implements revier.WindowWatcher: a test pushes
+// events into Events and the TUI's watcher path receives them.
+type Watcher struct {
+	*Fake
+	Events chan revier.WindowEvent
+}
+
+// NewWatcher returns a watching fake with a buffered event channel.
+func NewWatcher(name string) *Watcher {
+	return &Watcher{Fake: New(name), Events: make(chan revier.WindowEvent, 8)}
+}
+
+func (w *Watcher) Watch(context.Context) (<-chan revier.WindowEvent, error) { return w.Events, nil }
 
 // FakeProbe is an AgentProbe that reports a fixed state for every panel whose
 // title carries a marker. It exists so core tests can assert on the survey's
