@@ -14,6 +14,7 @@ A findability map. What revier *is* and why it is shaped this way is
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
 | `scripts/drive/` | Manual headless driver ([RUNNING.md](RUNNING.md)). |
+| `scripts/migrate-sessions/` | One-shot converter, `.session` files to project TOML. Not part of the product (`docs/design/decisions.md` D5). |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 | `docs/design/` | The specification and the decision log. |
 
