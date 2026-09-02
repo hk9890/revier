@@ -335,6 +335,13 @@ func TestBindOnLaunchAgainstSway(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Home first, so the second press below has somewhere to toggle back to
+	// and the test can move focus away from the notes window.
+	if _, err := c.Go(ctx(t), p, "home", nil); err != nil {
+		t.Fatal(err)
+	}
+	homeInst := waitFor(t, h, home.Match)
+
 	res, err := c.Go(ctx(t), p, "notes", nil)
 	if err != nil {
 		t.Fatalf("Go: %v", err)
@@ -354,6 +361,11 @@ func TestBindOnLaunchAgainstSway(t *testing.T) {
 		t.Errorf("focused = %s, want the bound window %s raised", focused.ID, inst.Ref.ID)
 	}
 
+	// Away from notes, then press again: the binding finds it, the rule
+	// still would not, and nothing launches.
+	if err := h.Focus(ctx(t), homeInst.Ref); err != nil {
+		t.Fatal(err)
+	}
 	again, err := c.Go(ctx(t), p, "notes", core.Bindings{"notes": inst.Ref})
 	if err != nil {
 		t.Fatalf("second Go: %v", err)
@@ -362,7 +374,7 @@ func TestBindOnLaunchAgainstSway(t *testing.T) {
 		t.Errorf("second press = %+v, want the binding used and no second launch", again)
 	}
 	windows, _ := h.Instances(ctx(t))
-	if len(windows) != 1 {
-		t.Errorf("got %d windows, want 1", len(windows))
+	if len(windows) != 2 {
+		t.Errorf("got %d windows, want home and notes only", len(windows))
 	}
 }
