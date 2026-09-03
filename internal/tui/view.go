@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -21,8 +23,13 @@ func (m *Model) layout() {
 	if h < 1 {
 		h = 1
 	}
-	m.plist.SetSize(m.width, h)
-	m.tlist.SetSize(m.width, h)
+	w := m.width
+	if pane := m.paneWidth(); pane > 0 {
+		w = m.width - pane
+		m.detail.Width, m.detail.Height = pane-paneChrome, h
+	}
+	m.plist.SetSize(w, h)
+	m.tlist.SetSize(w, h)
 	m.help.Width = m.width
 }
 
@@ -30,11 +37,14 @@ func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.header())
 	b.WriteString("\n")
+	body := m.plist.View()
 	if m.level == levelTargets {
-		b.WriteString(m.tlist.View())
-	} else {
-		b.WriteString(m.plist.View())
+		body = m.tlist.View()
 	}
+	if m.paneWidth() > 0 {
+		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.detail.View())
+	}
+	b.WriteString(body)
 	b.WriteString("\n")
 	b.WriteString(m.footer())
 	return b.String()
@@ -107,4 +117,30 @@ func selStyle(rendered string, selected bool, th theme.Theme) string {
 		return rendered
 	}
 	return th.OnSelection(lipgloss.NewStyle()).Render(rendered)
+}
+
+// contractHome writes a path under the home directory as ~/..., which is how
+// the user names it and how it fits the column.
+func contractHome(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || p == home {
+		return p
+	}
+	if rest, ok := strings.CutPrefix(p, home+string(filepath.Separator)); ok {
+		return "~" + string(filepath.Separator) + rest
+	}
+	return p
+}
+
+// truncate keeps the end of a path, not the start: the last two segments say
+// which checkout this is, and the first say only where checkouts live.
+func truncate(s string, width int) string {
+	if width < 4 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	r := []rune(s)
+	return "…" + string(r[len(r)-width+1:])
 }

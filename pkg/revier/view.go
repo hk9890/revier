@@ -4,11 +4,16 @@ package revier
 // --json - consume. It is the only type they share, so a field added here
 // serves both surfaces at once.
 type ProjectView struct {
-	Project Project      `json:"project"`
-	Running bool         `json:"running"`
-	Home    TargetRef    `json:"home,omitzero"`
-	Targets []TargetView `json:"targets"`
-	Agents  []AgentView  `json:"agents,omitempty"`
+	Project Project `json:"project"`
+	Running bool    `json:"running"`
+	// PathExists reports whether the project directory is on this machine. A
+	// project file outlives the checkout it names - a machine that never had
+	// it, a directory that was deleted - and a target launched into a path
+	// that is not there fails in the tool rather than in revier.
+	PathExists bool         `json:"path_exists"`
+	Home       TargetRef    `json:"home,omitzero"`
+	Targets    []TargetView `json:"targets"`
+	Agents     []AgentView  `json:"agents,omitempty"`
 }
 
 // Attention reports whether any agent in the project is waiting for the human.

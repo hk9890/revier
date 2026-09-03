@@ -25,6 +25,16 @@ PKG=github.com/hk9890/revier/internal/build
 go build -ldflags "-s -w -X $PKG.Version=$VERSION -X $PKG.Commit=$COMMIT -X $PKG.Date=$DATE" -o bin/revier ./cmd/revier
 """
 
+[tasks.install]
+description = "Install revier and revier-popup into ~/.local/bin"
+depends = ["build"]
+run = """
+mkdir -p "$HOME/.local/bin"
+install -m 755 bin/revier "$HOME/.local/bin/revier"
+install -m 755 contrib/gnome/revier-popup "$HOME/.local/bin/revier-popup"
+echo "installed: $HOME/.local/bin/revier, $HOME/.local/bin/revier-popup"
+"""
+
 [tasks.revier]
 description = "Build from source and run in your shell's directory. Usage: mise run revier -- <args>"
 run = 'cd "$MISE_PROJECT_ROOT" && go build -o bin/revier ./cmd/revier && cd "${MISE_ORIGINAL_CWD:-$PWD}" && exec "$MISE_PROJECT_ROOT/bin/revier"'

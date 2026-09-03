@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -105,8 +106,12 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	if !strings.Contains(first, "needs a decision") {
 		t.Errorf("first row = %q, want the activity line", first)
 	}
-	if second := lines(m)[2]; !strings.Contains(second, "project-00") {
-		t.Errorf("second row = %q, want config order to resume", second)
+	// Rows are two lines: the name, then the path under it.
+	if path := lines(m)[2]; !strings.Contains(path, "/p/project-03") {
+		t.Errorf("second line = %q, want the path of the first row", path)
+	}
+	if second := lines(m)[3]; !strings.Contains(second, "project-00") {
+		t.Errorf("third line = %q, want config order to resume", second)
 	}
 }
 
@@ -430,4 +435,81 @@ func selectedRow(t *testing.T, m tui.Model) string {
 	}
 	t.Fatalf("no row is selected:\n%s", m.View())
 	return ""
+}
+
+// resize is the size message a terminal sends. The default model is 80
+// columns, which is too narrow to split, so a test that wants the detail pane
+// has to ask for the room.
+func resize(m tui.Model, w, h int) tui.Model {
+	next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return next.(tui.Model)
+}
+
+// pane is the detail pane: whatever is right of the border column on each
+// line. The two panes are joined horizontally, so this is how a test reads
+// one without the other.
+func pane(m tui.Model) string {
+	var out []string
+	for _, line := range lines(m) {
+		if _, right, ok := strings.Cut(line, "│"); ok {
+			out = append(out, strings.TrimSpace(right))
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// The pane answers "what is this project" for the row under the cursor, and
+// follows the cursor.
+func TestDetailPaneFollowsTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	first := pane(m)
+	if !strings.Contains(first, "project-02") || !strings.Contains(first, "/p/project-02") {
+		t.Fatalf("pane = %q, want the name and path of the first row", first)
+	}
+	if !strings.Contains(first, "home") || !strings.Contains(first, "editor") {
+		t.Errorf("pane = %q, want every target listed", first)
+	}
+
+	m, _ = press(m, "down")
+	if second := pane(m); second == first || !strings.Contains(second, "project-00") {
+		t.Errorf("pane after down = %q, want the next project", second)
+	}
+}
+
+// A project with two agents is the case the row cannot show: it collapses to
+// the worst state. The pane lists them both.
+func TestDetailPaneListsEveryAgent(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	rt.Add("session:project-00", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	// Both projects want the human now, so the sort keeps config order and
+	// project-00 is the first row.
+	body := pane(m)
+	if !strings.Contains(body, "project-00") {
+		t.Fatalf("pane = %q, want project-00", body)
+	}
+	if n := strings.Count(body, "needs a decision"); n != 2 {
+		t.Errorf("pane lists %d agents, want 2:\n%s", n, body)
+	}
+}
+
+// The pane is a luxury. At eighty columns the list keeps the whole width, and
+// no row is wider than the terminal.
+func TestNoDetailPaneAtEightyColumns(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	if strings.Contains(m.View(), "│") {
+		t.Errorf("80 columns should not split:\n%s", m.View())
+	}
+	for i, line := range lines(m) {
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
 }

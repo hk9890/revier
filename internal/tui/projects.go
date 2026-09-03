@@ -48,7 +48,11 @@ type projectDelegate struct {
 	nameWidth int
 }
 
-func (d projectDelegate) Height() int                         { return 1 }
+// Height is two: the name line and the path under it. The path is what tells
+// two checkouts of the same name apart, and what shows that a project's
+// directory is not on this machine (os_list_json.py:476 renders the same two
+// lines).
+func (d projectDelegate) Height() int                         { return 2 }
 func (d projectDelegate) Spacing() int                        { return 0 }
 func (d projectDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
@@ -82,15 +86,22 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		cursor = th.Glyphs.Cursor
 	}
 
-	row := style(th.Accent).Render(cursor+" ") +
+	first := style(th.Accent).Render(cursor+" ") +
 		style(markStyle).Render(mark) + style(th.Path).Render(" ") +
 		style(name).Render(pad(string(v.Project.Name), d.nameWidth)) +
 		style(th.Path).Render("  ") + selStyle(state, sel, th) +
 		style(th.Path).Render("  ") +
 		d.agent(v, style)
 
+	pathStyle := th.Path
+	if !v.PathExists {
+		pathStyle = th.PathMissing
+	}
+	second := style(th.Path).Render("    ") +
+		style(pathStyle).Render(truncate(contractHome(v.Project.Path), m.Width()-5))
+
 	// The list renders into a strings.Builder, which cannot fail.
-	_, _ = fmt.Fprint(w, fill(row, m.Width(), sel, th))
+	_, _ = fmt.Fprint(w, fill(first, m.Width(), sel, th)+"\n"+fill(second, m.Width(), sel, th))
 }
 
 // agent is the worst agent state in the project and its activity: the part of

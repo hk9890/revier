@@ -26,6 +26,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/config"
@@ -69,6 +70,7 @@ type Model struct {
 	filter string // typed at the project level, held here so a refresh can re-apply it
 	keys   keyMap
 	help   help.Model
+	detail viewport.Model
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -79,7 +81,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, actions []conf
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
-		keys: newKeyMap(actions), help: newHelp(th),
+		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
 	}
 	m.layout()
 	return m
@@ -155,7 +157,20 @@ func tick(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
+// Update handles the message and then rebuilds the detail pane, so the pane
+// is a function of the state after the message rather than something every
+// branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	mm, ok := next.(Model)
+	if !ok {
+		return next, cmd
+	}
+	mm.syncDetail()
+	return mm, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
