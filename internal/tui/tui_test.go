@@ -63,7 +63,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // timer does.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, actions, time.Second, theme.Default())
+	m := tui.New(c, projects, root, actions, time.Second, theme.Default(), "")
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
 }
@@ -305,7 +305,7 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, nil, time.Second, theme.Default())
+	m := tui.New(c, projects, root, nil, time.Second, theme.Default(), "")
 	stray := wm.Add("Pull requests - Chromium", "chromium")
 	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
 
@@ -604,5 +604,33 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 	}
 	if footer := lines(m)[len(lines(m))-1]; !strings.Contains(footer, "no web target") {
 		t.Errorf("footer = %q, want it to name the missing target", footer)
+	}
+}
+
+// The surface opens on the project the working directory resolves to. Opening
+// on an unrelated project makes the most likely target the one that needs
+// scrolling to.
+func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m = survey(m)
+
+	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
+		t.Errorf("selected %q, want project-04", row)
+	}
+}
+
+// After the first survey the user's selection wins: a refresh must not pull
+// the cursor back to where the process started.
+func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m = survey(m)
+	m, _ = press(m, "down")
+	moved := selectedRow(t, m)
+
+	m = survey(m)
+	if row := selectedRow(t, m); row != moved {
+		t.Errorf("selection = %q after a refresh, want %q", row, moved)
 	}
 }

@@ -156,8 +156,14 @@ func (m *Model) reload() {
 	}
 	m.setNameWidth()
 
-	if hadSelection {
+	switch {
+	case hadSelection:
 		m.selectName(was)
+	case m.start != "":
+		// The first survey: open on the project of the working directory, the
+		// way the shell picker preselects it (os_list_json.py:570). After
+		// that the user's own selection wins.
+		m.selectName(m.start)
 	}
 	if m.level == levelTargets {
 		m.reloadTargets()

@@ -72,18 +72,19 @@ type Model struct {
 	help   help.Model
 	detail viewport.Model
 	tkeys  map[string]revier.TargetName // chord to target name, over every project
+	start  revier.ProjectName           // the project to open on, from the working directory
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
-func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme) Model {
+func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
 	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects),
+		tkeys: targetKeys(projects), start: start,
 	}
 	m.layout()
 	return m

@@ -142,7 +142,13 @@ func cmdTUI(a *app) error {
 	if err != nil {
 		return err
 	}
-	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second, th)
+	// A project the working directory does not resolve to is not an error
+	// here: the TUI opens on the first row instead.
+	start := revier.ProjectName("")
+	if p, err := a.resolveProject(""); err == nil {
+		start = p.Name
+	}
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second, th, start)
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }
