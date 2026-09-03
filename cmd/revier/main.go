@@ -138,8 +138,12 @@ func cmdTUI(a *app) error {
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		return cmdList(context.Background(), a, nil)
 	}
-	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second)
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	th, err := a.cfg.Theme()
+	if err != nil {
+		return err
+	}
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second, th)
+	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }
 

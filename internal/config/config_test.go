@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -320,5 +321,54 @@ func TestLoadProbes(t *testing.T) {
 	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\n")
 	if _, _, err := config.Load(root); err == nil {
 		t.Error("a probe without exec should be refused at load")
+	}
+}
+
+func TestLoadReadsTheUITable(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[ui]
+theme = "catppuccin-latte"
+glyphs = "nerd"
+`)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	th, err := cfg.Theme()
+	if err != nil {
+		t.Fatalf("Theme: %v", err)
+	}
+	if th.Name != "catppuccin-latte" || th.Glyphs.Local == "" {
+		t.Errorf("theme = %q, glyphs = %+v", th.Name, th.Glyphs)
+	}
+}
+
+// A typo in a theme name must stop revier at startup. Falling back to the
+// default would leave the user looking for a colour that never arrives.
+func TestLoadRejectsAnUnknownThemeAndNamesTheValidOnes(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[ui]\ntheme = \"dracula\"\n")
+
+	_, _, err := config.Load(root)
+	if err == nil {
+		t.Fatal("Load: no error for an unknown theme")
+	}
+	if !strings.Contains(err.Error(), "catppuccin-mocha") {
+		t.Errorf("error = %q, want it to list the valid names", err)
+	}
+}
+
+func TestLoadWithNoUITableGetsTheDefault(t *testing.T) {
+	cfg, _, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	th, err := cfg.Theme()
+	if err != nil {
+		t.Fatalf("Theme: %v", err)
+	}
+	if th.Name != theme.DefaultTheme || th.Glyphs != theme.Default().Glyphs {
+		t.Errorf("default theme = %q with glyphs %+v", th.Name, th.Glyphs)
 	}
 }

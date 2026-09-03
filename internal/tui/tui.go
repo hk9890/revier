@@ -29,6 +29,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -46,6 +47,7 @@ type Model struct {
 	stateRoot string
 	actions   []config.Action
 	refresh   time.Duration
+	theme     theme.Theme
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
@@ -65,8 +67,11 @@ type Model struct {
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
-func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration) Model {
-	return Model{core: c, projects: projects, stateRoot: stateRoot, actions: actions, refresh: refresh, width: 80, height: 24}
+func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme) Model {
+	return Model{
+		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
+		refresh: refresh, theme: th, width: 80, height: 24,
+	}
 }
 
 type surveyMsg struct {
@@ -515,15 +520,6 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 // ("ctrl+y").
 func keyName(k string) string { return strings.ReplaceAll(strings.ToLower(k), "-", "+") }
 
-var (
-	styleHeader    = lipgloss.NewStyle().Bold(true)
-	styleDim       = lipgloss.NewStyle().Faint(true)
-	styleCursor    = lipgloss.NewStyle().Reverse(true)
-	styleAttention = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-	styleRunning   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	styleIdle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-)
-
 func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.header())
@@ -553,7 +549,7 @@ func (m Model) View() string {
 	for i := start; i < end; i++ {
 		line := lines[i]
 		if i == cursor {
-			line = styleCursor.Render(line)
+			line = m.theme.Cursor.Render(line)
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -581,7 +577,7 @@ func (m Model) header() string {
 	} else if m.filter != "" {
 		title += "   /" + m.filter
 	}
-	return styleHeader.Render(title)
+	return m.theme.Header.Render(title)
 }
 
 func (m Model) footer() string {
@@ -595,9 +591,9 @@ func (m Model) footer() string {
 		help += " · " + act.Key + " " + act.Name
 	}
 	if m.err != nil {
-		return styleAttention.Render(" " + m.err.Error())
+		return m.theme.Attention.Render(" " + m.err.Error())
 	}
-	return styleDim.Render(help)
+	return m.theme.Help.Render(help)
 }
 
 func (m Model) projectLines() []string {
@@ -614,21 +610,22 @@ func (m Model) projectLines() []string {
 	lines := make([]string, 0, len(rows))
 	for _, i := range rows {
 		v := m.views[i]
-		mark, state := styleDim.Render("·"), styleDim.Render("-      ")
+		g := m.theme.Glyphs
+		mark, state := m.theme.NameDim.Render(g.Stopped), m.theme.NameDim.Render("-      ")
 		if v.Running {
-			mark, state = styleRunning.Render("●"), "running"
+			mark, state = m.theme.Running.Render(g.Running), "running"
 		}
 		if v.Attention() {
-			mark = styleAttention.Render("!")
+			mark = m.theme.Attention.Render(g.Attention)
 		}
-		lines = append(lines, fmt.Sprintf(" %s %s  %s  %s", mark, pad(string(v.Project.Name), nameWidth), state, agentLine(v)))
+		lines = append(lines, fmt.Sprintf(" %s %s  %s  %s", mark, pad(string(v.Project.Name), nameWidth), state, m.agentLine(v)))
 	}
 	return lines
 }
 
 // agentLine is the worst agent state in the project and its activity: the
 // line that answers "which one needs me" at a glance.
-func agentLine(v revier.ProjectView) string {
+func (m Model) agentLine(v revier.ProjectView) string {
 	if len(v.Agents) == 0 {
 		return ""
 	}
@@ -641,13 +638,13 @@ func agentLine(v revier.ProjectView) string {
 	label := worst.Status.String()
 	switch worst.Status {
 	case revier.StatusAttention:
-		label = styleAttention.Render(label)
+		label = m.theme.Attention.Render(label)
 	case revier.StatusRunning:
-		label = styleRunning.Render(label)
+		label = m.theme.Running.Render(label)
 	case revier.StatusIdle:
-		label = styleIdle.Render(label)
+		label = m.theme.Idle.Render(label)
 	default:
-		label = styleDim.Render(label)
+		label = m.theme.NameDim.Render(label)
 	}
 	if worst.Activity == "" {
 		return label
@@ -660,17 +657,18 @@ func (m Model) targetLines() []string {
 	lines := make([]string, 0, len(rows))
 	for _, r := range rows {
 		if !r.attached.IsZero() {
-			lines = append(lines, fmt.Sprintf("   %s  %s  %s", pad("", 14), pad(r.attached.Title, 24), styleDim.Render("attached · "+r.attached.Host)))
+			lines = append(lines, fmt.Sprintf("   %s  %s  %s", pad("", 14), pad(r.attached.Title, 24), m.theme.Meta.Render("attached · "+r.attached.Host)))
 			continue
 		}
 		t := r.target
-		mark := styleDim.Render("·")
-		state := styleDim.Render("-")
+		g := m.theme.Glyphs
+		mark := m.theme.NameDim.Render(g.Stopped)
+		state := m.theme.NameDim.Render("-")
 		switch {
 		case !t.Available:
-			state = styleDim.Render("unavailable")
+			state = m.theme.NameDim.Render("unavailable")
 		case !t.Ref.IsZero():
-			mark, state = styleRunning.Render("●"), "running"
+			mark, state = m.theme.Running.Render(g.Running), "running"
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s  %s  %s  %s", mark, pad(t.Key, 14), pad(string(t.Name), 24), pad(t.Host, 6), state))
 	}

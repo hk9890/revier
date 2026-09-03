@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -61,7 +62,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // timer does.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, actions, time.Second)
+	m := tui.New(c, projects, root, actions, time.Second, theme.Default())
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
 }
@@ -299,7 +300,7 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, nil, time.Second)
+	m := tui.New(c, projects, root, nil, time.Second, theme.Default())
 	stray := wm.Add("Pull requests - Chromium", "chromium")
 	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
 

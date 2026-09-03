@@ -19,6 +19,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -26,8 +27,16 @@ import (
 // the TUI exposes, and the external agent probes.
 type Config struct {
 	Hosts   Hosts    `toml:"hosts"`
+	UI      UI       `toml:"ui"`
 	Actions []Action `toml:"action"`
 	Probes  []Probe  `toml:"probe"`
+}
+
+// UI is how the TUI looks. Both names are resolved at load, so a typo is a
+// startup error and not an unstyled surface.
+type UI struct {
+	Theme  string `toml:"theme"`
+	Glyphs string `toml:"glyphs"`
 }
 
 // Probe declares an external agent probe: a binary that reads one panel as
@@ -87,11 +96,21 @@ func Load(root string) (*Config, []core.Project, error) {
 		cfg.Probes[i].Exec = expandHome(pr.Exec)
 	}
 
+	if _, err := cfg.Theme(); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+	}
+
 	projects, err := LoadProjects(filepath.Join(root, "projects"))
 	if err != nil {
 		return nil, nil, err
 	}
 	return cfg, projects, nil
+}
+
+// Theme resolves the configured palette and glyph set. An empty [ui] table
+// gives the default.
+func (c *Config) Theme() (theme.Theme, error) {
+	return theme.Lookup(c.UI.Theme, c.UI.Glyphs)
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
