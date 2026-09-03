@@ -2,16 +2,20 @@ package tui_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -61,7 +65,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // timer does.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, actions, time.Second)
+	m := tui.New(c, projects, root, actions, time.Second, theme.Default(), "")
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
 }
@@ -89,7 +93,45 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	return next.(tui.Model), cmd
 }
 
-func lines(m tui.Model) []string { return strings.Split(m.View(), "\n") }
+// lines is the surface's content, with the frame taken off: the border rows
+// dropped and the border column stripped from each side. Tests assert on what
+// the surface says, not on where its box is drawn.
+func lines(m tui.Model) []string {
+	var out []string
+	for _, raw := range strings.Split(m.View(), "\n") {
+		line := strings.TrimRight(raw, " ")
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(trimmed, "╭") || strings.HasPrefix(trimmed, "╰") {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "│") {
+			out = append(out, line)
+			continue
+		}
+		body := strings.TrimPrefix(trimmed, "│")
+		body = strings.TrimSuffix(strings.TrimRight(body, " "), "│")
+		out = append(out, strings.TrimRight(body, " "))
+	}
+	return out
+}
+
+// footer is the last content line: the key legend, or the last failure.
+func footer(m tui.Model) string {
+	l := lines(m)
+	return l[len(l)-1]
+}
+
+// rows are the project rows, without the header, the query line and the rule.
+func rows(m tui.Model) []string {
+	l := lines(m)
+	if len(l) < chromeLines {
+		return nil
+	}
+	return l[chromeLines:]
+}
+
+// The header, the query line and the rule sit above the list.
+const chromeLines = 3
 
 // The project the human is waiting on sorts above every other, whatever its
 // config order.
@@ -97,15 +139,19 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	_, _, c, projects := world(t, 4)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
-	first := lines(m)[1]
+	first := rows(m)[0]
 	if !strings.Contains(first, "project-03") || !strings.Contains(first, "attention") {
 		t.Fatalf("first row = %q, want project-03 with attention", first)
 	}
 	if !strings.Contains(first, "needs a decision") {
 		t.Errorf("first row = %q, want the activity line", first)
 	}
-	if second := lines(m)[2]; !strings.Contains(second, "project-00") {
-		t.Errorf("second row = %q, want config order to resume", second)
+	// Rows are two lines: the name, then the path under it.
+	if path := rows(m)[1]; !strings.Contains(path, "/p/project-03") {
+		t.Errorf("second line = %q, want the path of the first row", path)
+	}
+	if second := rows(m)[2]; !strings.Contains(second, "project-00") {
+		t.Errorf("third line = %q, want config order to resume", second)
 	}
 }
 
@@ -166,7 +212,7 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "1")
 	m, _ = press(m, "1")
-	body := strings.Join(lines(m)[1:], "\n")
+	body := strings.Join(rows(m), "\n")
 	if !strings.Contains(body, "project-11") || strings.Contains(body, "project-10") {
 		t.Errorf("filter '11' should leave only project-11:\n%s", m.View())
 	}
@@ -299,7 +345,7 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, nil, time.Second)
+	m := tui.New(c, projects, root, nil, time.Second, theme.Default(), "")
 	stray := wm.Add("Pull requests - Chromium", "chromium")
 	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
 
@@ -361,5 +407,326 @@ func TestEnterPinsTheTarget(t *testing.T) {
 	got, _ := state.Load(root)
 	if ref := got.Bound["project-00"]["editor"]; ref.IsZero() {
 		t.Fatalf("bound = %+v, want the editor pinned after Enter", got.Bound)
+	}
+}
+
+// A background refresh replaces every row. The cursor must stay on the
+// project the user was looking at, not on the row index it happened to sit
+// at: attention sorting moves rows, so an index points at a different project
+// after a survey.
+func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
+	rt, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	for _, r := range "project-0" { // project-00 .. project-09
+		m, _ = press(m, string(r))
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	before := selectedRow(t, m)
+	if !strings.Contains(before, "project-02") {
+		t.Fatalf("selected %q, want project-02 two rows down", before)
+	}
+
+	// project-09's agent starts wanting the human, so it sorts to the top and
+	// every row below it moves down one. An index-based cursor would now be
+	// pointing at project-01.
+	rt.Add("session:project-09", "kitty", revier.Panel{ID: "9", Kind: revier.PanelAgent, Title: "claude"})
+	m = survey(m)
+
+	if first := rows(m)[0]; !strings.Contains(first, "project-09") {
+		t.Fatalf("first row = %q, want project-09 to have sorted first", first)
+	}
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selection moved across a refresh: %q -> %q", before, after)
+	}
+	if body := m.View(); strings.Contains(body, "project-11") {
+		t.Errorf("filter did not survive the refresh:\n%s", body)
+	}
+}
+
+// The filter is fuzzy, not a substring test: the characters have to appear in
+// order, and nothing more. This is the ranking fzf uses, which is what the
+// picker being replaced trained the user on.
+func TestFilterMatchesNonAdjacentCharacters(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	for _, r := range "pj11" {
+		m, _ = press(m, string(r))
+	}
+	body := m.View()
+	if !strings.Contains(body, "project-11") {
+		t.Errorf("fuzzy filter 'pj11' should match project-11:\n%s", body)
+	}
+	if strings.Contains(body, "project-10") {
+		t.Errorf("fuzzy filter 'pj11' should not match project-10:\n%s", body)
+	}
+}
+
+// selectedRow is the row the cursor is on, found by the cursor glyph the
+// delegate renders into it.
+func selectedRow(t *testing.T, m tui.Model) string {
+	t.Helper()
+	for _, line := range lines(m) {
+		if strings.Contains(line, theme.Default().Glyphs.Cursor) {
+			return strings.TrimSpace(line)
+		}
+	}
+	t.Fatalf("no row is selected:\n%s", m.View())
+	return ""
+}
+
+// resize is the size message a terminal sends. The default model is 80
+// columns, which is too narrow to split, so a test that wants the detail pane
+// has to ask for the room.
+func resize(m tui.Model, w, h int) tui.Model {
+	next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return next.(tui.Model)
+}
+
+// pane is the detail pane: whatever is right of the border column on each
+// line. The two panes are joined horizontally, so this is how a test reads
+// one without the other.
+func pane(m tui.Model) string {
+	var out []string
+	for _, line := range lines(m) {
+		if _, right, ok := strings.Cut(line, "│"); ok {
+			out = append(out, strings.TrimSpace(right))
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// The pane answers "what is this project" for the row under the cursor, and
+// follows the cursor.
+func TestDetailPaneFollowsTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	first := pane(m)
+	if !strings.Contains(first, "project-02") || !strings.Contains(first, "/p/project-02") {
+		t.Fatalf("pane = %q, want the name and path of the first row", first)
+	}
+	if !strings.Contains(first, "home") || !strings.Contains(first, "editor") {
+		t.Errorf("pane = %q, want every target listed", first)
+	}
+
+	m, _ = press(m, "down")
+	if second := pane(m); second == first || !strings.Contains(second, "project-00") {
+		t.Errorf("pane after down = %q, want the next project", second)
+	}
+}
+
+// A project with two agents is the case the row cannot show: it collapses to
+// the worst state. The pane lists them both.
+func TestDetailPaneListsEveryAgent(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	rt.Add("session:project-00", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	// Both projects want the human now, so the sort keeps config order and
+	// project-00 is the first row.
+	body := pane(m)
+	if !strings.Contains(body, "project-00") {
+		t.Fatalf("pane = %q, want project-00", body)
+	}
+	if n := strings.Count(body, "needs a decision"); n != 2 {
+		t.Errorf("pane lists %d agents, want 2:\n%s", n, body)
+	}
+}
+
+// The pane is a luxury. At eighty columns the list keeps the whole width, and
+// no row is wider than the terminal.
+func TestNoDetailPaneAtEightyColumns(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	// The frame draws its own border, so look inside it.
+	for i, line := range lines(m) {
+		if strings.Contains(line, "│") {
+			t.Errorf("80 columns should not split, line %d = %q", i, line)
+		}
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
+}
+
+// A target key acts on the row under the cursor, without the target level.
+// The keys are the ones the desktop bindings use, so the surface and the
+// keyboard agree about what ctrl+shift+o means.
+func TestTargetKeyRunsAgainstTheHighlightedProject(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	_, cmd := press(m, "ctrl+shift+o") // editor, a window target
+	if cmd == nil {
+		t.Fatal("ctrl+shift+o produced no command")
+	}
+	cmd()
+	if len(wm.Opened) != 1 {
+		t.Fatalf("window host opened %d times, want 1", len(wm.Opened))
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime host opened %d times, want none: the editor is a window", len(rt.Opened))
+	}
+}
+
+// The footer names the keys that will do something on this row, because which
+// targets exist depends on the project.
+func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	if f := footer(m); !strings.Contains(f, "editor") || !strings.Contains(f, "home") {
+		t.Errorf("footer = %q, want the target keys of the selected project", f)
+	}
+}
+
+// A letter is a filter character, never a shortcut. A project bound to a bare
+// key would otherwise swallow it.
+func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
+	raw := []revier.Project{{
+		Name: "solo", Path: "/p/solo",
+		Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:solo$"}}},
+			{Name: "editor", Key: "o", Window: &revier.Realization{
+				Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+		},
+	}}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
+	c := &core.Core{Runtime: rt, Window: wm}
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	// The command a keystroke returns is the input's own cursor blink, so the
+	// evidence is that no host was asked to open anything.
+	m, cmd := press(m, "o")
+	if cmd != nil {
+		cmd()
+	}
+	if len(wm.Opened) != 0 || len(rt.Opened) != 0 {
+		t.Fatalf("a bare letter opened something: window %d, runtime %d", len(wm.Opened), len(rt.Opened))
+	}
+	if body := m.View(); !strings.Contains(body, "❯ o") {
+		t.Errorf("'o' should have gone to the query line:\n%s", body)
+	}
+}
+
+// A target key means the same target in every project, so a press on a
+// project that does not declare it is a mistake worth naming. Doing nothing
+// would look like the key was not bound at all.
+func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
+	raw := []revier.Project{
+		{Name: "plain", Path: "/p/plain", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:plain$"}}},
+		}},
+		{Name: "webby", Path: "/p/webby", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:webby$"}}},
+			{Name: "web", Key: "ctrl-shift-i", Window: &revier.Realization{
+				Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
+		}},
+	}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, cmd := press(m, "ctrl+shift+i") // "plain" is the first row
+	if cmd != nil {
+		t.Fatal("a target the project does not declare should run nothing")
+	}
+	if f := footer(m); !strings.Contains(f, "no web target") {
+		t.Errorf("footer = %q, want it to name the missing target", f)
+	}
+}
+
+// The surface opens on the project the working directory resolves to. Opening
+// on an unrelated project makes the most likely target the one that needs
+// scrolling to.
+func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m = survey(m)
+
+	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
+		t.Errorf("selected %q, want project-04", row)
+	}
+}
+
+// After the first survey the user's selection wins: a refresh must not pull
+// the cursor back to where the process started.
+func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m = survey(m)
+	m, _ = press(m, "down")
+	moved := selectedRow(t, m)
+
+	m = survey(m)
+	if row := selectedRow(t, m); row != moved {
+		t.Errorf("selection = %q after a refresh, want %q", row, moved)
+	}
+}
+
+// The tree says which checkout this is. Dot entries are not part of that, and
+// a directory that cannot be read is not an error.
+func TestDetailPaneShowsTheProjectTree(t *testing.T) {
+	dir := t.TempDir()
+	for _, p := range []string{"cmd/revier", "docs", ".git/objects"} {
+		if err := os.MkdirAll(filepath.Join(dir, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := []revier.Project{{Name: "here", Path: dir, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^session:here$"}}},
+	}}}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
+
+	body := pane(m)
+	if !strings.Contains(body, "Project Snapshot") {
+		t.Fatalf("pane = %q, want a tree", body)
+	}
+	for _, want := range []string{"cmd", "revier", "docs", "go.mod"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("tree does not list %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, ".git") {
+		t.Errorf("tree lists a dot entry:\n%s", body)
+	}
+}
+
+// A project whose directory is not here has no tree, and says nothing about
+// one.
+func TestNoTreeForAMissingDirectory(t *testing.T) {
+	_, _, c, projects := world(t, 1) // /p/project-00 does not exist
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
+
+	if body := pane(m); strings.Contains(body, "Project Snapshot") {
+		t.Errorf("pane = %q, want no tree for a missing directory", body)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -517,8 +518,20 @@ func (c *Core) declared(inst revier.Instance, projects []Project) bool {
 	return false
 }
 
+// dirExists is one stat per project per survey. It scales with the project
+// count, which the Instances rule forbids for host calls; a stat is not a host
+// call and costs microseconds on a local filesystem, which is where a project
+// directory is.
+func dirExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
 func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings) revier.ProjectView {
-	v := revier.ProjectView{Project: p.Project}
+	v := revier.ProjectView{Project: p.Project, PathExists: dirExists(p.Path)}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a

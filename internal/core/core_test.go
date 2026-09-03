@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -687,5 +688,29 @@ func TestClaimBounds(t *testing.T) {
 	}
 	if _, ok := c.ClaimEvent(editor, action, now, projects); ok {
 		t.Error("the event path must not attach a declared target's window")
+	}
+}
+
+// A project file outlives the checkout it names. The survey reports whether
+// the directory is there, so the surface can say so before a target launches
+// into a path that is not.
+func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
+	here := project()
+	here.Path = t.TempDir()
+	gone := project()
+	gone.Name, gone.Path = "gone", filepath.Join(t.TempDir(), "never-cloned")
+
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	report, err := c.Survey(context.Background(), []core.Project{
+		prepared(t, here), prepared(t, gone),
+	}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if !report.Views[0].PathExists {
+		t.Errorf("%s: PathExists = false for a directory that is there", report.Views[0].Project.Path)
+	}
+	if report.Views[1].PathExists {
+		t.Errorf("%s: PathExists = true for a directory that is not", report.Views[1].Project.Path)
 	}
 }
