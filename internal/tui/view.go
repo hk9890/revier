@@ -11,21 +11,48 @@ import (
 	"github.com/hk9890/revier/internal/theme"
 )
 
-// The header and the footer each take one line, with one blank line above the
-// footer so the list never touches it.
-const chromeHeight = 3
+// The chrome above and below the list: a header, the query line, the rule
+// under it, and the footer. The frame around all of it costs two more rows
+// and two columns, and the margin outside the frame two more of each.
+const (
+	chromeHeight = 4
+	frameHeight  = 2
+	frameWidth   = 4 // border and one column of padding on each side
+	marginRows   = 1
+	marginCols   = 2
+)
+
+// margins are dropped on a small terminal, where four rows and four columns
+// of empty space cost two project rows.
+func (m Model) margins() (rows, cols int) {
+	if m.height < 24 || m.width < 100 {
+		return 0, 0
+	}
+	return marginRows, marginCols
+}
+
+// inner is the size available inside the frame and the margin.
+func (m Model) inner() (w, h int) {
+	mr, mc := m.margins()
+	w = m.width - 2*mc - frameWidth
+	h = m.height - 2*mr - frameHeight - chromeHeight
+	if w < 20 {
+		w = 20
+	}
+	if h < 2 {
+		h = 2
+	}
+	return w, h
+}
 
 // layout gives the lists whatever the header and footer leave. It runs on
 // every size change and once at construction, so a model that never receives
 // a WindowSizeMsg still renders.
 func (m *Model) layout() {
-	h := m.height - chromeHeight
-	if h < 1 {
-		h = 1
-	}
-	w := m.width
+	w, h := m.inner()
+	m.input.Width = w - lipgloss.Width(promptMark) - 2
 	if pane := m.paneWidth(); pane > 0 {
-		w = m.width - pane
+		w -= pane
 		m.detail.Width, m.detail.Height = pane-paneChrome, h
 	}
 	m.plist.SetSize(w, h)
@@ -37,9 +64,15 @@ func (m *Model) layout() {
 }
 
 func (m Model) View() string {
+	w, _ := m.inner()
 	var b strings.Builder
-	b.WriteString(m.clip(m.header()))
+	b.WriteString(clipTo(m.header(), w))
 	b.WriteString("\n")
+	b.WriteString(clipTo(m.subtitle(w), w))
+	b.WriteString("\n")
+	b.WriteString(m.rule(w))
+	b.WriteString("\n")
+
 	body := m.plist.View()
 	if m.level == levelTargets {
 		body = m.tlist.View()
@@ -49,19 +82,49 @@ func (m Model) View() string {
 	}
 	b.WriteString(body)
 	b.WriteString("\n")
-	b.WriteString(m.clip(m.footer()))
-	return b.String()
+	b.WriteString(clipTo(m.footer(), w))
+
+	mr, mc := m.margins()
+	// Width is the frame's outside, and the frame pads by one column on each
+	// side, so the content box is w.
+	return m.theme.Frame.
+		Margin(mr, mc).
+		Width(w + 2).
+		Render(b.String())
 }
 
-// clip cuts a styled line to the terminal width. Nothing may wrap: a header
-// or a footer that wraps pushes a row of the list off the screen, and the
-// list has already been sized for the space it was given.
-func (m Model) clip(line string) string {
-	return lipgloss.NewStyle().MaxWidth(m.width).Render(line)
+// subtitle is the line under the header: the query at the project level,
+// where typing filters, and the project's path at the target level, where it
+// does not. The line stays, so the list does not jump by a row when the level
+// changes.
+func (m Model) subtitle(width int) string {
+	if m.level != levelTargets {
+		return m.promptView()
+	}
+	v, ok := m.selected()
+	if !ok {
+		return ""
+	}
+	return "  " + m.theme.Path.Render(clipTo(contractHome(v.Project.Path), width-2))
+}
+
+// rule separates the chrome from the list, and carries the count the way the
+// picker does: how many rows survive the filter, out of how many there are.
+func (m Model) rule(width int) string {
+	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
+	if m.level == levelTargets {
+		count = fmt.Sprintf(" %d targets ", len(m.tlist.Items()))
+	}
+	line := width - lipgloss.Width(count)
+	if line < 0 {
+		line = 0
+	}
+	return m.theme.NameDim.Render(count) + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
 // header is the one line that says what is on screen. At the project level it
-// counts, because with ninety projects the counts are the reason to look.
+// counts, because with ninety projects the counts are the reason to look. The
+// filter is not here: it has its own line, with a cursor on it.
 func (m Model) header() string {
 	th := m.theme
 	if m.level == levelTargets {
@@ -76,14 +139,9 @@ func (m Model) header() string {
 			attention++
 		}
 	}
-	line := th.Header.Render(fmt.Sprintf(" revier  %d projects", len(m.views))) +
+	return th.Header.Render(fmt.Sprintf(" revier  %d projects", len(m.views))) +
 		th.Path.Render(" · ") + th.Running.Render(fmt.Sprintf("%d running", running)) +
 		th.Path.Render(" · ") + th.Attention.Render(fmt.Sprintf("%d need you", attention))
-	if m.filter != "" {
-		line += th.Path.Render("   /") + th.Accent.Render(m.filter) +
-			th.Path.Render(fmt.Sprintf(" (%d)", len(m.plist.VisibleItems())))
-	}
-	return line
 }
 
 // footer is the key legend, or the last failure. An error replaces the legend
@@ -100,6 +158,17 @@ func (m Model) footer() string {
 		}
 	}
 	return " " + m.help.ShortHelpView(keys)
+}
+
+// spread puts left at the start of a width and right at the end of it, which
+// is what keeps a column of states aligned without padding every name to the
+// longest one on screen.
+func spread(left, right string, width int) string {
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 1 {
+		return clipTo(left, width)
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 // fill pads a rendered row to the width of the list, so the selection

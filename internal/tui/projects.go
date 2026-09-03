@@ -42,10 +42,6 @@ func newProjectList(th theme.Theme) list.Model {
 // agent state in the project with what it is doing.
 type projectDelegate struct {
 	theme theme.Theme
-	// nameWidth is the column the agent state starts at, computed per render
-	// pass from the visible rows so the columns line up on this screen and
-	// not on the widest name in the store.
-	nameWidth int
 }
 
 // Height is two: the name line and the path under it. The path is what tells
@@ -73,10 +69,8 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 	v := it.view
 	mark, markStyle, name := th.Glyphs.Stopped, th.NameDim, th.NameDim
-	state := th.NameDim.Render(pad("-", stateWidth))
 	if v.Running {
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
-		state = th.Running.Render(pad("running", stateWidth))
 	}
 	if v.Attention() {
 		mark, markStyle = th.Glyphs.Attention, th.Attention
@@ -86,26 +80,29 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		cursor = th.Glyphs.Cursor
 	}
 
-	first := style(th.Accent).Render(cursor+" ") +
-		style(markStyle).Render(mark) + style(th.Path).Render(" ") +
-		style(name).Render(pad(string(v.Project.Name), d.nameWidth)) +
-		style(th.Path).Render("  ") + selStyle(state, sel, th) +
-		style(th.Path).Render("  ") +
-		d.agent(v, style)
+	// Name on the left, agent state on the right. Padding every name to the
+	// longest one on screen put the state column half a row away from a short
+	// name; the right edge does not move.
+	first := spread(
+		style(th.Accent).Render(cursor+" ")+style(markStyle).Render(mark)+style(th.Path).Render(" ")+
+			style(name).Render(string(v.Project.Name)),
+		d.agent(v, style),
+		m.Width())
 
 	pathStyle := th.Path
 	if !v.PathExists {
 		pathStyle = th.PathMissing
 	}
 	second := style(th.Path).Render("    ") +
-		style(pathStyle).Render(truncate(contractHome(v.Project.Path), m.Width()-5))
+		style(pathStyle).Render(contractHome(v.Project.Path))
 
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(first, m.Width(), sel, th)+"\n"+fill(second, m.Width(), sel, th))
 }
 
-// agent is the worst agent state in the project and its activity: the part of
-// the row that answers "which one needs me".
+// agent is the worst agent state in the project and what it is doing: the
+// right-hand side of the row, and the part that answers "which of these needs
+// me". A project running several agents is why the detail pane lists them all.
 func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) lipgloss.Style) string {
 	if len(v.Agents) == 0 {
 		return ""
@@ -117,7 +114,6 @@ func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) 
 		}
 	}
 	th := d.theme
-	label := worst.Status.String()
 	var s lipgloss.Style
 	switch worst.Status {
 	case revier.StatusAttention:
@@ -129,9 +125,9 @@ func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) 
 	default:
 		s = th.NameDim
 	}
-	out := style(s).Render(label)
+	out := style(s).Render(worst.Status.String())
 	if worst.Activity != "" {
-		out += style(th.Path).Render(" " + worst.Activity)
+		out += style(th.NameDim).Render(" " + worst.Activity)
 	}
 	return out
 }
@@ -154,7 +150,6 @@ func (m *Model) reload() {
 	if m.filter != "" {
 		m.plist.SetFilterText(m.filter)
 	}
-	m.setNameWidth()
 
 	switch {
 	case hadSelection:
@@ -194,39 +189,12 @@ func (m *Model) selectName(name revier.ProjectName) {
 // selection are right on the same pass as the keystroke.
 func (m *Model) setFilter(f string) {
 	m.filter = f
+	if m.input.Value() != f {
+		m.input.SetValue(f)
+	}
 	if f == "" {
 		m.plist.ResetFilter()
 	} else {
 		m.plist.SetFilterText(f)
 	}
-	m.setNameWidth()
 }
-
-// setNameWidth measures the visible rows. Padding to the widest name in the
-// store would leave a filtered list of three short names indented across half
-// the screen.
-func (m *Model) setNameWidth() {
-	w := 0
-	for _, item := range m.plist.VisibleItems() {
-		it, ok := item.(projectItem)
-		if !ok {
-			continue
-		}
-		if n := lipgloss.Width(string(it.view.Project.Name)); n > w {
-			w = n
-		}
-	}
-	if w > maxNameWidth {
-		w = maxNameWidth
-	}
-	m.plist.SetDelegate(projectDelegate{theme: m.theme, nameWidth: w})
-}
-
-// stateWidth holds the workspace column, so the agent state after it starts
-// at the same place whether the workspace is up or not.
-const stateWidth = 7
-
-// maxNameWidth caps the name column. A name longer than this is not truncated,
-// it just stops holding the column, which keeps one outlier from indenting
-// every other row.
-const maxNameWidth = 32

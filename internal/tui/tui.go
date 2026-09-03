@@ -26,6 +26,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -74,6 +75,7 @@ type Model struct {
 	tkeys  map[string]revier.TargetName // chord to target name, over every project
 	start  revier.ProjectName           // the project to open on, from the working directory
 	trees  map[string]treeEntry         // cached directory listings, by project path
+	input  textinput.Model              // the filter query, with its own cursor
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -85,7 +87,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, actions []conf
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects), start: start,
+		tkeys: targetKeys(projects), start: start, input: newPrompt(th),
 	}
 	m.layout()
 	return m
@@ -125,13 +127,14 @@ type binding struct {
 // Init surveys immediately; the timer starts once the first survey answers.
 // A window host that can report events is watched from the start.
 func (m Model) Init() tea.Cmd {
+	blink := m.input.Focus()
 	if w, ok := m.core.Window.(revier.WindowWatcher); ok {
 		events, err := w.Watch(context.Background())
 		if err == nil {
-			return tea.Batch(m.Survey(), waitEvent(events))
+			return tea.Batch(m.Survey(), waitEvent(events), blink)
 		}
 	}
-	return m.Survey()
+	return tea.Batch(m.Survey(), blink)
 }
 
 // waitEvent delivers the next window event as a message. Watch is called
@@ -208,7 +211,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.key(msg)
 	}
-	return m, nil
+	// A blink is the input's own timer message; nothing else reads it.
+	in, cmd := m.input.Update(msg)
+	m.input = in
+	return m, cmd
 }
 
 // claimByPolling diffs the window listing against the previous survey's and
@@ -351,11 +357,6 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
-	case key.Matches(msg, m.keys.Backspace):
-		if m.level == levelProjects && m.filter != "" {
-			m.setFilter(m.filter[:len(m.filter)-1])
-		}
-		return m, nil
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
@@ -364,9 +365,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if next, cmd, ok := m.targetKey(msg); ok {
 			return next, cmd
 		}
-	}
-	if m.level == levelProjects && msg.Type == tea.KeyRunes {
-		m.setFilter(m.filter + string(msg.Runes))
+		if m.promptKey(msg) {
+			return m.edit(msg)
+		}
 	}
 	return m, nil
 }

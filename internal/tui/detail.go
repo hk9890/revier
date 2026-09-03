@@ -16,7 +16,7 @@ import (
 const (
 	minSplitWidth = 90
 	minPaneWidth  = 36
-	maxPaneWidth  = 56
+	maxPaneWidth  = 90
 )
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
@@ -25,6 +25,9 @@ func (m Model) paneWidth() int {
 	if m.width < minSplitWidth {
 		return 0
 	}
+	// Half, as the picker gives its preview 55% (os-fzf.sh:782). A fixed cap
+	// left the pane at 28% of a 200-column terminal, which is where the paths
+	// and the tree it holds are longest.
 	w := m.width / 2
 	if w > maxPaneWidth {
 		w = maxPaneWidth

@@ -14,12 +14,11 @@ import (
 // There is no "q to quit": at the project level every printable rune is a
 // filter character, and a project called `queue` has to be reachable.
 type keyMap struct {
-	Up        key.Binding
-	Down      key.Binding
-	Enter     key.Binding
-	Back      key.Binding
-	Quit      key.Binding
-	Backspace key.Binding
+	Up    key.Binding
+	Down  key.Binding
+	Enter key.Binding
+	Back  key.Binding
+	Quit  key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -27,12 +26,11 @@ type keyMap struct {
 
 func newKeyMap(actions []config.Action) keyMap {
 	k := keyMap{
-		Up:        key.NewBinding(key.WithKeys("up", "ctrl+p"), key.WithHelp("↑", "up")),
-		Down:      key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
-		Enter:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:      key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
-		Quit:      key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
-		Backspace: key.NewBinding(key.WithKeys("backspace")),
+		Up:    key.NewBinding(key.WithKeys("up", "ctrl+p"), key.WithHelp("↑", "up")),
+		Down:  key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
+		Enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		Back:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		Quit:  key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 	}
 	for _, act := range actions {
 		k.actions = append(k.actions, key.NewBinding(

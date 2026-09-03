@@ -39,6 +39,7 @@ type Theme struct {
 	Attention   lipgloss.Style // an agent waiting for the user, and errors
 	Border      lipgloss.Style // pane separators
 	Help        lipgloss.Style // the key legend
+	Frame       lipgloss.Style // the border around the whole surface
 }
 
 // Glyphs is the marker set. Every glyph is one cell wide, whatever the set.
@@ -134,6 +135,10 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 		Attention:   fg(f.Red()).Bold(true),
 		Border:      fg(f.Surface1()),
 		Help:        fg(f.Overlay0()),
+		Frame: fg(f.Text()).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(c(f.Surface1())).
+			Padding(0, 1),
 	}
 }
 

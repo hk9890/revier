@@ -93,7 +93,45 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	return next.(tui.Model), cmd
 }
 
-func lines(m tui.Model) []string { return strings.Split(m.View(), "\n") }
+// lines is the surface's content, with the frame taken off: the border rows
+// dropped and the border column stripped from each side. Tests assert on what
+// the surface says, not on where its box is drawn.
+func lines(m tui.Model) []string {
+	var out []string
+	for _, raw := range strings.Split(m.View(), "\n") {
+		line := strings.TrimRight(raw, " ")
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(trimmed, "╭") || strings.HasPrefix(trimmed, "╰") {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "│") {
+			out = append(out, line)
+			continue
+		}
+		body := strings.TrimPrefix(trimmed, "│")
+		body = strings.TrimSuffix(strings.TrimRight(body, " "), "│")
+		out = append(out, strings.TrimRight(body, " "))
+	}
+	return out
+}
+
+// footer is the last content line: the key legend, or the last failure.
+func footer(m tui.Model) string {
+	l := lines(m)
+	return l[len(l)-1]
+}
+
+// rows are the project rows, without the header, the query line and the rule.
+func rows(m tui.Model) []string {
+	l := lines(m)
+	if len(l) < chromeLines {
+		return nil
+	}
+	return l[chromeLines:]
+}
+
+// The header, the query line and the rule sit above the list.
+const chromeLines = 3
 
 // The project the human is waiting on sorts above every other, whatever its
 // config order.
@@ -101,7 +139,7 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	_, _, c, projects := world(t, 4)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
-	first := lines(m)[1]
+	first := rows(m)[0]
 	if !strings.Contains(first, "project-03") || !strings.Contains(first, "attention") {
 		t.Fatalf("first row = %q, want project-03 with attention", first)
 	}
@@ -109,10 +147,10 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 		t.Errorf("first row = %q, want the activity line", first)
 	}
 	// Rows are two lines: the name, then the path under it.
-	if path := lines(m)[2]; !strings.Contains(path, "/p/project-03") {
+	if path := rows(m)[1]; !strings.Contains(path, "/p/project-03") {
 		t.Errorf("second line = %q, want the path of the first row", path)
 	}
-	if second := lines(m)[3]; !strings.Contains(second, "project-00") {
+	if second := rows(m)[2]; !strings.Contains(second, "project-00") {
 		t.Errorf("third line = %q, want config order to resume", second)
 	}
 }
@@ -174,7 +212,7 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "1")
 	m, _ = press(m, "1")
-	body := strings.Join(lines(m)[1:], "\n")
+	body := strings.Join(rows(m), "\n")
 	if !strings.Contains(body, "project-11") || strings.Contains(body, "project-10") {
 		t.Errorf("filter '11' should leave only project-11:\n%s", m.View())
 	}
@@ -396,7 +434,7 @@ func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
 	rt.Add("session:project-09", "kitty", revier.Panel{ID: "9", Kind: revier.PanelAgent, Title: "claude"})
 	m = survey(m)
 
-	if first := lines(m)[1]; !strings.Contains(first, "project-09") {
+	if first := rows(m)[0]; !strings.Contains(first, "project-09") {
 		t.Fatalf("first row = %q, want project-09 to have sorted first", first)
 	}
 	if after := selectedRow(t, m); after != before {
@@ -506,10 +544,13 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
 
-	if strings.Contains(m.View(), "│") {
-		t.Errorf("80 columns should not split:\n%s", m.View())
-	}
+	// The frame draws its own border, so look inside it.
 	for i, line := range lines(m) {
+		if strings.Contains(line, "│") {
+			t.Errorf("80 columns should not split, line %d = %q", i, line)
+		}
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
 		if w := lipgloss.Width(line); w > 80 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
@@ -542,9 +583,8 @@ func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	footer := lines(m)[len(lines(m))-1]
-	if !strings.Contains(footer, "editor") || !strings.Contains(footer, "home") {
-		t.Errorf("footer = %q, want the target keys of the selected project", footer)
+	if f := footer(m); !strings.Contains(f, "editor") || !strings.Contains(f, "home") {
+		t.Errorf("footer = %q, want the target keys of the selected project", f)
 	}
 }
 
@@ -568,12 +608,17 @@ func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm}
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
+	// The command a keystroke returns is the input's own cursor blink, so the
+	// evidence is that no host was asked to open anything.
 	m, cmd := press(m, "o")
 	if cmd != nil {
-		t.Fatal("a bare letter should not run a target")
+		cmd()
 	}
-	if body := m.View(); !strings.Contains(body, "/o") {
-		t.Errorf("'o' should have gone to the filter:\n%s", body)
+	if len(wm.Opened) != 0 || len(rt.Opened) != 0 {
+		t.Fatalf("a bare letter opened something: window %d, runtime %d", len(wm.Opened), len(rt.Opened))
+	}
+	if body := m.View(); !strings.Contains(body, "❯ o") {
+		t.Errorf("'o' should have gone to the query line:\n%s", body)
 	}
 }
 
@@ -604,8 +649,8 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("a target the project does not declare should run nothing")
 	}
-	if footer := lines(m)[len(lines(m))-1]; !strings.Contains(footer, "no web target") {
-		t.Errorf("footer = %q, want it to name the missing target", footer)
+	if f := footer(m); !strings.Contains(f, "no web target") {
+		t.Errorf("footer = %q, want it to name the missing target", f)
 	}
 }
 
