@@ -71,6 +71,7 @@ type Model struct {
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
+	tkeys  map[string]revier.TargetName // chord to target name, over every project
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -82,6 +83,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, actions []conf
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
+		tkeys: targetKeys(projects),
 	}
 	m.layout()
 	return m
@@ -356,6 +358,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
 	}
+	if m.level == levelProjects {
+		if next, cmd, ok := m.targetKey(msg); ok {
+			return next, cmd
+		}
+	}
 	if m.level == levelProjects && msg.Type == tea.KeyRunes {
 		m.setFilter(m.filter + string(msg.Runes))
 	}
@@ -450,9 +457,16 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 			return actedMsg{err: c.Focus(ctx, ref)}
 		}
 	}
-	name := row.target.Name
+	return m, m.goTarget(p, row.target.Name)
+}
+
+// goTarget is one activation: run-or-raise the target, and settle where it
+// landed. Enter at the target level and a target key at the project level are
+// the same operation, so they are the same command.
+func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
+	c := m.core
 	bound := m.bound[p.Name]
-	return m, func() tea.Msg {
+	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*bindWait)
 		defer cancel()
 		res, err := c.Go(ctx, p, name, bound)

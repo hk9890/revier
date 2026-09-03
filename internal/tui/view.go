@@ -30,12 +30,15 @@ func (m *Model) layout() {
 	}
 	m.plist.SetSize(w, h)
 	m.tlist.SetSize(w, h)
-	m.help.Width = m.width
+	// One column less than the terminal: the footer is rendered with a leading
+	// space. help truncates on its own width, and its own truncation gives up
+	// once the line is nearly full, so View clips as well.
+	m.help.Width = m.width - 1
 }
 
 func (m Model) View() string {
 	var b strings.Builder
-	b.WriteString(m.header())
+	b.WriteString(m.clip(m.header()))
 	b.WriteString("\n")
 	body := m.plist.View()
 	if m.level == levelTargets {
@@ -46,8 +49,15 @@ func (m Model) View() string {
 	}
 	b.WriteString(body)
 	b.WriteString("\n")
-	b.WriteString(m.footer())
+	b.WriteString(m.clip(m.footer()))
 	return b.String()
+}
+
+// clip cuts a styled line to the terminal width. Nothing may wrap: a header
+// or a footer that wraps pushes a row of the list off the screen, and the
+// list has already been sized for the space it was given.
+func (m Model) clip(line string) string {
+	return lipgloss.NewStyle().MaxWidth(m.width).Render(line)
 }
 
 // header is the one line that says what is on screen. At the project level it
@@ -83,7 +93,13 @@ func (m Model) footer() string {
 	if m.err != nil {
 		return m.theme.Attention.Render(" " + m.err.Error())
 	}
-	return " " + m.help.ShortHelpView(m.keys.helpFor(m.level))
+	keys := m.keys.helpFor(m.level)
+	if m.level == levelProjects {
+		if v, ok := m.selected(); ok {
+			keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
+		}
+	}
+	return " " + m.help.ShortHelpView(keys)
 }
 
 // fill pads a rendered row to the width of the list, so the selection

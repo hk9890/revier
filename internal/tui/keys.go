@@ -64,6 +64,17 @@ func (k keyMap) helpFor(l level) []key.Binding {
 	return append(out, k.actions...)
 }
 
+// targetHelp is the highlighted project's own target keys. They come from the
+// row rather than from configuration, because which keys do anything depends
+// on which project the cursor is on.
+func (k keyMap) targetHelp(keys []targetKeyHelp) []key.Binding {
+	out := make([]key.Binding, 0, len(keys))
+	for _, t := range keys {
+		out = append(out, helpKey(t.key, t.name))
+	}
+	return out
+}
+
 // helpKey is a help entry. The keys it declares are never matched against -
 // key routing uses the fields of keyMap - so a label like "type" is allowed.
 func helpKey(k, desc string) key.Binding {

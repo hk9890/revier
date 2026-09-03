@@ -513,3 +513,96 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 		}
 	}
 }
+
+// A target key acts on the row under the cursor, without the target level.
+// The keys are the ones the desktop bindings use, so the surface and the
+// keyboard agree about what ctrl+shift+o means.
+func TestTargetKeyRunsAgainstTheHighlightedProject(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	_, cmd := press(m, "ctrl+shift+o") // editor, a window target
+	if cmd == nil {
+		t.Fatal("ctrl+shift+o produced no command")
+	}
+	cmd()
+	if len(wm.Opened) != 1 {
+		t.Fatalf("window host opened %d times, want 1", len(wm.Opened))
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime host opened %d times, want none: the editor is a window", len(rt.Opened))
+	}
+}
+
+// The footer names the keys that will do something on this row, because which
+// targets exist depends on the project.
+func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	footer := lines(m)[len(lines(m))-1]
+	if !strings.Contains(footer, "editor") || !strings.Contains(footer, "home") {
+		t.Errorf("footer = %q, want the target keys of the selected project", footer)
+	}
+}
+
+// A letter is a filter character, never a shortcut. A project bound to a bare
+// key would otherwise swallow it.
+func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
+	raw := []revier.Project{{
+		Name: "solo", Path: "/p/solo",
+		Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:solo$"}}},
+			{Name: "editor", Key: "o", Window: &revier.Realization{
+				Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+		},
+	}}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
+	c := &core.Core{Runtime: rt, Window: wm}
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	m, cmd := press(m, "o")
+	if cmd != nil {
+		t.Fatal("a bare letter should not run a target")
+	}
+	if body := m.View(); !strings.Contains(body, "/o") {
+		t.Errorf("'o' should have gone to the filter:\n%s", body)
+	}
+}
+
+// A target key means the same target in every project, so a press on a
+// project that does not declare it is a mistake worth naming. Doing nothing
+// would look like the key was not bound at all.
+func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
+	raw := []revier.Project{
+		{Name: "plain", Path: "/p/plain", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:plain$"}}},
+		}},
+		{Name: "webby", Path: "/p/webby", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^session:webby$"}}},
+			{Name: "web", Key: "ctrl-shift-i", Window: &revier.Realization{
+				Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
+		}},
+	}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, cmd := press(m, "ctrl+shift+i") // "plain" is the first row
+	if cmd != nil {
+		t.Fatal("a target the project does not declare should run nothing")
+	}
+	if footer := lines(m)[len(lines(m))-1]; !strings.Contains(footer, "no web target") {
+		t.Errorf("footer = %q, want it to name the missing target", footer)
+	}
+}
