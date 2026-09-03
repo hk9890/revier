@@ -148,6 +148,16 @@ func contractHome(p string) string {
 	return p
 }
 
+// clipTo cuts text to a width, keeping the start: for a name, an activity
+// line or a tree row the beginning is what identifies it. It is ANSI-aware,
+// so it can be given text that already carries styling.
+func clipTo(s string, width int) string {
+	if width < 1 {
+		return ""
+	}
+	return lipgloss.NewStyle().MaxWidth(width).Render(s)
+}
+
 // truncate keeps the end of a path, not the start: the last two segments say
 // which checkout this is, and the first say only where checkouts live.
 func truncate(s string, width int) string {

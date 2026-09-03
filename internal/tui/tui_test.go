@@ -2,6 +2,8 @@ package tui_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -632,5 +634,54 @@ func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 	m = survey(m)
 	if row := selectedRow(t, m); row != moved {
 		t.Errorf("selection = %q after a refresh, want %q", row, moved)
+	}
+}
+
+// The tree says which checkout this is. Dot entries are not part of that, and
+// a directory that cannot be read is not an error.
+func TestDetailPaneShowsTheProjectTree(t *testing.T) {
+	dir := t.TempDir()
+	for _, p := range []string{"cmd/revier", "docs", ".git/objects"} {
+		if err := os.MkdirAll(filepath.Join(dir, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := []revier.Project{{Name: "here", Path: dir, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^session:here$"}}},
+	}}}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
+
+	body := pane(m)
+	if !strings.Contains(body, "Project Snapshot") {
+		t.Fatalf("pane = %q, want a tree", body)
+	}
+	for _, want := range []string{"cmd", "revier", "docs", "go.mod"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("tree does not list %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, ".git") {
+		t.Errorf("tree lists a dot entry:\n%s", body)
+	}
+}
+
+// A project whose directory is not here has no tree, and says nothing about
+// one.
+func TestNoTreeForAMissingDirectory(t *testing.T) {
+	_, _, c, projects := world(t, 1) // /p/project-00 does not exist
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
+
+	if body := pane(m); strings.Contains(body, "Project Snapshot") {
+		t.Errorf("pane = %q, want no tree for a missing directory", body)
 	}
 }

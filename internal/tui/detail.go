@@ -65,7 +65,7 @@ func (m *Model) syncDetail() {
 // detailContent is what the shell picker's preview shows, in its order
 // (os-fzf.sh:290): what this project is, then what is up, then what the
 // agents are doing.
-func (m Model) detailContent(v revier.ProjectView) string {
+func (m *Model) detailContent(v revier.ProjectView) string {
 	th := m.theme
 	w := m.paneWidth() - paneChrome
 	var b strings.Builder
@@ -76,7 +76,7 @@ func (m Model) detailContent(v revier.ProjectView) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(th.Header.Render(truncate(string(v.Project.Name), w)))
+	b.WriteString(th.Header.Render(clipTo(string(v.Project.Name), w)))
 	b.WriteString("\n\n")
 
 	status, statusStyle := "stopped", th.NameDim
@@ -97,7 +97,7 @@ func (m Model) detailContent(v revier.ProjectView) string {
 	// project whose directory has since gone is a different problem, and the
 	// red path already says it.
 	if !v.PathExists && !v.Running {
-		b.WriteString(th.PathMissing.Render(truncate("Directory is not on this machine", w)))
+		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on this machine", w)))
 		b.WriteString("\n")
 	}
 
@@ -110,7 +110,7 @@ func (m Model) detailContent(v revier.ProjectView) string {
 	}
 	for _, ref := range m.attached[v.Project.Name] {
 		b.WriteString(th.NameDim.Render(th.Glyphs.Running + " "))
-		b.WriteString(th.ProjectName.Render(truncate(ref.Title, w-12)))
+		b.WriteString(th.ProjectName.Render(clipTo(ref.Title, w-12)))
 		b.WriteString(th.Meta.Render(" attached"))
 		b.WriteString("\n")
 	}
@@ -124,6 +124,20 @@ func (m Model) detailContent(v revier.ProjectView) string {
 		for _, a := range v.Agents {
 			b.WriteString(m.detailAgent(a, w))
 			b.WriteString("\n")
+		}
+	}
+
+	// What the directory holds. With ninety near-identical names this is what
+	// says which checkout the cursor is on.
+	if v.PathExists {
+		if tree := m.treeFor(v.Project.Path); len(tree) > 0 {
+			b.WriteString("\n")
+			b.WriteString(th.Meta.Render("Project Snapshot"))
+			b.WriteString("\n")
+			for _, line := range tree {
+				b.WriteString(th.Path.Render(clipTo(line, w)))
+				b.WriteString("\n")
+			}
 		}
 	}
 	return b.String()
@@ -172,7 +186,7 @@ func (m Model) detailAgent(a revier.AgentView, w int) string {
 	if a.State.Activity == "" {
 		return head
 	}
-	return head + th.Path.Render(truncate(a.State.Activity, w-detailNameWidth-detailKeyWidth))
+	return head + th.Path.Render(clipTo(a.State.Activity, w-detailNameWidth-detailKeyWidth))
 }
 
 // The pane's columns. Narrower than the list's, because the pane is.

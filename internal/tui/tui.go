@@ -73,6 +73,7 @@ type Model struct {
 	detail viewport.Model
 	tkeys  map[string]revier.TargetName // chord to target name, over every project
 	start  revier.ProjectName           // the project to open on, from the working directory
+	trees  map[string]treeEntry         // cached directory listings, by project path
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
