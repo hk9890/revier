@@ -364,3 +364,70 @@ func TestEnterPinsTheTarget(t *testing.T) {
 		t.Fatalf("bound = %+v, want the editor pinned after Enter", got.Bound)
 	}
 }
+
+// A background refresh replaces every row. The cursor must stay on the
+// project the user was looking at, not on the row index it happened to sit
+// at: attention sorting moves rows, so an index points at a different project
+// after a survey.
+func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
+	rt, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	for _, r := range "project-0" { // project-00 .. project-09
+		m, _ = press(m, string(r))
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	before := selectedRow(t, m)
+	if !strings.Contains(before, "project-02") {
+		t.Fatalf("selected %q, want project-02 two rows down", before)
+	}
+
+	// project-09's agent starts wanting the human, so it sorts to the top and
+	// every row below it moves down one. An index-based cursor would now be
+	// pointing at project-01.
+	rt.Add("session:project-09", "kitty", revier.Panel{ID: "9", Kind: revier.PanelAgent, Title: "claude"})
+	m = survey(m)
+
+	if first := lines(m)[1]; !strings.Contains(first, "project-09") {
+		t.Fatalf("first row = %q, want project-09 to have sorted first", first)
+	}
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selection moved across a refresh: %q -> %q", before, after)
+	}
+	if body := m.View(); strings.Contains(body, "project-11") {
+		t.Errorf("filter did not survive the refresh:\n%s", body)
+	}
+}
+
+// The filter is fuzzy, not a substring test: the characters have to appear in
+// order, and nothing more. This is the ranking fzf uses, which is what the
+// picker being replaced trained the user on.
+func TestFilterMatchesNonAdjacentCharacters(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	for _, r := range "pj11" {
+		m, _ = press(m, string(r))
+	}
+	body := m.View()
+	if !strings.Contains(body, "project-11") {
+		t.Errorf("fuzzy filter 'pj11' should match project-11:\n%s", body)
+	}
+	if strings.Contains(body, "project-10") {
+		t.Errorf("fuzzy filter 'pj11' should not match project-10:\n%s", body)
+	}
+}
+
+// selectedRow is the row the cursor is on, found by the cursor glyph the
+// delegate renders into it.
+func selectedRow(t *testing.T, m tui.Model) string {
+	t.Helper()
+	for _, line := range lines(m) {
+		if strings.Contains(line, theme.Default().Glyphs.Cursor) {
+			return strings.TrimSpace(line)
+		}
+	}
+	t.Fatalf("no row is selected:\n%s", m.View())
+	return ""
+}

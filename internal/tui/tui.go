@@ -23,8 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -56,22 +58,31 @@ type Model struct {
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
 	err      error                                // the last failure, shown in the footer
 	level    level
-	filter   string
-	cursor   int                // row at the project level, into rows()
-	tcursor  int                // row at the target level
 	current  revier.ProjectName // the project drilled into
 	width    int
 	height   int
+
+	// The two levels are two lists. Cursor, paging and fuzzy filtering are
+	// the component's; what a row looks like is the delegate's.
+	plist  list.Model
+	tlist  list.Model
+	filter string // typed at the project level, held here so a refresh can re-apply it
+	keys   keyMap
+	help   help.Model
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
 func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme) Model {
-	return Model{
+	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
+		plist: newProjectList(th), tlist: newTargetList(th),
+		keys: newKeyMap(actions), help: newHelp(th),
 	}
+	m.layout()
+	return m
 }
 
 type surveyMsg struct {
@@ -148,6 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.layout()
 		return m, nil
 	case surveyMsg:
 		m.err = msg.err
@@ -155,8 +167,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.claimByPolling(msg.report)
 			m.views = sorted(msg.report.Views)
 			m.windows, m.surveyed = msg.report.Windows, true
+			m.reload()
 		}
-		m.clamp()
 		return m, tick(m.refresh)
 	case windowMsg:
 		if !msg.ok {
@@ -294,36 +306,35 @@ func sorted(views []revier.ProjectView) []revier.ProjectView {
 	return out
 }
 
+// key routes a press. Everything the surface owns is matched here, and only
+// what is left over reaches the list - which is why every printable rune is a
+// filter character and never a list command: the surface filters as you type,
+// the way the picker it replaces does, so no letter can be a shortcut.
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c", "q":
-		if m.level == levelProjects && msg.String() == "q" && m.filter != "" {
-			break // "q" is a letter of a project name while filtering
-		}
+	switch {
+	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
-	case "esc":
+	case key.Matches(msg, m.keys.Back):
 		switch {
 		case m.level == levelTargets:
 			m.level = levelProjects
 		case m.filter != "":
-			m.filter = ""
-			m.clamp()
+			m.setFilter("")
 		default:
 			return m, tea.Quit
 		}
 		return m, nil
-	case "up", "ctrl+p":
-		m.move(-1)
+	case key.Matches(msg, m.keys.Up):
+		m.list().CursorUp()
 		return m, nil
-	case "down", "ctrl+n":
-		m.move(1)
+	case key.Matches(msg, m.keys.Down):
+		m.list().CursorDown()
 		return m, nil
-	case "enter":
+	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
-	case "backspace":
+	case key.Matches(msg, m.keys.Backspace):
 		if m.level == levelProjects && m.filter != "" {
-			m.filter = m.filter[:len(m.filter)-1]
-			m.clamp()
+			m.setFilter(m.filter[:len(m.filter)-1])
 		}
 		return m, nil
 	}
@@ -331,46 +342,18 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if m.level == levelProjects && msg.Type == tea.KeyRunes {
-		m.filter += string(msg.Runes)
-		m.clamp()
+		m.setFilter(m.filter + string(msg.Runes))
 	}
 	return m, nil
 }
 
-func (m *Model) move(delta int) {
+// list is the list of the level in view. It is a pointer because the cursor
+// moves on it.
+func (m *Model) list() *list.Model {
 	if m.level == levelTargets {
-		m.tcursor += delta
-	} else {
-		m.cursor += delta
+		return &m.tlist
 	}
-	m.clamp()
-}
-
-func (m *Model) clamp() {
-	if n := len(m.rows()); m.cursor >= n {
-		m.cursor = n - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-	if n := len(m.targetRows()); m.tcursor >= n {
-		m.tcursor = n - 1
-	}
-	if m.tcursor < 0 {
-		m.tcursor = 0
-	}
-}
-
-// rows is the project level after the filter: indices into views.
-func (m Model) rows() []int {
-	var out []int
-	f := strings.ToLower(m.filter)
-	for i, v := range m.views {
-		if f == "" || strings.Contains(strings.ToLower(string(v.Project.Name)), f) {
-			out = append(out, i)
-		}
-	}
-	return out
+	return &m.plist
 }
 
 // selected is the project under the cursor at the project level, or the one
@@ -384,11 +367,11 @@ func (m Model) selected() (revier.ProjectView, bool) {
 		}
 		return revier.ProjectView{}, false
 	}
-	rows := m.rows()
-	if m.cursor < 0 || m.cursor >= len(rows) {
+	it, ok := m.plist.SelectedItem().(projectItem)
+	if !ok {
 		return revier.ProjectView{}, false
 	}
-	return m.views[rows[m.cursor]], true
+	return it.view, true
 }
 
 func (m Model) project(name revier.ProjectName) (core.Project, bool) {
@@ -430,14 +413,15 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		}
 		m.current = v.Project.Name
 		m.level = levelTargets
-		m.tcursor = 0
+		m.reloadTargets()
+		m.tlist.Select(0)
 		return m, nil
 	}
-	rows := m.targetRows()
-	if m.tcursor < 0 || m.tcursor >= len(rows) {
+	it, ok := m.tlist.SelectedItem().(targetItem)
+	if !ok {
 		return m, nil
 	}
-	row := rows[m.tcursor]
+	row := it.row
 	p, ok := m.project(m.current)
 	if !ok {
 		return m, nil
@@ -519,165 +503,3 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 // keyName maps a configured key ("ctrl-y") to the name bubbletea reports
 // ("ctrl+y").
 func keyName(k string) string { return strings.ReplaceAll(strings.ToLower(k), "-", "+") }
-
-func (m Model) View() string {
-	var b strings.Builder
-	b.WriteString(m.header())
-	b.WriteString("\n")
-
-	var lines []string
-	cursor := m.cursor
-	if m.level == levelTargets {
-		lines = m.targetLines()
-		cursor = m.tcursor
-	} else {
-		lines = m.projectLines()
-	}
-	// Keep the cursor on screen: the header and footer take three lines.
-	visible := m.height - 3
-	if visible < 1 {
-		visible = 1
-	}
-	start := 0
-	if cursor >= visible {
-		start = cursor - visible + 1
-	}
-	end := start + visible
-	if end > len(lines) {
-		end = len(lines)
-	}
-	for i := start; i < end; i++ {
-		line := lines[i]
-		if i == cursor {
-			line = m.theme.Cursor.Render(line)
-		}
-		b.WriteString(line)
-		b.WriteString("\n")
-	}
-	for i := end - start; i < visible; i++ {
-		b.WriteString("\n")
-	}
-	b.WriteString(m.footer())
-	return b.String()
-}
-
-func (m Model) header() string {
-	running, attention := 0, 0
-	for _, v := range m.views {
-		if v.Running {
-			running++
-		}
-		if v.Attention() {
-			attention++
-		}
-	}
-	title := fmt.Sprintf(" revier  %d projects · %d running · %d need you", len(m.views), running, attention)
-	if m.level == levelTargets {
-		title = fmt.Sprintf(" revier  %s", m.current)
-	} else if m.filter != "" {
-		title += "   /" + m.filter
-	}
-	return m.theme.Header.Render(title)
-}
-
-func (m Model) footer() string {
-	var help string
-	if m.level == levelTargets {
-		help = " enter go · esc back · q quit"
-	} else {
-		help = " enter targets · type to filter · esc clear/quit"
-	}
-	for _, act := range m.actions {
-		help += " · " + act.Key + " " + act.Name
-	}
-	if m.err != nil {
-		return m.theme.Attention.Render(" " + m.err.Error())
-	}
-	return m.theme.Help.Render(help)
-}
-
-func (m Model) projectLines() []string {
-	rows := m.rows()
-	nameWidth := 0
-	for _, i := range rows {
-		if n := lipgloss.Width(string(m.views[i].Project.Name)); n > nameWidth {
-			nameWidth = n
-		}
-	}
-	if nameWidth > 32 {
-		nameWidth = 32
-	}
-	lines := make([]string, 0, len(rows))
-	for _, i := range rows {
-		v := m.views[i]
-		g := m.theme.Glyphs
-		mark, state := m.theme.NameDim.Render(g.Stopped), m.theme.NameDim.Render("-      ")
-		if v.Running {
-			mark, state = m.theme.Running.Render(g.Running), "running"
-		}
-		if v.Attention() {
-			mark = m.theme.Attention.Render(g.Attention)
-		}
-		lines = append(lines, fmt.Sprintf(" %s %s  %s  %s", mark, pad(string(v.Project.Name), nameWidth), state, m.agentLine(v)))
-	}
-	return lines
-}
-
-// agentLine is the worst agent state in the project and its activity: the
-// line that answers "which one needs me" at a glance.
-func (m Model) agentLine(v revier.ProjectView) string {
-	if len(v.Agents) == 0 {
-		return ""
-	}
-	worst := revier.AgentState{}
-	for _, a := range v.Agents {
-		if a.State.Status >= worst.Status {
-			worst = a.State
-		}
-	}
-	label := worst.Status.String()
-	switch worst.Status {
-	case revier.StatusAttention:
-		label = m.theme.Attention.Render(label)
-	case revier.StatusRunning:
-		label = m.theme.Running.Render(label)
-	case revier.StatusIdle:
-		label = m.theme.Idle.Render(label)
-	default:
-		label = m.theme.NameDim.Render(label)
-	}
-	if worst.Activity == "" {
-		return label
-	}
-	return label + " " + worst.Activity
-}
-
-func (m Model) targetLines() []string {
-	rows := m.targetRows()
-	lines := make([]string, 0, len(rows))
-	for _, r := range rows {
-		if !r.attached.IsZero() {
-			lines = append(lines, fmt.Sprintf("   %s  %s  %s", pad("", 14), pad(r.attached.Title, 24), m.theme.Meta.Render("attached · "+r.attached.Host)))
-			continue
-		}
-		t := r.target
-		g := m.theme.Glyphs
-		mark := m.theme.NameDim.Render(g.Stopped)
-		state := m.theme.NameDim.Render("-")
-		switch {
-		case !t.Available:
-			state = m.theme.NameDim.Render("unavailable")
-		case !t.Ref.IsZero():
-			mark, state = m.theme.Running.Render(g.Running), "running"
-		}
-		lines = append(lines, fmt.Sprintf(" %s %s  %s  %s  %s", mark, pad(t.Key, 14), pad(string(t.Name), 24), pad(t.Host, 6), state))
-	}
-	return lines
-}
-
-func pad(s string, width int) string {
-	if n := lipgloss.Width(s); n < width {
-		return s + strings.Repeat(" ", width-n)
-	}
-	return s
-}

@@ -161,3 +161,10 @@ func sortedKeys[V any](m map[string]V) []string {
 func quote(s string) string { return strconv.Quote(s) }
 
 func join(ss []string) string { return strings.Join(ss, ", ") }
+
+// OnSelection is a style as it renders inside the selected row: the row's
+// background, applied to every segment, so the highlight is continuous rather
+// than one band per styled run.
+func (t Theme) OnSelection(s lipgloss.Style) lipgloss.Style {
+	return s.Background(t.Cursor.GetBackground())
+}
