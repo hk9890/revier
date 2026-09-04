@@ -842,3 +842,57 @@ func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
 		t.Error("a pane is not an OS window; its process tells nothing about a window title")
 	}
 }
+
+// A desktop key has no useful working directory, so the project comes from
+// the window in front of the user. The rules a project already declares are
+// the mapping.
+func TestProjectOfFocusedUsesTheDeclaredRules(t *testing.T) {
+	wm := hosttest.New("wm")
+	other := wm.Add("something else", "firefox")
+	editor := wm.Add("revier - README.md", "code")
+	c := &core.Core{Window: wm}
+	projects := []core.Project{prepared(t, project())}
+
+	wm.SetFocus(editor)
+	p, ok, err := c.ProjectOfFocused(context.Background(), projects)
+	if err != nil || !ok {
+		t.Fatalf("ProjectOfFocused: ok=%v err=%v, want the project of the editor window", ok, err)
+	}
+	if p.Name != "revier" {
+		t.Errorf("project = %q, want revier", p.Name)
+	}
+
+	wm.SetFocus(other)
+	if _, ok, err := c.ProjectOfFocused(context.Background(), projects); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want no project for a window no rule claims", ok, err)
+	}
+}
+
+// The focused window is reported by the window host while the target it
+// matches may be realized by the runtime. Requiring the two hosts to agree
+// would answer nothing, so the rule is matched wherever the window came from.
+func TestProjectOfFocusedMatchesARuntimeRuleOnAWindow(t *testing.T) {
+	wm := hosttest.New("wm")
+	session := wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	wm.SetFocus(session)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	p, ok, err := c.ProjectOfFocused(context.Background(), []core.Project{prepared(t, project())})
+	if err != nil || !ok {
+		t.Fatalf("ProjectOfFocused: ok=%v err=%v", ok, err)
+	}
+	if p.Name != "revier" {
+		t.Errorf("project = %q, want revier: home's rule matches the session window", p.Name)
+	}
+}
+
+// With no host that can report focus there is nothing to ask, and no error.
+func TestProjectOfFocusedWithNoHostIsQuiet(t *testing.T) {
+	c := &core.Core{}
+	if _, ok, err := c.ProjectOfFocused(context.Background(), nil); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want a quiet miss", ok, err)
+	}
+}

@@ -44,6 +44,11 @@ flags:
   -p, --project <name>          act on this project instead of the resolved one
 `
 
+// exitNoProject is returned when no project could be resolved. It is a
+// normal outcome, not a failure: contrib/gnome/revier-go turns it into the
+// picker.
+const exitNoProject = 3
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		// An action's own exit status passes through, so whatever bound the
@@ -51,6 +56,12 @@ func main() {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			os.Exit(exit.ExitCode())
+		}
+		// A window that belongs to no project is a normal outcome with its
+		// own status, so a desktop binding can offer the picker instead.
+		if errors.Is(err, errNoProject) {
+			fmt.Fprintln(os.Stderr, "revier:", err)
+			os.Exit(exitNoProject)
 		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)
@@ -145,7 +156,7 @@ func cmdTUI(a *app) error {
 	// A project the working directory does not resolve to is not an error
 	// here: the TUI opens on the first row instead.
 	start := revier.ProjectName("")
-	if p, err := a.resolveProject(""); err == nil {
+	if p, err := a.resolveProject(context.Background(), ""); err == nil {
 		start = p.Name
 	}
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second, th, start)
@@ -254,7 +265,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if len(pos) > 0 {
 		name = pos[0]
 	}
-	p, err := a.resolveProject(name)
+	p, err := a.resolveProject(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -280,7 +291,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if len(pos) < 1 {
 		return fmt.Errorf("usage: revier go <target> [-p project]")
 	}
-	p, err := a.resolveProject(*project)
+	p, err := a.resolveProject(ctx, *project)
 	if err != nil {
 		return err
 	}
@@ -302,7 +313,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if len(pos) < 1 {
 		return fmt.Errorf("usage: revier run <action> [-p project]")
 	}
-	p, err := a.resolveProject(*project)
+	p, err := a.resolveProject(ctx, *project)
 	if err != nil {
 		return err
 	}
@@ -354,7 +365,7 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	if a.core.Window == nil {
 		return fmt.Errorf("attach needs a window host; none is available here")
 	}
-	p, err := a.resolveProject(*project)
+	p, err := a.resolveProject(ctx, *project)
 	if err != nil {
 		return err
 	}
@@ -370,13 +381,13 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	return nil
 }
 
-func cmdStatus(_ context.Context, a *app, args []string) error {
+func cmdStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	project := projectFlag(fs)
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
 	}
-	p, err := a.resolveProject(*project)
+	p, err := a.resolveProject(ctx, *project)
 	if err != nil {
 		return err
 	}

@@ -15,15 +15,15 @@ name='revier: picker'
 
 [revier-home]
 binding='<Shift><Control>u'
-command='sh -lc "revier go home"'
+command='sh -lc "revier-go home"'
 name='revier: workspace'
 
 [revier-editor]
 binding='<Shift><Control>o'
-command='sh -lc "revier go editor"'
+command='sh -lc "revier-go editor"'
 name='revier: editor'
 
 [revier-web]
 binding='<Shift><Control>i'
-command='sh -lc "revier go web"'
+command='sh -lc "revier-go web"'
 name='revier: web'

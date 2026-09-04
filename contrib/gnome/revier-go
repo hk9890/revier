@@ -1,0 +1,26 @@
+#!/bin/sh
+# Runs a target, and opens the picker when no project could be resolved.
+#
+# A desktop key has no working directory, and the window in front of it may be
+# one no project claims. revier then exits with status 3 and does nothing; the
+# shell session tool's own bindings do what this does with that outcome and
+# fall back to the picker (os-to-editor.sh).
+#
+# The fallback lives here and not in revier because revier is one process per
+# keypress and knows nothing about popups: opening a terminal window is the
+# compositor's business (docs/design/decisions.md D9).
+set -eu
+
+# The status has to be taken from the command itself. After `if cmd; then`,
+# `$?` is the status of the `if`, which is zero whichever branch ran - the bug
+# this comment exists to stop coming back.
+status=0
+revier go "$@" || status=$?
+
+if [ "$status" -eq 0 ]; then
+	exit 0
+fi
+if [ "$status" -eq 3 ]; then
+	exec revier-popup
+fi
+exit "$status"

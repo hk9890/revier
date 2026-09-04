@@ -164,6 +164,52 @@ func (c *Core) identify(s snapshot) {
 	}
 }
 
+// ProjectOfFocused reports the project the focused window belongs to.
+//
+// The match rules a project already declares are the mapping: a kitty window
+// titled `session:revier`, an editor window whose title carries the project
+// name, a browser window with the class the project gave it. Nothing is
+// declared twice.
+//
+// The host that owns the focused instance is not required to be the host that
+// would realize the target. The question here is which project a window
+// belongs to, not which host provides it: the focused window of a running
+// session is reported by the window host, while its home target is realized by
+// the runtime, and requiring agreement would answer nothing.
+func (c *Core) ProjectOfFocused(ctx context.Context, projects []Project) (Project, bool, error) {
+	h := c.focusAuthority()
+	if h == nil {
+		return Project{}, false, nil
+	}
+	ref, err := h.Focused(ctx)
+	if err != nil {
+		return Project{}, false, fmt.Errorf("%s: focused: %w", h.Name(), err)
+	}
+	if ref.IsZero() {
+		return Project{}, false, nil
+	}
+	snap, err := c.snapshot(ctx)
+	if err != nil {
+		return Project{}, false, err
+	}
+	inst, ok := byRef(snap, ref)
+	if !ok {
+		return Project{}, false, nil
+	}
+	for _, p := range projects {
+		for i := range p.Targets {
+			_, _, m, err := c.resolveAt(p, i)
+			if err != nil {
+				continue
+			}
+			if m.Matches(inst) {
+				return p, true, nil
+			}
+		}
+	}
+	return Project{}, false, nil
+}
+
 // find returns the first instance of the host that satisfies the match. The
 // match was compiled at load, so this is a scan and nothing else.
 func find(s snapshot, h revier.Host, m revier.CompiledMatch) (revier.Instance, bool) {
