@@ -331,3 +331,32 @@ The panels are unaffected: they still come from the runtime, so a session
 found this way reports its agents like any other. tmux cannot claim
 `OSWindows`, so nothing about a pane changes.
 
+
+### D23 — the list component ranks and filters; the scrolling is ours — Accepted
+
+Amends D8's implementation, not its intent.
+
+The surface was built on `bubbles/list`, which is paginated: the cursor walks
+to the bottom of a page and the next press replaces every row on the screen
+and puts the cursor back at the top. Measured at 120 by 24 with eighty-nine
+projects, the tenth press of the down key moved the view from `proj-01..10` to
+`proj-11..20`. With ninety projects reached by a held-down arrow key that is
+the normal way through the list, so the rows flicker through unrelated names
+on the way to a neighbour. The shell picker it replaces scrolls one line.
+
+Continuous scrolling cannot be asked of the component: a page is a fixed
+window, and there is no way to express a window that starts one row lower.
+
+So the component keeps the work it is good at - fuzzy ranking by the algorithm
+fzf uses, the filter, and which item is selected - and is given room for every
+row it holds, so it renders a single page. A viewport clips that page and
+scrolls it by the least that keeps the selected row on screen.
+
+This takes back the scroll window that the move to the component handed over,
+and it is the second half of that trade rather than a reversal of it: the
+alternative was to hand-roll the filter and the ranking as well.
+
+The cost is that the delegate renders every row the filter leaves rather than
+one screen of them. Eighty-nine projects is a hundred and seventy-eight lines
+per frame, which is a rounding error next to the survey that produced them.
+
