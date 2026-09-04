@@ -45,6 +45,10 @@ type Fake struct {
 	// InstancesCalls counts Instances calls, so a test can assert that a
 	// refresh costs one call whatever the project count.
 	InstancesCalls int
+	// Placements records every geometry passed to Place, by ref. A window
+	// host that cannot place windows leaves this nil, which is the
+	// degradation a test also has to cover.
+	Placements map[string][]string
 
 	caps revier.Capabilities
 }
@@ -156,6 +160,18 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 	defer f.mu.Unlock()
 	f.Focuses = append(f.Focuses, ref)
 	f.focused = ref
+	return nil
+}
+
+// Place records the geometry. Fake implements revier.WindowPlacer, so a test
+// that wants a host without the capability uses a different double.
+func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Placements == nil {
+		f.Placements = map[string][]string{}
+	}
+	f.Placements[ref.ID] = geometry
 	return nil
 }
 

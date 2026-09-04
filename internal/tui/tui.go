@@ -76,6 +76,7 @@ type Model struct {
 	start  revier.ProjectName           // the project to open on, from the working directory
 	trees  map[string]treeEntry         // cached directory listings, by project path
 	input  textinput.Model              // the filter query, with its own cursor
+	body   viewport.Model               // the scrolling window over the level in view
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -88,6 +89,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, actions []conf
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects), start: start, input: newPrompt(th),
+		body: newBody(),
 	}
 	m.layout()
 	return m
@@ -174,6 +176,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 	mm.syncDetail()
+	mm.syncBody()
 	return mm, cmd
 }
 

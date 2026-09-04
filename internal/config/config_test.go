@@ -339,7 +339,7 @@ glyphs = "nerd"
 	if err != nil {
 		t.Fatalf("Theme: %v", err)
 	}
-	if th.Name != "catppuccin-latte" || th.Glyphs.Local == "" {
+	if th.Name != "catppuccin-latte" || th.Glyphs.Cursor == "" {
 		t.Errorf("theme = %q, glyphs = %+v", th.Name, th.Glyphs)
 	}
 }
@@ -370,5 +370,35 @@ func TestLoadWithNoUITableGetsTheDefault(t *testing.T) {
 	}
 	if th.Name != theme.DefaultTheme || th.Glyphs != theme.Default().Glyphs {
 		t.Errorf("default theme = %q with glyphs %+v", th.Name, th.Glyphs)
+	}
+}
+
+// A geometry short of its four tokens would reach the window host and be
+// refused there, after the window had already opened.
+func TestValidateRejectsAShortPlacement(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Place: "right top",
+		}},
+	}}
+	err := config.Validate(p)
+	if err == nil {
+		t.Fatal("Validate accepted a two-token placement")
+	}
+	if !strings.Contains(err.Error(), "four tokens") {
+		t.Errorf("error = %v, want it to say what a placement needs", err)
+	}
+}
+
+func TestValidateAcceptsAFullPlacement(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Place: "right top 75% 100%",
+		}},
+	}}
+	if err := config.Validate(p); err != nil {
+		t.Fatalf("Validate: %v", err)
 	}
 }

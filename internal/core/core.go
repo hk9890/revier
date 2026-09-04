@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -113,7 +114,101 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 		}
 		s[h.Name()] = in
 	}
+	c.identify(s)
 	return s, nil
+}
+
+// identify gives a runtime instance with no identity of its own the title the
+// window host reports for the same process (decisions.md D22).
+//
+// It is policy, not an adapter's business: neither host can do it alone. The
+// runtime knows the window has no name; only the window host knows what the
+// window manager calls it.
+//
+// The pairing is by process, and it is refused unless that process owns
+// exactly one window on each side. D19 rejected the process id for pairing a
+// pane to a window, because every OS window of one kitty process shares its
+// pid; that objection is exactly this refusal, so an ambiguous process is left
+// as it was rather than guessed at.
+func (c *Core) identify(s snapshot) {
+	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
+		return
+	}
+	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
+
+	perPID := map[int]int{}
+	for _, r := range runtimes {
+		if r.PID != 0 {
+			perPID[r.PID]++
+		}
+	}
+	byPID := map[int]revier.Instance{}
+	seen := map[int]int{}
+	for _, w := range windows {
+		if w.PID == 0 {
+			continue
+		}
+		seen[w.PID]++
+		byPID[w.PID] = w
+	}
+
+	for i, r := range runtimes {
+		if r.Title != "" || r.PID == 0 || perPID[r.PID] != 1 || seen[r.PID] != 1 {
+			continue
+		}
+		w := byPID[r.PID]
+		runtimes[i].Title = w.Title
+		runtimes[i].Ref.Title = w.Title
+		if runtimes[i].Class == "" {
+			runtimes[i].Class = w.Class
+		}
+	}
+}
+
+// ProjectOfFocused reports the project the focused window belongs to.
+//
+// The match rules a project already declares are the mapping: a kitty window
+// titled `session:revier`, an editor window whose title carries the project
+// name, a browser window with the class the project gave it. Nothing is
+// declared twice.
+//
+// The host that owns the focused instance is not required to be the host that
+// would realize the target. The question here is which project a window
+// belongs to, not which host provides it: the focused window of a running
+// session is reported by the window host, while its home target is realized by
+// the runtime, and requiring agreement would answer nothing.
+func (c *Core) ProjectOfFocused(ctx context.Context, projects []Project) (Project, bool, error) {
+	h := c.focusAuthority()
+	if h == nil {
+		return Project{}, false, nil
+	}
+	ref, err := h.Focused(ctx)
+	if err != nil {
+		return Project{}, false, fmt.Errorf("%s: focused: %w", h.Name(), err)
+	}
+	if ref.IsZero() {
+		return Project{}, false, nil
+	}
+	snap, err := c.snapshot(ctx)
+	if err != nil {
+		return Project{}, false, err
+	}
+	inst, ok := byRef(snap, ref)
+	if !ok {
+		return Project{}, false, nil
+	}
+	for _, p := range projects {
+		for i := range p.Targets {
+			_, _, m, err := c.resolveAt(p, i)
+			if err != nil {
+				continue
+			}
+			if m.Matches(inst) {
+				return p, true, nil
+			}
+		}
+	}
+	return Project{}, false, nil
 }
 
 // find returns the first instance of the host that satisfies the match. The
@@ -150,13 +245,35 @@ type Bindings = map[revier.TargetName]revier.TargetRef
 
 // locate finds the instance backing a target: its binding when alive, else
 // the first instance the rule matches.
-func (c *Core) locate(snap snapshot, host revier.Host, m revier.CompiledMatch, bound revier.TargetRef) (revier.Instance, bool) {
+func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revier.CompiledMatch, bound revier.TargetRef) (revier.Instance, bool) {
 	if bound.Host == host.Name() {
-		if inst, ok := byRef(snap, bound); ok {
+		if inst, ok := byRef(snap, bound); ok && c.bindingHolds(p, i, host, inst) {
 			return inst, true
 		}
 	}
 	return find(snap, host, m)
+}
+
+// bindingHolds re-checks a remembered instance against the class the target
+// declares, before a keypress is sent to it.
+//
+// Pruning already drops a binding whose instance is gone. What is left is a
+// binding that is alive and wrong: a window manager reuses window ids, so the
+// id a target was bound to can come back as an unrelated window, and the
+// keypress then raises that. Nothing about the failure is visible - the wrong
+// window simply comes forward - which is why it is checked rather than left to
+// be noticed.
+//
+// Only the class is re-checked, never the title. The whole point of a binding
+// is to survive a title the rule no longer matches, which is what D21 exists
+// for: an editor window is bound while its title still says the file it opened
+// with. A target that declares no class is trusted as before, and so is a
+// runtime binding: a pane id and a kitty window id are not handed back out.
+func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {
+	if c.Window == nil || host.Name() != c.Window.Name() {
+		return true
+	}
+	return c.classOK(p, i, inst)
 }
 
 // Result is what Go did. Ref is where the key landed. Launched reports that
@@ -188,7 +305,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 		return Result{}, err
 	}
 
-	inst, found := c.locate(snap, host, m, bound[name])
+	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
 		res := Result{Launched: true}
 		if c.Window != nil {
@@ -211,6 +328,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 			return Result{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
 		res.Ref = ref
+		c.place(ctx, real, ref)
 		return res, nil
 	}
 
@@ -277,6 +395,7 @@ func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, befo
 			if err := c.Window.Focus(ctx, w.Ref); err != nil {
 				return revier.Instance{}, false, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
 			}
+			c.place(ctx, *p.Targets[i].Window, w.Ref)
 			return w, true, nil
 		}
 		if len(candidates) > 1 || !time.Now().Before(deadline) {
@@ -285,6 +404,62 @@ func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, befo
 		select {
 		case <-ctx.Done():
 			return revier.Instance{}, false, ctx.Err()
+		case <-time.After(BindPoll):
+		}
+	}
+}
+
+// PlaceWait is how long placement waits for the window host to see the OS
+// window of a runtime instance that was just opened. It matches the wait the
+// shell tool uses for the same purpose.
+const PlaceWait = 2 * time.Second
+
+// place positions a window a launch has just produced. It applies to a launch
+// and never to a raise: moving a window the user has already put somewhere is
+// not revier's business (decisions.md D24).
+//
+// A failure is not returned. The window is open and focused either way, and
+// the alternative - failing the keypress because a geometry was refused -
+// would turn a cosmetic problem into a broken key. A window pinned by
+// maximize or tiling is refused by the host as a matter of course.
+func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.TargetRef) {
+	if real.Place == "" || c.Window == nil || ref.IsZero() {
+		return
+	}
+	placer, ok := c.Window.(revier.WindowPlacer)
+	if !ok {
+		return
+	}
+	target := ref
+	if ref.Host != c.Window.Name() {
+		w, ok := c.windowOfNew(ctx, ref)
+		if !ok {
+			return
+		}
+		target = w
+	}
+	_ = placer.Place(ctx, target, strings.Fields(real.Place))
+}
+
+// windowOfNew waits for the window host to report the OS window of a runtime
+// instance that has just been opened. A terminal reports its window before the
+// compositor has mapped it, so the first look often finds nothing.
+func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.TargetRef, bool) {
+	deadline := time.Now().Add(PlaceWait)
+	for {
+		if snap, err := c.snapshot(ctx); err == nil {
+			if inst, ok := byRef(snap, ref); ok {
+				if w, ok := c.osWindowOf(snap, inst); ok {
+					return w.Ref, true
+				}
+			}
+		}
+		if !time.Now().Before(deadline) {
+			return revier.TargetRef{}, false
+		}
+		select {
+		case <-ctx.Done():
+			return revier.TargetRef{}, false
 		case <-time.After(BindPoll):
 		}
 	}
@@ -545,7 +720,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()
-			if inst, found := c.locate(snap, host, m, bound[t.Name]); found {
+			if inst, found := c.locate(snap, p, i, host, m, bound[t.Name]); found {
 				tv.Ref = inst.Ref
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref

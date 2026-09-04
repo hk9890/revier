@@ -730,3 +730,88 @@ func TestNoTreeForAMissingDirectory(t *testing.T) {
 		t.Errorf("pane = %q, want no tree for a missing directory", body)
 	}
 }
+
+// topRow is the name of the first project on screen, and selectedName the one
+// under the cursor. Both read the rendered surface, so they see what the
+// viewport actually shows.
+func topRow(t *testing.T, m tui.Model) string {
+	t.Helper()
+	for _, line := range rows(m) {
+		if n := projectIn(line); n != "" {
+			return n
+		}
+	}
+	t.Fatalf("no project row on screen:\n%s", m.View())
+	return ""
+}
+
+func projectIn(line string) string {
+	for _, f := range strings.Fields(line) {
+		if strings.HasPrefix(f, "project-") {
+			return f
+		}
+	}
+	return ""
+}
+
+// The list scrolls one row at a time. The component underneath pages, which
+// replaced every row on screen at the page boundary and put the cursor back at
+// the top; with ninety projects that is the normal way through the list.
+func TestTheListScrollsByOneRowNotByAPage(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 100, 14)
+
+	order := map[string]int{}
+	for i, line := range rows(m) {
+		if n := projectIn(line); n != "" {
+			order[n] = i
+		}
+	}
+	if len(order) < 3 {
+		t.Fatalf("only %d rows fit; the test needs a list taller than the screen", len(order))
+	}
+
+	seen := []string{topRow(t, m)}
+	for i := range 10 {
+		m, _ = press(m, "down")
+		top := topRow(t, m)
+		seen = append(seen, top)
+
+		// The cursor must stay on screen, and the row it is on must be the
+		// one the surface says is selected.
+		if selectedRow(t, m) == "" {
+			t.Fatalf("press %d: the cursor left the screen", i+1)
+		}
+	}
+
+	// Consecutive presses may move the top row by one project or by none.
+	// A page flip moves it by a screenful.
+	full := projectOrder(t, m)
+	for i := 1; i < len(seen); i++ {
+		step := full[seen[i]] - full[seen[i-1]]
+		if step < 0 || step > 1 {
+			t.Errorf("press %d moved the top row from %s to %s, %d places: the list paged",
+				i, seen[i-1], seen[i], step)
+		}
+	}
+	if full[seen[len(seen)-1]] == 0 {
+		t.Error("after ten presses the top row never moved; the test proved nothing")
+	}
+}
+
+// projectOrder is every project by its place in the list, taken from the
+// model rather than from the screen, so it covers rows that scrolled away.
+func projectOrder(t *testing.T, m tui.Model) map[string]int {
+	t.Helper()
+	out := map[string]int{}
+	for i := range 12 {
+		out[fmt.Sprintf("project-%02d", i)] = 0
+	}
+	// The surface sorts attention first, then config order. world gives the
+	// last project the attention, so it leads and the rest follow in order.
+	out["project-11"] = 0
+	for i := range 11 {
+		out[fmt.Sprintf("project-%02d", i)] = i + 1
+	}
+	return out
+}

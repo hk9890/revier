@@ -94,6 +94,18 @@ type WindowWatcher interface {
 	Watch(ctx context.Context) (<-chan WindowEvent, error)
 }
 
+// WindowPlacer is an optional capability, detected by type assertion. A host
+// that implements it can position a window it did not open, which is how a
+// launched workspace lands where the user expects rather than where the
+// compositor put it (decisions.md D24). A host that does not implement it
+// ignores every declared placement.
+//
+// Geometry is four tokens - x, y, width, height - in the host's own
+// vocabulary of pixels and workarea-relative words.
+type WindowPlacer interface {
+	Place(ctx context.Context, ref TargetRef, geometry []string) error
+}
+
 type WindowEvent struct {
 	Kind     WindowEventKind
 	Instance Instance

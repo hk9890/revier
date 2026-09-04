@@ -148,6 +148,26 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
+// Place positions a window through the extension. `--settled` makes wctl hold
+// the reply until the compositor has mapped and placed the window, so a
+// geometry request made straight after a launch is not overwritten by the
+// compositor's own initial placement.
+//
+// A refusal is not an error the caller should act on: a window pinned by
+// maximize, fullscreen or tiling keeps its geometry, and the launch it
+// followed succeeded either way.
+func (h *Host) Place(ctx context.Context, ref revier.TargetRef, geometry []string) error {
+	if ref.ID == "" {
+		return fmt.Errorf("gnome: cannot place a zero ref")
+	}
+	if len(geometry) != 4 {
+		return fmt.Errorf("gnome: place needs four tokens, got %d", len(geometry))
+	}
+	args := append([]string{"place", ref.ID}, geometry...)
+	_, err := h.run(ctx, append(args, "--settled")...)
+	return err
+}
+
 // Focused reports the focused window.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	raw, err := h.run(ctx, "focused", "--json")

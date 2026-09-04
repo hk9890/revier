@@ -7,7 +7,9 @@
 package gnome_test
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/gnome"
@@ -109,5 +111,47 @@ func TestDecodeFocusedArrayForm(t *testing.T) {
 	}
 	if ref.ID != "7" {
 		t.Errorf("ref = %+v, want id 7", ref)
+	}
+}
+
+// Place builds the command the extension expects. --settled is the part worth
+// pinning: without it the request is made before the compositor has placed the
+// window, and the compositor's own placement overwrites it.
+func TestPlaceBuildsTheCommand(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "argv")
+	stub := filepath.Join(dir, "wctl")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + log + "\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &gnome.Host{Bin: stub}
+	err := h.Place(context.Background(),
+		revier.TargetRef{Host: "gnome", ID: "4181121382"},
+		[]string{"right", "top", "75%", "100%"})
+	if err != nil {
+		t.Fatalf("Place: %v", err)
+	}
+
+	got, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "place 4181121382 right top 75% 100% --settled\n"
+	if string(got) != want {
+		t.Errorf("argv = %q, want %q", got, want)
+	}
+}
+
+// A zero ref and a short geometry are refused before the process starts, so a
+// broken project file cannot reach the compositor.
+func TestPlaceRefusesWhatItCannotSend(t *testing.T) {
+	h := &gnome.Host{Bin: "/nonexistent"}
+	if err := h.Place(context.Background(), revier.TargetRef{}, []string{"a", "b", "c", "d"}); err == nil {
+		t.Error("a zero ref should be refused")
+	}
+	if err := h.Place(context.Background(), revier.TargetRef{ID: "1"}, []string{"a"}); err == nil {
+		t.Error("a geometry short of four tokens should be refused")
 	}
 }

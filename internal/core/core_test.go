@@ -3,7 +3,9 @@ package core_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -540,10 +542,10 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 // press finds it by id, whatever the application did to its title since.
 func TestGoPrefersTheBoundRef(t *testing.T) {
 	wm := hosttest.New("wm")
-	// The editor's title no longer matches the rule; the class still does
-	// not either, because IntelliJ names every window jetbrains-idea and the
-	// rule here is on class ^code$ - a binding is the only way back.
-	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "other"})
+	// The editor's title no longer matches the rule - it opened on the
+	// project and now names a file. The class is what D21 binds by and what
+	// a binding is re-checked against, so it still holds.
+	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
 	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": editor})
@@ -621,7 +623,8 @@ func TestBindLeavesAmbiguityAlone(t *testing.T) {
 // A survey reports a bound instance as the target's, ahead of the rule.
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")
-	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "other"})
+	// A title that moved, which is what a binding exists to survive (D21).
+	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
 		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}})
@@ -712,5 +715,308 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 	}
 	if report.Views[1].PathExists {
 		t.Errorf("%s: PathExists = true for a directory that is not", report.Views[1].Project.Path)
+	}
+}
+
+// osWindow is a runtime that owns OS windows, as kitty does, with one
+// instance that has no identity of its own - the state a window opened by the
+// shell session tool is in.
+func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.AddInstance(revier.Instance{
+		Ref:    revier.TargetRef{Host: "rt", ID: "1"},
+		PID:    pid,
+		Panels: []revier.Panel{{ID: "1", Kind: revier.PanelAgent, Title: "claude"}},
+	})
+	return rt
+}
+
+// A window the shell tool opened has kitty's default name, so the runtime
+// reports no title and no rule can match it. The window manager sees the
+// title. The core pairs them by process, and the project reads as running.
+func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
+	}}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	v := report.Views[0]
+	if !v.Running {
+		t.Fatal("project should be running: its window is open, under a name only the window manager sees")
+	}
+	if len(v.Agents) != 1 {
+		t.Errorf("agents = %+v, want the one the runtime reports: identity must not cost the panels", v.Agents)
+	}
+}
+
+// The point of finding it is that the next press raises it. A second window
+// beside the one already open is the failure this fixes.
+func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, project()), "home", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime opened %d instances, want none: the window was already there", len(rt.Opened))
+	}
+	if len(rt.Focuses) == 0 && len(wm.Focuses) == 0 {
+		t.Error("nothing was focused, so nothing was raised")
+	}
+}
+
+// D19 rejected the process id for pairing a pane to a window, because one
+// kitty process can own several OS windows. That case is refused here rather
+// than guessed at: a wrong title would send a keypress to the wrong window.
+func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	for _, id := range []string{"1", "2"} {
+		rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: id}, PID: 4242})
+	}
+	wm := hosttest.New("wm")
+	for i, title := range []string{"session:revier", "session:setup"} {
+		wm.AddInstance(revier.Instance{
+			Ref:   revier.TargetRef{Host: "wm", ID: fmt.Sprintf("w%d", i)},
+			Title: title, Class: "kitty", PID: 4242,
+		})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("a process owning two windows must not lend either title to the other")
+	}
+}
+
+// With no window host there is nothing to ask, and the behaviour is what it
+// was: an unnamed window stays unidentified.
+func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {
+	c := &core.Core{Runtime: unnamedRuntime(t, 4242)}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("without a window host the title cannot be learned")
+	}
+}
+
+// A runtime that does not own OS windows - tmux - is untouched by this: its
+// instances are panes, and a pane has no window manager title.
+func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
+	rt := hosttest.NewRuntime("rt") // no OSWindows capability
+	rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: "1"}, PID: 4242})
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("a pane is not an OS window; its process tells nothing about a window title")
+	}
+}
+
+// A desktop key has no useful working directory, so the project comes from
+// the window in front of the user. The rules a project already declares are
+// the mapping.
+func TestProjectOfFocusedUsesTheDeclaredRules(t *testing.T) {
+	wm := hosttest.New("wm")
+	other := wm.Add("something else", "firefox")
+	editor := wm.Add("revier - README.md", "code")
+	c := &core.Core{Window: wm}
+	projects := []core.Project{prepared(t, project())}
+
+	wm.SetFocus(editor)
+	p, ok, err := c.ProjectOfFocused(context.Background(), projects)
+	if err != nil || !ok {
+		t.Fatalf("ProjectOfFocused: ok=%v err=%v, want the project of the editor window", ok, err)
+	}
+	if p.Name != "revier" {
+		t.Errorf("project = %q, want revier", p.Name)
+	}
+
+	wm.SetFocus(other)
+	if _, ok, err := c.ProjectOfFocused(context.Background(), projects); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want no project for a window no rule claims", ok, err)
+	}
+}
+
+// The focused window is reported by the window host while the target it
+// matches may be realized by the runtime. Requiring the two hosts to agree
+// would answer nothing, so the rule is matched wherever the window came from.
+func TestProjectOfFocusedMatchesARuntimeRuleOnAWindow(t *testing.T) {
+	wm := hosttest.New("wm")
+	session := wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	wm.SetFocus(session)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	p, ok, err := c.ProjectOfFocused(context.Background(), []core.Project{prepared(t, project())})
+	if err != nil || !ok {
+		t.Fatalf("ProjectOfFocused: ok=%v err=%v", ok, err)
+	}
+	if p.Name != "revier" {
+		t.Errorf("project = %q, want revier: home's rule matches the session window", p.Name)
+	}
+}
+
+// With no host that can report focus there is nothing to ask, and no error.
+func TestProjectOfFocusedWithNoHostIsQuiet(t *testing.T) {
+	c := &core.Core{}
+	if _, ok, err := c.ProjectOfFocused(context.Background(), nil); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want a quiet miss", ok, err)
+	}
+}
+
+// A launched workspace lands where the project says. The shell tool places
+// every new session window at the right of the screen; a compositor rule
+// cannot express "the window this launch just made", which is why revier
+// places what revier starts.
+func TestALaunchedWindowIsPlacedWhereTheProjectSays(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%" // the editor target
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, raw), "editor", nil)
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref.IsZero() {
+		t.Fatal("the fake window host names what it opens; expected a ref")
+	}
+	got := wm.Placements[res.Ref.ID]
+	want := []string{"right", "top", "75%", "100%"}
+	if !slices.Equal(got, want) {
+		t.Errorf("placement = %v, want %v", got, want)
+	}
+}
+
+// Raising is not placing. A window the user has already moved stays where
+// they put it.
+func TestARaiseDoesNotPlace(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%"
+	wm := hosttest.New("wm")
+	wm.Add("revier - README.md", "code") // already open, so Go raises it
+	c := &core.Core{Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(wm.Placements) != 0 {
+		t.Errorf("placements = %v, want none: the window was already open", wm.Placements)
+	}
+}
+
+// A target that declares no placement is never placed, which is every target
+// that has not asked for one.
+func TestNoPlacementDeclaredIsNoPlacement(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, project()), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(wm.Placements) != 0 {
+		t.Errorf("placements = %v, want none", wm.Placements)
+	}
+}
+
+// noPlacer is a window host without the placement capability. The method
+// shadows the one promoted from the fake with a signature that does not
+// satisfy revier.WindowPlacer, which is how a host that cannot place windows
+// is expressed in a test.
+type noPlacer struct{ *hosttest.Fake }
+
+func (noPlacer) Place() {}
+
+// A window host that cannot place windows ignores the declaration. sway is
+// such a host today, and a machine with no extension installed is another.
+func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%"
+	fake := hosttest.New("wm")
+	c := &core.Core{Window: noPlacer{fake}}
+
+	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(fake.Placements) != 0 {
+		t.Errorf("placements = %v, want none from a host without the capability", fake.Placements)
+	}
+	if len(fake.Opened) != 1 {
+		t.Errorf("opened %d, want 1: the launch must still happen", len(fake.Opened))
+	}
+}
+
+// A window manager reuses window ids, so the id a target was bound to can
+// come back as an unrelated window. Nothing about that failure is visible -
+// the wrong window simply comes forward - so the binding is re-checked
+// against the class the target declares before a keypress is sent to it.
+func TestABindingToAReusedIdIsNotTrusted(t *testing.T) {
+	wm := hosttest.New("wm")
+	// The id the editor was bound to now belongs to something else.
+	stale := wm.AddInstance(revier.Instance{Title: "Inbox", Class: "thunderbird"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": stale})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref == stale {
+		t.Fatal("the keypress went to a window of another application")
+	}
+	if len(wm.Opened) != 1 {
+		t.Errorf("opened %d, want 1: with no editor to find, the rule launches one", len(wm.Opened))
+	}
+}
+
+// A target whose rule constrains no class has nothing to re-check, and its
+// binding is trusted as it was.
+func TestABindingIsTrustedWhenTheRuleNamesNoClass(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Match = revier.Match{Title: "^revier"} // editor, title only
+	wm := hosttest.New("wm")
+	anything := wm.AddInstance(revier.Instance{Title: "moved on", Class: "whatever"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, raw), "editor", core.Bindings{"editor": anything})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref != anything || len(wm.Opened) != 0 {
+		t.Errorf("result = %+v, opened %d; want the binding trusted", res, len(wm.Opened))
 	}
 }

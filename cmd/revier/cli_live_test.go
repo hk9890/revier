@@ -272,3 +272,23 @@ func TestRunUnknownActionIsAnError(t *testing.T) {
 		t.Fatalf("err = %v, want an error naming the action", err)
 	}
 }
+
+// A window that belongs to no project is a normal outcome, not a failure: it
+// carries its own exit status so a desktop binding can offer the picker
+// instead (contrib/gnome/revier-go). No window host probes here, so nothing
+// can be resolved from focus, which is the case under test.
+func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
+	// The working directory is this package, which no project claims; state
+	// is fresh, and no window host probes here.
+	scratch(t)
+	err := run([]string{"go", "home"})
+	if err == nil {
+		t.Fatal("go with no project resolved: want an error")
+	}
+	if !errors.Is(err, errNoProject) {
+		t.Fatalf("error = %v, want the no-project outcome so the binding can fall back", err)
+	}
+	if exitNoProject == 1 {
+		t.Error("the no-project status must differ from a generic failure")
+	}
+}

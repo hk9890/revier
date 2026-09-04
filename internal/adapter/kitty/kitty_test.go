@@ -79,9 +79,20 @@ func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
 		t.Fatalf("got %d instances, want 2 OS windows", len(got))
 	}
 
+	// The first window carries kitty's default name, which identifies
+	// nothing; the adapter reports that as no title, and the core learns one
+	// from the window manager (decisions.md D22). The second was named by
+	// revier and identifies itself.
 	legacy, ws := got[0], got[1]
-	if legacy.Title != "kitty" || ws.Title != "session:revier" {
-		t.Errorf("titles = %q, %q: the identity is wm_name", legacy.Title, ws.Title)
+	if legacy.Title != "" || legacy.Ref.Title != "" {
+		t.Errorf("unnamed window title = %q, ref title = %q, want both empty",
+			legacy.Title, legacy.Ref.Title)
+	}
+	if ws.Title != "session:revier" {
+		t.Errorf("title = %q: the identity is wm_name", ws.Title)
+	}
+	if legacy.PID != 4000 {
+		t.Errorf("unnamed window pid = %d, want 4000: it is how the core pairs it", legacy.PID)
 	}
 	if ws.Ref.Host != "kitty" || ws.Ref.ID != "@kitty-4000/2" {
 		t.Errorf("ref = %+v, want kitty/@kitty-4000/2: the socket rides in the id", ws.Ref)

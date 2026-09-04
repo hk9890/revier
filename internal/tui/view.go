@@ -52,11 +52,11 @@ func (m *Model) layout() {
 	w, h := m.inner()
 	m.input.Width = w - lipgloss.Width(promptMark) - 2
 	if pane := m.paneWidth(); pane > 0 {
-		w -= pane
 		m.detail.Width, m.detail.Height = pane-paneChrome, h
 	}
-	m.plist.SetSize(w, h)
-	m.tlist.SetSize(w, h)
+	// The lists are sized by syncBody, which gives them room for every row
+	// they hold; this viewport is the part of that the screen shows.
+	m.body.Width, m.body.Height = m.listWidth(), h
 	// One column less than the terminal: the footer is rendered with a leading
 	// space. help truncates on its own width, and its own truncation gives up
 	// once the line is nearly full, so View clips as well.
@@ -73,10 +73,7 @@ func (m Model) View() string {
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
 
-	body := m.plist.View()
-	if m.level == levelTargets {
-		body = m.tlist.View()
-	}
+	body := m.body.View()
 	if m.paneWidth() > 0 {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.detail.View())
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -71,7 +72,12 @@ func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 // Step 3 is why state exists. A keybinding pressed while the editor is focused
 // has no working directory and no focused workspace to read, so without a
 // remembered project "go back to the terminal" could not be answered.
-func (a *app) resolveProject(explicit string) (core.Project, error) {
+// errNoProject is the normal outcome of a keypress on a window that belongs
+// to no project. It has its own exit status so a desktop binding can fall
+// back to the picker (contrib/gnome/revier-go).
+var errNoProject = errors.New("no project for this directory, for the focused window, and none remembered")
+
+func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project, error) {
 	if explicit != "" {
 		p, ok := a.project(revier.ProjectName(explicit))
 		if !ok {
@@ -84,12 +90,18 @@ func (a *app) resolveProject(explicit string) (core.Project, error) {
 			return p, nil
 		}
 	}
+	// The focused window, before the remembered project: a desktop binding
+	// has no useful working directory, and the project the user is looking at
+	// beats the one revier last acted on.
+	if p, ok, err := a.core.ProjectOfFocused(ctx, a.projects); err == nil && ok {
+		return p, nil
+	}
 	if a.state.Current != "" {
 		if p, ok := a.project(a.state.Current); ok {
 			return p, nil
 		}
 	}
-	return core.Project{}, fmt.Errorf("no project for this directory, and none remembered; pass --project")
+	return core.Project{}, errNoProject
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
