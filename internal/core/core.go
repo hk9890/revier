@@ -113,7 +113,55 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 		}
 		s[h.Name()] = in
 	}
+	c.identify(s)
 	return s, nil
+}
+
+// identify gives a runtime instance with no identity of its own the title the
+// window host reports for the same process (decisions.md D22).
+//
+// It is policy, not an adapter's business: neither host can do it alone. The
+// runtime knows the window has no name; only the window host knows what the
+// window manager calls it.
+//
+// The pairing is by process, and it is refused unless that process owns
+// exactly one window on each side. D19 rejected the process id for pairing a
+// pane to a window, because every OS window of one kitty process shares its
+// pid; that objection is exactly this refusal, so an ambiguous process is left
+// as it was rather than guessed at.
+func (c *Core) identify(s snapshot) {
+	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
+		return
+	}
+	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
+
+	perPID := map[int]int{}
+	for _, r := range runtimes {
+		if r.PID != 0 {
+			perPID[r.PID]++
+		}
+	}
+	byPID := map[int]revier.Instance{}
+	seen := map[int]int{}
+	for _, w := range windows {
+		if w.PID == 0 {
+			continue
+		}
+		seen[w.PID]++
+		byPID[w.PID] = w
+	}
+
+	for i, r := range runtimes {
+		if r.Title != "" || r.PID == 0 || perPID[r.PID] != 1 || seen[r.PID] != 1 {
+			continue
+		}
+		w := byPID[r.PID]
+		runtimes[i].Title = w.Title
+		runtimes[i].Ref.Title = w.Title
+		if runtimes[i].Class == "" {
+			runtimes[i].Class = w.Class
+		}
+	}
 }
 
 // find returns the first instance of the host that satisfies the match. The

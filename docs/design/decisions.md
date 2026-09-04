@@ -296,3 +296,38 @@ it, and a fresh process is the launched one or its child, but the single-
 instance applications this exists for - browsers, an editor already running -
 hand the new window to a process that was already there. Class and time do
 the same work for both kinds.
+
+
+### D22 — a window with no name of its own is identified by the window manager — Accepted
+
+Amends D19, whose accepted cost this removes.
+
+D19 gave a runtime that owns OS windows the job of carrying the title a window
+host reports for the same window, and named the case it could not cover: a
+window kitty opened from a session file has no `--os-window-name`, so it
+carries kitty's default instance name and is invisible to revier. On this
+machine that was every session the shell tool had opened - five of them, with
+`revier list` reporting nothing running while all five were on screen.
+
+The window manager sees what the runtime cannot. `kitten @ ls` reports
+`wm_name` of `kitty`; `wctl list --json` reports the same windows with the
+titles `session:revier`, `session:setup` and the rest, because the session
+template sets the OS window title. Both hosts report the process.
+
+So the runtime says only that a window has no identity - the kitty adapter
+reports an empty title where it would report the default name, which is a fact
+about kitty and not a policy - and the core pairs it with a window of the same
+process and takes that window's title. Neither host can do this alone, which
+is what makes it policy.
+
+The pairing is refused unless the process owns exactly one window on each
+side. D19 rejected the process id for pairing a pane to a window because every
+OS window of one kitty process shares its pid; that objection is precisely
+this refusal. An ambiguous process is left unidentified rather than guessed
+at, because a borrowed title sends the next keypress to the wrong window,
+which is worse than the window staying invisible.
+
+The panels are unaffected: they still come from the runtime, so a session
+found this way reports its agents like any other. tmux cannot claim
+`OSWindows`, so nothing about a pane changes.
+

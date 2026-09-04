@@ -289,9 +289,17 @@ func decode(l listing) []revier.Instance {
 	pid := pidOf(l.socket)
 	out := make([]revier.Instance, 0, len(l.windows))
 	for _, w := range l.windows {
+		// An OS window kitty opened for itself carries the default instance
+		// name, which identifies nothing: every such window has it. Reporting
+		// it as no title at all is the fact the core needs to know that this
+		// window has to be identified some other way (decisions.md D22).
+		name := w.WMName
+		if name == defaultWMName {
+			name = ""
+		}
 		inst := revier.Instance{
-			Ref:   revier.TargetRef{Host: "kitty", ID: refID(l.socket, w.ID), Title: w.WMName},
-			Title: w.WMName,
+			Ref:   revier.TargetRef{Host: "kitty", ID: refID(l.socket, w.ID), Title: name},
+			Title: name,
 			Class: w.WMClass,
 			PID:   pid,
 		}
@@ -304,6 +312,11 @@ func decode(l listing) []revier.Instance {
 	}
 	return out
 }
+
+// defaultWMName is what kitty calls an OS window that was given no name of
+// its own: `kitty`, the same as its class. Verified with `kitten @ ls` against
+// a window the shell session tool opened.
+const defaultWMName = "kitty"
 
 func refID(socket string, id int) string {
 	return strings.TrimPrefix(socket, "unix:") + "/" + strconv.Itoa(id)

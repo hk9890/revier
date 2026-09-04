@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -712,5 +713,132 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 	}
 	if report.Views[1].PathExists {
 		t.Errorf("%s: PathExists = true for a directory that is not", report.Views[1].Project.Path)
+	}
+}
+
+// osWindow is a runtime that owns OS windows, as kitty does, with one
+// instance that has no identity of its own - the state a window opened by the
+// shell session tool is in.
+func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.AddInstance(revier.Instance{
+		Ref:    revier.TargetRef{Host: "rt", ID: "1"},
+		PID:    pid,
+		Panels: []revier.Panel{{ID: "1", Kind: revier.PanelAgent, Title: "claude"}},
+	})
+	return rt
+}
+
+// A window the shell tool opened has kitty's default name, so the runtime
+// reports no title and no rule can match it. The window manager sees the
+// title. The core pairs them by process, and the project reads as running.
+func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
+	}}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	v := report.Views[0]
+	if !v.Running {
+		t.Fatal("project should be running: its window is open, under a name only the window manager sees")
+	}
+	if len(v.Agents) != 1 {
+		t.Errorf("agents = %+v, want the one the runtime reports: identity must not cost the panels", v.Agents)
+	}
+}
+
+// The point of finding it is that the next press raises it. A second window
+// beside the one already open is the failure this fixes.
+func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, project()), "home", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime opened %d instances, want none: the window was already there", len(rt.Opened))
+	}
+	if len(rt.Focuses) == 0 && len(wm.Focuses) == 0 {
+		t.Error("nothing was focused, so nothing was raised")
+	}
+}
+
+// D19 rejected the process id for pairing a pane to a window, because one
+// kitty process can own several OS windows. That case is refused here rather
+// than guessed at: a wrong title would send a keypress to the wrong window.
+func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	for _, id := range []string{"1", "2"} {
+		rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: id}, PID: 4242})
+	}
+	wm := hosttest.New("wm")
+	for i, title := range []string{"session:revier", "session:setup"} {
+		wm.AddInstance(revier.Instance{
+			Ref:   revier.TargetRef{Host: "wm", ID: fmt.Sprintf("w%d", i)},
+			Title: title, Class: "kitty", PID: 4242,
+		})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("a process owning two windows must not lend either title to the other")
+	}
+}
+
+// With no window host there is nothing to ask, and the behaviour is what it
+// was: an unnamed window stays unidentified.
+func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {
+	c := &core.Core{Runtime: unnamedRuntime(t, 4242)}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("without a window host the title cannot be learned")
+	}
+}
+
+// A runtime that does not own OS windows - tmux - is untouched by this: its
+// instances are panes, and a pane has no window manager title.
+func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
+	rt := hosttest.NewRuntime("rt") // no OSWindows capability
+	rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: "1"}, PID: 4242})
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
+		Title: "session:revier", Class: "kitty", PID: 4242,
+	})
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("a pane is not an OS window; its process tells nothing about a window title")
 	}
 }
