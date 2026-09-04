@@ -339,7 +339,7 @@ glyphs = "nerd"
 	if err != nil {
 		t.Fatalf("Theme: %v", err)
 	}
-	if th.Name != "catppuccin-latte" || th.Glyphs.Local == "" {
+	if th.Name != "catppuccin-latte" || th.Glyphs.Cursor == "" {
 		t.Errorf("theme = %q, glyphs = %+v", th.Name, th.Glyphs)
 	}
 }

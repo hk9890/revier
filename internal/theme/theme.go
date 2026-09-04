@@ -43,22 +43,31 @@ type Theme struct {
 }
 
 // Glyphs is the marker set. Every glyph is one cell wide, whatever the set.
+//
+// There is no glyph for where a project lives. Every project is on this
+// machine until sessions over a network exist, and a mark that is the same on
+// every row says nothing.
 type Glyphs struct {
 	Running   string // an instance is up
 	Stopped   string // it is not
 	Attention string // it wants the user
 	Cursor    string // the selected row
-	Local     string // this machine
-	Remote    string // another machine
 }
 
 // The three glyph sets. Unicode is the default: every one of its characters is
-// in any font a terminal ships with. Nerd is the set the shell picker uses
-// (nf-fa-home, nf-fa-globe). ASCII is for a terminal whose font is not yours.
+// in any font a terminal ships with. Nerd needs a patched font, and says the
+// same things with icons - a bell for a project that wants you, which reads as
+// a call rather than as punctuation. ASCII is for a terminal whose font is not
+// yours.
 var glyphSets = map[string]Glyphs{
-	"unicode": {Running: "●", Stopped: "○", Attention: "!", Cursor: "▸", Local: "⌂", Remote: "↗"},
-	"nerd":    {Running: "●", Stopped: "○", Attention: "!", Cursor: "▸", Local: "", Remote: ""},
-	"ascii":   {Running: "*", Stopped: "-", Attention: "!", Cursor: ">", Local: "=", Remote: "@"},
+	"unicode": {Running: "\u25cf", Stopped: "\u25cb", Attention: "!", Cursor: "\u25b8"},
+	"nerd": {
+		Running:   "\uf111", // nf-fa-circle
+		Stopped:   "\uf10c", // nf-fa-circle_o
+		Attention: "\uf0f3", // nf-fa-bell
+		Cursor:    "\uf054", // nf-fa-chevron_right
+	},
+	"ascii": {Running: "*", Stopped: "-", Attention: "!", Cursor: ">"},
 }
 
 var flavors = map[string]catppuccin.Flavor{
