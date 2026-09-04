@@ -245,13 +245,35 @@ type Bindings = map[revier.TargetName]revier.TargetRef
 
 // locate finds the instance backing a target: its binding when alive, else
 // the first instance the rule matches.
-func (c *Core) locate(snap snapshot, host revier.Host, m revier.CompiledMatch, bound revier.TargetRef) (revier.Instance, bool) {
+func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revier.CompiledMatch, bound revier.TargetRef) (revier.Instance, bool) {
 	if bound.Host == host.Name() {
-		if inst, ok := byRef(snap, bound); ok {
+		if inst, ok := byRef(snap, bound); ok && c.bindingHolds(p, i, host, inst) {
 			return inst, true
 		}
 	}
 	return find(snap, host, m)
+}
+
+// bindingHolds re-checks a remembered instance against the class the target
+// declares, before a keypress is sent to it.
+//
+// Pruning already drops a binding whose instance is gone. What is left is a
+// binding that is alive and wrong: a window manager reuses window ids, so the
+// id a target was bound to can come back as an unrelated window, and the
+// keypress then raises that. Nothing about the failure is visible - the wrong
+// window simply comes forward - which is why it is checked rather than left to
+// be noticed.
+//
+// Only the class is re-checked, never the title. The whole point of a binding
+// is to survive a title the rule no longer matches, which is what D21 exists
+// for: an editor window is bound while its title still says the file it opened
+// with. A target that declares no class is trusted as before, and so is a
+// runtime binding: a pane id and a kitty window id are not handed back out.
+func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {
+	if c.Window == nil || host.Name() != c.Window.Name() {
+		return true
+	}
+	return c.classOK(p, i, inst)
 }
 
 // Result is what Go did. Ref is where the key landed. Launched reports that
@@ -283,7 +305,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 		return Result{}, err
 	}
 
-	inst, found := c.locate(snap, host, m, bound[name])
+	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
 		res := Result{Launched: true}
 		if c.Window != nil {
@@ -698,7 +720,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()
-			if inst, found := c.locate(snap, host, m, bound[t.Name]); found {
+			if inst, found := c.locate(snap, p, i, host, m, bound[t.Name]); found {
 				tv.Ref = inst.Ref
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref

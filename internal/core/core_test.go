@@ -542,10 +542,10 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 // press finds it by id, whatever the application did to its title since.
 func TestGoPrefersTheBoundRef(t *testing.T) {
 	wm := hosttest.New("wm")
-	// The editor's title no longer matches the rule; the class still does
-	// not either, because IntelliJ names every window jetbrains-idea and the
-	// rule here is on class ^code$ - a binding is the only way back.
-	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "other"})
+	// The editor's title no longer matches the rule - it opened on the
+	// project and now names a file. The class is what D21 binds by and what
+	// a binding is re-checked against, so it still holds.
+	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
 	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": editor})
@@ -623,7 +623,8 @@ func TestBindLeavesAmbiguityAlone(t *testing.T) {
 // A survey reports a bound instance as the target's, ahead of the rule.
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")
-	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "other"})
+	// A title that moved, which is what a binding exists to survive (D21).
+	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
 		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}})
@@ -977,5 +978,45 @@ func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
 	}
 	if len(fake.Opened) != 1 {
 		t.Errorf("opened %d, want 1: the launch must still happen", len(fake.Opened))
+	}
+}
+
+// A window manager reuses window ids, so the id a target was bound to can
+// come back as an unrelated window. Nothing about that failure is visible -
+// the wrong window simply comes forward - so the binding is re-checked
+// against the class the target declares before a keypress is sent to it.
+func TestABindingToAReusedIdIsNotTrusted(t *testing.T) {
+	wm := hosttest.New("wm")
+	// The id the editor was bound to now belongs to something else.
+	stale := wm.AddInstance(revier.Instance{Title: "Inbox", Class: "thunderbird"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, project()), "editor", core.Bindings{"editor": stale})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref == stale {
+		t.Fatal("the keypress went to a window of another application")
+	}
+	if len(wm.Opened) != 1 {
+		t.Errorf("opened %d, want 1: with no editor to find, the rule launches one", len(wm.Opened))
+	}
+}
+
+// A target whose rule constrains no class has nothing to re-check, and its
+// binding is trusted as it was.
+func TestABindingIsTrustedWhenTheRuleNamesNoClass(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Match = revier.Match{Title: "^revier"} // editor, title only
+	wm := hosttest.New("wm")
+	anything := wm.AddInstance(revier.Instance{Title: "moved on", Class: "whatever"})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, raw), "editor", core.Bindings{"editor": anything})
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref != anything || len(wm.Opened) != 0 {
+		t.Errorf("result = %+v, opened %d; want the binding trusted", res, len(wm.Opened))
 	}
 }

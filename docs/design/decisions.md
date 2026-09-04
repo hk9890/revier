@@ -398,3 +398,34 @@ the runtime and the window host agree on, with a short wait: a terminal
 reports its window before the compositor has mapped it, and a geometry request
 made too early is overwritten by the compositor's own placement.
 
+
+### D25 — a binding is re-checked against the class before it is trusted — Accepted
+
+Extends D21, which said how a binding is made and not how far it is believed.
+
+Pruning drops a binding whose instance the last survey did not see. What it
+cannot drop is a binding that is alive and wrong: a window manager hands window
+ids back out, so the id a target was bound to can return as an unrelated
+window, and the next press raises that. Nothing about the failure is visible -
+the wrong window comes forward, and the user has no way to tell a reused id
+from a mistake of their own.
+
+So `locate` re-checks a remembered instance against the class the target
+declares before returning it, and falls back to the rule when it no longer
+holds. This is the class D21 already trusts: bind-on-launch takes the first new
+window "the target's rule accepts by class alone, which is right from the first
+frame".
+
+The title is never re-checked. Surviving a title the rule no longer matches is
+the whole reason a binding exists - D21's own example is IntelliJ opening
+without the project in its title - and re-checking it would undo D21 entirely.
+
+A target whose rule constrains no class has nothing to check and is trusted as
+before, and so is a binding to a runtime instance: a tmux pane id and a kitty
+window id are not handed back out.
+
+The manual half of the original question - a key that forgets the instance
+under the cursor - is not built. It covers a wrong `attach` by hand, which has
+not happened yet; the self-check covers the failure that cannot be seen, which
+is the one worth spending a surface on.
+
