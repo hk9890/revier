@@ -16,11 +16,11 @@ territory.
 
 Early, but usable. There is no release yet; build from source.
 
-Working: project files, run-or-raise with toggle-back, agent state for Claude
-Code (opencode is recognised but reports no state), external probes, kitty and
-tmux runtime hosts, GNOME and sway window hosts, claim-on-appear for windows
-opened after a launch, the TUI, every command below, and the GNOME keybindings
-under `contrib/`.
+Working: project files, run-or-raise with toggle-back, the project resolved
+from the focused window, agent state for Claude Code (opencode is recognised
+but reports no state), external probes, kitty and tmux runtime hosts, GNOME and
+sway window hosts, claim-on-appear for windows opened after a launch, the TUI,
+every command below, and the GNOME keybindings under `contrib/`.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
@@ -54,14 +54,17 @@ the shell implementation's `os-*` shortcuts, on the same keys:
 | Key | Runs |
 |---|---|
 | `Alt+Space` | `revier-popup`: the TUI in a kitty window of class `revier-popup`, or the one already open |
-| `Ctrl+Shift+U` | `revier go home` |
-| `Ctrl+Shift+O` | `revier go editor` |
-| `Ctrl+Shift+I` | `revier go web` |
+| `Ctrl+Shift+U` | `revier-go home` |
+| `Ctrl+Shift+O` | `revier-go editor` |
+| `Ctrl+Shift+I` | `revier-go web` |
+
+`revier-go` runs the target and opens the picker when no project resolves,
+because a key pressed on a window no project claims should still do something.
 
 To install:
 
-1. Put `revier` and `contrib/gnome/revier-popup` on the PATH a login shell
-   has, for example in `~/.local/bin/`.
+1. Run `mise run install`. It puts `revier`, `revier-popup` and `revier-go` in
+   `~/.local/bin`, which a login shell has on its PATH.
 2. Run `contrib/gnome/install-keybindings.sh`. It loads
    `revier-keybindings.dconf` and appends its four entries to the
    custom-keybindings list; the entries already there are left as they are.
