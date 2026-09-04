@@ -30,6 +30,10 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
+// sessionPlace is where a launched workspace lands, in the window host's
+// vocabulary: the right three quarters of the workarea, full height.
+const sessionPlace = "right top 75% 100%"
+
 const defaultIn = "~/setup/dotfiles/kitty/.config/kitty/sessions"
 
 // translated lists the keys this converter maps. Every other key present in
@@ -206,6 +210,10 @@ func render(s session) (string, error) {
 	p("  [target.runtime]\n")
 	p("  name = \"session:{{.Name}}\"\n")
 	p("  match = { title = %s }\n", q("^session:"+pattern(s.name)+"$"))
+	// The geometry the shell tool gives every new session window
+	// (os-fzf.sh:460). Only the workspace: an editor and a page keep whatever
+	// position they had.
+	p("  place = %s\n", q(sessionPlace))
 	p("    [[target.runtime.panels]]\n")
 	p("    kind = \"agent\"\n    title = \"Claude Code\"\n")
 	p("    command = [\"sh\", \"-lc\", %s]\n", q(`"$HOME/setup/scripts/sessions/kt-new-agent.sh"`))

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -894,5 +895,87 @@ func TestProjectOfFocusedWithNoHostIsQuiet(t *testing.T) {
 	c := &core.Core{}
 	if _, ok, err := c.ProjectOfFocused(context.Background(), nil); ok || err != nil {
 		t.Errorf("ok=%v err=%v, want a quiet miss", ok, err)
+	}
+}
+
+// A launched workspace lands where the project says. The shell tool places
+// every new session window at the right of the screen; a compositor rule
+// cannot express "the window this launch just made", which is why revier
+// places what revier starts.
+func TestALaunchedWindowIsPlacedWhereTheProjectSays(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%" // the editor target
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+
+	res, err := c.Go(context.Background(), prepared(t, raw), "editor", nil)
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref.IsZero() {
+		t.Fatal("the fake window host names what it opens; expected a ref")
+	}
+	got := wm.Placements[res.Ref.ID]
+	want := []string{"right", "top", "75%", "100%"}
+	if !slices.Equal(got, want) {
+		t.Errorf("placement = %v, want %v", got, want)
+	}
+}
+
+// Raising is not placing. A window the user has already moved stays where
+// they put it.
+func TestARaiseDoesNotPlace(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%"
+	wm := hosttest.New("wm")
+	wm.Add("revier - README.md", "code") // already open, so Go raises it
+	c := &core.Core{Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(wm.Placements) != 0 {
+		t.Errorf("placements = %v, want none: the window was already open", wm.Placements)
+	}
+}
+
+// A target that declares no placement is never placed, which is every target
+// that has not asked for one.
+func TestNoPlacementDeclaredIsNoPlacement(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, project()), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(wm.Placements) != 0 {
+		t.Errorf("placements = %v, want none", wm.Placements)
+	}
+}
+
+// noPlacer is a window host without the placement capability. The method
+// shadows the one promoted from the fake with a signature that does not
+// satisfy revier.WindowPlacer, which is how a host that cannot place windows
+// is expressed in a test.
+type noPlacer struct{ *hosttest.Fake }
+
+func (noPlacer) Place() {}
+
+// A window host that cannot place windows ignores the declaration. sway is
+// such a host today, and a machine with no extension installed is another.
+func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%"
+	fake := hosttest.New("wm")
+	c := &core.Core{Window: noPlacer{fake}}
+
+	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(fake.Placements) != 0 {
+		t.Errorf("placements = %v, want none from a host without the capability", fake.Placements)
+	}
+	if len(fake.Opened) != 1 {
+		t.Errorf("opened %d, want 1: the launch must still happen", len(fake.Opened))
 	}
 }

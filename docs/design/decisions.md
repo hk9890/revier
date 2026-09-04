@@ -58,7 +58,7 @@ needing attention first, enter opens or focuses, action keys run commands. The
 current implementation splits this across two shell scripts of about 1,570
 lines combined.
 
-### D9 — window placement belongs to the compositor — Proposed
+### D9 — window placement belongs to the compositor — Narrowed by D24
 
 revier is a TUI. Opening it as a positioned popup on a global hotkey is a
 compositor rule the user writes — a GNOME extension rule, a sway `for_window`,
@@ -359,4 +359,42 @@ alternative was to hand-roll the filter and the ranking as well.
 The cost is that the delegate renders every row the filter leaves rather than
 one screen of them. Eighty-nine projects is a hundred and seventy-eight lines
 per frame, which is a rounding error next to the survey that produced them.
+
+
+### D24 — the compositor places what your script starts; revier places what revier starts — Accepted
+
+Narrows D9, which is right about the popup and wrong about a workspace.
+
+D9 said placement is a compositor rule the user writes, and removed geometry
+from the product. That holds for the TUI popup: the user launches it from
+`contrib/gnome/revier-popup`, which is a script they own, and a `wctl place`
+line in it is exactly the rule D9 describes.
+
+It does not hold for a window revier launched. No compositor rule can name
+*the window this launch just produced*: a rule matches a class or a title, and
+every session window of every project shares both. The shell tool this
+replaces does not try - `place_new_session_window` waits for the new window by
+its exact title and then places it, and the comment there records why a poll
+is not enough.
+
+So a realization may declare `place`, four tokens - x, y, width, height - in
+the window host's own vocabulary of pixels and workarea-relative words. The
+core applies it once, after a launch, through an optional `WindowPlacer`
+capability on the window host. A host that does not implement it ignores every
+placement, which is sway today.
+
+Three limits keep this from growing into a window manager:
+
+- It applies to a launch and never to a raise. A window the user has moved
+  stays where they put it.
+- A refusal is not an error. A window pinned by maximize or tiling keeps its
+  geometry, and the keypress that opened it succeeded either way; failing the
+  key over a rejected geometry would trade a cosmetic problem for a broken one.
+- Nothing is placed that did not ask. A project with no `place` behaves as it
+  did before.
+
+For a runtime target the window is found the way D19 finds it, by the title
+the runtime and the window host agree on, with a short wait: a terminal
+reports its window before the compositor has mapped it, and a geometry request
+made too early is overwritten by the compositor's own placement.
 

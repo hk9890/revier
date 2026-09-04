@@ -94,6 +94,15 @@ type Realization struct {
 	// Panels is the layout for a Home target. Runtime hosts only: a window
 	// host cannot see inside a terminal, and ignores it.
 	Panels []PanelSpec `toml:"panels" json:"panels,omitempty"`
+
+	// Place is where a newly launched window goes, as four tokens - x, y,
+	// width, height - in the window host's own vocabulary of pixels and
+	// workarea-relative words: "right top 75% 100%". It applies to a launch
+	// and never to a raise, because moving a window the user has already put
+	// somewhere is not revier's business (decisions.md D24).
+	//
+	// A window host that cannot place windows ignores it.
+	Place string `toml:"place" json:"place,omitempty"`
 }
 
 // Match recognises an instance. An empty field does not constrain; every

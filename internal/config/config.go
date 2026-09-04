@@ -244,6 +244,11 @@ func Validate(p revier.Project) error {
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
 			}
+			if r.Place != "" && len(strings.Fields(r.Place)) != 4 {
+				// A geometry short of its four tokens would reach the window
+				// host and be refused there, after the window had opened.
+				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, r.Place))
+			}
 		}
 		if t.Prefer != "" && t.Prefer != revier.HostWindow && t.Prefer != revier.HostRuntime {
 			errs = append(errs, fmt.Errorf("target %q: prefer must be %q or %q, got %q",

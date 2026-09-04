@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -305,6 +306,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 			return Result{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
 		res.Ref = ref
+		c.place(ctx, real, ref)
 		return res, nil
 	}
 
@@ -371,6 +373,7 @@ func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, befo
 			if err := c.Window.Focus(ctx, w.Ref); err != nil {
 				return revier.Instance{}, false, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
 			}
+			c.place(ctx, *p.Targets[i].Window, w.Ref)
 			return w, true, nil
 		}
 		if len(candidates) > 1 || !time.Now().Before(deadline) {
@@ -379,6 +382,62 @@ func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, befo
 		select {
 		case <-ctx.Done():
 			return revier.Instance{}, false, ctx.Err()
+		case <-time.After(BindPoll):
+		}
+	}
+}
+
+// PlaceWait is how long placement waits for the window host to see the OS
+// window of a runtime instance that was just opened. It matches the wait the
+// shell tool uses for the same purpose.
+const PlaceWait = 2 * time.Second
+
+// place positions a window a launch has just produced. It applies to a launch
+// and never to a raise: moving a window the user has already put somewhere is
+// not revier's business (decisions.md D24).
+//
+// A failure is not returned. The window is open and focused either way, and
+// the alternative - failing the keypress because a geometry was refused -
+// would turn a cosmetic problem into a broken key. A window pinned by
+// maximize or tiling is refused by the host as a matter of course.
+func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.TargetRef) {
+	if real.Place == "" || c.Window == nil || ref.IsZero() {
+		return
+	}
+	placer, ok := c.Window.(revier.WindowPlacer)
+	if !ok {
+		return
+	}
+	target := ref
+	if ref.Host != c.Window.Name() {
+		w, ok := c.windowOfNew(ctx, ref)
+		if !ok {
+			return
+		}
+		target = w
+	}
+	_ = placer.Place(ctx, target, strings.Fields(real.Place))
+}
+
+// windowOfNew waits for the window host to report the OS window of a runtime
+// instance that has just been opened. A terminal reports its window before the
+// compositor has mapped it, so the first look often finds nothing.
+func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.TargetRef, bool) {
+	deadline := time.Now().Add(PlaceWait)
+	for {
+		if snap, err := c.snapshot(ctx); err == nil {
+			if inst, ok := byRef(snap, ref); ok {
+				if w, ok := c.osWindowOf(snap, inst); ok {
+					return w.Ref, true
+				}
+			}
+		}
+		if !time.Now().Before(deadline) {
+			return revier.TargetRef{}, false
+		}
+		select {
+		case <-ctx.Done():
+			return revier.TargetRef{}, false
 		case <-time.After(BindPoll):
 		}
 	}
