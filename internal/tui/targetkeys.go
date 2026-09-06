@@ -23,12 +23,29 @@ func targetKeys(projects []core.Project) map[string]revier.TargetName {
 			if t.Key == "" {
 				continue
 			}
-			if k := keyName(t.Key); isChord(k) {
+			if k, ok := chordName(t.Key); ok {
 				out[k] = t.Name
 			}
 		}
 	}
 	return out
+}
+
+// chordName is the key a target declares, in the one spelling bubbletea
+// reports. core.ParseChord and not keyName, because keyName only lowercases
+// and swaps the separator: it leaves `shift-ctrl-o` as `shift+ctrl+o`, which
+// no keypress ever matches, while `revier keys status` reports the same target
+// as holding `ctrl+shift+o`. Two commands disagreeing about a target's key is
+// the thing the canonical form exists to stop.
+//
+// A key that does not parse binds nothing here; config.Validate has already
+// refused it at load, so this is the hand-built case only.
+func chordName(key string) (string, bool) {
+	c, err := core.ParseChord(key)
+	if err != nil {
+		return "", false
+	}
+	return string(c), isChord(string(c))
 }
 
 // isChord reports whether a key name carries a modifier. A bare letter is a
@@ -72,7 +89,7 @@ func (m Model) targetKeysOf(v revier.ProjectView) []targetKeyHelp {
 		if t.Key == "" {
 			continue
 		}
-		if k := keyName(t.Key); isChord(k) {
+		if k, ok := chordName(t.Key); ok {
 			out = append(out, targetKeyHelp{key: k, name: string(t.Name)})
 		}
 	}

@@ -130,6 +130,21 @@ org.gnome.shell.keybindings toggle-overview ['<Super>s']
 	}
 }
 
+// The media-keys schema holds one array that is not accelerators: the list of
+// dconf paths the custom entries live under. Read as chords it would put
+// bindings in the report that nobody could press, on a path rather than a key.
+func TestThePathListIsNotReadAsChords(t *testing.T) {
+	got := gnome.DecodeBuiltin(read(t, "media-keys.txt"))
+	for _, b := range got {
+		if strings.HasPrefix(b.Chord, "/") {
+			t.Errorf("binding = %+v, want a chord and not a dconf path", b)
+		}
+	}
+	if len(got) != 1 || got[0].Chord != "<Super>l" {
+		t.Fatalf("got %+v, want only the screensaver accelerator", got)
+	}
+}
+
 func TestListReadsBothToolsAndCombinesThem(t *testing.T) {
 	rec := &recorder{}
 	k := &gnome.Keys{}

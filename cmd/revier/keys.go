@@ -22,11 +22,16 @@ usage:
   revier keys status [--json]
 `
 
-// keyBinderWait bounds the desktop probe. It is short because nothing about
-// this command is worth waiting on: gsettings answers in milliseconds, and a
-// dconf service that does not answer at all should report that rather than
-// hold the terminal.
-const keyBinderWait = 3 * time.Second
+// keyBinderWait bounds the desktop probe, and keysWait the whole read. Both
+// are short because nothing about this command is worth waiting on: gsettings
+// answers in milliseconds, and a dconf service that has stopped answering
+// should say so rather than hold the terminal for the minute a keypress
+// command is allowed. keysWait covers seven subprocesses, so it is the looser
+// of the two.
+const (
+	keyBinderWait = 3 * time.Second
+	keysWait      = 15 * time.Second
+)
 
 func cmdKeys(ctx context.Context, a *app, args []string) error {
 	sub := ""
@@ -41,10 +46,12 @@ func cmdKeys(ctx context.Context, a *app, args []string) error {
 		// The desktop is probed here and not in newApp: it costs a gsettings
 		// process, and every other command - `revier go` on a keypress above
 		// all - would pay for a value only this one reads.
-		probe, cancel := context.WithTimeout(ctx, keyBinderWait)
-		defer cancel()
+		read, cancelRead := context.WithTimeout(ctx, keysWait)
+		defer cancelRead()
+		probe, cancelProbe := context.WithTimeout(read, keyBinderWait)
+		defer cancelProbe()
 		a.core.KeyBinder = selectKeyBinder(probe, keyBinders())
-		return cmdKeysStatus(ctx, a, args)
+		return cmdKeysStatus(read, a, args)
 	default:
 		fmt.Fprint(os.Stderr, keysUsage)
 		return fmt.Errorf("unknown keys command %q", sub)
