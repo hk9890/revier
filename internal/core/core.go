@@ -37,6 +37,11 @@ type Core struct {
 	Runtime revier.Runtime
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
+
+	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
+	// provides no instances and takes no part in run-or-raise, and a machine
+	// with no desktop leaves it nil.
+	KeyBinder revier.KeyBinder
 }
 
 // hosts returns the configured hosts, window first so the default resolution

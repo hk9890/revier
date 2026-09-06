@@ -37,7 +37,17 @@ type Config struct {
 type UI struct {
 	Theme  string `toml:"theme"`
 	Glyphs string `toml:"glyphs"`
+
+	// TriggerKey is the desktop chord that opens revier. It belongs here and
+	// not on a project, because it opens the surface itself rather than any
+	// one project's target, so nothing in projects/ could declare it.
+	TriggerKey string `toml:"trigger_key"`
 }
+
+// DefaultTriggerKey is the chord revier expects to be opened with. It has a
+// default so `revier keys status` reports the key on a machine with no
+// config.toml at all, which is the common case.
+const DefaultTriggerKey = "alt-space"
 
 // Probe declares an external agent probe: a binary that reads one panel as
 // JSON and answers with one agent state. Name is the harness, and the
@@ -99,6 +109,9 @@ func Load(root string) (*Config, []core.Project, error) {
 	if _, err := cfg.Theme(); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
+	if _, err := cfg.TriggerKey(); err != nil {
+		return nil, nil, fmt.Errorf("%s: ui.trigger_key: %w", cfgPath, err)
+	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"))
 	if err != nil {
@@ -111,6 +124,15 @@ func Load(root string) (*Config, []core.Project, error) {
 // gives the default.
 func (c *Config) Theme() (theme.Theme, error) {
 	return theme.Lookup(c.UI.Theme, c.UI.Glyphs)
+}
+
+// TriggerKey resolves the chord that opens revier. An empty [ui] table gives
+// DefaultTriggerKey.
+func (c *Config) TriggerKey() (core.Chord, error) {
+	if c.UI.TriggerKey == "" {
+		return core.ParseChord(DefaultTriggerKey)
+	}
+	return core.ParseChord(c.UI.TriggerKey)
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
@@ -196,7 +218,13 @@ func Validate(p revier.Project) error {
 
 	homes := 0
 	seenName := map[revier.TargetName]bool{}
-	seenKey := map[string]revier.TargetName{}
+	// Keyed by the canonical chord, not by the text. Two targets written
+	// "ctrl-o" and "Ctrl+O" are the same key, and the raw strings do not say
+	// so.
+	seenKey := map[core.Chord]struct {
+		target revier.TargetName
+		raw    string
+	}{}
 
 	for _, t := range p.Targets {
 		if t.Name == "" {
@@ -212,10 +240,26 @@ func Validate(p revier.Project) error {
 			homes++
 		}
 		if t.Key != "" {
-			if prev, ok := seenKey[t.Key]; ok {
-				errs = append(errs, fmt.Errorf("targets %q and %q share key %q", prev, t.Name, t.Key))
+			// A key that cannot be read is rejected here rather than dropped
+			// later. Dropped, it costs the target its desktop chord and its
+			// row in `revier keys status`, which is the one place a user
+			// would look to find out what happened to it.
+			chord, err := core.ParseChord(t.Key)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("target %q: %w", t.Name, err))
+			} else {
+				// Both spellings are named: the two targets may be written
+				// differently and still be the same key, and the file is
+				// where the reader has to find them.
+				if prev, ok := seenKey[chord]; ok {
+					errs = append(errs, fmt.Errorf("targets %q and %q share key %q: %q and %q",
+						prev.target, t.Name, chord, prev.raw, t.Key))
+				}
+				seenKey[chord] = struct {
+					target revier.TargetName
+					raw    string
+				}{t.Name, t.Key}
 			}
-			seenKey[t.Key] = t.Name
 		}
 
 		if t.Window == nil && t.Runtime == nil {

@@ -429,3 +429,37 @@ under the cursor - is not built. It covers a wrong `attach` by hand, which has
 not happened yet; the self-check covers the failure that cannot be seen, which
 is the one worth spending a surface on.
 
+
+## 2026-09-06
+
+### D26 — the desktop's keyboard shortcuts are a port of their own — Accepted
+
+revier and the shell tool it replaces both want the same four desktop keys.
+Neither can be switched to without knowing who holds a key now, and today
+`contrib/gnome/install-keybindings.sh` appends its entries beside whatever is
+already there, so a press fires both systems.
+
+Reading the shortcuts is not the window host's job. `Host` provides instances
+of targets and takes part in run-or-raise; a shortcut store provides neither,
+and on GNOME the two are different tools - `wctl` for windows, `gsettings` and
+`dconf` for keys. Folding the reader into the window host would also make the
+answer to "which key is bound" depend on a Shell extension being up, which is
+when a user is most likely to ask.
+
+So `KeyBinder` is its own port, with `List` and nothing else. A machine with no
+desktop leaves it nil, which is a sentinel and not a failure.
+
+Two things stay in the core rather than in the adapter. One chord has three
+spellings in this system - `ctrl-shift-u` in a project file, `ctrl+shift+u`
+from bubbletea, `<Shift><Control>u` from GNOME - so there is one canonical form
+and a parser that accepts all three; comparing spellings is a decision, not a
+GNOME fact. The other is what revier wants: the union of the key each target
+declares, plus the chord that opens revier itself, which is `[ui] trigger_key`
+because no project could own the key that opens the surface rather than a
+target.
+
+`revier keys status` reads and prints. Claiming a chord is a separate
+operation, and a status command an agent may run against a live desktop is one
+that cannot change it: the adapter names the read subcommands it may use and
+refuses everything else, so `gsettings set` and `dconf write` are unreachable
+rather than merely unused.

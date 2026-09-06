@@ -131,6 +131,29 @@ func selectWindow(ctx context.Context, want []string, adapters map[string]revier
 	return nil, nil
 }
 
-func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg)}
+// keyBinders are the desktops whose keyboard shortcuts revier can read. This
+// is a shorter list than windowAdapters on purpose: reading a compositor's
+// window list and reading a desktop's shortcut store are different jobs, and
+// sway keeps its bindings in a config file that revier does not parse.
+func keyBinders() map[string]revier.KeyBinder {
+	return map[string]revier.KeyBinder{"gnome": &gnome.Keys{}}
+}
+
+// selectKeyBinder picks the desktop to read shortcuts from. Finding none is
+// survivable: every other command works, and `revier keys` says so.
+func selectKeyBinder(ctx context.Context, binders map[string]revier.KeyBinder) revier.KeyBinder {
+	for _, name := range defaultWindowOrder {
+		b, ok := binders[name].(interface {
+			revier.KeyBinder
+			Probe(context.Context) error
+		})
+		if ok && b.Probe(ctx) == nil {
+			return b
+		}
+	}
+	return nil
+}
+
+func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
+	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys}
 }

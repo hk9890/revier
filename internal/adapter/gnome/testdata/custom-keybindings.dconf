@@ -1,0 +1,24 @@
+[custom0]
+binding='<Alt>space'
+command='sh -lc "$HOME/setup/scripts/sessions/gnome-run.sh "$HOME/setup/scripts/sessions/os-fzf-popup.sh""'
+name='start-session-selector'
+
+[custom1]
+binding='<Shift><Control>u'
+command='sh -lc "$HOME/setup/scripts/sessions/os-to-session.sh"'
+name='to-session-terminal'
+
+[custom2]
+binding='<Shift><Control>o'
+command='sh -lc "$HOME/setup/scripts/sessions/os-to-editor.sh"'
+name='to-editor-window'
+
+[custom3]
+binding='<Shift><Control>i'
+command='sh -lc "$HOME/setup/scripts/sessions/os-to-web.sh"'
+name='to-web-window'
+
+[revier-diff]
+binding='<Shift><Control>y'
+command='sh -lc "revier-go diff"'
+name='revier: diff'

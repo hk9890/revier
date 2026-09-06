@@ -1,0 +1,5 @@
+org.gnome.desktop.wm.keybindings activate-window-menu @as []
+org.gnome.desktop.wm.keybindings close ['<Alt>F4', '<Super>q']
+org.gnome.desktop.wm.keybindings switch-input-source ['<Shift><Control>i']
+org.gnome.desktop.wm.keybindings toggle-maximized ['<Super>Up']
+org.gnome.desktop.wm.keybindings workspace-names @as []
