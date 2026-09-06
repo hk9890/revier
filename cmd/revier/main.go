@@ -38,6 +38,7 @@ usage:
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
+  revier keys status [--json]   the desktop chords revier wants, and who holds them
   revier version
 
 flags:
@@ -108,6 +109,8 @@ func run(args []string) error {
 		return cmdAttach(ctx, a, args)
 	case "status":
 		return cmdStatus(ctx, a, args)
+	case "keys":
+		return cmdKeys(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)

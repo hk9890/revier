@@ -48,7 +48,8 @@ func newApp(ctx context.Context) (*app, error) {
 	}
 	return &app{
 		cfg: cfg, projects: projects, state: st,
-		stateRoot: stateRoot, core: newCore(cfg, rt, win),
+		stateRoot: stateRoot,
+		core:      newCore(cfg, rt, win, selectKeyBinder(ctx, keyBinders())),
 	}, nil
 }
 

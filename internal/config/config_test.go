@@ -402,3 +402,56 @@ func TestValidateAcceptsAFullPlacement(t *testing.T) {
 		t.Fatalf("Validate: %v", err)
 	}
 }
+
+// The chord that opens revier has a default, so `revier keys status` reports
+// the key on a machine with no config.toml at all.
+func TestTriggerKeyDefaults(t *testing.T) {
+	cfg, _, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, err := cfg.TriggerKey()
+	if err != nil {
+		t.Fatalf("TriggerKey: %v", err)
+	}
+	if got != "alt+space" {
+		t.Errorf("trigger key = %q, want alt+space", got)
+	}
+}
+
+// Whatever spelling the file uses, the resolved chord is the canonical one:
+// comparing it with what GNOME reports is the whole point of resolving it.
+func TestTriggerKeyIsCanonical(t *testing.T) {
+	for _, in := range []string{"ctrl-shift-space", "<Shift><Control>space", "ctrl+shift+space"} {
+		root := t.TempDir()
+		write(t, root, "config.toml", "[ui]\ntrigger_key = \""+in+"\"\n")
+		cfg, _, err := config.Load(root)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", in, err)
+		}
+		got, err := cfg.TriggerKey()
+		if err != nil {
+			t.Fatalf("TriggerKey(%q): %v", in, err)
+		}
+		if got != "ctrl+shift+space" {
+			t.Errorf("trigger_key %q resolved to %q", in, got)
+		}
+	}
+}
+
+// A key that does not parse fails at startup, naming the value. Reported at a
+// keypress instead, it would look like a broken keyboard.
+func TestLoadRejectsAnUnreadableTriggerKey(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[ui]\ntrigger_key = \"<Nonsense>space\"\n")
+
+	_, _, err := config.Load(root)
+	if err == nil {
+		t.Fatal("Load accepted a key it cannot read")
+	}
+	for _, want := range []string{"trigger_key", "Nonsense"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name %q", err, want)
+		}
+	}
+}

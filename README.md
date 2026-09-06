@@ -35,6 +35,7 @@ revier go <target> [-p name]  run-or-raise a target; pressing it again returns h
 revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
 revier status                 which project this directory resolves to
+revier keys status [--json]   the desktop keys revier wants, and who holds each
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
@@ -70,6 +71,11 @@ To install:
    custom-keybindings list; the entries already there are left as they are.
 3. Disable the `os-*` bindings that use the same keys, in Settings > Keyboard,
    or GNOME fires both.
+
+`revier keys status` says which of these keys revier holds and which something
+else does, so step 3 can be checked rather than assumed. It only reads. The key
+that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space` by
+default; the rest are the `key` each target declares.
 
 Placement of the popup is a compositor rule, not revier's: on GNOME, a
 `wctl place` line in `revier-popup` after the launch.
