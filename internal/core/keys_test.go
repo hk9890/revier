@@ -312,3 +312,57 @@ func TestAFailedReadIsReported(t *testing.T) {
 		t.Fatal("want the read failure to reach the caller")
 	}
 }
+
+// GNOME fires every switched-on shortcut on a chord, which is why README's
+// step 3 asks a user to switch the old ones off. Reporting the first holder
+// and dropping the rest calls the chord active while somebody else's command
+// runs on the same press - the one state this command exists to catch.
+func TestASecondSwitchedOnHolderIsNotHidden(t *testing.T) {
+	report := keysOf(t, hosttest.NewKeys("gnome",
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier: workspace"),
+		hosttest.Custom("<Shift><Control>u", `sh -lc "$HOME/setup/scripts/sessions/os-to-session.sh"`, "to-session-terminal"),
+	), keyProject(t, "revier"))
+
+	got := row(t, report, "ctrl+shift+u")
+	if got.Status != core.KeyTaken {
+		t.Errorf("status = %q, want taken: somebody else's shortcut fires too", got.Status)
+	}
+	for _, want := range []string{"revier: workspace", "to-session-terminal"} {
+		if !strings.Contains(got.HeldBy, want) {
+			t.Errorf("held by %q, want it to name %q", got.HeldBy, want)
+		}
+	}
+}
+
+// The picker holds a chord like a target does. A target that declares the
+// trigger key puts two rows on one chord - the picker active, the target
+// stale - and repairing the stale one breaks the key that opens revier.
+func TestATargetOnTheTriggerChordIsMarked(t *testing.T) {
+	clash := prepared(t, revier.Project{
+		Name: "setup", Path: "/home/hans/setup",
+		Targets: []revier.Target{
+			{
+				Name: "menu", Key: "alt-space",
+				Window: &revier.Realization{Launch: []string{"rofi"}, Match: revier.Match{Class: "^rofi$"}},
+			},
+		},
+	})
+	report := keysOf(t, hosttest.NewKeys("gnome",
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+	), keyProject(t, "revier"), clash)
+
+	var onTheChord []core.KeyRow
+	for _, r := range report.Rows {
+		if r.Chord == "alt+space" {
+			onTheChord = append(onTheChord, r)
+		}
+	}
+	if len(onTheChord) != 2 {
+		t.Fatalf("got %d rows on alt+space, want 2: %+v", len(onTheChord), report.Rows)
+	}
+	for _, r := range onTheChord {
+		if !r.Conflict {
+			t.Errorf("target %q on alt+space is not marked as a conflict", r.Target)
+		}
+	}
+}

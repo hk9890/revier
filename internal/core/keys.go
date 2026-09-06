@@ -142,6 +142,13 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 	chordsPerTarget := map[string]map[Chord]bool{}
 	targetsPerChord := map[Chord]map[string]bool{}
 
+	// The picker holds a chord like any target does. Left out of these maps, a
+	// target that declares the trigger key produces two rows on one chord -
+	// the picker active and the target stale - with neither marked, which is
+	// the disagreement this marking exists to name.
+	chordsPerTarget[PickerTarget] = map[Chord]bool{trigger: true}
+	targetsPerChord[trigger] = map[string]bool{PickerTarget: true}
+
 	for _, p := range projects {
 		for _, t := range p.Targets {
 			if t.Key == "" {
@@ -210,18 +217,39 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 // get reported: revier's own shortcut left switched off, or a desktop default
 // sitting on the chord.
 func classify(want KeyRow, holders []revier.Binding) KeyRow {
+	// Every switched-on shortcut on the chord fires, not just the first one
+	// the desktop happens to list - which is why README's step 3 asks a user
+	// to switch the old bindings off. Reporting one holder and dropping the
+	// rest would say "active" for a chord that also runs somebody else's
+	// command, and that is the one thing this command exists to catch.
+	var live []revier.Binding
 	for _, b := range holders {
 		if b.Source == revier.BindingCustom && b.Enabled {
-			switch {
-			case !ownedCommand(b.Command):
-				want.Status, want.HeldBy = KeyTaken, b.Label
-			case b.Command == want.Command:
-				want.Status, want.HeldBy = KeyActive, b.Label
-			default:
-				want.Status, want.HeldBy = KeyStale, b.Label
-			}
-			return want
+			live = append(live, b)
 		}
+	}
+	if len(live) > 0 {
+		// The holder that decides the status is the one a user has to act on:
+		// somebody else's beats revier's own, because revier's is the half
+		// that is already right.
+		decides := live[0]
+		labels := make([]string, 0, len(live))
+		for _, b := range live {
+			if !ownedCommand(b.Command) && ownedCommand(decides.Command) {
+				decides = b
+			}
+			labels = append(labels, b.Label)
+		}
+		switch {
+		case !ownedCommand(decides.Command):
+			want.Status = KeyTaken
+		case decides.Command == want.Command:
+			want.Status = KeyActive
+		default:
+			want.Status = KeyStale
+		}
+		want.HeldBy = strings.Join(labels, ", ")
+		return want
 	}
 	for _, b := range holders {
 		if b.Source == revier.BindingCustom && ownedCommand(b.Command) {

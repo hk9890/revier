@@ -131,10 +131,8 @@ func splitAngle(raw string) (mods []string, key string, err error) {
 // is the half `keys install` needs, and it is here now because a conversion
 // proved in one direction only is a conversion nobody has checked.
 func (c Chord) GNOME() string {
+	// Split never returns nothing, so the last field is always the key.
 	parts := strings.Split(string(c), "+")
-	if len(parts) == 0 {
-		return ""
-	}
 	key, mods := parts[len(parts)-1], parts[:len(parts)-1]
 
 	held := map[string]bool{}

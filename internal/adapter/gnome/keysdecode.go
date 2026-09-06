@@ -90,6 +90,13 @@ func decodeBuiltin(raw []byte) []revier.Binding {
 			if chord == "" {
 				continue
 			}
+			// The media-keys schema holds one array that is not accelerators:
+			// custom-keybindings, the list of dconf paths. An accelerator
+			// never starts with a slash, so the shape tells them apart here
+			// as it does everywhere else in this file.
+			if strings.HasPrefix(chord, "/") {
+				continue
+			}
 			out = append(out, revier.Binding{
 				Chord:   chord,
 				Label:   key,
