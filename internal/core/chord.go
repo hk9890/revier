@@ -126,6 +126,10 @@ func splitAngle(raw string) (mods []string, key string, err error) {
 // GNOME renders the chord the way GNOME stores it. The modifier order is
 // GTK's own - shift, control, alt, super - so a chord revier writes reads back
 // identical to one the settings UI wrote.
+//
+// Nothing calls this yet: reading goes the other way, through ParseChord. It
+// is the half `keys install` needs, and it is here now because a conversion
+// proved in one direction only is a conversion nobody has checked.
 func (c Chord) GNOME() string {
 	parts := strings.Split(string(c), "+")
 	if len(parts) == 0 {

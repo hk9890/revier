@@ -105,8 +105,17 @@ func decodeBuiltin(raw []byte) []revier.Binding {
 // gvariantList reads a GVariant array of strings. An empty array is written
 // `@as []`, which carries no elements and needs no special case beyond having
 // no quoted strings in it.
+//
+// A value that is not an array reads as nothing at all. That is what keeps a
+// list of shortcut key names out of this adapter: a schema holds shortcuts and
+// ordinary settings side by side, and the shape tells them apart. The check is
+// on the start of the value, not on a bracket anywhere in it - a string
+// setting holding brackets would otherwise yield chords nobody bound.
 func gvariantList(s string) []string {
 	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "[") && !strings.HasPrefix(s, "@as") {
+		return nil
+	}
 	open := strings.IndexByte(s, '[')
 	closeAt := strings.LastIndexByte(s, ']')
 	if open < 0 || closeAt < open {

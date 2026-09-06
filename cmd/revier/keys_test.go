@@ -63,9 +63,30 @@ func TestAConflictIsMarkedAndExplained(t *testing.T) {
 	if !strings.Contains(out, "editor (conflict)") {
 		t.Errorf("the row is not marked:\n%s", out)
 	}
-	for _, want := range []string{"revier, beads", "setup", "more than one key"} {
+	for _, want := range []string{"revier, beads", "setup", "on more than one key"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output does not explain %q:\n%s", want, out)
+		}
+	}
+}
+
+// The other direction. The mark alone does not say which disagreement a row is
+// in, so each is explained the way it runs.
+func TestTwoTargetsOnOneKeyAreExplainedTheOtherWayRound(t *testing.T) {
+	r := core.KeyReport{Rows: []core.KeyRow{
+		{Chord: "ctrl+shift+u", Target: "home", Status: core.KeyActive, Conflict: true, Projects: []revier.ProjectName{"revier"}},
+		{Chord: "ctrl+shift+u", Target: "terminal", Status: core.KeyStale, Conflict: true, Projects: []revier.ProjectName{"setup"}},
+	}}
+	out := printed(r)
+	if !strings.Contains(out, "ctrl+shift+u is asked for by more than one target") {
+		t.Errorf("the disagreement is not explained:\n%s", out)
+	}
+	if strings.Contains(out, "on more than one key") {
+		t.Errorf("explained in the wrong direction:\n%s", out)
+	}
+	for _, want := range []string{"home", "terminal"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output does not name %q:\n%s", want, out)
 		}
 	}
 }
@@ -78,7 +99,9 @@ func TestOrphansGetTheirOwnBlock(t *testing.T) {
 		{Chord: "ctrl+shift+y", Status: core.KeyActive, HeldBy: "revier: diff", Command: `sh -lc "revier-go diff"`},
 	}
 	out := printed(r)
-	for _, want := range []string{"ORPHANED", "ctrl+shift+y", `sh -lc "revier-go diff"`} {
+	// The name is what finds the entry in the desktop's settings, and the
+	// command is what says what it still does. Both are needed to remove it.
+	for _, want := range []string{"ORPHANED", "ctrl+shift+y", "revier: diff", `sh -lc "revier-go diff"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output does not carry %q:\n%s", want, out)
 		}

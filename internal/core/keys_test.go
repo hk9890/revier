@@ -233,6 +233,39 @@ func TestProjectsThatDisagreeProduceTwoMarkedRows(t *testing.T) {
 	}
 }
 
+// The other direction of the same disagreement. Two targets on one chord
+// print one row active and one stale, and a user repairing the stale one
+// breaks the working one.
+func TestTwoTargetsOnOneChordAreBothMarked(t *testing.T) {
+	other := prepared(t, revier.Project{
+		Name: "setup", Path: "/home/hans/setup",
+		Targets: []revier.Target{
+			{
+				Name: "terminal", Key: "ctrl-shift-u",
+				Runtime: &revier.Realization{Launch: []string{"kitty"}, Match: revier.Match{Title: "^t$"}},
+			},
+		},
+	})
+	report := keysOf(t, hosttest.NewKeys("gnome",
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier: workspace"),
+	), keyProject(t, "revier"), other)
+
+	var onTheChord []core.KeyRow
+	for _, r := range report.Rows {
+		if r.Chord == "ctrl+shift+u" {
+			onTheChord = append(onTheChord, r)
+		}
+	}
+	if len(onTheChord) != 2 {
+		t.Fatalf("got %d rows on ctrl+shift+u, want 2: %+v", len(onTheChord), report.Rows)
+	}
+	for _, r := range onTheChord {
+		if !r.Conflict {
+			t.Errorf("target %q on ctrl+shift+u is not marked as a conflict", r.Target)
+		}
+	}
+}
+
 // A target that is renamed or deleted leaves revier's shortcut behind, still
 // firing, on a chord nothing asks for any more.
 func TestAChordRevierHoldsAndNoLongerWantsIsAnOrphan(t *testing.T) {

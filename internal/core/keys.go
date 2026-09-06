@@ -140,6 +140,7 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 	}
 	at := map[key]int{}
 	chordsPerTarget := map[string]map[Chord]bool{}
+	targetsPerChord := map[Chord]map[string]bool{}
 
 	for _, p := range projects {
 		for _, t := range p.Targets {
@@ -148,9 +149,9 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 			}
 			ch, err := ParseChord(t.Key)
 			if err != nil {
-				// config.Load rejects a key that does not parse, so this is
-				// unreachable through the CLI. Skipping keeps a hand-built
-				// project from breaking the whole report.
+				// config.Validate rejects a key that does not parse, so a
+				// project that reached here has readable keys. Skipping keeps
+				// a hand-built Project from breaking the whole report.
 				continue
 			}
 			k := key{string(t.Name), ch}
@@ -169,11 +170,19 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 				chordsPerTarget[string(t.Name)] = map[Chord]bool{}
 			}
 			chordsPerTarget[string(t.Name)][ch] = true
+			if targetsPerChord[ch] == nil {
+				targetsPerChord[ch] = map[string]bool{}
+			}
+			targetsPerChord[ch][string(t.Name)] = true
 		}
 	}
 
+	// Both directions are a disagreement, and both mislead unmarked. One
+	// target on two chords prints two rows that look like two targets; two
+	// targets on one chord prints one row active and one stale, where fixing
+	// the stale one breaks the working one.
 	for i, r := range rows {
-		if len(chordsPerTarget[r.Target]) > 1 {
+		if len(chordsPerTarget[r.Target]) > 1 || len(targetsPerChord[r.Chord]) > 1 {
 			rows[i].Conflict = true
 		}
 	}

@@ -218,7 +218,13 @@ func Validate(p revier.Project) error {
 
 	homes := 0
 	seenName := map[revier.TargetName]bool{}
-	seenKey := map[string]revier.TargetName{}
+	// Keyed by the canonical chord, not by the text. Two targets written
+	// "ctrl-o" and "Ctrl+O" are the same key, and the raw strings do not say
+	// so.
+	seenKey := map[core.Chord]struct {
+		target revier.TargetName
+		raw    string
+	}{}
 
 	for _, t := range p.Targets {
 		if t.Name == "" {
@@ -234,10 +240,26 @@ func Validate(p revier.Project) error {
 			homes++
 		}
 		if t.Key != "" {
-			if prev, ok := seenKey[t.Key]; ok {
-				errs = append(errs, fmt.Errorf("targets %q and %q share key %q", prev, t.Name, t.Key))
+			// A key that cannot be read is rejected here rather than dropped
+			// later. Dropped, it costs the target its desktop chord and its
+			// row in `revier keys status`, which is the one place a user
+			// would look to find out what happened to it.
+			chord, err := core.ParseChord(t.Key)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("target %q: %w", t.Name, err))
+			} else {
+				// Both spellings are named: the two targets may be written
+				// differently and still be the same key, and the file is
+				// where the reader has to find them.
+				if prev, ok := seenKey[chord]; ok {
+					errs = append(errs, fmt.Errorf("targets %q and %q share key %q: %q and %q",
+						prev.target, t.Name, chord, prev.raw, t.Key))
+				}
+				seenKey[chord] = struct {
+					target revier.TargetName
+					raw    string
+				}{t.Name, t.Key}
 			}
-			seenKey[t.Key] = t.Name
 		}
 
 		if t.Window == nil && t.Runtime == nil {

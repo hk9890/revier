@@ -127,7 +127,7 @@ func TestValidateRejects(t *testing.T) {
 				{Name: "a", Home: true, Key: "ctrl-o", Window: &base},
 				{Name: "b", Key: "ctrl-o", Window: &base},
 			}},
-			`share key "ctrl-o"`,
+			`share key "ctrl+o"`,
 		},
 		{
 			"no realization",
@@ -435,6 +435,50 @@ func TestTriggerKeyIsCanonical(t *testing.T) {
 		}
 		if got != "ctrl+shift+space" {
 			t.Errorf("trigger_key %q resolved to %q", in, got)
+		}
+	}
+}
+
+// A target key that cannot be read must be refused, not dropped. Dropped, the
+// target loses its desktop chord and its row in `revier keys status`, which is
+// the one place a user would look to find out what happened to it.
+func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Key: "<Nonsense>u", Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+		}},
+	}}
+	err := config.Validate(p)
+	if err == nil {
+		t.Fatal("Validate accepted a key it cannot read")
+	}
+	for _, want := range []string{"home", "Nonsense"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name %q", err, want)
+		}
+	}
+}
+
+// Two spellings of one key are one key. Compared as text they are two, and the
+// second silently takes the chord from the first at the desktop.
+func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Key: "ctrl-o", Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+		}},
+		{Name: "editor", Key: "<Control>O", Window: &revier.Realization{
+			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
+		}},
+	}}
+	err := config.Validate(p)
+	if err == nil {
+		t.Fatal("Validate accepted two spellings of one key")
+	}
+	// Both spellings are named, because that is what the reader has to find
+	// in the file.
+	for _, want := range []string{"ctrl-o", "<Control>O", "ctrl+o"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name %q", err, want)
 		}
 	}
 }
