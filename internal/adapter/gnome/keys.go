@@ -127,28 +127,31 @@ func (k *Keys) exec(ctx context.Context, bin string, args ...string) ([]byte, er
 	return run(ctx, bin, args...)
 }
 
-// readOnly refuses anything that is not one of the read subcommands. The
+// readOnly refuses anything that is not one of the read subcommands.
+func readOnly(bin string, args []string) error { return allowed(readCommands, bin, args) }
+
+// allowed refuses a command that is not in the set its caller may run. The
 // binary is matched on its base name, so a test pointing GSettings at a stub
 // is held to the same rule as the real thing.
-func readOnly(bin string, args []string) error {
+func allowed(set map[string][]string, bin string, args []string) error {
 	base := bin
 	if i := strings.LastIndexByte(base, '/'); i >= 0 {
 		base = base[i+1:]
 	}
 	base = strings.TrimSuffix(base, "-stub")
-	allowed, ok := readCommands[base]
+	subcommands, ok := set[base]
 	if !ok {
-		return fmt.Errorf("gnome keys: %s is not a command this reads with", bin)
+		return fmt.Errorf("gnome keys: %s is not a command this runs", bin)
 	}
 	if len(args) == 0 {
 		return fmt.Errorf("gnome keys: %s needs a subcommand", bin)
 	}
-	for _, a := range allowed {
+	for _, a := range subcommands {
 		if args[0] == a {
 			return nil
 		}
 	}
-	return fmt.Errorf("gnome keys: %s %s is not a read", base, args[0])
+	return fmt.Errorf("gnome keys: %s %s is not allowed here", base, args[0])
 }
 
 func execRun(ctx context.Context, bin string, args ...string) ([]byte, error) {

@@ -19,6 +19,10 @@ const (
 // and is not normalised here: comparing two spellings is policy, so it
 // happens in the core (see core.Chord).
 type Binding struct {
+	// ID is the desktop's own name for the entry, which is what makes a
+	// shortcut addressable: GNOME's `custom0`, or `revier-home` for one revier
+	// wrote. A built-in has none - it is a setting, not an entry.
+	ID string
 	// Chord is the key combination, in the desktop's spelling.
 	Chord string
 	// Command is what the chord runs. A built-in has none: it names an action
@@ -38,9 +42,10 @@ type Binding struct {
 
 // KeyBinder reads the desktop's keyboard shortcuts.
 //
-// It is read-only on purpose. `revier keys status` answers "who holds this
-// chord", which needs listing and nothing else; claiming a chord is a later
-// change and will add its own methods here.
+// It is read-only, and an implementation of it must stay that way: this is
+// what `revier keys status` is given, and a status command an agent may run
+// against a live desktop has to be one that cannot change it. Writing is
+// KeyWriter, which an implementation keeps behind a separate type.
 type KeyBinder interface {
 	// Name is the desktop this reads, for messages.
 	Name() string
@@ -48,4 +53,25 @@ type KeyBinder interface {
 	// same rule applies as to Host.Instances: the cost may not scale with the
 	// number of projects.
 	List(ctx context.Context) ([]Binding, error)
+}
+
+// KeyWriter changes the desktop's keyboard shortcuts.
+//
+// The three verbs are separate because they are not reversible in the same
+// way. Removing an entry destroys what it held; switching one off leaves every
+// word of it in the desktop's store, so the thing that wrote it can put it
+// back. Which one a shortcut deserves is policy: revier removes only what it
+// wrote itself, and switches off what belongs to somebody else.
+type KeyWriter interface {
+	KeyBinder
+	// Bind creates or replaces the shortcut named by b.ID and makes the
+	// desktop act on it. b.Chord is in the desktop's spelling, b.Where is
+	// ignored: where a new entry goes is the desktop's choice, not revier's.
+	Bind(ctx context.Context, b Binding) error
+	// Disable stops the desktop acting on a shortcut, leaving its definition
+	// in place. On a built-in this clears the setting.
+	Disable(ctx context.Context, b Binding) error
+	// Remove deletes a shortcut and everything it held. It is refused for a
+	// built-in, which is a desktop setting and not an entry to delete.
+	Remove(ctx context.Context, b Binding) error
 }

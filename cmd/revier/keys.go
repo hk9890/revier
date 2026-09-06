@@ -16,10 +16,16 @@ import (
 	"github.com/hk9890/revier/internal/core"
 )
 
-const keysUsage = `revier keys - the desktop chords revier wants, and who holds each one
+const keysUsage = `revier keys - the desktop keys revier wants, and who holds each one
 
 usage:
-  revier keys status [--json]
+  revier keys status [--json]              who holds each key now
+  revier keys install [--force] [-n]       claim the keys
+  revier keys uninstall [-n]               release the keys revier holds
+
+  --force  take a key something else holds. Without it, install adds only
+           what is free and reports the rest.
+  -n, --dry-run  print what would happen and change nothing
 `
 
 // keyBinderWait bounds the desktop probe, and keysWait the whole read. Both
@@ -42,16 +48,23 @@ func cmdKeys(ctx context.Context, a *app, args []string) error {
 	case "", "help", "--help", "-h":
 		fmt.Print(keysUsage)
 		return nil
-	case "status":
+	case "status", "install", "uninstall":
 		// The desktop is probed here and not in newApp: it costs a gsettings
 		// process, and every other command - `revier go` on a keypress above
-		// all - would pay for a value only this one reads.
-		read, cancelRead := context.WithTimeout(ctx, keysWait)
+		// all - would pay for a value only these read.
+		ctx, cancelRead := context.WithTimeout(ctx, keysWait)
 		defer cancelRead()
-		probe, cancelProbe := context.WithTimeout(read, keyBinderWait)
+		probe, cancelProbe := context.WithTimeout(ctx, keyBinderWait)
 		defer cancelProbe()
-		a.core.KeyBinder = selectKeyBinder(probe, keyBinders())
-		return cmdKeysStatus(read, a, args)
+		// status is given the reader, which cannot write whatever a later
+		// change does to it. Only the two commands that change something are
+		// given a desktop that can be changed.
+		if sub == "status" {
+			a.core.KeyBinder = selectKeyBinder(probe, keyBinders())
+			return cmdKeysStatus(ctx, a, args)
+		}
+		a.core.KeyBinder = selectKeyWriter(probe, keyWriters())
+		return cmdKeysApply(ctx, a, sub, args)
 	default:
 		fmt.Fprint(os.Stderr, keysUsage)
 		return fmt.Errorf("unknown keys command %q", sub)

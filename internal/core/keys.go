@@ -71,8 +71,8 @@ type KeyReport struct {
 	Orphaned []KeyRow `json:"orphaned,omitempty"`
 }
 
-// The commands revier binds. They match contrib/gnome/revier-keybindings.dconf:
-// a login shell, so the desktop finds revier on the same PATH a terminal has.
+// The commands revier binds to a desktop key. A login shell, so the desktop
+// finds revier on the same PATH a terminal has.
 const pickerCommand = `sh -lc "revier-popup"`
 
 func targetCommand(name revier.TargetName) string {
@@ -100,15 +100,22 @@ func (c *Core) Keys(ctx context.Context, projects []Project, trigger Chord) (Key
 	if err != nil {
 		return KeyReport{}, err
 	}
-	report := KeyReport{Desktop: c.KeyBinder.Name()}
+	return c.report(bindings, projects, trigger), nil
+}
 
+// report is the whole of the classification, over bindings already read. It is
+// split from Keys because installing starts from the same answer: what is true
+// now decides what to do about it, and two commands working from one report
+// cannot disagree about the desktop.
+func (c *Core) report(bindings []revier.Binding, projects []Project, trigger Chord) KeyReport {
+	report := KeyReport{Desktop: c.KeyBinder.Name()}
 	held := index(bindings)
 	wanted := wantedChords(projects, trigger)
 	for _, w := range wanted {
 		report.Rows = append(report.Rows, classify(w, held[w.Chord]))
 	}
 	report.Orphaned = orphans(bindings, wanted)
-	return report, nil
+	return report
 }
 
 // index groups the desktop's shortcuts by canonical chord. A chord revier

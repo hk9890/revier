@@ -50,6 +50,11 @@ flags:
 // picker.
 const exitNoProject = 3
 
+// exitKeysIncomplete is returned when `revier keys install` ran and the
+// desktop is not fully what was asked for. Every reason is already printed
+// against the key it belongs to, so this status carries no message of its own.
+const exitKeysIncomplete = 4
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		// An action's own exit status passes through, so whatever bound the
@@ -63,6 +68,11 @@ func main() {
 		if errors.Is(err, errNoProject) {
 			fmt.Fprintln(os.Stderr, "revier:", err)
 			os.Exit(exitNoProject)
+		}
+		// The keys command has already said, key by key, what did not happen.
+		// A line here would repeat the summary it just printed.
+		if errors.Is(err, errKeysIncomplete) {
+			os.Exit(exitKeysIncomplete)
 		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)

@@ -463,3 +463,50 @@ operation, and a status command an agent may run against a live desktop is one
 that cannot change it: the adapter names the read subcommands it may use and
 refuses everything else, so `gsettings set` and `dconf write` are unreachable
 rather than merely unused.
+
+## 2026-09-07
+
+### D27 — revier adds keys; it takes one only when told to — Accepted
+
+Extends D26, which read the desktop's shortcuts and stopped there.
+
+Two systems want the same four keys. `revier keys install` is how revier claims
+them, and `os init` in the `setup` repository is how the shell session tool
+claims them back. Neither knows the other exists. Whichever ran last holds the
+keys, and that is the switch between the two systems: no environment variable
+to read at a keypress, no dispatcher script in front of the four, no third
+place where the choice lives.
+
+The two never fight over storage. revier writes entries it names itself -
+`revier-picker`, `revier-home` - while `os init` allocates GNOME's numbered
+slots and skips any that already holds a definition.
+
+Install adds. A key that something else holds is left exactly as it is, and
+reported. `--force` is what takes one, and it is per key rather than all or
+nothing: a machine where three keys are free and one is a desktop default
+should get three keys, and `revier keys status` shows the half state
+afterwards.
+
+**Force destroys nothing.** Another program's shortcut is taken out of the list
+GNOME acts on and keeps every word of itself, so whatever wrote it puts it
+back. A desktop default is a setting rather than an entry, so it is emptied,
+and the one `gsettings reset` line that returns it is printed beside the key it
+was cleared for. This is why revier stores no copy of what it displaced: a
+backup would be a third way back, competing with `os init` and with the desktop
+itself, and it would age.
+
+Uninstall is the mirror and nothing more. It removes what revier wrote,
+including a shortcut left on a key nothing asks for any more, and restores
+nothing: what to put back is a question only the tool that was displaced can
+answer.
+
+A disagreement inside revier's own configuration - two targets on one key, or a
+target on the key that opens revier - is refused rather than installed. The
+report names it and carries on, because a diagnostic that fails when something
+is wrong is no diagnostic; installing either spelling of it would be a guess.
+
+Writing is `KeyWriter`, a separate interface satisfied by a separate type in
+the adapter, so the reader `revier keys status` is handed stays unable to write
+whatever is added beside it. Its three verbs are separate because they are not
+reversible in the same way: creating, switching off, and removing. Which one a
+shortcut deserves is policy - revier removes only what it wrote.

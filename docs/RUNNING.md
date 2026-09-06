@@ -155,8 +155,9 @@ the kitty entries in `wctl list --json`.
 
 ## Verify a keybinding without pressing it
 
-A binding is a command in `contrib/gnome/revier-keybindings.dconf`. Run that
-command by hand, with the same login shell the binding uses, and watch focus:
+A binding is a command. `revier keys status --json` prints the one each key
+would carry. Run it by hand, with the same login shell the binding uses, and
+watch focus:
 
 ```bash
 sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title
@@ -164,5 +165,8 @@ sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title   # back at t
 hyperfine --warmup 3 -N './bin/revier go home -p demo'               # the keypress budget
 ```
 
-Installing the bindings is the user's step, never a verification step: it
-rewrites their desktop configuration.
+`revier keys install` and `revier keys uninstall` rewrite the user's desktop
+configuration, so they are the user's step and never a verification step. Their
+`--dry-run` reads and prints only, and is safe to run. `dconf` writes go through
+the session's own service, so `DCONF_PROFILE` does not isolate them: there is no
+scratch desktop to install into, and the layers above are where this is proved.

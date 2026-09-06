@@ -139,6 +139,13 @@ func keyBinders() map[string]revier.KeyBinder {
 	return map[string]revier.KeyBinder{"gnome": &gnome.Keys{}}
 }
 
+// keyWriters are the desktops whose shortcuts revier can change. A writer is a
+// separate type from the reader in the same adapter, so that the reader stays
+// read-only and `revier keys status` cannot reach a write through it.
+func keyWriters() map[string]revier.KeyBinder {
+	return map[string]revier.KeyBinder{"gnome": &gnome.Writer{}}
+}
+
 // selectKeyBinder picks the desktop to read shortcuts from. Finding none is
 // survivable: every other command works, and `revier keys` says so.
 func selectKeyBinder(ctx context.Context, binders map[string]revier.KeyBinder) revier.KeyBinder {
@@ -152,6 +159,16 @@ func selectKeyBinder(ctx context.Context, binders map[string]revier.KeyBinder) r
 		}
 	}
 	return nil
+}
+
+// selectKeyWriter is the same choice, refusing a desktop that can only be
+// read: a command that changes keys must not silently do nothing.
+func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) revier.KeyBinder {
+	b := selectKeyBinder(ctx, binders)
+	if _, ok := b.(revier.KeyWriter); !ok {
+		return nil
+	}
+	return b
 }
 
 func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
