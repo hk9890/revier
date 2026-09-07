@@ -355,3 +355,162 @@ func theWebProject(t *testing.T) core.Project {
 		},
 	})
 }
+
+// A desktop default sitting on a chord another program's shortcut also holds
+// is still a setting nothing else puts back, so it carries its undo. The
+// status names the shortcut, because that is what a user acts on first; what
+// the step has to evict is read off the chord instead.
+func TestADefaultEvictedBesideAShortcutStillCarriesItsUndo(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Alt>space", sessionSelector, "start-session-selector"),
+		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, plan, "alt+space")
+	if s.Action != core.KeyTakeOver {
+		t.Fatalf("action = %q, want a take over", s.Action)
+	}
+	if !strings.Contains(s.Undo, "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu") {
+		t.Errorf("undo = %q, want the line that returns the desktop default", s.Undo)
+	}
+	c.ApplyKeys(context.Background(), plan, true)
+	if held := w.Held("<Alt>space"); len(held) != 1 || held[0].Source != revier.BindingCustom {
+		t.Errorf("alt+space is held by %+v, want revier's own shortcut alone", held)
+	}
+}
+
+// Two desktop defaults on one chord are two settings to put back, so both
+// lines are printed. One of them alone would be a way back that does not work.
+func TestTwoDefaultsOnOneChordCarryBothUndoLines(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
+		hosttest.Builtin("<Alt>space", "org.gnome.shell.keybindings", "toggle-overview"),
+	)
+	_, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, plan, "alt+space")
+	for _, want := range []string{"activate-window-menu", "toggle-overview"} {
+		if !strings.Contains(s.Undo, want) {
+			t.Errorf("undo = %q, want it to name %q", s.Undo, want)
+		}
+	}
+}
+
+// revier's own shortcut with an old command, and a desktop default on the same
+// key. Rewriting the command alone would report the key as revier's while the
+// default is still what fires, so the default has to go - and taking it needs
+// --force like any other key revier was not given.
+func TestAStaleShortcutUnderADesktopDefaultNeedsForce(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Shift><Control>o", `sh -lc "revier-go edit"`, "revier-editor"),
+		hosttest.Builtin("<Shift><Control>o", "org.gnome.desktop.wm.keybindings", "toggle-maximized"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, plan, "ctrl+shift+o")
+	if !s.Action.Blocked() {
+		t.Fatalf("action = %q, want one that --force has to allow", s.Action)
+	}
+	if !strings.Contains(s.Undo, "toggle-maximized") {
+		t.Errorf("undo = %q, want the line that returns the desktop default", s.Undo)
+	}
+
+	c.ApplyKeys(context.Background(), plan, false)
+	for _, call := range w.Calls {
+		if strings.HasPrefix(call, "disable") {
+			t.Errorf("the desktop default was cleared without --force: %v", w.Calls)
+		}
+	}
+
+	_, again := planInstall(t, w, keyProject(t, "revier"))
+	c.ApplyKeys(context.Background(), again, true)
+	held := w.Held("<Shift><Control>o")
+	if len(held) != 1 || held[0].Command != `sh -lc "revier-go editor"` {
+		t.Errorf("ctrl+shift+o is held by %+v, want revier's own shortcut alone", held)
+	}
+}
+
+// Installing either spelling of a disagreement is a guess; removing what
+// revier wrote is not. Refusing here would leave a user unable to give the
+// keys back until the file that disagrees is fixed.
+func TestUninstallDoesNotRefuseAConfigurationDisagreement(t *testing.T) {
+	other := prepared(t, revier.Project{
+		Name: "setup", Path: "/home/hans/setup",
+		Targets: []revier.Target{
+			{
+				Name: "editor", Key: "ctrl-shift-e",
+				Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}},
+			},
+		},
+	})
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
+	)
+	c := &core.Core{KeyBinder: w}
+	projects := []core.Project{keyProject(t, "revier"), other}
+
+	plan, err := c.PlanUninstallKeys(context.Background(), projects, "alt+space")
+	if err != nil {
+		t.Fatalf("PlanUninstallKeys refused a state it can act on: %v", err)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	if len(w.Bindings) != 0 {
+		t.Errorf("bindings after uninstall = %+v, want revier's own gone", w.Bindings)
+	}
+}
+
+// A step removes everything of revier's on its chord, so two shortcuts on one
+// chord are one step. Two would remove each entry twice and print the key
+// twice.
+func TestTwoOrphansOnOneChordAreOneStep(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go diff"`, "revier-diff"),
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go review"`, "revier-review"),
+	)
+	c := &core.Core{KeyBinder: w}
+	plan, err := c.PlanUninstallKeys(context.Background(), []core.Project{keyProject(t, "revier")}, "alt+space")
+	if err != nil {
+		t.Fatalf("PlanUninstallKeys: %v", err)
+	}
+
+	n := 0
+	for _, s := range plan.Steps {
+		if s.Chord == "ctrl+shift+y" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("ctrl+shift+y got %d steps, want 1: %+v", n, plan.Steps)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	if len(w.Calls) != 2 {
+		t.Errorf("calls = %v, want one remove per shortcut", w.Calls)
+	}
+}
+
+// revier's own shortcut being right does not make the key revier's while a
+// desktop default sits on the same chord: GNOME still has the setting, and a
+// run that reported "ok" would be reporting a key that does not work.
+func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
+		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, plan, "alt+space")
+	if s.Action != core.KeyClear {
+		t.Fatalf("action = %q, want clear: the desktop default still fires", s.Action)
+	}
+	if !strings.Contains(s.Undo, "activate-window-menu") {
+		t.Errorf("undo = %q, want the reset for the setting it clears", s.Undo)
+	}
+	// And it needs --force, because clearing a GNOME setting always does.
+	c.ApplyKeys(context.Background(), plan, false)
+	for _, call := range w.Calls {
+		if strings.HasPrefix(call, "disable") {
+			t.Errorf("a GNOME setting was cleared without --force: %v", w.Calls)
+		}
+	}
+}

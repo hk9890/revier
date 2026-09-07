@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -125,6 +126,9 @@ func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger 
 	if err != nil {
 		return KeyPlan{}, err
 	}
+	if err := conflicts(report); err != nil {
+		return KeyPlan{}, err
+	}
 	held := index(bindings)
 
 	plan := KeyPlan{Desktop: report.Desktop}
@@ -138,6 +142,11 @@ func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger 
 //
 // It covers the chords revier wants and the ones it holds and no longer wants,
 // so a renamed target does not leave a shortcut firing that nothing removes.
+//
+// One step per chord, not one per row: a step removes everything of revier's
+// on its chord, so two rows sharing one - two orphans on the same key, or a
+// configuration disagreement - would otherwise remove each entry twice and
+// print the same line twice.
 func (c *Core) PlanUninstallKeys(ctx context.Context, projects []Project, trigger Chord) (KeyPlan, error) {
 	report, bindings, err := c.keyState(ctx, projects, trigger)
 	if err != nil {
@@ -146,11 +155,19 @@ func (c *Core) PlanUninstallKeys(ctx context.Context, projects []Project, trigge
 	held := index(bindings)
 
 	plan := KeyPlan{Desktop: report.Desktop}
+	seen := map[Chord]bool{}
+	add := func(chord Chord, target string) {
+		if seen[chord] {
+			return
+		}
+		seen[chord] = true
+		plan.Steps = append(plan.Steps, removeStep(chord, target, held[chord]))
+	}
 	for _, row := range report.Rows {
-		plan.Steps = append(plan.Steps, removeStep(row.Chord, row.Target, held[row.Chord]))
+		add(row.Chord, row.Target)
 	}
 	for _, row := range report.Orphaned {
-		plan.Steps = append(plan.Steps, removeStep(row.Chord, "", held[row.Chord]))
+		add(row.Chord, "")
 	}
 	return plan, nil
 }
@@ -158,6 +175,11 @@ func (c *Core) PlanUninstallKeys(ctx context.Context, projects []Project, trigge
 // keyState is the one read both plans start from: the report `keys status`
 // prints, plus the bindings behind it, because a plan acts on the shortcuts
 // themselves and not on their labels.
+//
+// It does not refuse a configuration disagreement. Only installing has to
+// choose between two spellings of one; removing what revier wrote is the same
+// answer either way, and refusing there would leave a user unable to give the
+// keys back until the file that disagrees is fixed.
 func (c *Core) keyState(ctx context.Context, projects []Project, trigger Chord) (KeyReport, []revier.Binding, error) {
 	if c.KeyBinder == nil {
 		return KeyReport{}, nil, ErrNoKeyBinder
@@ -166,11 +188,7 @@ func (c *Core) keyState(ctx context.Context, projects []Project, trigger Chord) 
 	if err != nil {
 		return KeyReport{}, nil, err
 	}
-	report := c.report(bindings, projects, trigger)
-	if err := conflicts(report); err != nil {
-		return KeyReport{}, nil, err
-	}
-	return report, bindings, nil
+	return c.report(bindings, projects, trigger), bindings, nil
 }
 
 // conflicts turns the report's own marks into a refusal, naming every chord in
@@ -224,8 +242,10 @@ func installStep(row KeyRow, holders []revier.Binding) KeyStep {
 
 	switch row.Status {
 	case KeyActive:
+		// Not returned yet. revier's shortcut being right does not make the
+		// key revier's while a desktop default sits on the same chord, and
+		// the check below is what notices.
 		step.Action = KeyOK
-		return step
 	case KeyStale:
 		step.Action = KeyUpdate
 	case KeyInert:
@@ -234,14 +254,26 @@ func installStep(row KeyRow, holders []revier.Binding) KeyStep {
 		step.Action = KeyCreate
 	case KeyTaken:
 		step.Action = KeyTakeOver
-		step.Evict = otherHolders(holders)
 	case KeyBuiltin:
 		step.Action = KeyClear
-		step.Evict = otherHolders(holders)
-		if len(step.Evict) == 1 {
-			step.Undo = fmt.Sprintf("gsettings reset %s %s", step.Evict[0].Where, step.Evict[0].Label)
-		}
 	}
+
+	// What has to stop firing is read off the chord and not off the status.
+	// A status names the holder a user has to act on first, and a desktop
+	// default sitting beside revier's own stale entry is not that holder -
+	// but it still fires, so rewriting the command without clearing it would
+	// leave the key doing what it did before.
+	step.Evict = otherHolders(holders)
+	if len(step.Evict) > 0 && !step.Action.Blocked() {
+		// Displacing something that is not revier's needs --force, whatever
+		// the status was named after.
+		step.Action = KeyTakeOver
+		if allBuiltin(step.Evict) {
+			step.Action = KeyClear
+		}
+		step.HeldBy = holderNames(step.Evict)
+	}
+	step.Undo = undoFor(step.Evict)
 
 	// An update or an enable acts on revier's own entry where the desktop
 	// already keeps it, so the write does not move it to a new place.
@@ -284,6 +316,46 @@ func otherHolders(holders []revier.Binding) []revier.Binding {
 		out = append(out, b)
 	}
 	return out
+}
+
+// allBuiltin reports whether everything to be evicted is a desktop default,
+// which is the difference between taking a key from a program and changing a
+// setting of the desktop.
+func allBuiltin(evict []revier.Binding) bool {
+	for _, b := range evict {
+		if b.Source != revier.BindingBuiltin {
+			return false
+		}
+	}
+	return len(evict) > 0
+}
+
+// undoFor is the command that puts back every desktop default the step clears.
+// A default is a setting rather than an entry, so nothing revier keeps and
+// nothing the displaced program does will return it: this line is the only way
+// back, and it is printed beside the key.
+func undoFor(evict []revier.Binding) string {
+	var out []string
+	for _, b := range evict {
+		if b.Source == revier.BindingBuiltin {
+			out = append(out, fmt.Sprintf("gsettings reset %s %s", b.Where, b.Label))
+		}
+	}
+	return strings.Join(out, "; ")
+}
+
+// holderNames names what is being evicted, spelled the way the report spells
+// it: a shortcut by its label, a desktop default by its setting.
+func holderNames(evict []revier.Binding) string {
+	names := make([]string, 0, len(evict))
+	for _, b := range evict {
+		if b.Source == revier.BindingBuiltin {
+			names = append(names, b.Where+" "+b.Label)
+			continue
+		}
+		names = append(names, b.Label)
+	}
+	return strings.Join(names, ", ")
 }
 
 // ownHolder is revier's own shortcut on the chord, if the desktop holds one.

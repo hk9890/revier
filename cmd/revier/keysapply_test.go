@@ -127,3 +127,32 @@ func TestUninstallCountsWhatItReleased(t *testing.T) {
 		}
 	}
 }
+
+// A step that failed after clearing the desktop setting is the one whose
+// reader most needs the way back. Printing the undo only on success would hide
+// it exactly where it matters.
+func TestTheUndoIsPrintedEvenWhenTheStepFailed(t *testing.T) {
+	undo := "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu"
+	p := core.KeyPlan{Steps: []core.KeyStep{{
+		Chord: "alt+space", Target: "picker", Action: core.KeyClear,
+		HeldBy: "org.gnome.desktop.wm.keybindings activate-window-menu",
+		Undo:   undo, Err: "dconf is not answering",
+	}}}
+	out := plan(p, "install", false, true)
+	if !strings.Contains(out, "undo: "+undo) {
+		t.Errorf("the undo is not printed after a failure:\n%s", out)
+	}
+}
+
+// A key nobody was allowed to take was not cleared, so there is nothing to
+// undo and the line would be a false alarm.
+func TestNoUndoIsPrintedForAKeyForceWasNotGivenFor(t *testing.T) {
+	p := core.KeyPlan{Steps: []core.KeyStep{{
+		Chord: "alt+space", Target: "picker", Action: core.KeyClear,
+		HeldBy: "org.gnome.desktop.wm.keybindings activate-window-menu",
+		Undo:   "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu",
+	}}}
+	if out := plan(p, "install", false, false); strings.Contains(out, "undo:") {
+		t.Errorf("an undo is offered for a key nothing was taken from:\n%s", out)
+	}
+}

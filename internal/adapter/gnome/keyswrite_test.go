@@ -209,3 +209,18 @@ func TestTheReaderStillCannotWrite(t *testing.T) {
 		}
 	}
 }
+
+// GNOME writes a custom-keybindings path with a trailing slash and accepts it
+// without one, and the reader compares it away. A shortcut listed without one
+// would otherwise read as switched on and be impossible to switch off, so
+// force would report a key taken that still runs somebody else's command.
+func TestAPathListedWithoutItsTrailingSlashIsStillUnlisted(t *testing.T) {
+	w, rec := newWriter("['" + base + "custom0', '" + base + "custom1/']")
+	if err := w.Disable(context.Background(), revier.Binding{
+		ID: "custom0", Where: base + "custom0/", Source: revier.BindingCustom,
+	}); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+	ran(t, rec, `gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings `+
+		`['`+base+`custom1/']`)
+}

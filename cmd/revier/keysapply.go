@@ -48,12 +48,18 @@ func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(plan)
+		if err := enc.Encode(plan); err != nil {
+			return err
+		}
+	} else {
+		printPlan(os.Stdout, plan, sub, dryRun, *force)
 	}
-	printPlan(os.Stdout, plan, sub, dryRun, *force)
 
 	// A skipped key and a failed one are both reasons the desktop is not what
-	// was asked for, so the status says so and a script can see it.
+	// was asked for, so the status says so and a script can see it. The status
+	// is the same either way: a caller reading JSON is the one most likely to
+	// be a script, so it is the last one that should have to parse the plan to
+	// find out the run was incomplete.
 	for _, s := range plan.Steps {
 		if s.Err != "" || (s.Action.Blocked() && !*force) {
 			return errKeysIncomplete
@@ -149,7 +155,10 @@ func printPlan(w io.Writer, plan core.KeyPlan, sub string, dryRun, force bool) {
 	for _, s := range plan.Steps {
 		_, _ = fmt.Fprintf(tw, "  %s %s\t%s\t%s\n",
 			mark(s, dryRun, force), prettyChord(s.Chord), bindingName(s), note(s, dryRun, force))
-		if s.Undo != "" && (s.Done || (dryRun && acts(s, force))) {
+		// The undo goes with the attempt, not with the success: a step that
+		// failed after clearing the setting is exactly the one whose reader
+		// needs the line back.
+		if s.Undo != "" && acts(s, force) {
 			_, _ = fmt.Fprintf(tw, "  \t\tundo: %s\n", s.Undo)
 		}
 	}

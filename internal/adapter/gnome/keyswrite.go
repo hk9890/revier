@@ -106,7 +106,11 @@ func (w *Writer) setEnabled(ctx context.Context, path string, want bool) error {
 	out := make([]string, 0, len(current)+1)
 	found := false
 	for _, p := range current {
-		if p == path {
+		// The trailing slash is compared away, as decodeCustom compares it
+		// away when it reads the same list. GNOME writes the path with one
+		// and accepts it without; a shortcut listed without one would
+		// otherwise be readable as switched on and impossible to switch off.
+		if samePath(p, path) {
 			found = true
 			if !want {
 				continue
@@ -123,6 +127,12 @@ func (w *Writer) setEnabled(ctx context.Context, path string, want bool) error {
 
 	_, err = w.write(ctx, w.gsettings(), "set", customSchema, "custom-keybindings", gvariantArray(out))
 	return err
+}
+
+// samePath compares two dconf directory paths, one of which may have been
+// written without its trailing slash.
+func samePath(a, b string) bool {
+	return strings.TrimSuffix(a, "/") == strings.TrimSuffix(b, "/")
 }
 
 // quote renders a GVariant string literal. GNOME shortcut commands carry
