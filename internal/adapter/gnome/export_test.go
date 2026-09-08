@@ -14,9 +14,11 @@ func (k *Keys) SetRunner(fn func(ctx context.Context, bin string, args ...string
 	k.run = fn
 }
 
-// ReadOnly exposes the guard that stands between this type and the two tools'
-// write subcommands.
+// ReadOnly exposes the guard that stands between Keys and the two tools'
+// write subcommands, and WriterAllows the wider one Writer runs under.
 func ReadOnly(bin string, args []string) error { return readOnly(bin, args) }
+
+func WriterAllows(bin string, args []string) error { return allowed(writeCommands, bin, args) }
 
 // DecodeCustom and DecodeBuiltin expose the parsers to the L3 tests.
 func DecodeCustom(dump, list []byte) []revier.Binding { return decodeCustom(dump, list) }

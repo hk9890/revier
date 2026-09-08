@@ -2,6 +2,7 @@ package hosttest
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -34,11 +35,100 @@ func (f *FakeKeys) List(context.Context) ([]revier.Binding, error) {
 	return f.Bindings, nil
 }
 
+// FakeWriter is a FakeKeys that also changes what it holds. It keeps the
+// bindings it was given, so a test asserts on the desktop as it ends up rather
+// than on the calls that got it there - which is what a user sees.
+type FakeWriter struct {
+	*FakeKeys
+	// BindErr makes Bind fail, for the error path a plan has to survive.
+	BindErr error
+	// Calls records every change, in order, as "verb id".
+	Calls []string
+}
+
+// NewWriter returns a fake desktop that can be written to.
+func NewWriter(name string, bindings ...revier.Binding) *FakeWriter {
+	return &FakeWriter{FakeKeys: NewKeys(name, bindings...)}
+}
+
+func (f *FakeWriter) Bind(_ context.Context, b revier.Binding) error {
+	f.Calls = append(f.Calls, "bind "+b.ID)
+	if f.BindErr != nil {
+		return f.BindErr
+	}
+	b.Enabled = true
+	if b.Where == "" {
+		b.Where = "/custom-keybindings/" + b.ID + "/"
+	}
+	for i, existing := range f.Bindings {
+		if existing.ID == b.ID {
+			f.Bindings[i] = b
+			return nil
+		}
+	}
+	f.Bindings = append(f.Bindings, b)
+	return nil
+}
+
+func (f *FakeWriter) Disable(_ context.Context, b revier.Binding) error {
+	f.Calls = append(f.Calls, "disable "+label(b))
+	for i, existing := range f.Bindings {
+		if same(existing, b) {
+			f.Bindings[i].Enabled = false
+			return nil
+		}
+	}
+	return nil
+}
+
+func (f *FakeWriter) Remove(_ context.Context, b revier.Binding) error {
+	f.Calls = append(f.Calls, "remove "+label(b))
+	if b.Source == revier.BindingBuiltin {
+		return errors.New("a desktop setting is not an entry to remove")
+	}
+	out := f.Bindings[:0]
+	for _, existing := range f.Bindings {
+		if !same(existing, b) {
+			out = append(out, existing)
+		}
+	}
+	f.Bindings = out
+	return nil
+}
+
+// Held reports the enabled shortcuts on a chord, as the desktop spells it.
+func (f *FakeWriter) Held(chord string) []revier.Binding {
+	var out []revier.Binding
+	for _, b := range f.Bindings {
+		if b.Chord == chord && b.Enabled {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+func same(a, b revier.Binding) bool {
+	if a.Source != b.Source {
+		return false
+	}
+	if a.Source == revier.BindingBuiltin {
+		return a.Where == b.Where && a.Label == b.Label
+	}
+	return a.ID == b.ID
+}
+
+func label(b revier.Binding) string {
+	if b.ID != "" {
+		return b.ID
+	}
+	return b.Label
+}
+
 // Custom builds an enabled custom shortcut, the common case in a test.
-func Custom(chord, command, label string) revier.Binding {
+func Custom(chord, command, name string) revier.Binding {
 	return revier.Binding{
-		Chord: chord, Command: command, Label: label,
-		Where:   "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/" + label + "/",
+		ID: name, Chord: chord, Command: command, Label: name,
+		Where:   "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/" + name + "/",
 		Enabled: true, Source: revier.BindingCustom,
 	}
 }

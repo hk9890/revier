@@ -46,6 +46,7 @@ func decodeCustom(dump, list []byte) []revier.Binding {
 			group := strings.Trim(line, "[]")
 			path := strings.TrimSuffix(customPath, "/") + "/" + group
 			cur = &revier.Binding{
+				ID:      group,
 				Where:   path + "/",
 				Enabled: enabled[path],
 				Source:  revier.BindingCustom,

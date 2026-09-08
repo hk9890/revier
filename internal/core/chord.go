@@ -127,9 +127,9 @@ func splitAngle(raw string) (mods []string, key string, err error) {
 // GTK's own - shift, control, alt, super - so a chord revier writes reads back
 // identical to one the settings UI wrote.
 //
-// Nothing calls this yet: reading goes the other way, through ParseChord. It
-// is the half `keys install` needs, and it is here now because a conversion
-// proved in one direction only is a conversion nobody has checked.
+// This is the half `keys install` writes with; reading goes the other way,
+// through ParseChord. A conversion proved in one direction only is a
+// conversion nobody has checked, which is why both are tested.
 func (c Chord) GNOME() string {
 	// Split never returns nothing, so the last field is always the key.
 	parts := strings.Split(string(c), "+")

@@ -36,6 +36,8 @@ revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
 revier status                 which project this directory resolves to
 revier keys status [--json]   the desktop keys revier wants, and who holds each
+revier keys install [--force] claim the desktop keys
+revier keys uninstall         release the keys revier holds
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
@@ -66,16 +68,22 @@ To install:
 
 1. Run `mise run install`. It puts `revier`, `revier-popup` and `revier-go` in
    `~/.local/bin`, which a login shell has on its PATH.
-2. Run `contrib/gnome/install-keybindings.sh`. It loads
-   `revier-keybindings.dconf` and appends its four entries to the
-   custom-keybindings list; the entries already there are left as they are.
-3. Disable the `os-*` bindings that use the same keys, in Settings > Keyboard,
-   or GNOME fires both.
+2. Run `revier keys install --dry-run` to see what would change, then
+   `revier keys install`.
 
-`revier keys status` says which of these keys revier holds and which something
-else does, so step 3 can be checked rather than assumed. It only reads. The key
-that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space` by
-default; the rest are the `key` each target declares.
+Without `--force`, install adds only the keys nothing else holds, and reports
+the rest. `--force` takes a key from whatever has it: another shortcut is
+switched off and keeps its command, so the tool that wrote it can put it back;
+a GNOME default is cleared, and the `gsettings reset` line that returns it is
+printed beside the key.
+
+`revier keys uninstall` removes what revier wrote and nothing else. It restores
+no other tool's shortcuts — that tool does, and the shell implementation's
+`os init` is how those four come back.
+
+The key that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space`
+by default; the rest are the `key` each target declares.
+`revier keys status` says who holds each of them and only reads.
 
 Placement of the popup is a compositor rule, not revier's: on GNOME, a
 `wctl place` line in `revier-popup` after the launch.
