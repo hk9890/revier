@@ -11,7 +11,9 @@ package tmux_test
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -289,5 +291,48 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(out)); got != dir {
 		t.Errorf("pane cwd = %q, want the realization's dir %q", got, dir)
+	}
+}
+
+// Text arrives in the pane as typed, whatever it holds: a leading dash that
+// send-keys would read as a flag, a word that is a tmux key name, quotes, a
+// backslash, the format separator. The "\r" sent after it is the Enter that
+// submits it.
+func TestSendTextTypesIntoThePane(t *testing.T) {
+	h, c := server(t), ctx(t)
+	out := filepath.Join(t.TempDir(), "typed")
+	if _, err := h.Open(c, revier.Realization{
+		Name: "agent", Match: revier.Match{Title: "^agent$"},
+		Launch: []string{"sh", "-c", `IFS= read -r line; printf '%s' "$line" > "$0"; sleep 30`, out},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil || len(instances) != 1 {
+		t.Fatalf("Instances = %+v, %v", instances, err)
+	}
+	inst := instances[0]
+
+	var w revier.PanelWriter = h
+	text := `-t Enter "it's" a\b|c`
+	for _, s := range []string{text, "\r"} {
+		if err := w.SendText(c, inst.Ref, inst.Panels[0].ID, s); err != nil {
+			t.Fatalf("SendText %q: %v", s, err)
+		}
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := os.ReadFile(out)
+		if err == nil && len(got) > 0 {
+			if string(got) != text {
+				t.Fatalf("pane read %q, want %q", got, text)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the pane read nothing within 5s: the Enter did not submit the line")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

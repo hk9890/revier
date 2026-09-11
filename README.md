@@ -39,6 +39,11 @@ revier status                 which project this directory resolves to
 revier keys status [--json]   the desktop keys revier wants, and who holds each
 revier keys install [--force] claim the desktop keys
 revier keys uninstall         release the keys revier holds
+revier agent wait <project>[:<target>] --until <status> [--timeout s]
+                              block until the agent is idle, running, attention,
+                              or stopped; exit 2 on timeout
+revier agent prompt <project>[:<target>] <text>
+                              type one line into the agent and submit it
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter

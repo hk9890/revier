@@ -50,6 +50,12 @@ type Fake struct {
 	// degradation a test also has to cover.
 	Placements map[string][]string
 
+	// Sent records every text a FakeRuntime was asked to type, in order.
+	Sent []Sent
+	// OnSend runs after each SendText, so a test can make the agent react to
+	// its prompt the way a real one does.
+	OnSend func(panel revier.PanelID, text string)
+
 	caps revier.Capabilities
 }
 
@@ -69,6 +75,43 @@ func (f *FakeRuntime) Capabilities() revier.Capabilities { return f.caps }
 // SetCapabilities changes what the runtime reports, for tests that assert on
 // the no-layout path.
 func (f *FakeRuntime) SetCapabilities(c revier.Capabilities) { f.caps = c }
+
+// Sent is one SendText call.
+type Sent struct {
+	Ref   revier.TargetRef
+	Panel revier.PanelID
+	Text  string
+}
+
+// SendText records the text, then runs OnSend. FakeRuntime implements
+// revier.PanelWriter; a runtime without the capability is a different double.
+func (f *FakeRuntime) SendText(_ context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
+	f.mu.Lock()
+	f.Sent = append(f.Sent, Sent{Ref: ref, Panel: panel, Text: text})
+	on := f.OnSend
+	f.mu.Unlock()
+	if on != nil {
+		on(panel, text)
+	}
+	return nil
+}
+
+// Retitle changes a panel's title wherever it is listed, as the program in it
+// does when its state changes.
+func (f *Fake) Retitle(panel revier.PanelID, title string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.instances {
+		// A fresh slice: a listing already handed out shares the old one.
+		panels := append([]revier.Panel(nil), f.instances[i].Panels...)
+		for j := range panels {
+			if panels[j].ID == panel {
+				panels[j].Title = title
+			}
+		}
+		f.instances[i].Panels = panels
+	}
+}
 
 // Add registers a live instance and returns its ref.
 func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef {

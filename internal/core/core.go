@@ -753,19 +753,29 @@ func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
 func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.AgentView {
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
-		for _, probe := range c.Probes {
-			if !probe.Match(panel) {
-				continue
-			}
-			state, err := probe.Inspect(ctx, panel)
-			if err != nil {
-				// A probe that fails reports unknown rather than failing the
-				// survey: one broken harness must not blank the dashboard.
-				state = revier.AgentState{Harness: probe.Name(), Status: revier.StatusUnknown}
-			}
-			out = append(out, revier.AgentView{Panel: panel.ID, State: state})
-			break
+		if probe, ok := c.probeFor(panel); ok {
+			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, panel)})
 		}
 	}
 	return out
+}
+
+// probeFor returns the first probe that claims the panel.
+func (c *Core) probeFor(panel revier.Panel) (revier.AgentProbe, bool) {
+	for _, probe := range c.Probes {
+		if probe.Match(panel) {
+			return probe, true
+		}
+	}
+	return nil, false
+}
+
+// read runs a probe over a panel. A probe that fails reports unknown rather
+// than failing the survey: one broken harness must not blank the dashboard.
+func (c *Core) read(ctx context.Context, probe revier.AgentProbe, panel revier.Panel) revier.AgentState {
+	state, err := probe.Inspect(ctx, panel)
+	if err != nil {
+		return revier.AgentState{Harness: probe.Name(), Status: revier.StatusUnknown}
+	}
+	return state
 }

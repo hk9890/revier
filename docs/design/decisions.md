@@ -574,3 +574,52 @@ any target of the project is running, as the picker refused a running session.
 The file the TUI handed to the editor, or removed, is applied at once; D17
 still holds for a file changed anywhere else. Renaming is out: the name is in
 the file name, the window titles and the bindings in state.
+
+### D31 — a runtime can type into a panel; whether it may is the core's — Accepted
+
+Anything that scripts the agents was still on `os agent`, whose `prompt` and
+`wait` had no revier equivalent. `revier agent wait` and `revier agent prompt`
+are that equivalent. `revier list --json` already covered `os agent list`, so
+there is no third listing.
+
+Waiting needs nothing new: it is the survey's probe path, read again every
+half second until the status matches. Typing does. It is a fact about one
+tool - `tmux send-keys -l`, `kitten @ send-text --stdin` - so it is a runtime's,
+and it is an optional capability, `PanelWriter`, detected by type assertion as
+`WindowPlacer` is. Not every runtime can type into a pane, and one that cannot
+still does everything else; a method on `Runtime` would have made every
+out-of-tree runtime implement it.
+
+`SendText` delivers text as it is and adds nothing. The Enter that submits is
+a `"\r"` the core sends after it, so the runtime knows nothing of a prompt, a
+submit, or a dialog. The instance ref travels with the panel id because a kitty
+window id means nothing without the process that holds it.
+
+Every refusal is the core's:
+
+- **Not an agent.** No probe claims the panel, or the runtime sees a shell in
+  its foreground. The second is not redundant: the kitty marker the Claude probe
+  reads outlives Claude in a `--hold` window, and text typed into the shell left
+  behind runs as a command. The shell tool guarded the same case by the
+  foreground process.
+- **Attention, or unknown.** An agent waiting for the human shows a question or
+  a permission dialog, where the Enter picks the highlighted option. An unknown
+  state may be showing one too.
+- **More than one line.** A newline submits early and sends the rest as further
+  prompts.
+
+Prompt returns once an idle agent has left idle. A runtime reports that text
+was delivered, never that it was read, so this is the only confirmation there
+is, and it is what makes `prompt && wait --until stopped` wait for the turn
+that was asked for rather than match the rest before it. An agent still idle
+after three seconds is a warning, not a failure, as it was in the shell tool.
+
+An agent is addressed as `<project>`, `<project>:<target>`, or
+`<project>:<panel>`. The target is revier's word for what `os` called a
+session window; the panel id is there for a target holding two agents, which
+the first two forms refuse as ambiguous. A wait that times out exits 2, the
+status `os agent wait` used, so a script keeps its branch.
+
+The cost is on tmux: its panes carry no hook variable, so the Claude probe
+never reports attention there, and the attention refusal fires on tmux only for
+a probe that reads it some other way.

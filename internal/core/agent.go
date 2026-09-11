@@ -1,0 +1,275 @@
+package core
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// Driving one agent from a script: find it, wait on its state, type into it.
+// Which panel may be typed into, and when, is policy, so every refusal is made
+// here. A runtime only delivers the text (decisions.md D31).
+
+var (
+	// ErrNoAgent means a project, or one of its targets, holds no agent panel.
+	ErrNoAgent = errors.New("no agent panel")
+
+	// ErrNotAgent refuses a panel no probe claims, or one whose foreground is
+	// a shell: text typed there runs as a command. A probe can still claim a
+	// shell - the kitty marker outlives the agent in a `--hold` window - which
+	// is why the foreground is checked as well.
+	ErrNotAgent = errors.New("not an agent panel")
+
+	// ErrAmbiguous refuses an address that names more than one agent.
+	ErrAmbiguous = errors.New("names more than one agent")
+
+	// ErrAttention refuses a prompt to an agent that is waiting for the human.
+	// It shows a question or a permission dialog, where the Enter that submits
+	// a prompt picks the highlighted option instead.
+	ErrAttention = errors.New("agent is waiting for an answer")
+
+	// ErrAgentGone means the panel a wait was following is no longer an
+	// agent's, or no longer there.
+	ErrAgentGone = errors.New("agent panel is gone")
+
+	// ErrNoWriter means the runtime holding the agent cannot type into a panel.
+	ErrNoWriter = errors.New("runtime cannot type into a panel")
+)
+
+// AgentPoll is how often Wait and Prompt read an agent again.
+const AgentPoll = 500 * time.Millisecond
+
+// PromptConfirmPolls is how many polls Prompt watches an idle agent for the
+// turn it asked for. A runtime reports that text was delivered, never that it
+// was read, so an agent leaving idle is the only confirmation there is.
+const PromptConfirmPolls = 6
+
+// Agent is one agent panel: the instance holding it, the panel, and what its
+// probe read there.
+type Agent struct {
+	Ref   revier.TargetRef
+	Panel revier.Panel
+	State revier.AgentState
+}
+
+// untils are the statuses a wait can ask for. "stopped" is an agent doing no
+// work, at rest or waiting for the human: what a script that prompted it waits
+// for before it reads the result.
+var untils = map[string][]revier.Status{
+	"idle":      {revier.StatusIdle},
+	"running":   {revier.StatusRunning},
+	"attention": {revier.StatusAttention},
+	"stopped":   {revier.StatusIdle, revier.StatusAttention},
+}
+
+// Until returns the statuses a wait for name ends on.
+func Until(name string) ([]revier.Status, error) {
+	if s, ok := untils[name]; ok {
+		return s, nil
+	}
+	return nil, fmt.Errorf("unknown status %q: want idle, running, attention or stopped", name)
+}
+
+// Agent finds the agent panel addr names in a project: with addr empty, the
+// project's only agent; with a target name, the only agent in that target's
+// instance; otherwise the panel with that id.
+func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings) (Agent, error) {
+	snap, err := c.snapshot(ctx)
+	if err != nil {
+		return Agent{}, err
+	}
+	where, only := string(p.Name), revier.TargetName("")
+	if _, ok := p.index(revier.TargetName(addr)); ok {
+		where, only = where+":"+addr, revier.TargetName(addr)
+	}
+	scope := c.running(snap, p, bound, only)
+	switch {
+	case addr != "" && only == "":
+		return c.panel(ctx, scope, p.Name, addr)
+	case only != "" && len(scope) == 0:
+		return Agent{}, fmt.Errorf("%s is not running", where)
+	}
+
+	var found []Agent
+	for _, inst := range scope {
+		for _, panel := range inst.Panels {
+			if probe, ok := c.agentProbe(panel); ok {
+				found = append(found, Agent{Ref: inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)})
+			}
+		}
+	}
+	switch len(found) {
+	case 0:
+		return Agent{}, fmt.Errorf("%s: %w", where, ErrNoAgent)
+	case 1:
+		return found[0], nil
+	}
+	addrs := make([]string, len(found))
+	for i, a := range found {
+		addrs[i] = string(p.Name) + ":" + a.Panel.ID.String()
+	}
+	return Agent{}, fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
+}
+
+// panel finds an agent by panel id among a project's running instances.
+func (c *Core) panel(ctx context.Context, scope []revier.Instance, project revier.ProjectName, id string) (Agent, error) {
+	for _, inst := range scope {
+		for _, panel := range inst.Panels {
+			if panel.ID.String() != id {
+				continue
+			}
+			probe, ok := c.agentProbe(panel)
+			if !ok {
+				return Agent{}, fmt.Errorf("%s:%s is %w: %s", project, id, ErrNotAgent, notAgentReason(panel))
+			}
+			return Agent{Ref: inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)}, nil
+		}
+	}
+	return Agent{}, fmt.Errorf("%s has no target and no running panel named %q", project, id)
+}
+
+func notAgentReason(panel revier.Panel) string {
+	if panel.Kind == revier.PanelShell {
+		return "its foreground is a shell, where the text would run as a command"
+	}
+	return "no probe recognises what runs in it"
+}
+
+// running lists the instances backing a project's targets, each once, in
+// target order; with only set, that target's alone.
+func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.TargetName) []revier.Instance {
+	var out []revier.Instance
+	seen := map[string]bool{}
+	for i, t := range p.Targets {
+		if only != "" && t.Name != only {
+			continue
+		}
+		host, _, m, err := c.resolveAt(p, i)
+		if err != nil {
+			continue
+		}
+		if inst, ok := c.locate(snap, p, i, host, m, bound[t.Name]); ok && !seen[key(inst.Ref)] {
+			seen[key(inst.Ref)] = true
+			out = append(out, inst)
+		}
+	}
+	return out
+}
+
+// agentProbe returns the probe that reads the panel, when the panel is an
+// agent's: a probe claims it and its foreground is not a shell.
+func (c *Core) agentProbe(panel revier.Panel) (revier.AgentProbe, bool) {
+	if panel.Kind == revier.PanelShell {
+		return nil, false
+	}
+	return c.probeFor(panel)
+}
+
+// Wait blocks until the agent's status is one of until, and returns the state
+// that matched. When ctx ends first it returns ctx's error with the last state
+// read, which is how a caller tells a timeout from a failure.
+func (c *Core) Wait(ctx context.Context, a Agent, until []revier.Status, poll time.Duration) (revier.AgentState, error) {
+	state := a.State
+	for !slices.Contains(until, state.Status) {
+		select {
+		case <-ctx.Done():
+			return state, ctx.Err()
+		case <-time.After(poll):
+		}
+		next, err := c.reread(ctx, a)
+		if err != nil {
+			// A host call cut short by the deadline is the deadline.
+			if ctx.Err() != nil {
+				return state, ctx.Err()
+			}
+			return state, err
+		}
+		state = next
+	}
+	return state, nil
+}
+
+// Prompt types one line into an agent and submits it. It refuses an agent that
+// is waiting for the human, and one whose state is unknown, since either may
+// be showing a dialog the Enter would answer.
+//
+// It returns once an idle agent has left idle, so a following Wait sees the
+// turn it asked for rather than the rest before it. The state returned is the
+// last one read: still idle means the agent was not seen to take the prompt.
+// An agent that was already working queues the prompt, and nothing marks its
+// arrival, so Prompt returns at once.
+func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Duration) (revier.AgentState, error) {
+	w, ok := c.Runtime.(revier.PanelWriter)
+	if !ok || a.Ref.Host != c.Runtime.Name() {
+		return a.State, fmt.Errorf("%w: %s", ErrNoWriter, a.Ref.Host)
+	}
+	switch a.State.Status {
+	case revier.StatusAttention:
+		return a.State, fmt.Errorf("%w: it shows a question or a permission dialog, where the Enter that submits a prompt would pick the highlighted option; answer it in the panel", ErrAttention)
+	case revier.StatusUnknown:
+		return a.State, errors.New("the agent's state is unknown, so it may be showing a dialog the Enter would answer")
+	}
+	if strings.ContainsAny(text, "\r\n") {
+		return a.State, errors.New("a prompt is one line: a newline submits the text early and sends the rest as further prompts")
+	}
+
+	if err := w.SendText(ctx, a.Ref, a.Panel.ID, text); err != nil {
+		return a.State, err
+	}
+	if err := w.SendText(ctx, a.Ref, a.Panel.ID, "\r"); err != nil {
+		// Say so: prompting again would type the text a second time.
+		return a.State, fmt.Errorf("the text reached the panel but the Enter did not, so it sits unsent in the composer; submit it there: %w", err)
+	}
+	if a.State.Status != revier.StatusIdle {
+		return a.State, nil
+	}
+	for range PromptConfirmPolls {
+		select {
+		case <-ctx.Done():
+			return a.State, nil
+		case <-time.After(poll):
+		}
+		// A failed read proves nothing about a text already delivered, so it
+		// only costs a poll.
+		if s, err := c.reread(ctx, a); err == nil && s.Status != revier.StatusIdle {
+			return s, nil
+		}
+	}
+	return a.State, nil
+}
+
+// reread reads the agent's panel again, from one listing of its host.
+func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
+	var host revier.Host
+	for _, h := range c.hosts() {
+		if h.Name() == a.Ref.Host {
+			host = h
+		}
+	}
+	if host == nil {
+		return revier.AgentState{}, fmt.Errorf("%w: no host named %q", ErrNoHost, a.Ref.Host)
+	}
+	instances, err := host.Instances(ctx)
+	if err != nil {
+		return revier.AgentState{}, fmt.Errorf("%s: instances: %w", host.Name(), err)
+	}
+	for _, inst := range instances {
+		if inst.Ref.ID != a.Ref.ID {
+			continue
+		}
+		for _, panel := range inst.Panels {
+			if panel.ID != a.Panel.ID {
+				continue
+			}
+			if probe, ok := c.agentProbe(panel); ok {
+				return c.read(ctx, probe, panel), nil
+			}
+		}
+	}
+	return revier.AgentState{}, fmt.Errorf("%w: %s", ErrAgentGone, a.Panel.ID)
+}

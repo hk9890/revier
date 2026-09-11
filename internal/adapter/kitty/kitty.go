@@ -55,7 +55,7 @@ var socketPattern = regexp.MustCompile(`^@kitty-\d+$`)
 // Host is a kitty Runtime. The zero value uses the real kitten binary and
 // discovers sockets; tests inject recorders through export_test.go.
 type Host struct {
-	run     func(ctx context.Context, socket string, args ...string) ([]byte, error)
+	run     func(ctx context.Context, socket, stdin string, args ...string) ([]byte, error)
 	sockets func() []string
 	start   func(ctx context.Context, args ...string) error
 }
@@ -148,8 +148,13 @@ func kittenPath() (string, error) {
 }
 
 func (h *Host) kitten(ctx context.Context, socket string, args ...string) ([]byte, error) {
+	return h.kittenIn(ctx, socket, "", args...)
+}
+
+// kittenIn is kitten with stdin, for the one command that reads it.
+func (h *Host) kittenIn(ctx context.Context, socket, stdin string, args ...string) ([]byte, error) {
 	if h.run != nil {
-		return h.run(ctx, socket, args...)
+		return h.run(ctx, socket, stdin, args...)
 	}
 	bin, err := kittenPath()
 	if err != nil {
@@ -158,6 +163,9 @@ func (h *Host) kitten(ctx context.Context, socket string, args ...string) ([]byt
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, append([]string{"@", "--to", socket}, args...)...)
 	c.Stdout, c.Stderr = &out, &errb
+	if stdin != "" {
+		c.Stdin = strings.NewReader(stdin)
+	}
 	if err := c.Run(); err != nil {
 		return nil, fmt.Errorf("kitten @ --to %s %s: %w: %s", socket, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
@@ -570,6 +578,20 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return err
 	}
 	return fmt.Errorf("kitty: os window %s not found", ref.ID)
+}
+
+// SendText types text into one kitty window, on the socket of the process the
+// instance lives in. It goes through stdin because kitty reads an argument
+// for Python escapes, which would mangle a backslash, and sends stdin as it
+// is. kitty reports success even when --match finds nothing, so success here
+// means delivered, not received.
+func (h *Host) SendText(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
+	socket, _, err := parseRef(ref.ID)
+	if err != nil {
+		return err
+	}
+	_, err = h.kittenIn(ctx, socket, text, "send-text", "--match", "id:"+panel.String(), "--stdin")
+	return err
 }
 
 // activeWindow is the window of the active tab that has the tab's focus, or

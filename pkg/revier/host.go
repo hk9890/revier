@@ -106,6 +106,20 @@ type WindowPlacer interface {
 	Place(ctx context.Context, ref TargetRef, geometry []string) error
 }
 
+// PanelWriter is an optional capability of a Runtime, detected by type
+// assertion. A runtime that implements it can type into one of its panels,
+// which is how `revier agent prompt` reaches an agent (decisions.md D31). One
+// that does not cannot be prompted through revier.
+//
+// SendText delivers text to the panel's input as given, as if typed: no escape
+// is interpreted and no key is added, so a submit is a "\r" of its own.
+// Whether a panel may be typed into is the core's decision. ref names the
+// instance holding the panel, because on some runtimes a panel id means
+// nothing without it: a kitty window id is scoped to its kitty process.
+type PanelWriter interface {
+	SendText(ctx context.Context, ref TargetRef, panel PanelID, text string) error
+}
+
 type WindowEvent struct {
 	Kind     WindowEventKind
 	Instance Instance

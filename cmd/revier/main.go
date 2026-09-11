@@ -43,6 +43,10 @@ usage:
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
   revier keys status [--json]   the desktop chords revier wants, and who holds them
+  revier agent wait <agent> --until <status> [--timeout s]
+                                block until an agent reaches a status
+  revier agent prompt <agent> <text>
+                                type one line into an agent and submit it
   revier version
 
 flags:
@@ -58,6 +62,10 @@ const exitNoProject = 3
 // desktop is not fully what was asked for. Every reason is already printed
 // against the key it belongs to, so this status carries no message of its own.
 const exitKeysIncomplete = 4
+
+// exitTimeout is returned when `revier agent wait` gave up. It is the status
+// the shell tool's wait used, so scripts written against it keep their branch.
+const exitTimeout = 2
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -77,6 +85,10 @@ func main() {
 		// A line here would repeat the summary it just printed.
 		if errors.Is(err, errKeysIncomplete) {
 			os.Exit(exitKeysIncomplete)
+		}
+		if errors.Is(err, errWaitTimeout) {
+			fmt.Fprintln(os.Stderr, "revier:", err)
+			os.Exit(exitTimeout)
 		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)
@@ -100,9 +112,7 @@ func run(args []string) error {
 		return cmdNew(args)
 	}
 
-	// Long enough for a detached launch's wait (bindWait) on top of the
-	// host calls around it.
-	ctx, cancel := context.WithTimeout(context.Background(), bindWait+30*time.Second)
+	ctx, cancel := commandContext(cmd)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -127,10 +137,23 @@ func run(args []string) error {
 		return cmdStatus(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
+	case "agent":
+		return cmdAgent(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
+}
+
+// commandContext bounds a command. A keypress command gets long enough for a
+// detached launch's wait (bindWait) on top of the host calls around it. An
+// agent command waits as long as its caller says, which by default is for
+// good: `revier agent wait` on a long turn is the point of it.
+func commandContext(cmd string) (context.Context, context.CancelFunc) {
+	if cmd == "agent" {
+		return context.WithCancel(context.Background())
+	}
+	return context.WithTimeout(context.Background(), bindWait+30*time.Second)
 }
 
 // projectFlag registers -p/--project on a flag set.
