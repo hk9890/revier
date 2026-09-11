@@ -29,8 +29,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # `go build ./...` writes no binary. A binary at the repository root
+      # leaves the tree dirty, and GoReleaser refuses a dirty tree.
       - name: build
-        run: go build ./cmd/revier
+        run: go build ./...
 
       - name: vet
         run: go vet ./...
