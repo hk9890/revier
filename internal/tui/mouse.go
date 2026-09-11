@@ -8,7 +8,10 @@ import tea "github.com/charmbracelet/bubbletea"
 // selection, one row a notch, the way the arrow keys do. A click does nothing
 // yet.
 func (m Model) mouse(msg tea.MouseMsg) Model {
-	if msg.Action != tea.MouseActionPress {
+	// A delete waiting for its answer holds the screen still: the question
+	// names one project, and a wheel moving the highlight to another would
+	// leave the user answering about a row they are no longer looking at.
+	if msg.Action != tea.MouseActionPress || m.confirm != "" {
 		return m
 	}
 	if m.overPane(msg.X) {
