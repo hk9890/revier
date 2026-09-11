@@ -8,27 +8,28 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The attach goes to the server this host speaks to, selects the window and
-// attaches its session, which is how `revier open --attach` ends in the
-// window it opened.
-func TestAttachCommandSelectsTheWindowOnTheHostsServer(t *testing.T) {
+// The attach goes to the server this host speaks to and targets the window
+// itself: tmux attaches whichever session holds it, which is how `revier
+// open --attach` ends in the window it opened, or matched, wherever on the
+// server that is.
+func TestAttachCommandTargetsTheWindowOnTheHostsServer(t *testing.T) {
 	h := &tmux.Host{Socket: "revier-test", Session: "work"}
 	argv, err := h.AttachCommand(revier.TargetRef{Host: "tmux", ID: "4242/@7", Title: "session:demo"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"tmux", "-u", "-L", "revier-test", "select-window", "-t", "@7", ";", "attach-session", "-t", "work"}
+	want := []string{"tmux", "-u", "-L", "revier-test", "attach-session", "-t", "@7"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %v, want %v", argv, want)
 	}
 }
 
-func TestAttachCommandUsesTheDefaultServerAndSession(t *testing.T) {
+func TestAttachCommandUsesTheDefaultServer(t *testing.T) {
 	argv, err := (&tmux.Host{}).AttachCommand(revier.TargetRef{Host: "tmux", ID: "4242/@1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"tmux", "-u", "select-window", "-t", "@1", ";", "attach-session", "-t", "revier"}
+	want := []string{"tmux", "-u", "attach-session", "-t", "@1"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %v, want %v", argv, want)
 	}

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/pkg/revier"
@@ -15,11 +17,32 @@ import (
 // out, or fails with err.
 func record(r *ssh.Remote, out string, err error) *[][]string {
 	var calls [][]string
-	r.SetRun(func(_ context.Context, args ...string) ([]byte, error) {
+	r.SetRun(func(_ context.Context, args ...string) ([]byte, []byte, error) {
 		calls = append(calls, args)
-		return []byte(out), err
+		return []byte(out), nil, err
 	})
 	return &calls
+}
+
+// A local deadline is the remote wait's timeout too: ending the ssh alone
+// would leave `revier agent wait` polling on the host.
+func TestWaitCarriesTheDeadlineAsTheRemoteTimeout(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, "running\n", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := r.Wait(ctx, "demo", "stopped"); err != nil {
+		t.Fatal(err)
+	}
+	args := (*calls)[0]
+	i := slices.Index(args, "--timeout")
+	if i < 0 || i+1 >= len(args) {
+		t.Fatalf("ran %v, want --timeout <seconds>", args)
+	}
+	secs, err := strconv.ParseFloat(args[i+1], 64)
+	if err != nil || secs <= 0 || secs > 30 {
+		t.Errorf("--timeout %q, want the seconds left of 30", args[i+1])
+	}
 }
 
 func TestSurveyAsksForTheNamedProjectsInOneCall(t *testing.T) {

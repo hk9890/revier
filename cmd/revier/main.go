@@ -285,7 +285,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
 	for _, v := range views {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			projectLabel(v), runState(v), agentSummary(v), targetSummary(v))
+			v.Project.Label(), runState(v), agentSummary(v), targetSummary(v))
 	}
 	return w.Flush()
 }
@@ -298,14 +298,6 @@ func runState(v revier.ProjectView) string {
 		return "running"
 	}
 	return "-"
-}
-
-// projectLabel is the name, and the host for a project that is on one.
-func projectLabel(v revier.ProjectView) string {
-	if v.Project.Host != "" {
-		return string(v.Project.Name) + "@" + v.Project.Host
-	}
-	return string(v.Project.Name)
 }
 
 // agentSummary shows the worst state across the project's agents, because the
@@ -480,9 +472,11 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 // the project, or, for a project on another machine, the ssh that runs the
 // action there (decisions.md D40).
 func (a *app) actionArgv(p core.Project, name string) ([]string, error) {
-	if r, remote, err := a.remoteOf(p); err != nil {
+	r, err := a.core.RemoteOf(p)
+	if err != nil {
 		return nil, err
-	} else if remote {
+	}
+	if r != nil {
 		return r.RunCommand(p.Name, name), nil
 	}
 	return a.action(p, name)

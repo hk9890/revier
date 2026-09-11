@@ -124,7 +124,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
 	}
 
-	nameText := clipTo(label(v.Project), min(projectCol, maxNameWidth))
+	nameText := clipTo(v.Project.Label(), min(projectCol, maxNameWidth))
 	first := prefix + cell(highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match)), projectCol+gridGap) +
 		d.agent(v, agentCol, style)
 	if agentCol == 0 {
@@ -167,21 +167,11 @@ func (d projectDelegate) projectColumn(m list.Model) int {
 	for _, item := range m.VisibleItems() {
 		if it, ok := item.(projectItem); ok {
 			col = max(col,
-				min(lipgloss.Width(label(it.view.Project)), maxNameWidth),
+				min(lipgloss.Width(it.view.Project.Label()), maxNameWidth),
 				lipgloss.Width(contractHome(it.view.Project.Path)))
 		}
 	}
 	return min(col, maxProjectWidth)
-}
-
-// label is the name the row shows: the project's, and its host after an @
-// for one on another machine. The host follows the name, so the filter's
-// match positions, which are the name's, still point at the right letters.
-func label(p revier.Project) string {
-	if p.Host != "" {
-		return string(p.Name) + "@" + p.Host
-	}
-	return string(p.Name)
 }
 
 // highlight renders the letters the filter matched in their own style, as fzf

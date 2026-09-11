@@ -128,8 +128,9 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		line("Host", v.Project.Host, th.Path)
 	}
 
+	// A host that did not answer has said nothing about the checkout.
 	pathStyle := th.Path
-	if !v.PathExists {
+	if !v.PathExists && v.Unreachable == "" {
 		pathStyle = th.PathMissing
 	}
 	line("Path", contractHome(v.Project.Path), pathStyle)
@@ -146,23 +147,17 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// project whose directory has since gone is a different problem, and the
 	// red path already says it. A remote project's host clones it on open
 	// (decisions.md D40), so Enter is the same answer there.
-	switch {
-	case v.Project.Host != "" && !v.PathExists && !v.Running:
-		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+v.Project.Host, w)))
-		b.WriteString("\n")
-		if v.Project.GitURL != "" {
-			b.WriteString(th.Meta.Render(clipTo("Enter: clone there and open", w)))
-		} else {
-			b.WriteString(th.PathMissing.Render(clipTo("No git_url recorded to clone it from", w)))
+	if !v.PathExists && !v.Running && v.Unreachable == "" {
+		where, clone := "this machine", "Enter: clone and open"
+		if v.Project.Host != "" {
+			where, clone = v.Project.Host, "Enter: clone there and open"
 		}
-		b.WriteString("\n")
-	case !v.PathExists && !v.Running:
-		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on this machine", w)))
+		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
 		// What Enter does about it, as the picker's preview says
 		// (os-fzf.sh:326, :338).
 		if v.Project.GitURL != "" {
-			b.WriteString(th.Meta.Render(clipTo("Enter: clone and open", w)))
+			b.WriteString(th.Meta.Render(clipTo(clone, w)))
 		} else {
 			b.WriteString(th.PathMissing.Render(clipTo("No git_url recorded to clone it from", w)))
 		}

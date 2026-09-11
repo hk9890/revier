@@ -15,6 +15,9 @@ const (
 	SkipDuplicate Skip = "duplicate"
 	// SkipFiltered: the --filter test failed in the project's directory.
 	SkipFiltered Skip = "filtered"
+	// SkipRemote: the project lives on another machine (decisions.md D40),
+	// and its path is in that machine's terms.
+	SkipRemote Skip = "remote"
 )
 
 // Pick is one project and whether a run in every project reaches it.
@@ -38,6 +41,11 @@ func Select(projects []Project, resolve func(path string) (string, bool), keep f
 	owner := map[string]revier.ProjectName{}
 	for _, p := range projects {
 		pick := Pick{Project: p}
+		if p.Host != "" {
+			pick.Skip = SkipRemote
+			picks = append(picks, pick)
+			continue
+		}
 		real, ok := resolve(p.Path)
 		first, taken := owner[real]
 		switch {

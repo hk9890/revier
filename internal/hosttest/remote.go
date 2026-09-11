@@ -17,17 +17,11 @@ type FakeRemote struct {
 	Views []revier.ProjectView
 	// Err makes every call fail, for the unreachable host path.
 	Err error
-	// WaitStatus is what Wait answers with.
-	WaitStatus revier.Status
 
 	// Asked records the names of every Survey call, in order, so a test can
 	// assert that a refresh costs one call per host whatever the project
 	// count.
 	Asked [][]revier.ProjectName
-	// Prompts records every prompt, in order.
-	Prompts []Prompt
-	// Waits records every wait, in order.
-	Waits []Wait
 	// RunArgv is what RunCommand answers with; Runs records every ask.
 	RunArgv []string
 	Runs    []Run
@@ -44,16 +38,6 @@ func (f *FakeRemote) RunCommand(project revier.ProjectName, action string) []str
 	defer f.mu.Unlock()
 	f.Runs = append(f.Runs, Run{Project: project, Action: action})
 	return append([]string(nil), f.RunArgv...)
-}
-
-// Prompt is one text sent to one address.
-type Prompt struct {
-	Address, Text string
-}
-
-// Wait is one wait on one address.
-type Wait struct {
-	Address, Until string
 }
 
 // NewRemote returns a fake remote for the host.
@@ -73,19 +57,8 @@ func (f *FakeRemote) Survey(_ context.Context, names []revier.ProjectName) ([]re
 	return append([]revier.ProjectView(nil), f.Views...), nil
 }
 
-func (f *FakeRemote) Prompt(_ context.Context, address, text string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.Prompts = append(f.Prompts, Prompt{Address: address, Text: text})
-	return f.Err
-}
+func (f *FakeRemote) Prompt(context.Context, string, string) error { return f.Err }
 
-func (f *FakeRemote) Wait(_ context.Context, address, until string) (revier.Status, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.Waits = append(f.Waits, Wait{Address: address, Until: until})
-	if f.Err != nil {
-		return revier.StatusUnknown, f.Err
-	}
-	return f.WaitStatus, nil
+func (f *FakeRemote) Wait(context.Context, string, string) (revier.Status, error) {
+	return revier.StatusUnknown, f.Err
 }

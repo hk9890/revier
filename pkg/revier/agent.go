@@ -129,13 +129,22 @@ func (s *Status) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &name); err != nil {
 		return err
 	}
+	parsed, err := ParseStatus(name)
+	if err != nil {
+		return err
+	}
+	*s = parsed
+	return nil
+}
+
+// ParseStatus reads a status from its name, the word String writes.
+func ParseStatus(name string) (Status, error) {
 	for v, n := range statusNames {
 		if n == name {
-			*s = v
-			return nil
+			return v, nil
 		}
 	}
-	return fmt.Errorf("unknown agent status %q", name)
+	return StatusUnknown, fmt.Errorf("unknown agent status %q", name)
 }
 
 // String makes a PanelID usable where a host expects a plain target argument.

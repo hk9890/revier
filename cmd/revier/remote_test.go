@@ -104,14 +104,14 @@ func TestRemoteForFindsTheHostOfARemoteProjectsAgent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
 
-	r, isRemote, err := a.remoteFor("far:home")
-	if err != nil || !isRemote || r.Name() != "buildbox" {
-		t.Errorf("remoteFor(far:home) = %v, %v, %v; want buildbox", r, isRemote, err)
+	r, err := a.remoteFor("far:home")
+	if err != nil || r == nil || r.Name() != "buildbox" {
+		t.Errorf("remoteFor(far:home) = %v, %v; want buildbox", r, err)
 	}
-	if _, isRemote, err := a.remoteFor("demo"); err != nil || isRemote {
-		t.Errorf("remoteFor(demo) = remote %v, err %v; want a local project", isRemote, err)
+	if r, err := a.remoteFor("demo"); err != nil || r != nil {
+		t.Errorf("remoteFor(demo) = %v, err %v; want a local project", r, err)
 	}
-	if _, _, err := a.remoteFor("nope:home"); err == nil {
+	if _, err := a.remoteFor("nope:home"); err == nil {
 		t.Error("remoteFor(nope:home): want the unknown project refused")
 	}
 }

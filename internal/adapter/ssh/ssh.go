@@ -12,8 +12,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -23,7 +26,7 @@ import (
 // The zero value is unusable; construct it with New.
 type Remote struct {
 	host string
-	run  func(ctx context.Context, args ...string) ([]byte, error)
+	run  func(ctx context.Context, args ...string) (stdout, stderr []byte, err error)
 }
 
 // New returns a remote for the host.
@@ -41,10 +44,11 @@ func (r *Remote) Name() string { return r.host }
 // to give up.
 var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 
-// exec runs one command on the remote and returns its stdout. The remote
+// exec runs one command on the remote and returns what it wrote. The remote
 // shell joins the words ssh is given back into one line, so each is quoted
-// here to reach the remote revier as the one argument it was.
-func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, error) {
+// here to reach the remote revier as the one argument it was. A failure
+// carries the remote's stderr, or ssh's own, as its text.
+func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, error) {
 	words := make([]string, len(args))
 	for i, a := range args {
 		words[i] = quote(a)
@@ -58,9 +62,9 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return nil, fmt.Errorf("%s: %s: %s", r.host, strings.Join(args, " "), msg)
+		return nil, errb.Bytes(), fmt.Errorf("%s: %s: %s", r.host, strings.Join(args, " "), msg)
 	}
-	return out.Bytes(), nil
+	return out.Bytes(), errb.Bytes(), nil
 }
 
 // quote wraps s for a POSIX shell: single quotes, with each single quote in s
@@ -86,7 +90,7 @@ func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revi
 	for _, n := range names {
 		args = append(args, string(n))
 	}
-	out, err := r.run(ctx, args...)
+	out, _, err := r.run(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,22 +101,34 @@ func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revi
 	return views, nil
 }
 
-// Prompt runs `revier agent prompt` on the remote.
+// Prompt runs `revier agent prompt` on the remote. What it warns about on
+// success - an agent still idle after the text was delivered - is passed on
+// to this stderr, as it would be had the command run here.
 func (r *Remote) Prompt(ctx context.Context, address, text string) error {
-	_, err := r.run(ctx, "revier", "agent", "prompt", address, "--", text)
-	return err
+	_, warnings, err := r.run(ctx, "revier", "agent", "prompt", address, "--", text)
+	if err != nil {
+		return err
+	}
+	_, _ = os.Stderr.Write(warnings)
+	return nil
 }
 
-// Wait runs `revier agent wait` on the remote, with no timeout of its own:
-// ctx ending ends the ssh, and with it the wait.
+// Wait runs `revier agent wait` on the remote. ctx's deadline goes with it
+// as the wait's own timeout: ending the ssh alone would leave the wait
+// polling on the host, since nothing signals a command there when the
+// client goes away, and the remote's timeout names the status the agent
+// was in, which a killed ssh could not.
 func (r *Remote) Wait(ctx context.Context, address, until string) (revier.Status, error) {
-	out, err := r.run(ctx, "revier", "agent", "wait", address, "--until", until)
+	args := []string{"revier", "agent", "wait", address, "--until", until}
+	if deadline, ok := ctx.Deadline(); ok {
+		args = append(args, "--timeout", strconv.FormatFloat(time.Until(deadline).Seconds(), 'f', 1, 64))
+	}
+	out, _, err := r.run(ctx, args...)
 	if err != nil {
 		return revier.StatusUnknown, err
 	}
-	var s revier.Status
-	word, _ := json.Marshal(strings.TrimSpace(string(out)))
-	if err := json.Unmarshal(word, &s); err != nil {
+	s, err := revier.ParseStatus(strings.TrimSpace(string(out)))
+	if err != nil {
 		return revier.StatusUnknown, fmt.Errorf("%s: revier agent wait: %w", r.host, err)
 	}
 	return s, nil

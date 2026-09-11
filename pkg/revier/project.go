@@ -48,6 +48,17 @@ func (p Project) Home() (Target, bool) {
 	return Target{}, false
 }
 
+// Label is the name a listing shows: the project's, and its host after an @
+// for one on another machine, which tells two projects of one name apart.
+// The host follows the name, so a match position within the name still
+// points at the same letter of the label.
+func (p Project) Label() string {
+	if p.Host != "" {
+		return string(p.Name) + "@" + p.Host
+	}
+	return string(p.Name)
+}
+
 // Target returns the named target.
 func (p Project) Target(name TargetName) (Target, bool) {
 	for _, t := range p.Targets {

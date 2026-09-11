@@ -102,11 +102,47 @@ func TestSurveyMarksTheProjectsOfAHostThatDidNotAnswer(t *testing.T) {
 	if len(v.Agents) != 0 {
 		t.Errorf("agents = %+v, want none: nothing is known", v.Agents)
 	}
-	if !v.PathExists {
-		t.Error("the checkout is unknown, not missing")
+	if v.PathExists {
+		t.Error("nothing said the checkout is there")
 	}
 	if local := report.Views[1]; local.Unreachable != "" {
 		t.Errorf("the local project is unreachable %q; it has no host", local.Unreachable)
+	}
+}
+
+// A host that answered but could not reach the project itself has said why,
+// and that is this side's word too, not a healthy project with no agent.
+func TestSurveyTakesAHostsOwnUnreachableWord(t *testing.T) {
+	said := revier.ProjectView{Project: revier.Project{Name: "demo"}, Unreachable: "farbox: connection refused"}
+	remote := hosttest.NewRemote("buildbox", said)
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if u := report.Views[0].Unreachable; !strings.Contains(u, "farbox") {
+		t.Errorf("unreachable = %q, want the host's own failure", u)
+	}
+}
+
+// The pane here that reaches a remote project is not the agent in it: what
+// the local probes make of it is not the project's agent, whatever the host
+// then says.
+func TestSurveyDoesNotProbeTheLocalPaneOfARemoteProject(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:demo", "kitty")
+	remote := hosttest.NewRemote("buildbox")
+	remote.Err = errors.New("buildbox: connection refused")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	v := report.Views[0]
+	if !v.Running || len(v.Agents) != 0 {
+		t.Errorf("running = %v, agents = %+v: want the pane counted as the window and nothing as an agent", v.Running, v.Agents)
 	}
 }
 

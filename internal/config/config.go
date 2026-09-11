@@ -394,16 +394,16 @@ func Validate(p revier.Project) error {
 // A URL with credentials is not echoed back: the message would print the
 // token the rule exists to keep out of the file.
 func ValidateGitURL(u string) error {
-	switch {
-	case u == "":
+	if u == "" {
 		return errors.New("empty")
-	case httpsUserinfo.MatchString(u):
+	}
+	if httpsUserinfo.MatchString(u) {
 		return errors.New("an https URL with credentials in it is refused; record it without the user part")
-	case strings.IndexFunc(u, unicode.IsSpace) >= 0:
-		return fmt.Errorf("%q contains whitespace", u)
-	case strings.IndexFunc(u, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
-		return fmt.Errorf("%q contains a control character", u)
-	case strings.ContainsAny(u, "`\"'\\$;|&<>(){}"):
+	}
+	if err := oneWord(u); err != nil {
+		return err
+	}
+	if strings.ContainsAny(u, "`\"'\\$;|&<>(){}") {
 		return fmt.Errorf("%q contains a shell metacharacter", u)
 	}
 	return nil
@@ -414,13 +414,20 @@ func ValidateGitURL(u string) error {
 // shell character is harmless; a space or a control character is a name no
 // ssh config holds, and a leading dash is a flag.
 func validateHost(h string) error {
-	switch {
-	case strings.HasPrefix(h, "-"):
+	if strings.HasPrefix(h, "-") {
 		return fmt.Errorf("%q starts with a dash, which ssh reads as a flag", h)
-	case strings.IndexFunc(h, unicode.IsSpace) >= 0:
-		return fmt.Errorf("%q contains whitespace", h)
-	case strings.IndexFunc(h, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
-		return fmt.Errorf("%q contains a control character", h)
+	}
+	return oneWord(h)
+}
+
+// oneWord refuses whitespace and control characters: a value handed to a
+// program as one argument, and shown back in a message, holds neither.
+func oneWord(s string) error {
+	switch {
+	case strings.IndexFunc(s, unicode.IsSpace) >= 0:
+		return fmt.Errorf("%q contains whitespace", s)
+	case strings.IndexFunc(s, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
+		return fmt.Errorf("%q contains a control character", s)
 	}
 	return nil
 }

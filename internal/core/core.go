@@ -763,7 +763,11 @@ func dirExists(path string) bool {
 }
 
 func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
-	v := revier.ProjectView{Project: p.Project, PathExists: dirExists(p.Path)}
+	// A remote project's checkout and agents are its host's word, laid over
+	// this view by merge; the path is in the host's terms, and the pane here
+	// that reaches the project is not the agent in it.
+	local := p.Host == ""
+	v := revier.ProjectView{Project: p.Project, PathExists: local && dirExists(p.Path)}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
@@ -784,7 +788,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 				}
 				// One instance can back two targets; probing it twice would
 				// report the same agent twice.
-				if k := key(inst.Ref); !seen[k] {
+				if k := key(inst.Ref); local && !seen[k] {
 					seen[k] = true
 					v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 				}

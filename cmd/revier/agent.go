@@ -106,9 +106,11 @@ func waitFor(ctx context.Context, address, name string, until []revier.Status) (
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	if r, remote, err := a.remoteFor(address); err != nil {
+	r, err := a.remoteFor(address)
+	if err != nil {
 		return revier.AgentState{}, err
-	} else if remote {
+	}
+	if r != nil {
 		status, err := r.Wait(ctx, address, name)
 		if err != nil {
 			return revier.AgentState{Status: status}, fmt.Errorf("%s: %w", address, err)
@@ -141,9 +143,11 @@ func cmdAgentPrompt(args []string) error {
 	if err != nil {
 		return err
 	}
-	if r, remote, err := a.remoteFor(pos[0]); err != nil {
+	r, err := a.remoteFor(pos[0])
+	if err != nil {
 		return err
-	} else if remote {
+	}
+	if r != nil {
 		// The remote revier makes every refusal and prints its own warning.
 		return r.Prompt(ctx, pos[0], pos[1])
 	}
@@ -161,29 +165,17 @@ func cmdAgentPrompt(args []string) error {
 	return nil
 }
 
-// remoteFor returns the remote that drives the agent an address names, when
-// its project is on another machine (decisions.md D40). The address is
+// remoteFor returns the remote that drives the agent an address names, nil
+// when its project is on this machine (decisions.md D40). The address is
 // passed on as it is: what it names within the project is the remote's to
 // resolve, against the instances it can see.
-func (a *app) remoteFor(address string) (revier.Remote, bool, error) {
+func (a *app) remoteFor(address string) (revier.Remote, error) {
 	name, _, _ := strings.Cut(address, ":")
 	p, ok := a.project(revier.ProjectName(name))
 	if !ok {
-		return nil, false, fmt.Errorf("no project named %q", name)
+		return nil, fmt.Errorf("no project named %q", name)
 	}
-	return a.remoteOf(p)
-}
-
-// remoteOf returns the remote a project lives on, when it lives on one.
-func (a *app) remoteOf(p core.Project) (revier.Remote, bool, error) {
-	if p.Host == "" {
-		return nil, false, nil
-	}
-	r, ok := a.core.Remotes[p.Host]
-	if !ok {
-		return nil, false, fmt.Errorf("no remote is wired for host %q", p.Host)
-	}
-	return r, true, nil
+	return a.core.RemoteOf(p)
 }
 
 // agent finds the agent an address names: <project>, or <project>:<target>,

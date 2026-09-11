@@ -229,6 +229,8 @@ func resultLine(res runlog.Result, dir string) (string, string) {
 	switch res.Skip {
 	case core.SkipMissing:
 		return "missing", res.Path
+	case core.SkipRemote:
+		return "remote", res.Path
 	case core.SkipDuplicate:
 		return "duplicate", "same directory as " + string(res.SameAs)
 	}

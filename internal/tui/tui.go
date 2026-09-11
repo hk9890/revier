@@ -641,11 +641,11 @@ const bindWait = 30 * time.Second
 // against the project, or, for a project on another machine, the ssh that
 // runs the action there (decisions.md D40).
 func (m Model) actionArgv(p core.Project, act config.Action) ([]string, error) {
-	if p.Host != "" {
-		r, ok := m.core.Remotes[p.Host]
-		if !ok {
-			return nil, fmt.Errorf("no remote is wired for host %q", p.Host)
-		}
+	r, err := m.core.RemoteOf(p)
+	if err != nil {
+		return nil, err
+	}
+	if r != nil {
 		return r.RunCommand(p.Name, act.Name), nil
 	}
 	argv, err := core.RenderArgv(p.Project, act.Run)
