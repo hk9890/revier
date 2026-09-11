@@ -133,9 +133,15 @@ func run(args []string) error {
 		// fail, that has nothing to do with running a command in directories.
 		// No deadline either, for the reason runAction has none.
 		return cmdEach(os.Stdout, args)
+	case "agent":
+		// Its own app: how long an agent command may take is one of its
+		// flags, and the hosts are probed and listed inside that bound.
+		return cmdAgent(args)
 	}
 
-	ctx, cancel := commandContext(cmd)
+	// A keypress command gets long enough for a detached launch's wait
+	// (bindWait) on top of the host calls around it.
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -160,24 +166,14 @@ func run(args []string) error {
 		return cmdStatus(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
-	case "agent":
-		return cmdAgent(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
 }
 
-// commandContext bounds a command. A keypress command gets long enough for a
-// detached launch's wait (bindWait) on top of the host calls around it. An
-// agent command waits as long as its caller says, which by default is for
-// good: `revier agent wait` on a long turn is the point of it.
-func commandContext(cmd string) (context.Context, context.CancelFunc) {
-	if cmd == "agent" {
-		return context.WithCancel(context.Background())
-	}
-	return context.WithTimeout(context.Background(), bindWait+30*time.Second)
-}
+// commandTimeout bounds a command that has no bound of its own.
+const commandTimeout = bindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {
@@ -364,7 +360,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		// The clone ran without a deadline. The host calls still need one,
 		// and the one set at startup may have been spent waiting for git.
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), bindWait+30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
 		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
