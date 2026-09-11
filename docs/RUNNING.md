@@ -17,10 +17,14 @@ client, reaches a display, or is visible in the user's own tmux.
 ## Drive the CLI against a scratch configuration
 
 `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
-user's projects and state. Set both, every time.
+user's projects and state. `TMUX_TMPDIR` and `unset TMUX` move revier's tmux
+runtime, and every `tmux` command after them, onto a private server. Set all
+four, every time, in the one shell that runs the recipes below.
 
 ```bash
 S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"
+export TMUX_TMPDIR=$(mktemp -d /tmp/rv.XXXX)   # short: tmux fails on a socket path over 107 bytes
+unset TMUX                                     # inside tmux, $TMUX names the user's server
 printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
 name = "demo"
@@ -40,7 +44,7 @@ export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 ./bin/revier list              # agent state and target availability
 ./bin/revier list --json       # what both renderers read
 
-tmux kill-session -t revier; rm -rf "$S"
+tmux kill-server; rm -rf "$S" "$TMUX_TMPDIR"   # the private server only
 ```
 
 The `[hosts]` line is the important one. This machine has a working kitty and a
