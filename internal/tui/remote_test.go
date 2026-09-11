@@ -39,7 +39,7 @@ func remoteOnDisk(t *testing.T, name string) []core.Project {
 	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := config.LoadProjects(dir)
+	projects, err := config.LoadProjects(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}

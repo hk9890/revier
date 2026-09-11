@@ -72,7 +72,7 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 		_ = os.Remove(path)
 		return core.Project{}, werr
 	}
-	p, err := LoadProject(path)
+	p, err := LoadProject(path, "")
 	if err != nil {
 		_ = os.Remove(path)
 		return core.Project{}, err

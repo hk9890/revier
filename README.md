@@ -103,7 +103,9 @@ home = true
 ```
 
 revier must be installed on the host, with tmux and the same project file
-under its `~/.config/revier/projects/`. The list then shows the project as
+under its `~/.config/revier/projects/`. The host's `config.toml` says what the
+files call it, `host = "buildbox"`, so that file is local there and the host
+does not ask itself over ssh. The list then shows the project as
 `far@buildbox` with what the agent there is doing, read from the revier
 there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
 wait far ...` and `revier run <action> -p far` run on the host, so an action

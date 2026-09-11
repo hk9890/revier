@@ -25,7 +25,7 @@ home = true
 `
 
 func TestRemoteProjectKeepsItsPathAsWritten(t *testing.T) {
-	p, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote))
+	p, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "")
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -41,6 +41,29 @@ func TestRemoteProjectKeepsItsPathAsWritten(t *testing.T) {
 	}
 }
 
+// The same file is read on the host it names. There, with config.toml
+// saying this machine is buildbox, the project is local: its path is
+// expanded here, and nothing is asked of buildbox over ssh.
+func TestAProjectOnThisMachineLoadsAsLocal(t *testing.T) {
+	p, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "buildbox")
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if p.Host != "" {
+		t.Errorf("host = %q, want none: this machine is buildbox", p.Host)
+	}
+	if strings.HasPrefix(p.Path, "~") {
+		t.Errorf("path = %q, want it expanded here", p.Path)
+	}
+	other, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "farbox")
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if other.Host != "buildbox" {
+		t.Errorf("host = %q on farbox, want buildbox kept", other.Host)
+	}
+}
+
 func TestHostIsValidatedAtLoad(t *testing.T) {
 	for _, tc := range []struct{ name, host, want string }{
 		{"flag", "-oProxyCommand=x", "dash"},
@@ -48,14 +71,14 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 		{"control character", `build\u0001box`, "control character"},
 	} {
 		body := strings.Replace(remote, `host = "buildbox"`, `host = "`+tc.host+`"`, 1)
-		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body))
+		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body), "")
 		if err == nil || !strings.Contains(err.Error(), "host:") || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want one naming host and %q", tc.name, err, tc.want)
 		}
 	}
 	for _, host := range []string{"buildbox", "hans@build.example.com", "10.0.0.7"} {
 		body := strings.Replace(remote, `host = "buildbox"`, `host = "`+host+`"`, 1)
-		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body)); err != nil {
+		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body), ""); err != nil {
 			t.Errorf("%s: %v", host, err)
 		}
 	}

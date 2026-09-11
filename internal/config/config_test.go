@@ -48,7 +48,7 @@ func write(t *testing.T, dir, name, body string) string {
 
 func TestLoadProject(t *testing.T) {
 	dir := t.TempDir()
-	p, err := config.LoadProject(write(t, dir, "revier.toml", valid))
+	p, err := config.LoadProject(write(t, dir, "revier.toml", valid), "")
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestLoadProject(t *testing.T) {
 func TestLoadProjectNameDefaultsToFileStem(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Replace(valid, `name = "revier"`, "", 1)
-	p, err := config.LoadProject(write(t, dir, "other.toml", body))
+	p, err := config.LoadProject(write(t, dir, "other.toml", body), "")
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestLoadProjectsRefusesTwoFilesWithOneName(t *testing.T) {
 	first := write(t, dir, "revier.toml", valid)
 	second := write(t, dir, "revier-copy.toml", valid)
 
-	_, err := config.LoadProjects(dir)
+	_, err := config.LoadProjects(dir, "")
 	if err == nil {
 		t.Fatal("two files declaring project revier loaded")
 	}
@@ -240,7 +240,7 @@ func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := write(t, dir, "broken.toml", body)
-			_, err := config.LoadProject(path)
+			_, err := config.LoadProject(path, "")
 			if err == nil {
 				t.Fatal("want an error")
 			}
@@ -254,7 +254,7 @@ func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
 // Projects leave Load prepared: templates rendered, so a host never sees one.
 func TestLoadProjectRendersTemplates(t *testing.T) {
 	dir := t.TempDir()
-	p, err := config.LoadProject(write(t, dir, "revier.toml", valid))
+	p, err := config.LoadProject(write(t, dir, "revier.toml", valid), "")
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 	}
 	dir := t.TempDir()
 	body := strings.Replace(valid, `path = "/home/hans/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
-	p, err := config.LoadProject(write(t, dir, "revier.toml", body))
+	p, err := config.LoadProject(write(t, dir, "revier.toml", body), "")
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}

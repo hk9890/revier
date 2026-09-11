@@ -52,8 +52,11 @@ type Model struct {
 	projects  []core.Project
 	stateRoot string
 	actions   []config.Action
-	refresh   time.Duration
-	theme     theme.Theme
+	// self is what the project files call this machine, for a file read
+	// again after an edit, as config.Load read it at start.
+	self    string
+	refresh time.Duration
+	theme   theme.Theme
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
@@ -93,10 +96,11 @@ type Model struct {
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
-func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
-		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
+		core: c, projects: projects, stateRoot: stateRoot, actions: actions, self: cfg.Host,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),

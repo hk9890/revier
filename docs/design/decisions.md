@@ -816,7 +816,14 @@ answer marks its projects unreachable, with the failure, and fails nothing
 else: the survey renders, and a down machine is a row.
 
 The file is on both machines, as D30 already assumed, and its path is the
-host's to expand: a remote project's `~` is kept as written. The checkout is
+host's to expand: a remote project's `~` is kept as written. The host reads
+the same `host = "buildbox"`, so it has to know that it is buildbox, or it
+asks itself over ssh, once per level, until the deadline. Its `config.toml`
+says so, `host = "buildbox"`, and a project naming this machine loads as a
+local one. A machine's hostname was rejected for it: an ssh alias is rarely
+the hostname, and a mismatch reproduces the recursion silently. Leaving
+`host` out of the host's copy was rejected too: the file is then not the
+same on both sides, which is what the synced dotfiles rely on. The checkout is
 the host's to clone, in the pane, by the `revier open` that runs there. A
 name the host does not know is an error for that host, which is how a
 missing file there is found. ssh runs in batch mode with a connect timeout,

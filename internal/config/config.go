@@ -28,6 +28,11 @@ import (
 // Config is the global configuration: which adapters to prefer, the actions
 // the TUI exposes, and the external agent probes.
 type Config struct {
+	// Host is what the project files call this machine: the ssh name other
+	// machines reach it by. A project whose host is this name is local here,
+	// so the same file serves on both sides (decisions.md D40). Empty on a
+	// machine no project file names.
+	Host    string   `toml:"host"`
 	Hosts   Hosts    `toml:"hosts"`
 	UI      UI       `toml:"ui"`
 	Actions []Action `toml:"action"`
@@ -118,7 +123,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"))
+	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,8 +174,8 @@ func validateActions(actions []Action) error {
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
-// across machines.
-func LoadProjects(dir string) ([]core.Project, error) {
+// across machines. self is what the files call this machine, or empty.
+func LoadProjects(dir, self string) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -192,7 +197,7 @@ func LoadProjects(dir string) ([]core.Project, error) {
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
-		p, err := LoadProject(path)
+		p, err := LoadProject(path, self)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -214,11 +219,15 @@ func LoadProjects(dir string) ([]core.Project, error) {
 
 // LoadProject reads, validates, and prepares one project file. Every error
 // names the file: a rendering or compile failure is reported here, at load,
-// and never reaches a keystroke.
-func LoadProject(path string) (core.Project, error) {
+// and never reaches a keystroke. self is what the files call this machine:
+// a project whose host is that name lives here, and loads as a local one.
+func LoadProject(path, self string) (core.Project, error) {
 	var p revier.Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if p.Host != "" && p.Host == self {
+		p.Host = ""
 	}
 	if p.Name == "" {
 		// Fall back to the file stem so a project file need not repeat its own

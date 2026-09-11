@@ -66,7 +66,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // timer does.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, actions, time.Second, theme.Default(), "")
+	m := tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "")
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
 }
@@ -163,7 +163,7 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 // component's own empty text.
 func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
 	_, _, c, projects := world(t, 90)
-	m := resize(tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 150, 20)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 
 	view := m.View()
 	for _, wrong := range []string{"0 projects", "0/0", "No items", "No project"} {
@@ -186,7 +186,7 @@ func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	// Wide enough that the temporary directory's long name is not cut.
-	m := resize(tui.New(c, nil, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 200, 20)
+	m := resize(tui.New(c, nil, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 200, 20)
 
 	// Nothing to survey, so the first frame is already the answer.
 	view := m.View()
@@ -472,7 +472,7 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, nil, time.Second, theme.Default(), "")
+	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "")
 	stray := wm.Add("Pull requests - Chromium", "chromium")
 	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
 
@@ -1010,7 +1010,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 // scrolling to.
 func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
 	m = survey(m)
 
 	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
@@ -1022,7 +1022,7 @@ func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
 // the cursor back to where the process started.
 func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), "project-04")
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
 	m = survey(m)
 	m, _ = press(m, "down")
 	moved := selectedRow(t, m)
