@@ -18,11 +18,8 @@ live substrates, which are the only layers that prove an adapter drives its tool
 
 No emojis, in commit messages, PR titles, or PR bodies.
 
-End every commit message with the trailers this account uses:
-
-```
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
-```
+No `Co-Authored-By` trailer, and no model name or session link, in a commit or
+a PR.
 
 ## Before opening a PR
 
