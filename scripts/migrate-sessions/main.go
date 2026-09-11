@@ -40,10 +40,11 @@ const defaultIn = "~/setup/dotfiles/kitty/.config/kitty/sessions"
 // the input is reported as untranslated rather than dropped in silence: a
 // half-converted project is worse than a named omission.
 var translated = map[string]bool{
-	"KT_SESSION_PATH": true,
-	"KT_WEB_URL":      true,
-	"KT_IDEA_NAME":    true,
-	"KT_EDITOR":       true,
+	"KT_SESSION_PATH":  true,
+	"KT_GIT_CLONE_URL": true,
+	"KT_WEB_URL":       true,
+	"KT_IDEA_NAME":     true,
+	"KT_EDITOR":        true,
 }
 
 type session struct {
@@ -76,7 +77,7 @@ func convert(in, out string) error {
 		return err
 	}
 
-	written, skipped := 0, 0
+	written, skipped, withURL, recoverable := 0, 0, 0, 0
 	untranslated := map[string]int{}
 	var missing []string
 
@@ -102,9 +103,16 @@ func convert(in, out string) error {
 			return err
 		}
 		written++
+		hasURL := s.vars["KT_GIT_CLONE_URL"] != ""
+		if hasURL {
+			withURL++
+		}
 		if dir := expandHome(s.vars["KT_SESSION_PATH"]); dir != "" {
 			if _, err := os.Stat(dir); err != nil {
 				missing = append(missing, s.name)
+				if hasURL {
+					recoverable++
+				}
 			}
 		}
 	}
@@ -117,14 +125,14 @@ func convert(in, out string) error {
 		return fmt.Errorf("the written projects do not load: %w", err)
 	}
 
-	fmt.Printf("input    %d\nwritten  %d\nskipped  %d\nloaded   %d\n",
-		len(sessions), written, skipped, len(projects))
+	fmt.Printf("input    %d\nwritten  %d\nskipped  %d\nloaded   %d\ngit_url  %d\n",
+		len(sessions), written, skipped, len(projects), withURL)
 	if len(untranslated) > 0 {
 		fmt.Printf("not translated (no field in a revier project): %s\n", counts(untranslated))
 	}
 	if len(missing) > 0 {
-		fmt.Printf("%d projects point at a directory that does not exist here: %s\n",
-			len(missing), strings.Join(missing, " "))
+		fmt.Printf("%d projects point at a directory that does not exist here, %d of them with a git_url to clone it from: %s\n",
+			len(missing), recoverable, strings.Join(missing, " "))
 	}
 	if written+skipped != len(sessions) {
 		return fmt.Errorf("written+skipped = %d, input = %d", written+skipped, len(sessions))
@@ -202,7 +210,15 @@ func render(s session) (string, error) {
 
 	p("# %s: converted from %s by scripts/migrate-sessions.\n", s.name, contractHome(s.file))
 	p("name = %s\n", q(s.name))
-	p("path = %s\n\n", q(s.vars["KT_SESSION_PATH"]))
+	p("path = %s\n", q(s.vars["KT_SESSION_PATH"]))
+	// What `revier open` clones when the path is not on this machine. An
+	// unsafe URL is not filtered out here: the load gate in convert refuses
+	// it, naming the file, which is better than a project that quietly lost
+	// it.
+	if u := s.vars["KT_GIT_CLONE_URL"]; u != "" {
+		p("git_url = %s\n", q(u))
+	}
+	p("\n")
 
 	// The workspace: the agent beside a shell in one kitty OS window titled
 	// session:<name>, which is the default kitty template's first tab.

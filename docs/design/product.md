@@ -93,6 +93,7 @@ an application restart.
 ```
 revier                 the TUI: every project, its agent state, its targets
 revier open [name]     run-or-raise the home target, without UI
+revier new [name]      write a project file for the current directory
 revier go <target>     run-or-raise a named target in the current project
 revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
@@ -103,7 +104,8 @@ revier status          the project for the current directory
 The TUI is one surface with two levels. The top level lists projects, sorted so
 the ones needing attention come first. Enter on a project opens its home
 target (D28). Tab lists its targets and attached instances, and Enter there
-activates one.
+activates one. alt+e opens the project's file in `$EDITOR`, and alt+d deletes
+it after a confirmation (D30).
 
 ## Scope
 

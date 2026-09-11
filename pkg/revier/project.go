@@ -18,8 +18,14 @@ type (
 
 // Project is a directory and the set of targets bound to it.
 type Project struct {
-	Name    ProjectName       `toml:"name" json:"name"`
-	Path    string            `toml:"path" json:"path"`
+	Name ProjectName `toml:"name" json:"name"`
+	Path string      `toml:"path" json:"path"`
+
+	// GitURL is the repository the directory at Path is a clone of. It is
+	// what brings back a project whose directory is not on this machine: the
+	// project file travels between machines, and the checkout does not.
+	GitURL string `toml:"git_url" json:"git_url,omitempty"`
+
 	Targets []Target          `toml:"target" json:"targets"`
 	Vars    map[string]string `toml:"vars" json:"vars,omitempty"`
 }

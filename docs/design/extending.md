@@ -13,6 +13,8 @@ A project, in `~/.config/revier/projects/<name>.toml`:
 ```toml
 name = "revier"
 path = "~/dev/github/revier"
+# Optional. Opening the project clones it here when path is missing.
+git_url = "git@github.com:hk9890/revier.git"
 
 # The workspace. Home is where toggle-back returns.
 [[target]]

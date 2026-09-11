@@ -58,11 +58,17 @@ type Model struct {
 	surveyed bool                 // whether windows holds a listing yet
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
-	err      error                                // the last failure, shown in the footer
-	level    level
-	current  revier.ProjectName // the project drilled into
-	width    int
-	height   int
+	// Two failures, because they end differently. err is what a key or an
+	// activation ran into, and it stays until the next key: a refusal that
+	// the next refresh wiped would be on screen for under a second.
+	// surveyErr is the last refresh's, and the next refresh replaces it.
+	err       error
+	surveyErr error
+	level     level
+	current   revier.ProjectName // the project drilled into
+	confirm   revier.ProjectName // the project a delete is waiting on an answer for
+	width     int
+	height    int
 
 	// The two levels are two lists. Cursor, paging and fuzzy filtering are
 	// the component's; what a row looks like is the delegate's.
@@ -187,10 +193,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	case surveyMsg:
-		m.err = msg.err
+		m.surveyErr = msg.err
 		if msg.err == nil {
 			m.claimByPolling(msg.report)
-			m.views = sorted(msg.report.Views)
+			m.views = sorted(m.known(msg.report.Views))
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
 		}
@@ -211,6 +217,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.apply(msg)
 		return m, nil
+	case editedMsg:
+		m.err = m.reread(msg)
+		return m, nil
+	case clonedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
 		return m.key(msg)
 	}
@@ -339,6 +354,10 @@ func sorted(views []revier.ProjectView) []revier.ProjectView {
 // filter character and never a list command: the surface filters as you type,
 // the way the picker it replaces does, so no letter can be a shortcut.
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirm != "" {
+		return m.confirmDelete(msg)
+	}
+	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -362,6 +381,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.enter()
 	case key.Matches(msg, m.keys.Targets) && m.level == levelProjects:
 		return m.drill()
+	case key.Matches(msg, m.keys.Edit) && m.level == levelProjects:
+		return m.editFile()
+	case key.Matches(msg, m.keys.Delete) && m.level == levelProjects:
+		return m.askDelete()
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
@@ -439,6 +462,9 @@ func (m Model) targetRows() []targetRow {
 // run-or-raise `revier go home` does. Searching for a project is almost always
 // to get to it, so the target list is the detour and gets the other key. A
 // project with no home target has nothing to open, so it gets the list.
+//
+// A project whose directory is not on this machine is cloned first, when its
+// file says from where, as `revier open` does.
 func (m Model) enter() (tea.Model, tea.Cmd) {
 	if m.level == levelProjects {
 		v, ok := m.selected()
@@ -450,6 +476,9 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if home, ok := p.Home(); ok {
+			if !v.PathExists && p.GitURL != "" {
+				return m, m.clone(p, home.Name)
+			}
 			return m, m.goTarget(p, home.Name)
 		}
 		return m.drill()

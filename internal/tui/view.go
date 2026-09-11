@@ -145,14 +145,24 @@ func (m Model) header() string {
 // rather than being added to it: a survey that failed is the only thing worth
 // reading on that line.
 func (m Model) footer() string {
-	if m.err != nil {
-		return m.theme.Attention.Render(" " + m.err.Error())
+	if m.confirm != "" {
+		return m.deletePrompt()
+	}
+	err := m.err
+	if err == nil {
+		err = m.surveyErr
+	}
+	if err != nil {
+		return m.theme.Attention.Render(" " + err.Error())
 	}
 	keys := m.keys.helpFor(m.level)
 	if m.level == levelProjects {
 		if v, ok := m.selected(); ok {
 			keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
 		}
+		// Last, so a narrow footer cuts the file keys and not the row's own
+		// target keys: those change from row to row, and these never do.
+		keys = append(keys, m.keys.Edit, m.keys.Delete)
 	}
 	return " " + m.help.ShortHelpView(keys)
 }

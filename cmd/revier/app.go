@@ -19,6 +19,7 @@ import (
 // core wired to the hosts this machine actually has.
 type app struct {
 	cfg       *config.Config
+	cfgRoot   string
 	projects  []core.Project
 	state     *state.State
 	stateRoot string
@@ -47,7 +48,7 @@ func newApp(ctx context.Context) (*app, error) {
 		return nil, err
 	}
 	return &app{
-		cfg: cfg, projects: projects, state: st,
+		cfg: cfg, cfgRoot: cfgRoot, projects: projects, state: st,
 		stateRoot: stateRoot,
 		// No keybinder: probing the desktop costs a process, and only
 		// `revier keys` reads one. cmdKeys selects it when it is needed.

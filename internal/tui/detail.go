@@ -96,11 +96,22 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 		pathStyle = th.PathMissing
 	}
 	line("Path", contractHome(v.Project.Path), pathStyle)
+	if v.Project.GitURL != "" {
+		line("Git URL", v.Project.GitURL, th.Path)
+	}
 	// Only worth saying when it is the reason nothing can start. A running
 	// project whose directory has since gone is a different problem, and the
 	// red path already says it.
 	if !v.PathExists && !v.Running {
 		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on this machine", w)))
+		b.WriteString("\n")
+		// What Enter does about it, as the picker's preview says
+		// (os-fzf.sh:326, :338).
+		if v.Project.GitURL != "" {
+			b.WriteString(th.Meta.Render(clipTo("Enter: clone and open", w)))
+		} else {
+			b.WriteString(th.PathMissing.Render(clipTo("No git_url recorded to clone it from", w)))
+		}
 		b.WriteString("\n")
 	}
 

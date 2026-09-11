@@ -22,6 +22,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/hk9890/revier/internal/build"
+	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
@@ -33,7 +34,10 @@ const usage = `revier - a project-grouped control surface for running agents
 usage:
   revier                        the TUI: every project, its agent state, its targets
   revier list [--json]          the same, printed once
-  revier open [name]            run-or-raise a project's workspace
+  revier open [name]            run-or-raise a project's workspace; an unknown name
+                                becomes a new project for this directory, and a
+                                missing directory is cloned from git_url
+  revier new [name]             write a project file for this directory
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
@@ -92,6 +96,8 @@ func run(args []string) error {
 	case "help", "--help", "-h":
 		fmt.Print(usage)
 		return nil
+	case "new":
+		return cmdNew(args)
 	}
 
 	// Long enough for a detached launch's wait (bindWait) on top of the
@@ -278,6 +284,17 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if len(pos) > 0 {
 		name = pos[0]
 	}
+	// A name revier does not know, typed in a directory, is a project being
+	// started: the file is written and the workspace opened in one step, as
+	// `os open` does. Without a name there is nothing to call it, and the
+	// usual resolution applies.
+	if _, known := a.project(revier.ProjectName(name)); name != "" && !known {
+		p, err := createProject(a.cfgRoot, a.projects, revier.ProjectName(name))
+		if err != nil {
+			return err
+		}
+		a.projects = append(a.projects, p)
+	}
 	p, err := a.resolveProject(ctx, name)
 	if err != nil {
 		return err
@@ -285,6 +302,17 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	home, ok := p.Home()
 	if !ok {
 		return fmt.Errorf("project %q has no home target", p.Name)
+	}
+	cloned, err := checkout.Ensure(p.Project, os.Stderr)
+	if err != nil {
+		return err
+	}
+	if cloned {
+		// The clone ran without a deadline. The host calls still need one,
+		// and the one set at startup may have been spent waiting for git.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), bindWait+30*time.Second)
+		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {
