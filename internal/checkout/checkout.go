@@ -30,7 +30,15 @@ var ErrNoGitURL = errors.New("the project file records no git_url to clone it fr
 // config.ValidateGitURL refuses is dropped too, as the shell tool drops it
 // (session_infer_git_clone_url): a remote with a token in it must not be
 // copied into a file that is shared between machines.
+//
+// So is the origin of a repository dir is only inside. A clone of it lands at
+// the project's path, so recorded for a subdirectory it would put the whole
+// repository where the subdirectory was, nested one level too deep.
 func Origin(dir string) string {
+	prefix, err := exec.Command("git", "-C", dir, "rev-parse", "--show-prefix").Output()
+	if err != nil || strings.TrimSpace(string(prefix)) != "" {
+		return ""
+	}
 	out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output()
 	if err != nil {
 		return ""
