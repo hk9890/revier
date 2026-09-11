@@ -101,8 +101,9 @@ revier status          the project for the current directory
 ```
 
 The TUI is one surface with two levels. The top level lists projects, sorted so
-the ones needing attention come first. Entering a project lists its targets and
-attached instances. Enter activates.
+the ones needing attention come first. Enter on a project opens its home
+target (D28). Tab lists its targets and attached instances, and Enter there
+activates one.
 
 ## Scope
 

@@ -41,9 +41,9 @@ revier keys uninstall         release the keys revier holds
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
-by name, Enter opens a project's targets, Enter on a target runs-or-raises it,
-Esc goes back. A configured action key runs the action against the selected
-project.
+by name, Enter opens the project's home, Tab lists its targets, Enter on a
+target runs-or-raises it, Esc goes back. A configured action key runs the
+action against the selected project.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
