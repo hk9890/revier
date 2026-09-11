@@ -8,12 +8,13 @@ import (
 	"time"
 )
 
-// The bounds on a listing. Two levels and twenty lines is what identifies a
-// checkout - a Go tree, a docs tree, an empty directory - and the per
-// directory cap keeps a directory of ten thousand files from being read to
-// the end for a pane that shows twenty lines of it.
+// The bounds on a listing. Two levels is what identifies a checkout - a Go
+// tree, a docs tree, an empty directory. The line cap is the tallest pane a
+// terminal has rows for; the pane cuts the listing to the rows it has
+// (snapshot). The per directory cap keeps a directory of ten thousand files
+// from being read to the end for a pane that shows a screen of it.
 const (
-	treeMaxLines   = 20
+	treeMaxLines   = 200
 	treeMaxEntries = 200
 	treeTTL        = 30 * time.Second
 )

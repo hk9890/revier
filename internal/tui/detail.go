@@ -10,37 +10,32 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The pane's width bounds, and the list's beside it. The list is what the
-// surface is for, so the pane takes what is left over and not the other way
-// round: at ninety columns a half-and-half split cut every path in the list
-// to make room for a pane that wrapped every line of its own. The list stops
-// at a width that holds a name, a state with its activity and a path whole;
-// past that the frame stops growing (maxInnerWidth).
+// The list's width bounds, the least the pane needs beside it, and the pane
+// width at which the pane lays its sections side by side (decisions.md D39).
+//
+// The list is a table of two columns - the project, and its agent's state -
+// and stops at the width that holds both whole. Past that every column goes
+// to the pane, which is where a wide terminal has something to show. Below
+// the least the two need together, there is no pane.
 const (
-	minPaneWidth = 44
-	maxPaneWidth = 90
-	minListWidth = 56
-	maxListWidth = 100
+	minListWidth  = 56
+	maxListWidth  = 110
+	minPaneWidth  = 44
+	widePaneWidth = 130
+	maxFactsWidth = 80
 )
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
-// narrow to give both the list and the pane their least.
+// narrow to give both the list and the pane their least. The list takes half
+// up to its cap, as the picker split its preview (os-fzf.sh:782), and the
+// pane takes the rest.
 func (m Model) paneWidth() int {
-	// Half, as the picker gives its preview 55% (os-fzf.sh:782). A fixed cap
-	// left the pane at 28% of a 200-column terminal, which is where the paths
-	// and the tree it holds are longest.
-	w := m.width / 2
-	if w > maxPaneWidth {
-		w = maxPaneWidth
-	}
 	inner, _ := m.inner()
-	if spare := inner - minListWidth; w > spare {
-		w = spare
-	}
-	if w < minPaneWidth {
+	if inner < minListWidth+minPaneWidth {
 		return 0
 	}
-	return w
+	list := min(max(inner/2, minListWidth), maxListWidth)
+	return inner - list
 }
 
 // paneChrome is the border column and the padding column the pane's frame
@@ -77,15 +72,38 @@ func (m *Model) syncDetail() {
 
 // detailContent is what the shell picker's preview shows, in its order
 // (os-fzf.sh:290): what this project is, then what is up, then what the
-// agents are doing.
+// agents are doing, then what the directory holds.
+//
+// A narrow pane stacks the sections, and the snapshot takes the rows the
+// others leave. A wide pane puts the snapshot beside the rest, so both fill
+// the height and neither waits under the other (decisions.md D39).
+func (m *Model) detailContent(v revier.ProjectView) string {
+	w := m.paneWidth() - paneChrome
+	_, h := m.inner()
+	if m.paneWidth() < widePaneWidth {
+		facts := m.facts(v, w)
+		return facts + m.snapshot(v, w, h-strings.Count(facts, "\n"))
+	}
+	// The facts take half, up to what a repository URL and an agent's line
+	// need whole; the snapshot takes the rest.
+	left := min((w-gridGap)/2, maxFactsWidth)
+	right := w - gridGap - left
+	// The snapshot starts level with the name: its heading's blank line is a
+	// separator from a section above it, and there is none here.
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(left).Render(m.facts(v, left)),
+		strings.Repeat(" ", gridGap),
+		strings.TrimPrefix(m.snapshot(v, right, h+1), "\n"))
+}
+
+// facts is the pane's first part: what this project is, then what is up,
+// then what the agents are doing.
 //
 // A path and an activity line wrap, as the preview does (os-fzf.sh:788,
 // --preview-window=...,wrap): they are the fields worth reading whole, and a
-// cut takes exactly the end that says which checkout or which step. Tree rows
-// are cut instead, because a wrapped tree row loses its indentation.
-func (m *Model) detailContent(v revier.ProjectView) string {
+// cut takes exactly the end that says which checkout or which step.
+func (m *Model) facts(v revier.ProjectView, w int) string {
 	th := m.theme
-	w := m.paneWidth() - paneChrome
 	var b strings.Builder
 
 	line := func(label, value string, style lipgloss.Style) {
@@ -150,17 +168,31 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 			b.WriteString("\n")
 		}
 	}
+	return b.String()
+}
 
-	// What the directory holds. With ninety near-identical names this is what
-	// says which checkout the cursor is on.
-	if v.PathExists {
-		if tree := m.treeFor(v.Project.Path); len(tree) > 0 {
-			b.WriteString(m.heading("Project Snapshot", w))
-			for _, line := range tree {
-				b.WriteString(th.Path.Render(clipTo(line, w)))
-				b.WriteString("\n")
-			}
-		}
+// snapshot is what the directory holds, in the rows it is given: with ninety
+// near-identical names this is what says which checkout the cursor is on.
+// Tree rows are cut, not wrapped, because a wrapped tree row loses its
+// indentation. rows counts the heading; a listing that does not fit ends in
+// an ellipsis on its last row.
+func (m *Model) snapshot(v revier.ProjectView, w, rows int) string {
+	if !v.PathExists {
+		return ""
+	}
+	tree := m.treeFor(v.Project.Path)
+	room := rows - 2 // the heading and the blank line before it
+	if len(tree) == 0 || room < 1 {
+		return ""
+	}
+	if len(tree) > room {
+		tree = append(tree[:room-1:room-1], "...")
+	}
+	var b strings.Builder
+	b.WriteString(m.heading("Project Snapshot", w))
+	for _, line := range tree {
+		b.WriteString(m.theme.Path.Render(clipTo(line, w)))
+		b.WriteString("\n")
 	}
 	return b.String()
 }

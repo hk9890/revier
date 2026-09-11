@@ -1200,7 +1200,7 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
 
 	r := rows(m)
-	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply-nested") || !strings.Contains(r[2], "short") {
+	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply") || !strings.Contains(r[2], "short") {
 		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
 	}
 	for i, line := range strings.Split(m.View(), "\n") {
@@ -1208,10 +1208,10 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
 	}
-	// The activity is cut to make room, and the state it describes is not: the
-	// state is what the row is for.
-	if !strings.Contains(r[0], "working") || !strings.Contains(r[0], "Reading") || !strings.Contains(r[0], "…") {
-		t.Errorf("first row = %q, want the state kept and the activity cut short", r[0])
+	// The activity goes to make room, and the state it describes does not:
+	// the state is what the row is for, and the path keeps its column.
+	if !strings.Contains(r[0], "working") || strings.Contains(r[0], "Reading") {
+		t.Errorf("first row = %q, want the state kept and the activity gone", r[0])
 	}
 }
 
@@ -1305,19 +1305,21 @@ func TestTheWheelMovesTheSelection(t *testing.T) {
 // The wheel over the pane scrolls the pane and leaves the selection alone; the
 // next project starts at its own top.
 func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
+	// The snapshot fits the pane by design, so what overflows a fourteen-row
+	// terminal is a project with more targets than the pane has rows.
 	dir := t.TempDir()
-	for i := range 20 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	home := func(name string) []revier.Target {
-		return []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+	targets := func(name string) []revier.Target {
+		out := []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
 			Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}
+		for i := range 12 {
+			out = append(out, revier.Target{Name: revier.TargetName(fmt.Sprintf("t%02d", i)), Window: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Class: fmt.Sprintf("^t%02d-%s$", i, name)}}})
+		}
+		return out
 	}
 	projects, err := core.Prepare([]revier.Project{
-		{Name: "first", Path: dir, Targets: home("first")},
-		{Name: "second", Path: dir, Targets: home("second")},
+		{Name: "first", Path: dir, Targets: targets("first")},
+		{Name: "second", Path: dir, Targets: targets("second")},
 	})
 	if err != nil {
 		t.Fatal(err)
