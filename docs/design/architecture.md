@@ -112,6 +112,7 @@ pkg/revier/            the ports and the shared types
 internal/core/         match, run-or-raise, toggle-back, resolution
 internal/config/       TOML load, template rendering, validation
 internal/state/        per-session attachments, which do not belong in config
+internal/checkout/     the clone of a missing project directory (D30)
 internal/adapter/
     kitty/
     tmux/

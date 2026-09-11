@@ -13,6 +13,7 @@ type TargetName string
 type Project struct {
     Name    ProjectName
     Path    string
+    GitURL  string // what `revier open` clones when Path is missing (D30)
     Targets []Target
     Vars    map[string]string // template values for launches
 }

@@ -17,6 +17,11 @@ import (
 // with PrepareProject.
 type Project struct {
 	revier.Project
+
+	// File is the project file this was loaded from, for the surface that
+	// edits or removes it. Empty for a project built in memory.
+	File string
+
 	compiled []compiledTarget // parallel to Project.Targets
 }
 

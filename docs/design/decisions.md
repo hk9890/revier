@@ -549,3 +549,28 @@ A single-command way back is `os init`'s to provide, in the `setup`
 repository: switch its own shortcuts back on rather than copying them, and
 switch off anything else on its four keys, as `--force` does here. revier does
 not reach into that tool to do it for it.
+
+### D30 — revier writes project files, and clones a missing checkout — Accepted
+
+A project file travels between machines; the checkout it names does not. Half
+of the converted projects point at a directory that is not on this machine, so
+a project records `git_url`, validated at load by the shell tool's rules, and
+an explicit open - `revier open`, or Enter in the TUI - clones it first. The
+clone is the only write revier makes outside its own files. It runs in the
+foreground with git's output on screen, and never from a survey. With no
+`git_url`, `revier open` fails and names the field.
+
+`revier new` writes a project from a built-in template, with the origin
+remote as `git_url`, and `revier open <unknown>` does the same before it
+opens. The template carries no keys: a key means the same target in every
+project, so one written here either repeats the user's choice or conflicts
+with it. It refuses a directory that is already a project and the home
+directory, which would own every directory under it that no project claims.
+
+The TUI edits with alt+e and deletes with alt+d. Every other free key is
+taken: a bare letter filters, del and ctrl+e edit the query, and the ctrl
+chords are where target keys and actions live. Delete asks, and refuses while
+any target of the project is running, as the picker refused a running session.
+The file the TUI handed to the editor, or removed, is applied at once; D17
+still holds for a file changed anywhere else. Renaming is out: the name is in
+the file name, the window titles and the bindings in state.

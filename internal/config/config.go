@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 
@@ -202,6 +204,7 @@ func LoadProject(path string) (core.Project, error) {
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
+	prepared.File = path
 	return prepared, nil
 }
 
@@ -214,6 +217,11 @@ func Validate(p revier.Project) error {
 
 	if p.Path == "" {
 		errs = append(errs, errors.New("project has no path"))
+	}
+	if p.GitURL != "" {
+		if err := ValidateGitURL(p.GitURL); err != nil {
+			errs = append(errs, fmt.Errorf("git_url: %w", err))
+		}
 	}
 
 	homes := 0
@@ -310,6 +318,34 @@ func Validate(p revier.Project) error {
 
 	return errors.Join(errs...)
 }
+
+// ValidateGitURL refuses a clone URL that is unsafe to hand to git or to keep
+// in a file shared between machines. The rules are the shell tool's
+// (_session_is_safe_clone_url in ~/setup/scripts/sessions), so a URL one of
+// them recorded the other accepts: no whitespace, no control characters, no
+// shell metacharacters, and no credentials in an https URL.
+//
+// A URL with credentials is not echoed back: the message would print the
+// token the rule exists to keep out of the file.
+func ValidateGitURL(u string) error {
+	switch {
+	case u == "":
+		return errors.New("empty")
+	case httpsUserinfo.MatchString(u):
+		return errors.New("an https URL with credentials in it is refused; record it without the user part")
+	case strings.IndexFunc(u, unicode.IsSpace) >= 0:
+		return fmt.Errorf("%q contains whitespace", u)
+	case strings.IndexFunc(u, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
+		return fmt.Errorf("%q contains a control character", u)
+	case strings.ContainsAny(u, "`\"'\\$;|&<>(){}"):
+		return fmt.Errorf("%q contains a shell metacharacter", u)
+	}
+	return nil
+}
+
+// httpsUserinfo is an https authority with a user part in it:
+// https://user:token@host/...
+var httpsUserinfo = regexp.MustCompile(`^https://[^/]+@`)
 
 // expandHome resolves a leading "~" against the user's home directory.
 func expandHome(p string) string {

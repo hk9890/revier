@@ -20,6 +20,8 @@ type keyMap struct {
 	Targets key.Binding
 	Back    key.Binding
 	Quit    key.Binding
+	Edit    key.Binding
+	Delete  key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -34,6 +36,13 @@ func newKeyMap(actions []config.Action) keyMap {
 		Targets: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "targets")),
 		Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Quit:    key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
+		// Alt and a letter, because every other free key is spoken for: a
+		// bare letter filters, del and ctrl+e edit the query, and the ctrl
+		// chords are where target keys and configured actions live. The
+		// surface matches both before the query is offered the key, so the
+		// letter never reaches the filter.
+		Edit:   key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "edit")),
+		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
 	}
 	for _, act := range actions {
 		k.actions = append(k.actions, key.NewBinding(

@@ -48,6 +48,12 @@ working GNOME adapter: without `runtime = ["tmux"]` the workspace opens as a
 real kitty OS window, and without `window = ["none"]` a window target launches
 a real application and moves the user's focus.
 
+`revier new` and `revier open <unknown name>` write into
+`$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
+`MISE_STATE_DIR=$S/mise` as well, so the trust lands outside the user's list.
+Point a `git_url` you test cloning with at a local bare repository
+(`git init --bare $S/origin.git`).
+
 To exercise the agent monitor, give a pane a Claude-style title. The leading
 glyph is the state signal:
 

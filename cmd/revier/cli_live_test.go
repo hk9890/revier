@@ -74,7 +74,12 @@ func scratch(t *testing.T) string {
 		t.Fatal(err)
 	}
 	// A second project, so a command acting on the wrong one is detectable.
-	other := strings.ReplaceAll(projectTOML, "%PATH%", filepath.Join(workdir, "elsewhere"))
+	// Its directory exists: `open` on a missing one clones or fails.
+	elsewhere := filepath.Join(workdir, "elsewhere")
+	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	other := strings.ReplaceAll(projectTOML, "%PATH%", elsewhere)
 	other = strings.ReplaceAll(other, `name = "home"`, `name = "home"`)
 	if err := os.WriteFile(filepath.Join(projects, "second.toml"), []byte(other), 0o644); err != nil {
 		t.Fatal(err)

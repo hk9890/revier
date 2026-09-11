@@ -31,6 +31,7 @@ the system and logs the decisions behind it.
 revier                        the TUI: every project, its agent state, its targets
 revier list [--json]          the same, printed once
 revier open [name]            run-or-raise a project's workspace
+revier new [name]             write a project file for this directory
 revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
 revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
@@ -42,11 +43,15 @@ revier keys uninstall         release the keys revier holds
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
 by name, Enter opens the project's home, Tab lists its targets, Enter on a
-target runs-or-raises it, Esc goes back. A configured action key runs the
-action against the selected project.
+target runs-or-raises it, Esc goes back. alt+e opens the selected project's
+file in `$EDITOR`; alt+d deletes it, after asking. A configured action key runs
+the action against the selected project.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
+`revier new` writes one for the current directory, and `revier open <name>`
+does the same for a name revier does not know yet. A project whose directory is
+missing is cloned from its `git_url` when it is opened.
 
 ## Keybindings
 
