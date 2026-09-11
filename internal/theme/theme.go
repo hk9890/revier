@@ -5,9 +5,10 @@
 // other. The TUI names roles and never a colour.
 //
 // Glyphs are a separate choice from the palette because a terminal program
-// cannot ask which font is loaded. A Nerd Font glyph in a terminal without one
-// draws a box and can throw the row alignment out, so the safe set is the
-// default and the Nerd Font set is opt-in.
+// cannot ask which font is loaded. The Nerd Font set is the default, because
+// the popup this replaces drew its icons from one and the surface is meant to
+// look like it; a terminal without the font draws boxes, and picks the unicode
+// set in [ui].
 package theme
 
 import (
@@ -76,11 +77,11 @@ type Glyphs struct {
 	NoFolder string
 }
 
-// The three glyph sets. Unicode is the default: every one of its characters is
-// in any font a terminal ships with. Nerd needs a patched font, and says the
-// same things with icons - a bell for an agent that wants you, which reads as
-// a call rather than as punctuation. ASCII is for a terminal whose font is not
-// yours.
+// The three glyph sets. Nerd is the default: it says things with icons - a
+// bell for an agent that wants you, which reads as a call rather than as
+// punctuation - and needs a patched font. Unicode says the same with the
+// characters any font a terminal ships with has. ASCII is for a terminal whose
+// font is not yours.
 //
 // The cursor is a half block in every set but ASCII: a bar the height of the
 // row reads as "this one" from across the screen, where a chevron in front of
@@ -121,7 +122,7 @@ var flavors = map[string]catppuccin.Flavor{
 // DefaultTheme and DefaultGlyphs are what an empty configuration gets.
 const (
 	DefaultTheme  = "catppuccin-mocha"
-	DefaultGlyphs = "unicode"
+	DefaultGlyphs = "nerd"
 )
 
 // Themes and GlyphSets report the valid names, sorted, for an error message.

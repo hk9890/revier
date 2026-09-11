@@ -123,7 +123,10 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	g := theme.Default().Glyphs
 
 	first, _, _ := strings.Cut(rows(m)[0], "│")
-	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor), g.Running+" project-01") {
+	// The folder column, when the set has one, sits between the mark and the
+	// name.
+	left, _, found := strings.Cut(strings.TrimLeft(first, " "+g.Cursor), "project-01")
+	if !found || !strings.HasPrefix(left, g.Running+" ") {
 		t.Errorf("row = %q, want the open mark in front of the name", first)
 	}
 	if !strings.Contains(first, g.NeedsYou+" needs you") {
