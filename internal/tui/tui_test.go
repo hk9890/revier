@@ -143,8 +143,8 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	first := rows(m)[0]
-	if !strings.Contains(first, "project-03") || !strings.Contains(first, "attention") {
-		t.Fatalf("first row = %q, want project-03 with attention", first)
+	if !strings.Contains(first, "project-03") || !strings.Contains(first, "needs you") {
+		t.Fatalf("first row = %q, want project-03 needing you", first)
 	}
 	if !strings.Contains(first, "needs a decision") {
 		t.Errorf("first row = %q, want the activity line", first)
@@ -280,7 +280,8 @@ func TestTabDrillsIntoTargetsAndEscReturns(t *testing.T) {
 
 	m, _ = press(m, "tab")
 	view := m.View()
-	for _, want := range []string{"project-02", "home", "editor", "ctrl-shift-o"} {
+	// The key in the spelling the footer uses, not the configuration's.
+	for _, want := range []string{"project-02", "home", "editor", "ctrl+shift+o"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("target level lacks %q:\n%s", want, view)
 		}
@@ -1149,10 +1150,20 @@ func TestDetailPaneWrapsALongPathAndActivity(t *testing.T) {
 	if !strings.Contains(joined, strings.Join(strings.Fields(longActivity), "")) {
 		t.Errorf("pane lost part of the activity line:\n%s", body)
 	}
-	// Continuation lines sit under the value, not under the label.
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "and-another") || strings.HasPrefix(line, "wraps it") {
-			t.Errorf("continuation %q starts at the label column", line)
+	// Continuation lines sit under the value, not under the label. pane trims
+	// each line, so the indentation is read off the untrimmed one.
+	for _, line := range lines(m) {
+		_, right, ok := strings.Cut(line, "│")
+		if !ok {
+			continue
+		}
+		text := strings.TrimLeft(right, " ")
+		if !strings.HasPrefix(text, "and-another") && !strings.HasPrefix(text, "wraps it") {
+			continue
+		}
+		// One column is the pane's padding; the label column is wider.
+		if indent := len(right) - len(text); indent <= 1 {
+			t.Errorf("continuation %q starts at the label column", text)
 		}
 	}
 	for i, line := range strings.Split(m.View(), "\n") {
@@ -1199,7 +1210,7 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 	}
 	// The activity is cut to make room, and the state it describes is not: the
 	// state is what the row is for.
-	if !strings.Contains(r[0], "running") || !strings.Contains(r[0], "Reading") || !strings.Contains(r[0], "…") {
+	if !strings.Contains(r[0], "working") || !strings.Contains(r[0], "Reading") || !strings.Contains(r[0], "…") {
 		t.Errorf("first row = %q, want the state kept and the activity cut short", r[0])
 	}
 }

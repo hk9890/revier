@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -69,65 +70,174 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 
 	v := it.view
+	width := m.Width()
+	// The mark says whether the project is open, and nothing else: what its
+	// agent is doing is the right-hand side's, in an icon and a word.
 	mark, markStyle, name := th.Glyphs.Stopped, th.NameDim, th.NameDim
 	if v.Running {
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
 	}
-	if v.Attention() {
-		mark, markStyle = th.Glyphs.Attention, th.Attention
-	}
-	cursor := " "
 	if sel {
-		cursor = th.Glyphs.Cursor
+		name = name.Bold(true)
 	}
+	// The bar runs down both lines, so the selection is one block and not a
+	// name with a path that happens to sit under it.
+	bar := style(th.Path).Render(" ")
+	if sel {
+		bar = th.Cursor.Render(th.Glyphs.Cursor)
+	}
+	gap := style(th.Path).Render(" ")
+	prefix := bar + gap + style(markStyle).Render(mark) + gap
+	if th.Glyphs.Folder != "" {
+		folder, folderStyle := th.Glyphs.Folder, th.Meta
+		if !v.PathExists {
+			folder, folderStyle = th.Glyphs.NoFolder, th.PathMissing
+		}
+		prefix += style(folderStyle).Render(folder) + gap
+	}
+	indent := lipgloss.Width(prefix)
 
 	// Name on the left, agent state on the right. Padding every name to the
 	// longest one on screen put the state column half a row away from a short
 	// name; the right edge does not move.
-	left := style(th.Accent).Render(cursor+" ") + style(markStyle).Render(mark) + style(th.Path).Render(" ") +
-		style(name).Render(string(v.Project.Name))
-	first := spread(left, d.agent(v, style, m.Width()-lipgloss.Width(left)-1), m.Width())
+	nameText := clipTo(string(v.Project.Name), width-indent)
+	left := prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
+	first := spread(left, d.agent(v, width-lipgloss.Width(left)-2, style), width, style(th.Path))
 
-	pathStyle := th.Path
-	if !v.PathExists {
-		pathStyle = th.PathMissing
+	// The path sits under the name, and what the row's second line has room
+	// for on the right is what is open, or why nothing can be.
+	path := contractHome(v.Project.Path)
+	room := width - indent - 1
+	tag := d.fitTag(v, lipgloss.Width(path), room, style)
+	if tag != "" {
+		room -= lipgloss.Width(tag) + 2
 	}
-	second := style(th.Path).Render("    ") +
-		style(pathStyle).Render(contractHome(v.Project.Path))
+	// A missing path stays grey: the tag says it, and a third of the rows in
+	// maroon from end to end read as a list of errors.
+	second := spread(bar+style(th.Path).Render(strings.Repeat(" ", indent-1))+style(th.Path).Render(elide(path, room)),
+		tag, width, style(th.Path))
 
 	// The list renders into a strings.Builder, which cannot fail.
-	_, _ = fmt.Fprint(w, fill(first, m.Width(), sel, th)+"\n"+fill(second, m.Width(), sel, th))
+	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
+}
+
+// highlight renders the letters the filter matched in their own style, as fzf
+// does: with a fuzzy filter the letters are the only way to see why a row is
+// on the list. matches are rune positions, from the list component.
+func highlight(text string, matches []int, plain, match lipgloss.Style) string {
+	if len(matches) == 0 {
+		return plain.Render(text)
+	}
+	hit := make(map[int]bool, len(matches))
+	for _, i := range matches {
+		hit[i] = true
+	}
+	var b strings.Builder
+	for i, r := range []rune(text) {
+		if hit[i] {
+			b.WriteString(match.Render(string(r)))
+		} else {
+			b.WriteString(plain.Render(string(r)))
+		}
+	}
+	return b.String()
+}
+
+// fitTag is the right-hand side of the second line, sized to what the path
+// leaves of room.
+//
+// A directory that is not here is said in words, with what Enter does about
+// it (decisions.md D30). That is the one thing on the line the row cannot do
+// without - no other column says it - so it shortens, and then cuts the path,
+// rather than go. The open targets are the pane's to list as well, so they
+// give way to a whole path.
+//
+// A stopped project with its checkout in place has nothing to say, and
+// neither does one with only its home open: that is what the green mark says.
+func (d projectDelegate) fitTag(v revier.ProjectView, path, room int, style func(lipgloss.Style) lipgloss.Style) string {
+	th := d.theme
+	if !v.PathExists {
+		long, short := "not on this machine", "not here"
+		if v.Project.GitURL != "" {
+			long, short = "not cloned · enter clones", "not cloned"
+		}
+		tag := long
+		if path+lipgloss.Width(long)+2 > room {
+			tag = short
+		}
+		return style(th.PathMissing).Render(tag)
+	}
+	var open []string
+	for _, t := range v.Targets {
+		if !t.Ref.IsZero() {
+			open = append(open, string(t.Name))
+		}
+	}
+	tag := strings.Join(open, " · ")
+	if len(open) == 1 && !v.Home.IsZero() || path+lipgloss.Width(tag)+2 > room {
+		return ""
+	}
+	return style(th.NameDim).Render(tag)
 }
 
 // agent is the worst agent state in the project and what it is doing: the
 // right-hand side of the row, and the part that answers "which of these needs
 // me". A project running several agents is why the detail pane lists them all.
 //
-// It fits in room by cutting the activity and never the state: the state is
-// the answer, and the activity is what the detail pane shows whole.
-func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) lipgloss.Style, room int) string {
+// It fits room by cutting the activity, never the state: on a narrow screen
+// "needs you" is what the row is there to show.
+func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	worst, ok := core.Worst(v.Agents)
 	if !ok {
 		return ""
 	}
 	th := d.theme
-	var s lipgloss.Style
-	switch worst.Status {
-	case revier.StatusAttention:
-		s = th.Attention
-	case revier.StatusRunning:
-		s = th.Running
-	case revier.StatusIdle:
-		s = th.Idle
-	default:
-		s = th.NameDim
+	state := statusLabel(th, worst.Status)
+	if lipgloss.Width(state) > room {
+		return ""
 	}
-	status := worst.Status.String()
-	out := style(s).Render(status)
-	if activity := ellipsize(worst.Activity, room-lipgloss.Width(status)-1); activity != "" {
-		out += style(th.NameDim).Render(" " + activity)
+	out := style(statusStyle(th, worst.Status)).Render(state)
+	if rest := room - lipgloss.Width(state) - 1; worst.Activity != "" && rest >= minActivityWidth {
+		out += style(th.NameDim).Render(" " + ellipsis(worst.Activity, rest))
 	}
 	return out
+}
+
+// minActivityWidth is the shortest cut of an activity line that still says
+// something. Below it the state stands alone.
+const minActivityWidth = 8
+
+// statusLabel is an agent state as the surface says it: its glyph and a word
+// for the person reading, not the name the JSON carries. "attention" was a
+// field value; "needs you" is what it means, and what the header says.
+// "working" and not "running", because running is what a project is when it
+// is open, and the two sat on one row.
+func statusLabel(th theme.Theme, s revier.Status) string {
+	switch s {
+	case revier.StatusAttention:
+		return th.Glyphs.NeedsYou + " needs you"
+	case revier.StatusRunning:
+		return th.Glyphs.Working + " working"
+	case revier.StatusIdle:
+		return th.Glyphs.Idle + " idle"
+	default:
+		return th.Glyphs.Unknown + " unknown"
+	}
+}
+
+// statusStyle is the colour of an agent state, the same on the row and in the
+// pane.
+func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
+	switch s {
+	case revier.StatusAttention:
+		return th.Attention
+	case revier.StatusRunning:
+		return th.Running
+	case revier.StatusIdle:
+		return th.Idle
+	default:
+		return th.NameDim
+	}
 }
 
 // reload puts the current survey into the project list, keeping the filter and
@@ -185,8 +295,11 @@ func (m *Model) selectName(name revier.ProjectName) {
 // setFilter is every change to the filter text. The list filters
 // synchronously through SetFilterText, so the count in the header and the
 // selection are right on the same pass as the keystroke.
+//
+// Clearing the filter keeps the cursor on the project it was on. A search
+// ends on the project that was searched for, and dropping the cursor back on
+// the first row when the query goes lost the one row the user had just found.
 func (m *Model) setFilter(f string) {
-	was, hadSelection := m.selectedName()
 	m.filter = f
 	if m.input.Value() != f {
 		m.input.SetValue(f)
@@ -197,8 +310,9 @@ func (m *Model) setFilter(f string) {
 	}
 	// ResetFilter keeps the cursor's index in the filtered list, which in the
 	// full list is another project; the selection goes back by name.
+	was, ok := m.selectedName()
 	m.plist.ResetFilter()
-	if hadSelection {
+	if ok {
 		m.selectName(was)
 	}
 }

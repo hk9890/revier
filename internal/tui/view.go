@@ -59,10 +59,11 @@ func (m *Model) layout() {
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
-	// One column less than the terminal: the footer is rendered with a leading
-	// space. help truncates on its own width, and its own truncation gives up
-	// once the line is nearly full, so View clips as well.
-	m.help.Width = m.width - 1
+	// One column less than the frame's content: the footer is rendered with a
+	// leading space. help truncates on its own width and marks the cut with an
+	// ellipsis; sized to the terminal instead, it never cut, and View's own
+	// clip took the end of a word with no mark.
+	m.help.Width = w - 1
 }
 
 func (m Model) View() string {
@@ -127,13 +128,17 @@ func (m Model) rule(width int) string {
 // header is the one line that says what is on screen. At the project level it
 // counts, because with ninety projects the counts are the reason to look. The
 // filter is not here: it has its own line, with a cursor on it.
+//
+// A count that is zero is grey. "0 need you" in bold red read as an alarm on
+// every screen where nothing was wrong.
 func (m Model) header() string {
 	th := m.theme
+	badge := th.Badge.Render("revier") + " "
 	if m.level == levelTargets {
-		return th.Header.Render(" revier  " + string(m.current))
+		return badge + th.NameDim.Render("› ") + th.Header.Render(string(m.current))
 	}
 	if !m.ready() {
-		return th.Header.Render(" revier  ") + th.NameDim.Render("surveying")
+		return badge + th.NameDim.Render("surveying")
 	}
 	running, attention := 0, 0
 	for _, v := range m.views {
@@ -144,9 +149,22 @@ func (m Model) header() string {
 			attention++
 		}
 	}
-	return th.Header.Render(fmt.Sprintf(" revier  %d projects", len(m.views))) +
-		th.Path.Render(" · ") + th.Running.Render(fmt.Sprintf("%d running", running)) +
-		th.Path.Render(" · ") + th.Attention.Render(fmt.Sprintf("%d need you", attention))
+	// Each count carries the glyph its rows carry, so the header is also the
+	// key to the list.
+	count := func(glyph string, n int, text string, s lipgloss.Style) string {
+		if n == 0 {
+			s = th.Count
+		}
+		return s.Render(fmt.Sprintf("%s %d %s", glyph, n, text))
+	}
+	need := "need you"
+	if attention == 1 {
+		need = "needs you"
+	}
+	sep := th.Path.Render(" · ")
+	return badge + th.Header.Render(fmt.Sprintf("%d projects", len(m.views))) +
+		sep + count(th.Glyphs.Running, running, "running", th.Running) +
+		sep + count(th.Glyphs.NeedsYou, attention, need, th.Attention)
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints
@@ -213,14 +231,16 @@ func (m Model) footer() string {
 
 // spread puts left at the start of a width and right at the end of it, which
 // is what keeps a column of states aligned without padding every name to the
-// longest one on screen. When the two do not fit, left is cut and right kept:
-// right is the state the row is there to show.
-func spread(left, right string, width int) string {
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		return clipTo(left, width-lipgloss.Width(right)-1) + " " + right
+// longest one on screen.
+//
+// The gap is drawn in the given style, so a selected row keeps its background
+// between the two halves instead of showing two highlighted islands.
+func spread(left, right string, width int, gap lipgloss.Style) string {
+	n := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if n < 1 {
+		return clipTo(left, width)
 	}
-	return left + strings.Repeat(" ", gap) + right
+	return left + gap.Render(strings.Repeat(" ", n)) + right
 }
 
 // fill pads a rendered row to the width of the list, so the selection
@@ -246,16 +266,6 @@ func pad(s string, width int) string {
 	return s
 }
 
-// selStyle re-renders text that already carries its own colour so it picks up
-// the selection background. lipgloss cannot add a background to a rendered
-// string, so the caller styles the text and this wraps the result.
-func selStyle(rendered string, selected bool, th theme.Theme) string {
-	if !selected {
-		return rendered
-	}
-	return th.OnSelection(lipgloss.NewStyle()).Render(rendered)
-}
-
 // contractHome writes a path under the home directory as ~/..., which is how
 // the user names it and how it fits the column.
 func contractHome(p string) string {
@@ -277,18 +287,6 @@ func clipTo(s string, width int) string {
 		return ""
 	}
 	return lipgloss.NewStyle().MaxWidth(width).Render(s)
-}
-
-// ellipsize cuts plain text to a width, keeping the start, and ends a cut
-// with an ellipsis so it does not read as the whole of the text.
-func ellipsize(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	if width < 2 {
-		return ""
-	}
-	return clipTo(s, width-1) + "…"
 }
 
 // wrap breaks text into lines no wider than width: at a space or a hyphen
@@ -317,15 +315,31 @@ func hang(head, value string, width int, style lipgloss.Style) string {
 	return head + strings.Join(parts, "\n"+strings.Repeat(" ", indent))
 }
 
-// truncate keeps the end of a path, not the start: the last two segments say
-// which checkout this is, and the first say only where checkouts live.
-func truncate(s string, width int) string {
-	if width < 4 {
+// ellipsis cuts text to a width, keeping the start and marking the cut: an
+// activity line reads from its first word, and a cut with no mark reads as
+// the whole sentence.
+func ellipsis(s string, width int) string {
+	if width < 1 {
 		return ""
 	}
 	if lipgloss.Width(s) <= width {
 		return s
 	}
+	return clipTo(s, width-1) + "…"
+}
+
+// elide cuts a path in the middle: the start says where checkouts live, the
+// end says which checkout this is, and a row has room to say both. A third of
+// the width goes to the start, because the end is the part that differs.
+func elide(s string, width int) string {
+	if width < 4 {
+		return ""
+	}
 	r := []rune(s)
-	return "…" + string(r[len(r)-width+1:])
+	if len(r) <= width {
+		return s
+	}
+	head := width / 3
+	tail := width - head - 1
+	return string(r[:head]) + "…" + string(r[len(r)-tail:])
 }

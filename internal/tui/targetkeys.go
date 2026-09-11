@@ -79,6 +79,15 @@ func targetKeys(projects []core.Project, keys keyMap) map[core.Chord]revier.Targ
 	return out
 }
 
+// keyLabel is a target's key as the footer spells it, so the row, the pane
+// and the legend agree. A key that does not parse is shown as written.
+func keyLabel(key string) string {
+	if c, err := core.ParseChord(key); err == nil {
+		return string(c)
+	}
+	return key
+}
+
 // chordName is the key a target declares, in canonical form. A key that does
 // not parse binds nothing here; config.Validate has already refused it at
 // load, so this is the hand-built case only. Neither does a key typed as

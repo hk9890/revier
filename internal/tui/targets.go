@@ -59,32 +59,39 @@ func (d targetDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		}
 		return s
 	}
-	cursor := " "
+	bar := style(th.Path).Render(" ")
 	if sel {
-		cursor = th.Glyphs.Cursor
+		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
+	bar += style(th.Path).Render(" ")
 
+	// The same words and colours as the pane beside it: a running mark is
+	// green, a key is spelled as the footer spells it, and a target with
+	// nothing up says "stopped".
 	var row string
 	if r := it.row.attached; !r.IsZero() {
-		row = style(th.Accent).Render(cursor+" ") +
-			style(th.NameDim).Render(" "+pad("", keyWidth)) +
+		row = bar +
+			style(th.Running).Render(th.Glyphs.Running) + style(th.Path).Render(" ") +
+			style(th.NameDim).Render(pad("", keyWidth)) +
 			style(th.ProjectName).Render(pad(r.Title, nameWidth)) +
 			style(th.Meta).Render("attached · "+r.Host)
 	} else {
 		t := it.row.target
-		mark, state := th.Glyphs.Stopped, th.NameDim.Render("-")
+		mark, markStyle := th.Glyphs.Stopped, th.NameDim
+		state, stateStyle, name := "stopped", th.Count, th.NameDim
 		switch {
 		case !t.Available:
-			state = th.NameDim.Render("unavailable")
+			state = "no host here"
 		case !t.Ref.IsZero():
-			mark, state = th.Glyphs.Running, th.Running.Render("running")
+			mark, markStyle = th.Glyphs.Running, th.Running
+			state, stateStyle, name = "running", th.Running, th.ProjectName
 		}
-		row = style(th.Accent).Render(cursor+" ") +
-			style(th.NameDim).Render(mark) + style(th.Path).Render(" ") +
-			style(th.Accent).Render(pad(t.Key, keyWidth)) +
-			style(th.ProjectName).Render(pad(string(t.Name), nameWidth)) +
+		row = bar +
+			style(markStyle).Render(mark) + style(th.Path).Render(" ") +
+			style(th.Accent).Render(pad(keyLabel(t.Key), keyWidth)) +
+			style(name).Render(pad(string(t.Name), nameWidth)) +
 			style(th.Meta).Render(pad(t.Host, hostWidth)) +
-			selStyle(state, sel, th)
+			style(stateStyle).Render(state)
 	}
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(row, m.Width(), sel, th))

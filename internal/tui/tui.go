@@ -364,13 +364,26 @@ func (m *Model) apply(msg actedMsg) {
 	m.keep(st)
 }
 
-// sorted puts projects needing attention first and otherwise keeps config
-// order, so rows move only when an agent's state changes.
+// sorted puts projects needing attention first, then the running ones, and
+// otherwise keeps config order, so rows move only when a project starts, stops
+// or an agent's state changes. Running above stopped is the picker's order
+// (os_list_json.py sorts on it too): with ninety projects the handful that are
+// open are what a search is almost always for.
 func sorted(views []revier.ProjectView) []revier.ProjectView {
 	out := make([]revier.ProjectView, len(views))
 	copy(out, views)
+	rank := func(v revier.ProjectView) int {
+		switch {
+		case v.Attention():
+			return 0
+		case v.Running:
+			return 1
+		default:
+			return 2
+		}
+	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].Attention() && !out[j].Attention()
+		return rank(out[i]) < rank(out[j])
 	})
 	return out
 }

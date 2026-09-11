@@ -78,6 +78,10 @@ func TestActivityStripsTheGlyph(t *testing.T) {
 		"✳Ready":                "Ready",
 		"no glyph here":         "no glyph here",
 		"":                      "",
+		// Claude's default title is no summary, with or without the glyph.
+		"✳ Claude Code":             "",
+		"Claude Code":               "",
+		"⠧ Claude Code refactoring": "Claude Code refactoring",
 	}
 	for in, want := range cases {
 		if got := claude.Activity(in); got != want {
