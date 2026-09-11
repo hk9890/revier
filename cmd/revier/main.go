@@ -238,7 +238,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
+	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
 	}
@@ -308,10 +308,14 @@ func targetSummary(v revier.ProjectView) string {
 		case !t.Ref.IsZero():
 			mark = "*" // running
 		}
+		name := string(t.Name)
+		if t.Attached {
+			name = "(" + t.Ref.Title + ")" // bound at runtime, so it has no name
+		}
 		if out != "" {
 			out += " "
 		}
-		out += mark + string(t.Name)
+		out += mark + name
 	}
 	return out
 }

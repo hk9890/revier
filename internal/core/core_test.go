@@ -281,7 +281,7 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	c := &core.Core{Runtime: rt} // no window host
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 		}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestSurveySkipsAShellLeftWhereAnAgentWas(t *testing.T) {
 		}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestSurveySurvivesAProbeError(t *testing.T) {
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey should not fail: %v", err)
 	}
@@ -687,7 +687,7 @@ func TestSurveyUsesBindings(t *testing.T) {
 	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
-		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}})
+		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,6 +698,29 @@ func TestSurveyUsesBindings(t *testing.T) {
 	}
 	if len(report.Instances) != 1 {
 		t.Errorf("instances = %d, want every host's listing for pruning", len(report.Instances))
+	}
+}
+
+// An attachment still listed follows the project's targets, marked attached
+// and carrying the title it has now; one whose window is gone is left out.
+func TestSurveyListsLiveAttachments(t *testing.T) {
+	wm := hosttest.New("wm")
+	live := wm.Add("Pull requests", "chromium")
+	gone := revier.TargetRef{Host: "wm", ID: "999", Title: "closed"}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil,
+		map[revier.ProjectName][]revier.TargetRef{"revier": {{Host: "wm", ID: live.ID, Title: "stale"}, gone}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attached []revier.TargetView
+	for _, tv := range report.Views[0].Targets {
+		if tv.Attached {
+			attached = append(attached, tv)
+		}
+	}
+	if len(attached) != 1 || attached[0].Ref != live || attached[0].Host != "wm" || !attached[0].Available {
+		t.Errorf("attached = %+v, want the live window %v alone", attached, live)
 	}
 }
 
@@ -772,7 +795,7 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	report, err := c.Survey(context.Background(), []core.Project{
 		prepared(t, here), prepared(t, gone),
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -814,7 +837,7 @@ func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
 	}}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -867,7 +890,7 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 	}
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -881,7 +904,7 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {
 	c := &core.Core{Runtime: unnamedRuntime(t, 4242)}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -902,7 +925,7 @@ func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
 	})
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

@@ -67,7 +67,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "survey":
-		report, err := c.Survey(ctx, []core.Project{project}, nil)
+		report, err := c.Survey(ctx, []core.Project{project}, nil, nil)
 		fatal(err)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")

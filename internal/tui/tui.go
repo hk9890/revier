@@ -177,7 +177,10 @@ func (m Model) Survey() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		report, err := c.Survey(ctx, projects, bound)
+		// No attachments: the surface lists them from state, which a claim
+		// updates between surveys, so a claimed window shows at once rather
+		// than a refresh later.
+		report, err := c.Survey(ctx, projects, bound, nil)
 		return surveyMsg{report: report, err: err}
 	}
 }
