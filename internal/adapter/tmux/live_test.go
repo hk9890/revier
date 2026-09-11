@@ -32,10 +32,29 @@ func server(t *testing.T) *tmux.Host {
 	}
 	socket := "revier-test-" + t.Name()
 	h := &tmux.Host{Socket: socket, Session: "revier-test"}
-	t.Cleanup(func() {
-		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
-	})
+	t.Cleanup(func() { killServer(t, socket) })
 	return h
+}
+
+// killServer stops the server on a socket and returns once it has gone.
+// kill-server returns before the server exits, and a client that connects in
+// between - the next test on this socket, or the next command of this one -
+// reaches a server on its way out and fails with "server exited
+// unexpectedly".
+func killServer(t *testing.T, socket string) {
+	t.Helper()
+	_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		out, _ := exec.Command("tmux", "-L", socket, "list-sessions").CombinedOutput()
+		if strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the server on %s still answers after kill-server: %s", socket, out)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func ctx(t *testing.T) context.Context {
@@ -498,9 +517,7 @@ func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
-	if err := exec.Command("tmux", "-L", h.Socket, "kill-server").Run(); err != nil {
-		t.Fatalf("kill-server: %v", err)
-	}
+	killServer(t, h.Socket)
 	if _, err := cr.Go(c, p, "home", nil); err != nil {
 		t.Fatalf("open home on the new server: %v", err)
 	}
