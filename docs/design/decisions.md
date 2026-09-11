@@ -513,7 +513,7 @@ shortcut deserves is policy - revier removes only what it wrote.
 
 ## 2026-09-11
 
-### D28 — Enter on a project opens its home — Accepted
+### D28 — Enter on a project opens its home — Accepted; the target list narrowed by D42
 
 The TUI was two levels, and Enter on a project only moved to the second: its
 list of targets. Reaching the project took a second Enter on the home row, which
@@ -864,3 +864,45 @@ of the file, rather than a `links/` directory: a project is found by name
 everywhere, and two directories would have been two places to look. The
 onboarding flow that lists a host's projects and writes a link for one is
 the next surface over this file.
+
+## 2026-09-12
+
+### D42 — Tab moves the cursor into the pane; there is no target level — Accepted
+
+Narrows D28: Enter stays as it is, and Tab no longer opens a list.
+
+The surface had two levels. Tab replaced the project list with a list of the
+highlighted project's targets, with its own header, path line, count and
+footer. The pane beside the list already showed those rows, under its
+Targets heading, with the same name, key and state. So the second level was a
+second rendering of what was on screen, and it hid the list it was reached
+from: which project this was, and what the other projects were doing.
+
+There is one level and two places the cursor can be: the list, and the
+Targets section of the pane. Tab moves it into the pane, onto the first
+target; up and down walk the targets and attached instances; Enter runs the
+one under the cursor; Esc brings the cursor back. The header keeps its
+counts, and the list stays beside the pane. Enter on a project with no home
+target, which used to open the list, moves the cursor into the pane. The
+second rendering is gone.
+
+Two cursors on one screen have to read as one thing. The pane's target rows
+carry the list's bar column and its selection background, and the agent
+rows are indented under them as before.
+
+Typing puts the cursor back on the list and filters, as it does anywhere:
+the query is a search for a project, and the list is where its result is. A
+target key acts on the highlighted project wherever the cursor is, as it
+did: `ctrl-shift-o` is "editor" everywhere, and a key that read the pane's
+cursor would mean something different on each row.
+
+A click on a target row in the pane runs it: one click, not the list's two.
+The list's first click selects because a selected project is useful on its
+own, the pane follows it; a target has no state worth selecting other than
+running it, so a click that only highlighted it would be a click wasted.
+The wheel over the pane still scrolls it.
+
+On a terminal too narrow for the list and the pane together there is no pane
+to move into, so Tab shows the pane in the list's place, at full width, and
+Esc gives the list back. It is the same renderer as the wide case, so the
+narrow terminal has no second implementation of the target rows.

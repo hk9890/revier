@@ -31,21 +31,25 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
+		if msg.Button == tea.MouseButtonLeft {
+			return m.clickPane(msg.Y)
+		}
 		m.detail, _ = m.detail.Update(msg)
 		return m, nil
 	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		m.list().CursorUp()
+		m.plist.CursorUp()
 	case tea.MouseButtonWheelDown:
-		m.list().CursorDown()
+		m.plist.CursorDown()
 	case tea.MouseButtonLeft:
 		index, ok := m.rowAt(msg.X, msg.Y)
 		if !ok {
 			return m, nil
 		}
 		m.err = nil
-		m.list().Select(index)
+		m.focus = focusList
+		m.plist.Select(index)
 		last := m.last
 		m.last = click{index: index, at: time.Now()}
 		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
@@ -56,32 +60,61 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// rowAt is the row of the level in view under a terminal cell, if a row is
-// there: the cell is inside the list, and not on the header, the footer or the
-// space below the last row.
+// clickPane is a click in the pane. On a target row it runs the target, as
+// Enter on it does: one click, not two, because a target has no state worth
+// selecting other than running it (decisions.md D42). Anywhere else it does
+// nothing.
+func (m Model) clickPane(y int) (tea.Model, tea.Cmd) {
+	line, ok := m.bodyLine(y)
+	if !ok {
+		return m, nil
+	}
+	for i, at := range m.tlines {
+		if at == line+m.detail.YOffset {
+			m.err = nil
+			m.focus, m.tcursor = focusPane, i
+			return m, m.goRow(i)
+		}
+	}
+	return m, nil
+}
+
+// rowAt is the list row under a terminal cell, if a row is there: the cell is
+// inside the list, and not on the header, the footer or the space below the
+// last row.
 func (m Model) rowAt(x, y int) (int, bool) {
-	mr, mc := m.margins()
+	_, mc := m.margins()
 	left := mc + frameWidth/2
 	if x < left || x >= left+m.listWidth() {
 		return 0, false
 	}
-	// The border row, then the header, the query line and the rule.
-	top := mr + frameHeight/2 + chromeHeight - 1
-	_, h := m.inner()
-	if y < top || y >= top+h {
+	line, ok := m.bodyLine(y)
+	if !ok {
 		return 0, false
 	}
-	index := (y - top + m.body.YOffset) / m.itemHeight()
-	if index >= len(m.list().VisibleItems()) {
+	index := (line + m.body.YOffset) / m.itemHeight()
+	if index >= len(m.plist.VisibleItems()) {
 		return 0, false
 	}
 	return index, true
 }
 
+// bodyLine is the line of the body a terminal row is on: below the border
+// row, the header, the query line and the rule, and above the footer.
+func (m Model) bodyLine(y int) (int, bool) {
+	mr, _ := m.margins()
+	top := mr + frameHeight/2 + chromeHeight - 1
+	_, h := m.inner()
+	if y < top || y >= top+h {
+		return 0, false
+	}
+	return y - top, true
+}
+
 // overPane reports whether a column is inside the detail pane: right of the
 // margin, the frame's border and padding, and the list.
 func (m Model) overPane(x int) bool {
-	if m.paneWidth() == 0 {
+	if m.paneCols() == 0 {
 		return false
 	}
 	_, mc := m.margins()

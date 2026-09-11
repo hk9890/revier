@@ -347,9 +347,6 @@ func (m *Model) reload() {
 		// that the user's own selection wins.
 		m.selectName(m.start)
 	}
-	if m.level == levelTargets {
-		m.reloadTargets()
-	}
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.

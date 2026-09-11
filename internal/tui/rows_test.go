@@ -384,24 +384,13 @@ func margins(m tui.Model) (rows, cols int) {
 	return 0, 0
 }
 
-// A target with nothing up says "stopped", in the pane and at the target
-// level, where it said "-".
+// A target with nothing up says "stopped", where it said "-".
 func TestAStoppedTargetSaysStopped(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	if body := pane(m); !strings.Contains(body, "stopped") {
 		t.Errorf("pane = %q, want the editor target stopped", body)
-	}
-	m, _ = press(m, "tab")
-	var editor string
-	for _, line := range lines(m) {
-		if l, _, _ := strings.Cut(line, "│"); strings.Contains(l, "editor") {
-			editor = l
-		}
-	}
-	if !strings.Contains(editor, "stopped") {
-		t.Errorf("target row = %q, want it stopped", editor)
 	}
 }
 

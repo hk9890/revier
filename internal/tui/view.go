@@ -60,10 +60,6 @@ func (m Model) inner() (w, h int) {
 func (m *Model) layout() {
 	w, h := m.inner()
 	m.input.Width = w - lipgloss.Width(promptMark) - 2
-	if pane := m.paneWidth(); pane > 0 {
-		// A viewport's width is its outside, border and padding included.
-		m.detail.Width, m.detail.Height = pane, h
-	}
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
@@ -79,14 +75,19 @@ func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(clipTo(m.header(), w))
 	b.WriteString("\n")
-	b.WriteString(clipTo(m.subtitle(w), w))
+	b.WriteString(clipTo(m.subtitle(), w))
 	b.WriteString("\n")
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
 
+	// The pane beside the list, or in its place on a terminal too narrow
+	// for both (decisions.md D42).
 	body := m.body.View()
-	if m.paneWidth() > 0 {
+	switch {
+	case m.paneWidth() > 0:
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.detail.View())
+	case m.paneCols() > 0:
+		body = m.detail.View()
 	}
 	b.WriteString(body)
 	b.WriteString("\n")
@@ -101,29 +102,16 @@ func (m Model) View() string {
 		Render(b.String())
 }
 
-// subtitle is the line under the header: the query at the project level,
-// where typing filters, and the project's path at the target level, where it
-// does not. The line stays, so the list does not jump by a row when the level
-// changes.
-func (m Model) subtitle(width int) string {
-	if m.level != levelTargets {
-		return m.promptView()
-	}
-	v, ok := m.selected()
-	if !ok {
-		return ""
-	}
-	return "  " + m.theme.Path.Render(clipTo(contractHome(v.Project.Path), width-2))
+// subtitle is the line under the header: the query, where typing filters.
+func (m Model) subtitle() string {
+	return m.promptView()
 }
 
 // rule separates the chrome from the list, and carries the count the way the
 // picker does: how many rows survive the filter, out of how many there are.
 func (m Model) rule(width int) string {
 	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	switch {
-	case m.level == levelTargets:
-		count = fmt.Sprintf(" %d targets ", len(m.tlist.Items()))
-	case !m.ready():
+	if !m.ready() {
 		count = ""
 	}
 	line := width - lipgloss.Width(count)
@@ -133,7 +121,7 @@ func (m Model) rule(width int) string {
 	return m.theme.NameDim.Render(count) + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
-// header is the one line that says what is on screen. At the project level it
+// header is the one line that says what is on screen. It
 // counts, because with ninety projects the counts are the reason to look. The
 // filter is not here: it has its own line, with a cursor on it.
 //
@@ -142,9 +130,6 @@ func (m Model) rule(width int) string {
 func (m Model) header() string {
 	th := m.theme
 	badge := th.Badge.Render("revier") + " "
-	if m.level == levelTargets {
-		return badge + th.NameDim.Render("› ") + th.Header.Render(string(m.current))
-	}
 	if !m.ready() {
 		return badge + th.NameDim.Render("surveying")
 	}
@@ -183,7 +168,7 @@ func (m Model) ready() bool {
 	return m.surveyed || len(m.projects) == 0
 }
 
-// empty is what the project level shows in place of rows, in revier's words
+// empty is what the list shows in place of rows, in revier's words
 // rather than the list component's "No items.": nothing before the first
 // survey, where to add a project when none is configured, and that the filter
 // is why the list is empty when it is.
@@ -196,7 +181,7 @@ func (m Model) empty() string {
 		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
 	}
 	switch {
-	case m.level == levelTargets || !m.ready():
+	case !m.ready():
 		return ""
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
@@ -225,15 +210,13 @@ func (m Model) footer() string {
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
-	keys := m.keys.helpFor(m.level)
-	if m.level == levelProjects {
-		if v, ok := m.selected(); ok {
-			keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
-		}
-		// Last, so a narrow footer cuts the file keys and not the row's own
-		// target keys: those change from row to row, and these never do.
-		keys = append(keys, m.keys.Edit, m.keys.Delete)
+	keys := m.keys.helpFor(m.focus)
+	if v, ok := m.selected(); ok {
+		keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
 	}
+	// Last, so a narrow footer cuts the file keys and not the row's own
+	// target keys: those change from row to row, and these never do.
+	keys = append(keys, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 

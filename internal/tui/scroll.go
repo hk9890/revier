@@ -16,7 +16,7 @@ import "github.com/charmbracelet/bubbles/viewport"
 // rather than one screen of them: ninety projects is a hundred and eighty
 // lines, which is a rounding error next to the survey that produced them.
 func (m *Model) syncBody() {
-	l, itemHeight := m.list(), m.itemHeight()
+	l, itemHeight := &m.plist, m.itemHeight()
 
 	n := len(l.VisibleItems())
 	if n < 1 {
@@ -29,11 +29,8 @@ func (m *Model) syncBody() {
 	m.follow(l.Index()*itemHeight, itemHeight)
 }
 
-// itemHeight is how many lines one row of the level in view takes.
+// itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
-	if m.level == levelTargets {
-		return targetDelegate{}.Height()
-	}
 	return projectDelegate{}.Height()
 }
 
@@ -52,11 +49,9 @@ func (m *Model) follow(top, height int) {
 
 func newBody() viewport.Model { return viewport.New(0, 0) }
 
-// listWidth is the room the list has once the detail pane has taken its share.
+// listWidth is the room the list has once the detail pane has taken its
+// share: none, while the pane stands in the list's place.
 func (m Model) listWidth() int {
 	w, _ := m.inner()
-	if pane := m.paneWidth(); pane > 0 {
-		w -= pane
-	}
-	return w
+	return w - m.paneCols()
 }
