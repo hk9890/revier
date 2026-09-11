@@ -326,3 +326,28 @@ func TestPromptNeedsARuntimeThatCanType(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNoWriter", err)
 	}
 }
+
+// A project is summed up by one agent: the one closest to needing the human,
+// and of two in that state the first, so `revier list` and the TUI row name
+// the same one.
+func TestWorstIsTheFirstAgentInTheWorstState(t *testing.T) {
+	agent := func(s revier.Status, activity string) revier.AgentView {
+		return revier.AgentView{State: revier.AgentState{Status: s, Activity: activity}}
+	}
+	for name, tc := range map[string]struct {
+		agents []revier.AgentView
+		want   string
+	}{
+		"worst wins":          {[]revier.AgentView{agent(revier.StatusIdle, "a"), agent(revier.StatusAttention, "b")}, "b"},
+		"first of two tied":   {[]revier.AgentView{agent(revier.StatusRunning, "a"), agent(revier.StatusRunning, "b")}, "a"},
+		"unknown is an agent": {[]revier.AgentView{agent(revier.StatusUnknown, "a")}, "a"},
+	} {
+		got, ok := core.Worst(tc.agents)
+		if !ok || got.Activity != tc.want {
+			t.Errorf("%s: Worst = %+v, %v; want activity %q", name, got, ok, tc.want)
+		}
+	}
+	if _, ok := core.Worst(nil); ok {
+		t.Error("Worst(nil) reported an agent")
+	}
+}

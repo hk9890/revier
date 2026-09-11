@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 const fileProject = `
@@ -137,6 +138,26 @@ func TestDeleteRefusesARunningProject(t *testing.T) {
 	_, _ = press(m, "y")
 	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
 		t.Errorf("a running project's file was removed: %v", err)
+	}
+}
+
+// A window attached to the project is refused as a running target is: it
+// would outlive the only entry that can reach it.
+func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
+	wm := hosttest.New("wm")
+	ref := wm.Add("Pull requests", "chromium")
+	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"alpha": {ref}})
+	m := resize(refreshed(t, c, projects, root, nil), 120, 20)
+
+	m, _ = alt(m, 'd')
+	if f := footer(m); !strings.Contains(f, "attached window") {
+		t.Fatalf("footer = %q, want the refusal", f)
+	}
+	_, _ = press(m, "y")
+	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
+		t.Errorf("the file of a project with an attached window was removed: %v", err)
 	}
 }
 

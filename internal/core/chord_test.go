@@ -127,3 +127,41 @@ func TestRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// A terminal without the kitty keyboard protocol has one byte for ctrl+o and
+// ctrl+shift+o, and tab's byte for ctrl+i. What it reports is the chord a
+// surface in it can match on.
+func TestTheChordATerminalReports(t *testing.T) {
+	for _, tc := range []struct {
+		in   core.Chord
+		want core.Chord
+	}{
+		{"ctrl+shift+o", "ctrl+o"},
+		{"ctrl+alt+shift+o", "ctrl+alt+o"},
+		{"ctrl+shift+i", "tab"},
+		{"ctrl+m", "enter"},
+		{"ctrl+alt+o", "ctrl+alt+o"},
+		{"alt+shift+o", "alt+shift+o"},
+		{"ctrl+shift+up", "ctrl+shift+up"},
+		{"ctrl+o", "ctrl+o"},
+	} {
+		got, ok := tc.in.Terminal()
+		if !ok || got != tc.want {
+			t.Errorf("Chord(%q).Terminal() = %q, %v; want %q", tc.in, got, ok, tc.want)
+		}
+	}
+	if got, ok := core.Chord("super+o").Terminal(); ok {
+		t.Errorf("Chord(super+o).Terminal() = %q; want no terminal to report it", got)
+	}
+}
+
+// Typed text is one character, alone or shifted: what a filter takes.
+func TestTypedChords(t *testing.T) {
+	for c, want := range map[core.Chord]bool{
+		"o": true, "shift+o": true, "ctrl+o": false, "alt+o": false, "f5": false, "shift+f5": false,
+	} {
+		if got := c.Typed(); got != want {
+			t.Errorf("Chord(%q).Typed() = %v, want %v", c, got, want)
+		}
+	}
+}

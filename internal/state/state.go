@@ -147,7 +147,11 @@ func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.Targe
 // found. A ref on any other host is kept: a survey that did not ask its host -
 // a TUI started over SSH, a window host that did not probe - cannot tell a
 // closed window from one it never looked for.
-func (s *State) Prune(hosts []string, instances []revier.Instance) bool {
+//
+// before is the state the survey started from. A ref it does not hold was
+// written while the survey was listing, for a window that may have opened
+// after the listing was taken, so it is kept for the next survey to judge.
+func (s *State) Prune(hosts []string, instances []revier.Instance, before *State) bool {
 	asked := map[string]bool{}
 	for _, h := range hosts {
 		asked[h] = true
@@ -156,7 +160,8 @@ func (s *State) Prune(hosts []string, instances []revier.Instance) bool {
 	for _, inst := range instances {
 		live[key(inst.Ref)] = true
 	}
-	gone := func(ref revier.TargetRef) bool { return asked[ref.Host] && !live[key(ref)] }
+	known := before.refs()
+	gone := func(ref revier.TargetRef) bool { return asked[ref.Host] && known[key(ref)] && !live[key(ref)] }
 
 	changed := false
 	for project, targets := range s.Bound {
@@ -187,6 +192,25 @@ func (s *State) Prune(hosts []string, instances []revier.Instance) bool {
 		s.Attached[project] = kept
 	}
 	return changed
+}
+
+// refs is every attached and bound ref, by key. A nil state holds none.
+func (s *State) refs() map[string]bool {
+	out := map[string]bool{}
+	if s == nil {
+		return out
+	}
+	for _, targets := range s.Bound {
+		for _, ref := range targets {
+			out[key(ref)] = true
+		}
+	}
+	for _, refs := range s.Attached {
+		for _, ref := range refs {
+			out[key(ref)] = true
+		}
+	}
+	return out
 }
 
 // key is the identity used to compare refs across a save and load.

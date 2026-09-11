@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"slices"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -40,14 +42,12 @@ func (m Model) promptKey(msg tea.KeyMsg) bool {
 		tea.KeyLeft, tea.KeyRight, tea.KeyHome, tea.KeyEnd:
 		return true
 	}
-	switch msg.String() {
-	// Word and line editing, the readline keys a query field is expected to
-	// have. ctrl+n and ctrl+p are not here: they move the list.
-	case "ctrl+w", "ctrl+u", "ctrl+a", "ctrl+e", "alt+backspace":
-		return true
-	}
-	return false
+	return slices.Contains(queryKeys, msg.String())
 }
+
+// queryKeys are word and line editing, the readline keys a query field is
+// expected to have. ctrl+n and ctrl+p are not here: they move the list.
+var queryKeys = []string{"ctrl+w", "ctrl+u", "ctrl+a", "ctrl+e", "alt+backspace"}
 
 // edit feeds a key to the input and re-filters if the query changed.
 func (m Model) edit(msg tea.KeyMsg) (Model, tea.Cmd) {

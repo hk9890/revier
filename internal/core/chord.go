@@ -9,13 +9,14 @@ import (
 // One chord already has three spellings in this repository:
 //
 //	ctrl-shift-u        a target's key in a project file
-//	ctrl+shift+u        what bubbletea reports, internal/tui/tui.go keyName
+//	alt+ctrl+u          what bubbletea reports, alt always first
 //	<Shift><Control>u   what GNOME stores
 //
 // Comparing them is the whole of "does revier hold this key", so there is one
-// canonical form and a parser that accepts every spelling. Canonical is the
-// bubbletea one, because the TUI already prints it and a user reading
-// `revier keys status` should see the same text the footer shows.
+// canonical form and a parser that accepts every spelling. Canonical is
+// bubbletea's separator with one fixed modifier order, because the TUI prints
+// it and a user reading `revier keys status` should see the same text the
+// footer shows.
 type Chord string
 
 // modifiers, in the order a canonical chord lists them.
@@ -210,6 +211,52 @@ func (c Chord) GNOME() string {
 	}
 	out.WriteString(gnomeKeyName(key))
 	return out.String()
+}
+
+// Terminal is the chord a terminal reports when c is pressed, which is not
+// always c. A terminal without the kitty keyboard protocol - and bubbletea v1
+// asks for no other - sends ctrl+shift+<letter> as the byte of ctrl+<letter>,
+// and ctrl+i and ctrl+m as the bytes of tab and enter. Super reaches no
+// terminal at all, so the second return is false for it.
+func (c Chord) Terminal() (Chord, bool) {
+	parts := strings.Split(string(c), "+")
+	key, mods := parts[len(parts)-1], parts[:len(parts)-1]
+	held := map[string]bool{}
+	for _, m := range mods {
+		held[m] = true
+	}
+	if held["super"] {
+		return "", false
+	}
+	if held["ctrl"] && len(key) == 1 && key >= "a" && key <= "z" {
+		delete(held, "shift")
+		switch key {
+		case "i":
+			delete(held, "ctrl")
+			key = "tab"
+		case "m":
+			delete(held, "ctrl")
+			key = "enter"
+		}
+	}
+	var out []string
+	for _, m := range modOrder {
+		if held[m] {
+			out = append(out, m)
+		}
+	}
+	return Chord(strings.Join(append(out, key), "+")), true
+}
+
+// Typed reports whether a terminal delivers the chord as text: one character,
+// alone or with shift. Where a surface filters as you type, that is a filter
+// character and cannot also be a command.
+func (c Chord) Typed() bool {
+	key, found := strings.CutPrefix(string(c), "shift+")
+	if !found {
+		key = string(c)
+	}
+	return !strings.Contains(key, "+") && len([]rune(key)) == 1
 }
 
 func gnomeKeyName(key string) string {

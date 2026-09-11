@@ -114,6 +114,9 @@ func Load(root string) (*Config, []core.Project, error) {
 	if _, err := cfg.TriggerKey(); err != nil {
 		return nil, nil, fmt.Errorf("%s: ui.trigger_key: %w", cfgPath, err)
 	}
+	if err := validateActions(cfg.Actions); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"))
 	if err != nil {
@@ -135,6 +138,34 @@ func (c *Config) TriggerKey() (core.Chord, error) {
 		return core.ParseChord(DefaultTriggerKey)
 	}
 	return core.ParseChord(c.UI.TriggerKey)
+}
+
+// validateActions refuses an action the TUI can never run. An action's key is
+// the TUI's alone - no desktop binding carries it - so a key the terminal
+// does not deliver, or one the filter takes as typed text, does nothing, and
+// the only place to say so is here.
+func validateActions(actions []Action) error {
+	var errs []error
+	for _, act := range actions {
+		if len(act.Run) == 0 {
+			errs = append(errs, fmt.Errorf("action %q runs nothing", act.Name))
+		}
+		chord, err := core.ParseChord(act.Key)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("action %q: %w", act.Name, err))
+			continue
+		}
+		sent, ok := chord.Terminal()
+		switch {
+		case chord.Typed():
+			errs = append(errs, fmt.Errorf("action %q: key %q is typed text, which the TUI filters on; give it ctrl or alt", act.Name, act.Key))
+		case !ok:
+			errs = append(errs, fmt.Errorf("action %q: key %q never reaches a terminal", act.Name, act.Key))
+		case sent != chord:
+			errs = append(errs, fmt.Errorf("action %q: key %q reaches a terminal as %s; bind that instead", act.Name, act.Key, sent))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
