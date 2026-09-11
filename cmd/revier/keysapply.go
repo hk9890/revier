@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/hk9890/revier/internal/core"
 )
@@ -267,7 +269,11 @@ func bindingName(s core.KeyStep) string {
 func prettyChord(c core.Chord) string {
 	parts := strings.Split(string(c), "+")
 	for i, p := range parts {
-		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		first, size := utf8.DecodeRuneInString(p)
+		if size == 0 {
+			continue
+		}
+		parts[i] = string(unicode.ToUpper(first)) + p[size:]
 	}
 	return strings.Join(parts, "+")
 }

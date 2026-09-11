@@ -24,7 +24,18 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 		{"<Primary><Shift>U", "ctrl+shift+u"},
 		{"alt-space", "alt+space"},
 		{"<Alt>space", "alt+space"},
-		{"<Super>Return", "super+return"},
+		{"<Super>Return", "super+enter"},
+		{"super-enter", "super+enter"},
+		{"ctrl-esc", "ctrl+esc"},
+		{"<Control>Escape", "ctrl+esc"},
+		{"super-pgup", "super+pgup"},
+		{"<Super>Page_Down", "super+pgdown"},
+		{"alt-,", "alt+,"},
+		{"<Alt>comma", "alt+,"},
+		{"alt-comma", "alt+,"},
+		{"<Alt>+", "alt+plus"},
+		{"<Alt>-", "alt+minus"},
+		{"ctrl-minus", "ctrl+minus"},
 		{"<Mod4>q", "super+q"},
 		{"<Alt>F4", "alt+f4"},
 		{"f12", "f12"},
@@ -44,7 +55,10 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 // A modifier revier does not know must not be dropped. Dropping it makes two
 // different chords compare equal, which reports a key as held when it is not.
 func TestParseChordRejectsWhatItCannotRead(t *testing.T) {
-	for _, in := range []string{"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>"} {
+	for _, in := range []string{
+		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>",
+		"alt-ä", "<Alt>a+b", "<Alt>page-up",
+	} {
 		if got, err := core.ParseChord(in); err == nil {
 			t.Errorf("ParseChord(%q) = %q, want an error", in, got)
 		}
@@ -63,8 +77,9 @@ func TestUnknownModifierNamesItself(t *testing.T) {
 	}
 }
 
-// GNOME's own spelling, back out. Key names come from gdk_keyval_from_name,
-// which is case sensitive: "return" is not a key and "Return" is.
+// GNOME's own spelling, back out. The key is a keysym name: "esc", "enter" and
+// "," name no keysym, so mutter would refuse the accelerator and the key would
+// do nothing.
 func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 	for _, tc := range []struct {
 		in   core.Chord
@@ -72,7 +87,13 @@ func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 	}{
 		{"ctrl+shift+u", "<Shift><Control>u"},
 		{"alt+space", "<Alt>space"},
-		{"super+return", "<Super>Return"},
+		{"super+enter", "<Super>Return"},
+		{"ctrl+esc", "<Control>Escape"},
+		{"super+pgup", "<Super>Page_Up"},
+		{"super+pgdown", "<Super>Page_Down"},
+		{"alt+,", "<Alt>comma"},
+		{"ctrl+.", "<Control>period"},
+		{"alt+plus", "<Alt>plus"},
 		{"alt+f4", "<Alt>F4"},
 		{"ctrl+alt+delete", "<Control><Alt>Delete"},
 		{"u", "u"},
@@ -88,7 +109,8 @@ func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	for _, in := range []string{
 		"<Shift><Control>u", "<Alt>space", "<Super>Return", "<Alt>F4",
-		"<Primary><Alt>Delete", "<Super>Page_Up",
+		"<Primary><Alt>Delete", "<Super>Page_Up", "<Alt>comma", "<Control>bracketleft",
+		"alt-esc", "ctrl-.", "<Alt>+",
 	} {
 		first, err := core.ParseChord(in)
 		if err != nil {
