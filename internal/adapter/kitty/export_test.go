@@ -5,7 +5,7 @@ import "context"
 // The injection points the L3 tests use to drive the host against recorded
 // output and a recording runner, with no kitty installed.
 
-func (h *Host) SetRunner(f func(ctx context.Context, socket string, args ...string) ([]byte, error)) {
+func (h *Host) SetRunner(f func(ctx context.Context, socket, stdin string, args ...string) ([]byte, error)) {
 	h.run = f
 }
 

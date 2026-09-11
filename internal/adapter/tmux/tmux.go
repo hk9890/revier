@@ -271,6 +271,14 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
+// SendText types text into a pane. -l sends it as characters, so no word of
+// it is read as a key name, and "--" keeps a leading dash from reading as a
+// flag. A pane id is unique across the server, so the instance is not needed.
+func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.PanelID, text string) error {
+	_, err := h.run(ctx, "send-keys", "-t", panel.String(), "-l", "--", text)
+	return err
+}
+
 // Focused reports the session's current window.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	out, err := h.run(ctx, "display-message", "-p", "-t", h.session()+":",

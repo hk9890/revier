@@ -54,13 +54,21 @@ a real application and moves the user's focus.
 Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
-To exercise the agent monitor, give a pane a Claude-style title. The leading
-glyph is the state signal:
+To exercise the agent monitor, launch the pane as `claude`, so the Claude probe
+claims it, and give it a Claude-style title. The leading glyph is the state
+signal:
 
 ```bash
+launch = ["bash", "-c", "exec -a claude sleep 600"]   # in the target, instead of sleep
 tmux select-pane -t agent -T '⠧ Working on it'   # spinner -> running
 tmux select-pane -t agent -T '✳ Ready'           # at rest  -> idle
+./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
+./bin/revier agent prompt demo 'hello'                    # types into that pane only; warns, as sleep never starts a turn
+tmux capture-pane -p -t agent                             # the text arrived
 ```
+
+`revier agent prompt` types into a pane. Run it only with the scratch
+configuration above: without it, it reaches the user's real agent.
 
 ## Drive the TUI without a screen
 
