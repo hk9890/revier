@@ -126,6 +126,61 @@ func TestFocusAndFocusedRoundTrip(t *testing.T) {
 	}
 }
 
+// tmux writes every non-ASCII character as '_' when LANG and LC_* name no
+// UTF-8 locale - cron, a container, ssh without locale forwarding - unless
+// it is told its output may carry UTF-8. A project name and the glyph a
+// Claude title leads with have to survive that.
+func TestNonASCIISurvivesALocaleWithoutUTF8(t *testing.T) {
+	for _, name := range []string{"LANG", "LC_ALL", "LC_CTYPE"} {
+		t.Setenv(name, "C")
+	}
+	t.Setenv("TMUX", "") // restored afterwards; unset below, as outside tmux
+	_ = os.Unsetenv("TMUX")
+	h, c := server(t), ctx(t)
+	real := revier.Realization{
+		Name:   "session:münchen",
+		Panels: []revier.PanelSpec{{Title: "⠧ Working", Command: []string{"sh", "-c", "sleep 30"}}},
+		Match:  revier.Match{Title: "^session:münchen$"},
+	}
+	if _, err := h.Open(c, real); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || instances[0].Title != "session:münchen" {
+		t.Fatalf("instances = %+v, want the window listed as session:münchen", instances)
+	}
+	if got := instances[0].Panels[0].Title; got != "⠧ Working" {
+		t.Errorf("pane title = %q, want the spinner glyph kept", got)
+	}
+}
+
+// A window linked into a second session - a session group, link-window - is
+// listed by list-panes -a once per session. Its panes are still one set:
+// counted twice, every agent in them would be two.
+func TestALinkedWindowListsItsPanesOnce(t *testing.T) {
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+		Match: revier.Match{Title: "^home$"},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	socket := "revier-test-" + t.Name()
+	if out, err := exec.Command("tmux", "-L", socket, "new-session", "-d", "-t", "revier-test", "-s", "second").CombinedOutput(); err != nil {
+		t.Fatalf("new-session -t: %v\n%s", err, out)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || len(instances[0].Panels) != 1 {
+		t.Fatalf("instances = %+v, want one window with one pane", instances)
+	}
+}
+
 func TestInstancesReportPanels(t *testing.T) {
 	h, c := server(t), ctx(t)
 	if _, err := h.Open(c, revier.Realization{

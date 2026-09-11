@@ -107,12 +107,14 @@ func (f *FakeWriter) Held(chord string) []revier.Binding {
 	return out
 }
 
+// same reports whether two bindings are one shortcut. A built-in is one key
+// of a setting that may hold several, as the desktop's own writer treats it.
 func same(a, b revier.Binding) bool {
 	if a.Source != b.Source {
 		return false
 	}
 	if a.Source == revier.BindingBuiltin {
-		return a.Where == b.Where && a.Label == b.Label
+		return a.Where == b.Where && a.Label == b.Label && a.Chord == b.Chord
 	}
 	return a.ID == b.ID
 }

@@ -58,8 +58,13 @@ func (h *Host) session() string {
 	return "revier"
 }
 
+// cmd runs tmux with -u. Without it tmux decides from LANG and LC_* whether
+// its output may carry UTF-8, and where they name no UTF-8 locale - cron, a
+// container, ssh without locale forwarding - it writes every non-ASCII
+// character as '_': a Claude spinner glyph and a project name like "münchen"
+// then stop matching anything.
 func (h *Host) cmd(ctx context.Context, args ...string) *exec.Cmd {
-	full := []string{}
+	full := []string{"-u"}
 	if h.Socket != "" {
 		full = append(full, "-L", h.Socket)
 	}
@@ -114,6 +119,10 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 
 	order := []string{}
 	byWindow := map[string]*revier.Instance{}
+	// list-panes -a lists a window's panes once for every session the window
+	// is linked into - a session group, link-window - and a pane listed twice
+	// is one agent, not two.
+	seen := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
 		if line == "" {
 			continue
@@ -126,6 +135,10 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			continue
 		}
 		winID, paneID, panePID, paneCmd, paneTitle := f[0], f[1], f[2], f[3], f[4]
+		if seen[paneID] {
+			continue
+		}
+		seen[paneID] = true
 
 		inst, ok := byWindow[winID]
 		if !ok {

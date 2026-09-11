@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -148,7 +149,8 @@ func (h *Host) instance(n node) revier.Instance {
 
 // Open launches the argv detached and returns a zero ref, as the GNOME host
 // does: the window does not exist yet, and the next Instances call finds it
-// through the realization's match.
+// through the realization's match. The application gets a session of its own,
+// so the hangup of the terminal revier runs in does not reach it.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if len(r.Launch) == 0 {
 		return revier.TargetRef{}, fmt.Errorf("sway: realization has no launch argv")
@@ -156,6 +158,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	c := exec.Command(r.Launch[0], r.Launch[1:]...)
 	c.Dir = r.Dir
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if len(h.Env) > 0 {
 		c.Env = append(os.Environ(), h.Env...)
 	}

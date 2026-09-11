@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,40 @@ type Panel struct {
 	PID     int               `json:"pid,omitempty"`
 	Command []string          `json:"command,omitempty"`
 }
+
+// Runs reports whether the panel's foreground command is the program called
+// name: its argv[0], or the script an interpreter was started on - `node
+// .../bin/claude` and `python3 -m aider` are how an npm or a pip install runs
+// one. Any other argument is data: `nvim claude` edits a file, and a probe
+// that claimed it would have `revier agent prompt` type into the editor.
+func (p Panel) Runs(name string) bool {
+	if len(p.Command) == 0 {
+		return false
+	}
+	program := baseName(p.Command[0])
+	if program == name {
+		return true
+	}
+	if !interpreter(program) {
+		return false
+	}
+	for _, arg := range p.Command[1:] {
+		if !strings.HasPrefix(arg, "-") {
+			return baseName(arg) == name
+		}
+	}
+	return false
+}
+
+func interpreter(program string) bool {
+	switch program {
+	case "node", "bun", "deno":
+		return true
+	}
+	return strings.HasPrefix(program, "python")
+}
+
+func baseName(arg string) string { return arg[strings.LastIndex(arg, "/")+1:] }
 
 // AgentProbe derives agent state from a panel.
 //

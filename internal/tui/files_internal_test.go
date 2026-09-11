@@ -53,6 +53,25 @@ func TestAnEditedFileIsReadBack(t *testing.T) {
 	}
 }
 
+// A survey still running holds the project list it started with, on another
+// goroutine. The edit goes into a new list; written into that one, it would
+// race the survey reading it.
+func TestAnEditLeavesTheListARunningSurveyHolds(t *testing.T) {
+	m, file := editableModel(t)
+	held := m.projects // what a running Survey command captured
+	if err := os.WriteFile(file, []byte(strings.Replace(editable, "/p/alpha", "/p/moved", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	next, _ := m.Update(editedMsg{project: "alpha", file: file})
+	m = next.(Model)
+	if got := held[0].Path; got != "/p/alpha" {
+		t.Errorf("the running survey's list changed under it: path = %q", got)
+	}
+	if got := m.projects[0].Path; got != "/p/moved" {
+		t.Errorf("path = %q, want the edited one", got)
+	}
+}
+
 // A file the edit broke keeps the project as it was, and says why, so it
 // can still be reached to fix.
 func TestAnEditThatDoesNotLoadKeepsTheProject(t *testing.T) {

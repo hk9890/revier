@@ -69,7 +69,8 @@ type KeyWriter interface {
 	// ignored: where a new entry goes is the desktop's choice, not revier's.
 	Bind(ctx context.Context, b Binding) error
 	// Disable stops the desktop acting on a shortcut, leaving its definition
-	// in place. On a built-in this clears the setting.
+	// in place. On a built-in this takes b.Chord out of the setting, and
+	// leaves any other key the setting holds.
 	Disable(ctx context.Context, b Binding) error
 	// Remove deletes a shortcut and everything it held. It is refused for a
 	// built-in, which is a desktop setting and not an entry to delete.

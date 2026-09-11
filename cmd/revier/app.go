@@ -128,18 +128,26 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 
 // commit records the project a command acted on, so the next keybinding
 // pressed away from a terminal still knows where it is, plus whatever else
-// the command learned. It re-reads the file first: the TUI writes claims to
-// it while a command runs, and a launch can take seconds waiting for a
-// socket, so saving the state loaded at startup would overwrite them.
+// the command learned.
 func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
+	a.update(func(s *state.State) {
+		s.Current = p
+		if apply != nil {
+			apply(s)
+		}
+	})
+}
+
+// update applies a change to state and saves it. It re-reads the file first:
+// the TUI writes claims to it while a command runs, and a launch can take
+// seconds waiting for a socket, so saving the state loaded at startup would
+// overwrite them.
+func (a *app) update(apply func(s *state.State)) {
 	st, err := state.Load(a.stateRoot)
 	if err != nil {
 		st = a.state
 	}
-	st.Current = p
-	if apply != nil {
-		apply(st)
-	}
+	apply(st)
 	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
@@ -160,10 +168,17 @@ const bindWait = 30 * time.Second
 //
 // A second press during the wait must not launch again: the pending launch
 // is recorded before waiting, and a press that finds one still inside
-// core.BindWindow reports it rather than opening a second window.
+// core.BindWindow reports it rather than opening a second window. A window
+// that has appeared by then is raised like any other.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
 	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
-		if _, alive := a.state.Bound[p.Name][name]; !alive {
+		// Every binding of a target consumes its launch, so a launch still on
+		// record has not landed, whatever an older binding says.
+		up, err := a.core.Running(ctx, p, name, a.state.Bound[p.Name])
+		if err != nil {
+			return revier.TargetRef{}, err
+		}
+		if !up {
 			return revier.TargetRef{}, nil // still coming up; the first press is waiting for it
 		}
 	}
@@ -171,13 +186,13 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	ref := res.Ref
+	landed, ref := res.Target, res.Ref
 	if res.Launched && ref.IsZero() {
 		at := time.Now()
 		a.commit(p.Name, func(s *state.State) {
-			s.Launch = &state.Launch{Project: p.Name, Target: name, At: at}
+			s.Launch = &state.Launch{Project: p.Name, Target: landed, At: at}
 		})
-		inst, ok, err := a.core.Bind(ctx, p, name, res.Before, bindWait)
+		inst, ok, err := a.core.Bind(ctx, p, landed, res.Before, bindWait)
 		if err != nil {
 			return revier.TargetRef{}, err
 		}
@@ -187,8 +202,8 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 		ref = inst.Ref
 	}
 	a.commit(p.Name, func(s *state.State) {
-		s.Bind(p.Name, name, ref)
-		if s.Launch != nil && s.Launch.Project == p.Name && s.Launch.Target == name {
+		s.Bind(p.Name, landed, ref)
+		if s.Launch != nil && s.Launch.Project == p.Name && s.Launch.Target == landed {
 			s.Launch = nil
 		}
 	})

@@ -213,6 +213,26 @@ func TestEnterOnAMissingDirectoryClonesBeforeLaunching(t *testing.T) {
 	}
 }
 
+// With no git_url there is nothing to clone, and Enter refuses as `revier
+// open` does, naming the field: opened anyway, the workspace and its agent
+// would start in whatever directory the runtime falls back to.
+func TestEnterOnAMissingDirectoryWithoutGitURLOpensNothing(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	projects, _ := onDisk(t, []string{"stuck"}, map[string]string{"stuck": "/nowhere/b"}, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 160, 20)
+
+	m, cmd := press(m, "enter")
+	if cmd != nil {
+		cmd()
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime Opened = %v for a directory that is not there", rt.Opened)
+	}
+	if f := footer(m); !strings.Contains(f, "git_url") {
+		t.Errorf("footer = %q, want the missing field named", f)
+	}
+}
+
 // While a delete waits for its answer, the wheel does not move the highlight:
 // the question names one project, and the row under it has to stay that one.
 func TestTheWheelHoldsStillWhileADeleteIsAsked(t *testing.T) {

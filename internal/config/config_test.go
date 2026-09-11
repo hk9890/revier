@@ -86,6 +86,23 @@ func TestLoadProjectNameDefaultsToFileStem(t *testing.T) {
 	}
 }
 
+// A copied project file keeps its name line. Two files under one name would be
+// one project to every lookup and to state, so the delete of the second row
+// would remove the first file; the load refuses them and names both.
+func TestLoadProjectsRefusesTwoFilesWithOneName(t *testing.T) {
+	dir := t.TempDir()
+	first := write(t, dir, "revier.toml", valid)
+	second := write(t, dir, "revier-copy.toml", valid)
+
+	_, err := config.LoadProjects(dir)
+	if err == nil {
+		t.Fatal("two files declaring project revier loaded")
+	}
+	if !strings.Contains(err.Error(), first) || !strings.Contains(err.Error(), second) {
+		t.Errorf("err = %v, want both files named", err)
+	}
+}
+
 // Every rule here names a failure that is otherwise invisible until a key is
 // pressed.
 func TestValidateRejects(t *testing.T) {

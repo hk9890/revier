@@ -157,6 +157,7 @@ func LoadProjects(dir string) ([]core.Project, error) {
 	sort.Strings(names)
 
 	projects := make([]core.Project, 0, len(names))
+	declared := map[revier.ProjectName]string{}
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -165,6 +166,13 @@ func LoadProjects(dir string) ([]core.Project, error) {
 			errs = append(errs, err)
 			continue
 		}
+		// A project is found by name everywhere - a lookup, a key in state, a
+		// run log - so a second file under a taken name would act as the first.
+		if first, taken := declared[p.Name]; taken {
+			errs = append(errs, fmt.Errorf("%s: project %q is already declared in %s", path, p.Name, first))
+			continue
+		}
+		declared[p.Name] = path
 		projects = append(projects, p)
 	}
 	if len(errs) > 0 {

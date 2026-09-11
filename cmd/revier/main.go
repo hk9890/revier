@@ -76,34 +76,40 @@ const exitEachFailed = 5
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		// An action's own exit status passes through, so whatever bound the
-		// key sees the failure the command reported and not a generic one.
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			os.Exit(exit.ExitCode())
-		}
-		// A window that belongs to no project is a normal outcome with its
-		// own status, so a desktop binding can offer the picker instead.
-		if errors.Is(err, errNoProject) {
+		status, say := outcome(err)
+		if say {
 			fmt.Fprintln(os.Stderr, "revier:", err)
-			os.Exit(exitNoProject)
 		}
-		// The keys command has already said, key by key, what did not happen.
-		// A line here would repeat the summary it just printed.
-		if errors.Is(err, errKeysIncomplete) {
-			os.Exit(exitKeysIncomplete)
-		}
-		if errors.Is(err, errWaitTimeout) {
-			fmt.Fprintln(os.Stderr, "revier:", err)
-			os.Exit(exitTimeout)
-		}
-		// `revier each` has already named every project it failed in.
-		if errors.Is(err, errEachFailed) {
-			os.Exit(exitEachFailed)
-		}
-		fmt.Fprintln(os.Stderr, "revier:", err)
-		os.Exit(1)
+		os.Exit(status)
 	}
+}
+
+// outcome is the exit status a failed command ends with, and whether its
+// message is still to be printed.
+func outcome(err error) (status int, say bool) {
+	var exit *exec.ExitError
+	switch {
+	// An action's own exit status passes through, so whatever bound the key
+	// sees the failure the command reported and not a generic one. The action
+	// has said why on the terminal it was given. A tool a host drives fails
+	// with a status too, and that one is revier's failure: it is printed.
+	case errors.Is(err, errActionFailed) && errors.As(err, &exit):
+		return exit.ExitCode(), false
+	// A window that belongs to no project is a normal outcome with its own
+	// status, so a desktop binding can offer the picker instead.
+	case errors.Is(err, errNoProject):
+		return exitNoProject, true
+	// The keys command has already said, key by key, what did not happen. A
+	// line here would repeat the summary it just printed.
+	case errors.Is(err, errKeysIncomplete):
+		return exitKeysIncomplete, false
+	case errors.Is(err, errWaitTimeout):
+		return exitTimeout, true
+	// `revier each` has already named every project it failed in.
+	case errors.Is(err, errEachFailed):
+		return exitEachFailed, false
+	}
+	return 1, true
 }
 
 func run(args []string) error {
@@ -238,17 +244,11 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 	views := report.Views
 
-	// Drop attachments whose windows are gone, so state does not accumulate
-	// refs to closed windows forever. An attachment is always a window-host
-	// ref, so the window listing is the live set.
-	if a.core.Window != nil {
-		live := map[string]bool{}
-		for _, inst := range report.Instances {
-			live[state.Key(inst.Ref)] = true
-		}
-		if a.state.Prune(live) {
-			a.commit(a.state.Current, nil)
-		}
+	// Drop attachments and bindings whose windows are gone, so state does not
+	// accumulate refs to closed windows forever. The prune is made again on
+	// the state as it is on disk: another process may have written it since.
+	if a.state.Prune(report.Hosts, report.Instances) {
+		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances) })
 	}
 
 	if *asJSON {
@@ -427,6 +427,10 @@ func (a *app) action(p core.Project, name string) ([]string, error) {
 	return nil, fmt.Errorf("no action named %q", name)
 }
 
+// errActionFailed marks an action's own failure, whose exit status revier
+// passes on as its own.
+var errActionFailed = errors.New("the action failed")
+
 // runAction executes an argv in the project directory with the terminal
 // attached, and returns the command's own error so its exit status survives.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
@@ -436,7 +440,10 @@ func runAction(p core.Project, argv []string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = p.Path
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return c.Run()
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("%w: %w", errActionFailed, err)
+	}
+	return nil
 }
 
 func cmdAttach(ctx context.Context, a *app, args []string) error {

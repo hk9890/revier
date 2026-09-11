@@ -76,13 +76,30 @@ func TestPruneDropsDeadRefs(t *testing.T) {
 	s.Attach("p", dead)
 	s.Attach("q", dead)
 
-	s.Prune(map[string]bool{state.Key(live): true})
+	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}})
 
 	if len(s.Attached["p"]) != 1 || s.Attached["p"][0].ID != "7" {
 		t.Errorf("p = %+v, want only the live ref", s.Attached["p"])
 	}
 	if _, ok := s.Attached["q"]; ok {
 		t.Error("q had only dead refs and should have been removed")
+	}
+}
+
+// A survey that did not list a host says nothing about its windows. A TUI
+// started where the window host does not probe must not throw away every
+// attachment and binding made on it.
+func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
+	s := &state.State{}
+	window := revier.TargetRef{Host: "gnome", ID: "7"}
+	s.Attach("p", window)
+	s.Bind("p", "editor", window)
+
+	if s.Prune([]string{"tmux"}, nil) {
+		t.Error("Prune reported a change for refs on a host it did not ask")
+	}
+	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {
+		t.Errorf("state = %+v, want the gnome refs kept", s)
 	}
 }
 

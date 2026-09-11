@@ -111,17 +111,32 @@ func TestDisableTakesThePathOutAndKeepsTheEntry(t *testing.T) {
 	neverRan(t, rec, "dconf write")
 }
 
-// A desktop default is a setting, not an entry, so it is emptied rather than
-// unlisted.
+// A desktop default is a setting, not an entry, so the key comes out of the
+// setting rather than an entry out of the list. It holding that key alone,
+// the setting is left empty.
 func TestDisableEmptiesADesktopDefault(t *testing.T) {
-	w, rec := newWriter("@as []")
+	w, rec := newWriter("['<Alt>space']")
 	if err := w.Disable(context.Background(), revier.Binding{
-		Where: "org.gnome.desktop.wm.keybindings", Label: "activate-window-menu",
+		Chord: "<Alt>space", Where: "org.gnome.desktop.wm.keybindings", Label: "activate-window-menu",
 		Source: revier.BindingBuiltin,
 	}); err != nil {
 		t.Fatalf("Disable: %v", err)
 	}
 	ran(t, rec, "gsettings set org.gnome.desktop.wm.keybindings activate-window-menu @as []")
+}
+
+// A setting can hold several keys, and only the one revier needs comes out:
+// emptied whole, `close` would lose Alt+F4 to a target that asked for Super+Q.
+func TestDisableKeepsTheOtherKeysOfADesktopDefault(t *testing.T) {
+	w, rec := newWriter("['<Alt>F4', '<Super>q']")
+	if err := w.Disable(context.Background(), revier.Binding{
+		Chord: "<Super>q", Where: "org.gnome.desktop.wm.keybindings", Label: "close",
+		Source: revier.BindingBuiltin,
+	}); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+	ran(t, rec, "gsettings set org.gnome.desktop.wm.keybindings close ['<Alt>F4']")
+	neverRan(t, rec, "gsettings set org.gnome.desktop.wm.keybindings close @as []")
 }
 
 func TestRemoveUnlistsThenDeletes(t *testing.T) {

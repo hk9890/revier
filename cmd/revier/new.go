@@ -41,10 +41,11 @@ func cmdNew(args []string) error {
 // directory's mise configuration, as `os open` does for a session it creates.
 // An empty name is the directory's own.
 //
-// Two directories are refused. One that is already a project's path would
-// become two projects fighting over it. The home directory would own every
-// directory under it that no other project claims, so a keypress in any of
-// them would resolve to it instead of reporting no project.
+// Two directories are refused, and a name already taken. A directory that is
+// already a project's path would become two projects fighting over it. The
+// home directory would own every directory under it that no other project
+// claims, so a keypress in any of them would resolve to it instead of
+// reporting no project.
 func createProject(root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -56,6 +57,11 @@ func createProject(root string, projects []core.Project, name revier.ProjectName
 	for _, p := range projects {
 		if filepath.Clean(p.Path) == dir {
 			return core.Project{}, fmt.Errorf("%s is already project %q", dir, p.Name)
+		}
+		// A file of another name can declare this project name, and the load
+		// refuses two projects under one name.
+		if p.Name == name {
+			return core.Project{}, fmt.Errorf("project %q already exists: %s", name, p.File)
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == dir {

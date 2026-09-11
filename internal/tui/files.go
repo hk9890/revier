@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -73,11 +74,15 @@ func (m *Model) reread(msg editedMsg) error {
 	if err != nil {
 		return fmt.Errorf("%w; %s is shown as it was before the edit", err, msg.project)
 	}
-	for i := range m.projects {
-		if m.projects[i].Name == msg.project {
-			m.projects[i] = p
+	// A new list, not a write into the old one: a survey still running reads
+	// the old one on another goroutine.
+	projects := slices.Clone(m.projects)
+	for i := range projects {
+		if projects[i].Name == msg.project {
+			projects[i] = p
 		}
 	}
+	m.projects = projects
 	m.tkeys = targetKeys(m.projects)
 	return msg.err
 }

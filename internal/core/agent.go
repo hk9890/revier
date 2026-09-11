@@ -96,10 +96,14 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 	}
 
 	var found []Agent
-	for _, inst := range scope {
-		for _, panel := range inst.Panels {
+	var targets []revier.TargetName
+	ids := map[revier.PanelID]int{}
+	for _, h := range scope {
+		for _, panel := range h.inst.Panels {
 			if probe, ok := c.agentProbe(panel); ok {
-				found = append(found, Agent{Ref: inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)})
+				found = append(found, Agent{Ref: h.inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)})
+				targets = append(targets, h.target)
+				ids[panel.ID]++
 			}
 		}
 	}
@@ -109,28 +113,47 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 	case 1:
 		return found[0], nil
 	}
+	// A panel id is one process's - a kitty window id is - so two windows can
+	// each hold a panel 1. Such an agent is named by its target instead.
 	addrs := make([]string, len(found))
 	for i, a := range found {
 		addrs[i] = string(p.Name) + ":" + a.Panel.ID.String()
+		if ids[a.Panel.ID] > 1 {
+			addrs[i] = string(p.Name) + ":" + string(targets[i])
+		}
 	}
 	return Agent{}, fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
 }
 
-// panel finds an agent by panel id among a project's running instances.
-func (c *Core) panel(ctx context.Context, scope []revier.Instance, project revier.ProjectName, id string) (Agent, error) {
-	for _, inst := range scope {
-		for _, panel := range inst.Panels {
-			if panel.ID.String() != id {
-				continue
+// panel finds an agent by panel id among a project's running instances. An
+// id held in more than one of them - each by its own process - names none.
+func (c *Core) panel(ctx context.Context, scope []held, project revier.ProjectName, id string) (Agent, error) {
+	var hits []held
+	var hit revier.Panel
+	for _, h := range scope {
+		for _, panel := range h.inst.Panels {
+			if panel.ID.String() == id {
+				hits, hit = append(hits, h), panel
 			}
-			probe, ok := c.agentProbe(panel)
-			if !ok {
-				return Agent{}, fmt.Errorf("%s:%s is %w: %s", project, id, ErrNotAgent, notAgentReason(panel))
-			}
-			return Agent{Ref: inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)}, nil
 		}
 	}
-	return Agent{}, fmt.Errorf("%s has no target and no running panel named %q", project, id)
+	switch len(hits) {
+	case 0:
+		return Agent{}, fmt.Errorf("%s has no target and no running panel named %q", project, id)
+	case 1:
+	default:
+		names := make([]string, len(hits))
+		for i, h := range hits {
+			names[i] = string(project) + ":" + string(h.target)
+		}
+		return Agent{}, fmt.Errorf("%s:%s %w: more than one window holds a panel %s; use one of %s",
+			project, id, ErrAmbiguous, id, strings.Join(names, ", "))
+	}
+	probe, ok := c.agentProbe(hit)
+	if !ok {
+		return Agent{}, fmt.Errorf("%s:%s is %w: %s", project, id, ErrNotAgent, notAgentReason(hit))
+	}
+	return Agent{Ref: hits[0].inst.Ref, Panel: hit, State: c.read(ctx, probe, hit)}, nil
 }
 
 func notAgentReason(panel revier.Panel) string {
@@ -140,10 +163,16 @@ func notAgentReason(panel revier.Panel) string {
 	return "no probe recognises what runs in it"
 }
 
+// held is a running instance and the target it backs.
+type held struct {
+	target revier.TargetName
+	inst   revier.Instance
+}
+
 // running lists the instances backing a project's targets, each once, in
 // target order; with only set, that target's alone.
-func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.TargetName) []revier.Instance {
-	var out []revier.Instance
+func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.TargetName) []held {
+	var out []held
 	seen := map[string]bool{}
 	for i, t := range p.Targets {
 		if only != "" && t.Name != only {
@@ -155,7 +184,7 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 		}
 		if inst, ok := c.locate(snap, p, i, host, m, bound[t.Name]); ok && !seen[key(inst.Ref)] {
 			seen[key(inst.Ref)] = true
-			out = append(out, inst)
+			out = append(out, held{target: t.Name, inst: inst})
 		}
 	}
 	return out
@@ -235,8 +264,10 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 		case <-time.After(poll):
 		}
 		// A failed read proves nothing about a text already delivered, so it
-		// only costs a poll.
-		if s, err := c.reread(ctx, a); err == nil && s.Status != revier.StatusIdle {
+		// only costs a poll. A probe that failed reads as unknown, not as an
+		// error, and is no more proof of a turn.
+		s, err := c.reread(ctx, a)
+		if err == nil && s.Status != revier.StatusIdle && s.Status != revier.StatusUnknown {
 			return s, nil
 		}
 	}

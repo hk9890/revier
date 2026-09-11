@@ -22,7 +22,6 @@ package opencode
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -33,14 +32,7 @@ type Probe struct{}
 func (p *Probe) Name() string { return "opencode" }
 
 // Match recognises an opencode pane by its foreground command.
-func (p *Probe) Match(panel revier.Panel) bool {
-	for _, arg := range panel.Command {
-		if arg[strings.LastIndex(arg, "/")+1:] == "opencode" {
-			return true
-		}
-	}
-	return false
-}
+func (p *Probe) Match(panel revier.Panel) bool { return panel.Runs("opencode") }
 
 // Inspect reports presence only. See the package comment for what opencode
 // does not expose.

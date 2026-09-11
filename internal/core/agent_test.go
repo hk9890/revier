@@ -221,6 +221,50 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 	}
 }
 
+// A panel id is one process's: two kitty processes each number their windows
+// from 1. With an agent in each of two such windows, a bare "1" names
+// neither - it would type into whichever came first - and the agents are
+// named by their targets instead.
+func TestAPanelIDHeldTwiceNamesNoAgent(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
+	rt.Add("diff:revier", "kitty", agentPanel("1", "idle"))
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}
+	p := prepared(t, project())
+
+	if _, err := c.Agent(context.Background(), p, "1", nil); !errors.Is(err, core.ErrAmbiguous) {
+		t.Errorf("Agent(1) = %v, want ErrAmbiguous: two windows hold a panel 1", err)
+	}
+	_, err := c.Agent(context.Background(), p, "", nil)
+	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:home") || !strings.Contains(err.Error(), "revier:diff") {
+		t.Errorf("Agent() = %v, want both agents named by their targets", err)
+	}
+	if a, err := c.Agent(context.Background(), p, "diff", nil); err != nil || a.Ref.Title != "diff:revier" {
+		t.Errorf("Agent(diff) = %+v, %v; want the diff window's agent", a, err)
+	}
+}
+
+// A read that comes back unknown after the prompt is no proof that the turn
+// started: a probe that failed reads that way. Prompt keeps watching, and
+// reports the agent still idle when that is all it saw, so the caller is
+// warned rather than told the turn is under way.
+func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
+	c, rt := agentCore(agentPanel("1", "idle"))
+	rt.OnSend = func(panel revier.PanelID, text string) {
+		if text == "\r" {
+			rt.Retitle(panel, "mystery") // titleProbe reads this as unknown
+		}
+	}
+	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := c.Prompt(context.Background(), a, "hello", time.Millisecond)
+	if err != nil || state.Status != revier.StatusIdle {
+		t.Fatalf("Prompt = %v, %v; want idle: an unknown read is not the turn", state.Status, err)
+	}
+}
+
 // The Enter that submits a prompt answers a dialog instead, so an agent
 // waiting for the human, or one whose state is unknown, is not typed into.
 func TestPromptRefusesAnAgentThatMayShowADialog(t *testing.T) {

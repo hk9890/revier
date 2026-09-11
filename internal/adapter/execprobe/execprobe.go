@@ -50,14 +50,7 @@ func (p *Probe) WithTimeout(d time.Duration) *Probe {
 func (p *Probe) Name() string { return p.name }
 
 // Match claims a panel whose foreground command is the harness name.
-func (p *Probe) Match(panel revier.Panel) bool {
-	for _, arg := range panel.Command {
-		if arg[strings.LastIndex(arg, "/")+1:] == p.name {
-			return true
-		}
-	}
-	return false
-}
+func (p *Probe) Match(panel revier.Panel) bool { return panel.Runs(p.name) }
 
 // Inspect runs the binary once. A non-zero exit, malformed output, or the
 // timeout is an error, which the core turns into StatusUnknown for this

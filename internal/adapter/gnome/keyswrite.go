@@ -62,12 +62,13 @@ func (w *Writer) Bind(ctx context.Context, b revier.Binding) error {
 //
 // A custom entry loses its place in the list GNOME acts on; every word of it
 // stays in the store, so whatever wrote it puts it back. A built-in is a
-// setting rather than an entry, so the setting is emptied - and the command
-// that returns it is what the caller prints, because nothing else will.
+// setting rather than an entry, and it can hold several keys: the one asked
+// for is taken out of it and the others stay - `close ['<Alt>F4', '<Super>q']`
+// keeps Alt+F4 when revier needs Super+Q. The command that returns it is what
+// the caller prints, because nothing else will.
 func (w *Writer) Disable(ctx context.Context, b revier.Binding) error {
 	if b.Source == revier.BindingBuiltin {
-		_, err := w.write(ctx, w.gsettings(), "set", b.Where, b.Label, "@as []")
-		return err
+		return w.dropAccelerator(ctx, b)
 	}
 	if b.Where == "" {
 		return fmt.Errorf("gnome keys: a shortcut needs a path to be switched off")
@@ -75,9 +76,30 @@ func (w *Writer) Disable(ctx context.Context, b revier.Binding) error {
 	return w.setEnabled(ctx, b.Where, false)
 }
 
+// dropAccelerator rewrites a built-in setting without the one accelerator the
+// binding stands for. A setting that no longer holds it is left alone.
+func (w *Writer) dropAccelerator(ctx context.Context, b revier.Binding) error {
+	raw, err := w.write(ctx, w.gsettings(), "get", b.Where, b.Label)
+	if err != nil {
+		return err
+	}
+	current := gvariantList(string(raw))
+	kept := make([]string, 0, len(current))
+	for _, chord := range current {
+		if chord != b.Chord {
+			kept = append(kept, chord)
+		}
+	}
+	if len(kept) == len(current) {
+		return nil
+	}
+	_, err = w.write(ctx, w.gsettings(), "set", b.Where, b.Label, gvariantArray(kept))
+	return err
+}
+
 // Remove deletes an entry: out of the list GNOME acts on, then the whole
 // subtree. It is refused for a built-in, which has no entry to delete and
-// whose setting Disable empties instead.
+// whose key Disable takes out of its setting instead.
 func (w *Writer) Remove(ctx context.Context, b revier.Binding) error {
 	if b.Source == revier.BindingBuiltin {
 		return fmt.Errorf("gnome keys: %s is a desktop setting, not an entry to remove", b.Label)

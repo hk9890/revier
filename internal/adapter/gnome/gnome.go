@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -125,11 +126,14 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if len(r.Launch) == 0 {
 		return revier.TargetRef{}, fmt.Errorf("gnome: realization has no launch argv")
 	}
-	c := exec.CommandContext(ctx, r.Launch[0], r.Launch[1:]...)
-	c.Dir = r.Dir
 	// Detach: the launched application outlives the revier process that
-	// started it, and must not die when a keypress-sized process exits.
+	// started it, and must not die when a keypress-sized process exits. So no
+	// context, which would kill it when the keypress ends, and a session of
+	// its own, so the hangup of the terminal revier runs in does not reach it.
+	c := exec.Command(r.Launch[0], r.Launch[1:]...)
+	c.Dir = r.Dir
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := c.Start(); err != nil {
 		return revier.TargetRef{}, fmt.Errorf("gnome: launch %s: %w", r.Launch[0], err)
 	}

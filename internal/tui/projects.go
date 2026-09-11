@@ -188,13 +188,19 @@ func (m *Model) selectName(name revier.ProjectName) {
 // synchronously through SetFilterText, so the count in the header and the
 // selection are right on the same pass as the keystroke.
 func (m *Model) setFilter(f string) {
+	was, hadSelection := m.selectedName()
 	m.filter = f
 	if m.input.Value() != f {
 		m.input.SetValue(f)
 	}
-	if f == "" {
-		m.plist.ResetFilter()
-	} else {
+	if f != "" {
 		m.plist.SetFilterText(f)
+		return
+	}
+	// ResetFilter keeps the cursor's index in the filtered list, which in the
+	// full list is another project; the selection goes back by name.
+	m.plist.ResetFilter()
+	if hadSelection {
+		m.selectName(was)
 	}
 }
