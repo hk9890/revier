@@ -234,8 +234,12 @@ func cmdTUI(a *app) error {
 func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier list [--json]")
 	}
 
 	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
@@ -326,6 +330,9 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(pos) > 1 {
+		return fmt.Errorf("usage: revier open [name]")
+	}
 	name := ""
 	if len(pos) > 0 {
 		name = pos[0]
@@ -375,7 +382,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier go <target> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -397,7 +404,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier run <action> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -453,8 +460,12 @@ func runAction(p core.Project, argv []string) error {
 func cmdAttach(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier attach [-p project]")
 	}
 	if a.core.Window == nil {
 		return fmt.Errorf("attach needs a window host; none is available here")
@@ -478,8 +489,12 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 func cmdStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier status [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
 	if err != nil {

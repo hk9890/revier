@@ -21,6 +21,9 @@ func cmdNew(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(pos) > 1 {
+		return fmt.Errorf("usage: revier new [name]")
+	}
 	root, err := config.Root()
 	if err != nil {
 		return err
