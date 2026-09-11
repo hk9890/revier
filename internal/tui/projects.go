@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -83,11 +84,9 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// Name on the left, agent state on the right. Padding every name to the
 	// longest one on screen put the state column half a row away from a short
 	// name; the right edge does not move.
-	first := spread(
-		style(th.Accent).Render(cursor+" ")+style(markStyle).Render(mark)+style(th.Path).Render(" ")+
-			style(name).Render(string(v.Project.Name)),
-		d.agent(v, style),
-		m.Width())
+	left := style(th.Accent).Render(cursor+" ") + style(markStyle).Render(mark) + style(th.Path).Render(" ") +
+		style(name).Render(string(v.Project.Name))
+	first := spread(left, d.agent(v, style, m.Width()-lipgloss.Width(left)-1), m.Width())
 
 	pathStyle := th.Path
 	if !v.PathExists {
@@ -103,15 +102,13 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 // agent is the worst agent state in the project and what it is doing: the
 // right-hand side of the row, and the part that answers "which of these needs
 // me". A project running several agents is why the detail pane lists them all.
-func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) lipgloss.Style) string {
-	if len(v.Agents) == 0 {
+//
+// It fits in room by cutting the activity and never the state: the state is
+// the answer, and the activity is what the detail pane shows whole.
+func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) lipgloss.Style, room int) string {
+	worst, ok := core.Worst(v.Agents)
+	if !ok {
 		return ""
-	}
-	worst := revier.AgentState{}
-	for _, a := range v.Agents {
-		if a.State.Status >= worst.Status {
-			worst = a.State
-		}
 	}
 	th := d.theme
 	var s lipgloss.Style
@@ -125,9 +122,10 @@ func (d projectDelegate) agent(v revier.ProjectView, style func(lipgloss.Style) 
 	default:
 		s = th.NameDim
 	}
-	out := style(s).Render(worst.Status.String())
-	if worst.Activity != "" {
-		out += style(th.NameDim).Render(" " + worst.Activity)
+	status := worst.Status.String()
+	out := style(s).Render(status)
+	if activity := ellipsize(worst.Activity, room-lipgloss.Width(status)-1); activity != "" {
+		out += style(th.NameDim).Render(" " + activity)
 	}
 	return out
 }
@@ -188,13 +186,19 @@ func (m *Model) selectName(name revier.ProjectName) {
 // synchronously through SetFilterText, so the count in the header and the
 // selection are right on the same pass as the keystroke.
 func (m *Model) setFilter(f string) {
+	was, hadSelection := m.selectedName()
 	m.filter = f
 	if m.input.Value() != f {
 		m.input.SetValue(f)
 	}
-	if f == "" {
-		m.plist.ResetFilter()
-	} else {
+	if f != "" {
 		m.plist.SetFilterText(f)
+		return
+	}
+	// ResetFilter keeps the cursor's index in the filtered list, which in the
+	// full list is another project; the selection goes back by name.
+	m.plist.ResetFilter()
+	if hadSelection {
+		m.selectName(was)
 	}
 }

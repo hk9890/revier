@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -86,6 +87,23 @@ func TestLoadProjectNameDefaultsToFileStem(t *testing.T) {
 	}
 }
 
+// A copied project file keeps its name line. Two files under one name would be
+// one project to every lookup and to state, so the delete of the second row
+// would remove the first file; the load refuses them and names both.
+func TestLoadProjectsRefusesTwoFilesWithOneName(t *testing.T) {
+	dir := t.TempDir()
+	first := write(t, dir, "revier.toml", valid)
+	second := write(t, dir, "revier-copy.toml", valid)
+
+	_, err := config.LoadProjects(dir)
+	if err == nil {
+		t.Fatal("two files declaring project revier loaded")
+	}
+	if !strings.Contains(err.Error(), first) || !strings.Contains(err.Error(), second) {
+		t.Errorf("err = %v, want both files named", err)
+	}
+}
+
 // Every rule here names a failure that is otherwise invisible until a key is
 // pressed.
 func TestValidateRejects(t *testing.T) {
@@ -146,6 +164,44 @@ func TestValidateRejects(t *testing.T) {
 			}},
 			"prefer must be",
 		},
+		{
+			// A runtime host names what it opens after the realization, and
+			// refuses to open without a name: the key would fail when pressed.
+			"runtime realization with no name",
+			revier.Project{Path: "/p", Targets: []revier.Target{
+				{Name: "a", Home: true, Runtime: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Title: "^x$"}}},
+			}},
+			`target "a" runtime realization has no name`,
+		},
+		{
+			// The name is written unquoted into the command a desktop key runs.
+			"target name with a space",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "my editor", Home: true, Window: &base}}},
+			`target name "my editor"`,
+		},
+		{
+			"target name with a quote",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: `ed"it`, Home: true, Window: &base}}},
+			"target name",
+		},
+		{
+			// The rule is ASCII because the name is read back out of a
+			// shortcut's command to tell it from somebody else's.
+			"target name with a non-ASCII letter",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "édit", Home: true, Window: &base}}},
+			`target name "édit"`,
+		},
+		{
+			"target name that reads as a flag",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "-p", Home: true, Window: &base}}},
+			`target name "-p"`,
+		},
+		{
+			// An agent address is <project>:<target>, split at the colon.
+			"project name with a colon",
+			revier.Project{Name: "a:b", Path: "/p", Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
+			`project name "a:b"`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -157,6 +213,18 @@ func TestValidateRejects(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A window realization needs no name: its launch argv carries the identity its
+// match finds. A target name may be any word, dots and dashes included.
+func TestValidateAcceptsANamelessWindowAndAWordTargetName(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}}},
+		{Name: "diff-2.old_x", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^y$"}}},
+	}}
+	if err := config.Validate(p); err != nil {
+		t.Fatalf("Validate: %v", err)
 	}
 }
 
@@ -378,7 +446,7 @@ func TestLoadWithNoUITableGetsTheDefault(t *testing.T) {
 func TestValidateRejectsAShortPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 			Place: "right top",
 		}},
 	}}
@@ -394,7 +462,7 @@ func TestValidateRejectsAShortPlacement(t *testing.T) {
 func TestValidateAcceptsAFullPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 			Place: "right top 75% 100%",
 		}},
 	}}
@@ -445,7 +513,7 @@ func TestTriggerKeyIsCanonical(t *testing.T) {
 func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Key: "<Nonsense>u", Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 	}}
 	err := config.Validate(p)
@@ -459,12 +527,50 @@ func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 	}
 }
 
+// A keyed target's name is the row, the shortcut's entry, and a word in the
+// command the key runs. "picker" is the row of the key that opens revier, so
+// the two collided and every install was refused; a name that is not one plain
+// word would run as shell syntax, and revier would not know the shortcut as
+// its own.
+func TestValidateRejectsANameAKeyedTargetCannotHave(t *testing.T) {
+	for _, name := range []revier.TargetName{"picker", "my editor", `x"; rm -rf ~; "`, "-x"} {
+		p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			}},
+			{Name: name, Key: "ctrl-shift-p", Window: &revier.Realization{
+				Launch: []string{"y"}, Match: revier.Match{Class: "^y$"},
+			}},
+		}}
+		err := config.Validate(p)
+		if err == nil {
+			t.Errorf("Validate accepted a keyed target named %q", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), strconv.Quote(string(name))) {
+			t.Errorf("error = %q, want it to name the target", err)
+		}
+	}
+}
+
+// Without a key the name reaches no desktop, so it is not restricted.
+func TestATargetWithNoKeyMayBeCalledPicker(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "picker", Home: true, Runtime: &revier.Realization{
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+		}},
+	}}
+	if err := config.Validate(p); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}
+
 // Two spellings of one key are one key. Compared as text they are two, and the
 // second silently takes the chord from the first at the desktop.
 func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Key: "ctrl-o", Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 		{Name: "editor", Key: "<Control>O", Window: &revier.Realization{
 			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
@@ -497,5 +603,40 @@ func TestLoadRejectsAnUnreadableTriggerKey(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to name %q", err, want)
 		}
+	}
+}
+
+// An action's key is the TUI's alone, so a key the TUI cannot receive, or
+// reads as filter text, is refused at load and named, rather than bound to a
+// key that does nothing.
+func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
+	for key, want := range map[string]string{
+		"y":            "typed text",
+		"shift-y":      "typed text",
+		"ctrl-shift-y": "reaches a terminal as ctrl+y",
+		"super-y":      "never reaches a terminal",
+		"<Nonsense>y":  "Nonsense",
+	} {
+		root := t.TempDir()
+		write(t, root, "config.toml", "[[action]]\nkey = \""+key+"\"\nname = \"sync\"\nrun = [\"true\"]\n")
+		_, _, err := config.Load(root)
+		if err == nil {
+			t.Errorf("Load accepted action key %q", key)
+			continue
+		}
+		for _, w := range []string{`action "sync"`, want} {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("key %q: error = %q, want it to say %q", key, err, w)
+			}
+		}
+	}
+}
+
+// An action with nothing to run fails at load, not at the keypress.
+func TestLoadRefusesAnActionThatRunsNothing(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[[action]]\nkey = \"ctrl-y\"\nname = \"sync\"\n")
+	if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), `action "sync" runs nothing`) {
+		t.Errorf("Load = %v, want the empty action named", err)
 	}
 }

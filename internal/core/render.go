@@ -53,6 +53,9 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 	if out.Match.Title, err = expand(p, r.Match.Title); err != nil {
 		return revier.Realization{}, fmt.Errorf("match title: %w", err)
 	}
+	if out.Place, err = expand(p, r.Place); err != nil {
+		return revier.Realization{}, fmt.Errorf("place: %w", err)
+	}
 	if len(r.Launch) > 0 {
 		out.Launch = make([]string, len(r.Launch))
 		for i, arg := range r.Launch {
@@ -65,6 +68,9 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 		out.Panels = make([]revier.PanelSpec, len(r.Panels))
 		copy(out.Panels, r.Panels)
 		for i, spec := range r.Panels {
+			if out.Panels[i].Title, err = expand(p, spec.Title); err != nil {
+				return revier.Realization{}, fmt.Errorf("panel[%d] title: %w", i, err)
+			}
 			if len(spec.Command) == 0 {
 				continue
 			}

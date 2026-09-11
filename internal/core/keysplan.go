@@ -140,7 +140,44 @@ func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger 
 	for _, row := range report.Rows {
 		plan.Steps = append(plan.Steps, installStep(row, held[row.Chord]))
 	}
+	entryPerStep(plan.Steps, bindings)
 	return plan, nil
+}
+
+// entryPerStep gives every step that creates a shortcut an entry no other step
+// writes and nobody else owns.
+//
+// A new shortcut is named after its target, and that name can be in use. When
+// a key moves between targets - home leaves ctrl+shift+u, web takes it - web
+// rewrites the entry revier-home in place, and home's new key would be written
+// to the same entry: one of the two keys is lost, and both steps report done.
+// An entry that is somebody else's is never overwritten either. revier's own
+// entry on a chord nothing wants any more may be reused: moving it is what
+// renaming the key means.
+func entryPerStep(steps []KeyStep, bindings []revier.Binding) {
+	taken := map[string]bool{}
+	for _, b := range bindings {
+		if b.Source == revier.BindingCustom && !ownedCommand(b.Command) {
+			taken[b.ID] = true
+		}
+	}
+	for _, s := range steps {
+		if s.Own != KeyCreate {
+			taken[s.Write.ID] = true
+		}
+	}
+	for i := range steps {
+		s := &steps[i]
+		if s.Own != KeyCreate {
+			continue
+		}
+		id := s.Write.ID
+		for n := 2; taken[id]; n++ {
+			id = fmt.Sprintf("%s-%d", s.Write.ID, n)
+		}
+		s.Write.ID = id
+		taken[id] = true
+	}
 }
 
 // PlanUninstallKeys works out what releasing the desktop keys would do.
@@ -430,10 +467,12 @@ func (c *Core) ApplyKeys(ctx context.Context, plan KeyPlan, force bool) KeyPlan 
 // shortcut is written. The order matters - a desktop that already refuses two
 // shortcuts on one chord would refuse the write otherwise.
 func applyStep(ctx context.Context, w revier.KeyWriter, s KeyStep) error {
+	var off []revier.Binding
 	for _, b := range s.Evict {
 		if err := w.Disable(ctx, b); err != nil {
-			return fmt.Errorf("switch off %s: %w", b.Label, err)
+			return stranded(fmt.Errorf("switch off %s: %w", b.Label, err), off)
 		}
+		off = append(off, b)
 	}
 	for _, b := range s.Drop {
 		if err := w.Remove(ctx, b); err != nil {
@@ -443,5 +482,21 @@ func applyStep(ctx context.Context, w revier.KeyWriter, s KeyStep) error {
 	if s.Action == KeyRemove || s.Action == KeyAbsent {
 		return nil
 	}
-	return w.Bind(ctx, s.Write)
+	if err := w.Bind(ctx, s.Write); err != nil {
+		return stranded(err, off)
+	}
+	return nil
+}
+
+// stranded is a failed step's error, naming what the step had already switched
+// off. Those stay off - revier has no verb that switches somebody else's
+// shortcut back on, and a desktop that just refused one write is not one to
+// trust with another - so the key may now run nothing, and the line printed
+// against it has to say why.
+func stranded(err error, off []revier.Binding) error {
+	if len(off) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w; %s switched off already and stays off, so the key may run nothing",
+		err, holderNames(off))
 }

@@ -432,7 +432,7 @@ is the one worth spending a surface on.
 
 ## 2026-09-06
 
-### D26 — the desktop's keyboard shortcuts are a port of their own — Accepted
+### D26 — the desktop's keyboard shortcuts are a port of their own — Narrowed by D35
 
 revier and the shell tool it replaces both want the same four desktop keys.
 Neither can be switched to without knowing who holds a key now, and today
@@ -466,7 +466,7 @@ rather than merely unused.
 
 ## 2026-09-07
 
-### D27 — revier adds keys; it takes one only when told to — Narrowed by D29
+### D27 — revier adds keys; it takes one only when told to — Narrowed by D29 and D34
 
 Extends D26, which read the desktop's shortcuts and stopped there.
 
@@ -670,3 +670,32 @@ an activity line is the agent's own - so the wheel is worth more than the drag.
 
 Clicking a row does nothing yet. It is the natural next step and needs no
 further trade: the events it would use are already reported.
+
+### D34 — `--force` takes one key out of a desktop default, not the whole setting — Accepted
+
+Narrows D27, which said a desktop default "is emptied".
+
+A GNOME default is one setting that can hold several keys: `close` is
+`['<Alt>F4', '<Super>q']` on many machines. Emptying it to take Super+Q took
+Alt+F4 as well, which nobody asked for and the printed undo line only
+restored by resetting the whole setting. `--force` now removes the one key
+revier needs and leaves the others, and the `gsettings reset` line beside the
+key still puts the default back as it was.
+
+### D35 — a key the terminal cannot deliver works on the desktop only — Accepted
+
+Narrows D26, which listed `ctrl+shift+u` as bubbletea's spelling of a chord.
+
+A terminal without the kitty keyboard protocol never sends it. Ctrl+Shift+U
+arrives as Ctrl+U, Ctrl+I as Tab, Ctrl+M as Enter, and Super not at all, so a
+target key compared against the chord it declares never fired in the TUI.
+
+The TUI now reads every press as a canonical chord and binds a target key
+under what the terminal actually sends - unless that press already means
+something in the TUI: its own keys, a query editing key, an action, or another
+target that declares it directly. Then the key works on the desktop only, and
+the footer does not offer it. On the owner's keys that makes Ctrl+Shift+O work
+in the TUI as Ctrl+O, while Ctrl+Shift+U (the query's clear-line) and
+Ctrl+Shift+I (Tab) stay desktop keys. An action has no desktop half, so an
+action key the terminal cannot send, or sends as another key, is refused at
+load.

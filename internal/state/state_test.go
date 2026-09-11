@@ -76,13 +76,54 @@ func TestPruneDropsDeadRefs(t *testing.T) {
 	s.Attach("p", dead)
 	s.Attach("q", dead)
 
-	s.Prune(map[string]bool{state.Key(live): true})
+	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}}, s)
 
 	if len(s.Attached["p"]) != 1 || s.Attached["p"][0].ID != "7" {
 		t.Errorf("p = %+v, want only the live ref", s.Attached["p"])
 	}
 	if _, ok := s.Attached["q"]; ok {
 		t.Error("q had only dead refs and should have been removed")
+	}
+}
+
+// A survey that did not list a host says nothing about its windows. A TUI
+// started where the window host does not probe must not throw away every
+// attachment and binding made on it.
+func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
+	s := &state.State{}
+	window := revier.TargetRef{Host: "gnome", ID: "7"}
+	s.Attach("p", window)
+	s.Bind("p", "editor", window)
+
+	if s.Prune([]string{"tmux"}, nil, s) {
+		t.Error("Prune reported a change for refs on a host it did not ask")
+	}
+	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {
+		t.Errorf("state = %+v, want the gnome refs kept", s)
+	}
+}
+
+// A survey lists what was there when it started. A binding written while it
+// was listing may be to a window that opened after the listing, and dropping
+// it would cost the target the window it just landed on.
+func TestPruneKeepsRefsWrittenAfterTheSurveyStarted(t *testing.T) {
+	before := &state.State{}
+	old := revier.TargetRef{Host: "gnome", ID: "7"}
+	before.Bind("p", "home", old)
+
+	now := &state.State{}
+	fresh := revier.TargetRef{Host: "gnome", ID: "9"}
+	now.Bind("p", "home", old)
+	now.Bind("p", "editor", fresh)
+	now.Attach("p", fresh)
+
+	now.Prune([]string{"gnome"}, nil, before)
+
+	if _, ok := now.Bound["p"]["home"]; ok {
+		t.Error("home's window was there to be listed and was not; want its binding dropped")
+	}
+	if now.Bound["p"]["editor"] != fresh || len(now.Attached["p"]) != 1 {
+		t.Errorf("state = %+v, want the refs written after the survey started kept", now)
 	}
 }
 

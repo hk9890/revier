@@ -12,19 +12,20 @@ func TestRenderExpandsEveryTemplatedField(t *testing.T) {
 	p := revier.Project{
 		Name: "revier",
 		Path: "/home/hans/dev/github/revier",
-		Vars: map[string]string{"url": "https://example.invalid/pulls"},
+		Vars: map[string]string{"url": "https://example.invalid/pulls", "x": "right"},
 		Targets: []revier.Target{{
 			Name: "pulls",
 			Window: &revier.Realization{
 				Name:   "revier-{{.Name}}-pulls",
 				Launch: []string{"chrome", "--app={{.Vars.url}}", "--class=revier-{{.Name}}"},
 				Match:  revier.Match{Class: "^revier-{{.Name}}$", Title: "{{.Name}}"},
+				Place:  "{{.Vars.x}} top 75% 100%",
 			},
 			Runtime: &revier.Realization{
 				Name:   "{{.Name}}",
 				Launch: []string{"less"},
 				Match:  revier.Match{Title: "^{{.Name}}$"},
-				Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude", "--cwd", "{{.Path}}"}}},
+				Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "agent:{{.Name}}", Command: []string{"claude", "--cwd", "{{.Path}}"}}},
 			},
 		}},
 	}
@@ -46,9 +47,15 @@ func TestRenderExpandsEveryTemplatedField(t *testing.T) {
 	if w.Match.Class != "^revier-revier$" || w.Match.Title != "revier" {
 		t.Errorf("match = %+v", w.Match)
 	}
+	if w.Place != "right top 75% 100%" {
+		t.Errorf("place = %q", w.Place)
+	}
 	r := out.Targets[0].Runtime
 	if r.Panels[0].Command[2] != "/home/hans/dev/github/revier" {
 		t.Errorf("panel command = %v", r.Panels[0].Command)
+	}
+	if r.Panels[0].Title != "agent:revier" {
+		t.Errorf("panel title = %q", r.Panels[0].Title)
 	}
 }
 

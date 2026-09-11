@@ -19,6 +19,8 @@ func TestMatch(t *testing.T) {
 		{"marker unset", revier.Panel{Vars: map[string]string{"CS_TAB": "0"}}, false},
 		{"foreground command", revier.Panel{Command: []string{"claude"}}, true},
 		{"absolute path command", revier.Panel{Command: []string{"/home/hans/.local/bin/claude"}}, true},
+		{"an npm install, under node", revier.Panel{Command: []string{"node", "/home/hans/.npm-global/bin/claude"}}, true},
+		{"a file called claude in an editor", revier.Panel{Command: []string{"nvim", "internal/adapter/claude"}}, false},
 		{"a shell is not an agent", revier.Panel{Command: []string{"zsh"}}, false},
 		{"empty panel", revier.Panel{}, false},
 	}

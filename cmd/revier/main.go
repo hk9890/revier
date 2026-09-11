@@ -76,34 +76,40 @@ const exitEachFailed = 5
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		// An action's own exit status passes through, so whatever bound the
-		// key sees the failure the command reported and not a generic one.
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			os.Exit(exit.ExitCode())
-		}
-		// A window that belongs to no project is a normal outcome with its
-		// own status, so a desktop binding can offer the picker instead.
-		if errors.Is(err, errNoProject) {
+		status, say := outcome(err)
+		if say {
 			fmt.Fprintln(os.Stderr, "revier:", err)
-			os.Exit(exitNoProject)
 		}
-		// The keys command has already said, key by key, what did not happen.
-		// A line here would repeat the summary it just printed.
-		if errors.Is(err, errKeysIncomplete) {
-			os.Exit(exitKeysIncomplete)
-		}
-		if errors.Is(err, errWaitTimeout) {
-			fmt.Fprintln(os.Stderr, "revier:", err)
-			os.Exit(exitTimeout)
-		}
-		// `revier each` has already named every project it failed in.
-		if errors.Is(err, errEachFailed) {
-			os.Exit(exitEachFailed)
-		}
-		fmt.Fprintln(os.Stderr, "revier:", err)
-		os.Exit(1)
+		os.Exit(status)
 	}
+}
+
+// outcome is the exit status a failed command ends with, and whether its
+// message is still to be printed.
+func outcome(err error) (status int, say bool) {
+	var exit *exec.ExitError
+	switch {
+	// An action's own exit status passes through, so whatever bound the key
+	// sees the failure the command reported and not a generic one. The action
+	// has said why on the terminal it was given. A tool a host drives fails
+	// with a status too, and that one is revier's failure: it is printed.
+	case errors.Is(err, errActionFailed) && errors.As(err, &exit):
+		return exit.ExitCode(), false
+	// A window that belongs to no project is a normal outcome with its own
+	// status, so a desktop binding can offer the picker instead.
+	case errors.Is(err, errNoProject):
+		return exitNoProject, true
+	// The keys command has already said, key by key, what did not happen. A
+	// line here would repeat the summary it just printed.
+	case errors.Is(err, errKeysIncomplete):
+		return exitKeysIncomplete, false
+	case errors.Is(err, errWaitTimeout):
+		return exitTimeout, true
+	// `revier each` has already named every project it failed in.
+	case errors.Is(err, errEachFailed):
+		return exitEachFailed, false
+	}
+	return 1, true
 }
 
 func run(args []string) error {
@@ -127,9 +133,15 @@ func run(args []string) error {
 		// fail, that has nothing to do with running a command in directories.
 		// No deadline either, for the reason runAction has none.
 		return cmdEach(os.Stdout, args)
+	case "agent":
+		// Its own app: how long an agent command may take is one of its
+		// flags, and the hosts are probed and listed inside that bound.
+		return cmdAgent(args)
 	}
 
-	ctx, cancel := commandContext(cmd)
+	// A keypress command gets long enough for a detached launch's wait
+	// (bindWait) on top of the host calls around it.
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -154,24 +166,14 @@ func run(args []string) error {
 		return cmdStatus(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
-	case "agent":
-		return cmdAgent(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
 }
 
-// commandContext bounds a command. A keypress command gets long enough for a
-// detached launch's wait (bindWait) on top of the host calls around it. An
-// agent command waits as long as its caller says, which by default is for
-// good: `revier agent wait` on a long turn is the point of it.
-func commandContext(cmd string) (context.Context, context.CancelFunc) {
-	if cmd == "agent" {
-		return context.WithCancel(context.Background())
-	}
-	return context.WithTimeout(context.Background(), bindWait+30*time.Second)
-}
+// commandTimeout bounds a command that has no bound of its own.
+const commandTimeout = bindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {
@@ -228,27 +230,29 @@ func cmdTUI(a *app) error {
 func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
 	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier list [--json]")
+	}
 
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
+	// What the survey can judge: a ref written after this, by another
+	// process, is to a window the listing may have missed. A state that
+	// cannot be read is nil, and a nil state lets nothing be pruned.
+	before, _ := state.Load(a.stateRoot)
+	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
 	}
 	views := report.Views
 
-	// Drop attachments whose windows are gone, so state does not accumulate
-	// refs to closed windows forever. An attachment is always a window-host
-	// ref, so the window listing is the live set.
-	if a.core.Window != nil {
-		live := map[string]bool{}
-		for _, inst := range report.Instances {
-			live[state.Key(inst.Ref)] = true
-		}
-		if a.state.Prune(live) {
-			a.commit(a.state.Current, nil)
-		}
+	// Drop attachments and bindings whose windows are gone, so state does not
+	// accumulate refs to closed windows forever. The prune is made again on
+	// the state as it is on disk: another process may have written it since.
+	if a.state.Prune(report.Hosts, report.Instances, before) {
+		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances, before) })
 	}
 
 	if *asJSON {
@@ -282,20 +286,14 @@ func runState(v revier.ProjectView) string {
 // agentSummary shows the worst state across the project's agents, because the
 // list exists to answer "which one needs me" at a glance.
 func agentSummary(v revier.ProjectView) string {
-	if len(v.Agents) == 0 {
+	worst, ok := core.Worst(v.Agents)
+	if !ok {
 		return "-"
 	}
-	worst := revier.StatusUnknown
-	activity := ""
-	for _, ag := range v.Agents {
-		if ag.State.Status > worst {
-			worst, activity = ag.State.Status, ag.State.Activity
-		}
+	if worst.Activity == "" {
+		return worst.Status.String()
 	}
-	if activity == "" {
-		return worst.String()
-	}
-	return worst.String() + ": " + activity
+	return worst.Status.String() + ": " + worst.Activity
 }
 
 func targetSummary(v revier.ProjectView) string {
@@ -308,10 +306,14 @@ func targetSummary(v revier.ProjectView) string {
 		case !t.Ref.IsZero():
 			mark = "*" // running
 		}
+		name := string(t.Name)
+		if t.Attached {
+			name = "(" + t.Ref.Title + ")" // bound at runtime, so it has no name
+		}
 		if out != "" {
 			out += " "
 		}
-		out += mark + string(t.Name)
+		out += mark + name
 	}
 	return out
 }
@@ -321,6 +323,9 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
+	}
+	if len(pos) > 1 {
+		return fmt.Errorf("usage: revier open [name]")
 	}
 	name := ""
 	if len(pos) > 0 {
@@ -353,7 +358,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		// The clone ran without a deadline. The host calls still need one,
 		// and the one set at startup may have been spent waiting for git.
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), bindWait+30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
 		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
@@ -371,7 +376,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier go <target> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -393,7 +398,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier run <action> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -427,6 +432,10 @@ func (a *app) action(p core.Project, name string) ([]string, error) {
 	return nil, fmt.Errorf("no action named %q", name)
 }
 
+// errActionFailed marks an action's own failure, whose exit status revier
+// passes on as its own.
+var errActionFailed = errors.New("the action failed")
+
 // runAction executes an argv in the project directory with the terminal
 // attached, and returns the command's own error so its exit status survives.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
@@ -436,14 +445,21 @@ func runAction(p core.Project, argv []string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = p.Path
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return c.Run()
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("%w: %w", errActionFailed, err)
+	}
+	return nil
 }
 
 func cmdAttach(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier attach [-p project]")
 	}
 	if a.core.Window == nil {
 		return fmt.Errorf("attach needs a window host; none is available here")
@@ -467,8 +483,12 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 func cmdStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier status [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
 	if err != nil {

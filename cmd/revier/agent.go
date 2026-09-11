@@ -35,7 +35,12 @@ waiting for an answer, where the Enter would pick an option in its dialog.
 // the one the shell tool used, so a script can tell it from a failure.
 var errWaitTimeout = errors.New("timed out")
 
-func cmdAgent(ctx context.Context, a *app, args []string) error {
+// promptTimeout bounds `revier agent prompt` from the host probe to the watch
+// for the turn to start. A wedged tmux would otherwise hold it for good. A
+// variable, so a test need not wait this long for it.
+var promptTimeout = commandTimeout
+
+func cmdAgent(args []string) error {
 	sub := ""
 	if len(args) > 0 {
 		sub, args = args[0], args[1:]
@@ -45,16 +50,20 @@ func cmdAgent(ctx context.Context, a *app, args []string) error {
 		fmt.Print(agentUsage)
 		return nil
 	case "wait":
-		return cmdAgentWait(ctx, a, args)
+		return cmdAgentWait(args)
 	case "prompt":
-		return cmdAgentPrompt(ctx, a, args)
+		return cmdAgentPrompt(args)
 	default:
 		fmt.Fprint(os.Stderr, agentUsage)
 		return fmt.Errorf("unknown agent command %q", sub)
 	}
 }
 
-func cmdAgentWait(ctx context.Context, a *app, args []string) error {
+// cmdAgentWait waits as long as its caller says, which by default is for
+// good: `revier agent wait` on a long turn is the point of it. The timeout
+// covers the host probes and the lookup as well as the wait, since a host that
+// never answers is a wait that never ends.
+func cmdAgentWait(args []string) error {
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
@@ -72,27 +81,41 @@ func cmdAgentWait(ctx context.Context, a *app, args []string) error {
 	if *timeout < 0 {
 		return fmt.Errorf("--timeout must not be negative")
 	}
-	ag, err := a.agent(ctx, pos[0])
-	if err != nil {
-		return err
-	}
+	ctx, cancel := context.WithCancel(context.Background())
 	if *timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(*timeout*float64(time.Second)))
-		defer cancel()
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
-	state, err := a.core.Wait(ctx, ag, statuses, core.AgentPoll)
-	if errors.Is(err, context.DeadlineExceeded) {
+	defer cancel()
+	state, err := waitFor(ctx, pos[0], statuses)
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
 	if err != nil {
-		return fmt.Errorf("%s: %w", pos[0], err)
+		return err
 	}
 	fmt.Println(state.Status)
 	return nil
 }
 
-func cmdAgentPrompt(ctx context.Context, a *app, args []string) error {
+// waitFor finds the agent an address names and waits for one of the statuses.
+// The state is the last one read, zero when the agent was never found.
+func waitFor(ctx context.Context, address string, until []revier.Status) (revier.AgentState, error) {
+	a, err := newApp(ctx)
+	if err != nil {
+		return revier.AgentState{}, err
+	}
+	ag, err := a.agent(ctx, address)
+	if err != nil {
+		return revier.AgentState{}, err
+	}
+	state, err := a.core.Wait(ctx, ag, until, core.AgentPoll)
+	if err != nil {
+		return state, fmt.Errorf("%s: %w", address, err)
+	}
+	return state, nil
+}
+
+func cmdAgentPrompt(args []string) error {
 	fs := flag.NewFlagSet("agent prompt", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -100,6 +123,12 @@ func cmdAgentPrompt(ctx context.Context, a *app, args []string) error {
 	}
 	if len(pos) != 2 {
 		return fmt.Errorf("usage: revier agent prompt <agent> [--] <text>")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
+	defer cancel()
+	a, err := newApp(ctx)
+	if err != nil {
+		return err
 	}
 	ag, err := a.agent(ctx, pos[0])
 	if err != nil {

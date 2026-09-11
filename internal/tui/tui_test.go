@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -229,6 +230,9 @@ func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 // the same run-or-raise `revier go home` does, and does not stop at the list.
 func TestEnterOnAProjectOpensItsHome(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
+	for i := range projects {
+		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
+	}
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "0")
 	m, _ = press(m, "0") // project-00, whose home is not running
@@ -329,6 +333,22 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m, _ = press(m, "esc")
 	if body := m.View(); !strings.Contains(body, "project-00") {
 		t.Errorf("esc should clear the filter:\n%s", body)
+	}
+}
+
+// Clearing the query keeps the project the cursor is on. The list keeps the
+// cursor's place among the filtered rows, which in the full list is another
+// project, and Enter would then open that one.
+func TestClearingTheFilterKeepsTheSelectedProject(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, _ = press(m, "0")
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	before := selectedRow(t, m)
+	m, _ = press(m, "esc")
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selection moved when the filter was cleared: %q -> %q", before, after)
 	}
 }
 
@@ -514,6 +534,154 @@ func TestEnterPinsTheTarget(t *testing.T) {
 	if ref := got.Bound["project-00"]["editor"]; ref.IsZero() {
 		t.Fatalf("bound = %+v, want the editor pinned after Enter", got.Bound)
 	}
+	if got.Current != "project-00" {
+		t.Errorf("current = %q, want project-00: a desktop key pressed next falls back to it", got.Current)
+	}
+}
+
+// Enter on the editor while the editor has focus goes home, and pins home.
+// Pinned to the editor, the home window would be where the editor's key
+// lands from then on.
+func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
+	rt, wm, c, projects := world(t, 1)
+	wm.SetFocus(wm.Add("Visual Studio Code", "code-project-00"))
+	listed, _ := rt.Instances(context.Background())
+	home := listed[0].Ref
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down") // editor
+	_, cmd := press(m, "enter")
+	m.Update(cmd())
+
+	got, _ := state.Load(root)
+	if ref := got.Bound["project-00"]["editor"]; !ref.IsZero() {
+		t.Errorf("editor bound to %v, want no binding: the press landed on home", ref)
+	}
+	if ref := got.Bound["project-00"]["home"]; ref != home {
+		t.Errorf("home bound to %v, want %v", ref, home)
+	}
+}
+
+// lateWindows is a window host whose windows appear later than the launch
+// that asked for them: Open starts nothing it can list yet.
+type lateWindows struct {
+	*hosttest.Fake
+	opened int
+}
+
+func (l *lateWindows) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
+	l.opened++
+	return revier.TargetRef{}, nil
+}
+
+// A second press while a launch is coming up does not launch again, and the
+// launch is in state before the wait for its window begins, so a desktop key
+// pressed meanwhile sees it too (decisions.md D21).
+func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	wm := &lateWindows{Fake: hosttest.New("wm")}
+	c.Window = wm
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down") // editor
+	m, cmd := press(m, "enter")
+	next, wait := m.Update(cmd())
+	m = next.(tui.Model)
+	if wait == nil {
+		t.Fatal("a detached launch should go on to wait for its window")
+	}
+	if got, _ := state.Load(root); got.Launch == nil || got.Launch.Target != "editor" {
+		t.Fatalf("launch = %+v, want the editor recorded before the wait", got.Launch)
+	}
+
+	if _, again := press(m, "enter"); again != nil {
+		again()
+	}
+	if wm.opened != 1 {
+		t.Errorf("the editor was launched %d times, want once", wm.opened)
+	}
+}
+
+// Once the window of a launch still on record is there, Enter raises it: only
+// a second launch is refused, never the raise.
+func TestAPressDuringALaunchRaisesTheWindowOnceItIsThere(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	wm := &lateWindows{Fake: hosttest.New("wm")}
+	editor := wm.Add("Visual Studio Code", "code-project-00")
+	c.Window = wm
+	root := stateWith(t, nil)
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "project-00", Target: "editor", At: time.Now().Add(-40 * time.Second)}
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m := refreshed(t, c, projects, root, nil)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down") // editor
+	_, cmd := press(m, "enter")
+	m.Update(cmd())
+
+	if wm.opened != 0 {
+		t.Errorf("the editor was launched %d more times, want none", wm.opened)
+	}
+	if n := len(wm.Focuses); n == 0 || wm.Focuses[n-1] != editor {
+		t.Errorf("focuses = %v, want the editor window %v raised", wm.Focuses, editor)
+	}
+}
+
+// A refresh prunes only what it could see. A surface started where the window
+// host does not probe lists no window at all, and must not take that as every
+// attached window having closed.
+func TestARefreshWithoutAWindowHostKeepsWindowRefs(t *testing.T) {
+	rt, _, _, projects := world(t, 1)
+	c := &core.Core{Runtime: rt}
+	window := revier.TargetRef{Host: "gnome", ID: "42"}
+	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {window}})
+	st, _ := state.Load(root)
+	st.Bind("project-00", "editor", window)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshed(t, c, projects, root, nil)
+
+	got, _ := state.Load(root)
+	if len(got.Attached["project-00"]) != 1 || got.Bound["project-00"]["editor"] != window {
+		t.Errorf("state = attached %v, bound %v; want the window refs kept", got.Attached, got.Bound)
+	}
+}
+
+// A survey lists the windows that were there when it started. A binding a
+// desktop key writes while it lists is to a window the listing may not hold,
+// and the survey answering afterwards must not take that as the window having
+// closed.
+func TestASurveyKeepsABindingWrittenWhileItListed(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+
+	inFlight := m.Survey()() // listed before the editor opened
+	editor := wm.Add("Visual Studio Code", "code-project-00")
+	st, _ := state.Load(root)
+	st.Bind("project-00", "editor", editor)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	m.Update(inFlight)
+	if got, _ := state.Load(root); got.Bound["project-00"]["editor"] != editor {
+		t.Fatalf("bound = %+v, want the editor binding kept for the next survey", got.Bound)
+	}
+
+	// The next survey saw the window, and one after it closed drops it.
+	m = survey(m)
+	wm.Remove(editor)
+	survey(m)
+	if got, _ := state.Load(root); !got.Bound["project-00"]["editor"].IsZero() {
+		t.Errorf("bound = %+v, want the closed editor's binding dropped", got.Bound)
+	}
 }
 
 // A background refresh replaces every row. The cursor must stay on the
@@ -663,14 +831,21 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 	}
 }
 
+// send is one key as bubbletea's input reader delivers it.
+func send(m tui.Model, msg tea.KeyMsg) (tui.Model, tea.Cmd) {
+	next, cmd := m.Update(msg)
+	return next.(tui.Model), cmd
+}
+
 // A target key acts on the row under the cursor, without the target level.
 // The keys are the ones the desktop bindings use, so the surface and the
-// keyboard agree about what ctrl+shift+o means.
+// keyboard agree about what ctrl+shift+o means. A terminal sends ctrl+shift+o
+// as the byte of ctrl+o, which is the message the surface gets.
 func TestTargetKeyRunsAgainstTheHighlightedProject(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
-	_, cmd := press(m, "ctrl+shift+o") // editor, a window target
+	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor, a window target
 	if cmd == nil {
 		t.Fatal("ctrl+shift+o produced no command")
 	}
@@ -684,13 +859,82 @@ func TestTargetKeyRunsAgainstTheHighlightedProject(t *testing.T) {
 }
 
 // The footer names the keys that will do something on this row, because which
-// targets exist depends on the project.
+// targets exist depends on the project. A key that does nothing here is not
+// named: ctrl+shift+u reaches the surface as ctrl+u, which clears the query,
+// so home's key is the desktop's only.
 func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	if f := footer(m); !strings.Contains(f, "editor") || !strings.Contains(f, "home") {
-		t.Errorf("footer = %q, want the target keys of the selected project", f)
+	f := footer(m)
+	if !strings.Contains(f, "ctrl+shift+o editor") {
+		t.Errorf("footer = %q, want the editor's key of the selected project", f)
+	}
+	if strings.Contains(f, "ctrl+shift+u") {
+		t.Errorf("footer = %q, names home's key, which the query takes here", f)
+	}
+}
+
+// ctrl+shift+u cannot reach the surface as itself, and ctrl+u, which it
+// arrives as, is the query's. The query keeps it: nothing opens.
+func TestADesktopKeyTheQueryOwnsEditsTheQuery(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, _ = press(m, "p")
+
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	if cmd != nil {
+		cmd()
+	}
+	if len(rt.Opened) != 0 || len(wm.Opened) != 0 {
+		t.Errorf("ctrl+u opened something: runtime %v, window %v", rt.Opened, wm.Opened)
+	}
+	if q := lines(m)[1]; !strings.Contains(q, "filter") {
+		t.Errorf("query line = %q, want ctrl+u to have cleared it", q)
+	}
+}
+
+// bubbletea names ctrl+alt+<key> "alt+ctrl+<key>", alt first. A target key and
+// an action on a ctrl+alt chord fire on the message the terminal produces.
+func TestCtrlAltKeysFire(t *testing.T) {
+	raw := []revier.Project{{Name: "solo", Path: "/p/solo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^session:solo$"}}},
+		{Name: "editor", Key: "ctrl-alt-o", Window: &revier.Realization{
+			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+	}}}
+	projects, err := core.Prepare(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wm := hosttest.New("wm")
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	actions := []config.Action{{Key: "ctrl-alt-y", Name: "sync", Run: []string{"true"}}}
+	m := refreshed(t, c, projects, stateWith(t, nil), actions)
+
+	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO, Alt: true}); cmd == nil {
+		t.Error("ctrl+alt+o ran no target")
+	} else if cmd(); len(wm.Opened) != 1 {
+		t.Errorf("window host opened %d times, want the editor once", len(wm.Opened))
+	}
+	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY, Alt: true}); cmd == nil {
+		t.Error("ctrl+alt+y ran no action")
+	}
+}
+
+// An action that renders to nothing says so in words, not in a formatting
+// verb that was handed no error.
+func TestAnActionThatRunsNothingSaysSo(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	m := refreshed(t, c, projects, stateWith(t, nil), []config.Action{{Key: "ctrl-y", Name: "sync"}})
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	if cmd == nil {
+		t.Fatal("ctrl+y ran no action")
+	}
+	next, _ := m.Update(cmd())
+	f := footer(next.(tui.Model))
+	if !strings.Contains(f, `action "sync"`) || strings.Contains(f, "%!") {
+		t.Errorf("footer = %q, want the action named and no formatting verb", f)
 	}
 }
 
@@ -740,7 +984,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 		{Name: "webby", Path: "/p/webby", Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
 				Launch: []string{"x"}, Match: revier.Match{Title: "^session:webby$"}}},
-			{Name: "web", Key: "ctrl-shift-i", Window: &revier.Realization{
+			{Name: "web", Key: "ctrl-shift-y", Window: &revier.Realization{
 				Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
 		}},
 	}
@@ -751,7 +995,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	m, cmd := press(m, "ctrl+shift+i") // "plain" is the first row
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY}) // ctrl+shift+y; "plain" is the first row
 	if cmd != nil {
 		t.Fatal("a target the project does not declare should run nothing")
 	}
@@ -952,6 +1196,54 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 		if w := lipgloss.Width(line); w > 80 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
+	}
+	// The activity is cut to make room, and the state it describes is not: the
+	// state is what the row is for.
+	if !strings.Contains(r[0], "running") || !strings.Contains(r[0], "Reading") || !strings.Contains(r[0], "…") {
+		t.Errorf("first row = %q, want the state kept and the activity cut short", r[0])
+	}
+}
+
+// A project with two agents in one state is summed up by the first, as
+// `revier list` sums it up.
+func TestTheRowNamesTheFirstOfTwoAgentsInTheWorstState(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	probe := func(marker, activity string) *hosttest.FakeProbe {
+		return &hosttest.FakeProbe{Harness: "claude", Marker: marker,
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: activity}}
+	}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe("one", "first task"), probe("two", "second task")}}
+	projects, err := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Add("session:duo", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude one"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude two"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	if row := rows(m)[0]; !strings.Contains(row, "first task") {
+		t.Errorf("row = %q, want the first agent's activity", row)
+	}
+}
+
+// An error of several lines - a project file with two mistakes - keeps the
+// footer one line, so the frame stays the height of the terminal.
+func TestAMultiLineErrorKeepsTheFooterOneLine(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 100, 20)
+	height := len(strings.Split(m.View(), "\n"))
+
+	rt.InstancesErr = fmt.Errorf("kitty went away\nand took its socket with it")
+	m = survey(m)
+	if got := len(strings.Split(m.View(), "\n")); got != height {
+		t.Errorf("the surface is %d lines with the error, %d without:\n%s", got, height, m.View())
+	}
+	if f := footer(m); !strings.Contains(f, "kitty went away") {
+		t.Errorf("footer = %q, want the error's first line", f)
 	}
 }
 

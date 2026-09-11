@@ -178,3 +178,26 @@ func TestNoUndoIsPrintedForAKeyForceWasNotGivenFor(t *testing.T) {
 		t.Errorf("an undo is offered for a key nothing was taken from:\n%s", out)
 	}
 }
+
+// A key is printed as the settings window spells it. `<Alt>+` once parsed to a
+// chord with an empty part, which the capital letter panicked on; and a
+// capital taken off the first byte splits a letter that is more than one.
+func TestAChordPrintsWhateverItsKeyIs(t *testing.T) {
+	plus, err := core.ParseChord("<Alt>+")
+	if err != nil {
+		t.Fatalf("ParseChord: %v", err)
+	}
+	for _, tc := range []struct {
+		in   core.Chord
+		want string
+	}{
+		{plus, "Alt+Plus"},
+		{"alt+,", "Alt+,"},
+		{"ctrl+é", "Ctrl+É"},
+		{"alt++", "Alt++"},
+	} {
+		if got := prettyChord(tc.in); got != tc.want {
+			t.Errorf("prettyChord(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

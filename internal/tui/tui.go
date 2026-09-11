@@ -17,10 +17,11 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -30,6 +31,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
@@ -58,6 +60,7 @@ type Model struct {
 	surveyed bool                 // whether a survey has answered: windows holds a listing, and the counts are real
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
+	pending  *state.Launch                        // the launch still coming up, from state
 	// Two failures, because they end differently. err is what a key or an
 	// activation ran into, and it stays until the next key: a refusal that
 	// the next refresh wiped would be on screen for under a second.
@@ -78,32 +81,36 @@ type Model struct {
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
-	shown  revier.ProjectName           // the project the pane holds, so a new one starts at its top
-	tkeys  map[string]revier.TargetName // chord to target name, over every project
-	start  revier.ProjectName           // the project to open on, from the working directory
-	trees  map[string]treeEntry         // cached directory listings, by project path
-	input  textinput.Model              // the filter query, with its own cursor
-	body   viewport.Model               // the scrolling window over the level in view
+	shown  revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys  map[core.Chord]revier.TargetName // press to target name, over every project
+	start  revier.ProjectName               // the project to open on, from the working directory
+	trees  map[string]treeEntry             // cached directory listings, by project path
+	input  textinput.Model                  // the filter query, with its own cursor
+	body   viewport.Model                   // the scrolling window over the level in view
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
 func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	keys := newKeyMap(actions)
 	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
-		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects), start: start, input: newPrompt(th),
+		keys: keys, help: newHelp(th), detail: newDetail(th),
+		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		body: newBody(),
 	}
 	m.layout()
 	return m
 }
 
+// surveyMsg is one survey's answer, and the state it started from: what it
+// may prune (state.Prune).
 type surveyMsg struct {
 	report core.Report
+	before *state.State
 	err    error
 }
 
@@ -133,6 +140,16 @@ type binding struct {
 	ref     revier.TargetRef
 }
 
+// launchedMsg follows a Go that started a process whose window it cannot name
+// yet. The launch reaches state before the wait for that window starts, so a
+// second press - here or on a desktop key - finds it and reports the target
+// coming up instead of launching a second copy (decisions.md D21).
+type launchedMsg struct {
+	project core.Project
+	launch  state.Launch
+	before  []revier.Instance
+}
+
 // Init surveys immediately; the timer starts once the first survey answers.
 // A window host that can report events is watched from the start.
 func (m Model) Init() tea.Cmd {
@@ -160,12 +177,17 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 // command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects, bound := m.core, m.projects, m.bound
+	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		report, err := c.Survey(ctx, projects, bound)
-		return surveyMsg{report: report, err: err}
+		// A state that cannot be read is nil, which lets nothing be pruned.
+		before, _ := state.Load(root)
+		// No attachments: the surface lists them from state, which a claim
+		// updates between surveys, so a claimed window shows at once rather
+		// than a refresh later.
+		report, err := c.Survey(ctx, projects, bound, nil)
+		return surveyMsg{report: report, before: before, err: err}
 	}
 }
 
@@ -196,7 +218,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.surveyErr = msg.err
 		if msg.err == nil {
-			m.claimByPolling(msg.report)
+			m.claimByPolling(msg.report, msg.before)
 			m.views = sorted(m.known(msg.report.Views))
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
@@ -218,6 +240,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.apply(msg)
 		return m, nil
+	case launchedMsg:
+		m.apply(actedMsg{launch: &msg.launch})
+		return m, m.bindLaunch(msg)
 	case editedMsg:
 		m.err = m.reread(msg)
 		return m, nil
@@ -242,30 +267,27 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // settles the last launch with a window that appeared since: bound to its
 // target, or attached to the project when an action launched. State is
 // re-read because the launch was written by another process. The same pass
-// drops attachments and bindings whose instances are gone.
-func (m *Model) claimByPolling(report core.Report) {
+// drops attachments and bindings whose instances are gone, of those the
+// survey started from: one written while it listed is the next survey's.
+func (m *Model) claimByPolling(report core.Report, before *state.State) {
 	st, err := state.Load(m.stateRoot)
 	if err != nil {
 		return
 	}
-	live := map[string]bool{}
-	for _, inst := range report.Instances {
-		live[state.Key(inst.Ref)] = true
-	}
-	changed := st.Prune(live)
+	changed := st.Prune(report.Hosts, report.Instances, before)
 	if l, ok := m.launch(st); ok && m.surveyed {
 		now := time.Now()
 		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
 			settle(st, claimed)
 			changed = true
-		} else if _, ok := m.core.Claim(nil, nil, l, now, m.projects); !ok && !m.within(l, now) {
+		} else if !l.Pending(now) {
 			st.Launch, changed = nil, true // expired
 		}
 	}
 	if changed {
 		_ = st.Save(m.stateRoot)
 	}
-	m.attached, m.bound = st.Attached, st.Bound
+	m.keep(st)
 }
 
 // claimByEvent is the same decision for a window a watching host reported.
@@ -284,7 +306,12 @@ func (m *Model) claimByEvent(inst revier.Instance) {
 	}
 	settle(st, claimed)
 	_ = st.Save(m.stateRoot)
-	m.attached, m.bound = st.Attached, st.Bound
+	m.keep(st)
+}
+
+// keep holds the parts of state the surface reads between refreshes.
+func (m *Model) keep(st *state.State) {
+	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 }
 
 // launch is the pending launch in state as the core sees it.
@@ -297,15 +324,6 @@ func (m Model) launch(st *state.State) (core.Launch, bool) {
 		return core.Launch{}, false
 	}
 	return core.Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}, true
-}
-
-// within reports whether a launch can still be settled.
-func (m Model) within(l core.Launch, now time.Time) bool {
-	limit := core.ClaimWindow
-	if l.Target != "" {
-		limit = core.BindWindow
-	}
-	return now.Sub(l.At) <= limit
 }
 
 // settle writes a claim into state and consumes the launch.
@@ -328,17 +346,22 @@ func (m *Model) apply(msg actedMsg) {
 	if err != nil {
 		return
 	}
+	// The project acted on becomes the current one, as a CLI command makes
+	// it: a desktop key pressed next on a window no rule names falls back to
+	// it.
 	if msg.launch != nil {
 		st.Launch = msg.launch
+		st.Current = msg.launch.Project
 	}
 	if b := msg.bind; b != nil {
+		st.Current = b.project
 		st.Bind(b.project, b.target, b.ref)
 		if st.Launch != nil && st.Launch.Project == b.project && st.Launch.Target == b.target {
 			st.Launch = nil
 		}
 	}
 	_ = st.Save(m.stateRoot)
-	m.attached, m.bound = st.Attached, st.Bound
+	m.keep(st)
 }
 
 // sorted puts projects needing attention first and otherwise keeps config
@@ -482,6 +505,16 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 			if !v.PathExists && p.GitURL != "" {
 				return m, m.clone(p, home.Name)
 			}
+			if !v.PathExists && !v.Running {
+				// Nothing to clone from, and nothing to raise: refused as
+				// `revier open` refuses it, rather than started in whatever
+				// directory the runtime falls back to. The check is made
+				// again, as the directory may have appeared since the survey.
+				if _, err := checkout.Ensure(p.Project, io.Discard); err != nil {
+					m.err = err
+					return m, nil
+				}
+			}
 			return m, m.goTarget(p, home.Name)
 		}
 		return m.drill()
@@ -523,32 +556,58 @@ func (m Model) drill() (tea.Model, tea.Cmd) {
 // goTarget is one activation: run-or-raise the target, and settle where it
 // landed. Enter at the target level and a target key at the project level are
 // the same operation, so they are the same command.
+//
+// A target still coming up from an earlier press, here or from a desktop key,
+// is not launched again: the first press is waiting for its window
+// (decisions.md D21). A window that has appeared by then is raised like any
+// other.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 	c := m.core
 	bound := m.bound[p.Name]
+	pending := m.launchPending(p.Name, name)
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*bindWait)
+		ctx, cancel := context.WithTimeout(context.Background(), bindWait)
 		defer cancel()
+		if pending {
+			if up, err := c.Running(ctx, p, name, bound); err != nil || !up {
+				return actedMsg{err: err}
+			}
+		}
 		res, err := c.Go(ctx, p, name, bound)
 		if err != nil {
 			return actedMsg{err: err}
 		}
-		ref := res.Ref
-		msg := actedMsg{}
-		if res.Launched && ref.IsZero() {
-			// A detached launch: wait for its window and bind it; if it takes
-			// longer than the wait, the launch record lets a later refresh
-			// bind it.
-			msg.launch = &state.Launch{Project: p.Name, Target: name, At: time.Now()}
-			inst, ok, err := c.Bind(ctx, p, name, res.Before, bindWait)
-			if err != nil || !ok {
-				msg.err = err
-				return msg
+		if res.Launched && res.Ref.IsZero() {
+			return launchedMsg{
+				project: p,
+				launch:  state.Launch{Project: p.Name, Target: res.Target, At: time.Now()},
+				before:  res.Before,
 			}
-			ref = inst.Ref
 		}
-		msg.bind = &binding{project: p.Name, target: name, ref: ref}
-		return msg
+		return actedMsg{bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
+	}
+}
+
+// launchPending reports whether a launch of the target is on record and still
+// inside the time its window may take to appear.
+func (m Model) launchPending(p revier.ProjectName, name revier.TargetName) bool {
+	l := m.pending
+	return l != nil && l.Project == p && l.Target == name && time.Since(l.At) < core.BindWindow
+}
+
+// bindLaunch waits for the window a detached launch produces and binds it. If
+// it takes longer than the wait, the launch record lets a later refresh bind
+// it.
+func (m Model) bindLaunch(msg launchedMsg) tea.Cmd {
+	c, l := m.core, msg.launch
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*bindWait)
+		defer cancel()
+		inst, ok, err := c.Bind(ctx, msg.project, l.Target, msg.before, bindWait)
+		if err != nil || !ok {
+			return actedMsg{err: err}
+		}
+		return actedMsg{bind: &binding{project: l.Project, target: l.Target, ref: inst.Ref}}
 	}
 }
 
@@ -560,9 +619,12 @@ const bindWait = 30 * time.Second
 // selected project. The terminal is handed to the command while it runs, and
 // the argv is rendered by the same rules `revier run` uses.
 func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
-	pressed := msg.String()
+	c, ok := pressed(msg)
+	if !ok {
+		return nil, false
+	}
 	for _, act := range m.actions {
-		if keyName(act.Key) != pressed {
+		if actionChord(act) != c {
 			continue
 		}
 		v, ok := m.selected()
@@ -574,7 +636,10 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		argv, err := core.RenderArgv(p.Project, act.Run)
-		if err != nil || len(argv) == 0 {
+		if err == nil && len(argv) == 0 {
+			err = errors.New("it runs nothing")
+		}
+		if err != nil {
 			return func() tea.Msg { return actedMsg{err: fmt.Errorf("action %q: %w", act.Name, err)} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
@@ -588,7 +653,3 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	}
 	return nil, false
 }
-
-// keyName maps a configured key ("ctrl-y") to the name bubbletea reports
-// ("ctrl+y").
-func keyName(k string) string { return strings.ReplaceAll(strings.ToLower(k), "-", "+") }

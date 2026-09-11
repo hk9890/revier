@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -16,7 +17,8 @@ var ErrNoKeyBinder = errors.New("no desktop keybinding support on this machine")
 
 // PickerTarget is the row for the chord that opens revier itself. It is not a
 // target - nothing is run-or-raised, the surface comes up - so it has a name
-// of its own rather than borrowing a target's.
+// of its own rather than borrowing a target's, and ValidateKeyTarget keeps a
+// target with a key from taking it.
 const PickerTarget = "picker"
 
 // KeyStatus is what a chord revier wants is doing right now.
@@ -73,18 +75,63 @@ type KeyReport struct {
 
 // The commands revier binds to a desktop key. A login shell, so the desktop
 // finds revier on the same PATH a terminal has.
-const pickerCommand = `sh -lc "revier-popup"`
+const (
+	pickerCommand   = `sh -lc "revier-popup"`
+	goCommandPrefix = `sh -lc "revier-go `
+)
 
 func targetCommand(name revier.TargetName) string {
-	return fmt.Sprintf(`sh -lc "revier-go %s"`, name)
+	return goCommandPrefix + string(name) + `"`
 }
 
-// ownedCommand reports whether a shortcut runs revier. Ownership is read from
-// the command and not from where the desktop filed the shortcut, because a
-// user who bound `revier-go editor` by hand owns the same key revier does, and
+// keyTargetName is the shape of every target name. The name is written into
+// the shell command a desktop key runs, and read back out of it to tell
+// revier's shortcuts from anybody else's, so it is one plain word that no
+// shell reads as syntax and revier-go does not read as a flag. It holds for a
+// target with no key too: a key added later must not find its name refused.
+var keyTargetName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// ValidateTargetName refuses a name no target can have. config runs it at
+// load, so a key that could not be installed, or would be taken for somebody
+// else's once it was, fails before anything is written.
+func ValidateTargetName(name revier.TargetName) error {
+	if !keyTargetName.MatchString(string(name)) {
+		return fmt.Errorf("target name %q: it goes into the command the target's key runs; use letters, digits, '.', '_' and '-', starting with a letter or digit",
+			name)
+	}
+	return nil
+}
+
+// ValidateKeyTarget refuses a name a target with a key cannot have on top of
+// that: the picker's row, which the key opening revier already holds.
+func ValidateKeyTarget(name revier.TargetName) error {
+	if name == PickerTarget {
+		return fmt.Errorf("target %q has a key, and %q names the key that opens revier ([ui] trigger_key); rename the target",
+			name, PickerTarget)
+	}
+	return nil
+}
+
+// ownedCommand reports whether a shortcut runs exactly a command revier
+// writes: the picker's, or one target's. Ownership is read from the command
+// and not from where the desktop filed the shortcut, because a user who bound
+// `sh -lc "revier-go editor"` by hand owns the same key revier does, and
 // reporting that as somebody else's would be a lie.
+//
+// It is exact because ownership is what uninstall deletes and what install
+// rewrites without --force. A user's own shortcut that merely runs revier -
+// `revier-go editor && notify-send done` - is theirs, and is treated as
+// anybody else's.
 func ownedCommand(cmd string) bool {
-	return strings.Contains(cmd, "revier-popup") || strings.Contains(cmd, "revier-go")
+	if cmd == pickerCommand {
+		return true
+	}
+	name, ok := strings.CutPrefix(cmd, goCommandPrefix)
+	if !ok {
+		return false
+	}
+	name, ok = strings.CutSuffix(name, `"`)
+	return ok && keyTargetName.MatchString(name)
 }
 
 // Keys reports which desktop chords revier wants and who holds each one.
@@ -222,7 +269,9 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 // A switched-on custom shortcut wins, because that is what fires on a press.
 // Only when none exists do the states a user cannot see from the settings UI
 // get reported: revier's own shortcut left switched off, or a desktop default
-// sitting on the chord.
+// sitting on the chord. The one exception is a desktop default beside
+// revier's own shortcut when that is right: both fire, so the chord is not
+// revier's yet.
 func classify(want KeyRow, holders []revier.Binding) KeyRow {
 	// Every switched-on shortcut on the chord fires, not just the first one
 	// the desktop happens to list - which is why README's step 3 asks a user
@@ -247,13 +296,20 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 			}
 			labels = append(labels, b.Label)
 		}
+		builtins := builtinNames(holders)
 		switch {
 		case !ownedCommand(decides.Command):
 			want.Status = KeyTaken
-		case decides.Command == want.Command:
-			want.Status = KeyActive
-		default:
+		case decides.Command != want.Command:
 			want.Status = KeyStale
+		case len(builtins) > 0:
+			// revier's shortcut is right, and a desktop default fires on the
+			// same press. Active would promise a key install still has to
+			// clear with --force.
+			want.Status = KeyBuiltin
+			labels = append(labels, builtins...)
+		default:
+			want.Status = KeyActive
 		}
 		want.HeldBy = strings.Join(labels, ", ")
 		return want
@@ -272,6 +328,17 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 	}
 	want.Status = KeyFree
 	return want
+}
+
+// builtinNames names the desktop defaults on a chord, each by its setting.
+func builtinNames(holders []revier.Binding) []string {
+	var out []string
+	for _, b := range holders {
+		if b.Source == revier.BindingBuiltin {
+			out = append(out, b.Where+" "+b.Label)
+		}
+	}
+	return out
 }
 
 // orphans are revier's own shortcuts on chords revier no longer wants: what a

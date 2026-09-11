@@ -31,6 +31,9 @@ func TestMatchIsTheHarnessCommand(t *testing.T) {
 	if p.Match(revier.Panel{Command: []string{"claude"}}) {
 		t.Error("a claude panel must not cost the aider probe a process")
 	}
+	if p.Match(revier.Panel{Command: []string{"less", "notes/aider"}}) {
+		t.Error("a pager reading a file called aider is not aider")
+	}
 }
 
 // The wire form: the panel in, the state out, status as its name.
@@ -92,7 +95,7 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

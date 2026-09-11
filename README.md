@@ -94,8 +94,8 @@ To install:
 Without `--force`, install adds only the keys nothing else holds, and reports
 the rest. `--force` takes a key from whatever has it: another shortcut is
 switched off and keeps its command, so the tool that wrote it can put it back;
-a GNOME default is cleared, and the `gsettings reset` line that returns it is
-printed beside the key.
+a GNOME default loses that one key and keeps any other it holds, and the
+`gsettings reset` line that returns it is printed beside the key.
 
 `revier keys uninstall` removes what revier wrote and nothing else. It restores
 no other tool's shortcuts — that tool does. To go back to the shell

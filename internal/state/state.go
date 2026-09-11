@@ -143,12 +143,30 @@ func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.Targe
 }
 
 // Prune drops attachments and bindings whose instances are gone and reports
-// whether any were. live holds the refs a survey found, keyed "host\x00id".
-func (s *State) Prune(live map[string]bool) bool {
+// whether any were. hosts are the hosts a survey listed and instances what it
+// found. A ref on any other host is kept: a survey that did not ask its host -
+// a TUI started over SSH, a window host that did not probe - cannot tell a
+// closed window from one it never looked for.
+//
+// before is the state the survey started from. A ref it does not hold was
+// written while the survey was listing, for a window that may have opened
+// after the listing was taken, so it is kept for the next survey to judge.
+func (s *State) Prune(hosts []string, instances []revier.Instance, before *State) bool {
+	asked := map[string]bool{}
+	for _, h := range hosts {
+		asked[h] = true
+	}
+	live := map[string]bool{}
+	for _, inst := range instances {
+		live[key(inst.Ref)] = true
+	}
+	known := before.refs()
+	gone := func(ref revier.TargetRef) bool { return asked[ref.Host] && known[key(ref)] && !live[key(ref)] }
+
 	changed := false
 	for project, targets := range s.Bound {
 		for t, ref := range targets {
-			if !live[Key(ref)] {
+			if gone(ref) {
 				delete(targets, t)
 				changed = true
 			}
@@ -160,7 +178,7 @@ func (s *State) Prune(live map[string]bool) bool {
 	for project, refs := range s.Attached {
 		kept := refs[:0]
 		for _, ref := range refs {
-			if live[Key(ref)] {
+			if !gone(ref) {
 				kept = append(kept, ref)
 			}
 		}
@@ -176,5 +194,24 @@ func (s *State) Prune(live map[string]bool) bool {
 	return changed
 }
 
-// Key is the identity used to compare refs across a save and load.
-func Key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
+// refs is every attached and bound ref, by key. A nil state holds none.
+func (s *State) refs() map[string]bool {
+	out := map[string]bool{}
+	if s == nil {
+		return out
+	}
+	for _, targets := range s.Bound {
+		for _, ref := range targets {
+			out[key(ref)] = true
+		}
+	}
+	for _, refs := range s.Attached {
+		for _, ref := range refs {
+			out[key(ref)] = true
+		}
+	}
+	return out
+}
+
+// key is the identity used to compare refs across a save and load.
+func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }

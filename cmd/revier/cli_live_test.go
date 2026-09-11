@@ -46,13 +46,30 @@ key = "ctrl-o"
 `
 
 // scratch builds an isolated config and state root and points the process at
-// them. The tmux runtime uses the user's default server here, so every test
-// kills the sessions it created rather than the server.
+// them, and gives the test a tmux server of its own. The runtime here is the
+// default server, as a real `revier` gets it (adapters.go), so the default is
+// what moves: TMUX_TMPDIR puts its socket in the test's directory, and TMUX
+// is cleared, so a run from inside tmux does not reach the server it runs in.
+// The user's own sessions are never seen, and never killed.
 func scratch(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; the CLI live layer needs it")
 	}
+	// Short, and not t.TempDir: a socket path over 108 bytes cannot be bound.
+	sockets, err := os.MkdirTemp("", "rv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX_TMPDIR", sockets)
+	t.Setenv("TMUX", "")
+	_ = os.Unsetenv("TMUX")
+	// Registered after the environment it needs, so it runs before that is
+	// restored: the server it kills is this test's.
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "kill-server").Run()
+		_ = os.RemoveAll(sockets)
+	})
 	root := t.TempDir()
 	projects := filepath.Join(root, "projects")
 	if err := os.MkdirAll(projects, 0o755); err != nil {
@@ -87,7 +104,6 @@ func scratch(t *testing.T) string {
 
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
-	t.Cleanup(func() { _ = exec.Command("tmux", "kill-session", "-t", "revier").Run() })
 	return workdir
 }
 

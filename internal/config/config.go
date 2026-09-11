@@ -114,6 +114,9 @@ func Load(root string) (*Config, []core.Project, error) {
 	if _, err := cfg.TriggerKey(); err != nil {
 		return nil, nil, fmt.Errorf("%s: ui.trigger_key: %w", cfgPath, err)
 	}
+	if err := validateActions(cfg.Actions); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"))
 	if err != nil {
@@ -137,6 +140,34 @@ func (c *Config) TriggerKey() (core.Chord, error) {
 	return core.ParseChord(c.UI.TriggerKey)
 }
 
+// validateActions refuses an action the TUI can never run. An action's key is
+// the TUI's alone - no desktop binding carries it - so a key the terminal
+// does not deliver, or one the filter takes as typed text, does nothing, and
+// the only place to say so is here.
+func validateActions(actions []Action) error {
+	var errs []error
+	for _, act := range actions {
+		if len(act.Run) == 0 {
+			errs = append(errs, fmt.Errorf("action %q runs nothing", act.Name))
+		}
+		chord, err := core.ParseChord(act.Key)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("action %q: %w", act.Name, err))
+			continue
+		}
+		sent, ok := chord.Terminal()
+		switch {
+		case chord.Typed():
+			errs = append(errs, fmt.Errorf("action %q: key %q is typed text, which the TUI filters on; give it ctrl or alt", act.Name, act.Key))
+		case !ok:
+			errs = append(errs, fmt.Errorf("action %q: key %q never reaches a terminal", act.Name, act.Key))
+		case sent != chord:
+			errs = append(errs, fmt.Errorf("action %q: key %q reaches a terminal as %s; bind that instead", act.Name, act.Key, sent))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
 // across machines.
 func LoadProjects(dir string) ([]core.Project, error) {
@@ -157,6 +188,7 @@ func LoadProjects(dir string) ([]core.Project, error) {
 	sort.Strings(names)
 
 	projects := make([]core.Project, 0, len(names))
+	declared := map[revier.ProjectName]string{}
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -165,6 +197,13 @@ func LoadProjects(dir string) ([]core.Project, error) {
 			errs = append(errs, err)
 			continue
 		}
+		// A project is found by name everywhere - a lookup, a key in state, a
+		// run log - so a second file under a taken name would act as the first.
+		if first, taken := declared[p.Name]; taken {
+			errs = append(errs, fmt.Errorf("%s: project %q is already declared in %s", path, p.Name, first))
+			continue
+		}
+		declared[p.Name] = path
 		projects = append(projects, p)
 	}
 	if len(errs) > 0 {
@@ -218,6 +257,11 @@ func Validate(p revier.Project) error {
 	if p.Path == "" {
 		errs = append(errs, errors.New("project has no path"))
 	}
+	if strings.ContainsRune(string(p.Name), ':') {
+		// `revier agent` addresses <project>:<target>, and the address is
+		// split at its first colon.
+		errs = append(errs, fmt.Errorf("project name %q contains \":\", which separates a project from its target in an agent address", p.Name))
+	}
 	if p.GitURL != "" {
 		if err := ValidateGitURL(p.GitURL); err != nil {
 			errs = append(errs, fmt.Errorf("git_url: %w", err))
@@ -239,6 +283,9 @@ func Validate(p revier.Project) error {
 			errs = append(errs, errors.New("a target has no name"))
 			continue
 		}
+		if err := core.ValidateTargetName(t.Name); err != nil {
+			errs = append(errs, err)
+		}
 		if seenName[t.Name] {
 			errs = append(errs, fmt.Errorf("target %q declared twice", t.Name))
 		}
@@ -248,6 +295,9 @@ func Validate(p revier.Project) error {
 			homes++
 		}
 		if t.Key != "" {
+			if err := core.ValidateKeyTarget(t.Name); err != nil {
+				errs = append(errs, err)
+			}
 			// A key that cannot be read is rejected here rather than dropped
 			// later. Dropped, it costs the target its desktop chord and its
 			// row in `revier keys status`, which is the one place a user
@@ -295,6 +345,13 @@ func Validate(p revier.Project) error {
 			}
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
+			}
+			if r.Name == "" && kind == revier.HostRuntime {
+				// A runtime host gives the instance it opens this name, and
+				// has no other identity to give it; both refuse to open
+				// without one. A window host needs none: its launch argv
+				// carries the identity match finds.
+				errs = append(errs, fmt.Errorf("target %q runtime realization has no name; give it the name its match finds", t.Name))
 			}
 			if r.Place != "" && len(strings.Fields(r.Place)) != 4 {
 				// A geometry short of its four tokens would reach the window

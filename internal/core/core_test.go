@@ -281,7 +281,7 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	c := &core.Core{Runtime: rt} // no window host
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 		}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -326,6 +326,31 @@ func TestSurveyReportsAgentAttention(t *testing.T) {
 	}
 	if !views[0].Attention() {
 		t.Error("Attention() should report true; it is what the TUI sorts on")
+	}
+}
+
+// A shell in the foreground is not an agent, even where a probe still
+// recognises the panel: the marker a harness sets outlives it in a --hold
+// window, and the dashboard would report the gone agent's last state - here,
+// that it wants the human - for as long as the window stays open. `revier
+// agent` refuses the same panel.
+func TestSurveySkipsAShellLeftWhereAnAgentWas(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "claude"})
+	c := &core.Core{
+		Runtime: rt,
+		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+			Harness: "claude", Marker: "claude",
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention},
+		}},
+	}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if agents := report.Views[0].Agents; len(agents) != 0 {
+		t.Errorf("agents = %+v, want none: the panel's foreground is a shell", agents)
 	}
 }
 
@@ -339,7 +364,7 @@ func TestSurveySurvivesAProbeError(t *testing.T) {
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey should not fail: %v", err)
 	}
@@ -401,6 +426,41 @@ func TestToggleBackWorksOnRuntimeWhenItIsTheAuthority(t *testing.T) {
 	}
 	if res.Ref != homeRef {
 		t.Errorf("returned %v, want home %v", res.Ref, homeRef)
+	}
+}
+
+// A toggle-back lands on home, and says so. A caller that pinned the pressed
+// target to where the key landed would bind diff to the home window, and every
+// later press of diff would find home through that binding and go nowhere
+// else.
+func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	homeRef := rt.Add("session:revier", "kitty")
+	diffRef := rt.Add("diff:revier", "kitty")
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, revier.Project{Name: "revier", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
+		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
+	}})
+	bound := core.Bindings{}
+	press := func() core.Result {
+		t.Helper()
+		res, err := c.Go(context.Background(), p, "diff", bound)
+		if err != nil {
+			t.Fatalf("Go: %v", err)
+		}
+		bound[res.Target] = res.Ref // what goTarget does with the result
+		return res
+	}
+
+	rt.SetFocus(diffRef)
+	if res := press(); res.Target != "home" || res.Ref != homeRef {
+		t.Fatalf("toggle-back = %+v, want it to land on home %v", res, homeRef)
+	}
+	if res := press(); res.Target != "diff" || res.Ref != diffRef {
+		t.Errorf("the press after it = %+v, want diff %v: the key must still reach its target", res, diffRef)
 	}
 }
 
@@ -627,7 +687,7 @@ func TestSurveyUsesBindings(t *testing.T) {
 	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
-		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}})
+		map[revier.ProjectName]core.Bindings{"revier": {"editor": editor}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,6 +698,29 @@ func TestSurveyUsesBindings(t *testing.T) {
 	}
 	if len(report.Instances) != 1 {
 		t.Errorf("instances = %d, want every host's listing for pruning", len(report.Instances))
+	}
+}
+
+// An attachment still listed follows the project's targets, marked attached
+// and carrying the title it has now; one whose window is gone is left out.
+func TestSurveyListsLiveAttachments(t *testing.T) {
+	wm := hosttest.New("wm")
+	live := wm.Add("Pull requests", "chromium")
+	gone := revier.TargetRef{Host: "wm", ID: "999", Title: "closed"}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil,
+		map[revier.ProjectName][]revier.TargetRef{"revier": {{Host: "wm", ID: live.ID, Title: "stale"}, gone}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attached []revier.TargetView
+	for _, tv := range report.Views[0].Targets {
+		if tv.Attached {
+			attached = append(attached, tv)
+		}
+	}
+	if len(attached) != 1 || attached[0].Ref != live || attached[0].Host != "wm" || !attached[0].Available {
+		t.Errorf("attached = %+v, want the live window %v alone", attached, live)
 	}
 }
 
@@ -692,6 +775,12 @@ func TestClaimBounds(t *testing.T) {
 	if _, ok := c.ClaimEvent(editor, action, now, projects); ok {
 		t.Error("the event path must not attach a declared target's window")
 	}
+	// A terminal's OS window carries the title its runtime rule matches, so
+	// another project's workspace opening after an action is declared too.
+	workspace := revier.Instance{Ref: ref("6"), Title: "session:revier", Class: "kitty"}
+	if _, ok := c.Claim(before, append(before, workspace), action, now, projects); ok {
+		t.Error("an action's launch must not attach a window a runtime rule declares")
+	}
 }
 
 // A project file outlives the checkout it names. The survey reports whether
@@ -706,7 +795,7 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	report, err := c.Survey(context.Background(), []core.Project{
 		prepared(t, here), prepared(t, gone),
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -748,7 +837,7 @@ func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
 	}}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -801,7 +890,7 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 	}
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -815,7 +904,7 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {
 	c := &core.Core{Runtime: unnamedRuntime(t, 4242)}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -836,7 +925,7 @@ func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
 	})
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

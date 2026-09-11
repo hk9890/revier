@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 const fileProject = `
@@ -140,6 +141,26 @@ func TestDeleteRefusesARunningProject(t *testing.T) {
 	}
 }
 
+// A window attached to the project is refused as a running target is: it
+// would outlive the only entry that can reach it.
+func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
+	wm := hosttest.New("wm")
+	ref := wm.Add("Pull requests", "chromium")
+	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"alpha": {ref}})
+	m := resize(refreshed(t, c, projects, root, nil), 120, 20)
+
+	m, _ = alt(m, 'd')
+	if f := footer(m); !strings.Contains(f, "attached window") {
+		t.Fatalf("footer = %q, want the refusal", f)
+	}
+	_, _ = press(m, "y")
+	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
+		t.Errorf("the file of a project with an attached window was removed: %v", err)
+	}
+}
+
 // With no $EDITOR there is nothing to run, and the surface says so instead
 // of doing nothing.
 func TestEditWithoutEditorSaysSo(t *testing.T) {
@@ -210,6 +231,26 @@ func TestEnterOnAMissingDirectoryClonesBeforeLaunching(t *testing.T) {
 	cmd() // hands back the request for the terminal; the clone runs when the program grants it
 	if len(rt.Opened) != 0 {
 		t.Errorf("runtime Opened = %v before the clone", rt.Opened)
+	}
+}
+
+// With no git_url there is nothing to clone, and Enter refuses as `revier
+// open` does, naming the field: opened anyway, the workspace and its agent
+// would start in whatever directory the runtime falls back to.
+func TestEnterOnAMissingDirectoryWithoutGitURLOpensNothing(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	projects, _ := onDisk(t, []string{"stuck"}, map[string]string{"stuck": "/nowhere/b"}, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 160, 20)
+
+	m, cmd := press(m, "enter")
+	if cmd != nil {
+		cmd()
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime Opened = %v for a directory that is not there", rt.Opened)
+	}
+	if f := footer(m); !strings.Contains(f, "git_url") {
+		t.Errorf("footer = %q, want the missing field named", f)
 	}
 }
 

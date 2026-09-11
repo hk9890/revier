@@ -57,16 +57,7 @@ func (p *Probe) Name() string { return "claude" }
 // Match recognises a Claude pane by its marker variable, falling back to the
 // foreground command for a pane started outside the marked launcher.
 func (p *Probe) Match(panel revier.Panel) bool {
-	if panel.Vars[varTab] == "1" {
-		return true
-	}
-	for _, arg := range panel.Command {
-		base := arg[strings.LastIndex(arg, "/")+1:]
-		if base == "claude" || base == "claude-code" {
-			return true
-		}
-	}
-	return false
+	return panel.Vars[varTab] == "1" || panel.Runs("claude") || panel.Runs("claude-code")
 }
 
 // Inspect derives the state. It performs no I/O: everything it needs is

@@ -19,6 +19,7 @@ path = "/p/alpha"
 name = "home"
 home = true
   [target.runtime]
+  name = "home"
   launch = ["sh"]
   match = { title = "^home$" }
 `
@@ -47,6 +48,25 @@ func TestAnEditedFileIsReadBack(t *testing.T) {
 	m = next.(Model)
 	if m.err != nil {
 		t.Fatalf("err = %v", m.err)
+	}
+	if got := m.projects[0].Path; got != "/p/moved" {
+		t.Errorf("path = %q, want the edited one", got)
+	}
+}
+
+// A survey still running holds the project list it started with, on another
+// goroutine. The edit goes into a new list; written into that one, it would
+// race the survey reading it.
+func TestAnEditLeavesTheListARunningSurveyHolds(t *testing.T) {
+	m, file := editableModel(t)
+	held := m.projects // what a running Survey command captured
+	if err := os.WriteFile(file, []byte(strings.Replace(editable, "/p/alpha", "/p/moved", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	next, _ := m.Update(editedMsg{project: "alpha", file: file})
+	m = next.(Model)
+	if got := held[0].Path; got != "/p/alpha" {
+		t.Errorf("the running survey's list changed under it: path = %q", got)
 	}
 	if got := m.projects[0].Path; got != "/p/moved" {
 		t.Errorf("path = %q, want the edited one", got)

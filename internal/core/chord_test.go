@@ -24,7 +24,18 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 		{"<Primary><Shift>U", "ctrl+shift+u"},
 		{"alt-space", "alt+space"},
 		{"<Alt>space", "alt+space"},
-		{"<Super>Return", "super+return"},
+		{"<Super>Return", "super+enter"},
+		{"super-enter", "super+enter"},
+		{"ctrl-esc", "ctrl+esc"},
+		{"<Control>Escape", "ctrl+esc"},
+		{"super-pgup", "super+pgup"},
+		{"<Super>Page_Down", "super+pgdown"},
+		{"alt-,", "alt+,"},
+		{"<Alt>comma", "alt+,"},
+		{"alt-comma", "alt+,"},
+		{"<Alt>+", "alt+plus"},
+		{"<Alt>-", "alt+minus"},
+		{"ctrl-minus", "ctrl+minus"},
 		{"<Mod4>q", "super+q"},
 		{"<Alt>F4", "alt+f4"},
 		{"f12", "f12"},
@@ -44,7 +55,10 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 // A modifier revier does not know must not be dropped. Dropping it makes two
 // different chords compare equal, which reports a key as held when it is not.
 func TestParseChordRejectsWhatItCannotRead(t *testing.T) {
-	for _, in := range []string{"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>"} {
+	for _, in := range []string{
+		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>",
+		"alt-ä", "<Alt>a+b", "<Alt>page-up",
+	} {
 		if got, err := core.ParseChord(in); err == nil {
 			t.Errorf("ParseChord(%q) = %q, want an error", in, got)
 		}
@@ -63,8 +77,9 @@ func TestUnknownModifierNamesItself(t *testing.T) {
 	}
 }
 
-// GNOME's own spelling, back out. Key names come from gdk_keyval_from_name,
-// which is case sensitive: "return" is not a key and "Return" is.
+// GNOME's own spelling, back out. The key is a keysym name: "esc", "enter" and
+// "," name no keysym, so mutter would refuse the accelerator and the key would
+// do nothing.
 func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 	for _, tc := range []struct {
 		in   core.Chord
@@ -72,7 +87,13 @@ func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 	}{
 		{"ctrl+shift+u", "<Shift><Control>u"},
 		{"alt+space", "<Alt>space"},
-		{"super+return", "<Super>Return"},
+		{"super+enter", "<Super>Return"},
+		{"ctrl+esc", "<Control>Escape"},
+		{"super+pgup", "<Super>Page_Up"},
+		{"super+pgdown", "<Super>Page_Down"},
+		{"alt+,", "<Alt>comma"},
+		{"ctrl+.", "<Control>period"},
+		{"alt+plus", "<Alt>plus"},
 		{"alt+f4", "<Alt>F4"},
 		{"ctrl+alt+delete", "<Control><Alt>Delete"},
 		{"u", "u"},
@@ -88,7 +109,8 @@ func TestChordRendersTheWayGNOMEStoresIt(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	for _, in := range []string{
 		"<Shift><Control>u", "<Alt>space", "<Super>Return", "<Alt>F4",
-		"<Primary><Alt>Delete", "<Super>Page_Up",
+		"<Primary><Alt>Delete", "<Super>Page_Up", "<Alt>comma", "<Control>bracketleft",
+		"alt-esc", "ctrl-.", "<Alt>+",
 	} {
 		first, err := core.ParseChord(in)
 		if err != nil {
@@ -102,6 +124,44 @@ func TestRoundTrip(t *testing.T) {
 		}
 		if again != first {
 			t.Errorf("%q: round trip %q -> %q -> %q", in, first, first.GNOME(), again)
+		}
+	}
+}
+
+// A terminal without the kitty keyboard protocol has one byte for ctrl+o and
+// ctrl+shift+o, and tab's byte for ctrl+i. What it reports is the chord a
+// surface in it can match on.
+func TestTheChordATerminalReports(t *testing.T) {
+	for _, tc := range []struct {
+		in   core.Chord
+		want core.Chord
+	}{
+		{"ctrl+shift+o", "ctrl+o"},
+		{"ctrl+alt+shift+o", "ctrl+alt+o"},
+		{"ctrl+shift+i", "tab"},
+		{"ctrl+m", "enter"},
+		{"ctrl+alt+o", "ctrl+alt+o"},
+		{"alt+shift+o", "alt+shift+o"},
+		{"ctrl+shift+up", "ctrl+shift+up"},
+		{"ctrl+o", "ctrl+o"},
+	} {
+		got, ok := tc.in.Terminal()
+		if !ok || got != tc.want {
+			t.Errorf("Chord(%q).Terminal() = %q, %v; want %q", tc.in, got, ok, tc.want)
+		}
+	}
+	if got, ok := core.Chord("super+o").Terminal(); ok {
+		t.Errorf("Chord(super+o).Terminal() = %q; want no terminal to report it", got)
+	}
+}
+
+// Typed text is one character, alone or shifted: what a filter takes.
+func TestTypedChords(t *testing.T) {
+	for c, want := range map[core.Chord]bool{
+		"o": true, "shift+o": true, "ctrl+o": false, "alt+o": false, "f5": false, "shift+f5": false,
+	} {
+		if got := c.Typed(); got != want {
+			t.Errorf("Chord(%q).Typed() = %v, want %v", c, got, want)
 		}
 	}
 }
