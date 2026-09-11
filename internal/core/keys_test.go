@@ -158,6 +158,26 @@ func TestADesktopDefaultIsNeitherFreeNorTaken(t *testing.T) {
 	}
 }
 
+// revier's shortcut is right, and a desktop default still fires on the same
+// press. Install plans a clear that needs --force for it, so calling it active
+// would say the key is done while the default still runs.
+func TestADesktopDefaultBesideRevierOwnShortcutIsNotActive(t *testing.T) {
+	report := keysOf(t, hosttest.NewKeys("gnome",
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
+	), keyProject(t, "revier"))
+
+	got := row(t, report, "alt+space")
+	if got.Status != core.KeyBuiltin {
+		t.Errorf("alt+space = %q, want builtin: the desktop default still fires", got.Status)
+	}
+	for _, want := range []string{"revier: picker", "activate-window-menu"} {
+		if !strings.Contains(got.HeldBy, want) {
+			t.Errorf("held by %q, want it to name %q", got.HeldBy, want)
+		}
+	}
+}
+
 func TestAChordNobodyHoldsIsFree(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome"), keyProject(t, "revier"))
 	for _, r := range report.Rows {
