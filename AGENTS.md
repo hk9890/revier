@@ -14,6 +14,12 @@ Every route below is **mandatory, not advisory**. Load the document BEFORE the
 first action of that kind — loading it afterwards does not count, and no route
 becomes skippable because the change looks small.
 
+### Any change, commit, branch, PR
+
+**MUST read [docs/CHANGE-WORKFLOW.md](docs/CHANGE-WORKFLOW.md) before the first
+edit to ANY file in this repository, and before any git command that writes.**
+No change is made in the main checkout; the doc says where it is made instead.
+
 ### Research, planning, architecture — and finding anything at all
 
 **MUST read [docs/OVERVIEW.md](docs/OVERVIEW.md) before your first `rg`, `grep`,
@@ -56,8 +62,3 @@ verify a change without touching it.
 Markdown file** — the root steering files, anything under `docs/`, or anything
 under `docs/design/`. The two trees have different owners and different
 registers, and some gaps in the set are deliberate.
-
-### Commit, branch, PR
-
-**MUST read [docs/CHANGE-WORKFLOW.md](docs/CHANGE-WORKFLOW.md) before any git
-command that writes** — commit, branch, push — **and before opening a PR.**

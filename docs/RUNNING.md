@@ -14,6 +14,9 @@ a window the user is reading.
 Every recipe below runs on a private substrate instead. Nothing here attaches a
 client, reaches a display, or is visible in the user's own tmux.
 
+Run `mise run build` first. The recipes call `./bin/revier`, and a fresh
+worktree has none.
+
 ## Drive the CLI against a scratch configuration
 
 `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
@@ -43,10 +46,9 @@ export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 tmux kill-session -t revier; rm -rf "$S"
 ```
 
-The `[hosts]` line is the important one. This machine has a working kitty and a
-working GNOME adapter: without `runtime = ["tmux"]` the workspace opens as a
-real kitty OS window, and without `window = ["none"]` a window target launches
-a real application and moves the user's focus.
+Keep the `[hosts]` line. Without `runtime = ["tmux"]` the workspace opens as a
+real kitty OS window; without `window = ["none"]` a window target launches a
+real application and moves the user's focus.
 
 `revier new` and `revier open <unknown name>` write into
 `$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
@@ -104,9 +106,8 @@ go run ./scripts/drive survey       # the view both renderers read, as JSON
 go run ./scripts/drive kill         # remove the private server
 ```
 
-Run `kill` when you finish. The server persists between invocations on purpose
-— that is what makes the second `go diff` a round trip rather than a fresh open
-— so a stale one makes the next session's first result confusing.
+Run `kill` when you finish. The server persists between invocations on purpose,
+so a stale one skews the next session's first result.
 
 Read `survey` for `available`: a window-only target reports `false` on a machine
 with no window host, which is the expected headless result and not a failure.

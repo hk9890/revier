@@ -3,6 +3,7 @@
 coverage.out
 *.test
 .idea/
+.claude/worktrees/
 
 # Scratch folder covered by the global gitignore; listed here so a fresh clone
 # on another machine is also covered.

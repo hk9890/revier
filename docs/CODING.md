@@ -2,11 +2,9 @@
 
 ```bash
 mise run build      # ./bin/revier
-mise run fmt        # goimports -local github.com/hk9890/revier
+mise run fmt        # goimports -local; plain gofmt leaves import groups the gate rejects
 mise run quality    # the pre-commit gate
 ```
-
-Test commands and which layer a test belongs in: [TESTING.md](TESTING.md).
 
 ## Where a change goes
 
@@ -40,13 +38,14 @@ that assign their own identity — a tmux window name, a browser `--class`. See
 `internal/adapter/tmux.Host.Open`.
 
 **`Instances` must cost the same whatever the project count.** It runs on every
-TUI refresh, and one call per project turns a refresh into O(projects) - this
-repository expects roughly ninety. Bulk queries only: `tmux list-panes -a`,
-`kitten @ ls`, `wctl list --json`. The tmux host uses two bulk calls, because
-tmux format output allows only one free-text field per line and it needs window
-names as well as pane titles. The kitty host issues one `ls` per kitty process,
-concurrently, because each process has its own socket. Constant calls, or calls
-that scale with something other than projects, are fine; one per project is not.
+TUI refresh, and this repository expects roughly ninety projects.
+
+- Query in bulk: `tmux list-panes -a`, `kitten @ ls`, `wctl list --json`.
+- A constant number of calls is fine. tmux needs two, because its format output
+  carries one free-text field per line.
+- Calls that scale with something else are fine. kitty issues one `ls` per
+  kitty process, concurrently, because each process has its own socket.
+- One call per project is not.
 
 ## Errors
 
@@ -57,9 +56,3 @@ Reserve errors for a tool that misbehaved.
 
 A probe that fails reports `StatusUnknown`. One broken harness must not blank
 the dashboard.
-
-## Go version and style
-
-Go 1.27, pinned in `.mise.toml` and `go.mod`. Format with `mise run fmt`; the
-gate is goimports with `-local`, which has an opinion on import grouping that
-plain `gofmt` does not.
