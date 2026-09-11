@@ -55,6 +55,13 @@ opens a window, starts a terminal, or talks to a window manager.** This product
 manipulates the user's live desktop; the doc carries the substrates that let you
 verify a change without touching it.
 
+### Cutting a release, or changing what a release ships
+
+**MUST read [docs/RELEASING.md](docs/RELEASING.md) before tagging a version,
+before editing `.github/workflows/release.yml` or `.goreleaser.yaml`, and
+before adding, renaming or removing a released artifact.** The workflow is
+dispatched by hand, and the dispatched ref must be the tagged commit.
+
 ### Writing project docs
 
 **MUST read [docs/DOCUMENTING.md](docs/DOCUMENTING.md) AND invoke the
