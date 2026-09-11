@@ -467,10 +467,12 @@ func (c *Core) ApplyKeys(ctx context.Context, plan KeyPlan, force bool) KeyPlan 
 // shortcut is written. The order matters - a desktop that already refuses two
 // shortcuts on one chord would refuse the write otherwise.
 func applyStep(ctx context.Context, w revier.KeyWriter, s KeyStep) error {
+	var off []revier.Binding
 	for _, b := range s.Evict {
 		if err := w.Disable(ctx, b); err != nil {
-			return fmt.Errorf("switch off %s: %w", b.Label, err)
+			return stranded(fmt.Errorf("switch off %s: %w", b.Label, err), off)
 		}
+		off = append(off, b)
 	}
 	for _, b := range s.Drop {
 		if err := w.Remove(ctx, b); err != nil {
@@ -480,5 +482,21 @@ func applyStep(ctx context.Context, w revier.KeyWriter, s KeyStep) error {
 	if s.Action == KeyRemove || s.Action == KeyAbsent {
 		return nil
 	}
-	return w.Bind(ctx, s.Write)
+	if err := w.Bind(ctx, s.Write); err != nil {
+		return stranded(err, off)
+	}
+	return nil
+}
+
+// stranded is a failed step's error, naming what the step had already switched
+// off. Those stay off - revier has no verb that switches somebody else's
+// shortcut back on, and a desktop that just refused one write is not one to
+// trust with another - so the key may now run nothing, and the line printed
+// against it has to say why.
+func stranded(err error, off []revier.Binding) error {
+	if len(off) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w; %s switched off already and stays off, so the key may run nothing",
+		err, holderNames(off))
 }

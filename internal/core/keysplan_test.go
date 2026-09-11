@@ -419,6 +419,23 @@ func TestOneFailedKeyDoesNotStopTheRest(t *testing.T) {
 	}
 }
 
+// With --force the shortcut in the way is switched off before revier's is
+// written. When the write then fails, the key may run nothing at all, and the
+// error against it has to say what was switched off, or the user is left with
+// a dead key and a reason that does not explain it.
+func TestAFailedWriteNamesWhatItAlreadySwitchedOff(t *testing.T) {
+	w := theShellTool()
+	w.BindErr = errors.New("dconf is not answering")
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, c.ApplyKeys(context.Background(), plan, true), "ctrl+shift+u")
+	for _, want := range []string{"dconf is not answering", "to-session-terminal", "switched off"} {
+		if !strings.Contains(s.Err, want) {
+			t.Errorf("error = %q, want it to name %q", s.Err, want)
+		}
+	}
+}
+
 // A desktop revier can read and not change must say so, rather than reporting
 // a plan that quietly did nothing.
 func TestADesktopThatCannotBeWrittenIsReported(t *testing.T) {
