@@ -699,3 +699,28 @@ in the TUI as Ctrl+O, while Ctrl+Shift+U (the query's clear-line) and
 Ctrl+Shift+I (Tab) stay desktop keys. An action has no desktop half, so an
 action key the terminal cannot send, or sends as another key, is refused at
 load.
+
+### D36 — a click selects a row, and a second click on it opens the row — Accepted
+
+Completes D33, which left the click for later.
+
+The events were already reported, and a pointer over a list that only the
+wheel moves reads as a list that is broken. A click on a row moves the
+selection to it, as fzf's does; two clicks on one row within the desktop's
+double-click time do what Enter does there — open the project, or run the
+target. Two clicks on different rows are two choices. A click on the pane,
+the header or the footer moves nothing, so a pointer parked on the surface
+cannot change what the keys act on.
+
+### D37 — the frame stops growing at the width its content needs — Accepted
+
+On a wide terminal the list took every column the pane did not, so a state
+sat three hundred columns from the name it belonged to, and the pane an
+arm's length from the row it described. The popup being replaced was half
+the screen wide, centred (os-fzf-popup.sh: `POPUP_PLACE_WIDTH_PERCENT=50`,
+anchored center), which is why it never had the problem.
+
+The list is capped at a hundred columns — a name, a state with its activity
+and a path fit — and the pane at ninety, so the frame stops at their sum and
+sits centred in whatever is left. Height is not capped: rows are what a list
+of ninety projects is short of.
