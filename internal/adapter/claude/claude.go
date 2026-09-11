@@ -44,6 +44,11 @@ const (
 
 	// glyphAtRest is U+2733, the marker Claude shows while it is not working.
 	glyphAtRest = '✳'
+
+	// defaultTitle is what Claude titles its pane before it has a summary of
+	// the session to show, and what the launcher names the panel. It names
+	// the tool, not what the tool is doing.
+	defaultTitle = "Claude Code"
 )
 
 // Probe reads Claude Code panels.
@@ -100,10 +105,14 @@ func IsStateGlyph(r rune) bool { return IsSpinner(r) || r == glyphAtRest }
 
 // Activity strips a leading state glyph and the space after it, leaving the
 // summary Claude wrote. The glyph is rendered separately, so leaving it in
-// would show the state twice.
+// would show the state twice. Claude's default title is no summary at all,
+// and reads as none: shown, it put "Claude Code" on every idle agent's row.
 func Activity(title string) string {
 	if r := leading(title); IsStateGlyph(r) {
-		return strings.TrimLeft(strings.TrimPrefix(title, string(r)), " ")
+		title = strings.TrimLeft(strings.TrimPrefix(title, string(r)), " ")
+	}
+	if title == defaultTitle {
+		return ""
 	}
 	return title
 }

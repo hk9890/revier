@@ -10,21 +10,22 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The pane's width, and the width below which there is no pane at all. A
-// narrow terminal gets the list and nothing else: half of forty columns is
-// two columns of text and two of border.
+// The pane's width bounds, and the list's beside it. The list is what the
+// surface is for, so the pane takes what is left over and not the other way
+// round: at ninety columns a half-and-half split cut every path in the list
+// to make room for a pane that wrapped every line of its own. The list stops
+// at a width that holds a name, a state with its activity and a path whole;
+// past that the frame stops growing (maxInnerWidth).
 const (
-	minSplitWidth = 90
-	minPaneWidth  = 36
-	maxPaneWidth  = 90
+	minPaneWidth = 44
+	maxPaneWidth = 90
+	minListWidth = 56
+	maxListWidth = 100
 )
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
-// narrow to split.
+// narrow to give both the list and the pane their least.
 func (m Model) paneWidth() int {
-	if m.width < minSplitWidth {
-		return 0
-	}
 	// Half, as the picker gives its preview 55% (os-fzf.sh:782). A fixed cap
 	// left the pane at 28% of a 200-column terminal, which is where the paths
 	// and the tree it holds are longest.
@@ -32,8 +33,12 @@ func (m Model) paneWidth() int {
 	if w > maxPaneWidth {
 		w = maxPaneWidth
 	}
+	inner, _ := m.inner()
+	if spare := inner - minListWidth; w > spare {
+		w = spare
+	}
 	if w < minPaneWidth {
-		w = minPaneWidth
+		return 0
 	}
 	return w
 }
@@ -89,16 +94,16 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	}
 
 	b.WriteString(th.Header.Render(clipTo(string(v.Project.Name), w)))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
-	status, statusStyle := "stopped", th.NameDim
+	status, style := "stopped", th.NameDim
 	switch {
 	case v.Running:
-		status, statusStyle = "running", th.Running
+		status, style = "running", th.Running
 	case !v.PathExists:
-		status, statusStyle = "not available", th.PathMissing
+		status, style = "not available", th.PathMissing
 	}
-	line("Status", status, statusStyle)
+	line("Status", status, style)
 
 	pathStyle := th.Path
 	if !v.PathExists {
@@ -124,9 +129,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
-	b.WriteString(th.Meta.Render("Targets"))
-	b.WriteString("\n")
+	b.WriteString(m.heading("Targets", w))
 	for _, t := range v.Targets {
 		b.WriteString(m.detailTarget(t, w))
 		b.WriteString("\n")
@@ -141,9 +144,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	// Every agent, not the worst one the row collapses to: a project with two
 	// agents is exactly where the row is not enough.
 	if len(v.Agents) > 0 {
-		b.WriteString("\n")
-		b.WriteString(th.Meta.Render("Agents"))
-		b.WriteString("\n")
+		b.WriteString(m.heading("Agents", w))
 		for _, a := range v.Agents {
 			b.WriteString(m.detailAgent(a, w))
 			b.WriteString("\n")
@@ -154,9 +155,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	// says which checkout the cursor is on.
 	if v.PathExists {
 		if tree := m.treeFor(v.Project.Path); len(tree) > 0 {
-			b.WriteString("\n")
-			b.WriteString(th.Meta.Render("Project Snapshot"))
-			b.WriteString("\n")
+			b.WriteString(m.heading("Project Snapshot", w))
 			for _, line := range tree {
 				b.WriteString(th.Path.Render(clipTo(line, w)))
 				b.WriteString("\n")
@@ -166,13 +165,28 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	return b.String()
 }
 
+// heading opens a section of the pane: a blank line, then the title with a
+// rule to the pane's edge, so the sections read as blocks rather than as a
+// list of lines that happens to change colour.
+func (m Model) heading(title string, w int) string {
+	th := m.theme
+	rule := w - lipgloss.Width(title) - 1
+	if rule < 0 {
+		rule = 0
+	}
+	return "\n" + th.Heading.Render(title) + " " + th.Border.Render(strings.Repeat("─", rule)) + "\n"
+}
+
+// detailTarget is one target: whether it is up, its name, its key in the
+// spelling the footer uses, and its state. A stopped target says "stopped",
+// where it said "-", which read as a value that failed to load.
 func (m Model) detailTarget(t revier.TargetView, w int) string {
 	th := m.theme
 	mark, markStyle := th.Glyphs.Stopped, th.NameDim
-	state, stateStyle := "-", th.NameDim
+	state, stateStyle := "stopped", th.Count
 	switch {
 	case !t.Available:
-		state = "unavailable"
+		state = "no host here"
 	case !t.Ref.IsZero():
 		mark, markStyle = th.Glyphs.Running, th.Running
 		state, stateStyle = "running", th.Running
@@ -182,36 +196,31 @@ func (m Model) detailTarget(t revier.TargetView, w int) string {
 		name = th.NameDim
 	}
 	return markStyle.Render(mark+" ") +
-		name.Render(pad(string(t.Name), detailNameWidth)) +
-		th.Accent.Render(pad(t.Key, detailKeyWidth)) +
-		stateStyle.Render(truncate(state, w-detailNameWidth-detailKeyWidth-2))
+		name.Render(pad(clipTo(string(t.Name), detailNameWidth-1), detailNameWidth)) +
+		th.Accent.Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
+		stateStyle.Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
 }
 
 func (m Model) detailAgent(a revier.AgentView, w int) string {
 	th := m.theme
-	var s lipgloss.Style
-	switch a.State.Status {
-	case revier.StatusAttention:
-		s = th.Attention
-	case revier.StatusRunning:
-		s = th.Running
-	case revier.StatusIdle:
-		s = th.Idle
-	default:
-		s = th.NameDim
-	}
 	harness := a.State.Harness
 	if harness == "" {
 		harness = "agent"
 	}
-	head := th.ProjectName.Render(pad(harness, detailNameWidth)) +
-		s.Render(pad(a.State.Status.String(), detailKeyWidth))
+	// Indented past the targets' mark column, so the harness sits under the
+	// target names; the state glyph is in the label after it.
+	head := "  " + th.ProjectName.Render(pad(harness, detailNameWidth)) +
+		statusStyle(th, a.State.Status).Render(pad(statusLabel(th, a.State.Status), detailStateWidth))
 	return hang(head, a.State.Activity, w, th.Path)
 }
 
-// The pane's columns. Narrower than the list's, because the pane is.
+// The pane's columns. Narrower than the list's, because the pane is. An
+// agent's state column fits its widest label, "◆ needs you", and no more, so
+// the activity after it has the room: it is the part of that line worth
+// reading.
 const (
 	detailLabelWidth = 9
 	detailNameWidth  = 10
-	detailKeyWidth   = 15
+	detailKeyWidth   = 16
+	detailStateWidth = 13
 )

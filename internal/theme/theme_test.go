@@ -69,16 +69,22 @@ func TestEveryRoleIsSetInEveryFlavour(t *testing.T) {
 	}
 }
 
+// optional are the glyphs a set may leave out: the folder column, which a set
+// draws for both states or not at all.
+var optional = map[string]bool{"Folder": true, "NoFolder": true}
+
 // The comment on Glyphs promises one cell each. A two-cell glyph in a row
 // built from padded columns moves every column after it.
 func TestEveryGlyphIsOneCell(t *testing.T) {
 	for setName, g := range glyphSets {
 		v := reflect.ValueOf(g)
 		for i := range v.NumField() {
-			glyph := v.Field(i).String()
+			name, glyph := v.Type().Field(i).Name, v.Field(i).String()
+			if glyph == "" && optional[name] {
+				continue
+			}
 			if w := lipgloss.Width(glyph); w != 1 {
-				t.Errorf("%s glyph %s = %q, width %d, want 1",
-					setName, v.Type().Field(i).Name, glyph, w)
+				t.Errorf("%s glyph %s = %q, width %d, want 1", setName, name, glyph, w)
 			}
 		}
 	}
@@ -88,9 +94,12 @@ func TestNoGlyphSetIsIncomplete(t *testing.T) {
 	for setName, g := range glyphSets {
 		v := reflect.ValueOf(g)
 		for i := range v.NumField() {
-			if v.Field(i).String() == "" {
-				t.Errorf("%s glyph set has no %s", setName, v.Type().Field(i).Name)
+			if name := v.Type().Field(i).Name; v.Field(i).String() == "" && !optional[name] {
+				t.Errorf("%s glyph set has no %s", setName, name)
 			}
+		}
+		if (g.Folder == "") != (g.NoFolder == "") {
+			t.Errorf("%s glyph set draws one folder state and not the other", setName)
 		}
 	}
 }

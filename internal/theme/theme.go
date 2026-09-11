@@ -5,9 +5,10 @@
 // other. The TUI names roles and never a colour.
 //
 // Glyphs are a separate choice from the palette because a terminal program
-// cannot ask which font is loaded. A Nerd Font glyph in a terminal without one
-// draws a box and can throw the row alignment out, so the safe set is the
-// default and the Nerd Font set is opt-in.
+// cannot ask which font is loaded. The Nerd Font set is the default, because
+// the popup this replaces drew its icons from one and the surface is meant to
+// look like it; a terminal without the font draws boxes, and picks the unicode
+// set in [ui].
 package theme
 
 import (
@@ -25,7 +26,11 @@ type Theme struct {
 	Name   string
 	Glyphs Glyphs
 
+	Badge       lipgloss.Style // the product name, as a tag at the start of the header
 	Header      lipgloss.Style // the top line
+	Heading     lipgloss.Style // a section title in the detail pane
+	Count       lipgloss.Style // a count that is zero, and so says nothing is wrong
+	Match       lipgloss.Style // the letters of a name the filter matched
 	Accent      lipgloss.Style // counts and the filter, inside the header
 	Cursor      lipgloss.Style // the selected row
 	ProjectName lipgloss.Style // a project or target name
@@ -44,30 +49,67 @@ type Theme struct {
 
 // Glyphs is the marker set. Every glyph is one cell wide, whatever the set.
 //
+// Each column of a row means one thing. The mark says whether the project is
+// open; the agent glyph, beside the agent's state in words, says what its
+// agent is doing. A "!" in the mark column for an agent that wanted the user
+// read as punctuation, and said again what the words on the right said.
+//
 // There is no glyph for where a project lives. Every project is on this
 // machine until sessions over a network exist, and a mark that is the same on
 // every row says nothing.
 type Glyphs struct {
-	Running   string // an instance is up
-	Stopped   string // it is not
-	Attention string // it wants the user
-	Cursor    string // the selected row
+	Running string // the project is open
+	Stopped string // it is not
+	Cursor  string // the bar down the left of the selected row
+
+	// What an agent is doing. Each stands beside the state in words, so a
+	// glyph only has to be told apart from the others, not read on its own.
+	NeedsYou string // it asked for the user and waits
+	Working  string // it is in a turn
+	Idle     string // it is at rest, waiting for the next prompt
+	Unknown  string // its probe could not tell
+
+	// Folder and NoFolder are an icon column in front of the name: whether
+	// the project's directory is on this machine. A set draws both or
+	// neither. A set without them says it only in words, on the path line,
+	// and gives the name the room.
+	Folder   string
+	NoFolder string
 }
 
-// The three glyph sets. Unicode is the default: every one of its characters is
-// in any font a terminal ships with. Nerd needs a patched font, and says the
-// same things with icons - a bell for a project that wants you, which reads as
-// a call rather than as punctuation. ASCII is for a terminal whose font is not
-// yours.
+// The three glyph sets. Nerd is the default: it says things with icons - a
+// bell for an agent that wants you, which reads as a call rather than as
+// punctuation - and needs a patched font. Unicode says the same with the
+// characters any font a terminal ships with has. ASCII is for a terminal whose
+// font is not yours.
+//
+// The cursor is a half block in every set but ASCII: a bar the height of the
+// row reads as "this one" from across the screen, where a chevron in front of
+// the first line reads as punctuation (fzf draws its selection the same way).
+//
+// The unicode agent glyphs are one family: a diamond for an agent waiting on
+// the user, solid when it is blocked on an answer and hollow when it has only
+// finished its turn, and a play mark for one that is working.
 var glyphSets = map[string]Glyphs{
-	"unicode": {Running: "\u25cf", Stopped: "\u25cb", Attention: "!", Cursor: "\u25b8"},
-	"nerd": {
-		Running:   "\uf111", // nf-fa-circle
-		Stopped:   "\uf10c", // nf-fa-circle_o
-		Attention: "\uf0f3", // nf-fa-bell
-		Cursor:    "\uf054", // nf-fa-chevron_right
+	"unicode": {
+		Running: "\u25cf", Stopped: "\u25cb", Cursor: "\u258c",
+		NeedsYou: "\u25c6", Working: "\u25b6", Idle: "\u25c7", Unknown: "?",
 	},
-	"ascii": {Running: "*", Stopped: "-", Attention: "!", Cursor: ">"},
+	"nerd": {
+		Running:  "\uf111", // nf-fa-circle
+		Stopped:  "\uf10c", // nf-fa-circle_o
+		Cursor:   "\u258c", // a half block, as in the unicode set
+		NeedsYou: "\uf0f3", // nf-fa-bell
+		Working:  "\uf110", // nf-fa-spinner
+		Idle:     "\uf04c", // nf-fa-pause
+		Unknown:  "\uf128", // nf-fa-question
+		Folder:   "\uf07b", // nf-fa-folder
+		NoFolder: "\uf114", // nf-fa-folder_o
+	},
+	"ascii": {
+		Running: "*", Stopped: "-", Cursor: ">",
+		NeedsYou: "!", Working: "~", Idle: ".", Unknown: "?",
+	},
 }
 
 var flavors = map[string]catppuccin.Flavor{
@@ -80,7 +122,7 @@ var flavors = map[string]catppuccin.Flavor{
 // DefaultTheme and DefaultGlyphs are what an empty configuration gets.
 const (
 	DefaultTheme  = "catppuccin-mocha"
-	DefaultGlyphs = "unicode"
+	DefaultGlyphs = "nerd"
 )
 
 // Themes and GlyphSets report the valid names, sorted, for an error message.
@@ -120,8 +162,15 @@ func Lookup(name, glyphs string) (Theme, error) {
 
 // fromFlavor maps a Catppuccin flavour onto the roles. The mapping follows the
 // shell picker's, so revier looks like the tool it replaces: green for
-// running, red for a missing path, blue for the metadata columns, mauve for
-// anything remote (os_list_json.py:54).
+// running, blue for the metadata columns, mauve for anything remote
+// (os_list_json.py:54).
+//
+// Three departures from it. A path is a step dimmer than a stopped name, so the
+// names are what the eye lands on. A missing path is maroon, not red: on a
+// machine that has a third of the checkouts, red on every third row drowned
+// out the red that means an agent wants you. And the header is quiet text
+// behind a badge, where it was red throughout, so the one red count in it is
+// the one that needs reading.
 func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	c := func(col catppuccin.Color) lipgloss.Color { return lipgloss.Color(col.Hex) }
 	fg := func(col catppuccin.Color) lipgloss.Style {
@@ -130,13 +179,17 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	return Theme{
 		Name:        name,
 		Glyphs:      g,
-		Header:      fg(f.Red()).Bold(true),
+		Badge:       fg(f.Base()).Background(c(f.Mauve())).Bold(true).Padding(0, 1),
+		Header:      fg(f.Text()).Bold(true),
+		Heading:     fg(f.Blue()).Bold(true),
+		Count:       fg(f.Overlay0()),
+		Match:       fg(f.Peach()).Bold(true),
 		Accent:      fg(f.Mauve()),
-		Cursor:      lipgloss.NewStyle().Foreground(c(f.Text())).Background(c(f.Surface0())).Bold(true),
+		Cursor:      lipgloss.NewStyle().Foreground(c(f.Mauve())).Background(c(f.Surface0())).Bold(true),
 		ProjectName: fg(f.Text()),
 		NameDim:     fg(f.Overlay1()),
-		Path:        fg(f.Overlay1()),
-		PathMissing: fg(f.Red()),
+		Path:        fg(f.Overlay0()),
+		PathMissing: fg(f.Maroon()),
 		Meta:        fg(f.Blue()),
 		Remote:      fg(f.Mauve()),
 		Running:     fg(f.Green()),
