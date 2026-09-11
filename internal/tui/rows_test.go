@@ -1,6 +1,9 @@
 package tui_test
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -209,6 +212,117 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 
 // gridGap is the space between the name column and the state column.
 const gridGap = 2
+
+// The list stops at its table's width, and the pane takes the rest: at
+// three hundred and eighty columns the list is a hundred and ten.
+func TestTheListStopsAtItsTableWidth(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 40)
+	_, mc := margins(m)
+	// The border sits after the margin, the frame's border and padding, and
+	// the list.
+	if border := paneBorder(t, m); border != mc+2+110 {
+		t.Errorf("pane border at column %d, want the list capped at 110 columns", border)
+	}
+}
+
+// The state column gives way in steps as the list narrows: the activity
+// goes first, then the words, and the glyph stays as long as anything does.
+func TestTheStateColumnGivesWayInSteps(t *testing.T) {
+	g := theme.Default().Glyphs
+	for _, tc := range []struct {
+		width      int
+		activity   bool
+		words      bool
+		nameIsWide bool
+	}{
+		{160, true, true, true},   // room for everything
+		{60, false, true, true},   // the words, and no activity
+		{30, false, false, false}, // the glyph alone, and the name cut to keep it
+	} {
+		_, _, c, projects := longNamedWorld(t)
+		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
+		first := rows(m)[0]
+		if got := strings.Contains(first, "needs a decision") || strings.Contains(first, "needs a…"); got != tc.activity {
+			t.Errorf("%d columns: activity shown = %v, want %v: %q", tc.width, got, tc.activity, first)
+		}
+		if got := strings.Contains(first, "needs you"); got != tc.words {
+			t.Errorf("%d columns: words shown = %v, want %v: %q", tc.width, got, tc.words, first)
+		}
+		if !strings.Contains(first, g.NeedsYou) {
+			t.Errorf("%d columns: the glyph is gone: %q", tc.width, first)
+		}
+		if got := strings.Contains(first, longName); got != tc.nameIsWide {
+			t.Errorf("%d columns: whole name shown = %v, want %v: %q", tc.width, got, tc.nameIsWide, first)
+		}
+	}
+}
+
+const longName = "a-project-name-of-thirty-chars"
+
+// longNamedWorld is one running project with a thirty-character name whose
+// agent needs the human.
+func longNamedWorld(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
+	}}}
+	projects, err := core.Prepare([]revier.Project{{Name: longName, Path: "/p/x", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:x", Launch: []string{"x"}, Match: revier.Match{Title: "^session:x$"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	return rt, nil, c, projects
+}
+
+// The snapshot takes the rows the pane has left, and no more: on a tall
+// terminal it lists past the twenty rows it once stopped at, and on a short
+// one it ends in an ellipsis inside the pane.
+func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 40 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, c, projects := world(t, 1)
+	projects[0].Path = dir
+
+	tall := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 80)
+	if body := pane(tall); !strings.Contains(body, "f39") || strings.Contains(body, "...") {
+		t.Errorf("tall pane stops short of its rows:\n%s", body)
+	}
+	// Sixteen rows of pane; the facts take nine, the heading two.
+	short := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)
+	body := pane(short)
+	if !strings.Contains(body, "f00") || strings.Contains(body, "f39") || !strings.HasSuffix(strings.TrimSpace(body), "...") {
+		t.Errorf("short pane does not end in an ellipsis inside its rows:\n%s", body)
+	}
+	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 16 {
+		t.Errorf("short pane is %d rows, want at most 16", n)
+	}
+}
+
+// A wide pane puts the snapshot beside the facts, level with the name, so
+// both fill the height.
+func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, projects := longWorld(t, dir)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 260, 30)
+
+	top := strings.Split(pane(m), "\n")[0]
+	if !strings.HasPrefix(top, "long") || !strings.Contains(top, "Project Snapshot") {
+		t.Errorf("pane top = %q, want the name and the snapshot's heading on one line", top)
+	}
+}
 
 // A name too long for a narrow list is cut, and the state after it stays: the
 // name column gives way before the state does.

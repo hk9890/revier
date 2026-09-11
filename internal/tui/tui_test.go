@@ -1305,19 +1305,21 @@ func TestTheWheelMovesTheSelection(t *testing.T) {
 // The wheel over the pane scrolls the pane and leaves the selection alone; the
 // next project starts at its own top.
 func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
+	// The snapshot fits the pane by design, so what overflows a fourteen-row
+	// terminal is a project with more targets than the pane has rows.
 	dir := t.TempDir()
-	for i := range 20 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	home := func(name string) []revier.Target {
-		return []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+	targets := func(name string) []revier.Target {
+		out := []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
 			Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}
+		for i := range 12 {
+			out = append(out, revier.Target{Name: revier.TargetName(fmt.Sprintf("t%02d", i)), Window: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Class: fmt.Sprintf("^t%02d-%s$", i, name)}}})
+		}
+		return out
 	}
 	projects, err := core.Prepare([]revier.Project{
-		{Name: "first", Path: dir, Targets: home("first")},
-		{Name: "second", Path: dir, Targets: home("second")},
+		{Name: "first", Path: dir, Targets: targets("first")},
+		{Name: "second", Path: dir, Targets: targets("second")},
 	})
 	if err != nil {
 		t.Fatal(err)

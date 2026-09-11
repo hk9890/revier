@@ -130,17 +130,21 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
 }
 
-// The grid's measures: the gap between two columns, and the most a name
-// column takes. A name longer than that is cut, and its row alone pays for
-// it, rather than every state on the list moving right for one name.
+// The grid's measures: the gap between two columns, and the bounds of the
+// name column. A name longer than the most is cut, and its row alone pays
+// for it, rather than every state on the list moving right for one name. The
+// least is what the column keeps when the state's words want the room: past
+// it the words go before the names do.
 const (
 	gridGap      = 2
 	maxNameWidth = 32
+	minNameWidth = 16
 )
 
 // nameColumn is the width of the name column: the widest name on the list,
-// within its cap, and never so wide that the widest state does not fit after
-// it in room.
+// within its cap. On a narrow list it gives way to the state column in the
+// same steps the state column gives way in: down to its least to keep the
+// words, and then to keep the glyph.
 func (d projectDelegate) nameColumn(m list.Model, room int) int {
 	col := 0
 	for _, item := range m.VisibleItems() {
@@ -149,8 +153,11 @@ func (d projectDelegate) nameColumn(m list.Model, room int) int {
 		}
 	}
 	col = min(col, maxNameWidth)
-	if state := lipgloss.Width(statusLabel(d.theme, revier.StatusAttention)); col+gridGap+state > room {
-		col = max(room-gridGap-state, 1)
+	if words := lipgloss.Width(statusLabel(d.theme, revier.StatusAttention)); col+gridGap+words > room {
+		col = max(room-gridGap-words, minNameWidth)
+	}
+	if glyph := lipgloss.Width(statusGlyph(d.theme, revier.StatusAttention)); col+gridGap+glyph > room {
+		col = max(room-gridGap-glyph, 1)
 	}
 	return col
 }
@@ -215,11 +222,13 @@ func (d projectDelegate) fitTag(v revier.ProjectView, path, room int, style func
 }
 
 // agent is the worst agent state in the project and what it is doing: the
-// right-hand side of the row, and the part that answers "which of these needs
+// table's second column, and the part that answers "which of these needs
 // me". A project running several agents is why the detail pane lists them all.
 //
-// It fits room by cutting the activity, never the state: on a narrow screen
-// "needs you" is what the row is there to show.
+// The column gives way in steps as room goes (decisions.md D39): first the
+// activity, which the pane shows whole; then the words, leaving the glyph,
+// which is why every set's glyphs are told apart on their own; then the
+// glyph. The sort and the header's counts still say who needs you.
 func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	worst, ok := core.Worst(v.Agents)
 	if !ok {
@@ -228,18 +237,33 @@ func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipglo
 	th := d.theme
 	state := statusLabel(th, worst.Status)
 	if lipgloss.Width(state) > room {
+		state = statusGlyph(th, worst.Status)
+	}
+	if lipgloss.Width(state) > room {
 		return ""
 	}
 	out := style(statusStyle(th, worst.Status)).Render(state)
-	if rest := room - lipgloss.Width(state) - 1; worst.Activity != "" && rest >= minActivityWidth {
+	rest := min(room-lipgloss.Width(state)-1, maxActivityWidth)
+	if state != statusGlyph(th, worst.Status) && worst.Activity != "" && rest >= minActivityWidth {
 		out += style(th.NameDim).Render(" " + ellipsis(worst.Activity, rest))
 	}
 	return out
 }
 
-// minActivityWidth is the shortest cut of an activity line that still says
-// something. Below it the state stands alone.
-const minActivityWidth = 8
+// The activity's bounds on a row. Below the least, a cut says nothing and
+// the state stands alone; above the most, the rest is the pane's, and the
+// row would only be pushing the pane away.
+const (
+	minActivityWidth = 16
+	maxActivityWidth = 50
+)
+
+// statusGlyph is the state's glyph alone, for a column with no room for its
+// words.
+func statusGlyph(th theme.Theme, s revier.Status) string {
+	glyph, _, _ := strings.Cut(statusLabel(th, s), " ")
+	return glyph
+}
 
 // statusLabel is an agent state as the surface says it: its glyph and a word
 // for the person reading, not the name the JSON carries. "attention" was a

@@ -742,3 +742,29 @@ On the second line, what is open or why nothing can be follows the path, so
 the line reads as one sentence about the checkout. The pane keeps half the
 width up to a hundred and twenty columns, where a Git URL and a tree row fit
 whole; the list takes the rest, at any width.
+
+### D39 — the list stops at its table's width, and the pane takes the rest — Accepted
+
+Narrows D38: the grid stays, the split changes.
+
+The list is a table of two columns, the project and its agent's state, and
+a table has a width its content needs: a name up to thirty-two, the state's
+glyph and word, and fifty of the activity. That is a hundred and ten
+columns. Past it a wider list was blank on the right, and at the owner's
+standard size, a popup half a wide monitor, most of the list was. The list
+stops there, and every further column goes to the pane, which is where a
+wide terminal has something to show.
+
+The state column gives way in steps as room goes, rather than being cut
+mid-word: first the activity, which the pane shows whole; then the words,
+leaving the glyph, which is why every set's glyphs are told apart on their
+own; then the glyph. The name column gives way to sixteen before the words
+go, and to one before the glyph does. With the column gone, the sort and the
+header's counts still say who needs you.
+
+The pane fills its height: the snapshot takes the rows the other sections
+leave, where it stopped at twenty lines over twenty blank rows. At a hundred
+and thirty columns the pane lays the snapshot beside the facts, each filling
+the height, so neither waits under the other. A third column, the selected
+agent's live output, is the next use of a wide pane and is a decision of its
+own.
