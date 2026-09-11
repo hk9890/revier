@@ -256,6 +256,9 @@ func Validate(p revier.Project) error {
 			homes++
 		}
 		if t.Key != "" {
+			if err := core.ValidateKeyTarget(t.Name); err != nil {
+				errs = append(errs, err)
+			}
 			// A key that cannot be read is rejected here rather than dropped
 			// later. Dropped, it costs the target its desktop chord and its
 			// row in `revier keys status`, which is the one place a user

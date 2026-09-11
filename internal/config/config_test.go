@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -473,6 +474,44 @@ func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to name %q", err, want)
 		}
+	}
+}
+
+// A keyed target's name is the row, the shortcut's entry, and a word in the
+// command the key runs. "picker" is the row of the key that opens revier, so
+// the two collided and every install was refused; a name that is not one plain
+// word would run as shell syntax, and revier would not know the shortcut as
+// its own.
+func TestValidateRejectsANameAKeyedTargetCannotHave(t *testing.T) {
+	for _, name := range []revier.TargetName{"picker", "my editor", `x"; rm -rf ~; "`, "-x"} {
+		p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			}},
+			{Name: name, Key: "ctrl-shift-p", Window: &revier.Realization{
+				Launch: []string{"y"}, Match: revier.Match{Class: "^y$"},
+			}},
+		}}
+		err := config.Validate(p)
+		if err == nil {
+			t.Errorf("Validate accepted a keyed target named %q", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), strconv.Quote(string(name))) {
+			t.Errorf("error = %q, want it to name the target", err)
+		}
+	}
+}
+
+// Without a key the name reaches no desktop, so it is not restricted.
+func TestATargetWithNoKeyMayBeCalledPicker(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "picker", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+		}},
+	}}
+	if err := config.Validate(p); err != nil {
+		t.Errorf("Validate: %v", err)
 	}
 }
 

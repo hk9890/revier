@@ -250,6 +250,41 @@ func TestUninstallRemovesOnlyRevierOwnShortcuts(t *testing.T) {
 	}
 }
 
+// A user's own shortcut that runs revier among other things is theirs. Read as
+// revier's, install rewrote it without --force and uninstall deleted it.
+func TestAShortcutThatMerelyRunsRevierIsNotRevierOwn(t *testing.T) {
+	wrapper := `sh -lc "revier-go editor && notify-send editor"`
+	popup := `sh -c "revier-popup; logger picked"`
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Shift><Control>o", wrapper, "my-editor"),
+		hosttest.Custom("<Super>p", popup, "my-picker"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	if got := step(t, plan, "ctrl+shift+o").Action; got != core.KeyTakeOver {
+		t.Errorf("ctrl+shift+o action = %q, want a take over: the shortcut is the user's", got)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+
+	back, err := c.PlanUninstallKeys(context.Background(), []core.Project{keyProject(t, "revier")}, "alt+space")
+	if err != nil {
+		t.Fatalf("PlanUninstallKeys: %v", err)
+	}
+	c.ApplyKeys(context.Background(), back, false)
+
+	for label, command := range map[string]string{"my-editor": wrapper, "my-picker": popup} {
+		held := false
+		for _, b := range w.Bindings {
+			if b.Label == label && b.Command == command && b.Enabled {
+				held = true
+			}
+		}
+		if !held {
+			t.Errorf("%s was rewritten, switched off or deleted: %+v", label, w.Bindings)
+		}
+	}
+}
+
 // Install then uninstall leaves the desktop as it was, except that what was
 // evicted has to be switched back on by whatever wrote it. That is what `os
 // init` is for, and it is why nothing is stored.
