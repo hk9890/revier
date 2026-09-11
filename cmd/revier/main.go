@@ -133,9 +133,15 @@ func run(args []string) error {
 		// fail, that has nothing to do with running a command in directories.
 		// No deadline either, for the reason runAction has none.
 		return cmdEach(os.Stdout, args)
+	case "agent":
+		// Its own app: how long an agent command may take is one of its
+		// flags, and the hosts are probed and listed inside that bound.
+		return cmdAgent(args)
 	}
 
-	ctx, cancel := commandContext(cmd)
+	// A keypress command gets long enough for a detached launch's wait
+	// (bindWait) on top of the host calls around it.
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
 	a, err := newApp(ctx)
@@ -160,24 +166,14 @@ func run(args []string) error {
 		return cmdStatus(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
-	case "agent":
-		return cmdAgent(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
 }
 
-// commandContext bounds a command. A keypress command gets long enough for a
-// detached launch's wait (bindWait) on top of the host calls around it. An
-// agent command waits as long as its caller says, which by default is for
-// good: `revier agent wait` on a long turn is the point of it.
-func commandContext(cmd string) (context.Context, context.CancelFunc) {
-	if cmd == "agent" {
-		return context.WithCancel(context.Background())
-	}
-	return context.WithTimeout(context.Background(), bindWait+30*time.Second)
-}
+// commandTimeout bounds a command that has no bound of its own.
+const commandTimeout = bindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {
@@ -234,11 +230,15 @@ func cmdTUI(a *app) error {
 func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
 	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier list [--json]")
+	}
 
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
+	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
 	}
@@ -308,10 +308,14 @@ func targetSummary(v revier.ProjectView) string {
 		case !t.Ref.IsZero():
 			mark = "*" // running
 		}
+		name := string(t.Name)
+		if t.Attached {
+			name = "(" + t.Ref.Title + ")" // bound at runtime, so it has no name
+		}
 		if out != "" {
 			out += " "
 		}
-		out += mark + string(t.Name)
+		out += mark + name
 	}
 	return out
 }
@@ -321,6 +325,9 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
+	}
+	if len(pos) > 1 {
+		return fmt.Errorf("usage: revier open [name]")
 	}
 	name := ""
 	if len(pos) > 0 {
@@ -353,7 +360,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		// The clone ran without a deadline. The host calls still need one,
 		// and the one set at startup may have been spent waiting for git.
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), bindWait+30*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
 		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
@@ -371,7 +378,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier go <target> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -393,7 +400,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) < 1 {
+	if len(pos) != 1 {
 		return fmt.Errorf("usage: revier run <action> [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
@@ -449,8 +456,12 @@ func runAction(p core.Project, argv []string) error {
 func cmdAttach(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier attach [-p project]")
 	}
 	if a.core.Window == nil {
 		return fmt.Errorf("attach needs a window host; none is available here")
@@ -474,8 +485,12 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 func cmdStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	project := projectFlag(fs)
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier status [-p project]")
 	}
 	p, err := a.resolveProject(ctx, *project)
 	if err != nil {

@@ -226,6 +226,11 @@ func Validate(p revier.Project) error {
 	if p.Path == "" {
 		errs = append(errs, errors.New("project has no path"))
 	}
+	if strings.ContainsRune(string(p.Name), ':') {
+		// `revier agent` addresses <project>:<target>, and the address is
+		// split at its first colon.
+		errs = append(errs, fmt.Errorf("project name %q contains \":\", which separates a project from its target in an agent address", p.Name))
+	}
 	if p.GitURL != "" {
 		if err := ValidateGitURL(p.GitURL); err != nil {
 			errs = append(errs, fmt.Errorf("git_url: %w", err))
@@ -246,6 +251,13 @@ func Validate(p revier.Project) error {
 		if t.Name == "" {
 			errs = append(errs, errors.New("a target has no name"))
 			continue
+		}
+		if strings.IndexFunc(string(t.Name), notInTargetName) >= 0 || strings.HasPrefix(string(t.Name), "-") {
+			// A target's name is written into the shell command its desktop
+			// key runs, unquoted, as an argument of `revier go`: a space or a
+			// quote in it would break the key, and a leading dash would make
+			// it a flag. A word needs no quoting in any shell.
+			errs = append(errs, fmt.Errorf("target name %q may hold only letters, digits, \".\", \"_\" and \"-\", and must not start with \"-\"", t.Name))
 		}
 		if seenName[t.Name] {
 			errs = append(errs, fmt.Errorf("target %q declared twice", t.Name))
@@ -307,6 +319,13 @@ func Validate(p revier.Project) error {
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
 			}
+			if r.Name == "" && kind == revier.HostRuntime {
+				// A runtime host gives the instance it opens this name, and
+				// has no other identity to give it; both refuse to open
+				// without one. A window host needs none: its launch argv
+				// carries the identity match finds.
+				errs = append(errs, fmt.Errorf("target %q runtime realization has no name; give it the name its match finds", t.Name))
+			}
 			if r.Place != "" && len(strings.Fields(r.Place)) != 4 {
 				// A geometry short of its four tokens would reach the window
 				// host and be refused there, after the window had opened.
@@ -328,6 +347,10 @@ func Validate(p revier.Project) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func notInTargetName(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("._-", r)
 }
 
 // ValidateGitURL refuses a clone URL that is unsafe to hand to git or to keep

@@ -23,6 +23,7 @@ key  = "ctrl-shift-h"
 home = true
 
   [target.runtime]
+  name  = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
 
     [[target.runtime.panels]]
@@ -53,6 +54,7 @@ key  = "ctrl-shift-d"
   match  = { class = "^meld$" }
 
   [target.runtime]
+  name   = "diff:{{.Name}}"
   launch = ["nvim", "-d"]
   match  = { title = "^diff:{{.Name}}$" }
 

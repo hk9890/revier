@@ -252,7 +252,7 @@ func TestClaimOnAppearAgainstSway(t *testing.T) {
 	}
 	projects := []core.Project{p}
 
-	before, err := c.Survey(ctx(t), projects, nil)
+	before, err := c.Survey(ctx(t), projects, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestClaimOnAppearAgainstSway(t *testing.T) {
 		t.Fatal(err)
 	}
 	strayInst := waitFor(t, h, stray.Match)
-	after, err := c.Survey(ctx(t), projects, nil)
+	after, err := c.Survey(ctx(t), projects, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

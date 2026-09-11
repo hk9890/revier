@@ -112,6 +112,21 @@ func TestOriginReadsTheRemote(t *testing.T) {
 	}
 }
 
+// A subdirectory of a checkout is not the checkout: cloning the origin to its
+// path would nest the whole repository there.
+func TestOriginOfASubdirectoryIsEmpty(t *testing.T) {
+	repo := bare(t)
+	work := filepath.Join(t.TempDir(), "w")
+	git(t, "", "clone", "-q", repo, work)
+	sub := filepath.Join(work, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := checkout.Origin(sub); got != "" {
+		t.Errorf("Origin of a subdirectory = %q, want empty", got)
+	}
+}
+
 // A remote with a token in it is not copied into a project file.
 func TestOriginDropsARemoteWithCredentials(t *testing.T) {
 	bare(t)

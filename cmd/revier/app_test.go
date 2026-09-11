@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -161,5 +162,43 @@ func TestListSavesItsPrune(t *testing.T) {
 	}
 	if len(got.Attached) != 0 || len(got.Bound) != 0 {
 		t.Errorf("state on disk = attached %v, bound %v; want both pruned", got.Attached, got.Bound)
+	}
+}
+
+// `revier list --json` carries what was attached to a project, marked so, as
+// the TUI lists it under the project.
+func TestListJSONCarriesAttachments(t *testing.T) {
+	wm := hosttest.New("gnome")
+	stray := wm.Add("Pull requests", "chromium")
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	p, root := demoProject(t), t.TempDir()
+	st := &state.State{}
+	st.Attach("demo", stray)
+	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout := os.Stdout
+	os.Stdout = w
+	err = cmdList(context.Background(), a, []string{"--json"})
+	os.Stdout = stdout
+	_ = w.Close()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var views []revier.ProjectView
+	if err := json.NewDecoder(r).Decode(&views); err != nil {
+		t.Fatal(err)
+	}
+	var attached []revier.TargetView
+	for _, tv := range views[0].Targets {
+		if tv.Attached {
+			attached = append(attached, tv)
+		}
+	}
+	if len(attached) != 1 || attached[0].Ref != stray {
+		t.Errorf("attached targets = %+v, want the stray window %v", attached, stray)
 	}
 }

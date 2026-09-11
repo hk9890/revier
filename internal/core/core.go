@@ -603,19 +603,21 @@ type Report struct {
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
 // local matching for every project. bound is where each project's targets
-// last landed; a bound instance that is still listed is its target.
+// last landed; a bound instance that is still listed is its target. attached
+// is what was bound to each project by hand or by a claim; an attachment that
+// is still listed follows the project's targets, marked Attached.
 //
 // Every project here is already rendered and compiled; a project that could
 // not be was refused at load, so the survey has no per-project error path and
 // does no work that a previous refresh did not also have to do.
-func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings) (Report, error) {
+func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
 	snap, err := c.snapshot(ctx)
 	if err != nil {
 		return Report{}, err
 	}
 	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name]))
+		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name], attached[p.Name]))
 	}
 	for _, h := range c.hosts() {
 		r.Hosts = append(r.Hosts, h.Name())
@@ -745,7 +747,7 @@ func dirExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings) revier.ProjectView {
+func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
 	v := revier.ProjectView{Project: p.Project, PathExists: dirExists(p.Path)}
 
 	// Probe every matched instance, not only home. An agent is wherever the
@@ -774,6 +776,13 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 			}
 		}
 		v.Targets = append(v.Targets, tv)
+	}
+	// A gone attachment is left out rather than shown dead: the caller prunes
+	// it from state against this same listing.
+	for _, ref := range attached {
+		if inst, ok := byRef(snap, ref); ok {
+			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
+		}
 	}
 	return v
 }

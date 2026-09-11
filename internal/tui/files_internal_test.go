@@ -19,6 +19,7 @@ path = "/p/alpha"
 name = "home"
 home = true
   [target.runtime]
+  name = "home"
   launch = ["sh"]
   match = { title = "^home$" }
 `

@@ -158,3 +158,59 @@ func TestAgentPromptRefusals(t *testing.T) {
 		}
 	}
 }
+
+// wedgedTmux points revier at a tmux that never answers: it is on PATH, so it
+// is selected, and every call to it hangs. It stands in for a server that
+// stopped responding, which no host call times out on by itself.
+func wedgedTmux(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\nexec sleep 10\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ReplaceAll(projectTOML, "%PATH%", t.TempDir())
+	if err := os.WriteFile(filepath.Join(root, "projects", "demo.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
+}
+
+// The timeout covers finding the agent, not only waiting on it: a host that
+// never answers the lookup still ends the wait on time, with the timeout's
+// status.
+func TestAgentWaitTimesOutOnAHostThatNeverAnswers(t *testing.T) {
+	wedgedTmux(t)
+	start := time.Now()
+	err := run([]string{"agent", "wait", "demo", "--until", "idle", "--timeout", "0.3"})
+	if !errors.Is(err, errWaitTimeout) {
+		t.Fatalf("err = %v, want the timeout, which exits %d", err, exitTimeout)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Error("the wait outlived its timeout")
+	}
+}
+
+// A prompt has a bound of its own, so a host that never answers fails it
+// rather than holding the script that called it for good.
+func TestAgentPromptGivesUpOnAHostThatNeverAnswers(t *testing.T) {
+	wedgedTmux(t)
+	old := promptTimeout
+	promptTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { promptTimeout = old })
+	start := time.Now()
+	if err := run([]string{"agent", "prompt", "demo", "hello"}); err == nil {
+		t.Fatal("prompt succeeded against a host that never answered")
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Error("the prompt outlived its bound")
+	}
+}
