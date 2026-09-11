@@ -837,6 +837,124 @@ func TestNoTreeForAMissingDirectory(t *testing.T) {
 	}
 }
 
+// longActivity is an agent's activity line longer than any pane.
+const longActivity = "Reading internal/tui/detail.go and working out why the activity line ends in an ellipsis where fzf wraps it"
+
+// longWorld is one running project at path whose agent reports longActivity,
+// and a second project after it.
+func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: longActivity},
+	}}}
+	home := func(name string) revier.Target {
+		return revier.Target{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}
+	}
+	projects, err := core.Prepare([]revier.Project{
+		{Name: "long", Path: path, Targets: []revier.Target{home("long")}},
+		{Name: "short", Path: "/p/short", Targets: []revier.Target{home("short")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Add("session:long", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	return c, projects
+}
+
+// paneColumns is the detail pane's rendered width, its border included: from
+// the border between list and pane to the frame's padding column.
+func paneColumns(t *testing.T, m tui.Model) int {
+	t.Helper()
+	for _, raw := range strings.Split(m.View(), "\n") {
+		r := []rune(raw)
+		var bars []int
+		for i, c := range r {
+			if c == '│' {
+				bars = append(bars, i)
+			}
+		}
+		if len(bars) == 3 {
+			return bars[2] - bars[1] - 1
+		}
+	}
+	t.Fatalf("no line with a pane:\n%s", m.View())
+	return 0
+}
+
+// Where the picker's preview wraps, the pane wraps: a path and an activity
+// line are the fields worth reading whole, and an ellipsis cut exactly them.
+func TestDetailPaneWrapsALongPathAndActivity(t *testing.T) {
+	path := "/p/a-rather-long-directory-name-for-wrapping/and-another-deeply-nested-segment/checkout-with-a-long-name"
+	c, projects := longWorld(t, path)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 40)
+
+	if w := paneColumns(t, m); w*100 < 45*150 {
+		t.Errorf("pane is %d of 150 columns, want at least 45%%", w)
+	}
+	body := pane(m)
+	if strings.Contains(body, "…") {
+		t.Errorf("pane cut a field with an ellipsis:\n%s", body)
+	}
+	joined := strings.Join(strings.Fields(body), "")
+	if !strings.Contains(joined, path) {
+		t.Errorf("pane lost part of the path %s:\n%s", path, body)
+	}
+	if !strings.Contains(joined, strings.Join(strings.Fields(longActivity), "")) {
+		t.Errorf("pane lost part of the activity line:\n%s", body)
+	}
+	// Continuation lines sit under the value, not under the label.
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "and-another") || strings.HasPrefix(line, "wraps it") {
+			t.Errorf("continuation %q starts at the label column", line)
+		}
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(line); w > 150 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
+}
+
+// A tree row is cut, not wrapped: a wrapped row loses the indentation that
+// says where in the tree it is.
+func TestDetailPaneCutsTreeRows(t *testing.T) {
+	dir := t.TempDir()
+	name := "a-file-whose-name-is-long-enough-that-the-tree-row-must-be-cut-rather-than-wrapped.go"
+	if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, projects := longWorld(t, dir)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 40)
+
+	body := pane(m)
+	if !strings.Contains(body, "└── a-file-whose-name") {
+		t.Fatalf("pane lacks the tree row:\n%s", body)
+	}
+	if strings.Contains(strings.Join(strings.Fields(body), ""), name) {
+		t.Errorf("the tree row was wrapped rather than cut:\n%s", body)
+	}
+}
+
+// At eighty columns there is no pane, and the list does not wrap either: a
+// long path and a long activity line leave every row two lines high.
+func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
+	c, projects := longWorld(t, "/p/"+strings.Repeat("deeply-nested/", 10)+"checkout")
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	r := rows(m)
+	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply-nested") || !strings.Contains(r[2], "short") {
+		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
+}
+
 // topRow is the name of the first project on screen, and selectedName the one
 // under the cursor. Both read the rendered surface, so they see what the
 // viewport actually shows.

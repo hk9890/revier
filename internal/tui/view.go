@@ -53,7 +53,8 @@ func (m *Model) layout() {
 	w, h := m.inner()
 	m.input.Width = w - lipgloss.Width(promptMark) - 2
 	if pane := m.paneWidth(); pane > 0 {
-		m.detail.Width, m.detail.Height = pane-paneChrome, h
+		// A viewport's width is its outside, border and padding included.
+		m.detail.Width, m.detail.Height = pane, h
 	}
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
@@ -273,6 +274,32 @@ func clipTo(s string, width int) string {
 		return ""
 	}
 	return lipgloss.NewStyle().MaxWidth(width).Render(s)
+}
+
+// wrap breaks text into lines no wider than width: at a space or a hyphen
+// where there is one, and mid-word where there is not. It trims the padding
+// lipgloss adds, so a line is only as wide as its text.
+func wrap(s string, width int) []string {
+	if width < 1 {
+		return nil
+	}
+	out := strings.Split(lipgloss.NewStyle().Width(width).Render(s), "\n")
+	for i := range out {
+		out[i] = strings.TrimRight(out[i], " ")
+	}
+	return out
+}
+
+// hang puts a value right of an already rendered head and wraps it within
+// width, continuing under the value rather than under the head, so a label
+// column stays a column.
+func hang(head, value string, width int, style lipgloss.Style) string {
+	indent := lipgloss.Width(head)
+	parts := wrap(value, width-indent)
+	for i, p := range parts {
+		parts[i] = style.Render(p)
+	}
+	return head + strings.Join(parts, "\n"+strings.Repeat(" ", indent))
 }
 
 // truncate keeps the end of a path, not the start: the last two segments say

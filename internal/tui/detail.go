@@ -39,7 +39,7 @@ func (m Model) paneWidth() int {
 }
 
 // paneChrome is the border column and the padding column the pane's frame
-// takes from the list.
+// takes from what it holds.
 const paneChrome = 2
 
 func newDetail(th theme.Theme) viewport.Model {
@@ -68,14 +68,18 @@ func (m *Model) syncDetail() {
 // detailContent is what the shell picker's preview shows, in its order
 // (os-fzf.sh:290): what this project is, then what is up, then what the
 // agents are doing.
+//
+// A path and an activity line wrap, as the preview does (os-fzf.sh:788,
+// --preview-window=...,wrap): they are the fields worth reading whole, and a
+// cut takes exactly the end that says which checkout or which step. Tree rows
+// are cut instead, because a wrapped tree row loses its indentation.
 func (m *Model) detailContent(v revier.ProjectView) string {
 	th := m.theme
 	w := m.paneWidth() - paneChrome
 	var b strings.Builder
 
 	line := func(label, value string, style lipgloss.Style) {
-		b.WriteString(th.Meta.Render(pad(label, detailLabelWidth)))
-		b.WriteString(style.Render(truncate(value, w-detailLabelWidth)))
+		b.WriteString(hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style))
 		b.WriteString("\n")
 	}
 
@@ -197,10 +201,7 @@ func (m Model) detailAgent(a revier.AgentView, w int) string {
 	}
 	head := th.ProjectName.Render(pad(harness, detailNameWidth)) +
 		s.Render(pad(a.State.Status.String(), detailKeyWidth))
-	if a.State.Activity == "" {
-		return head
-	}
-	return head + th.Path.Render(clipTo(a.State.Activity, w-detailNameWidth-detailKeyWidth))
+	return hang(head, a.State.Activity, w, th.Path)
 }
 
 // The pane's columns. Narrower than the list's, because the pane is.
