@@ -140,7 +140,44 @@ func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger 
 	for _, row := range report.Rows {
 		plan.Steps = append(plan.Steps, installStep(row, held[row.Chord]))
 	}
+	entryPerStep(plan.Steps, bindings)
 	return plan, nil
+}
+
+// entryPerStep gives every step that creates a shortcut an entry no other step
+// writes and nobody else owns.
+//
+// A new shortcut is named after its target, and that name can be in use. When
+// a key moves between targets - home leaves ctrl+shift+u, web takes it - web
+// rewrites the entry revier-home in place, and home's new key would be written
+// to the same entry: one of the two keys is lost, and both steps report done.
+// An entry that is somebody else's is never overwritten either. revier's own
+// entry on a chord nothing wants any more may be reused: moving it is what
+// renaming the key means.
+func entryPerStep(steps []KeyStep, bindings []revier.Binding) {
+	taken := map[string]bool{}
+	for _, b := range bindings {
+		if b.Source == revier.BindingCustom && !ownedCommand(b.Command) {
+			taken[b.ID] = true
+		}
+	}
+	for _, s := range steps {
+		if s.Own != KeyCreate {
+			taken[s.Write.ID] = true
+		}
+	}
+	for i := range steps {
+		s := &steps[i]
+		if s.Own != KeyCreate {
+			continue
+		}
+		id := s.Write.ID
+		for n := 2; taken[id]; n++ {
+			id = fmt.Sprintf("%s-%d", s.Write.ID, n)
+		}
+		s.Write.ID = id
+		taken[id] = true
+	}
 }
 
 // PlanUninstallKeys works out what releasing the desktop keys would do.

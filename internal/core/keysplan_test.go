@@ -285,6 +285,63 @@ func TestAShortcutThatMerelyRunsRevierIsNotRevierOwn(t *testing.T) {
 	}
 }
 
+// A key moves between targets: home leaves ctrl+shift+u for ctrl+shift+j, and
+// web takes ctrl+shift+u. web rewrites the entry revier-home in place, so
+// home's new key written to the same entry would overwrite one of the two -
+// and both steps would still report done.
+func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier-home"),
+	)
+	moved := prepared(t, revier.Project{
+		Name: "setup", Path: "/home/hans/setup",
+		Targets: []revier.Target{
+			{
+				Name: "home", Home: true, Key: "ctrl-shift-j",
+				Runtime: &revier.Realization{Launch: []string{"kitty"}, Match: revier.Match{Title: "^session:setup$"}},
+			},
+			{
+				Name: "web", Key: "ctrl-shift-u",
+				Window: &revier.Realization{Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}},
+			},
+		},
+	})
+	c, plan := planInstall(t, w, moved)
+	done := c.ApplyKeys(context.Background(), plan, false)
+	for _, s := range done.Steps {
+		if s.Err != "" || (!s.Done && s.Action != core.KeyOK) {
+			t.Errorf("%s: done=%v err=%q", s.Chord, s.Done, s.Err)
+		}
+	}
+
+	for chord, command := range map[string]string{
+		"<Shift><Control>j": `sh -lc "revier-go home"`,
+		"<Shift><Control>u": `sh -lc "revier-go web"`,
+	} {
+		held := w.Held(chord)
+		if len(held) != 1 || held[0].Command != command {
+			t.Errorf("%s is held by %+v, want %s alone", chord, held, command)
+		}
+	}
+}
+
+// An entry is named after its target, and somebody else's entry can carry
+// that name. Writing to it would replace their shortcut with revier's.
+func TestSomebodyElsesEntryIsNeverWrittenTo(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Super>w", "firefox", "revier-picker"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+	c.ApplyKeys(context.Background(), plan, false)
+
+	if held := w.Held("<Super>w"); len(held) != 1 || held[0].Command != "firefox" {
+		t.Errorf("super+w is held by %+v, want the user's own shortcut", held)
+	}
+	if held := w.Held("<Alt>space"); len(held) != 1 || held[0].Command != `sh -lc "revier-popup"` {
+		t.Errorf("alt+space is held by %+v, want revier's picker", held)
+	}
+}
+
 // Install then uninstall leaves the desktop as it was, except that what was
 // evicted has to be switched back on by whatever wrote it. That is what `os
 // init` is for, and it is why nothing is stored.
