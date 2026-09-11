@@ -99,6 +99,7 @@ revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
 revier list [--json]   machine-readable inventory
 revier status          the project for the current directory
+revier each -- <cmd>   run one command in every project's directory (D32)
 ```
 
 The TUI is one surface with two levels. The top level lists projects, sorted so
@@ -125,7 +126,6 @@ it after a confirmation (D30).
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
 | SSH sessions | Cut from the first version. A remote runtime is a host like any other and can be added without a redesign. |
-| Bulk command execution across projects | A different tool that happens to share the project list. Reachable through `revier list --json`. |
 | Popup window geometry | The compositor places windows. The rule that opens revier as a popup is user configuration. |
 | Session persistence across reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. |
 | Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. |

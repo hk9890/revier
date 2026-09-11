@@ -47,6 +47,8 @@ usage:
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
                                 type one line into an agent and submit it
+  revier each -- <cmd>          run one command in every project's directory
+  revier each log [run]         past runs of it, or one run's results
   revier version
 
 flags:
@@ -66,6 +68,11 @@ const exitKeysIncomplete = 4
 // exitTimeout is returned when `revier agent wait` gave up. It is the status
 // the shell tool's wait used, so scripts written against it keep their branch.
 const exitTimeout = 2
+
+// exitEachFailed is returned when `revier each` ran and the command failed in
+// at least one project. It is not 1, so a script can tell a failed project from
+// a revier that could not run at all.
+const exitEachFailed = 5
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -90,6 +97,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, "revier:", err)
 			os.Exit(exitTimeout)
 		}
+		// `revier each` has already named every project it failed in.
+		if errors.Is(err, errEachFailed) {
+			os.Exit(exitEachFailed)
+		}
 		fmt.Fprintln(os.Stderr, "revier:", err)
 		os.Exit(1)
 	}
@@ -110,6 +121,12 @@ func run(args []string) error {
 		return nil
 	case "new":
 		return cmdNew(args)
+	case "each":
+		// No app: a run in every project needs the project list and the state
+		// root, and no host. Probing the desktop would be work, and a way to
+		// fail, that has nothing to do with running a command in directories.
+		// No deadline either, for the reason runAction has none.
+		return cmdEach(os.Stdout, args)
 	}
 
 	ctx, cancel := commandContext(cmd)

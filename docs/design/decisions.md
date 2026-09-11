@@ -46,7 +46,7 @@ Container execution is the heaviest and least general transport and is cut.
 SSH is cut from the first version, but the `Runtime` port keeps the seam, so a
 remote runtime can be added later without a redesign.
 
-### D7 — bulk execution across projects is not in the first version — Accepted
+### D7 — bulk execution across projects is not in the first version — Superseded by D32
 
 `os run` is a separate tool that happens to share the project list. Anyone who
 needs it builds it on `revier list --json`.
@@ -623,3 +623,31 @@ status `os agent wait` used, so a script keeps its branch.
 The cost is on tmux: its panes carry no hook variable, so the Claude probe
 never reports attention there, and the attention refusal fires on tmux only for
 a probe that reads it some other way.
+
+### D32 — a command in every project is revier's after all — Accepted
+
+Supersedes D7.
+
+D7 left bulk execution to a separate tool built on `revier list --json`. Nobody
+built it, and the fleet-wide chores - pull every repository, trust every
+workspace, list the issues of every project that has a tracker - still go
+through `os run`. That keeps the shell tool alive after the picker has moved
+over. The project list is revier's, so the loop over it is too.
+
+`revier each -- <cmd>` runs one argv in the directory of every project. It does
+not take the `run` verb, which is one configured action in one project. Which
+projects it reaches is a decision, so it is the core's: a project whose
+directory is missing is skipped and named; a project on a directory an earlier
+one already has is skipped as a duplicate, because two project files on one
+checkout must not run a command that is not idempotent twice there; and
+`--filter` is a shell test run in each remaining directory, so the selection is
+data rather than a list.
+
+Projects run one at a time. The commands this exists for write shared state -
+one trust file in the home directory, one ssh agent, one credential helper - and
+ninety of them side by side lose writes or prompt at once. Output does not go to
+the terminal: each project's goes to its own file under the state root, beside a
+summary saved after every project, so an interrupted run still says how far it
+got. `revier each log` reads both back. A run in which any project failed exits
+5, not 1, so a script can tell a failed project from a revier that could not
+start.
