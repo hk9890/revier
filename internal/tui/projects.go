@@ -104,8 +104,17 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// its text left-aligned inside it, so the states line up in one column
 	// whatever the names and paths beside them do. Nothing from the project
 	// column crosses into it: a path is cut in the middle to fit.
-	agentCol := min(maxAgentWidth, (width-indent-gridGap)/2)
-	projectCol := width - indent - gridGap - agentCol
+	//
+	// The project column is what the list is for, so it gives way last: the
+	// agent column shrinks first, to its glyph, and then goes, and only then
+	// is a name or a path cut.
+	projectCol := d.projectColumn(m)
+	agentCol := min(maxAgentWidth, width-indent-gridGap-projectCol)
+	if agentCol < 1 {
+		agentCol, projectCol = 0, width-indent
+	} else {
+		projectCol = width - indent - gridGap - agentCol
+	}
 	cell := func(s string, w int) string {
 		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
 	}
@@ -113,27 +122,52 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	nameText := clipTo(string(v.Project.Name), min(projectCol, maxNameWidth))
 	first := prefix + cell(highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match)), projectCol+gridGap) +
 		d.agent(v, agentCol, style)
+	if agentCol == 0 {
+		first = prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
+	}
 
 	// A missing path stays grey: the note under the state says it, and a
 	// third of the rows in maroon from end to end read as a list of errors.
 	second := bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) +
 		cell(style(th.Path).Render(elide(contractHome(v.Project.Path), projectCol)), projectCol+gridGap) +
 		d.note(v, agentCol, style)
+	if agentCol == 0 {
+		second = bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) +
+			style(th.Path).Render(elide(contractHome(v.Project.Path), projectCol))
+	}
 
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
 }
 
 // The table's measures: the gap between its columns, the most the agent
-// column takes, and the most of it a name takes. The agent column has half
-// the row up to what a state and fifty of an activity need; the project
-// column has the rest, and a name longer than its cap is cut so its row
-// alone pays for it.
+// column takes, the most the project column asks for, and the most of it a
+// name takes. The agent column has what a state and thirty-six of an
+// activity need; the project column asks for its widest name or path up to
+// a width that holds most paths, and a name longer than its cap is cut so
+// its row alone pays for it.
 const (
-	gridGap       = 2
-	maxAgentWidth = 56
-	maxNameWidth  = 32
+	gridGap         = 2
+	maxAgentWidth   = 48
+	maxProjectWidth = 48
+	maxNameWidth    = 32
 )
+
+// projectColumn is the width the project column asks for: the widest name
+// or path on the list, within its cap. The agent column gets what is left,
+// so a list of short paths gives its agents the room and a list of long ones
+// keeps the paths whole.
+func (d projectDelegate) projectColumn(m list.Model) int {
+	col := 0
+	for _, item := range m.VisibleItems() {
+		if it, ok := item.(projectItem); ok {
+			col = max(col,
+				min(lipgloss.Width(string(it.view.Project.Name)), maxNameWidth),
+				lipgloss.Width(contractHome(it.view.Project.Path)))
+		}
+	}
+	return min(col, maxProjectWidth)
+}
 
 // highlight renders the letters the filter matched in their own style, as fzf
 // does: with a fuzzy filter the letters are the only way to see why a row is

@@ -1208,10 +1208,10 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
 	}
-	// The activity is cut to make room, and the state it describes is not: the
-	// state is what the row is for.
-	if !strings.Contains(r[0], "working") || !strings.Contains(r[0], "Reading") || !strings.Contains(r[0], "…") {
-		t.Errorf("first row = %q, want the state kept and the activity cut short", r[0])
+	// The activity goes to make room, and the state it describes does not:
+	// the state is what the row is for, and the path keeps its column.
+	if !strings.Contains(r[0], "working") || strings.Contains(r[0], "Reading") {
+		t.Errorf("first row = %q, want the state kept and the activity gone", r[0])
 	}
 }
 

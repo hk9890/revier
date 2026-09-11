@@ -757,18 +757,19 @@ half a wide monitor, most of the list was. The list stops there, and every
 further column goes to the pane, which is where a wide terminal has
 something to show.
 
-The agent column has a fixed width, half the row up to fifty-six, and sits
-at the right edge with its text left-aligned inside it, so the states line
-up in one column whatever the names and paths beside them do. Nothing from
-the project column crosses into it: a path is cut in the middle to fit.
-A checkout that is not here says "not cloned" or "not on this machine"
-under the state, and what Enter does about it is the pane's to say.
+The agent column has a fixed width, up to forty-eight, and sits at the
+right edge with its text left-aligned inside it, so the states line up in
+one column whatever the names and paths beside them do. Nothing from the
+project column crosses into it: a path is cut in the middle to fit. A
+checkout that is not here says "not cloned" or "not on this machine" under
+the state, and what Enter does about it is the pane's to say.
 
-The agent column gives way in steps as room goes, rather than being cut
-mid-word: first the activity, which the pane shows whole; then the words,
-leaving the glyph, which is why every set's glyphs are told apart on their
-own; then the glyph. With the column gone, the sort and the header's counts
-still say who needs you.
+The project column is what the list is for, so it gives way last. As room
+goes the agent column gives way in steps, rather than being cut mid-word:
+first the activity, which the pane shows whole; then the words, leaving the
+glyph, which is why every set's glyphs are told apart on their own; then the
+glyph; then the column. Only then is a name or a path cut. With the column
+gone, the sort and the header's counts still say who needs you.
 
 The pane fills its height: the snapshot takes the rows the other sections
 leave, where it stopped at twenty lines over twenty blank rows. At a hundred

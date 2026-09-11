@@ -73,18 +73,18 @@ func TestAMissingCheckoutSaysWhetherItCanBeCloned(t *testing.T) {
 	}
 }
 
-// On a row too narrow for the whole path and the whole tag, a missing
-// checkout keeps a short tag and the path is cut: nothing else on the row
-// says the directory is not here.
-func TestAMissingCheckoutKeepsItsTagOnANarrowRow(t *testing.T) {
-	long := "/nowhere/" + strings.Repeat("deeply-nested/", 4) + "cloneable"
+// On a row too narrow for both, the path is whole and the note under the
+// state goes: the project column gives way last.
+func TestAMissingCheckoutKeepsItsPathOnANarrowRow(t *testing.T) {
+	long := "/nowhere/" + strings.Repeat("deeply-nested/", 2) + "cloneable"
 	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": long},
 		map[string]string{"cloneable": "/srv/git/a.git"})
-	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 60, 20)
+	// Room for the path, its indent and a gap, and nothing for the note.
+	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 58, 20)
 
 	path := rows(m)[1]
-	if !strings.Contains(path, "not cloned") || !strings.Contains(path, "…") {
-		t.Errorf("path line = %q, want the path cut and the tag kept", path)
+	if !strings.Contains(path, long) || strings.Contains(path, "not") {
+		t.Errorf("path line = %q, want the path whole and the note gone", path)
 	}
 }
 
@@ -220,20 +220,20 @@ func TestTheListStopsAtItsTableWidth(t *testing.T) {
 	}
 }
 
-// The state column gives way in steps as the list narrows: the activity
-// goes first, then the words, and the glyph stays as long as anything does.
-func TestTheStateColumnGivesWayInSteps(t *testing.T) {
+// The agent column gives way in steps as the list narrows, and the project
+// column only after it: the activity goes first, then the words, then the
+// glyph, and only then is the name cut.
+func TestTheAgentColumnGivesWayBeforeTheProjectColumn(t *testing.T) {
 	g := theme.Default().Glyphs
 	for _, tc := range []struct {
-		width      int
-		activity   bool
-		words      bool
-		nameIsWide bool
+		width                         int
+		activity, words, glyph, whole bool
 	}{
-		{160, true, true, true},   // room for everything
-		{60, true, true, false},   // the name gives way first
-		{44, false, true, false},  // then the activity
-		{30, false, false, false}, // then the words; the glyph stays
+		{160, true, true, true, true},    // room for everything
+		{60, false, true, true, true},    // the activity goes
+		{44, false, false, true, true},   // the words go
+		{40, false, false, false, true},  // the glyph goes, the name is whole
+		{30, false, false, false, false}, // only now is the name cut
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
@@ -244,11 +244,11 @@ func TestTheStateColumnGivesWayInSteps(t *testing.T) {
 		if got := strings.Contains(first, "needs you"); got != tc.words {
 			t.Errorf("%d columns: words shown = %v, want %v: %q", tc.width, got, tc.words, first)
 		}
-		if !strings.Contains(first, g.NeedsYou) {
-			t.Errorf("%d columns: the glyph is gone: %q", tc.width, first)
+		if got := strings.Contains(first, g.NeedsYou); got != tc.glyph {
+			t.Errorf("%d columns: glyph shown = %v, want %v: %q", tc.width, got, tc.glyph, first)
 		}
-		if got := strings.Contains(first, longName); got != tc.nameIsWide {
-			t.Errorf("%d columns: whole name shown = %v, want %v: %q", tc.width, got, tc.nameIsWide, first)
+		if got := strings.Contains(first, longName); got != tc.whole {
+			t.Errorf("%d columns: whole name shown = %v, want %v: %q", tc.width, got, tc.whole, first)
 		}
 	}
 }
@@ -316,31 +316,6 @@ func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
 	top := strings.Split(pane(m), "\n")[0]
 	if !strings.HasPrefix(top, "long") || !strings.Contains(top, "Project Snapshot") {
 		t.Errorf("pane top = %q, want the name and the snapshot's heading on one line", top)
-	}
-}
-
-// A name too long for a narrow list is cut, and the state after it stays: the
-// name column gives way before the state does.
-func TestALongNameGivesWayToTheStateOnANarrowList(t *testing.T) {
-	long := "a-project-with-a-name-longer-than-the-column-allows"
-	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
-		Harness: "claude", Marker: "claude",
-		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
-	}}}
-	projects, err := core.Prepare([]revier.Project{{Name: revier.ProjectName(long), Path: "/p/x", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:x", Launch: []string{"x"}, Match: revier.Match{Title: "^session:x$"}}},
-	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 50, 20)
-
-	first := rows(m)[0]
-	if !strings.Contains(first, "needs you") || strings.Contains(first, long) {
-		t.Errorf("row = %q, want the name cut and the state kept", first)
 	}
 }
 
