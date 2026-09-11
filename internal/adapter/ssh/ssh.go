@@ -72,6 +72,14 @@ func quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// RunCommand is the ssh that runs the action on the remote with this
+// terminal: -t asks for a tty there, so an action that prompts or draws
+// works as it would in a shell on the host.
+func (r *Remote) RunCommand(project revier.ProjectName, action string) []string {
+	remote := strings.Join([]string{"revier", "run", quote(action), "-p", quote(string(project))}, " ")
+	return append(append([]string{"ssh", "-t"}, options...), "--", r.host, remote)
+}
+
 // Survey asks the remote revier for the named projects, in one call.
 func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
 	args := []string{"revier", "list", "--json"}

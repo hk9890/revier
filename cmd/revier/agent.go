@@ -171,6 +171,11 @@ func (a *app) remoteFor(address string) (revier.Remote, bool, error) {
 	if !ok {
 		return nil, false, fmt.Errorf("no project named %q", name)
 	}
+	return a.remoteOf(p)
+}
+
+// remoteOf returns the remote a project lives on, when it lives on one.
+func (a *app) remoteOf(p core.Project) (revier.Remote, bool, error) {
 	if p.Host == "" {
 		return nil, false, nil
 	}

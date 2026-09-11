@@ -103,11 +103,13 @@ home = true
 ```
 
 revier must be installed on the host, with tmux and the same project file
-under its `~/.config/revier/projects/`. The TUI then shows what the agent there
-is doing, read from the revier there; Enter opens the pane, and `revier agent
-prompt far ...` and `revier agent wait far ...` run on the host. A host that
-does not answer shows as unreachable. ssh runs in batch mode, so the host has
-to accept a key; `ControlMaster` in `~/.ssh/config` keeps the refresh fast.
+under its `~/.config/revier/projects/`. The list then shows the project as
+`far@buildbox` with what the agent there is doing, read from the revier
+there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
+wait far ...` and `revier run <action> -p far` run on the host, so an action
+is one the host's `config.toml` defines. A host that does not answer shows as
+unreachable. ssh runs in batch mode, so the host has to accept a key;
+`ControlMaster` in `~/.ssh/config` keeps the refresh fast.
 
 ## Keybindings
 

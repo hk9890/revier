@@ -190,6 +190,11 @@ type Remote interface {
     // there, with the remote's own refusals.
     Prompt(ctx context.Context, address, text string) error
     Wait(ctx context.Context, address, until string) (Status, error)
+
+    // RunCommand is the argv that runs `revier run <action> -p <project>`
+    // there, for the caller to run here with the terminal. The action is
+    // the remote's configuration's to define.
+    RunCommand(project ProjectName, action string) []string
 }
 ```
 

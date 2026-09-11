@@ -468,12 +468,24 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	argv, err := a.action(p, pos[0])
+	argv, err := a.actionArgv(p, pos[0])
 	if err != nil {
 		return err
 	}
 	a.launchedAction(p.Name)
 	return runAction(p, argv)
+}
+
+// actionArgv is what runs for the named action: the action rendered against
+// the project, or, for a project on another machine, the ssh that runs the
+// action there (decisions.md D40).
+func (a *app) actionArgv(p core.Project, name string) ([]string, error) {
+	if r, remote, err := a.remoteOf(p); err != nil {
+		return nil, err
+	} else if remote {
+		return r.RunCommand(p.Name, name), nil
+	}
+	return a.action(p, name)
 }
 
 // action renders the named action's argv against the project. An unknown name
@@ -506,7 +518,9 @@ var errActionFailed = errors.New("the action failed")
 // calls, and an action - an editor, a long pull - runs as long as it runs.
 func runAction(p core.Project, argv []string) error {
 	c := exec.Command(argv[0], argv[1:]...)
-	c.Dir = p.Path
+	if p.Host == "" {
+		c.Dir = p.Path // a remote project's path is on its host, where the action runs
+	}
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)

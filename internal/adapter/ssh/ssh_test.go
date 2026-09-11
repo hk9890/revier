@@ -85,6 +85,16 @@ func TestWaitReadsTheStatusTheRemotePrinted(t *testing.T) {
 	}
 }
 
+// An action runs on the host with this terminal, so the argv asks ssh for a
+// tty and carries the action and the project as one word each.
+func TestRunCommandAsksForATTYAndQuotesItsWords(t *testing.T) {
+	argv := ssh.New("buildbox").RunCommand("far", "pull all")
+	want := append(append([]string{"ssh", "-t"}, ssh.Options()...), "--", "buildbox", "revier run 'pull all' -p far")
+	if !slices.Equal(argv, want) {
+		t.Errorf("argv = %q, want %q", argv, want)
+	}
+}
+
 func TestWaitRefusesAWordThatIsNoStatus(t *testing.T) {
 	r := ssh.New("buildbox")
 	record(r, "bash: revier: command not found\n", nil)

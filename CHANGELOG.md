@@ -11,10 +11,11 @@ tag.
 
 - **A project can live on another machine.** `host = "buildbox"` in its file
   names the ssh host, and revier there, installed with tmux and the same
-  project file, reports what its agent is doing. The TUI shows it under the
-  host's name, Enter opens an ssh pane onto the workspace, and `revier agent
-  prompt` and `revier agent wait` run on the host. A host that does not
-  answer shows as unreachable and holds nothing else up.
+  project file, reports what its agent is doing. The list shows it as
+  `name@host` with a server icon, Enter opens an ssh pane onto the
+  workspace, and `revier agent prompt`, `revier agent wait` and `revier run`
+  run on the host, an action being one the host's configuration defines. A
+  host that does not answer shows as unreachable and holds nothing else up.
 - **`revier open --attach` ends with the terminal on the workspace**, on
   tmux. It is what the ssh pane of a remote project runs on the host.
 - **`revier list` takes project names** and lists those alone.

@@ -75,6 +75,9 @@ type Glyphs struct {
 	// and gives the name the room.
 	Folder   string
 	NoFolder string
+	// Remote takes the folder column for a project on another machine. A
+	// set that draws the folder draws this too.
+	Remote string
 }
 
 // The three glyph sets. Nerd is the default: it says things with icons - a
@@ -105,6 +108,7 @@ var glyphSets = map[string]Glyphs{
 		Unknown:  "\uf128", // nf-fa-question
 		Folder:   "\uf07b", // nf-fa-folder
 		NoFolder: "\uf114", // nf-fa-folder_o
+		Remote:   "\uf233", // nf-fa-server
 	},
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",

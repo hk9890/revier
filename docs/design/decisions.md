@@ -787,8 +787,13 @@ an ssh destination. Nothing about that machine's terminal, tmux or agents is
 read from here. The revier installed there is asked, over ssh, what it knows
 - `revier list --json <names>`, one call per host for all its projects, every
 host at once - and its answer is laid over the local view: the agents and
-whether the checkout is there are the host's word. `revier agent prompt` and
-`revier agent wait` on such a project run the same command there.
+whether the checkout is there are the host's word. `revier agent prompt`,
+`revier agent wait` and `revier run` on such a project run the same command
+there, an action with this terminal over `ssh -t`, so an action is defined
+in the host's configuration and runs in the checkout it has. The list shows
+the project as `name@host`, with a server glyph in the icon column: the
+name is the same on both machines, because it is what every command sends
+the host, and the host is what tells two of them apart.
 
 The alternative, an ssh-wrapping runtime adapter, was rejected. The runtime
 side is not one command: it is `tmux list-panes`, the process tree the

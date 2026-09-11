@@ -25,4 +25,11 @@ type Remote interface {
 	// statuses until names, and returns the status it ended on. It ends
 	// early with ctx's error.
 	Wait(ctx context.Context, address, until string) (Status, error)
+
+	// RunCommand is the argv that runs `revier run <action> -p <project>`
+	// on the remote, for the caller to run here with the terminal: an
+	// action takes the terminal it is given, so it is not run and read back
+	// but handed the one the user is at. The action is the remote's to
+	// know; its configuration there defines it.
+	RunCommand(project ProjectName, action string) []string
 }

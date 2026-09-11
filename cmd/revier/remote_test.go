@@ -116,6 +116,22 @@ func TestRemoteForFindsTheHostOfARemoteProjectsAgent(t *testing.T) {
 	}
 }
 
+// An action on a remote project runs on the host, through the remote's
+// command, and needs no action of that name in the configuration here.
+func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox")
+	remote.RunArgv = []string{"true"}
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+
+	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(remote.Runs) != 1 || remote.Runs[0] != (hosttest.Run{Project: "far", Action: "sync"}) {
+		t.Errorf("runs = %+v, want sync on far", remote.Runs)
+	}
+}
+
 // A runtime that cannot attach a terminal says so, naming what would: a
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {

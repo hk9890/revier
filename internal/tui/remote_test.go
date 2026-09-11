@@ -7,9 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -68,6 +71,39 @@ func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 	}
 	if body := pane(resize(m, 140, 30)); !strings.Contains(body, "buildbox") {
 		t.Errorf("pane = %q, want the host named", body)
+	}
+}
+
+// The row names the host after the project, so two projects of one name
+// on two machines read apart, and the icon column says it is remote.
+func TestARemoteProjectsRowNamesItsHost(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
+
+	row := rows(m)[0]
+	if !strings.Contains(row, "alpha@buildbox") {
+		t.Errorf("row = %q, want alpha@buildbox", row)
+	}
+	if !strings.Contains(row, theme.Default().Glyphs.Remote) {
+		t.Errorf("row = %q, want the remote glyph in the icon column", row)
+	}
+}
+
+// An action on a remote project runs on the host: the remote is asked for
+// the command, and the action need not exist in the configuration here.
+func TestAnActionOnARemoteProjectRunsOnTheHost(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
+	remote.RunArgv = []string{"true"}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), []config.Action{{Key: "ctrl-y", Name: "sync"}})
+
+	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	if cmd == nil {
+		t.Fatal("ctrl+y ran no action")
+	}
+	if len(remote.Runs) != 1 || remote.Runs[0] != (hosttest.Run{Project: "alpha", Action: "sync"}) {
+		t.Errorf("runs = %+v, want sync on alpha", remote.Runs)
 	}
 }
 

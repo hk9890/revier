@@ -28,6 +28,22 @@ type FakeRemote struct {
 	Prompts []Prompt
 	// Waits records every wait, in order.
 	Waits []Wait
+	// RunArgv is what RunCommand answers with; Runs records every ask.
+	RunArgv []string
+	Runs    []Run
+}
+
+// Run is one action asked for on one project.
+type Run struct {
+	Project revier.ProjectName
+	Action  string
+}
+
+func (f *FakeRemote) RunCommand(project revier.ProjectName, action string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Runs = append(f.Runs, Run{Project: project, Action: action})
+	return append([]string(nil), f.RunArgv...)
 }
 
 // Prompt is one text sent to one address.
