@@ -44,6 +44,8 @@ revier agent wait <project>[:<target>] --until <status> [--timeout s]
                               or stopped; exit 2 on timeout
 revier agent prompt <project>[:<target>] <text>
                               type one line into the agent and submit it
+revier each -- <cmd>          run one command in every project's directory
+revier each log [run]         past runs, or how each project ended in one
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
@@ -51,6 +53,14 @@ by name, Enter opens the project's home, Tab lists its targets, Enter on a
 target runs-or-raises it, Esc goes back. alt+e opens the selected project's
 file in `$EDITOR`; alt+d deletes it, after asking. A configured action key runs
 the action against the selected project.
+
+`revier each -- git pull --ff-only` runs one command in the directory of every
+project, one project at a time, and skips a project whose directory is missing.
+`--filter 'test -d .git'` narrows the run to the directories where a shell test
+passes, and `--dry-run` prints the selection and runs nothing. Each project's
+output is kept under `~/.local/state/revier/runs/<run>/`; `revier each log`
+lists past runs, and `revier each log <run> <project>` prints one project's
+output. A run in which any project failed exits 5.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
