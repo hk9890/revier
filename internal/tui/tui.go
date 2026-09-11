@@ -55,7 +55,7 @@ type Model struct {
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
-	surveyed bool                 // whether windows holds a listing yet
+	surveyed bool                 // whether a survey has answered: windows holds a listing, and the counts are real
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
 	// Two failures, because they end differently. err is what a key or an

@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
 )
 
@@ -109,8 +110,11 @@ func (m Model) subtitle(width int) string {
 // picker does: how many rows survive the filter, out of how many there are.
 func (m Model) rule(width int) string {
 	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	if m.level == levelTargets {
+	switch {
+	case m.level == levelTargets:
 		count = fmt.Sprintf(" %d targets ", len(m.tlist.Items()))
+	case !m.ready():
+		count = ""
 	}
 	line := width - lipgloss.Width(count)
 	if line < 0 {
@@ -127,6 +131,9 @@ func (m Model) header() string {
 	if m.level == levelTargets {
 		return th.Header.Render(" revier  " + string(m.current))
 	}
+	if !m.ready() {
+		return th.Header.Render(" revier  ") + th.NameDim.Render("surveying")
+	}
 	running, attention := 0, 0
 	for _, v := range m.views {
 		if v.Running {
@@ -139,6 +146,40 @@ func (m Model) header() string {
 	return th.Header.Render(fmt.Sprintf(" revier  %d projects", len(m.views))) +
 		th.Path.Render(" · ") + th.Running.Render(fmt.Sprintf("%d running", running)) +
 		th.Path.Render(" · ") + th.Attention.Render(fmt.Sprintf("%d need you", attention))
+}
+
+// ready reports whether the survey's numbers can be shown. bubbletea paints
+// once before the first survey answers, and on that frame every count is zero
+// and the list is empty, which says there are no projects when there are
+// ninety. With no project configured there is nothing to wait for.
+func (m Model) ready() bool {
+	return m.surveyed || len(m.projects) == 0
+}
+
+// empty is what the project level shows in place of rows, in revier's words
+// rather than the list component's "No items.": nothing before the first
+// survey, where to add a project when none is configured, and that the filter
+// is why the list is empty when it is.
+//
+// It wraps rather than clips: the directory is the part worth reading, and a
+// scratch REVIER_CONFIG_HOME is longer than the list is wide.
+func (m Model) empty() string {
+	th := m.theme
+	say := func(s lipgloss.Style, text string) string {
+		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
+	}
+	switch {
+	case m.level == levelTargets || !m.ready():
+		return ""
+	case len(m.projects) == 0:
+		where := "projects/<name>.toml under the configuration directory"
+		if root, err := config.Root(); err == nil {
+			where = contractHome(filepath.Join(root, "projects")) + "/<name>.toml"
+		}
+		return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
+	default:
+		return say(th.NameDim, fmt.Sprintf("No project matches %q.", m.filter))
+	}
 }
 
 // footer is the key legend, or the last failure. An error replaces the legend

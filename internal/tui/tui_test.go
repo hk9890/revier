@@ -157,6 +157,65 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	}
 }
 
+// bubbletea paints once before the first survey answers. That frame must not
+// say there are no projects when there are ninety, and must not carry the list
+// component's own empty text.
+func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
+	_, _, c, projects := world(t, 90)
+	m := resize(tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 150, 20)
+
+	view := m.View()
+	for _, wrong := range []string{"0 projects", "0/0", "No items", "No project"} {
+		if strings.Contains(view, wrong) {
+			t.Errorf("the first frame says %q:\n%s", wrong, view)
+		}
+	}
+	if head := lines(m)[0]; !strings.Contains(head, "surveying") {
+		t.Errorf("header = %q, want it to say the survey is pending", head)
+	}
+	if m = survey(m); !strings.Contains(lines(m)[0], "90 projects") {
+		t.Errorf("after the survey the header should count:\n%s", m.View())
+	}
+}
+
+// With no project files the surface says so, and says where they go, rather
+// than showing an empty list.
+func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	// Wide enough that the temporary directory's long name is not cut.
+	m := resize(tui.New(c, nil, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 200, 20)
+
+	// Nothing to survey, so the first frame is already the answer.
+	view := m.View()
+	if !strings.Contains(view, "No projects configured") || !strings.Contains(view, filepath.Join(root, "projects")) {
+		t.Errorf("want the empty state to name %s/projects:\n%s", root, view)
+	}
+	if strings.Contains(view, "No items") || strings.Contains(view, "surveying") {
+		t.Errorf("an empty configuration has nothing to wait for:\n%s", view)
+	}
+}
+
+// A filter that leaves nothing says the filter is why, and the count agrees.
+func TestAFilterMatchingNothingSaysSo(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	for _, r := range "zzz" {
+		m, _ = press(m, string(r))
+	}
+	view := m.View()
+	if !strings.Contains(view, `No project matches "zzz"`) {
+		t.Errorf("want the filter named as the reason:\n%s", view)
+	}
+	if rule := lines(m)[2]; !strings.Contains(rule, " 0/12 ") {
+		t.Errorf("rule = %q, want the count to read 0/12", rule)
+	}
+	if strings.Contains(view, "No items") {
+		t.Errorf("the list component's own text leaked:\n%s", view)
+	}
+}
+
 // A refresh costs one Instances call per host however many projects exist.
 func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 	rt, wm, c, projects := world(t, 60)
