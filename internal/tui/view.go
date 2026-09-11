@@ -23,20 +23,47 @@ const (
 	marginCols   = 2
 )
 
-// margins are dropped on a small terminal, where four rows and four columns
-// of empty space cost two project rows.
+// maxInnerWidth is the most content the frame holds. Past it the frame stops
+// growing and sits centred, as the popup did at half the screen
+// (os-fzf-popup.sh: POPUP_PLACE_WIDTH_PERCENT=50, anchored center). A row
+// that spans three hundred columns puts the state it carries a screen away
+// from the name it belongs to, and the pane an arm's length from the row it
+// describes.
+const maxInnerWidth = maxListWidth + maxPaneWidth
+
+// margins are what surrounds the frame: nothing on a small terminal, where
+// four rows and four columns of empty space cost two project rows; one row
+// and two columns on an ordinary one; and on a wide one whatever centres a
+// frame that has stopped growing. The rows go first, because rows are what a
+// list is short of: a wide and short terminal keeps the columns and centres.
 func (m Model) margins() (rows, cols int) {
-	if m.height < 24 || m.width < 100 {
+	if m.small() {
 		return 0, 0
 	}
-	return marginRows, marginCols
+	w, _ := m.inner()
+	return m.marginRows(), (m.width - w - frameWidth) / 2
+}
+
+func (m Model) small() bool { return m.width < 100 }
+
+func (m Model) marginRows() int {
+	if m.height < 24 {
+		return 0
+	}
+	return marginRows
 }
 
 // inner is the size available inside the frame and the margin.
 func (m Model) inner() (w, h int) {
-	mr, mc := m.margins()
+	mr, mc := 0, 0
+	if !m.small() {
+		mr, mc = m.marginRows(), marginCols
+	}
 	w = m.width - 2*mc - frameWidth
 	h = m.height - 2*mr - frameHeight - chromeHeight
+	if w > maxInnerWidth {
+		w = maxInnerWidth
+	}
 	if w < 20 {
 		w = 20
 	}

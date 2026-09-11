@@ -10,14 +10,17 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The pane's width bounds, and the least the list keeps beside it. The list
-// is what the surface is for, so the pane takes what is left over and not the
-// other way round: at ninety columns a half-and-half split cut every path in
-// the list to make room for a pane that wrapped every line of its own.
+// The pane's width bounds, and the list's beside it. The list is what the
+// surface is for, so the pane takes what is left over and not the other way
+// round: at ninety columns a half-and-half split cut every path in the list
+// to make room for a pane that wrapped every line of its own. The list stops
+// at a width that holds a name, a state with its activity and a path whole;
+// past that the frame stops growing (maxInnerWidth).
 const (
 	minPaneWidth = 44
 	maxPaneWidth = 90
 	minListWidth = 56
+	maxListWidth = 100
 )
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too

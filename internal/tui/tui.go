@@ -87,6 +87,7 @@ type Model struct {
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
 	body   viewport.Model                   // the scrolling window over the level in view
+	last   click                            // the last click on a row, for telling a double click
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -255,7 +256,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.key(msg)
 	case tea.MouseMsg:
-		return m.mouse(msg), nil
+		return m.mouse(msg)
 	}
 	// A blink is the input's own timer message; nothing else reads it.
 	in, cmd := m.input.Update(msg)
