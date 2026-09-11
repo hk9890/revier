@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 )
 
@@ -45,12 +46,33 @@ func newKeyMap(actions []config.Action) keyMap {
 		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
 	}
 	for _, act := range actions {
+		c := actionChord(act)
 		k.actions = append(k.actions, key.NewBinding(
-			key.WithKeys(keyName(act.Key)),
-			key.WithHelp(keyName(act.Key), act.Name),
+			key.WithKeys(string(c)),
+			key.WithHelp(string(c), act.Name),
 		))
 	}
 	return k
+}
+
+// actionChord is an action's key in canonical form. A key that does not parse
+// is empty, which no press is; config.Load has refused it already.
+func actionChord(act config.Action) core.Chord {
+	c, _ := core.ParseChord(act.Key)
+	return c
+}
+
+// claims reports whether a press is the surface's own or an action's, which
+// the surface matches before any target key.
+func (k keyMap) claims(c core.Chord) bool {
+	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
+		for _, name := range b.Keys() {
+			if own, err := core.ParseChord(name); err == nil && own == c {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // helpFor is the footer for a level. The same two keys mean different things

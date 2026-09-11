@@ -516,3 +516,38 @@ func TestLoadRejectsAnUnreadableTriggerKey(t *testing.T) {
 		}
 	}
 }
+
+// An action's key is the TUI's alone, so a key the TUI cannot receive, or
+// reads as filter text, is refused at load and named, rather than bound to a
+// key that does nothing.
+func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
+	for key, want := range map[string]string{
+		"y":            "typed text",
+		"shift-y":      "typed text",
+		"ctrl-shift-y": "reaches a terminal as ctrl+y",
+		"super-y":      "never reaches a terminal",
+		"<Nonsense>y":  "Nonsense",
+	} {
+		root := t.TempDir()
+		write(t, root, "config.toml", "[[action]]\nkey = \""+key+"\"\nname = \"sync\"\nrun = [\"true\"]\n")
+		_, _, err := config.Load(root)
+		if err == nil {
+			t.Errorf("Load accepted action key %q", key)
+			continue
+		}
+		for _, w := range []string{`action "sync"`, want} {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("key %q: error = %q, want it to say %q", key, err, w)
+			}
+		}
+	}
+}
+
+// An action with nothing to run fails at load, not at the keypress.
+func TestLoadRefusesAnActionThatRunsNothing(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[[action]]\nkey = \"ctrl-y\"\nname = \"sync\"\n")
+	if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), `action "sync" runs nothing`) {
+		t.Errorf("Load = %v, want the empty action named", err)
+	}
+}

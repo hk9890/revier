@@ -195,7 +195,9 @@ func (m Model) footer() string {
 		err = m.surveyErr
 	}
 	if err != nil {
-		return m.theme.Attention.Render(" " + err.Error())
+		// One line, whatever the error: a joined error is one per line, and a
+		// second line in the footer pushes the frame past the terminal.
+		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
 	keys := m.keys.helpFor(m.level)
 	if m.level == levelProjects {
@@ -211,11 +213,12 @@ func (m Model) footer() string {
 
 // spread puts left at the start of a width and right at the end of it, which
 // is what keeps a column of states aligned without padding every name to the
-// longest one on screen.
+// longest one on screen. When the two do not fit, left is cut and right kept:
+// right is the state the row is there to show.
 func spread(left, right string, width int) string {
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
-		return clipTo(left, width)
+		return clipTo(left, width-lipgloss.Width(right)-1) + " " + right
 	}
 	return left + strings.Repeat(" ", gap) + right
 }
@@ -274,6 +277,18 @@ func clipTo(s string, width int) string {
 		return ""
 	}
 	return lipgloss.NewStyle().MaxWidth(width).Render(s)
+}
+
+// ellipsize cuts plain text to a width, keeping the start, and ends a cut
+// with an ellipsis so it does not read as the whole of the text.
+func ellipsize(s string, width int) string {
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	if width < 2 {
+		return ""
+	}
+	return clipTo(s, width-1) + "…"
 }
 
 // wrap breaks text into lines no wider than width: at a space or a hyphen

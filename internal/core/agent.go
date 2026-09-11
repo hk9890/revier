@@ -75,6 +75,24 @@ func Until(name string) ([]revier.Status, error) {
 	return nil, fmt.Errorf("unknown status %q: want idle, running, attention or stopped", name)
 }
 
+// Worst is the one agent a project is summed up by, where a surface has room
+// for one: the agent in the state closest to needing the human, and of two in
+// that state the first. `revier list` and the TUI row both show it, so the two
+// cannot name different agents for one project. The second return is false
+// for a project with no agent.
+func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
+	if len(agents) == 0 {
+		return revier.AgentState{}, false
+	}
+	worst := agents[0].State
+	for _, a := range agents[1:] {
+		if a.State.Status > worst.Status {
+			worst = a.State
+		}
+	}
+	return worst, true
+}
+
 // Agent finds the agent panel addr names in a project: with addr empty, the
 // project's only agent; with a target name, the only agent in that target's
 // instance; otherwise the panel with that id.

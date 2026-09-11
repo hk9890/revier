@@ -83,7 +83,7 @@ func (m *Model) reread(msg editedMsg) error {
 		}
 	}
 	m.projects = projects
-	m.tkeys = targetKeys(m.projects)
+	m.tkeys = targetKeys(m.projects, m.keys)
 	return msg.err
 }
 
@@ -96,7 +96,7 @@ func (m Model) askDelete() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if err := refuseRunning(v); err != nil {
+	if err := m.refuseRunning(v); err != nil {
 		m.err = err
 		return m, nil
 	}
@@ -118,7 +118,7 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// answer, and the project may have started since.
 	for _, v := range m.views {
 		if v.Project.Name == name {
-			if err := refuseRunning(v); err != nil {
+			if err := m.refuseRunning(v); err != nil {
 				m.err = err
 				return m, nil
 			}
@@ -134,18 +134,31 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.projects = without(m.projects, name)
 	m.views = m.known(m.views)
-	m.tkeys = targetKeys(m.projects)
+	m.tkeys = targetKeys(m.projects, m.keys)
 	m.reload()
 	return m, nil
 }
 
-func refuseRunning(v revier.ProjectView) error {
+// refuseRunning refuses a project with a target running or a window attached
+// to it. An attachment on the window host is alive: every refresh prunes the
+// ones that host no longer lists. One on another host - a surface started
+// where that host does not probe - cannot be reached from here, so it does
+// not hold the delete up.
+func (m Model) refuseRunning(v revier.ProjectView) error {
 	running := v.Running
 	for _, t := range v.Targets {
 		running = running || !t.Ref.IsZero()
 	}
 	if running {
 		return fmt.Errorf("%s is running; close its targets before deleting it", v.Project.Name)
+	}
+	if m.core.Window == nil {
+		return nil
+	}
+	for _, ref := range m.attached[v.Project.Name] {
+		if ref.Host == m.core.Window.Name() {
+			return fmt.Errorf("%s has an attached window open; close it before deleting the project", v.Project.Name)
+		}
 	}
 	return nil
 }

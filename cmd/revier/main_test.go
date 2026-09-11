@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"testing"
+
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A tool a host drives failed. That is revier's own failure whatever status
@@ -24,5 +26,25 @@ func TestAnActionsFailurePassesItsStatusOn(t *testing.T) {
 	status, say := outcome(fmt.Errorf("%w: %w", errActionFailed, exit))
 	if say || status != exit.ExitCode() {
 		t.Errorf("outcome = %d, %v; want %d with nothing printed", status, say, exit.ExitCode())
+	}
+}
+
+// `revier list` names the agent the TUI row names: the first in the worst
+// state, whatever that state is. An agent whose probe could not read it is
+// still an agent, and what it was doing is still worth the column.
+func TestListSumsAProjectUpByTheSameAgentAsTheTUI(t *testing.T) {
+	agent := func(s revier.Status, activity string) revier.AgentView {
+		return revier.AgentView{State: revier.AgentState{Status: s, Activity: activity}}
+	}
+	for _, tc := range []struct {
+		agents []revier.AgentView
+		want   string
+	}{
+		{[]revier.AgentView{agent(revier.StatusAttention, "first"), agent(revier.StatusAttention, "second")}, "attention: first"},
+		{[]revier.AgentView{agent(revier.StatusUnknown, "reading")}, "unknown: reading"},
+	} {
+		if got := agentSummary(revier.ProjectView{Agents: tc.agents}); got != tc.want {
+			t.Errorf("agentSummary = %q, want %q", got, tc.want)
+		}
 	}
 }

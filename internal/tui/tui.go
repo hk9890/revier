@@ -17,11 +17,11 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -81,32 +81,36 @@ type Model struct {
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
-	shown  revier.ProjectName           // the project the pane holds, so a new one starts at its top
-	tkeys  map[string]revier.TargetName // chord to target name, over every project
-	start  revier.ProjectName           // the project to open on, from the working directory
-	trees  map[string]treeEntry         // cached directory listings, by project path
-	input  textinput.Model              // the filter query, with its own cursor
-	body   viewport.Model               // the scrolling window over the level in view
+	shown  revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys  map[core.Chord]revier.TargetName // press to target name, over every project
+	start  revier.ProjectName               // the project to open on, from the working directory
+	trees  map[string]treeEntry             // cached directory listings, by project path
+	input  textinput.Model                  // the filter query, with its own cursor
+	body   viewport.Model                   // the scrolling window over the level in view
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
 func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	keys := newKeyMap(actions)
 	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
-		keys: newKeyMap(actions), help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects), start: start, input: newPrompt(th),
+		keys: keys, help: newHelp(th), detail: newDetail(th),
+		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		body: newBody(),
 	}
 	m.layout()
 	return m
 }
 
+// surveyMsg is one survey's answer, and the state it started from: what it
+// may prune (state.Prune).
 type surveyMsg struct {
 	report core.Report
+	before *state.State
 	err    error
 }
 
@@ -173,12 +177,14 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 // command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects, bound := m.core, m.projects, m.bound
+	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		// A state that cannot be read is nil, which lets nothing be pruned.
+		before, _ := state.Load(root)
 		report, err := c.Survey(ctx, projects, bound)
-		return surveyMsg{report: report, err: err}
+		return surveyMsg{report: report, before: before, err: err}
 	}
 }
 
@@ -209,7 +215,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.surveyErr = msg.err
 		if msg.err == nil {
-			m.claimByPolling(msg.report)
+			m.claimByPolling(msg.report, msg.before)
 			m.views = sorted(m.known(msg.report.Views))
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
@@ -258,13 +264,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // settles the last launch with a window that appeared since: bound to its
 // target, or attached to the project when an action launched. State is
 // re-read because the launch was written by another process. The same pass
-// drops attachments and bindings whose instances are gone.
-func (m *Model) claimByPolling(report core.Report) {
+// drops attachments and bindings whose instances are gone, of those the
+// survey started from: one written while it listed is the next survey's.
+func (m *Model) claimByPolling(report core.Report, before *state.State) {
 	st, err := state.Load(m.stateRoot)
 	if err != nil {
 		return
 	}
-	changed := st.Prune(report.Hosts, report.Instances)
+	changed := st.Prune(report.Hosts, report.Instances, before)
 	if l, ok := m.launch(st); ok && m.surveyed {
 		now := time.Now()
 		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
@@ -609,9 +616,12 @@ const bindWait = 30 * time.Second
 // selected project. The terminal is handed to the command while it runs, and
 // the argv is rendered by the same rules `revier run` uses.
 func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
-	pressed := msg.String()
+	c, ok := pressed(msg)
+	if !ok {
+		return nil, false
+	}
 	for _, act := range m.actions {
-		if keyName(act.Key) != pressed {
+		if actionChord(act) != c {
 			continue
 		}
 		v, ok := m.selected()
@@ -623,7 +633,10 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		argv, err := core.RenderArgv(p.Project, act.Run)
-		if err != nil || len(argv) == 0 {
+		if err == nil && len(argv) == 0 {
+			err = errors.New("it runs nothing")
+		}
+		if err != nil {
 			return func() tea.Msg { return actedMsg{err: fmt.Errorf("action %q: %w", act.Name, err)} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
@@ -637,7 +650,3 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	}
 	return nil, false
 }
-
-// keyName maps a configured key ("ctrl-y") to the name bubbletea reports
-// ("ctrl+y").
-func keyName(k string) string { return strings.ReplaceAll(strings.ToLower(k), "-", "+") }

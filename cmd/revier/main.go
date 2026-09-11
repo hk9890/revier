@@ -238,6 +238,10 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
+	// What the survey can judge: a ref written after this, by another
+	// process, is to a window the listing may have missed. A state that
+	// cannot be read is nil, and a nil state lets nothing be pruned.
+	before, _ := state.Load(a.stateRoot)
 	report, err := a.core.Survey(ctx, a.projects, a.state.Bound)
 	if err != nil {
 		return err
@@ -247,8 +251,8 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// Drop attachments and bindings whose windows are gone, so state does not
 	// accumulate refs to closed windows forever. The prune is made again on
 	// the state as it is on disk: another process may have written it since.
-	if a.state.Prune(report.Hosts, report.Instances) {
-		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances) })
+	if a.state.Prune(report.Hosts, report.Instances, before) {
+		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances, before) })
 	}
 
 	if *asJSON {
@@ -282,20 +286,14 @@ func runState(v revier.ProjectView) string {
 // agentSummary shows the worst state across the project's agents, because the
 // list exists to answer "which one needs me" at a glance.
 func agentSummary(v revier.ProjectView) string {
-	if len(v.Agents) == 0 {
+	worst, ok := core.Worst(v.Agents)
+	if !ok {
 		return "-"
 	}
-	worst := revier.StatusUnknown
-	activity := ""
-	for _, ag := range v.Agents {
-		if ag.State.Status > worst {
-			worst, activity = ag.State.Status, ag.State.Activity
-		}
+	if worst.Activity == "" {
+		return worst.Status.String()
 	}
-	if activity == "" {
-		return worst.String()
-	}
-	return worst.String() + ": " + activity
+	return worst.Status.String() + ": " + worst.Activity
 }
 
 func targetSummary(v revier.ProjectView) string {
