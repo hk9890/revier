@@ -651,3 +651,22 @@ summary saved after every project, so an interrupted run still says how far it
 got. `revier each log` reads both back. A run in which any project failed exits
 5, not 1, so a script can tell a failed project from a revier that could not
 start.
+
+### D33 — the TUI takes the mouse wheel, and plain drag-select with it — Accepted
+
+The picker being replaced leaves fzf's mouse on, and the popup is a window on a
+desktop with a pointer in it. With no mouse at all the wheel did nothing, which
+reads as a dead window rather than a choice.
+
+The wheel over the detail pane scrolls the pane, the one place with more to
+read than the screen holds; anywhere else it moves the selection a row a notch,
+as the arrow keys do. The keyboard is unchanged.
+
+A terminal reports the wheel only to a program that asks for mouse events, and
+asking takes plain drag-to-select from the terminal for as long as the surface
+runs. Shift-drag still selects in kitty and most other terminals. Nothing on
+the surface is text a user needs to copy - a path is in the project file, and
+an activity line is the agent's own - so the wheel is worth more than the drag.
+
+Clicking a row does nothing yet. It is the natural next step and needs no
+further trade: the events it would use are already reported.

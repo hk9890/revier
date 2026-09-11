@@ -955,6 +955,99 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 	}
 }
 
+// wheel is one notch of the mouse wheel at a column.
+func wheel(m tui.Model, x int, b tea.MouseButton) tui.Model {
+	next, _ := m.Update(tea.MouseMsg{X: x, Y: 5, Button: b, Action: tea.MouseActionPress})
+	return next.(tui.Model)
+}
+
+// paneBorder is the terminal column of the border between the list and the
+// pane, read off the rendered surface.
+func paneBorder(t *testing.T, m tui.Model) int {
+	t.Helper()
+	for _, raw := range strings.Split(m.View(), "\n") {
+		var bars []int
+		for i, c := range []rune(raw) {
+			if c == '│' {
+				bars = append(bars, i)
+			}
+		}
+		if len(bars) == 3 {
+			return bars[1]
+		}
+	}
+	t.Fatalf("no line with a pane:\n%s", m.View())
+	return 0
+}
+
+// The wheel over the list moves the selection, a row a notch, whether or not
+// the terminal is wide enough for a pane.
+func TestTheWheelMovesTheSelection(t *testing.T) {
+	for _, width := range []int{80, 120} {
+		_, _, c, projects := world(t, 12)
+		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, 20)
+		first := selectedRow(t, m)
+
+		m = wheel(m, 5, tea.MouseButtonWheelDown)
+		if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+			t.Errorf("%d columns: selected %q after a notch down, want project-00", width, row)
+		}
+		m = wheel(m, 5, tea.MouseButtonWheelUp)
+		if row := selectedRow(t, m); row != first {
+			t.Errorf("%d columns: selected %q after a notch back up, want %q", width, row, first)
+		}
+	}
+}
+
+// The wheel over the pane scrolls the pane and leaves the selection alone; the
+// next project starts at its own top.
+func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 20 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home := func(name string) []revier.Target {
+		return []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}
+	}
+	projects, err := core.Prepare([]revier.Project{
+		{Name: "first", Path: dir, Targets: home("first")},
+		{Name: "second", Path: dir, Targets: home("second")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
+	border := paneBorder(t, m)
+
+	// One column left of the border is still the list.
+	m = wheel(m, border-1, tea.MouseButtonWheelDown)
+	m = wheel(m, border-1, tea.MouseButtonWheelUp)
+	if top := strings.Split(pane(m), "\n")[0]; top != "first" {
+		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
+	}
+
+	m = wheel(m, border, tea.MouseButtonWheelDown)
+	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "first") {
+		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
+	}
+	m = survey(m)
+	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+		t.Errorf("a refresh put the pane back at its top")
+	}
+
+	m, _ = press(m, "down")
+	if top := strings.Split(pane(m), "\n")[0]; top != "second" {
+		t.Errorf("pane top = %q after moving to the next project, want its name", top)
+	}
+}
+
 // topRow is the name of the first project on screen, and selectedName the one
 // under the cursor. Both read the rendered surface, so they see what the
 // viewport actually shows.

@@ -52,7 +52,8 @@ func newDetail(th theme.Theme) viewport.Model {
 
 // syncDetail rebuilds the pane for whatever the cursor is on. It runs after
 // every message, because the cursor moves on a keypress and the content
-// changes on a survey.
+// changes on a survey. The wheel scrolls the pane; a survey keeps that
+// scroll, and a different project starts at its top.
 func (m *Model) syncDetail() {
 	if m.paneWidth() == 0 {
 		return
@@ -63,6 +64,10 @@ func (m *Model) syncDetail() {
 		return
 	}
 	m.detail.SetContent(m.detailContent(v))
+	if v.Project.Name != m.shown {
+		m.shown = v.Project.Name
+		m.detail.GotoTop()
+	}
 }
 
 // detailContent is what the shell picker's preview shows, in its order

@@ -78,6 +78,7 @@ type Model struct {
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
+	shown  revier.ProjectName           // the project the pane holds, so a new one starts at its top
 	tkeys  map[string]revier.TargetName // chord to target name, over every project
 	start  revier.ProjectName           // the project to open on, from the working directory
 	trees  map[string]treeEntry         // cached directory listings, by project path
@@ -228,6 +229,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
 		return m.key(msg)
+	case tea.MouseMsg:
+		return m.mouse(msg), nil
 	}
 	// A blink is the input's own timer message; nothing else reads it.
 	in, cmd := m.input.Update(msg)
