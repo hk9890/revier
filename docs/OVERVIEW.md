@@ -15,6 +15,7 @@ A findability map: where things live, and how to search for them.
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
 | `scripts/drive/` | Manual headless driver. |
+| `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/migrate-sessions/` | One-shot converter, `.session` files to project TOML. Not part of the product (`docs/design/decisions.md` D5). |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 ## The two ports
