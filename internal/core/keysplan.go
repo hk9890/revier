@@ -53,6 +53,11 @@ type KeyStep struct {
 	Chord  Chord     `json:"chord"`
 	Target string    `json:"target"`
 	Action KeyAction `json:"action"`
+	// Own is what happens to revier's own shortcut on the chord: created,
+	// rewritten, switched on, or already right. Action says it too, except
+	// on a take over or a clear, where Action is about what is displaced and
+	// revier's own shortcut may exist already.
+	Own KeyAction `json:"own,omitempty"`
 
 	// Write is the shortcut revier would install. Zero when the step removes
 	// rather than installs.
@@ -264,24 +269,44 @@ func installStep(row KeyRow, holders []revier.Binding) KeyStep {
 	// but it still fires, so rewriting the command without clearing it would
 	// leave the key doing what it did before.
 	step.Evict = otherHolders(holders)
-	if len(step.Evict) > 0 && !step.Action.Blocked() {
+	if len(step.Evict) > 0 {
 		// Displacing something that is not revier's needs --force, whatever
 		// the status was named after.
-		step.Action = KeyTakeOver
-		if allBuiltin(step.Evict) {
-			step.Action = KeyClear
+		if !step.Action.Blocked() {
+			step.Action = KeyTakeOver
+			if allBuiltin(step.Evict) {
+				step.Action = KeyClear
+			}
 		}
+		// What is in the way is what is displaced. The status names every
+		// live shortcut on the chord, revier's own among them, and revier's
+		// own is never switched off.
 		step.HeldBy = holderNames(step.Evict)
 	}
 	step.Undo = undoFor(step.Evict)
+	step.Own = KeyCreate
 
 	// An update or an enable acts on revier's own entry where the desktop
 	// already keeps it, so the write does not move it to a new place.
 	if own, ok := ownHolder(holders); ok {
 		step.Write.ID = own.ID
 		step.Write.Where = own.Where
+		step.Own = ownAction(own, row.Command)
 	}
 	return step
+}
+
+// ownAction is what an install does to revier's own shortcut: rewrite a
+// command that is out of date, switch on one that is off, or leave it.
+func ownAction(own revier.Binding, want string) KeyAction {
+	switch {
+	case own.Command != want:
+		return KeyUpdate
+	case !own.Enabled:
+		return KeyEnable
+	default:
+		return KeyOK
+	}
 }
 
 // removeStep decides one chord for an uninstall. Only revier's own shortcuts

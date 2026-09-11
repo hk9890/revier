@@ -10,8 +10,8 @@ import (
 func installPlan() core.KeyPlan {
 	return core.KeyPlan{Desktop: "gnome", Steps: []core.KeyStep{
 		{Chord: "alt+space", Target: "picker", Action: core.KeyOK},
-		{Chord: "ctrl+shift+o", Target: "editor", Action: core.KeyTakeOver, HeldBy: "to-editor-window"},
-		{Chord: "ctrl+shift+u", Target: "home", Action: core.KeyTakeOver, HeldBy: "to-session-terminal"},
+		{Chord: "ctrl+shift+o", Target: "editor", Action: core.KeyTakeOver, Own: core.KeyCreate, HeldBy: "to-editor-window"},
+		{Chord: "ctrl+shift+u", Target: "home", Action: core.KeyTakeOver, Own: core.KeyCreate, HeldBy: "to-session-terminal"},
 		{Chord: "ctrl+shift+i", Target: "web", Action: core.KeyCreate},
 	}}
 }
@@ -86,12 +86,34 @@ func TestADryRunSaysNothingHappened(t *testing.T) {
 	}
 }
 
+// A key whose revier shortcut is already there and right, with an old one
+// still firing beside it, is taken by switching the old one off. Saying
+// "created" there would report work that did not happen.
+func TestTakingAKeyRevierAlreadyHoldsDoesNotSayCreated(t *testing.T) {
+	p := core.KeyPlan{Steps: []core.KeyStep{{
+		Chord: "alt+space", Target: "picker", Action: core.KeyTakeOver, Own: core.KeyOK,
+		HeldBy: "start-session-selector",
+	}}}
+	if out := plan(p, "install", true, true); !strings.Contains(out, "start-session-selector would be switched off") ||
+		strings.Contains(out, "created") {
+		t.Errorf("dry run:\n%s", out)
+	}
+	p.Steps[0].Done = true
+	if out := plan(p, "install", false, true); !strings.Contains(out, "picker  start-session-selector switched off") {
+		t.Errorf("run:\n%s", out)
+	}
+	p.Steps[0].Own = core.KeyUpdate
+	if out := plan(p, "install", false, true); !strings.Contains(out, "command rewritten, start-session-selector switched off") {
+		t.Errorf("stale shortcut:\n%s", out)
+	}
+}
+
 // Clearing a GNOME setting is the one action nothing else puts back, so the
 // command that does is printed beside it.
 func TestClearingADesktopDefaultPrintsItsUndo(t *testing.T) {
 	undo := "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu"
 	p := core.KeyPlan{Steps: []core.KeyStep{{
-		Chord: "alt+space", Target: "picker", Action: core.KeyClear,
+		Chord: "alt+space", Target: "picker", Action: core.KeyClear, Own: core.KeyCreate,
 		HeldBy: "org.gnome.desktop.wm.keybindings activate-window-menu",
 		Undo:   undo, Done: true,
 	}}}
@@ -134,7 +156,7 @@ func TestUninstallCountsWhatItReleased(t *testing.T) {
 func TestTheUndoIsPrintedEvenWhenTheStepFailed(t *testing.T) {
 	undo := "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu"
 	p := core.KeyPlan{Steps: []core.KeyStep{{
-		Chord: "alt+space", Target: "picker", Action: core.KeyClear,
+		Chord: "alt+space", Target: "picker", Action: core.KeyClear, Own: core.KeyCreate,
 		HeldBy: "org.gnome.desktop.wm.keybindings activate-window-menu",
 		Undo:   undo, Err: "dconf is not answering",
 	}}}
@@ -148,7 +170,7 @@ func TestTheUndoIsPrintedEvenWhenTheStepFailed(t *testing.T) {
 // undo and the line would be a false alarm.
 func TestNoUndoIsPrintedForAKeyForceWasNotGivenFor(t *testing.T) {
 	p := core.KeyPlan{Steps: []core.KeyStep{{
-		Chord: "alt+space", Target: "picker", Action: core.KeyClear,
+		Chord: "alt+space", Target: "picker", Action: core.KeyClear, Own: core.KeyCreate,
 		HeldBy: "org.gnome.desktop.wm.keybindings activate-window-menu",
 		Undo:   "gsettings reset org.gnome.desktop.wm.keybindings activate-window-menu",
 	}}}

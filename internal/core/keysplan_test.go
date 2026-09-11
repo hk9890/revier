@@ -514,3 +514,32 @@ func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
 		}
 	}
 }
+
+// The state `os init` leaves behind: revier's shortcut is right, and the shell
+// tool's is switched on again beside it, so both fire. The step takes the key
+// from the shell tool alone - revier's own is never what is in the way - and
+// says revier's own is already right rather than about to be created.
+func TestAnotherShortcutBesideRevierOwnIsTheOnlyThingInTheWay(t *testing.T) {
+	w := hosttest.NewWriter("gnome",
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", sessionSelector, "start-session-selector"),
+	)
+	c, plan := planInstall(t, w, keyProject(t, "revier"))
+
+	s := step(t, plan, "alt+space")
+	if s.Action != core.KeyTakeOver {
+		t.Fatalf("action = %q, want a take over", s.Action)
+	}
+	if s.HeldBy != "start-session-selector" {
+		t.Errorf("held by = %q, want only the shell tool's shortcut", s.HeldBy)
+	}
+	if s.Own != core.KeyOK {
+		t.Errorf("own = %q, want ok: revier's shortcut is already right", s.Own)
+	}
+
+	c.ApplyKeys(context.Background(), plan, true)
+	held := w.Held("<Alt>space")
+	if len(held) != 1 || held[0].Label != "revier: picker" {
+		t.Errorf("alt+space is held by %+v, want revier's own shortcut alone", held)
+	}
+}
