@@ -163,6 +163,37 @@ func TestValidateRejects(t *testing.T) {
 			}},
 			"prefer must be",
 		},
+		{
+			// A runtime host names what it opens after the realization, and
+			// refuses to open without a name: the key would fail when pressed.
+			"runtime realization with no name",
+			revier.Project{Path: "/p", Targets: []revier.Target{
+				{Name: "a", Home: true, Runtime: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Title: "^x$"}}},
+			}},
+			`target "a" runtime realization has no name`,
+		},
+		{
+			// The name is written unquoted into the command a desktop key runs.
+			"target name with a space",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "my editor", Home: true, Window: &base}}},
+			`target name "my editor"`,
+		},
+		{
+			"target name with a quote",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: `ed"it`, Home: true, Window: &base}}},
+			"target name",
+		},
+		{
+			"target name that reads as a flag",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "-p", Home: true, Window: &base}}},
+			`target name "-p"`,
+		},
+		{
+			// An agent address is <project>:<target>, split at the colon.
+			"project name with a colon",
+			revier.Project{Name: "a:b", Path: "/p", Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
+			`project name "a:b"`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,6 +205,18 @@ func TestValidateRejects(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A window realization needs no name: its launch argv carries the identity its
+// match finds. A target name may be any word, dots and dashes included.
+func TestValidateAcceptsANamelessWindowAndAWordTargetName(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}}},
+		{Name: "diff-2.old_ä", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^y$"}}},
+	}}
+	if err := config.Validate(p); err != nil {
+		t.Fatalf("Validate: %v", err)
 	}
 }
 
@@ -395,7 +438,7 @@ func TestLoadWithNoUITableGetsTheDefault(t *testing.T) {
 func TestValidateRejectsAShortPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 			Place: "right top",
 		}},
 	}}
@@ -411,7 +454,7 @@ func TestValidateRejectsAShortPlacement(t *testing.T) {
 func TestValidateAcceptsAFullPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 			Place: "right top 75% 100%",
 		}},
 	}}
@@ -462,7 +505,7 @@ func TestTriggerKeyIsCanonical(t *testing.T) {
 func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Key: "<Nonsense>u", Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 	}}
 	err := config.Validate(p)
@@ -481,7 +524,7 @@ func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Key: "ctrl-o", Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 		{Name: "editor", Key: "<Control>O", Window: &revier.Realization{
 			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
