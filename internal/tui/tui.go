@@ -360,6 +360,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
+	case key.Matches(msg, m.keys.Targets) && m.level == levelProjects:
+		return m.drill()
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
@@ -433,17 +435,24 @@ func (m Model) targetRows() []targetRow {
 	return out
 }
 
+// enter at the project level opens the project: its home target, the same
+// run-or-raise `revier go home` does. Searching for a project is almost always
+// to get to it, so the target list is the detour and gets the other key. A
+// project with no home target has nothing to open, so it gets the list.
 func (m Model) enter() (tea.Model, tea.Cmd) {
 	if m.level == levelProjects {
 		v, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		m.current = v.Project.Name
-		m.level = levelTargets
-		m.reloadTargets()
-		m.tlist.Select(0)
-		return m, nil
+		p, ok := m.project(v.Project.Name)
+		if !ok {
+			return m, nil
+		}
+		if home, ok := p.Home(); ok {
+			return m, m.goTarget(p, home.Name)
+		}
+		return m.drill()
 	}
 	it, ok := m.tlist.SelectedItem().(targetItem)
 	if !ok {
@@ -464,6 +473,19 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, m.goTarget(p, row.target.Name)
+}
+
+// drill opens the target list of the project under the cursor.
+func (m Model) drill() (tea.Model, tea.Cmd) {
+	v, ok := m.selected()
+	if !ok {
+		return m, nil
+	}
+	m.current = v.Project.Name
+	m.level = levelTargets
+	m.reloadTargets()
+	m.tlist.Select(0)
+	return m, nil
 }
 
 // goTarget is one activation: run-or-raise the target, and settle where it

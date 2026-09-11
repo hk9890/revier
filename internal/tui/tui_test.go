@@ -80,6 +80,8 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	switch key {
 	case "enter":
 		msg = tea.KeyMsg{Type: tea.KeyEnter}
+	case "tab":
+		msg = tea.KeyMsg{Type: tea.KeyTab}
 	case "esc":
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
 	case "down":
@@ -164,11 +166,56 @@ func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 	}
 }
 
-func TestEnterDrillsIntoTargetsAndEscReturns(t *testing.T) {
+// Enter on a project is what a search is for: it opens the project's home,
+// the same run-or-raise `revier go home` does, and does not stop at the list.
+func TestEnterOnAProjectOpensItsHome(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, _ = press(m, "0")
+	m, _ = press(m, "0") // project-00, whose home is not running
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a project returned no command")
+	}
+	cmd()
+	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
+		t.Fatalf("runtime Opened = %v, want project-00's home", rt.Opened)
+	}
+	if len(wm.Opened) != 0 {
+		t.Errorf("window Opened = %v, want nothing but home", wm.Opened)
+	}
+	if !strings.Contains(lines(m)[0], "2 projects") {
+		t.Errorf("enter must not leave the project level:\n%s", m.View())
+	}
+}
+
+// A project with no home target has nothing to open, so Enter shows what it
+// does have rather than doing nothing.
+func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	projects, err := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, cmd := press(m, "enter")
+	if cmd != nil {
+		t.Error("enter on a project without home should run nothing")
+	}
+	// The detail pane lists targets at both levels, so the header is what
+	// says which level is on screen.
+	if head := lines(m)[0]; strings.Contains(head, "projects") || !strings.Contains(head, "homeless") {
+		t.Errorf("want the target level of homeless:\n%s", m.View())
+	}
+}
+
+func TestTabDrillsIntoTargetsAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
-	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
 	view := m.View()
 	for _, want := range []string{"project-02", "home", "editor", "ctrl-shift-o"} {
 		if !strings.Contains(view, want) {
@@ -186,8 +233,8 @@ func TestEnterDrillsIntoTargetsAndEscReturns(t *testing.T) {
 func TestEnterOnATargetRunsGo(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	m, _ = press(m, "enter") // project-01, the running one, is first
-	m, _ = press(m, "down")  // editor
+	m, _ = press(m, "tab")  // project-01, the running one, is first
+	m, _ = press(m, "down") // editor
 	_, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("enter on a target returned no command")
@@ -232,7 +279,7 @@ func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	ref := wm.Add("Pull requests", "chrome")
 	m := refreshed(t, c, projects, stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}), nil)
-	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
 	if view := m.View(); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
 		t.Fatalf("attached instance not listed:\n%s", view)
 	}
@@ -285,7 +332,7 @@ func TestPollingClaimsTheWindowThatAppearsAfterALaunch(t *testing.T) {
 	}
 	m, _ = press(m, "0")
 	m, _ = press(m, "0") // project-00; project-01 sorts first, its agent wants the human
-	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
 	if view := m.View(); !strings.Contains(view, "Pull requests") {
 		t.Errorf("the claimed window should be listed under the project:\n%s", view)
 	}
@@ -387,7 +434,7 @@ func TestPollingBindsALaunchedTargetByClass(t *testing.T) {
 		t.Error("a binding must consume the launch")
 	}
 	m = survey(m)
-	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
 	if view := m.View(); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
 		t.Errorf("the bound editor should show running:\n%s", view)
 	}
@@ -400,7 +447,7 @@ func TestEnterPinsTheTarget(t *testing.T) {
 	wm.Add("Visual Studio Code", "code-project-00")
 	root := stateWith(t, nil)
 	m := refreshed(t, c, projects, root, nil)
-	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
 	m, _ = press(m, "down")
 	_, cmd := press(m, "enter")
 	m.Update(cmd()) // applies the binding on the update loop

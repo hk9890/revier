@@ -510,3 +510,18 @@ the adapter, so the reader `revier keys status` is handed stays unable to write
 whatever is added beside it. Its three verbs are separate because they are not
 reversible in the same way: creating, switching off, and removing. Which one a
 shortcut deserves is policy - revier removes only what it wrote.
+
+## 2026-09-11
+
+### D28 — Enter on a project opens its home — Accepted
+
+The TUI was two levels, and Enter on a project only moved to the second: its
+list of targets. Reaching the project took a second Enter on the home row, which
+was already the cursor's default. A search for a project is almost always a
+search to get to it, so the list was the common path paid for by the rare one.
+
+Enter on a project is now `revier go home` for that project: run-or-raise, and
+the surface stays where it was. Tab opens the target list. It is not the right
+arrow, because left and right move the cursor in the query. A project with no
+home target has nothing to open, so Enter shows its list instead of doing
+nothing.
