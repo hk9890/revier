@@ -50,16 +50,16 @@ func TestClearingTheFilterKeepsTheProjectFound(t *testing.T) {
 	}
 }
 
-// A project whose directory is not here says so on its row, and says whether
-// Enter can bring it back. One whose directory is here says nothing.
-func TestAMissingCheckoutSaysWhetherEnterClonesIt(t *testing.T) {
+// A project whose directory is not here says so on its row, and whether it
+// can be cloned. One whose directory is here says nothing.
+func TestAMissingCheckoutSaysWhetherItCanBeCloned(t *testing.T) {
 	gone := map[string]string{"cloneable": "/nowhere/a", "stuck": "/nowhere/b"}
 	projects, _ := onDisk(t, []string{"cloneable", "present", "stuck"}, gone,
 		map[string]string{"cloneable": "/srv/git/a.git"})
 	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 80, 20)
 
 	r := rows(m)
-	for i, want := range []string{"not cloned · enter clones", "", "not on this machine"} {
+	for i, want := range []string{"not cloned", "", "not on this machine"} {
 		path := r[2*i+1]
 		if want == "" {
 			if strings.Contains(path, "not cloned") || strings.Contains(path, "not on this machine") {
@@ -205,13 +205,7 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	if at(first) < 0 || at(first) != at(second) {
 		t.Errorf("states at %d and %d, want them in one column:\n%s\n%s", at(first), at(second), first, second)
 	}
-	if name := col(first, "project-00"); at(first)-name > len("project-00")+gridGap {
-		t.Errorf("state is %d columns from the name, want it right after the name column:\n%s", at(first)-name, first)
-	}
 }
-
-// gridGap is the space between the name column and the state column.
-const gridGap = 2
 
 // The list stops at its table's width, and the pane takes the rest: at
 // three hundred and eighty columns the list is a hundred and ten.
@@ -237,13 +231,14 @@ func TestTheStateColumnGivesWayInSteps(t *testing.T) {
 		nameIsWide bool
 	}{
 		{160, true, true, true},   // room for everything
-		{60, false, true, true},   // the words, and no activity
-		{30, false, false, false}, // the glyph alone, and the name cut to keep it
+		{60, true, true, false},   // the name gives way first
+		{44, false, true, false},  // then the activity
+		{30, false, false, false}, // then the words; the glyph stays
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
 		first := rows(m)[0]
-		if got := strings.Contains(first, "needs a decision") || strings.Contains(first, "needs a…"); got != tc.activity {
+		if got := strings.Contains(first, "needs you needs a"); got != tc.activity {
 			t.Errorf("%d columns: activity shown = %v, want %v: %q", tc.width, got, tc.activity, first)
 		}
 		if got := strings.Contains(first, "needs you"); got != tc.words {

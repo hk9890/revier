@@ -1200,7 +1200,7 @@ func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
 
 	r := rows(m)
-	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply-nested") || !strings.Contains(r[2], "short") {
+	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply") || !strings.Contains(r[2], "short") {
 		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
 	}
 	for i, line := range strings.Split(m.View(), "\n") {

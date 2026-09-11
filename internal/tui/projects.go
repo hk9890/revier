@@ -97,70 +97,43 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	indent := lipgloss.Width(prefix)
 
-	// The rows are a grid: the name column is as wide as the widest name on
-	// the list, and the state starts right after it, so the states line up
-	// and stay beside the names at any width. The activity flows from the
-	// state to the edge; it is the one part of the row that can use a wide
-	// terminal. Right-aligning the state instead put it a screen away from a
-	// short name on a wide list (decisions.md D38).
-	nameCol := d.nameColumn(m, width-indent)
-	nameText := clipTo(string(v.Project.Name), nameCol)
-	first := prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
-	if agent := d.agent(v, width-indent-nameCol-gridGap, style); agent != "" {
-		first += style(th.Path).Render(strings.Repeat(" ", nameCol-lipgloss.Width(nameText)+gridGap)) + agent
+	// The row is a table of two columns on both its lines (decisions.md
+	// D39): the project - its name, and its path under it - and the agent -
+	// its state and activity, and under them what is open or why nothing can
+	// be. The agent column has a fixed width and sits at the right edge, with
+	// its text left-aligned inside it, so the states line up in one column
+	// whatever the names and paths beside them do. Nothing from the project
+	// column crosses into it: a path is cut in the middle to fit.
+	agentCol := min(maxAgentWidth, (width-indent-gridGap)/2)
+	projectCol := width - indent - gridGap - agentCol
+	cell := func(s string, w int) string {
+		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
 	}
 
-	// The path sits under the name, and what is open, or why nothing can be,
-	// follows it on the same line, so the line reads as a sentence about the
-	// checkout rather than as two facts a screen apart.
-	path := contractHome(v.Project.Path)
-	room := width - indent - 1
-	tag := d.fitTag(v, lipgloss.Width(path), room, style)
-	if tag != "" {
-		room -= lipgloss.Width(tag) + gridGap
-	}
-	// A missing path stays grey: the tag says it, and a third of the rows in
-	// maroon from end to end read as a list of errors.
-	second := bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) + style(th.Path).Render(elide(path, room))
-	if tag != "" {
-		second += style(th.Path).Render(strings.Repeat(" ", gridGap)) + tag
-	}
+	nameText := clipTo(string(v.Project.Name), min(projectCol, maxNameWidth))
+	first := prefix + cell(highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match)), projectCol+gridGap) +
+		d.agent(v, agentCol, style)
+
+	// A missing path stays grey: the note under the state says it, and a
+	// third of the rows in maroon from end to end read as a list of errors.
+	second := bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) +
+		cell(style(th.Path).Render(elide(contractHome(v.Project.Path), projectCol)), projectCol+gridGap) +
+		d.note(v, agentCol, style)
 
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
 }
 
-// The grid's measures: the gap between two columns, and the bounds of the
-// name column. A name longer than the most is cut, and its row alone pays
-// for it, rather than every state on the list moving right for one name. The
-// least is what the column keeps when the state's words want the room: past
-// it the words go before the names do.
+// The table's measures: the gap between its columns, the most the agent
+// column takes, and the most of it a name takes. The agent column has half
+// the row up to what a state and fifty of an activity need; the project
+// column has the rest, and a name longer than its cap is cut so its row
+// alone pays for it.
 const (
-	gridGap      = 2
-	maxNameWidth = 32
-	minNameWidth = 16
+	gridGap       = 2
+	maxAgentWidth = 56
+	maxNameWidth  = 32
 )
-
-// nameColumn is the width of the name column: the widest name on the list,
-// within its cap. On a narrow list it gives way to the state column in the
-// same steps the state column gives way in: down to its least to keep the
-// words, and then to keep the glyph.
-func (d projectDelegate) nameColumn(m list.Model, room int) int {
-	col := 0
-	for _, item := range m.VisibleItems() {
-		if it, ok := item.(projectItem); ok {
-			col = max(col, lipgloss.Width(string(it.view.Project.Name)))
-		}
-	}
-	col = min(col, maxNameWidth)
-	if words := lipgloss.Width(statusLabel(d.theme, revier.StatusAttention)); col+gridGap+words > room {
-		col = max(room-gridGap-words, minNameWidth)
-	}
-	if glyph := lipgloss.Width(statusGlyph(d.theme, revier.StatusAttention)); col+gridGap+glyph > room {
-		col = max(room-gridGap-glyph, 1)
-	}
-	return col
-}
 
 // highlight renders the letters the filter matched in their own style, as fzf
 // does: with a fuzzy filter the letters are the only way to see why a row is
@@ -184,29 +157,25 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 	return b.String()
 }
 
-// fitTag is the right-hand side of the second line, sized to what the path
-// leaves of room.
-//
-// A directory that is not here is said in words, with what Enter does about
-// it (decisions.md D30). That is the one thing on the line the row cannot do
-// without - no other column says it - so it shortens, and then cuts the path,
-// rather than go. The open targets are the pane's to list as well, so they
-// give way to a whole path.
-//
-// A stopped project with its checkout in place has nothing to say, and
-// neither does one with only its home open: that is what the green mark says.
-func (d projectDelegate) fitTag(v revier.ProjectView, path, room int, style func(lipgloss.Style) lipgloss.Style) string {
+// note is the agent column's second line: what is open, or why nothing can
+// be. A directory that is not here is said in words (decisions.md D30), and
+// what Enter does about it is the pane's to say. A stopped project with its
+// checkout in place has nothing to say, and neither does one with only its
+// home open: that is what the green mark says.
+func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	th := d.theme
 	if !v.PathExists {
-		long, short := "not on this machine", "not here"
+		note := "not on this machine"
 		if v.Project.GitURL != "" {
-			long, short = "not cloned · enter clones", "not cloned"
+			note = "not cloned"
 		}
-		tag := long
-		if path+lipgloss.Width(long)+2 > room {
-			tag = short
+		if lipgloss.Width(note) > room {
+			note = "not here"
 		}
-		return style(th.PathMissing).Render(tag)
+		if lipgloss.Width(note) > room {
+			return ""
+		}
+		return style(th.PathMissing).Render(note)
 	}
 	var open []string
 	for _, t := range v.Targets {
@@ -214,11 +183,10 @@ func (d projectDelegate) fitTag(v revier.ProjectView, path, room int, style func
 			open = append(open, string(t.Name))
 		}
 	}
-	tag := strings.Join(open, " · ")
-	if len(open) == 1 && !v.Home.IsZero() || path+lipgloss.Width(tag)+2 > room {
+	if len(open) == 1 && !v.Home.IsZero() {
 		return ""
 	}
-	return style(th.NameDim).Render(tag)
+	return style(th.NameDim).Render(ellipsis(strings.Join(open, " · "), room))
 }
 
 // agent is the worst agent state in the project and what it is doing: the
@@ -254,7 +222,7 @@ func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipglo
 // the state stands alone; above the most, the rest is the pane's, and the
 // row would only be pushing the pane away.
 const (
-	minActivityWidth = 16
+	minActivityWidth = 12
 	maxActivityWidth = 50
 )
 
