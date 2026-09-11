@@ -212,3 +212,19 @@ func TestEnterOnAMissingDirectoryClonesBeforeLaunching(t *testing.T) {
 		t.Errorf("runtime Opened = %v before the clone", rt.Opened)
 	}
 }
+
+// While a delete waits for its answer, the wheel does not move the highlight:
+// the question names one project, and the row under it has to stay that one.
+func TestTheWheelHoldsStillWhileADeleteIsAsked(t *testing.T) {
+	_, m, _ := fileWorld(t, "alpha", "beta")
+	before := selectedRow(t, m)
+
+	m, _ = alt(m, 'd')
+	m = wheel(m, 5, tea.MouseButtonWheelDown)
+	if row := selectedRow(t, m); row != before {
+		t.Errorf("selected %q while the delete was asked, want %q", row, before)
+	}
+	if f := footer(m); !strings.Contains(f, "delete alpha?") {
+		t.Errorf("footer = %q, want the question still open", f)
+	}
+}

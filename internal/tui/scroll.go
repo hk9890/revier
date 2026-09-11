@@ -20,7 +20,9 @@ func (m *Model) syncBody() {
 
 	n := len(l.VisibleItems())
 	if n < 1 {
-		n = 1
+		m.body.SetContent(m.empty())
+		m.body.SetYOffset(0)
+		return
 	}
 	l.SetSize(m.listWidth(), n*itemHeight)
 	m.body.SetContent(l.View())

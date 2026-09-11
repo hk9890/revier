@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
 )
 
@@ -52,7 +53,8 @@ func (m *Model) layout() {
 	w, h := m.inner()
 	m.input.Width = w - lipgloss.Width(promptMark) - 2
 	if pane := m.paneWidth(); pane > 0 {
-		m.detail.Width, m.detail.Height = pane-paneChrome, h
+		// A viewport's width is its outside, border and padding included.
+		m.detail.Width, m.detail.Height = pane, h
 	}
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
@@ -109,8 +111,11 @@ func (m Model) subtitle(width int) string {
 // picker does: how many rows survive the filter, out of how many there are.
 func (m Model) rule(width int) string {
 	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	if m.level == levelTargets {
+	switch {
+	case m.level == levelTargets:
 		count = fmt.Sprintf(" %d targets ", len(m.tlist.Items()))
+	case !m.ready():
+		count = ""
 	}
 	line := width - lipgloss.Width(count)
 	if line < 0 {
@@ -127,6 +132,9 @@ func (m Model) header() string {
 	if m.level == levelTargets {
 		return th.Header.Render(" revier  " + string(m.current))
 	}
+	if !m.ready() {
+		return th.Header.Render(" revier  ") + th.NameDim.Render("surveying")
+	}
 	running, attention := 0, 0
 	for _, v := range m.views {
 		if v.Running {
@@ -139,6 +147,40 @@ func (m Model) header() string {
 	return th.Header.Render(fmt.Sprintf(" revier  %d projects", len(m.views))) +
 		th.Path.Render(" · ") + th.Running.Render(fmt.Sprintf("%d running", running)) +
 		th.Path.Render(" · ") + th.Attention.Render(fmt.Sprintf("%d need you", attention))
+}
+
+// ready reports whether the survey's numbers can be shown. bubbletea paints
+// once before the first survey answers, and on that frame every count is zero
+// and the list is empty, which says there are no projects when there are
+// ninety. With no project configured there is nothing to wait for.
+func (m Model) ready() bool {
+	return m.surveyed || len(m.projects) == 0
+}
+
+// empty is what the project level shows in place of rows, in revier's words
+// rather than the list component's "No items.": nothing before the first
+// survey, where to add a project when none is configured, and that the filter
+// is why the list is empty when it is.
+//
+// It wraps rather than clips: the directory is the part worth reading, and a
+// scratch REVIER_CONFIG_HOME is longer than the list is wide.
+func (m Model) empty() string {
+	th := m.theme
+	say := func(s lipgloss.Style, text string) string {
+		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
+	}
+	switch {
+	case m.level == levelTargets || !m.ready():
+		return ""
+	case len(m.projects) == 0:
+		where := "projects/<name>.toml under the configuration directory"
+		if root, err := config.Root(); err == nil {
+			where = contractHome(filepath.Join(root, "projects")) + "/<name>.toml"
+		}
+		return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
+	default:
+		return say(th.NameDim, fmt.Sprintf("No project matches %q.", m.filter))
+	}
 }
 
 // footer is the key legend, or the last failure. An error replaces the legend
@@ -232,6 +274,32 @@ func clipTo(s string, width int) string {
 		return ""
 	}
 	return lipgloss.NewStyle().MaxWidth(width).Render(s)
+}
+
+// wrap breaks text into lines no wider than width: at a space or a hyphen
+// where there is one, and mid-word where there is not. It trims the padding
+// lipgloss adds, so a line is only as wide as its text.
+func wrap(s string, width int) []string {
+	if width < 1 {
+		return nil
+	}
+	out := strings.Split(lipgloss.NewStyle().Width(width).Render(s), "\n")
+	for i := range out {
+		out[i] = strings.TrimRight(out[i], " ")
+	}
+	return out
+}
+
+// hang puts a value right of an already rendered head and wraps it within
+// width, continuing under the value rather than under the head, so a label
+// column stays a column.
+func hang(head, value string, width int, style lipgloss.Style) string {
+	indent := lipgloss.Width(head)
+	parts := wrap(value, width-indent)
+	for i, p := range parts {
+		parts[i] = style.Render(p)
+	}
+	return head + strings.Join(parts, "\n"+strings.Repeat(" ", indent))
 }
 
 // truncate keeps the end of a path, not the start: the last two segments say

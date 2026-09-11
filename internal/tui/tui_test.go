@@ -157,6 +157,65 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	}
 }
 
+// bubbletea paints once before the first survey answers. That frame must not
+// say there are no projects when there are ninety, and must not carry the list
+// component's own empty text.
+func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
+	_, _, c, projects := world(t, 90)
+	m := resize(tui.New(c, projects, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 150, 20)
+
+	view := m.View()
+	for _, wrong := range []string{"0 projects", "0/0", "No items", "No project"} {
+		if strings.Contains(view, wrong) {
+			t.Errorf("the first frame says %q:\n%s", wrong, view)
+		}
+	}
+	if head := lines(m)[0]; !strings.Contains(head, "surveying") {
+		t.Errorf("header = %q, want it to say the survey is pending", head)
+	}
+	if m = survey(m); !strings.Contains(lines(m)[0], "90 projects") {
+		t.Errorf("after the survey the header should count:\n%s", m.View())
+	}
+}
+
+// With no project files the surface says so, and says where they go, rather
+// than showing an empty list.
+func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	// Wide enough that the temporary directory's long name is not cut.
+	m := resize(tui.New(c, nil, stateWith(t, nil), nil, time.Second, theme.Default(), ""), 200, 20)
+
+	// Nothing to survey, so the first frame is already the answer.
+	view := m.View()
+	if !strings.Contains(view, "No projects configured") || !strings.Contains(view, filepath.Join(root, "projects")) {
+		t.Errorf("want the empty state to name %s/projects:\n%s", root, view)
+	}
+	if strings.Contains(view, "No items") || strings.Contains(view, "surveying") {
+		t.Errorf("an empty configuration has nothing to wait for:\n%s", view)
+	}
+}
+
+// A filter that leaves nothing says the filter is why, and the count agrees.
+func TestAFilterMatchingNothingSaysSo(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	for _, r := range "zzz" {
+		m, _ = press(m, string(r))
+	}
+	view := m.View()
+	if !strings.Contains(view, `No project matches "zzz"`) {
+		t.Errorf("want the filter named as the reason:\n%s", view)
+	}
+	if rule := lines(m)[2]; !strings.Contains(rule, " 0/12 ") {
+		t.Errorf("rule = %q, want the count to read 0/12", rule)
+	}
+	if strings.Contains(view, "No items") {
+		t.Errorf("the list component's own text leaked:\n%s", view)
+	}
+}
+
 // A refresh costs one Instances call per host however many projects exist.
 func TestRefreshIssuesOneInstancesCallPerHost(t *testing.T) {
 	rt, wm, c, projects := world(t, 60)
@@ -775,6 +834,217 @@ func TestNoTreeForAMissingDirectory(t *testing.T) {
 
 	if body := pane(m); strings.Contains(body, "Project Snapshot") {
 		t.Errorf("pane = %q, want no tree for a missing directory", body)
+	}
+}
+
+// longActivity is an agent's activity line longer than any pane.
+const longActivity = "Reading internal/tui/detail.go and working out why the activity line ends in an ellipsis where fzf wraps it"
+
+// longWorld is one running project at path whose agent reports longActivity,
+// and a second project after it.
+func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: longActivity},
+	}}}
+	home := func(name string) revier.Target {
+		return revier.Target{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}
+	}
+	projects, err := core.Prepare([]revier.Project{
+		{Name: "long", Path: path, Targets: []revier.Target{home("long")}},
+		{Name: "short", Path: "/p/short", Targets: []revier.Target{home("short")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Add("session:long", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	return c, projects
+}
+
+// paneColumns is the detail pane's rendered width, its border included: from
+// the border between list and pane to the frame's padding column.
+func paneColumns(t *testing.T, m tui.Model) int {
+	t.Helper()
+	for _, raw := range strings.Split(m.View(), "\n") {
+		r := []rune(raw)
+		var bars []int
+		for i, c := range r {
+			if c == '│' {
+				bars = append(bars, i)
+			}
+		}
+		if len(bars) == 3 {
+			return bars[2] - bars[1] - 1
+		}
+	}
+	t.Fatalf("no line with a pane:\n%s", m.View())
+	return 0
+}
+
+// Where the picker's preview wraps, the pane wraps: a path and an activity
+// line are the fields worth reading whole, and an ellipsis cut exactly them.
+func TestDetailPaneWrapsALongPathAndActivity(t *testing.T) {
+	path := "/p/a-rather-long-directory-name-for-wrapping/and-another-deeply-nested-segment/checkout-with-a-long-name"
+	c, projects := longWorld(t, path)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 40)
+
+	if w := paneColumns(t, m); w*100 < 45*150 {
+		t.Errorf("pane is %d of 150 columns, want at least 45%%", w)
+	}
+	body := pane(m)
+	if strings.Contains(body, "…") {
+		t.Errorf("pane cut a field with an ellipsis:\n%s", body)
+	}
+	joined := strings.Join(strings.Fields(body), "")
+	if !strings.Contains(joined, path) {
+		t.Errorf("pane lost part of the path %s:\n%s", path, body)
+	}
+	if !strings.Contains(joined, strings.Join(strings.Fields(longActivity), "")) {
+		t.Errorf("pane lost part of the activity line:\n%s", body)
+	}
+	// Continuation lines sit under the value, not under the label.
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "and-another") || strings.HasPrefix(line, "wraps it") {
+			t.Errorf("continuation %q starts at the label column", line)
+		}
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(line); w > 150 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
+}
+
+// A tree row is cut, not wrapped: a wrapped row loses the indentation that
+// says where in the tree it is.
+func TestDetailPaneCutsTreeRows(t *testing.T) {
+	dir := t.TempDir()
+	name := "a-file-whose-name-is-long-enough-that-the-tree-row-must-be-cut-rather-than-wrapped.go"
+	if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, projects := longWorld(t, dir)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 40)
+
+	body := pane(m)
+	if !strings.Contains(body, "└── a-file-whose-name") {
+		t.Fatalf("pane lacks the tree row:\n%s", body)
+	}
+	if strings.Contains(strings.Join(strings.Fields(body), ""), name) {
+		t.Errorf("the tree row was wrapped rather than cut:\n%s", body)
+	}
+}
+
+// At eighty columns there is no pane, and the list does not wrap either: a
+// long path and a long activity line leave every row two lines high.
+func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
+	c, projects := longWorld(t, "/p/"+strings.Repeat("deeply-nested/", 10)+"checkout")
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	r := rows(m)
+	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply-nested") || !strings.Contains(r[2], "short") {
+		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
+	}
+	for i, line := range strings.Split(m.View(), "\n") {
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("line %d is %d columns wide: %q", i, w, line)
+		}
+	}
+}
+
+// wheel is one notch of the mouse wheel at a column.
+func wheel(m tui.Model, x int, b tea.MouseButton) tui.Model {
+	next, _ := m.Update(tea.MouseMsg{X: x, Y: 5, Button: b, Action: tea.MouseActionPress})
+	return next.(tui.Model)
+}
+
+// paneBorder is the terminal column of the border between the list and the
+// pane, read off the rendered surface.
+func paneBorder(t *testing.T, m tui.Model) int {
+	t.Helper()
+	for _, raw := range strings.Split(m.View(), "\n") {
+		var bars []int
+		for i, c := range []rune(raw) {
+			if c == '│' {
+				bars = append(bars, i)
+			}
+		}
+		if len(bars) == 3 {
+			return bars[1]
+		}
+	}
+	t.Fatalf("no line with a pane:\n%s", m.View())
+	return 0
+}
+
+// The wheel over the list moves the selection, a row a notch, whether or not
+// the terminal is wide enough for a pane.
+func TestTheWheelMovesTheSelection(t *testing.T) {
+	for _, width := range []int{80, 120} {
+		_, _, c, projects := world(t, 12)
+		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, 20)
+		first := selectedRow(t, m)
+
+		m = wheel(m, 5, tea.MouseButtonWheelDown)
+		if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+			t.Errorf("%d columns: selected %q after a notch down, want project-00", width, row)
+		}
+		m = wheel(m, 5, tea.MouseButtonWheelUp)
+		if row := selectedRow(t, m); row != first {
+			t.Errorf("%d columns: selected %q after a notch back up, want %q", width, row, first)
+		}
+	}
+}
+
+// The wheel over the pane scrolls the pane and leaves the selection alone; the
+// next project starts at its own top.
+func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 20 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home := func(name string) []revier.Target {
+		return []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}
+	}
+	projects, err := core.Prepare([]revier.Project{
+		{Name: "first", Path: dir, Targets: home("first")},
+		{Name: "second", Path: dir, Targets: home("second")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
+	border := paneBorder(t, m)
+
+	// One column left of the border is still the list.
+	m = wheel(m, border-1, tea.MouseButtonWheelDown)
+	m = wheel(m, border-1, tea.MouseButtonWheelUp)
+	if top := strings.Split(pane(m), "\n")[0]; top != "first" {
+		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
+	}
+
+	m = wheel(m, border, tea.MouseButtonWheelDown)
+	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "first") {
+		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
+	}
+	m = survey(m)
+	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+		t.Errorf("a refresh put the pane back at its top")
+	}
+
+	m, _ = press(m, "down")
+	if top := strings.Split(pane(m), "\n")[0]; top != "second" {
+		t.Errorf("pane top = %q after moving to the next project, want its name", top)
 	}
 }
 
