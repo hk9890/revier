@@ -262,7 +262,9 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 // A switched-on custom shortcut wins, because that is what fires on a press.
 // Only when none exists do the states a user cannot see from the settings UI
 // get reported: revier's own shortcut left switched off, or a desktop default
-// sitting on the chord.
+// sitting on the chord. The one exception is a desktop default beside
+// revier's own shortcut when that is right: both fire, so the chord is not
+// revier's yet.
 func classify(want KeyRow, holders []revier.Binding) KeyRow {
 	// Every switched-on shortcut on the chord fires, not just the first one
 	// the desktop happens to list - which is why README's step 3 asks a user
@@ -287,13 +289,20 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 			}
 			labels = append(labels, b.Label)
 		}
+		builtins := builtinNames(holders)
 		switch {
 		case !ownedCommand(decides.Command):
 			want.Status = KeyTaken
-		case decides.Command == want.Command:
-			want.Status = KeyActive
-		default:
+		case decides.Command != want.Command:
 			want.Status = KeyStale
+		case len(builtins) > 0:
+			// revier's shortcut is right, and a desktop default fires on the
+			// same press. Active would promise a key install still has to
+			// clear with --force.
+			want.Status = KeyBuiltin
+			labels = append(labels, builtins...)
+		default:
+			want.Status = KeyActive
 		}
 		want.HeldBy = strings.Join(labels, ", ")
 		return want
@@ -312,6 +321,17 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 	}
 	want.Status = KeyFree
 	return want
+}
+
+// builtinNames names the desktop defaults on a chord, each by its setting.
+func builtinNames(holders []revier.Binding) []string {
+	var out []string
+	for _, b := range holders {
+		if b.Source == revier.BindingBuiltin {
+			out = append(out, b.Where+" "+b.Label)
+		}
+	}
+	return out
 }
 
 // orphans are revier's own shortcuts on chords revier no longer wants: what a
