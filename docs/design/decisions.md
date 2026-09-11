@@ -712,7 +712,7 @@ target. Two clicks on different rows are two choices. A click on the pane,
 the header or the footer moves nothing, so a pointer parked on the surface
 cannot change what the keys act on.
 
-### D37 — the frame stops growing at the width its content needs — Accepted
+### D37 — the frame stops growing at the width its content needs — Superseded by D38
 
 On a wide terminal the list took every column the pane did not, so a state
 sat three hundred columns from the name it belonged to, and the pane an
@@ -724,3 +724,21 @@ The list is capped at a hundred columns — a name, a state with its activity
 and a path fit — and the pane at ninety, so the frame stops at their sum and
 sits centred in whatever is left. Height is not capped: rows are what a list
 of ninety projects is short of.
+
+### D38 — the rows are a grid, and the frame takes the whole terminal — Accepted
+
+Supersedes D37, which capped and centred the frame.
+
+The cap treated a symptom. The state sat a screen away from its name because
+it was aligned to the row's right edge, and any wide list moves that edge. A
+capped frame left a third of a wide terminal empty on each side, which is
+space the surface was asked to use.
+
+The rows are a grid instead. The name column is as wide as the widest name on
+the list, within a cap of thirty-two so one long name does not move every
+state, and the state starts right after it. The activity flows from the state
+to the list's edge: it is the one part of a row that gets better with width.
+On the second line, what is open or why nothing can be follows the path, so
+the line reads as one sentence about the checkout. The pane keeps half the
+width up to a hundred and twenty columns, where a Git URL and a tree row fit
+whole; the list takes the rest, at any width.

@@ -10,25 +10,22 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The pane's width bounds, and the list's beside it. The list is what the
-// surface is for, so the pane takes what is left over and not the other way
-// round: at ninety columns a half-and-half split cut every path in the list
-// to make room for a pane that wrapped every line of its own. The list stops
-// at a width that holds a name, a state with its activity and a path whole;
-// past that the frame stops growing (maxInnerWidth).
+// The pane's width bounds, and the least the list keeps beside it. The list
+// is what the surface is for, so the pane takes what is left over and not the
+// other way round: at ninety columns a half-and-half split cut every path in
+// the list to make room for a pane that wrapped every line of its own. The
+// pane stops where a Git URL and a tree row fit whole; the list takes the
+// rest, and lays its rows out as a grid so any width reads.
 const (
 	minPaneWidth = 44
-	maxPaneWidth = 90
+	maxPaneWidth = 120
 	minListWidth = 56
-	maxListWidth = 100
 )
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
 // narrow to give both the list and the pane their least.
 func (m Model) paneWidth() int {
-	// Half, as the picker gives its preview 55% (os-fzf.sh:782). A fixed cap
-	// left the pane at 28% of a 200-column terminal, which is where the paths
-	// and the tree it holds are longest.
+	// Half, as the picker gives its preview 55% (os-fzf.sh:782).
 	w := m.width / 2
 	if w > maxPaneWidth {
 		w = maxPaneWidth

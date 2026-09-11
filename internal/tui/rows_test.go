@@ -167,18 +167,17 @@ func TestThePaneWaitsUntilTheListHasItsRoom(t *testing.T) {
 	}
 }
 
-// On a wide terminal the frame stops growing and sits in the middle, as the
-// popup did at half the screen: the state stays within reading distance of
-// the name, and the pane beside the row it describes.
-func TestAWideTerminalCentresTheFrame(t *testing.T) {
-	_, _, c, projects := world(t, 3)
-	// Twenty rows: a short terminal keeps no row for a margin, and the frame
-	// is still centred across the width it does not need.
+// On a wide terminal the frame takes the width, and the rows are a grid: the
+// states line up in a column right after the widest name, so a wide list is
+// a long activity line and not a state a screen away from its name.
+func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
+	rt, _, c, projects := world(t, 3) // project-02 needs you
+	rt.Add("session:project-00", "kitty", revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 20)
+	g := theme.Default().Glyphs
 
-	view := strings.Split(m.View(), "\n")
 	var top string
-	for _, line := range view {
+	for _, line := range strings.Split(m.View(), "\n") {
 		if w := lipgloss.Width(line); w > 380 {
 			t.Errorf("line is %d columns wide: %q", w, line)
 		}
@@ -186,15 +185,53 @@ func TestAWideTerminalCentresTheFrame(t *testing.T) {
 			top = line
 		}
 	}
-	lead := len(top) - len(strings.TrimLeft(top, " "))
-	frame := lipgloss.Width(strings.TrimSpace(top))
-	if lead < 90 || frame > 194 {
-		t.Errorf("frame is %d wide after %d columns of margin, want it capped and centred:\n%s", frame, lead, top)
+	if frame := lipgloss.Width(strings.TrimSpace(top)); frame < 370 {
+		t.Errorf("frame is %d wide, want the whole terminal but the margin:\n%s", frame, top)
 	}
-	first, _, split := strings.Cut(rows(m)[0], "│")
-	first = strings.TrimPrefix(first, " ") // the frame's padding column
-	if !split || lipgloss.Width(first) > 100 || !strings.Contains(first, "needs you") {
-		t.Errorf("row = %q, want the state on a list no wider than 100 columns, with the pane beside it", first)
+	r := rows(m)
+	first, second := r[0], r[2]
+	// Cells, not bytes: the bar and the glyphs are several bytes each.
+	col := func(row, s string) int {
+		i := strings.Index(row, s)
+		if i < 0 {
+			return -1
+		}
+		return lipgloss.Width(row[:i])
+	}
+	at := func(row string) int { return col(row, g.NeedsYou+" needs you") }
+	if at(first) < 0 || at(first) != at(second) {
+		t.Errorf("states at %d and %d, want them in one column:\n%s\n%s", at(first), at(second), first, second)
+	}
+	if name := col(first, "project-00"); at(first)-name > len("project-00")+gridGap {
+		t.Errorf("state is %d columns from the name, want it right after the name column:\n%s", at(first)-name, first)
+	}
+}
+
+// gridGap is the space between the name column and the state column.
+const gridGap = 2
+
+// A name too long for a narrow list is cut, and the state after it stays: the
+// name column gives way before the state does.
+func TestALongNameGivesWayToTheStateOnANarrowList(t *testing.T) {
+	long := "a-project-with-a-name-longer-than-the-column-allows"
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+		Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
+	}}}
+	projects, err := core.Prepare([]revier.Project{{Name: revier.ProjectName(long), Path: "/p/x", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:x", Launch: []string{"x"}, Match: revier.Match{Title: "^session:x$"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 50, 20)
+
+	first := rows(m)[0]
+	if !strings.Contains(first, "needs you") || strings.Contains(first, long) {
+		t.Errorf("row = %q, want the name cut and the state kept", first)
 	}
 }
 

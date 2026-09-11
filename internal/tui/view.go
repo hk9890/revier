@@ -23,47 +23,28 @@ const (
 	marginCols   = 2
 )
 
-// maxInnerWidth is the most content the frame holds. Past it the frame stops
-// growing and sits centred, as the popup did at half the screen
-// (os-fzf-popup.sh: POPUP_PLACE_WIDTH_PERCENT=50, anchored center). A row
-// that spans three hundred columns puts the state it carries a screen away
-// from the name it belongs to, and the pane an arm's length from the row it
-// describes.
-const maxInnerWidth = maxListWidth + maxPaneWidth
-
 // margins are what surrounds the frame: nothing on a small terminal, where
-// four rows and four columns of empty space cost two project rows; one row
-// and two columns on an ordinary one; and on a wide one whatever centres a
-// frame that has stopped growing. The rows go first, because rows are what a
-// list is short of: a wide and short terminal keeps the columns and centres.
+// four rows and four columns of empty space cost two project rows, and one
+// row and two columns otherwise. The rows go first, because rows are what a
+// list is short of: a wide and short terminal keeps the columns.
 func (m Model) margins() (rows, cols int) {
-	if m.small() {
+	if m.width < 100 {
 		return 0, 0
 	}
-	w, _ := m.inner()
-	return m.marginRows(), (m.width - w - frameWidth) / 2
-}
-
-func (m Model) small() bool { return m.width < 100 }
-
-func (m Model) marginRows() int {
 	if m.height < 24 {
-		return 0
+		return 0, marginCols
 	}
-	return marginRows
+	return marginRows, marginCols
 }
 
-// inner is the size available inside the frame and the margin.
+// inner is the size available inside the frame and the margin. The frame
+// takes the whole terminal (decisions.md D38): the rows are a grid, so a
+// wide row is a long activity line and not a state a screen away from its
+// name.
 func (m Model) inner() (w, h int) {
-	mr, mc := 0, 0
-	if !m.small() {
-		mr, mc = m.marginRows(), marginCols
-	}
+	mr, mc := m.margins()
 	w = m.width - 2*mc - frameWidth
 	h = m.height - 2*mr - frameHeight - chromeHeight
-	if w > maxInnerWidth {
-		w = maxInnerWidth
-	}
 	if w < 20 {
 		w = 20
 	}
@@ -254,20 +235,6 @@ func (m Model) footer() string {
 		keys = append(keys, m.keys.Edit, m.keys.Delete)
 	}
 	return " " + m.help.ShortHelpView(keys)
-}
-
-// spread puts left at the start of a width and right at the end of it, which
-// is what keeps a column of states aligned without padding every name to the
-// longest one on screen.
-//
-// The gap is drawn in the given style, so a selected row keeps its background
-// between the two halves instead of showing two highlighted islands.
-func spread(left, right string, width int, gap lipgloss.Style) string {
-	n := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if n < 1 {
-		return clipTo(left, width)
-	}
-	return left + gap.Render(strings.Repeat(" ", n)) + right
 }
 
 // fill pads a rendered row to the width of the list, so the selection

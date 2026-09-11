@@ -97,28 +97,62 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	indent := lipgloss.Width(prefix)
 
-	// Name on the left, agent state on the right. Padding every name to the
-	// longest one on screen put the state column half a row away from a short
-	// name; the right edge does not move.
-	nameText := clipTo(string(v.Project.Name), width-indent)
-	left := prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
-	first := spread(left, d.agent(v, width-lipgloss.Width(left)-2, style), width, style(th.Path))
+	// The rows are a grid: the name column is as wide as the widest name on
+	// the list, and the state starts right after it, so the states line up
+	// and stay beside the names at any width. The activity flows from the
+	// state to the edge; it is the one part of the row that can use a wide
+	// terminal. Right-aligning the state instead put it a screen away from a
+	// short name on a wide list (decisions.md D38).
+	nameCol := d.nameColumn(m, width-indent)
+	nameText := clipTo(string(v.Project.Name), nameCol)
+	first := prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
+	if agent := d.agent(v, width-indent-nameCol-gridGap, style); agent != "" {
+		first += style(th.Path).Render(strings.Repeat(" ", nameCol-lipgloss.Width(nameText)+gridGap)) + agent
+	}
 
-	// The path sits under the name, and what the row's second line has room
-	// for on the right is what is open, or why nothing can be.
+	// The path sits under the name, and what is open, or why nothing can be,
+	// follows it on the same line, so the line reads as a sentence about the
+	// checkout rather than as two facts a screen apart.
 	path := contractHome(v.Project.Path)
 	room := width - indent - 1
 	tag := d.fitTag(v, lipgloss.Width(path), room, style)
 	if tag != "" {
-		room -= lipgloss.Width(tag) + 2
+		room -= lipgloss.Width(tag) + gridGap
 	}
 	// A missing path stays grey: the tag says it, and a third of the rows in
 	// maroon from end to end read as a list of errors.
-	second := spread(bar+style(th.Path).Render(strings.Repeat(" ", indent-1))+style(th.Path).Render(elide(path, room)),
-		tag, width, style(th.Path))
+	second := bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) + style(th.Path).Render(elide(path, room))
+	if tag != "" {
+		second += style(th.Path).Render(strings.Repeat(" ", gridGap)) + tag
+	}
 
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
+}
+
+// The grid's measures: the gap between two columns, and the most a name
+// column takes. A name longer than that is cut, and its row alone pays for
+// it, rather than every state on the list moving right for one name.
+const (
+	gridGap      = 2
+	maxNameWidth = 32
+)
+
+// nameColumn is the width of the name column: the widest name on the list,
+// within its cap, and never so wide that the widest state does not fit after
+// it in room.
+func (d projectDelegate) nameColumn(m list.Model, room int) int {
+	col := 0
+	for _, item := range m.VisibleItems() {
+		if it, ok := item.(projectItem); ok {
+			col = max(col, lipgloss.Width(string(it.view.Project.Name)))
+		}
+	}
+	col = min(col, maxNameWidth)
+	if state := lipgloss.Width(statusLabel(d.theme, revier.StatusAttention)); col+gridGap+state > room {
+		col = max(room-gridGap-state, 1)
+	}
+	return col
 }
 
 // highlight renders the letters the filter matched in their own style, as fzf
