@@ -124,14 +124,34 @@ func note(s core.KeyStep, dryRun, force bool) string {
 		return "skipped: " + heldBy(s) + " holds it"
 	}
 
-	verb := map[core.KeyAction]string{
-		core.KeyCreate:   "created",
-		core.KeyUpdate:   "command rewritten",
-		core.KeyEnable:   "switched on",
-		core.KeyTakeOver: "created, " + heldBy(s) + " switched off",
-		core.KeyClear:    "created, " + heldBy(s) + " cleared",
-		core.KeyRemove:   "removed",
-	}[s.Action]
+	switch s.Action {
+	case core.KeyTakeOver:
+		return displaced(s, "switched off", dryRun)
+	case core.KeyClear:
+		return displaced(s, "cleared", dryRun)
+	}
+	return wouldBe(verbs[s.Action], dryRun)
+}
+
+var verbs = map[core.KeyAction]string{
+	core.KeyCreate: "created",
+	core.KeyUpdate: "command rewritten",
+	core.KeyEnable: "switched on",
+	core.KeyRemove: "removed",
+}
+
+// displaced is the note for a key taken from something else. It says what
+// happens to revier's own shortcut as well, and says nothing about it when it
+// is already right: "created" for a shortcut that exists would be a lie.
+func displaced(s core.KeyStep, what string, dryRun bool) string {
+	own, ok := verbs[s.Own]
+	if !ok {
+		return heldBy(s) + " " + wouldBe(what, dryRun)
+	}
+	return wouldBe(own, dryRun) + ", " + heldBy(s) + " " + what
+}
+
+func wouldBe(verb string, dryRun bool) string {
 	if dryRun {
 		return "would be " + verb
 	}

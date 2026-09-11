@@ -466,7 +466,7 @@ rather than merely unused.
 
 ## 2026-09-07
 
-### D27 — revier adds keys; it takes one only when told to — Accepted
+### D27 — revier adds keys; it takes one only when told to — Narrowed by D29
 
 Extends D26, which read the desktop's shortcuts and stopped there.
 
@@ -525,3 +525,27 @@ the surface stays where it was. Tab opens the target list. It is not the right
 arrow, because left and right move the cursor in the query. A project with no
 home target has nothing to open, so Enter shows its list instead of doing
 nothing.
+
+### D29 — `os init` is not a way back on its own — Accepted
+
+Narrows D27, which is right about what revier does and wrong about the switch.
+
+D27 said whichever of `revier keys install` and `os init` ran last holds the
+four keys. It was tested on the author's desktop and it does not hold for
+`os init`. After `revier keys install --force`, the shell tool's four shortcuts
+are switched off. `os init` then finds their slots holding a definition,
+writes four new copies into free slots and switches those on, and leaves
+revier's four switched on beside them. Every key fires both tools. Each round
+trip leaves four more copies behind.
+
+revier's half is unchanged and was right: install with `--force` switches off
+whatever else is live on a key, copies included, and never touches its own.
+What changes is the way back. It takes both commands, in either order:
+`revier keys uninstall` to stop revier firing, and `os init` to make the shell
+tool fire. Neither alone is enough - `os init` alone leaves both firing, and
+uninstall alone leaves nothing on the four keys.
+
+A single-command way back is `os init`'s to provide, in the `setup`
+repository: switch its own shortcuts back on rather than copying them, and
+switch off anything else on its four keys, as `--force` does here. revier does
+not reach into that tool to do it for it.

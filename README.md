@@ -78,8 +78,9 @@ a GNOME default is cleared, and the `gsettings reset` line that returns it is
 printed beside the key.
 
 `revier keys uninstall` removes what revier wrote and nothing else. It restores
-no other tool's shortcuts — that tool does, and the shell implementation's
-`os init` is how those four come back.
+no other tool's shortcuts — that tool does. To go back to the shell
+implementation, run `revier keys uninstall` and `os init`, in either order:
+`os init` alone leaves revier's shortcuts firing beside its own.
 
 The key that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space`
 by default; the rest are the `key` each target declares.
