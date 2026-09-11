@@ -371,35 +371,30 @@ func panelOf(w window) revier.Panel {
 }
 
 // classify reads the foreground process group as kitty lists it, outermost
-// first. A `--hold` window wraps its command in `kitten run-shell` and a shell,
-// so the first entry is never the interesting one. An agent anywhere in the
-// group makes the panel an agent: an agent running a tool is still an agent,
-// and the probe must keep seeing it.
+// first. The panel's command is the outermost program that is neither kitty's
+// `run-shell` wrapper nor a shell: a `--hold` window wraps its command in both,
+// and a program the panel runs stays the command while it runs a tool of its
+// own. Whether that program is an agent is the probes' to say, so no harness
+// is named here - a probe declared in config is for one this adapter was not
+// written with. With nothing but wrappers and shells, the panel is a shell.
 func classify(fg []process) (revier.PanelKind, []string, int) {
+	for _, p := range fg {
+		if len(p.Cmdline) == 0 || isRunShell(p.Cmdline) || isShell(base(p.Cmdline[0])) {
+			continue
+		}
+		return revier.PanelTool, p.Cmdline, p.PID
+	}
 	if len(fg) == 0 {
 		return revier.PanelShell, nil, 0
 	}
-	for _, p := range fg {
-		if len(p.Cmdline) > 0 && isAgent(base(p.Cmdline[0])) {
-			return revier.PanelAgent, p.Cmdline, p.PID
-		}
-	}
 	last := fg[len(fg)-1]
-	kind := revier.PanelTool
-	if len(last.Cmdline) > 0 && isShell(base(last.Cmdline[0])) {
-		kind = revier.PanelShell
-	}
-	return kind, last.Cmdline, last.PID
+	return revier.PanelShell, last.Cmdline, last.PID
 }
 
 func base(arg string) string { return arg[strings.LastIndex(arg, "/")+1:] }
 
-func isAgent(cmd string) bool {
-	switch cmd {
-	case "claude", "claude-code", "opencode", "aider":
-		return true
-	}
-	return false
+func isRunShell(cmdline []string) bool {
+	return base(cmdline[0]) == "kitten" && len(cmdline) > 1 && cmdline[1] == "run-shell"
 }
 
 func isShell(cmd string) bool {
@@ -413,7 +408,7 @@ func isShell(cmd string) bool {
 // Open creates an OS window named r.Name holding r.Panels, or r.Launch alone
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
 // opens the OS window and every later one splits into it. With no kitty
-// running it starts one, on a socket that discovery finds again.
+// answering it starts one, on a socket that discovery finds again.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
@@ -477,8 +472,7 @@ func (h *Host) title(ctx context.Context, socket string, id int, title string) e
 // openFirst opens the OS window with its first panel and returns the socket it
 // lives on and the id of that panel's window.
 func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	if socks := h.socketList(); len(socks) > 0 {
-		socket := socks[0]
+	if socket, ok := h.liveSocket(ctx); ok {
 		// The class is set explicitly so the window is a kitty window whatever
 		// process it lands in: a kitty started as `--class revier-popup` would
 		// otherwise pass that class, and its window rule, on to the workspace.
@@ -495,6 +489,19 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 		return socket, id, nil
 	}
 	return h.startKitty(ctx, r, p)
+}
+
+// liveSocket is the first socket that answers. KITTY_LISTEN_ON leads the list,
+// and it outlives its kitty in every process started from it - a tmux server,
+// a shell restored by a session manager - so the first socket can be dead, and
+// a launch into it would fail every time.
+func (h *Host) liveSocket(ctx context.Context) (string, bool) {
+	for _, s := range h.socketList() {
+		if _, err := h.kitten(ctx, s, "ls"); err == nil {
+			return s, true
+		}
+	}
+	return "", false
 }
 
 // startKitty starts a kitty process for the first panel and waits for its

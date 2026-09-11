@@ -135,11 +135,11 @@ func TestPanelsCarryWhatTheProbeReads(t *testing.T) {
 	if agent.Vars["CS_TAB"] != "1" {
 		t.Errorf("CS_TAB did not come through user_vars: %+v", agent.Vars)
 	}
-	if agent.Kind != revier.PanelAgent {
-		t.Errorf("kind = %q, want agent: claude is in the foreground group", agent.Kind)
+	if agent.Kind == revier.PanelShell {
+		t.Errorf("kind = shell: claude is in the foreground group")
 	}
 	if len(agent.Command) == 0 || agent.Command[0] != "claude" {
-		t.Errorf("command = %v, want the agent's own argv, not the run-shell wrapper", agent.Command)
+		t.Errorf("command = %v, want the agent's own argv, not the run-shell wrapper or the git it runs", agent.Command)
 	}
 	if agent.PID != 5002 {
 		t.Errorf("pid = %d, want the agent's 5002", agent.PID)
@@ -152,7 +152,59 @@ func TestPanelsCarryWhatTheProbeReads(t *testing.T) {
 		t.Errorf("shell panel = %+v", shell)
 	}
 	if tool := panels[2]; tool.Kind != revier.PanelTool || tool.Command[0] != "taskmgr-ui" {
-		t.Errorf("tool panel = %+v: the innermost process is the command", tool)
+		t.Errorf("tool panel = %+v: the program inside the wrapper is the command", tool)
+	}
+}
+
+// A harness this adapter was not written with - one a probe declared in
+// config exists for - stays the panel's command while it runs a tool, behind
+// the run-shell wrapper and a login shell, so its probe keeps claiming it.
+// The adapter names no harness: which program is an agent is the probe's.
+func TestADeclaredHarnessRunningAToolIsStillTheCommand(t *testing.T) {
+	h := &kitty.Host{}
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 1, "pid": 6001,
+				"foreground_processes": []map[string]any{
+					{"pid": 6001, "cmdline": []string{"/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh", "/usr/bin/sh", "-lc", "myagent"}},
+					{"pid": 6002, "cmdline": []string{"/usr/bin/sh", "-lc", "myagent"}},
+					{"pid": 6003, "cmdline": []string{"/usr/local/bin/myagent", "--resume"}},
+					{"pid": 6004, "cmdline": []string{"rg", "TODO"}},
+				}}}}}}})
+	})
+	got, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	panel := got[0].Panels[0]
+	if !panel.Runs("myagent") || panel.PID != 6003 {
+		t.Errorf("panel command = %v, pid %d: want myagent's, 6003, not the rg it runs", panel.Command, panel.PID)
+	}
+	if panel.Kind == revier.PanelShell {
+		t.Error("kind = shell: a shell overrules every probe")
+	}
+}
+
+// A panel whose group holds only the wrapper and shells has no program of its
+// own running: it is a shell, and a probe's marker left in it is stale.
+func TestAPanelOfOnlyShellsIsAShell(t *testing.T) {
+	h := &kitty.Host{}
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 1, "pid": 6001,
+				"foreground_processes": []map[string]any{
+					{"pid": 6001, "cmdline": []string{"/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh"}},
+					{"pid": 6002, "cmdline": []string{"/usr/bin/zsh", "-i"}},
+				}}}}}}})
+	})
+	got, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if panel := got[0].Panels[0]; panel.Kind != revier.PanelShell {
+		t.Errorf("panel = %+v, want a shell", panel)
 	}
 }
 
@@ -270,9 +322,10 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 	for _, c := range calls {
 		seq = append(seq, strings.Join(c.args, " "))
 	}
-	if len(seq) != 5 {
-		t.Fatalf("got %d calls, want launch, title, launch, title, ls:\n%s", len(seq), strings.Join(seq, "\n"))
+	if len(seq) != 6 || seq[0] != "ls" {
+		t.Fatalf("got %d calls, want ls, launch, title, launch, title, ls:\n%s", len(seq), strings.Join(seq, "\n"))
 	}
+	seq = seq[1:]
 	for _, want := range []string{
 		"launch --type=os-window",
 		"--os-window-name session:demo", "--os-window-title session:demo",
@@ -346,8 +399,54 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if got := strings.Join(calls[0].args, " "); !strings.HasSuffix(got, "taskmgr-ui --all") {
-		t.Errorf("launch %q should end with the argv", got)
+	launched := false
+	for _, c := range calls {
+		if c.args[0] != "launch" {
+			continue
+		}
+		launched = true
+		if got := strings.Join(c.args, " "); !strings.HasSuffix(got, "taskmgr-ui --all") {
+			t.Errorf("launch %q should end with the argv", got)
+		}
+	}
+	if !launched {
+		t.Error("nothing was launched")
+	}
+}
+
+// KITTY_LISTEN_ON leads the socket list and outlives its kitty in every
+// process started from it. Open launches into the first socket that answers,
+// not into the first one listed, or every launch fails on the dead one.
+func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
+	h := &kitty.Host{}
+	var launches []call
+	h.SetSockets(func() []string { return []string{"unix:@kitty-stale", "unix:@kitty-4000"} })
+	h.SetStarter(func(context.Context, ...string) error {
+		t.Fatal("started a kitty while one answers")
+		return nil
+	})
+	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+		if socket == "unix:@kitty-stale" {
+			return nil, os.ErrNotExist
+		}
+		if args[0] == "launch" {
+			launches = append(launches, call{socket, args})
+			return []byte("7\n"), nil
+		}
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "tickets:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}}}}}})
+	})
+	ref, err := h.Open(context.Background(), revier.Realization{
+		Name: "tickets:demo", Launch: []string{"taskmgr-ui"}, Match: revier.Match{Title: "^tickets:demo$"},
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(launches) != 1 || launches[0].socket != "unix:@kitty-4000" {
+		t.Errorf("launches = %+v, want one, into the live unix:@kitty-4000", launches)
+	}
+	if ref.ID != "@kitty-4000/1" {
+		t.Errorf("ref = %+v, want the OS window on the live socket", ref)
 	}
 }
 
