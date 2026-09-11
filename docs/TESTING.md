@@ -33,32 +33,20 @@ L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
 resolution, toggle-back, and the degradation rules need no tool at all.
 
-L4 is not redundant with L2. It caught that `Go` never focused after `Open`,
-which L2 could not see because the fake had no opinion about what launching
-does to focus. An adapter layer proves the tool is actually driven; the fake
-proves only that the core is self-consistent.
+L2 does not replace L4. The fake has no opinion about focus, so `Go` not
+focusing after `Open` passed L2 and failed L4.
 
-L5 is why the sway host exists before Hyprland or KWin: `sway` on the headless
-wlroots backend gives a real compositor with real IPC and no display, so window
-control gets the same treatment as tmux. Each test starts its own sway on its
-own socket and opens windows with `foot`; both are installed in CI and the
-tests skip where either is missing. GNOME cannot be tested this way — `wctl`
-needs a live logged-in session — and neither can a kitty window opening, which
-is what L6 holds.
+L5 needs `sway` and `foot`; CI installs both.
 
-## Two invariants every host test must cover
+## What every host test must cover
 
-- **`Open` produces what `Match` finds.** Otherwise run-or-raise opens a second
-  instance every time. `TestOpenThenMatchFindsIt` is the shape; a new host owes
-  the same test.
-- **`Instances` does not scale with the project count.** A host that queries
-  per project turns a refresh into O(projects). Assert on the tool invocation
-  count, not on timing.
-- **Free text survives the round trip.** Window and pane titles carry arbitrary
-  characters, including whatever a host uses as a field separator. tmux 3.4 also
-  escapes non-printable bytes that 3.7 passes through, so a control-character
-  delimiter passes locally and fails in CI. Test a title containing the
-  separator.
+- **`Open` produces what `Match` finds** ([CODING.md](CODING.md)).
+  `TestOpenThenMatchFindsIt` in `internal/adapter/tmux` is the shape.
+- **`Instances` does not scale with the project count** ([CODING.md](CODING.md)).
+  Assert on the tool invocation count, not on timing.
+- **Free text survives the round trip.** Test a title that contains the host's
+  field separator. tmux 3.4 escapes non-printable bytes that 3.7 passes
+  through, so a control-character delimiter passes locally and fails in CI.
 
 ## Conventions
 
@@ -68,9 +56,8 @@ is what L6 holds.
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must
   stay green on a machine without sway.
-- Substrates are not pinned in `.mise.toml`. The live layer exists to run
-  against whatever tmux or sway is installed; pinning one would have hidden the
-  3.4-versus-3.7 format difference that CI caught.
+- Leave tmux and sway unpinned in `.mise.toml`: the live layer runs against
+  whatever is installed, which is how CI caught the 3.4-versus-3.7 difference.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.
@@ -86,11 +73,9 @@ gate; run them when changing `Survey`, `Render`, or matching:
 go test -run='^$' -bench='Survey|Render|MatchCompile' -benchtime=200x ./internal/core/
 ```
 
-`BenchmarkSurvey90` is the size that matters: ninety projects is what this
-machine actually has. What the numbers mean, and what follows from them, is
-`taskmgr show revier-ledpxj` in the revier store - measurements are a record of one run on
-one machine, so they live in the tracker rather than in the repository, where
-they would age silently.
+`BenchmarkSurvey90` is the size that matters. Results live in taskmgr task
+`revier-ledpxj`; record new ones there, never in the repository — a measurement
+is one run on one machine and ages silently in a doc.
 
 A change is green when `mise run quality:full` passes. Driving the product by
 hand is [RUNNING.md](RUNNING.md)'s, and it is never a substitute for a layer.

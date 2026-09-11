@@ -1,7 +1,6 @@
 # Overview
 
-A findability map. What revier *is* and why it is shaped this way is
-[design/](design/README.md); this file is where things live.
+A findability map: where things live, and how to search for them.
 
 ## Layout
 
@@ -15,11 +14,9 @@ A findability map. What revier *is* and why it is shaped this way is
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
-| `scripts/drive/` | Manual headless driver ([RUNNING.md](RUNNING.md)). |
+| `scripts/drive/` | Manual headless driver. |
 | `scripts/migrate-sessions/` | One-shot converter, `.session` files to project TOML. Not part of the product (`docs/design/decisions.md` D5). |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
-| `docs/design/` | The specification and the decision log. |
-
 ## The two ports
 
 `Host` (`pkg/revier/host.go`) provides instances of targets. `Runtime` and

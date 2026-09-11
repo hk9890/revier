@@ -124,7 +124,6 @@ Go 1.27, pinned with [mise](https://mise.jdx.dev).
 ```bash
 mise install
 mise run build     # ./bin/revier
-mise run test      # the fast layers
 ```
 
 Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),
