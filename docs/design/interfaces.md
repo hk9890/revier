@@ -105,7 +105,7 @@ type Instance struct {
 // the core can route Focus back without tracking it separately.
 type TargetRef struct {
     Host  string
-    ID    string // host-scoped: kitty window id, tmux pane id, WM window id
+    ID    string // host-scoped: kitty socket/OS window id, tmux server pid/window id, WM window id
     Title string
 }
 ```

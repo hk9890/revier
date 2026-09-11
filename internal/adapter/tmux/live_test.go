@@ -391,3 +391,125 @@ func TestSendTextTypesIntoThePane(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// tmux expands -n, -c and -T as formats. A '#' in a project name, a pane
+// title or a directory has to arrive as written: "C#" otherwise names the
+// window "C", which the project's match never finds, and a directory with a
+// '#' starts the pane in $HOME. tmux keeps a run of '#' before '[' as it is,
+// so that case is here as well.
+func TestHashSurvivesNameTitleAndDirectory(t *testing.T) {
+	h, c := server(t), ctx(t)
+	for i, name := range []string{"session:C#", "a#{b}", "x#[y]", "p##[q", "##", "e#"} {
+		dir := filepath.Join(t.TempDir(), name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		ref, err := h.Open(c, revier.Realization{
+			Name: name, Dir: dir,
+			Panels: []revier.PanelSpec{{Title: name, Command: []string{"sh", "-c", "sleep 30"}}},
+		})
+		if err != nil {
+			t.Fatalf("Open %q: %v", name, err)
+		}
+		instances, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		if len(instances) != i+1 {
+			t.Fatalf("got %d instances, want %d", len(instances), i+1)
+		}
+		var inst revier.Instance
+		for _, in := range instances {
+			if in.Ref.ID == ref.ID {
+				inst = in
+			}
+		}
+		if inst.Title != name {
+			t.Errorf("window name = %q, want %q", inst.Title, name)
+		}
+		if got := inst.Panels[0].Title; got != name {
+			t.Errorf("pane title = %q, want %q", got, name)
+		}
+		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", inst.Panels[0].ID.String(), "#{pane_current_path}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(string(out)); got != dir {
+			t.Errorf("pane cwd = %q, want %q", got, dir)
+		}
+	}
+}
+
+// A one-element launch is an argv like any other: tmux would hand a single
+// argument to the shell as a command line, where a space, a '&' or a ';' in
+// the program's path breaks it.
+func TestOneElementLaunchRunsWithoutAShell(t *testing.T) {
+	h, c := server(t), ctx(t)
+	dir := filepath.Join(t.TempDir(), "a b&c;d")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ran := filepath.Join(dir, "ran")
+	program := filepath.Join(dir, "run me")
+	script := "#!/bin/sh\ntouch '" + ran + "'\nsleep 30\n"
+	if err := os.WriteFile(program, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Open(c, revier.Realization{
+		Name: "one", Launch: []string{program}, Match: revier.Match{Title: "^one$"},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(ran); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%q did not run within 5s", program)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// tmux numbers windows per server from @0, so a new server hands out the ids
+// an old one used. A binding kept from before a restart must not raise the
+// unrelated window that now holds its old number.
+func TestABindingDoesNotOutliveItsServer(t *testing.T) {
+	h, c := server(t), ctx(t)
+	cr := &core.Core{Runtime: h}
+	p, err := core.PrepareProject(revier.Project{
+		Name: "revier",
+		Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+				Match: revier.Match{Title: "^home$"},
+			}},
+			{Name: "diff", Runtime: &revier.Realization{
+				Name: "diff", Launch: []string{"sh", "-c", "sleep 30"},
+				Match: revier.Match{Title: "^diff$"},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("PrepareProject: %v", err)
+	}
+	diff, err := cr.Go(c, p, "diff", nil)
+	if err != nil {
+		t.Fatalf("open diff: %v", err)
+	}
+	if err := exec.Command("tmux", "-L", h.Socket, "kill-server").Run(); err != nil {
+		t.Fatalf("kill-server: %v", err)
+	}
+	if _, err := cr.Go(c, p, "home", nil); err != nil {
+		t.Fatalf("open home on the new server: %v", err)
+	}
+
+	res, err := cr.Go(c, p, "diff", core.Bindings{"diff": diff.Ref})
+	if err != nil {
+		t.Fatalf("go diff: %v", err)
+	}
+	if !res.Launched {
+		t.Fatalf("go diff raised %q: the binding from the old server landed on another window", res.Ref.Title)
+	}
+}
