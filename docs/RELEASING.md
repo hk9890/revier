@@ -37,7 +37,9 @@ on a user-owned **private** repository.
 
 5. Dispatch the workflow and watch it. The run takes a few seconds to
    register; re-run the lookup if it returns nothing. GoReleaser creates or
-   updates the GitHub release itself, with notes generated from the commits.
+   updates the GitHub release itself. Its notes are the tag's `CHANGELOG.md`
+   section, printed by `scripts/release-notes vX.Y.Z`; a tag with no section
+   fails the run before it publishes.
 
    ```bash
    gh workflow run release.yml --ref vX.Y.Z
@@ -65,8 +67,9 @@ a new tag: `gh release upload vX.Y.Z dist/* --clobber`.
 
 ## What goes in the CHANGELOG section
 
-Write it for the operator, not for this repository. Its reader runs `revier`
-and has never opened the source. An entry earns its place by telling them what
+The section is the release text on GitHub. Write it for the operator, not for
+this repository: its reader runs `revier` and has never opened the source.
+Features, changed behaviour and fixes, never a commit list. An entry earns its place by telling them what
 they must do, what they will see that they did not see before, or what was
 wrong that is now fixed. State the symptom; the cause belongs in the commit
 message.
@@ -87,7 +90,8 @@ the tagged commit, and `mise run quality:full` green there — that run
 substitutes for the CI provenance.
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) goreleaser release --clean --skip=sign --skip=sbom
+scripts/release-notes vX.Y.Z > /tmp/release-notes.md
+GITHUB_TOKEN=$(gh auth token) goreleaser release --clean --skip=sign --skip=sbom --release-notes /tmp/release-notes.md
 ```
 
 This produces binaries and checksums but no signing, SBOMs or provenance. Drop

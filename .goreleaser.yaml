@@ -47,6 +47,11 @@ release:
   # failing (docs/RELEASING.md).
   replace_existing_artifacts: true
 
+# The release notes are the version's CHANGELOG.md section, passed with
+# --release-notes (scripts/release-notes), not a commit list.
+changelog:
+  disable: true
+
 signs:
   - cmd: cosign
     artifacts: checksum
