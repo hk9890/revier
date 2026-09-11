@@ -26,6 +26,13 @@ type Project struct {
 	// project file travels between machines, and the checkout does not.
 	GitURL string `toml:"git_url" json:"git_url,omitempty"`
 
+	// Host names the machine the project lives on, as ssh knows it. Empty is
+	// this machine. A project with a host is surveyed and driven by the revier
+	// installed there (decisions.md D40): its runtime instances, its agents
+	// and its checkout are that machine's, and only the window a local
+	// target opens to reach them is this one's.
+	Host string `toml:"host" json:"host,omitempty"`
+
 	Targets []Target          `toml:"target" json:"targets"`
 	Vars    map[string]string `toml:"vars" json:"vars,omitempty"`
 }
@@ -39,6 +46,17 @@ func (p Project) Home() (Target, bool) {
 		}
 	}
 	return Target{}, false
+}
+
+// Label is the name a listing shows: the project's, and its host after an @
+// for one on another machine, which tells two projects of one name apart.
+// The host follows the name, so a match position within the name still
+// points at the same letter of the label.
+func (p Project) Label() string {
+	if p.Host != "" {
+		return string(p.Name) + "@" + p.Host
+	}
+	return string(p.Name)
 }
 
 // Target returns the named target.

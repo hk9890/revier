@@ -44,7 +44,9 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 	if out.Dir, err = expand(p, r.Dir); err != nil {
 		return revier.Realization{}, fmt.Errorf("dir: %w", err)
 	}
-	if out.Dir == "" {
+	// A remote project's path is on its host, and a local launch started in
+	// it would fail before reaching the host; it starts where revier did.
+	if out.Dir == "" && p.Host == "" {
 		out.Dir = p.Path
 	}
 	if out.Match.Class, err = expand(p, r.Match.Class); err != nil {

@@ -48,6 +48,18 @@ func TestSelectRunsEveryProjectThatHasADirectory(t *testing.T) {
 	}
 }
 
+// A project on another machine has no directory here to run in, whatever
+// its path resolves to on this one: the path is in the host's terms.
+func TestSelectLeavesARemoteProjectOut(t *testing.T) {
+	far := projectAt("far", "/a")
+	far.Host = "buildbox"
+	picks := core.Select([]core.Project{far, projectAt("a", "/a")}, dirs(map[string]string{"/a": "/a"}), nil)
+
+	if got := skips(picks); got["far"] != core.SkipRemote || got["a"] != "" {
+		t.Errorf("skips = %v, want far remote and a run", got)
+	}
+}
+
 // Two projects on one checkout - a symlink, or two project files for one
 // repository - are one directory. The command runs there once.
 func TestSelectRunsOneDirectoryOnce(t *testing.T) {

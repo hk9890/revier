@@ -4,7 +4,7 @@
 
 Ports and adapters. The core holds the domain and the orchestration and knows
 nothing about kitty, GNOME, tmux, or Claude. Every tool-specific fact lives
-behind one of two interfaces, defined in [interfaces.md](interfaces.md).
+behind one of three interfaces, defined in [interfaces.md](interfaces.md).
 
 ```
                     ┌──────────────┐
@@ -30,12 +30,17 @@ behind one of two interfaces, defined in [interfaces.md](interfaces.md).
   * not in the first version
 ```
 
-## Two ports
+## Three ports
 
 | Port | Answers | Second implementation |
 |---|---|---|
 | **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter. `Runtime` and `WindowController` are the same interface with different providers behind them. |
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
+| **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
+
+`Remote` is a revier on another machine, not a host: it answers with the view
+the core produces, and lists no instances here (decisions.md D40). The core
+lays its answer over the local view of the projects that live there.
 
 `Host` is one interface because run-or-raise is one operation. A compositor
 provides instances as OS windows; a terminal provides them as panes and
@@ -121,6 +126,7 @@ internal/adapter/
     claude/
     opencode/
     execprobe/
+    ssh/
 internal/tui/          the one TUI surface
 docs/design/
 ```

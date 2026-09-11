@@ -116,31 +116,48 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 
 	status, style := "stopped", th.NameDim
 	switch {
+	case v.Unreachable != "":
+		status, style = "unreachable", th.PathMissing
 	case v.Running:
 		status, style = "running", th.Running
 	case !v.PathExists:
 		status, style = "not available", th.PathMissing
 	}
 	line("Status", status, style)
+	if v.Project.Host != "" {
+		line("Host", v.Project.Host, th.Path)
+	}
 
+	// A host that did not answer has said nothing about the checkout.
 	pathStyle := th.Path
-	if !v.PathExists {
+	if !v.PathExists && v.Unreachable == "" {
 		pathStyle = th.PathMissing
 	}
 	line("Path", contractHome(v.Project.Path), pathStyle)
 	if v.Project.GitURL != "" {
 		line("Git URL", v.Project.GitURL, th.Path)
 	}
+	// A host that did not answer is said in full: the row has room for the
+	// fact, and this is where the reason is read.
+	if v.Unreachable != "" {
+		b.WriteString(hang("", v.Unreachable, w, th.PathMissing))
+		b.WriteString("\n")
+	}
 	// Only worth saying when it is the reason nothing can start. A running
 	// project whose directory has since gone is a different problem, and the
-	// red path already says it.
-	if !v.PathExists && !v.Running {
-		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on this machine", w)))
+	// red path already says it. A remote project's host clones it on open
+	// (decisions.md D40), so Enter is the same answer there.
+	if !v.PathExists && !v.Running && v.Unreachable == "" {
+		where, clone := "this machine", "Enter: clone and open"
+		if v.Project.Host != "" {
+			where, clone = v.Project.Host, "Enter: clone there and open"
+		}
+		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
 		// What Enter does about it, as the picker's preview says
 		// (os-fzf.sh:326, :338).
 		if v.Project.GitURL != "" {
-			b.WriteString(th.Meta.Render(clipTo("Enter: clone and open", w)))
+			b.WriteString(th.Meta.Render(clipTo(clone, w)))
 		} else {
 			b.WriteString(th.PathMissing.Render(clipTo("No git_url recorded to clone it from", w)))
 		}
@@ -177,7 +194,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 // indentation. rows counts the heading; a listing that does not fit ends in
 // an ellipsis on its last row.
 func (m *Model) snapshot(v revier.ProjectView, w, rows int) string {
-	if !v.PathExists {
+	if !v.PathExists || v.Project.Host != "" {
 		return ""
 	}
 	tree := m.treeFor(v.Project.Path)

@@ -30,11 +30,11 @@ func editableModel(t *testing.T) (Model, string) {
 	if err := os.WriteFile(file, []byte(editable), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, err := config.LoadProject(file)
+	p, err := config.LoadProject(file, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, []core.Project{p}, t.TempDir(), nil, time.Second, theme.Default(), "")
+	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, []core.Project{p}, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	return m, file
 }
 

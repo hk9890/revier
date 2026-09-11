@@ -14,6 +14,7 @@ type Project struct {
     Name    ProjectName
     Path    string
     GitURL  string // what `revier open` clones when Path is missing (D30)
+    Host    string // the machine the project lives on, as ssh knows it; empty is this one (D40)
     Targets []Target
     Vars    map[string]string // template values for launches
 }
@@ -157,6 +158,46 @@ const (
 )
 ```
 
+## Attacher
+
+```go
+// Attacher is an optional capability of a Runtime, detected by type
+// assertion. AttachCommand returns the argv that puts the calling terminal
+// onto the instance, for the caller to exec: `revier open --attach` ends in
+// it, and the ssh pane of a remote project runs that on the host (D40). A
+// runtime whose instances are OS windows has nothing to attach to.
+type Attacher interface {
+    AttachCommand(ref TargetRef) ([]string, error)
+}
+```
+
+## Remote
+
+A revier on another machine (D40). It is asked what it knows and told what to
+type, and nothing else: it lists no instances, opens nothing and focuses
+nothing here.
+
+```go
+type Remote interface {
+    // Name is the host as the project file names it.
+    Name() string
+
+    // Survey reports the named projects as the remote revier sees them, in
+    // one call. A name the remote does not know is an error.
+    Survey(ctx context.Context, names []ProjectName) ([]ProjectView, error)
+
+    // Prompt and Wait are `revier agent prompt` and `revier agent wait`
+    // there, with the remote's own refusals.
+    Prompt(ctx context.Context, address, text string) error
+    Wait(ctx context.Context, address, until string) (Status, error)
+
+    // RunCommand is the argv that runs `revier run <action> -p <project>`
+    // there, for the caller to run here with the terminal. The action is
+    // the remote's configuration's to define.
+    RunCommand(project ProjectName, action string) []string
+}
+```
+
 ## Panels and agent state
 
 ```go
@@ -234,9 +275,11 @@ What `internal/core` produces, and what both the TUI and `--json` render.
 
 ```go
 type ProjectView struct {
-    Project Project
-    Running bool
-    Home    TargetRef // zero when not running
+    Project     Project
+    Running     bool
+    PathExists  bool      // the checkout is on the machine that answered: this one, or the host (D40)
+    Unreachable string    // why a remote project's host gave no answer; empty when it did (D40)
+    Home        TargetRef // zero when not running
     Targets []TargetView
     Agents  []AgentView
 }

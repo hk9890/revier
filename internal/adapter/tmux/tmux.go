@@ -334,6 +334,23 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
+// AttachCommand is the argv that puts the calling terminal onto the window.
+// The window is the target: tmux attaches the session that holds it and
+// makes it current, and instances are listed across the whole server, so a
+// window matched in another session is reached the same way. It goes to the
+// server this host speaks to, so a private socket is carried along. The
+// caller execs it; nothing here takes over a terminal.
+func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
+	if ref.Host != h.Name() || ref.ID == "" {
+		return nil, fmt.Errorf("tmux: %s/%s is not a tmux window", ref.Host, ref.ID)
+	}
+	argv := []string{"tmux", "-u"}
+	if h.Socket != "" {
+		argv = append(argv, "-L", h.Socket)
+	}
+	return append(argv, "attach-session", "-t", windowOf(ref.ID)), nil
+}
+
 // SendText types text into a pane. -l sends it as characters, so no word of
 // it is read as a key name, and "--" keeps a leading dash from reading as a
 // flag. A pane id is unique across the server, so the instance is not needed.

@@ -28,6 +28,11 @@ import (
 // Config is the global configuration: which adapters to prefer, the actions
 // the TUI exposes, and the external agent probes.
 type Config struct {
+	// Host is what the project files call this machine: the ssh name other
+	// machines reach it by. A project whose host is this name is local here,
+	// so the same file serves on both sides (decisions.md D40). Empty on a
+	// machine no project file names.
+	Host    string   `toml:"host"`
 	Hosts   Hosts    `toml:"hosts"`
 	UI      UI       `toml:"ui"`
 	Actions []Action `toml:"action"`
@@ -118,7 +123,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"))
+	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,8 +174,8 @@ func validateActions(actions []Action) error {
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
-// across machines.
-func LoadProjects(dir string) ([]core.Project, error) {
+// across machines. self is what the files call this machine, or empty.
+func LoadProjects(dir, self string) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -192,7 +197,7 @@ func LoadProjects(dir string) ([]core.Project, error) {
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
-		p, err := LoadProject(path)
+		p, err := LoadProject(path, self)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -214,11 +219,15 @@ func LoadProjects(dir string) ([]core.Project, error) {
 
 // LoadProject reads, validates, and prepares one project file. Every error
 // names the file: a rendering or compile failure is reported here, at load,
-// and never reaches a keystroke.
-func LoadProject(path string) (core.Project, error) {
+// and never reaches a keystroke. self is what the files call this machine:
+// a project whose host is that name lives here, and loads as a local one.
+func LoadProject(path, self string) (core.Project, error) {
 	var p revier.Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if p.Host != "" && p.Host == self {
+		p.Host = ""
 	}
 	if p.Name == "" {
 		// Fall back to the file stem so a project file need not repeat its own
@@ -227,8 +236,12 @@ func LoadProject(path string) (core.Project, error) {
 	}
 	// A path is expanded once, here, so every consumer - templates, working
 	// directories, the cwd lookup - sees an absolute path and none of them
-	// hands a literal "~" to a program that does not expand it.
-	p.Path = expandHome(p.Path)
+	// hands a literal "~" to a program that does not expand it. A remote
+	// project's path is its host's to expand: the same file is read there,
+	// and the home directory here says nothing about the one there.
+	if p.Host == "" {
+		p.Path = expandHome(p.Path)
+	}
 	for _, t := range p.Targets {
 		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
 			if r != nil {
@@ -265,6 +278,11 @@ func Validate(p revier.Project) error {
 	if p.GitURL != "" {
 		if err := ValidateGitURL(p.GitURL); err != nil {
 			errs = append(errs, fmt.Errorf("git_url: %w", err))
+		}
+	}
+	if p.Host != "" {
+		if err := validateHost(p.Host); err != nil {
+			errs = append(errs, fmt.Errorf("host: %w", err))
 		}
 	}
 
@@ -385,17 +403,40 @@ func Validate(p revier.Project) error {
 // A URL with credentials is not echoed back: the message would print the
 // token the rule exists to keep out of the file.
 func ValidateGitURL(u string) error {
-	switch {
-	case u == "":
+	if u == "" {
 		return errors.New("empty")
-	case httpsUserinfo.MatchString(u):
+	}
+	if httpsUserinfo.MatchString(u) {
 		return errors.New("an https URL with credentials in it is refused; record it without the user part")
-	case strings.IndexFunc(u, unicode.IsSpace) >= 0:
-		return fmt.Errorf("%q contains whitespace", u)
-	case strings.IndexFunc(u, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
-		return fmt.Errorf("%q contains a control character", u)
-	case strings.ContainsAny(u, "`\"'\\$;|&<>(){}"):
+	}
+	if err := oneWord(u); err != nil {
+		return err
+	}
+	if strings.ContainsAny(u, "`\"'\\$;|&<>(){}") {
 		return fmt.Errorf("%q contains a shell metacharacter", u)
+	}
+	return nil
+}
+
+// validateHost refuses a host ssh would read as something other than a
+// destination. The name is handed to ssh as one argument after "--", so a
+// shell character is harmless; a space or a control character is a name no
+// ssh config holds, and a leading dash is a flag.
+func validateHost(h string) error {
+	if strings.HasPrefix(h, "-") {
+		return fmt.Errorf("%q starts with a dash, which ssh reads as a flag", h)
+	}
+	return oneWord(h)
+}
+
+// oneWord refuses whitespace and control characters: a value handed to a
+// program as one argument, and shown back in a message, holds neither.
+func oneWord(s string) error {
+	switch {
+	case strings.IndexFunc(s, unicode.IsSpace) >= 0:
+		return fmt.Errorf("%q contains whitespace", s)
+	case strings.IndexFunc(s, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
+		return fmt.Errorf("%q contains a control character", s)
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/adapter/sway"
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
@@ -171,6 +172,21 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 	return b
 }
 
-func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys}
+// remotes wires one ssh remote per host the project files name. A host is
+// not probed: whether it answers is learned by the survey, per refresh, and
+// reported on the projects that live there rather than refusing to start.
+func remotes(projects []core.Project) map[string]revier.Remote {
+	out := map[string]revier.Remote{}
+	for _, p := range projects {
+		if p.Host != "" {
+			if _, ok := out[p.Host]; !ok {
+				out[p.Host] = ssh.New(p.Host)
+			}
+		}
+	}
+	return out
+}
+
+func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder, projects []core.Project) *core.Core {
+	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys, Remotes: remotes(projects)}
 }

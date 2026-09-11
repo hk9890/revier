@@ -38,6 +38,11 @@ type Core struct {
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
 
+	// Remotes are the revier installations on other machines, by host, for
+	// the projects whose file names one (decisions.md D40). A remote project
+	// on a host with no entry here is reported unreachable, not refused.
+	Remotes map[string]revier.Remote
+
 	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
 	// provides no instances and takes no part in run-or-raise, and a machine
 	// with no desktop leaves it nil.
@@ -611,13 +616,23 @@ type Report struct {
 // not be was refused at load, so the survey has no per-project error path and
 // does no work that a previous refresh did not also have to do.
 func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
+	// The remote hosts are asked while the local ones are listed: a round
+	// trip to another machine is the slow part, and the local listing need not
+	// wait for it.
+	remote := make(chan map[revier.ProjectName]remoteAnswer, 1)
+	go func() { remote <- c.surveyRemotes(ctx, projects) }()
 	snap, err := c.snapshot(ctx)
 	if err != nil {
 		return Report{}, err
 	}
+	answers := <-remote
 	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name], attached[p.Name]))
+		v := c.view(ctx, snap, p, bound[p.Name], attached[p.Name])
+		if a, ok := answers[p.Name]; ok {
+			merge(&v, a)
+		}
+		r.Views = append(r.Views, v)
 	}
 	for _, h := range c.hosts() {
 		r.Hosts = append(r.Hosts, h.Name())
@@ -748,7 +763,11 @@ func dirExists(path string) bool {
 }
 
 func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
-	v := revier.ProjectView{Project: p.Project, PathExists: dirExists(p.Path)}
+	// A remote project's checkout and agents are its host's word, laid over
+	// this view by merge; the path is in the host's terms, and the pane here
+	// that reaches the project is not the agent in it.
+	local := p.Host == ""
+	v := revier.ProjectView{Project: p.Project, PathExists: local && dirExists(p.Path)}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
@@ -769,7 +788,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 				}
 				// One instance can back two targets; probing it twice would
 				// report the same agent twice.
-				if k := key(inst.Ref); !seen[k] {
+				if k := key(inst.Ref); local && !seen[k] {
 					seen[k] = true
 					v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 				}

@@ -45,8 +45,9 @@ To install from source instead, see [Building](#building).
 
 ```
 revier                        the TUI: every project, its agent state, its targets
-revier list [--json]          the same, printed once
-revier open [name]            run-or-raise a project's workspace
+revier list [--json] [name..] the same, printed once, or for the named projects
+revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
+                              with this terminal on it (tmux)
 revier new [name]             write a project file for this directory
 revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
 revier run <action> [-p name] run a configured action in the project
@@ -83,6 +84,34 @@ worked example, is [docs/design/extending.md](docs/design/extending.md).
 `revier new` writes one for the current directory, and `revier open <name>`
 does the same for a name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
+
+A project can live on another machine. Its file says `host = "buildbox"`, an
+ssh destination, and its home target here is a pane that reaches it:
+
+```toml
+name = "far"
+path = "~/dev/far"
+host = "buildbox"
+
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:far"
+  launch = ["ssh", "-t", "buildbox", "revier", "open", "far", "--attach"]
+  match = { title = "^session:far$" }
+```
+
+revier must be installed on the host, with tmux and the same project file
+under its `~/.config/revier/projects/`. The host's `config.toml` says what the
+files call it, `host = "buildbox"`, so that file is local there and the host
+does not ask itself over ssh. The list then shows the project as
+`far@buildbox` with what the agent there is doing, read from the revier
+there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
+wait far ...` and `revier run <action> -p far` run on the host, so an action
+is one the host's `config.toml` defines. A host that does not answer shows as
+unreachable. ssh runs in batch mode, so the host has to accept a key;
+`ControlMaster` in `~/.ssh/config` keeps the refresh fast.
 
 ## Keybindings
 

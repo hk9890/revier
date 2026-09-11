@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -33,10 +34,11 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json]          the same, printed once
-  revier open [name]            run-or-raise a project's workspace; an unknown name
+  revier list [--json] [name..] the same, printed once, or for the named projects
+  revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
-                                missing directory is cloned from git_url
+                                missing directory is cloned from git_url; --attach
+                                ends with this terminal on it (tmux)
   revier new [name]             write a project file for this directory
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
   revier run <action> [-p name] run a configured action in the project
@@ -220,7 +222,7 @@ func cmdTUI(a *app) error {
 	if p, err := a.resolveProject(context.Background(), ""); err == nil {
 		start = p.Name
 	}
-	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg.Actions, time.Second, th, start)
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start)
 	// Cell motion reports the wheel and clicks, and takes plain drag-to-select
 	// from the terminal; shift-drag still selects in kitty and most others.
 	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
@@ -234,15 +236,27 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Named, the list is those projects alone. This is how a revier on
+	// another machine is asked about the projects that live there
+	// (decisions.md D40), and a name it does not know is an error, so a
+	// missing project file there is reported, not shown as nothing.
+	projects := a.projects
 	if len(pos) > 0 {
-		return fmt.Errorf("usage: revier list [--json]")
+		projects = nil
+		for _, name := range pos {
+			p, ok := a.project(revier.ProjectName(name))
+			if !ok {
+				return fmt.Errorf("no project named %q", name)
+			}
+			projects = append(projects, p)
+		}
 	}
 
 	// What the survey can judge: a ref written after this, by another
 	// process, is to a window the listing may have missed. A state that
 	// cannot be read is nil, and a nil state lets nothing be pruned.
 	before, _ := state.Load(a.stateRoot)
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
+	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
 	}
@@ -271,13 +285,16 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
 	for _, v := range views {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			v.Project.Name, runState(v), agentSummary(v), targetSummary(v))
+			v.Project.Label(), runState(v), agentSummary(v), targetSummary(v))
 	}
 	return w.Flush()
 }
 
 func runState(v revier.ProjectView) string {
-	if v.Running {
+	switch {
+	case v.Unreachable != "":
+		return "unreachable"
+	case v.Running:
 		return "running"
 	}
 	return "-"
@@ -320,12 +337,13 @@ func targetSummary(v revier.ProjectView) string {
 
 func cmdOpen(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("open", flag.ContinueOnError)
+	attach := fs.Bool("attach", false, "end with this terminal on the workspace")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 1 {
-		return fmt.Errorf("usage: revier open [name]")
+		return fmt.Errorf("usage: revier open [name] [--attach]")
 	}
 	name := ""
 	if len(pos) > 0 {
@@ -350,23 +368,60 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if !ok {
 		return fmt.Errorf("project %q has no home target", p.Name)
 	}
-	cloned, err := checkout.Ensure(p.Project, os.Stderr)
-	if err != nil {
-		return err
-	}
-	if cloned {
-		// The clone ran without a deadline. The host calls still need one,
-		// and the one set at startup may have been spent waiting for git.
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
-		defer cancel()
+	// A remote project's checkout is its host's to clone: the pane opened
+	// here runs `revier open` there, and that one clones (decisions.md D40).
+	if p.Host == "" {
+		cloned, err := checkout.Ensure(p.Project, os.Stderr)
+		if err != nil {
+			return err
+		}
+		if cloned {
+			// The clone ran without a deadline. The host calls still need
+			// one, and the one set at startup may have been spent waiting
+			// for git.
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
+			defer cancel()
+		}
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {
 		return err
 	}
+	if *attach {
+		return a.attach(ref)
+	}
 	fmt.Printf("%s: %s\n", p.Name, describe(ref))
 	return nil
+}
+
+// attach ends the command with this terminal on the instance: the process
+// becomes the runtime's attach, so the pane that ran `revier open --attach`
+// is the workspace from here on. It is what the ssh pane of a remote
+// project runs on the host (decisions.md D40). Only a runtime that can
+// attach a terminal offers it; a runtime whose instances are windows of
+// their own has been raised already, and there is nothing to become.
+func (a *app) attach(ref revier.TargetRef) error {
+	att, ok := a.core.Runtime.(revier.Attacher)
+	if !ok {
+		name := "none"
+		if a.core.Runtime != nil {
+			name = a.core.Runtime.Name()
+		}
+		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes tmux", name)
+	}
+	if ref.IsZero() {
+		return errors.New("--attach: the workspace has not come up yet, so there is nothing to attach to")
+	}
+	argv, err := att.AttachCommand(ref)
+	if err != nil {
+		return err
+	}
+	path, err := exec.LookPath(argv[0])
+	if err != nil {
+		return err
+	}
+	return syscall.Exec(path, argv, os.Environ())
 }
 
 func cmdGo(ctx context.Context, a *app, args []string) error {
@@ -405,12 +460,26 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	argv, err := a.action(p, pos[0])
+	argv, err := a.actionArgv(p, pos[0])
 	if err != nil {
 		return err
 	}
 	a.launchedAction(p.Name)
 	return runAction(p, argv)
+}
+
+// actionArgv is what runs for the named action: the action rendered against
+// the project, or, for a project on another machine, the ssh that runs the
+// action there (decisions.md D40).
+func (a *app) actionArgv(p core.Project, name string) ([]string, error) {
+	r, err := a.core.RemoteOf(p)
+	if err != nil {
+		return nil, err
+	}
+	if r != nil {
+		return r.RunCommand(p.Name, name), nil
+	}
+	return a.action(p, name)
 }
 
 // action renders the named action's argv against the project. An unknown name
@@ -443,7 +512,9 @@ var errActionFailed = errors.New("the action failed")
 // calls, and an action - an editor, a long pull - runs as long as it runs.
 func runAction(p core.Project, argv []string) error {
 	c := exec.Command(argv[0], argv[1:]...)
-	c.Dir = p.Path
+	if p.Host == "" {
+		c.Dir = p.Path // a remote project's path is on its host, where the action runs
+	}
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)

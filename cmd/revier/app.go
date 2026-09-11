@@ -52,7 +52,7 @@ func newApp(ctx context.Context) (*app, error) {
 		stateRoot: stateRoot,
 		// No keybinder: probing the desktop costs a process, and only
 		// `revier keys` reads one. cmdKeys selects it when it is needed.
-		core: newCore(cfg, rt, win, nil),
+		core: newCore(cfg, rt, win, nil, projects),
 	}, nil
 }
 
@@ -113,6 +113,11 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 func (a *app) projectForPath(dir string) (core.Project, bool) {
 	best, bestLen := core.Project{}, -1
 	for _, p := range a.projects {
+		// A remote project's path is on its host; a directory here of the
+		// same name is some other checkout.
+		if p.Host != "" {
+			continue
+		}
 		root := filepath.Clean(p.Path)
 		if root == "" {
 			continue

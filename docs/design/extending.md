@@ -15,6 +15,9 @@ name = "revier"
 path = "~/dev/github/revier"
 # Optional. Opening the project clones it here when path is missing.
 git_url = "git@github.com:hk9890/revier.git"
+# Optional. The ssh host the project lives on; the revier there is asked
+# about it, and path is in that machine's terms (decisions.md D40).
+# host = "buildbox"
 
 # The workspace. Home is where toggle-back returns.
 [[target]]

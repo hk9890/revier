@@ -89,8 +89,13 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	gap := style(th.Path).Render(" ")
 	prefix := bar + gap + style(markStyle).Render(mark) + gap
 	if th.Glyphs.Folder != "" {
+		// The column says where the checkout is: here, not here, or on a
+		// host. A host without the checkout is said in words under the state.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
-		if !v.PathExists {
+		switch {
+		case v.Project.Host != "":
+			folder, folderStyle = th.Glyphs.Remote, th.Remote
+		case !v.PathExists:
 			folder, folderStyle = th.Glyphs.NoFolder, th.PathMissing
 		}
 		prefix += style(folderStyle).Render(folder) + gap
@@ -119,7 +124,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
 	}
 
-	nameText := clipTo(string(v.Project.Name), min(projectCol, maxNameWidth))
+	nameText := clipTo(v.Project.Label(), min(projectCol, maxNameWidth))
 	first := prefix + cell(highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match)), projectCol+gridGap) +
 		d.agent(v, agentCol, style)
 	if agentCol == 0 {
@@ -162,7 +167,7 @@ func (d projectDelegate) projectColumn(m list.Model) int {
 	for _, item := range m.VisibleItems() {
 		if it, ok := item.(projectItem); ok {
 			col = max(col,
-				min(lipgloss.Width(string(it.view.Project.Name)), maxNameWidth),
+				min(lipgloss.Width(it.view.Project.Label()), maxNameWidth),
 				lipgloss.Width(contractHome(it.view.Project.Path)))
 		}
 	}
@@ -198,8 +203,22 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 // home open: that is what the green mark says.
 func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	th := d.theme
+	if v.Unreachable != "" {
+		// The failure itself is the pane's: here there is room for the fact.
+		note := v.Project.Host + " unreachable"
+		if lipgloss.Width(note) > room {
+			note = "unreachable"
+		}
+		if lipgloss.Width(note) > room {
+			return ""
+		}
+		return style(th.PathMissing).Render(note)
+	}
 	if !v.PathExists {
 		note := "not on this machine"
+		if v.Project.Host != "" {
+			note = "not on " + v.Project.Host
+		}
 		if v.Project.GitURL != "" {
 			note = "not cloned"
 		}

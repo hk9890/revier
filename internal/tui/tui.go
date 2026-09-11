@@ -52,8 +52,11 @@ type Model struct {
 	projects  []core.Project
 	stateRoot string
 	actions   []config.Action
-	refresh   time.Duration
-	theme     theme.Theme
+	// self is what the project files call this machine, for a file read
+	// again after an edit, as config.Load read it at start.
+	self    string
+	refresh time.Duration
+	theme   theme.Theme
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
@@ -93,10 +96,11 @@ type Model struct {
 // New builds the surface over prepared projects. stateRoot is where revier's
 // state lives: attached instances are read from it on every refresh and
 // claims are written to it.
-func New(c *core.Core, projects []core.Project, stateRoot string, actions []config.Action, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
-		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
+		core: c, projects: projects, stateRoot: stateRoot, actions: actions, self: cfg.Host,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
@@ -516,6 +520,11 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if home, ok := p.Home(); ok {
+			// A remote project's checkout is its host's: the pane opened
+			// here runs `revier open` there, which clones (decisions.md D40).
+			if p.Host != "" {
+				return m, m.goTarget(p, home.Name)
+			}
 			if !v.PathExists && p.GitURL != "" {
 				return m, m.clone(p, home.Name)
 			}
@@ -632,6 +641,24 @@ const bindWait = 30 * time.Second
 // action runs the configured action bound to the key, if any, against the
 // selected project. The terminal is handed to the command while it runs, and
 // the argv is rendered by the same rules `revier run` uses.
+// actionArgv is what runs for an action on a project: the action rendered
+// against the project, or, for a project on another machine, the ssh that
+// runs the action there (decisions.md D40).
+func (m Model) actionArgv(p core.Project, act config.Action) ([]string, error) {
+	r, err := m.core.RemoteOf(p)
+	if err != nil {
+		return nil, err
+	}
+	if r != nil {
+		return r.RunCommand(p.Name, act.Name), nil
+	}
+	argv, err := core.RenderArgv(p.Project, act.Run)
+	if err == nil && len(argv) == 0 {
+		err = errors.New("it runs nothing")
+	}
+	return argv, err
+}
+
 func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	c, ok := pressed(msg)
 	if !ok {
@@ -649,15 +676,14 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if !ok {
 			return nil, true
 		}
-		argv, err := core.RenderArgv(p.Project, act.Run)
-		if err == nil && len(argv) == 0 {
-			err = errors.New("it runs nothing")
-		}
+		argv, err := m.actionArgv(p, act)
 		if err != nil {
 			return func() tea.Msg { return actedMsg{err: fmt.Errorf("action %q: %w", act.Name, err)} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Dir = p.Path
+		if p.Host == "" {
+			cmd.Dir = p.Path // a remote project's path is on its host, where the action runs
+		}
 		project := p.Name
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			// An action may open anything; the window that appears next is

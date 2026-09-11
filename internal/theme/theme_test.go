@@ -71,7 +71,7 @@ func TestEveryRoleIsSetInEveryFlavour(t *testing.T) {
 
 // optional are the glyphs a set may leave out: the folder column, which a set
 // draws for both states or not at all.
-var optional = map[string]bool{"Folder": true, "NoFolder": true}
+var optional = map[string]bool{"Folder": true, "NoFolder": true, "Remote": true}
 
 // The comment on Glyphs promises one cell each. A two-cell glyph in a row
 // built from padded columns moves every column after it.
@@ -98,8 +98,8 @@ func TestNoGlyphSetIsIncomplete(t *testing.T) {
 				t.Errorf("%s glyph set has no %s", setName, name)
 			}
 		}
-		if (g.Folder == "") != (g.NoFolder == "") {
-			t.Errorf("%s glyph set draws one folder state and not the other", setName)
+		if (g.Folder == "") != (g.NoFolder == "") || (g.Folder == "") != (g.Remote == "") {
+			t.Errorf("%s glyph set draws one folder state and not the others", setName)
 		}
 	}
 }
