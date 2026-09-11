@@ -80,13 +80,16 @@ The TUI needs a terminal, and a tmux pane is one. Run it on a private server
 against the scratch configuration above and read the screen back:
 
 ```bash
-T="tmux -L revier-tui"
-$T new-session -d -s tui -x 100 -y 20 "REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"
-$T capture-pane -p -t tui                       # the rows, as rendered
-$T send-keys -t tui d e m Enter                 # type to filter, Enter to drill in
-$T send-keys -t tui Escape q                    # back, quit
-$T kill-server
+t() { tmux -L revier-tui "$@"; }                # a function: zsh does not split a $T variable
+t new-session -d -s tui -x 100 -y 20 "REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"
+t capture-pane -p -t tui                        # the rows, as rendered
+t send-keys -t tui d e m Tab                    # type to filter, Tab lists the targets
+for k in back clear quit; do t send-keys -t tui Escape; sleep 0.3; done   # one at a time: two quick Escapes read as alt+Escape
+t kill-server
 ```
+
+Enter on a project runs its home target, so press it only on a scratch project
+whose launch is harmless, such as `sh -c "sleep 600"`.
 
 To see the agent line change without a keypress, retitle the agent pane on the
 scratch server while the TUI runs, then capture again after a refresh:
