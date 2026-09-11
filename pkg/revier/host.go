@@ -132,3 +132,16 @@ const (
 	WindowClosed
 	WindowFocused
 )
+
+// Attacher is an optional capability of a Runtime, detected by type
+// assertion. A runtime that implements it can put the calling terminal onto
+// one of its instances, which is how `revier open --attach` ends: a tmux
+// window is attached to, and the ssh pane that reaches a remote project is
+// that attach (decisions.md D40). A runtime whose instances are OS windows of
+// their own has nothing to attach to, and does not implement it.
+//
+// AttachCommand returns the argv that does it, for the caller to exec in the
+// terminal it holds; the runtime never takes over a terminal itself.
+type Attacher interface {
+	AttachCommand(ref TargetRef) ([]string, error)
+}

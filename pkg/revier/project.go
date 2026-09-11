@@ -26,6 +26,13 @@ type Project struct {
 	// project file travels between machines, and the checkout does not.
 	GitURL string `toml:"git_url" json:"git_url,omitempty"`
 
+	// Host names the machine the project lives on, as ssh knows it. Empty is
+	// this machine. A project with a host is surveyed and driven by the revier
+	// installed there (decisions.md D40): its runtime instances, its agents
+	// and its checkout are that machine's, and only the window a local
+	// target opens to reach them is this one's.
+	Host string `toml:"host" json:"host,omitempty"`
+
 	Targets []Target          `toml:"target" json:"targets"`
 	Vars    map[string]string `toml:"vars" json:"vars,omitempty"`
 }

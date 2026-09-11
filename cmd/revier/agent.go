@@ -86,7 +86,7 @@ func cmdAgentWait(args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
 	defer cancel()
-	state, err := waitFor(ctx, pos[0], statuses)
+	state, err := waitFor(ctx, pos[0], *until, statuses)
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
@@ -98,11 +98,22 @@ func cmdAgentWait(args []string) error {
 }
 
 // waitFor finds the agent an address names and waits for one of the statuses.
-// The state is the last one read, zero when the agent was never found.
-func waitFor(ctx context.Context, address string, until []revier.Status) (revier.AgentState, error) {
+// The state is the last one read, zero when the agent was never found. An
+// agent of a remote project is waited on by the revier on its host, which
+// answers with the status it ended on.
+func waitFor(ctx context.Context, address, name string, until []revier.Status) (revier.AgentState, error) {
 	a, err := newApp(ctx)
 	if err != nil {
 		return revier.AgentState{}, err
+	}
+	if r, remote, err := a.remoteFor(address); err != nil {
+		return revier.AgentState{}, err
+	} else if remote {
+		status, err := r.Wait(ctx, address, name)
+		if err != nil {
+			return revier.AgentState{Status: status}, fmt.Errorf("%s: %w", address, err)
+		}
+		return revier.AgentState{Status: status}, nil
 	}
 	ag, err := a.agent(ctx, address)
 	if err != nil {
@@ -130,6 +141,12 @@ func cmdAgentPrompt(args []string) error {
 	if err != nil {
 		return err
 	}
+	if r, remote, err := a.remoteFor(pos[0]); err != nil {
+		return err
+	} else if remote {
+		// The remote revier makes every refusal and prints its own warning.
+		return r.Prompt(ctx, pos[0], pos[1])
+	}
 	ag, err := a.agent(ctx, pos[0])
 	if err != nil {
 		return err
@@ -142,6 +159,26 @@ func cmdAgentPrompt(args []string) error {
 		fmt.Fprintf(os.Stderr, "revier: warning: %s was still idle after the prompt was delivered; check the panel before waiting on it\n", pos[0])
 	}
 	return nil
+}
+
+// remoteFor returns the remote that drives the agent an address names, when
+// its project is on another machine (decisions.md D40). The address is
+// passed on as it is: what it names within the project is the remote's to
+// resolve, against the instances it can see.
+func (a *app) remoteFor(address string) (revier.Remote, bool, error) {
+	name, _, _ := strings.Cut(address, ":")
+	p, ok := a.project(revier.ProjectName(name))
+	if !ok {
+		return nil, false, fmt.Errorf("no project named %q", name)
+	}
+	if p.Host == "" {
+		return nil, false, nil
+	}
+	r, ok := a.core.Remotes[p.Host]
+	if !ok {
+		return nil, false, fmt.Errorf("no remote is wired for host %q", p.Host)
+	}
+	return r, true, nil
 }
 
 // agent finds the agent an address names: <project>, or <project>:<target>,

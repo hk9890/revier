@@ -119,13 +119,13 @@ it after a confirmation (D30).
 - Agent state for Claude Code, shown per project
 - kitty runtime, GNOME window control, Claude probe
 - `--json` output
+- Projects on another machine, surveyed by the revier installed there (D40)
 
 **Out, deliberately**
 
 | Left out | Why |
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
-| SSH sessions | Cut from the first version. A remote runtime is a host like any other and can be added without a redesign. |
 | Popup window geometry | The compositor places windows. The rule that opens revier as a popup is user configuration. |
 | Session persistence across reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. |
 | Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. |

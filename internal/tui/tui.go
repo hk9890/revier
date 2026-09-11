@@ -516,6 +516,11 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if home, ok := p.Home(); ok {
+			// A remote project's checkout is its host's: the pane opened
+			// here runs `revier open` there, which clones (decisions.md D40).
+			if p.Host != "" {
+				return m, m.goTarget(p, home.Name)
+			}
 			if !v.PathExists && p.GitURL != "" {
 				return m, m.clone(p, home.Name)
 			}

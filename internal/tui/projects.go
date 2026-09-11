@@ -198,8 +198,22 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 // home open: that is what the green mark says.
 func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	th := d.theme
+	if v.Unreachable != "" {
+		// The failure itself is the pane's: here there is room for the fact.
+		note := v.Project.Host + " unreachable"
+		if lipgloss.Width(note) > room {
+			note = "unreachable"
+		}
+		if lipgloss.Width(note) > room {
+			return ""
+		}
+		return style(th.PathMissing).Render(note)
+	}
 	if !v.PathExists {
 		note := "not on this machine"
+		if v.Project.Host != "" {
+			note = "not on " + v.Project.Host
+		}
 		if v.Project.GitURL != "" {
 			note = "not cloned"
 		}

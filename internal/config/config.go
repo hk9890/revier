@@ -227,8 +227,12 @@ func LoadProject(path string) (core.Project, error) {
 	}
 	// A path is expanded once, here, so every consumer - templates, working
 	// directories, the cwd lookup - sees an absolute path and none of them
-	// hands a literal "~" to a program that does not expand it.
-	p.Path = expandHome(p.Path)
+	// hands a literal "~" to a program that does not expand it. A remote
+	// project's path is its host's to expand: the same file is read there,
+	// and the home directory here says nothing about the one there.
+	if p.Host == "" {
+		p.Path = expandHome(p.Path)
+	}
 	for _, t := range p.Targets {
 		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
 			if r != nil {
@@ -265,6 +269,11 @@ func Validate(p revier.Project) error {
 	if p.GitURL != "" {
 		if err := ValidateGitURL(p.GitURL); err != nil {
 			errs = append(errs, fmt.Errorf("git_url: %w", err))
+		}
+	}
+	if p.Host != "" {
+		if err := validateHost(p.Host); err != nil {
+			errs = append(errs, fmt.Errorf("host: %w", err))
 		}
 	}
 
@@ -396,6 +405,22 @@ func ValidateGitURL(u string) error {
 		return fmt.Errorf("%q contains a control character", u)
 	case strings.ContainsAny(u, "`\"'\\$;|&<>(){}"):
 		return fmt.Errorf("%q contains a shell metacharacter", u)
+	}
+	return nil
+}
+
+// validateHost refuses a host ssh would read as something other than a
+// destination. The name is handed to ssh as one argument after "--", so a
+// shell character is harmless; a space or a control character is a name no
+// ssh config holds, and a leading dash is a flag.
+func validateHost(h string) error {
+	switch {
+	case strings.HasPrefix(h, "-"):
+		return fmt.Errorf("%q starts with a dash, which ssh reads as a flag", h)
+	case strings.IndexFunc(h, unicode.IsSpace) >= 0:
+		return fmt.Errorf("%q contains whitespace", h)
+	case strings.IndexFunc(h, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0:
+		return fmt.Errorf("%q contains a control character", h)
 	}
 	return nil
 }

@@ -40,7 +40,6 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 		{"open", "my", "project"},
 		{"go", "editor", "extra"},
 		{"run", "say", "extra"},
-		{"list", "extra"},
 		{"attach", "extra"},
 		{"status", "extra"},
 	} {

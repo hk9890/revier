@@ -40,7 +40,7 @@ trailing comment becomes part of the value. revier does not inherit it. The
 roughly ninety existing session files are converted once by a throwaway script
 that is not part of the product.
 
-### D6 — dev containers are out, SSH is deferred — Accepted
+### D6 — dev containers are out, SSH is deferred — Superseded by D40
 
 Container execution is the heaviest and least general transport and is cut.
 SSH is cut from the first version, but the `Runtime` port keeps the seam, so a
@@ -777,3 +777,44 @@ and thirty columns the pane lays the snapshot beside the facts, each filling
 the height, so neither waits under the other. A third column, the selected
 agent's live output, is the next use of a wide pane and is a decision of its
 own.
+
+### D40 — a remote project is surveyed and driven by the revier on its host — Accepted
+
+Supersedes the SSH half of D6. Containers stay out.
+
+A project can live on another machine: its file says `host = "buildbox"`,
+an ssh destination. Nothing about that machine's terminal, tmux or agents is
+read from here. The revier installed there is asked, over ssh, what it knows
+- `revier list --json <names>`, one call per host for all its projects, every
+host at once - and its answer is laid over the local view: the agents and
+whether the checkout is there are the host's word. `revier agent prompt` and
+`revier agent wait` on such a project run the same command there.
+
+The alternative, an ssh-wrapping runtime adapter, was rejected. The runtime
+side is not one command: it is `tmux list-panes`, the process tree the
+Claude probe reads, the titles, `send-keys`. Wrapping each in ssh is a second
+implementation of every adapter, and the core holds one runtime, so a second
+one per host would have reached into resolution and the snapshot. The
+remote's `list --json` is already the view both renderers read, so a port
+that asks another revier costs one interface, `Remote`, and no change to the
+hosts, the probes, resolution or state.
+
+What is here is the window that reaches the project. The home target's
+runtime realization is a local pane whose command is
+`ssh -t <host> revier open <name> --attach`; the revier there opens the
+workspace in its tmux and puts the pane on it, through a new optional runtime
+capability, `Attacher`, that hands back the argv for it. Focus, toggle-back,
+bindings and claims see an ordinary local instance. So `Running` and `Home`
+stay local: an agent working on the host with no pane onto it here is an
+agent in a stopped project, and Enter opens the pane. A host that does not
+answer marks its projects unreachable, with the failure, and fails nothing
+else: the survey renders, and a down machine is a row.
+
+The file is on both machines, as D30 already assumed, and its path is the
+host's to expand: a remote project's `~` is kept as written. The checkout is
+the host's to clone, in the pane, by the `revier open` that runs there. A
+name the host does not know is an error for that host, which is how a
+missing file there is found. ssh runs in batch mode with a connect timeout,
+so a survey never waits on a password prompt; `ControlMaster` in the ssh
+config is what makes the round trip cheap, and revier does not stand in for
+it.

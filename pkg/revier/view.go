@@ -10,10 +10,14 @@ type ProjectView struct {
 	// project file outlives the checkout it names - a machine that never had
 	// it, a directory that was deleted - and a target launched into a path
 	// that is not there fails in the tool rather than in revier.
-	PathExists bool         `json:"path_exists"`
-	Home       TargetRef    `json:"home,omitzero"`
-	Targets    []TargetView `json:"targets"`
-	Agents     []AgentView  `json:"agents,omitempty"`
+	PathExists bool `json:"path_exists"`
+	// Unreachable says why a remote project's host gave no answer: the
+	// text of the failure, empty when it answered. Its agents and its
+	// checkout are then unknown, and the view carries none of either.
+	Unreachable string       `json:"unreachable,omitempty"`
+	Home        TargetRef    `json:"home,omitzero"`
+	Targets     []TargetView `json:"targets"`
+	Agents      []AgentView  `json:"agents,omitempty"`
 }
 
 // Attention reports whether any agent in the project is waiting for the human.
