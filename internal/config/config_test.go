@@ -185,6 +185,13 @@ func TestValidateRejects(t *testing.T) {
 			"target name",
 		},
 		{
+			// The rule is ASCII because the name is read back out of a
+			// shortcut's command to tell it from somebody else's.
+			"target name with a non-ASCII letter",
+			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "édit", Home: true, Window: &base}}},
+			`target name "édit"`,
+		},
+		{
 			"target name that reads as a flag",
 			revier.Project{Path: "/p", Targets: []revier.Target{{Name: "-p", Home: true, Window: &base}}},
 			`target name "-p"`,
@@ -214,7 +221,7 @@ func TestValidateRejects(t *testing.T) {
 func TestValidateAcceptsANamelessWindowAndAWordTargetName(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}}},
-		{Name: "diff-2.old_ä", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^y$"}}},
+		{Name: "diff-2.old_x", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^y$"}}},
 	}}
 	if err := config.Validate(p); err != nil {
 		t.Fatalf("Validate: %v", err)
@@ -550,7 +557,7 @@ func TestValidateRejectsANameAKeyedTargetCannotHave(t *testing.T) {
 func TestATargetWithNoKeyMayBeCalledPicker(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "picker", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
+			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 	}}
 	if err := config.Validate(p); err != nil {

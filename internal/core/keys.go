@@ -84,23 +84,30 @@ func targetCommand(name revier.TargetName) string {
 	return goCommandPrefix + string(name) + `"`
 }
 
-// keyTargetName is the shape of a target name that can carry a desktop key.
-// The name is written into the shell command the key runs, and read back out
-// of it to tell revier's shortcuts from anybody else's, so it is one plain
-// word that no shell reads as syntax and revier-go does not read as a flag.
+// keyTargetName is the shape of every target name. The name is written into
+// the shell command a desktop key runs, and read back out of it to tell
+// revier's shortcuts from anybody else's, so it is one plain word that no
+// shell reads as syntax and revier-go does not read as a flag. It holds for a
+// target with no key too: a key added later must not find its name refused.
 var keyTargetName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-// ValidateKeyTarget refuses a name a target with a key cannot have. config
-// runs it at load, so a key that could not be installed, or would be taken for
-// somebody else's once it was, fails before anything is written.
+// ValidateTargetName refuses a name no target can have. config runs it at
+// load, so a key that could not be installed, or would be taken for somebody
+// else's once it was, fails before anything is written.
+func ValidateTargetName(name revier.TargetName) error {
+	if !keyTargetName.MatchString(string(name)) {
+		return fmt.Errorf("target name %q: it goes into the command the target's key runs; use letters, digits, '.', '_' and '-', starting with a letter or digit",
+			name)
+	}
+	return nil
+}
+
+// ValidateKeyTarget refuses a name a target with a key cannot have on top of
+// that: the picker's row, which the key opening revier already holds.
 func ValidateKeyTarget(name revier.TargetName) error {
 	if name == PickerTarget {
 		return fmt.Errorf("target %q has a key, and %q names the key that opens revier ([ui] trigger_key); rename the target",
 			name, PickerTarget)
-	}
-	if !keyTargetName.MatchString(string(name)) {
-		return fmt.Errorf("target %q has a key, so its name goes into the command the key runs: use letters, digits, '.', '_' and '-', starting with a letter or digit",
-			name)
 	}
 	return nil
 }

@@ -252,12 +252,8 @@ func Validate(p revier.Project) error {
 			errs = append(errs, errors.New("a target has no name"))
 			continue
 		}
-		if strings.IndexFunc(string(t.Name), notInTargetName) >= 0 || strings.HasPrefix(string(t.Name), "-") {
-			// A target's name is written into the shell command its desktop
-			// key runs, unquoted, as an argument of `revier go`: a space or a
-			// quote in it would break the key, and a leading dash would make
-			// it a flag. A word needs no quoting in any shell.
-			errs = append(errs, fmt.Errorf("target name %q may hold only letters, digits, \".\", \"_\" and \"-\", and must not start with \"-\"", t.Name))
+		if err := core.ValidateTargetName(t.Name); err != nil {
+			errs = append(errs, err)
 		}
 		if seenName[t.Name] {
 			errs = append(errs, fmt.Errorf("target %q declared twice", t.Name))
@@ -347,10 +343,6 @@ func Validate(p revier.Project) error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func notInTargetName(r rune) bool {
-	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("._-", r)
 }
 
 // ValidateGitURL refuses a clone URL that is unsafe to hand to git or to keep
