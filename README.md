@@ -14,7 +14,7 @@ territory.
 
 ## Status
 
-Early, but usable. There is no release yet; build from source.
+Early, but usable. Linux only.
 
 Working: project files, run-or-raise with toggle-back, the project resolved
 from the focused window, agent state for Claude Code (opencode is recognised
@@ -24,6 +24,22 @@ every command below, and the GNOME keybindings under `contrib/`.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
+
+## Install
+
+Download an archive from the
+[releases page](https://github.com/hk9890/revier/releases) and put its three
+files, `revier`, `revier-popup` and `revier-go`, on your PATH. Archives are
+named `revier_<version>_linux_<arch>.tar.gz`, with `x64` or `arm64` as the
+architecture:
+
+```bash
+tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin
+```
+
+`revier version` prints what is installed. Each release ships a signed
+checksums file; [docs/RELEASING.md](docs/RELEASING.md) says how to verify it.
+To install from source instead, see [Building](#building).
 
 ## Usage
 
@@ -84,12 +100,8 @@ the shell implementation's `os-*` shortcuts, on the same keys:
 `revier-go` runs the target and opens the picker when no project resolves,
 because a key pressed on a window no project claims should still do something.
 
-To install:
-
-1. Run `mise run install`. It puts `revier`, `revier-popup` and `revier-go` in
-   `~/.local/bin`, which a login shell has on its PATH.
-2. Run `revier keys install --dry-run` to see what would change, then
-   `revier keys install`.
+To claim the keys, run `revier keys install --dry-run` to see what would
+change, then `revier keys install`.
 
 Without `--force`, install adds only the keys nothing else holds, and reports
 the rest. `--force` takes a key from whatever has it: another shortcut is
@@ -124,6 +136,7 @@ Go 1.27, pinned with [mise](https://mise.jdx.dev).
 ```bash
 mise install
 mise run build     # ./bin/revier
+mise run install   # revier, revier-popup and revier-go into ~/.local/bin
 ```
 
 Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),

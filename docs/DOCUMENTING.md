@@ -26,13 +26,11 @@ and return nothing:
 | File | Create when |
 |---|---|
 | `docs/MONITORING.md` | revier writes a log or leaves evidence of a past run |
-| `docs/RELEASING.md` | there is a release to cut |
 | `docs/REVIEWING.md` | this repository has a review rule the `code-review` skill cannot know |
 | `CONTRIBUTING.md` | someone other than the author builds from source |
 
 ## README scope
 
-`README.md` describes what revier is and how to use it. Building from source,
-the layer model, and the manual driver are `docs/`, not README. Until there is a
-release to install, README says so rather than documenting a build as if it were
-an install.
+`README.md` describes what revier is, how to install a release, and how to use
+it. Building from source, the layer model, the manual driver, and cutting a
+release are `docs/`, not README.
