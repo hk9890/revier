@@ -102,3 +102,84 @@ func TestSpinnerRanges(t *testing.T) {
 		}
 	}
 }
+
+// The probe is Resumable, which is detected by type assertion and so is not
+// checked by the compiler anywhere else.
+var _ revier.Resumable = (*claude.Probe)(nil)
+
+// The id comes off the panel and nowhere else. A pane with no variable holds
+// no conversation this probe will name: the only other signal is the newest
+// transcript for the pane's directory, which cannot tell two agents in one
+// repository apart, and resuming the wrong conversation is worse than
+// resuming none.
+func TestSession(t *testing.T) {
+	p := &claude.Probe{}
+	cases := []struct {
+		name  string
+		panel revier.Panel
+		want  revier.SessionID
+		held  bool
+	}{
+		{"the hook has run", revier.Panel{Vars: map[string]string{"CS_SESSION": "abc-123"}}, "abc-123", true},
+		{"no hook installed", revier.Panel{Vars: map[string]string{"CS_TAB": "1"}}, "", false},
+		{"set but empty", revier.Panel{Vars: map[string]string{"CS_SESSION": ""}}, "", false},
+		{"no variables at all", revier.Panel{}, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, held, err := p.Session(context.Background(), tc.panel)
+			if err != nil {
+				t.Fatalf("Session: %v", err)
+			}
+			if got != tc.want || held != tc.held {
+				t.Errorf("Session = (%q, %v), want (%q, %v)", got, held, tc.want, tc.held)
+			}
+		})
+	}
+}
+
+// The configured arguments are kept: a project that runs its agent with a
+// model flag keeps the flag across a restore.
+func TestResumeCommand(t *testing.T) {
+	p := &claude.Probe{}
+	cases := []struct {
+		name string
+		spec revier.PanelSpec
+		want []string
+	}{
+		{"the bare harness", revier.PanelSpec{}, []string{"claude", "--resume", "abc-123"}},
+		{
+			"the project's own flags",
+			revier.PanelSpec{Command: []string{"claude", "--model", "opus"}},
+			[]string{"claude", "--model", "opus", "--resume", "abc-123"},
+		},
+		{
+			"an npm install, under node",
+			revier.PanelSpec{Command: []string{"node", "/home/hans/.npm-global/bin/claude"}},
+			[]string{"node", "/home/hans/.npm-global/bin/claude", "--resume", "abc-123"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := p.ResumeCommand(tc.spec, "abc-123")
+			if len(got) != len(tc.want) {
+				t.Fatalf("ResumeCommand = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("ResumeCommand = %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// The spec's own slice must survive: it is the project's, read again on every
+// later keypress.
+func TestResumeCommandDoesNotEditTheSpec(t *testing.T) {
+	spec := revier.PanelSpec{Command: []string{"claude", "--model", "opus"}}
+	(&claude.Probe{}).ResumeCommand(spec, "abc-123")
+	if len(spec.Command) != 3 {
+		t.Errorf("the spec now reads %v, want it untouched", spec.Command)
+	}
+}

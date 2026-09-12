@@ -79,6 +79,31 @@ tmux capture-pane -p -t agent                             # the text arrived
 `revier agent prompt` types into a pane. Run it only with the scratch
 configuration above: without it, it reaches the user's real agent.
 
+## Drive save and restore across a reboot
+
+`tmux kill-server` on the private server is the reboot: every window is gone
+and the bindings in state point at nothing, while the project files and the
+saved session are untouched.
+
+```bash
+./bin/revier session save --name before-reboot   # what is open now
+./bin/revier session list                        # id, label, counts
+tmux kill-server                                 # the private server only
+./bin/revier session restore --dry-run           # what it would open
+./bin/revier session restore                     # the newest, opened in file order
+```
+
+Put a conversation on an agent pane before saving, so the resume path runs.
+It is what `contrib/claude/revier-session-hook` writes on a real agent:
+
+```bash
+tmux set-option -p -t agent @revier CS_SESSION=abc-123
+tmux list-panes -a -F '#{pane_id} #{pane_current_command} #{@revier}'
+```
+
+Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
+a restore acts on; it holds names alone, never a host or an argv.
+
 ## Drive the TUI without a screen
 
 The TUI needs a terminal, and a tmux pane is one. Run it on a private server

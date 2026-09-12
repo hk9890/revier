@@ -176,6 +176,12 @@ const bindWait = 30 * time.Second
 // core.BindWindow reports it rather than opening a second window. A window
 // that has appeared by then is raised like any other.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
+	return a.goTargetResuming(ctx, p, name, nil)
+}
+
+// goTargetResuming is goTarget with the agent panels of a launch started on
+// the conversations a saved session recorded for them.
+func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, error) {
 	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
 		// Every binding of a target consumes its launch, so a launch still on
 		// record has not landed, whatever an older binding says.
@@ -187,7 +193,7 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 			return revier.TargetRef{}, nil // still coming up; the first press is waiting for it
 		}
 	}
-	res, err := a.core.Go(ctx, p, name, a.state.Bound[p.Name])
+	res, err := a.core.GoResuming(ctx, p, name, a.state.Bound[p.Name], resumes)
 	if err != nil {
 		return revier.TargetRef{}, err
 	}

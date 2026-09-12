@@ -70,6 +70,12 @@ revier agent wait <project>[:<target>] --until <status> [--timeout s]
                               or stopped; exit 2 on timeout
 revier agent prompt <project>[:<target>] <text>
                               type one line into the agent and submit it
+revier session save [--name label]
+                              record the projects that are open now
+revier session restore [id|name] [--dry-run]
+                              open what a saved session recorded; the newest
+                              without an argument
+revier session list [--json]  the saved sessions, newest first
 revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
 ```
@@ -91,6 +97,19 @@ passes, and `--dry-run` prints the selection and runs nothing. Each project's
 output is kept under `~/.local/state/revier/runs/<run>/`; `revier each log`
 lists past runs, and `revier each log <run> <project>` prints one project's
 output. A run in which any project failed exits 5.
+
+`revier session save` writes down which projects are open and which of their
+targets, so `revier session restore` can open them again after a restart. It
+records names, not windows: the argv comes from the project file as it reads
+at restore, a target already up is left alone, and anything that has since
+been deleted is named and stepped over. Attached instances are not recorded —
+they have no name to be reopened by. Sessions live in
+`~/.local/state/revier/sessions/`, one readable TOML file each.
+
+An agent comes back on the conversation it held if its probe can name one.
+Claude Code can, once `contrib/claude/revier-session-hook` is installed as a
+`SessionStart` hook; without it the workspace still comes back, with the agent
+starting fresh.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).

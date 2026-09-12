@@ -149,3 +149,31 @@ func ParseStatus(name string) (Status, error) {
 
 // String makes a PanelID usable where a host expects a plain target argument.
 func (p PanelID) String() string { return string(p) }
+
+// SessionID is a harness's own name for one conversation, opaque to revier.
+// Only the probe that produced it knows how to spell it back into an argv.
+type SessionID string
+
+// Resumable is an optional capability of an AgentProbe, detected by type
+// assertion. A probe that implements it can name the conversation a panel
+// holds, so a workspace reopened after a reboot starts its agent where the
+// agent was rather than empty. A probe that does not restores an empty agent,
+// which is the whole of the degradation.
+//
+// It exists because a snapshot records names and nothing else: the argv is
+// derived again at restore from the project file as it reads then, so an
+// edited project file wins over a stale recording. ResumeCommand is handed
+// that current spec and folds its own resume flag into it, which is why the
+// flag's spelling never reaches the core.
+type Resumable interface {
+	// Session names the conversation the panel holds, false when it holds
+	// none. It is called on the panels a survey already listed, so an
+	// implementation reads what is on the Panel rather than going to look.
+	Session(ctx context.Context, p Panel) (SessionID, bool, error)
+
+	// ResumeCommand returns the argv that starts the harness on that
+	// conversation, built from the panel as it is configured now. The
+	// configured arguments are kept: a project that runs its agent with a
+	// model flag keeps the flag across a restore.
+	ResumeCommand(spec PanelSpec, id SessionID) []string
+}
