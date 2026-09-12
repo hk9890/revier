@@ -32,21 +32,33 @@ func TestRunningProjectsSortAboveStoppedOnes(t *testing.T) {
 	}
 }
 
-// Clearing the filter leaves the cursor on the project it found.
-func TestClearingTheFilterKeepsTheProjectFound(t *testing.T) {
+// Clearing the query, by Esc or by deleting its last letter, puts the cursor
+// back on the project it was on when the query began (decisions.md D44).
+func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	before := selectedRow(t, m) // project-01: project-11 leads, then config order
 
 	for _, r := range "project-07" {
 		m, _ = press(m, string(r))
 	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
+		t.Fatalf("selected %q while typing, want the best match", row)
+	}
 	m, _ = press(m, "esc")
-
 	if rule := lines(m)[2]; !strings.Contains(rule, " 12/12 ") {
 		t.Fatalf("rule = %q, want the filter cleared", rule)
 	}
-	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
-		t.Errorf("selected %q after clearing the filter, want project-07", row)
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selected %q after esc, want %q, where the cursor was before the query", after, before)
+	}
+
+	m, _ = press(m, "0")
+	m, _ = press(m, "backspace")
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selected %q after deleting the query, want %q", after, before)
 	}
 }
 
@@ -384,24 +396,13 @@ func margins(m tui.Model) (rows, cols int) {
 	return 0, 0
 }
 
-// A target with nothing up says "stopped", in the pane and at the target
-// level, where it said "-".
+// A target with nothing up says "stopped", where it said "-".
 func TestAStoppedTargetSaysStopped(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	if body := pane(m); !strings.Contains(body, "stopped") {
 		t.Errorf("pane = %q, want the editor target stopped", body)
-	}
-	m, _ = press(m, "tab")
-	var editor string
-	for _, line := range lines(m) {
-		if l, _, _ := strings.Cut(line, "│"); strings.Contains(l, "editor") {
-			editor = l
-		}
-	}
-	if !strings.Contains(editor, "stopped") {
-		t.Errorf("target row = %q, want it stopped", editor)
 	}
 }
 

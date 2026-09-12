@@ -262,34 +262,168 @@ func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	m, cmd := press(m, "enter")
 	if cmd != nil {
 		t.Error("enter on a project without home should run nothing")
 	}
-	// The detail pane lists targets at both levels, so the header is what
-	// says which level is on screen.
-	if head := lines(m)[0]; strings.Contains(head, "projects") || !strings.Contains(head, "homeless") {
-		t.Errorf("want the target level of homeless:\n%s", m.View())
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want it on the editor, the only target:\n%s", row, m.View())
 	}
 }
 
-func TestTabDrillsIntoTargetsAndEscReturns(t *testing.T) {
+// Tab moves the cursor into the pane, onto the project's targets, and the
+// list stays on screen beside it; Esc brings the cursor back
+// (decisions.md D42).
+func TestTabMovesTheCursorIntoThePaneAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "tab")
 	view := m.View()
 	// The key in the spelling the footer uses, not the configuration's.
-	for _, want := range []string{"project-02", "home", "editor", "ctrl+shift+o"} {
+	for _, want := range []string{"3 projects", "project-00", "ctrl+shift+o"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("target level lacks %q:\n%s", want, view)
+			t.Errorf("after tab the surface lacks %q:\n%s", want, view)
 		}
 	}
-	m, _ = press(m, "esc")
-	if !strings.Contains(lines(m)[0], "3 projects") {
-		t.Errorf("esc did not return to the project level:\n%s", m.View())
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q, want it on the first target", row)
 	}
+	if f := footer(m); !strings.Contains(f, "enter go") {
+		t.Errorf("footer = %q, want enter to say go", f)
+	}
+	m, _ = press(m, "down")
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after down, want the editor", row)
+	}
+	m, _ = press(m, "down")
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after down at the last row, want it to stay", row)
+	}
+	m, _ = press(m, "esc")
+	if row := paneCursor(m); row != "" {
+		t.Errorf("pane cursor = %q after esc, want none", row)
+	}
+	if f := footer(m); !strings.Contains(f, "enter open") {
+		t.Errorf("footer = %q, want enter to say open again", f)
+	}
+}
+
+// On a terminal too narrow for both, the pane takes the list's place while
+// the cursor is on it, and gives it back on Esc.
+func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil) // 80 columns: no pane beside the list
+
+	m, _ = press(m, "tab")
+	body := strings.Join(rows(m), "\n")
+	if strings.Contains(body, "project-00") {
+		t.Errorf("the list is still on screen:\n%s", m.View())
+	}
+	if !strings.Contains(body, "Targets") || !strings.Contains(body, "ctrl+shift+o") {
+		t.Errorf("the pane is not on screen:\n%s", m.View())
+	}
+	if !strings.Contains(lines(m)[0], "3 projects") {
+		t.Errorf("header = %q, want the counts kept", lines(m)[0])
+	}
+	m, _ = press(m, "esc")
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "project-00") {
+		t.Errorf("esc did not bring the list back:\n%s", m.View())
+	}
+}
+
+// The query line follows the cursor: with the cursor in the pane it is the
+// target query, the best match is selected, and leaving the pane drops it
+// and shows the project query again (decisions.md D43).
+func TestTypingInThePaneFiltersTheTargets(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "1")
+	m, _ = press(m, "tab")
+	if q := lines(m)[1]; !strings.Contains(q, "filter targets") {
+		t.Errorf("query line = %q, want the target query, empty", q)
+	}
+	m, _ = press(m, "e")
+	m, _ = press(m, "d")
+	if body := pane(m); strings.Contains(body, "home") || !strings.Contains(body, "editor") {
+		t.Errorf("target query 'ed' should leave only the editor:\n%s", body)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want the match", row)
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "project-00") {
+		t.Errorf("the target query filtered the projects:\n%s", body)
+	}
+	m, _ = press(m, "tab")
+	if q := lines(m)[1]; !strings.Contains(q, "❯ 1") {
+		t.Errorf("query line = %q, want the project query back", q)
+	}
+	if row := paneCursor(m); row != "" {
+		t.Errorf("pane cursor = %q after tab, want the cursor back on the list", row)
+	}
+	if body := pane(m); !strings.Contains(body, "home") {
+		t.Errorf("the target query outlived the pane:\n%s", body)
+	}
+}
+
+// A target key acts on the highlighted project wherever the cursor is: it
+// does not read the pane's cursor.
+func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "tab") // the cursor is on home
+	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO})
+	if cmd == nil {
+		t.Fatal("ctrl+o ran nothing")
+	}
+	cmd()
+	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
+		t.Errorf("Opened = %v, want the editor, the target the key names", wm.Opened)
+	}
+}
+
+// One click on a target row in the pane runs it, as Enter on it does.
+func TestAClickOnATargetInThePaneRunsIt(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	x, y := paneCell(t, m, "editor")
+	next, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = next.(tui.Model)
+	if cmd == nil {
+		t.Fatalf("the click ran nothing:\n%s", m.View())
+	}
+	cmd()
+	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
+		t.Errorf("Opened = %v, want the editor launched", wm.Opened)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want it on the row clicked", row)
+	}
+}
+
+// paneCursor is the pane row carrying the cursor bar, or nothing when the
+// cursor is on the list.
+func paneCursor(m tui.Model) string {
+	for _, line := range strings.Split(pane(m), "\n") {
+		if strings.Contains(line, theme.Default().Glyphs.Cursor) {
+			return line
+		}
+	}
+	return ""
+}
+
+// paneCell is a terminal cell on the pane line that carries the text.
+func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
+	t.Helper()
+	for y, raw := range strings.Split(m.View(), "\n") {
+		// The frame's border, the list, the pane's border, the pane.
+		if parts := strings.Split(raw, "│"); len(parts) > 3 && strings.Contains(parts[2], text) {
+			return paneBorder(t, m) + 2, y
+		}
+	}
+	t.Fatalf("no pane line carries %q:\n%s", text, m.View())
+	return 0, 0
 }
 
 // Enter on a target is core.Go: the same run-or-raise the CLI does, and the
@@ -334,22 +468,6 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m, _ = press(m, "esc")
 	if body := m.View(); !strings.Contains(body, "project-00") {
 		t.Errorf("esc should clear the filter:\n%s", body)
-	}
-}
-
-// Clearing the query keeps the project the cursor is on. The list keeps the
-// cursor's place among the filtered rows, which in the full list is another
-// project, and Enter would then open that one.
-func TestClearingTheFilterKeepsTheSelectedProject(t *testing.T) {
-	_, _, c, projects := world(t, 12)
-	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	m, _ = press(m, "0")
-	m, _ = press(m, "down")
-	m, _ = press(m, "down")
-	before := selectedRow(t, m)
-	m, _ = press(m, "esc")
-	if after := selectedRow(t, m); after != before {
-		t.Errorf("selection moved when the filter was cleared: %q -> %q", before, after)
 	}
 }
 

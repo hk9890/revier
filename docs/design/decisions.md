@@ -513,7 +513,7 @@ shortcut deserves is policy - revier removes only what it wrote.
 
 ## 2026-09-11
 
-### D28 — Enter on a project opens its home — Accepted
+### D28 — Enter on a project opens its home — Accepted; the target list narrowed by D42
 
 The TUI was two levels, and Enter on a project only moved to the second: its
 list of targets. Reaching the project took a second Enter on the home row, which
@@ -864,3 +864,83 @@ of the file, rather than a `links/` directory: a project is found by name
 everywhere, and two directories would have been two places to look. The
 onboarding flow that lists a host's projects and writes a link for one is
 the next surface over this file.
+
+## 2026-09-12
+
+### D42 — Tab moves the cursor into the pane; there is no target level — Accepted; typing amended by D43
+
+Narrows D28: Enter stays as it is, and Tab no longer opens a list.
+
+The surface had two levels. Tab replaced the project list with a list of the
+highlighted project's targets, with its own header, path line, count and
+footer. The pane beside the list already showed those rows, under its
+Targets heading, with the same name, key and state. So the second level was a
+second rendering of what was on screen, and it hid the list it was reached
+from: which project this was, and what the other projects were doing.
+
+There is one level and two places the cursor can be: the list, and the
+Targets section of the pane. Tab moves it into the pane, onto the first
+target; up and down walk the targets and attached instances; Enter runs the
+one under the cursor; Esc brings the cursor back. The header keeps its
+counts, and the list stays beside the pane. Enter on a project with no home
+target, which used to open the list, moves the cursor into the pane. The
+second rendering is gone.
+
+Two cursors on one screen have to read as one thing. The pane's target rows
+carry the list's bar column and its selection background, and the agent
+rows are indented under them as before.
+
+Typing puts the cursor back on the list and filters, as it does anywhere:
+the query is a search for a project, and the list is where its result is. A
+target key acts on the highlighted project wherever the cursor is, as it
+did: `ctrl-shift-o` is "editor" everywhere, and a key that read the pane's
+cursor would mean something different on each row.
+
+A click on a target row in the pane runs it: one click, not the list's two.
+The list's first click selects because a selected project is useful on its
+own, the pane follows it; a target has no state worth selecting other than
+running it, so a click that only highlighted it would be a click wasted.
+The wheel over the pane still scrolls it.
+
+On a terminal too narrow for the list and the pane together there is no pane
+to move into, so Tab shows the pane in the list's place, at full width, and
+Esc gives the list back. It is the same renderer as the wide case, so the
+narrow terminal has no second implementation of the target rows.
+
+### D43 — the query line follows the cursor — Accepted
+
+Amends D42, where typing with the cursor in the pane put it back on the list.
+
+With the cursor in the pane, the query line still showed the project query
+with its cursor blinking, so the surface pointed at two places at once. And
+a keystroke there threw the cursor back to the list, which was one rule for
+where a letter lands with two outcomes.
+
+The query line is one field whose scope follows the cursor. On the list it
+is the project query, as before. In the pane it is the target query: empty
+on entry, with its own placeholder, and matching the target rows by the
+ranking the list uses for projects, so the best match is selected as it is
+there. A project has a handful of targets today, and a query over three
+rows is rarely typed; attached instances are unbounded, and the field costs
+nothing while empty. Leaving the pane, by Tab or by Esc, drops the target
+query and shows the project query again as it was: the target query is a
+view over one project's rows and has no meaning on the list.
+
+Tab toggles: from the list into the pane, from the pane back to the list.
+Esc from the pane goes back too, so the one key that means "back" everywhere
+keeps meaning it. A second line for the target query was rejected: it would
+cost a row on every screen for a field that is empty nearly always.
+
+### D44 — clearing the query puts the cursor back where it was — Accepted
+
+Clearing the query used to leave the cursor on the project the search found,
+on the reasoning that a search ends on the project searched for. In use the
+query reads as a temporary view over the list, and clearing it, by Esc or by
+deleting the last letter, reads as its undo: the list comes back as it was,
+with the cursor where it was before the first letter. The row the search
+found matters only until Enter, and Enter leaves the surface.
+
+So the cursor's project is remembered when the query goes from empty to
+typed, and restored when it goes back to empty. While the query is typed the
+first row is selected on every keystroke, as the ranking puts the best match
+there.

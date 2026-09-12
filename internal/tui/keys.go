@@ -12,7 +12,7 @@ import (
 // keyMap is every key the surface owns, declared once with the label the
 // footer shows. A key and its help text cannot drift apart.
 //
-// There is no "q to quit": at the project level every printable rune is a
+// There is no "q to quit": on the list every printable rune is a
 // filter character, and a project called `queue` has to be reachable.
 type keyMap struct {
 	Up      key.Binding
@@ -75,14 +75,16 @@ func (k keyMap) claims(c core.Chord) bool {
 	return false
 }
 
-// helpFor is the footer for a level. The same two keys mean different things
-// at each - enter opens a project, or runs one of its targets - so the label
-// comes from the level and not from the binding.
-func (k keyMap) helpFor(l level) []key.Binding {
+// helpFor is the footer for a focus. The same two keys mean different things
+// on each - enter opens a project, or runs one of its targets - so the label
+// comes from the focus and not from the binding.
+func (k keyMap) helpFor(f focus) []key.Binding {
 	var out []key.Binding
-	if l == levelTargets {
+	if f == focusPane {
 		out = []key.Binding{
 			helpKey("enter", "go"),
+			helpKey("tab", "projects"),
+			helpKey("type", "filter"),
 			helpKey("esc", "back"),
 		}
 	} else {

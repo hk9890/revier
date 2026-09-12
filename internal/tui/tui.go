@@ -1,7 +1,8 @@
 // Package tui is the one surface: every project with its agent state, sorted
-// so the ones needing attention come first, and one level down, a project's
-// targets and attached instances. Enter activates. It is the picker and the
-// monitor at once (docs/design/decisions.md D8).
+// so the ones needing attention come first, and beside it a pane with the
+// project's targets and attached instances, which Tab moves the cursor into.
+// Enter activates. It is the picker and the monitor at once
+// (docs/design/decisions.md D8, D42).
 //
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action
@@ -39,11 +40,14 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-type level int
+// focus is where the cursor is: on the project list, or on the target rows
+// of the pane beside it. The pane is the same content either way; focus
+// decides what up, down and Enter act on.
+type focus int
 
 const (
-	levelProjects level = iota
-	levelTargets
+	focusList focus = iota
+	focusPane
 )
 
 // Model is the bubbletea model. Construct it with New.
@@ -67,17 +71,19 @@ type Model struct {
 	// surveyErr is the last refresh's, and the next refresh replaces it.
 	err       error
 	surveyErr error
-	level     level
-	current   revier.ProjectName // the project drilled into
+	focus     focus
+	tcursor   int                // the target row the pane's cursor is on
+	tfilter   string             // the query over the target rows, while the cursor is on the pane
+	tlines    []int              // the pane line each target row is on, for the cursor and a click
+	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	width     int
 	height    int
 
-	// The two levels are two lists. Cursor, paging and fuzzy filtering are
-	// the component's; what a row looks like is the delegate's.
+	// The project list. Cursor, paging and fuzzy filtering are the
+	// component's; what a row looks like is the delegate's.
 	plist  list.Model
-	tlist  list.Model
-	filter string // typed at the project level, held here so a refresh can re-apply it
+	filter string // the query, held here so a refresh can re-apply it
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
@@ -86,7 +92,7 @@ type Model struct {
 	start  revier.ProjectName               // the project to open on, from the working directory
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
-	body   viewport.Model                   // the scrolling window over the level in view
+	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
 }
 
@@ -99,8 +105,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
-		plist: newProjectList(th), tlist: newTargetList(th),
-		keys: keys, help: newHelp(th), detail: newDetail(th),
+		plist: newProjectList(th),
+		keys:  keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		body: newBody(),
 	}
@@ -404,8 +410,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		switch {
-		case m.level == levelTargets:
-			m.level = levelProjects
+		case m.focus == focusPane:
+			m.leavePane()
 		case m.filter != "":
 			m.setFilter("")
 		default:
@@ -413,54 +419,48 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Up):
-		m.list().CursorUp()
+		if m.focus == focusPane {
+			m.tcursor--
+		} else {
+			m.plist.CursorUp()
+		}
 		return m, nil
 	case key.Matches(msg, m.keys.Down):
-		m.list().CursorDown()
+		if m.focus == focusPane {
+			m.tcursor++
+		} else {
+			m.plist.CursorDown()
+		}
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
-	case key.Matches(msg, m.keys.Targets) && m.level == levelProjects:
+	case key.Matches(msg, m.keys.Targets):
+		if m.focus == focusPane {
+			m.leavePane()
+			return m, nil
+		}
 		return m.drill()
-	case key.Matches(msg, m.keys.Edit) && m.level == levelProjects:
+	case key.Matches(msg, m.keys.Edit):
 		return m.editFile()
-	case key.Matches(msg, m.keys.Delete) && m.level == levelProjects:
+	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
 	}
-	if m.level == levelProjects {
-		if next, cmd, ok := m.targetKey(msg); ok {
-			return next, cmd
-		}
-		if m.promptKey(msg) {
-			return m.edit(msg)
-		}
+	// A target key names a target of the highlighted project wherever the
+	// cursor is; it does not read the pane's cursor.
+	if next, cmd, ok := m.targetKey(msg); ok {
+		return next, cmd
+	}
+	if m.promptKey(msg) {
+		return m.edit(msg)
 	}
 	return m, nil
 }
 
-// list is the list of the level in view. It is a pointer because the cursor
-// moves on it.
-func (m *Model) list() *list.Model {
-	if m.level == levelTargets {
-		return &m.tlist
-	}
-	return &m.plist
-}
-
-// selected is the project under the cursor at the project level, or the one
-// drilled into at the target level.
+// selected is the project under the cursor.
 func (m Model) selected() (revier.ProjectView, bool) {
-	if m.level == levelTargets {
-		for _, v := range m.views {
-			if v.Project.Name == m.current {
-				return v, true
-			}
-		}
-		return revier.ProjectView{}, false
-	}
 	it, ok := m.plist.SelectedItem().(projectItem)
 	if !ok {
 		return revier.ProjectView{}, false
@@ -477,104 +477,158 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 	return core.Project{}, false
 }
 
-// targetRow is one line at the target level: a declared target, or an
-// attached instance, which has a ref and no name.
+// targetRow is one row of the pane's Targets section: a declared target, or an
+// attached instance, which has a ref and no name. matches are the rune
+// positions of its label the query matched, for the highlight.
 type targetRow struct {
 	target   revier.TargetView
 	attached revier.TargetRef
+	matches  []int
 }
 
+// label is what the target query matches: a target's name, or an attached
+// instance's title.
+func (r targetRow) label() string {
+	if !r.attached.IsZero() {
+		return r.attached.Title
+	}
+	return string(r.target.Name)
+}
+
+// targetRows is the pane's Targets section: every target, then every
+// attached instance, or, while a target query is typed, the rows it matches
+// ranked as the list ranks projects (decisions.md D43).
 func (m Model) targetRows() []targetRow {
 	v, ok := m.selected()
 	if !ok {
 		return nil
 	}
-	var out []targetRow
+	var all []targetRow
 	for _, t := range v.Targets {
-		out = append(out, targetRow{target: t})
+		all = append(all, targetRow{target: t})
 	}
 	for _, ref := range m.attached[v.Project.Name] {
-		out = append(out, targetRow{attached: ref})
+		all = append(all, targetRow{attached: ref})
+	}
+	if m.tfilter == "" {
+		return all
+	}
+	labels := make([]string, len(all))
+	for i, r := range all {
+		labels[i] = r.label()
+	}
+	var out []targetRow
+	for _, rank := range list.DefaultFilter(m.tfilter, labels) {
+		r := all[rank.Index]
+		r.matches = rank.MatchedIndexes
+		out = append(out, r)
 	}
 	return out
 }
 
-// enter at the project level opens the project: its home target, the same
+// enter on the list opens the project: its home target, the same
 // run-or-raise `revier go home` does. Searching for a project is almost always
-// to get to it, so the target list is the detour and gets the other key. A
-// project with no home target has nothing to open, so it gets the list.
+// to get to it, so the targets are the detour and get the other key. A
+// project with no home target has nothing to open, so Enter moves the cursor
+// to its targets instead. In the pane, Enter runs the target under the
+// cursor.
 //
 // A project whose directory is not on this machine is cloned first, when its
 // file says from where, as `revier open` does.
 func (m Model) enter() (tea.Model, tea.Cmd) {
-	if m.level == levelProjects {
-		v, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		p, ok := m.project(v.Project.Name)
-		if !ok {
-			return m, nil
-		}
-		if home, ok := p.Home(); ok {
-			// A remote project's checkout is its host's: the pane opened
-			// here runs `revier open` there, which clones (decisions.md D40).
-			if p.Remote != nil {
-				return m, m.goTarget(p, home.Name)
-			}
-			if !v.PathExists && p.GitURL != "" {
-				return m, m.clone(p, home.Name)
-			}
-			if !v.PathExists && !v.Running {
-				// Nothing to clone from, and nothing to raise: refused as
-				// `revier open` refuses it, rather than started in whatever
-				// directory the runtime falls back to. The check is made
-				// again, as the directory may have appeared since the survey.
-				if _, err := checkout.Ensure(p.Project, io.Discard); err != nil {
-					m.err = err
-					return m, nil
-				}
-			}
+	if m.focus == focusPane {
+		return m, m.goRow(m.tcursor)
+	}
+	v, ok := m.selected()
+	if !ok {
+		return m, nil
+	}
+	p, ok := m.project(v.Project.Name)
+	if !ok {
+		return m, nil
+	}
+	if home, ok := p.Home(); ok {
+		// A remote project's checkout is its host's: the pane opened
+		// here runs `revier open` there, which clones (decisions.md D40).
+		if p.Remote != nil {
 			return m, m.goTarget(p, home.Name)
 		}
-		return m.drill()
+		if !v.PathExists && p.GitURL != "" {
+			return m, m.clone(p, home.Name)
+		}
+		if !v.PathExists && !v.Running {
+			// Nothing to clone from, and nothing to raise: refused as
+			// `revier open` refuses it, rather than started in whatever
+			// directory the runtime falls back to. The check is made
+			// again, as the directory may have appeared since the survey.
+			if _, err := checkout.Ensure(p.Project, io.Discard); err != nil {
+				m.err = err
+				return m, nil
+			}
+		}
+		return m, m.goTarget(p, home.Name)
 	}
-	it, ok := m.tlist.SelectedItem().(targetItem)
-	if !ok {
-		return m, nil
+	return m.drill()
+}
+
+// goRow activates one row of the pane: an attached instance is focused
+// through the host that produced it, a target is run-or-raised.
+func (m Model) goRow(i int) tea.Cmd {
+	rows := m.targetRows()
+	if i < 0 || i >= len(rows) {
+		return nil
 	}
-	row := it.row
-	p, ok := m.project(m.current)
-	if !ok {
-		return m, nil
-	}
-	c := m.core
-	if !row.attached.IsZero() {
-		ref := row.attached
-		return m, func() tea.Msg {
+	row := rows[i]
+	if ref := row.attached; !ref.IsZero() {
+		c := m.core
+		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			return actedMsg{err: c.Focus(ctx, ref)}
 		}
 	}
-	return m, m.goTarget(p, row.target.Name)
+	v, _ := m.selected()
+	p, ok := m.project(v.Project.Name)
+	if !ok {
+		return nil
+	}
+	return m.goTarget(p, row.target.Name)
 }
 
-// drill opens the target list of the project under the cursor.
+// drill moves the cursor into the pane, onto the first target of the project
+// under the cursor. The pane starts at its top, where the targets are, and
+// the query line becomes the target query, empty.
 func (m Model) drill() (tea.Model, tea.Cmd) {
-	v, ok := m.selected()
-	if !ok {
+	if _, ok := m.selected(); !ok {
 		return m, nil
 	}
-	m.current = v.Project.Name
-	m.level = levelTargets
-	m.reloadTargets()
-	m.tlist.Select(0)
+	m.focus = focusPane
+	m.tcursor = 0
+	m.detail.GotoTop()
+	m.input.SetValue("")
+	m.input.Placeholder = targetPlaceholder
 	return m, nil
 }
 
+// leavePane brings the cursor back to the list. The target query is the
+// pane's alone, so it is dropped, and the query line shows the project
+// query again, as it was.
+func (m *Model) leavePane() {
+	m.focus = focusList
+	m.tfilter = ""
+	m.input.SetValue(m.filter)
+	m.input.Placeholder = projectPlaceholder
+}
+
+// setTargetFilter is every change to the target query. The first match is
+// selected, as the list selects it on a project query.
+func (m *Model) setTargetFilter(f string) {
+	m.tfilter = f
+	m.tcursor = 0
+}
+
 // goTarget is one activation: run-or-raise the target, and settle where it
-// landed. Enter at the target level and a target key at the project level are
+// landed. Enter on a row of the pane and a target key on the list are
 // the same operation, so they are the same command.
 //
 // A target still coming up from an earlier press, here or from a desktop key,
