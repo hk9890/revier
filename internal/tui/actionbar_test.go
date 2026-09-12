@@ -189,3 +189,23 @@ func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
 	return mr + 5
 }
+
+// The new-project screen stands over the list: a double click where the rows
+// were moves no selection behind it, and runs nothing.
+func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	_, mc := margins(m)
+	was := selectedRow(t, m)
+
+	m, _ = press(m, "alt+n")
+	m = clickAt(m, mc+6, rowTop(m)+2)
+	m = clickAt(m, mc+6, rowTop(m)+2)
+	if head := barLine(m); !strings.Contains(head, "add a project") {
+		t.Fatalf("top line = %q after a double click, want the new-project screen", head)
+	}
+	m, _ = press(m, "esc")
+	if now := selectedRow(t, m); now != was {
+		t.Errorf("selected %q after clicks on the new-project screen, want %q", now, was)
+	}
+}

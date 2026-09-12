@@ -37,7 +37,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.over = m.hoverAt(msg.X, msg.Y)
-	if msg.Action != tea.MouseActionPress {
+	// The new-project screen has no rows: the project list is behind it, and
+	// a click or a notch must not move a selection nobody can see.
+	if msg.Action != tea.MouseActionPress || m.dialog == dialogNew {
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonLeft {
@@ -87,6 +89,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // inside the list, and not on the header, the footer or the space below the
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
+	if m.dialog == dialogNew {
+		return 0, false
+	}
 	_, mc := m.margins()
 	if x < mc || x >= mc+m.listWidth() {
 		return 0, false
