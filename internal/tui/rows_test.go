@@ -32,21 +32,33 @@ func TestRunningProjectsSortAboveStoppedOnes(t *testing.T) {
 	}
 }
 
-// Clearing the filter leaves the cursor on the project it found.
-func TestClearingTheFilterKeepsTheProjectFound(t *testing.T) {
+// Clearing the query, by Esc or by deleting its last letter, puts the cursor
+// back on the project it was on when the query began (decisions.md D44).
+func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	before := selectedRow(t, m) // project-01: project-11 leads, then config order
 
 	for _, r := range "project-07" {
 		m, _ = press(m, string(r))
 	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
+		t.Fatalf("selected %q while typing, want the best match", row)
+	}
 	m, _ = press(m, "esc")
-
 	if rule := lines(m)[2]; !strings.Contains(rule, " 12/12 ") {
 		t.Fatalf("rule = %q, want the filter cleared", rule)
 	}
-	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
-		t.Errorf("selected %q after clearing the filter, want project-07", row)
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selected %q after esc, want %q, where the cursor was before the query", after, before)
+	}
+
+	m, _ = press(m, "0")
+	m, _ = press(m, "backspace")
+	if after := selectedRow(t, m); after != before {
+		t.Errorf("selected %q after deleting the query, want %q", after, before)
 	}
 }
 

@@ -372,10 +372,13 @@ func (m *Model) selectName(name revier.ProjectName) {
 // synchronously through SetFilterText, so the count in the header and the
 // selection are right on the same pass as the keystroke.
 //
-// Clearing the filter keeps the cursor on the project it was on. A search
-// ends on the project that was searched for, and dropping the cursor back on
-// the first row when the query goes lost the one row the user had just found.
+// A query is a view over the list, and clearing it, by Esc or by deleting
+// the last letter, is its undo: the cursor goes back to the project it was
+// on when the query began (decisions.md D44).
 func (m *Model) setFilter(f string) {
+	if m.filter == "" && f != "" {
+		m.before, _ = m.selectedName()
+	}
 	m.filter = f
 	if m.input.Value() != f {
 		m.input.SetValue(f)
@@ -384,11 +387,6 @@ func (m *Model) setFilter(f string) {
 		m.plist.SetFilterText(f)
 		return
 	}
-	// ResetFilter keeps the cursor's index in the filtered list, which in the
-	// full list is another project; the selection goes back by name.
-	was, ok := m.selectedName()
 	m.plist.ResetFilter()
-	if ok {
-		m.selectName(was)
-	}
+	m.selectName(m.before)
 }

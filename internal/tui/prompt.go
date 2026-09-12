@@ -23,7 +23,7 @@ func newPrompt(th theme.Theme) textinput.Model {
 	in.PromptStyle = th.Accent
 	in.TextStyle = th.ProjectName
 	in.Cursor.Style = th.Accent
-	in.Placeholder = "filter"
+	in.Placeholder = projectPlaceholder
 	in.PlaceholderStyle = th.NameDim
 	in.CharLimit = 64
 	// Focused from the start: the surface filters as you type, so the query
@@ -32,6 +32,12 @@ func newPrompt(th theme.Theme) textinput.Model {
 	_ = in.Focus()
 	return in
 }
+
+// What the query line says when it is empty: which rows a keystroke filters.
+const (
+	projectPlaceholder = "filter"
+	targetPlaceholder  = "filter targets"
+)
 
 // promptKeys are the keys the input gets. Everything else is the surface's:
 // up and down move the list, enter activates, esc goes back. Without this
@@ -49,12 +55,20 @@ func (m Model) promptKey(msg tea.KeyMsg) bool {
 // expected to have. ctrl+n and ctrl+p are not here: they move the list.
 var queryKeys = []string{"ctrl+w", "ctrl+u", "ctrl+a", "ctrl+e", "alt+backspace"}
 
-// edit feeds a key to the input and re-filters if the query changed.
+// edit feeds a key to the input and re-filters if the query changed. The
+// query line is one field whose scope follows the cursor: over the projects
+// while the cursor is on the list, over the pane's target rows while it is
+// there (decisions.md D43).
 func (m Model) edit(msg tea.KeyMsg) (Model, tea.Cmd) {
 	before := m.input.Value()
 	in, cmd := m.input.Update(msg)
 	m.input = in
-	if in.Value() != before {
+	if in.Value() == before {
+		return m, cmd
+	}
+	if m.focus == focusPane {
+		m.setTargetFilter(in.Value())
+	} else {
 		m.setFilter(in.Value())
 	}
 	return m, cmd

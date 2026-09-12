@@ -73,7 +73,9 @@ type Model struct {
 	surveyErr error
 	focus     focus
 	tcursor   int                // the target row the pane's cursor is on
+	tfilter   string             // the query over the target rows, while the cursor is on the pane
 	tlines    []int              // the pane line each target row is on, for the cursor and a click
+	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	width     int
 	height    int
@@ -409,7 +411,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Back):
 		switch {
 		case m.focus == focusPane:
-			m.focus = focusList
+			m.leavePane()
 		case m.filter != "":
 			m.setFilter("")
 		default:
@@ -432,7 +434,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
-	case key.Matches(msg, m.keys.Targets) && m.focus == focusList:
+	case key.Matches(msg, m.keys.Targets):
+		if m.focus == focusPane {
+			m.leavePane()
+			return m, nil
+		}
 		return m.drill()
 	case key.Matches(msg, m.keys.Edit):
 		return m.editFile()
@@ -447,11 +453,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.targetKey(msg); ok {
 		return next, cmd
 	}
-	// The query is about projects, so typing puts the cursor back on the
-	// list: a keystroke that filtered ninety rows while the cursor sat on a
-	// target of one of them would leave nothing to see the result on.
 	if m.promptKey(msg) {
-		m.focus = focusList
 		return m.edit(msg)
 	}
 	return m, nil
@@ -476,23 +478,50 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
-// attached instance, which has a ref and no name.
+// attached instance, which has a ref and no name. matches are the rune
+// positions of its label the query matched, for the highlight.
 type targetRow struct {
 	target   revier.TargetView
 	attached revier.TargetRef
+	matches  []int
 }
 
+// label is what the target query matches: a target's name, or an attached
+// instance's title.
+func (r targetRow) label() string {
+	if !r.attached.IsZero() {
+		return r.attached.Title
+	}
+	return string(r.target.Name)
+}
+
+// targetRows is the pane's Targets section: every target, then every
+// attached instance, or, while a target query is typed, the rows it matches
+// ranked as the list ranks projects (decisions.md D43).
 func (m Model) targetRows() []targetRow {
 	v, ok := m.selected()
 	if !ok {
 		return nil
 	}
-	var out []targetRow
+	var all []targetRow
 	for _, t := range v.Targets {
-		out = append(out, targetRow{target: t})
+		all = append(all, targetRow{target: t})
 	}
 	for _, ref := range m.attached[v.Project.Name] {
-		out = append(out, targetRow{attached: ref})
+		all = append(all, targetRow{attached: ref})
+	}
+	if m.tfilter == "" {
+		return all
+	}
+	labels := make([]string, len(all))
+	for i, r := range all {
+		labels[i] = r.label()
+	}
+	var out []targetRow
+	for _, rank := range list.DefaultFilter(m.tfilter, labels) {
+		r := all[rank.Index]
+		r.matches = rank.MatchedIndexes
+		out = append(out, r)
 	}
 	return out
 }
@@ -567,7 +596,8 @@ func (m Model) goRow(i int) tea.Cmd {
 }
 
 // drill moves the cursor into the pane, onto the first target of the project
-// under the cursor. The pane starts at its top, where the targets are.
+// under the cursor. The pane starts at its top, where the targets are, and
+// the query line becomes the target query, empty.
 func (m Model) drill() (tea.Model, tea.Cmd) {
 	if _, ok := m.selected(); !ok {
 		return m, nil
@@ -575,7 +605,26 @@ func (m Model) drill() (tea.Model, tea.Cmd) {
 	m.focus = focusPane
 	m.tcursor = 0
 	m.detail.GotoTop()
+	m.input.SetValue("")
+	m.input.Placeholder = targetPlaceholder
 	return m, nil
+}
+
+// leavePane brings the cursor back to the list. The target query is the
+// pane's alone, so it is dropped, and the query line shows the project
+// query again, as it was.
+func (m *Model) leavePane() {
+	m.focus = focusList
+	m.tfilter = ""
+	m.input.SetValue(m.filter)
+	m.input.Placeholder = projectPlaceholder
+}
+
+// setTargetFilter is every change to the target query. The first match is
+// selected, as the list selects it on a project query.
+func (m *Model) setTargetFilter(f string) {
+	m.tfilter = f
+	m.tcursor = 0
 }
 
 // goTarget is one activation: run-or-raise the target, and settle where it

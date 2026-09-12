@@ -333,20 +333,37 @@ func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
 	}
 }
 
-// Typing with the cursor in the pane filters the list, as it does anywhere,
-// and puts the cursor back on the list, where the result is.
-func TestTypingInThePaneReturnsToTheListAndFilters(t *testing.T) {
+// The query line follows the cursor: with the cursor in the pane it is the
+// target query, the best match is selected, and leaving the pane drops it
+// and shows the project query again (decisions.md D43).
+func TestTypingInThePaneFiltersTheTargets(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "1")
 	m, _ = press(m, "tab")
-	m, _ = press(m, "1")
-	m, _ = press(m, "1")
-	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q after typing, want the cursor back on the list", row)
+	if q := lines(m)[1]; !strings.Contains(q, "filter targets") {
+		t.Errorf("query line = %q, want the target query, empty", q)
 	}
-	body := strings.Join(rows(m), "\n")
-	if !strings.Contains(body, "project-11") || strings.Contains(body, "project-10") {
-		t.Errorf("filter '11' should leave only project-11:\n%s", m.View())
+	m, _ = press(m, "e")
+	m, _ = press(m, "d")
+	if body := pane(m); strings.Contains(body, "home") || !strings.Contains(body, "editor") {
+		t.Errorf("target query 'ed' should leave only the editor:\n%s", body)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want the match", row)
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "project-00") {
+		t.Errorf("the target query filtered the projects:\n%s", body)
+	}
+	m, _ = press(m, "tab")
+	if q := lines(m)[1]; !strings.Contains(q, "❯ 1") {
+		t.Errorf("query line = %q, want the project query back", q)
+	}
+	if row := paneCursor(m); row != "" {
+		t.Errorf("pane cursor = %q after tab, want the cursor back on the list", row)
+	}
+	if body := pane(m); !strings.Contains(body, "home") {
+		t.Errorf("the target query outlived the pane:\n%s", body)
 	}
 }
 
@@ -451,22 +468,6 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m, _ = press(m, "esc")
 	if body := m.View(); !strings.Contains(body, "project-00") {
 		t.Errorf("esc should clear the filter:\n%s", body)
-	}
-}
-
-// Clearing the query keeps the project the cursor is on. The list keeps the
-// cursor's place among the filtered rows, which in the full list is another
-// project, and Enter would then open that one.
-func TestClearingTheFilterKeepsTheSelectedProject(t *testing.T) {
-	_, _, c, projects := world(t, 12)
-	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	m, _ = press(m, "0")
-	m, _ = press(m, "down")
-	m, _ = press(m, "down")
-	before := selectedRow(t, m)
-	m, _ = press(m, "esc")
-	if after := selectedRow(t, m); after != before {
-		t.Errorf("selection moved when the filter was cleared: %q -> %q", before, after)
 	}
 }
 

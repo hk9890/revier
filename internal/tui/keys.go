@@ -83,6 +83,8 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	if f == focusPane {
 		out = []key.Binding{
 			helpKey("enter", "go"),
+			helpKey("tab", "projects"),
+			helpKey("type", "filter"),
 			helpKey("esc", "back"),
 		}
 	} else {

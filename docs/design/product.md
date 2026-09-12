@@ -105,9 +105,9 @@ revier each -- <cmd>   run one command in every project's directory (D32)
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
 Enter on a project opens its home target (D28). Tab moves the cursor into the
-pane, onto its targets and attached instances, and Enter there activates one
-(D42). alt+e opens the project's file in `$EDITOR`, and alt+d deletes it after
-a confirmation (D30).
+pane, onto its targets and attached instances, where typing filters them and
+Enter activates one; Tab or Esc brings the cursor back (D42, D43). alt+e opens
+the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30).
 
 ## Scope
 

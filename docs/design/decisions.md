@@ -867,7 +867,7 @@ the next surface over this file.
 
 ## 2026-09-12
 
-### D42 — Tab moves the cursor into the pane; there is no target level — Accepted
+### D42 — Tab moves the cursor into the pane; there is no target level — Accepted; typing amended by D43
 
 Narrows D28: Enter stays as it is, and Tab no longer opens a list.
 
@@ -906,3 +906,41 @@ On a terminal too narrow for the list and the pane together there is no pane
 to move into, so Tab shows the pane in the list's place, at full width, and
 Esc gives the list back. It is the same renderer as the wide case, so the
 narrow terminal has no second implementation of the target rows.
+
+### D43 — the query line follows the cursor — Accepted
+
+Amends D42, where typing with the cursor in the pane put it back on the list.
+
+With the cursor in the pane, the query line still showed the project query
+with its cursor blinking, so the surface pointed at two places at once. And
+a keystroke there threw the cursor back to the list, which was one rule for
+where a letter lands with two outcomes.
+
+The query line is one field whose scope follows the cursor. On the list it
+is the project query, as before. In the pane it is the target query: empty
+on entry, with its own placeholder, and matching the target rows by the
+ranking the list uses for projects, so the best match is selected as it is
+there. A project has a handful of targets today, and a query over three
+rows is rarely typed; attached instances are unbounded, and the field costs
+nothing while empty. Leaving the pane, by Tab or by Esc, drops the target
+query and shows the project query again as it was: the target query is a
+view over one project's rows and has no meaning on the list.
+
+Tab toggles: from the list into the pane, from the pane back to the list.
+Esc from the pane goes back too, so the one key that means "back" everywhere
+keeps meaning it. A second line for the target query was rejected: it would
+cost a row on every screen for a field that is empty nearly always.
+
+### D44 — clearing the query puts the cursor back where it was — Accepted
+
+Clearing the query used to leave the cursor on the project the search found,
+on the reasoning that a search ends on the project searched for. In use the
+query reads as a temporary view over the list, and clearing it, by Esc or by
+deleting the last letter, reads as its undo: the list comes back as it was,
+with the cursor where it was before the first letter. The row the search
+found matters only until Enter, and Enter leaves the surface.
+
+So the cursor's project is remembered when the query goes from empty to
+typed, and restored when it goes back to empty. While the query is typed the
+first row is selected on every keystroke, as the ranking puts the best match
+there.

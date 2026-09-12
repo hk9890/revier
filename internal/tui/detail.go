@@ -280,7 +280,7 @@ func (m Model) detailRow(row targetRow, w int, sel bool) string {
 	out := bar + style(th.Path).Render(" ")
 	if ref := row.attached; !ref.IsZero() {
 		out += style(th.NameDim).Render(th.Glyphs.Running+" ") +
-			style(th.ProjectName).Render(clipTo(ref.Title, w-12)) +
+			highlight(clipTo(ref.Title, w-12), row.matches, style(th.ProjectName), style(th.Match)) +
 			style(th.Meta).Render(" attached")
 	} else {
 		t := row.target
@@ -298,7 +298,7 @@ func (m Model) detailRow(row targetRow, w int, sel bool) string {
 			name = th.NameDim
 		}
 		out += style(markStyle).Render(mark+" ") +
-			style(name).Render(pad(clipTo(string(t.Name), detailNameWidth-1), detailNameWidth)) +
+			pad(highlight(clipTo(string(t.Name), detailNameWidth-1), row.matches, style(name), style(th.Match)), detailNameWidth) +
 			style(th.Accent).Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
 			style(stateStyle).Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
 	}
