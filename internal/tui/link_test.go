@@ -179,3 +179,21 @@ func TestEscDuringAnAskAbandonsIt(t *testing.T) {
 		t.Errorf("header = %q, want the project list, not the answered host", h)
 	}
 }
+
+// A survey started before a link was written answers from the list it began
+// with. The new row stays, and the cursor with it, rather than going off the
+// screen until the next refresh.
+func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "beta")
+	stale := m.Survey()
+
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	next, _ := m.Update(stale())
+	m = next.(tui.Model)
+	if row := selectedRow(t, m); !strings.Contains(row, "beta") {
+		t.Errorf("selected %q, want the new link still on the cursor", row)
+	}
+}

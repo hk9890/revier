@@ -228,7 +228,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.surveyErr = msg.err
 		if msg.err == nil {
 			m.claimByPolling(msg.report, msg.before)
-			m.views = sorted(m.known(msg.report.Views))
+			m.views = sorted(m.known(m.uncovered(msg.report.Views)))
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
 		}
