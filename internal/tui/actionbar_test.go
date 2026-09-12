@@ -67,7 +67,7 @@ func TestOneClickOnAButtonOpensItsScreen(t *testing.T) {
 
 	x, y := barCell(t, m)
 	m = clickAt(m, x, y) // the first button, "new"
-	if head := header(m); !strings.Contains(head, "add a project") {
+	if head := barLine(m); !strings.Contains(head, "add a project") {
 		t.Errorf("header = %q after a click on the new button, want the new-project screen", head)
 	}
 }
@@ -78,12 +78,12 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+n")
-	if head := header(m); !strings.Contains(head, "add a project") {
+	if head := barLine(m); !strings.Contains(head, "add a project") {
 		t.Fatalf("header = %q after alt+n, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")
-	if head := header(m); !strings.Contains(head, "running") {
-		t.Errorf("header = %q after esc, want the surface back", head)
+	if r := ruleLine(m); !strings.Contains(r, "running") {
+		t.Errorf("rule = %q after esc, want the surface back", r)
 	}
 }
 

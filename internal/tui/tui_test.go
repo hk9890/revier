@@ -120,7 +120,6 @@ func lines(m tui.Model) []string {
 
 // The chrome lines, in the order View writes them.
 func barLine(m tui.Model) string  { return lines(m)[0] }
-func header(m tui.Model) string   { return lines(m)[1] }
 func query(m tui.Model) string    { return lines(m)[2] }
 func ruleLine(m tui.Model) string { return lines(m)[3] }
 
@@ -177,11 +176,11 @@ func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
 			t.Errorf("the first frame says %q:\n%s", wrong, view)
 		}
 	}
-	if head := header(m); !strings.Contains(head, "surveying") {
-		t.Errorf("header = %q, want it to say the survey is pending", head)
+	if head := ruleLine(m); !strings.Contains(head, "surveying") {
+		t.Errorf("rule = %q, want it to say the survey is pending", head)
 	}
 	m = survey(m)
-	if strings.Contains(header(m), "surveying") || !strings.Contains(ruleLine(m), " 90/90 ") {
+	if strings.Contains(ruleLine(m), "surveying") || !strings.Contains(ruleLine(m), "90/90") {
 		t.Errorf("after the survey the counts should be real:\n%s", m.View())
 	}
 }

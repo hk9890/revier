@@ -26,12 +26,11 @@ type Theme struct {
 	Name   string
 	Glyphs Glyphs
 
-	Badge       lipgloss.Style // the product name, as a tag at the start of the header
-	Header      lipgloss.Style // the top line
+	Header      lipgloss.Style // the name a dialog gives itself
 	Heading     lipgloss.Style // a section title in the detail pane
 	Count       lipgloss.Style // a count that is zero, and so says nothing is wrong
 	Match       lipgloss.Style // the letters of a name the filter matched
-	Accent      lipgloss.Style // counts and the filter, inside the header
+	Accent      lipgloss.Style // the filter mark, and a target key
 	Cursor      lipgloss.Style // the selected row
 	Hover       lipgloss.Style // the row or button under the pointer
 	ProjectName lipgloss.Style // a project or target name
@@ -173,9 +172,9 @@ func Lookup(name, glyphs string) (Theme, error) {
 // Three departures from it. A path is a step dimmer than a stopped name, so the
 // names are what the eye lands on. A missing path is maroon, not red: on a
 // machine that has a third of the checkouts, red on every third row drowned
-// out the red that means an agent wants you. And the header is quiet text
-// behind a badge, where it was red throughout, so the one red count in it is
-// the one that needs reading.
+// out the red that means an agent wants you. And the counts on the rule are
+// quiet, where the header they came from was red throughout, so the one red
+// count among them is the one that needs reading.
 func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	c := func(col catppuccin.Color) lipgloss.Color { return lipgloss.Color(col.Hex) }
 	fg := func(col catppuccin.Color) lipgloss.Style {
@@ -184,7 +183,6 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	return Theme{
 		Name:        name,
 		Glyphs:      g,
-		Badge:       fg(f.Base()).Background(c(f.Mauve())).Bold(true).Padding(0, 1),
 		Header:      fg(f.Text()).Bold(true),
 		Heading:     fg(f.Blue()).Bold(true),
 		Count:       fg(f.Overlay0()),

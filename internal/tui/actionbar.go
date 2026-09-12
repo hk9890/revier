@@ -72,10 +72,10 @@ func (m Model) barCells() []barCell {
 	return out
 }
 
-// bar is the line as it is drawn. The button under the pointer takes the
-// hover background, a step below the selected row's. While a dialog or a
-// delete question is up the line stays blank rather than going away: the
-// rows below must not jump by one.
+// bar is the buttons as they are drawn. The button under the pointer takes
+// the hover background, a step below the selected row's. A delete question
+// blanks the line rather than removing it: the rows below must not jump by
+// one while an answer is waited for.
 func (m Model) bar() string {
 	if m.dialog != dialogNone || m.confirm != "" {
 		return ""

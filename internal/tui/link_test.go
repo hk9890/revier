@@ -62,7 +62,7 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") {
 		t.Fatalf("rows = %q, want the two hosts", r)
 	}
-	if h := header(m); !strings.Contains(h, "link") {
+	if h := barLine(m); !strings.Contains(h, "link") {
 		t.Errorf("header = %q, want the dialog named", h)
 	}
 
@@ -77,7 +77,7 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	if !strings.Contains(r[1], "beta") || strings.Contains(r[1], "linked") {
 		t.Errorf("rows = %q, want beta unlinked", r)
 	}
-	if h := header(m); !strings.Contains(h, "buildbox") {
+	if h := barLine(m); !strings.Contains(h, "buildbox") {
 		t.Errorf("header = %q, want the host named", h)
 	}
 }
@@ -128,7 +128,7 @@ func TestEscWalksBackThroughTheDialog(t *testing.T) {
 		t.Errorf("rows = %q, want the hosts again", r)
 	}
 	m, _ = press(m, "esc")
-	if h := header(m); strings.Contains(h, "link") {
+	if h := barLine(m); strings.Contains(h, "link") {
 		t.Errorf("header = %q, want the project list", h)
 	}
 }
@@ -175,7 +175,7 @@ func TestEscDuringAnAskAbandonsIt(t *testing.T) {
 	}
 	next, _ := m.Update(cmd())
 	m = next.(tui.Model)
-	if h := header(m); strings.Contains(h, "buildbox") {
+	if h := barLine(m); strings.Contains(h, "buildbox") {
 		t.Errorf("header = %q, want the project list, not the answered host", h)
 	}
 }

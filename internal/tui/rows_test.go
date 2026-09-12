@@ -156,8 +156,8 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 func TestTheHeaderSaysOneProjectNeedsYou(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	if head := header(m); !strings.Contains(head, "1 needs you") {
-		t.Errorf("header = %q, want \"1 needs you\"", head)
+	if head := ruleLine(m); !strings.Contains(head, "1 needs you") {
+		t.Errorf("rule = %q, want \"1 needs you\"", head)
 	}
 }
 

@@ -11,10 +11,10 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-// The chrome above and below the list: the action bar, the header, the query
-// line, the rule under it, and the footer. The frame around all of it costs
-// two more rows and two columns, and the margin outside the frame two more
-// of each.
+// The chrome above and below the list: the action bar, a blank line, the
+// query line, the rule under it, and the footer. The frame around all of it
+// costs two more rows and two columns, and the margin outside the frame two
+// more of each.
 const (
 	chromeHeight = 5
 	frameHeight  = 2
@@ -73,12 +73,10 @@ func (m *Model) layout() {
 func (m Model) View() string {
 	w, _ := m.inner()
 	var b strings.Builder
-	// The bar first: what can be done to the installation stands above what
-	// is on it, and the query then sits directly over the rows it filters.
-	b.WriteString(clipTo(m.bar(), w))
-	b.WriteString("\n")
-	b.WriteString(clipTo(m.header(), w))
-	b.WriteString("\n")
+	// The top line, then a blank one: the query reads as its own thing, and
+	// the eye does not run the buttons and the field together.
+	b.WriteString(clipTo(m.top(), w))
+	b.WriteString("\n\n")
 	b.WriteString(clipTo(m.subtitle(), w))
 	b.WriteString("\n")
 	b.WriteString(m.rule(w))
@@ -106,64 +104,95 @@ func (m Model) View() string {
 		Render(b.String())
 }
 
-// subtitle is the line under the header: the query, where typing filters,
-// or what the link dialog's rows are.
+// top is the frame's first line: the action bar on the surface, and the name
+// of a dialog standing over it. A dialog takes the bar's place rather than a
+// line of its own, because none of the bar's buttons acts while one is up.
+func (m Model) top() string {
+	name := ""
+	switch m.dialog {
+	case dialogHosts:
+		name = "link a project on another machine"
+	case dialogRemote:
+		name = m.host
+	case dialogNew:
+		name = "add a project on this machine"
+	default:
+		return m.bar()
+	}
+	return " " + m.theme.Header.Render(name)
+}
+
+// subtitle is the line over the rule: the query, where typing filters, or
+// what the dialog's rows are.
 func (m Model) subtitle() string {
 	switch m.dialog {
 	case dialogHosts:
-		return "  " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
+		return " " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
 	case dialogRemote:
-		return "  " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+		return " " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
 	case dialogNew:
 		return " " + m.path.View()
 	}
 	return m.promptView()
 }
 
-// rule separates the chrome from the list, and carries the count the way the
-// picker does: how many rows survive the filter, out of how many there are.
+// rule separates the chrome from the list and carries every number on the
+// screen: how many rows survive the filter out of how many there are, the way
+// the picker says it, and beside that how much of the list is doing
+// something. The two counts had a line of their own and did not earn it -
+// they are three words that never move - so they sit on the line that was
+// already mostly empty.
 func (m Model) rule(width int) string {
-	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	switch {
-	case m.dialog == dialogHosts:
-		count = fmt.Sprintf(" %d hosts ", len(m.hlist.Items()))
-	case m.dialog == dialogRemote:
-		count = fmt.Sprintf(" %d projects ", len(m.rlist.Items()))
-	case m.dialog == dialogNew:
-		count = ""
-	case !m.ready():
-		count = ""
+	head := pad0(m.ruleHead())
+	// A list too narrow for all of it keeps the ratio and drops the counts:
+	// the ratio is the number that changes as you type.
+	if lipgloss.Width(head) > width {
+		head = pad0(m.ruleCount())
 	}
-	line := width - lipgloss.Width(count)
+	head = clipTo(head, width)
+	line := width - lipgloss.Width(head)
 	if line < 0 {
 		line = 0
 	}
-	return m.theme.NameDim.Render(count) + m.theme.Border.Render(strings.Repeat("─", line))
+	return head + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
-// header is the one line that says what is on screen: how much of the list
-// is doing something. With ninety projects those two counts are the reason
-// to look.
-//
-// It does not count the projects. The rule under it already says how many
-// there are, and how many the filter left, which is the number that changes
-// as you type.
+// pad0 puts a space on each side of a rule's head, so its text does not touch
+// the frame or the line. An empty head stays empty.
+func pad0(head string) string {
+	if head == "" {
+		return ""
+	}
+	return " " + head + " "
+}
+
+// ruleCount is how many rows are under the rule: how many the filter left out
+// of how many there are, the way the picker says it, or what the step of a
+// dialog is listing.
+func (m Model) ruleCount() string {
+	th := m.theme
+	switch {
+	case m.dialog == dialogHosts:
+		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
+	case m.dialog == dialogRemote:
+		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
+	case m.dialog == dialogNew:
+		return ""
+	case !m.ready():
+		return th.NameDim.Render("surveying")
+	}
+	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
+}
+
+// ruleHead is what the rule says before its line: the count, and on the
+// surface how much of the list is doing something.
 //
 // A count that is zero is grey. "0 need you" in bold red read as an alarm on
 // every screen where nothing was wrong.
-func (m Model) header() string {
+func (m Model) ruleHead() string {
 	th := m.theme
-	badge := th.Badge.Render("revier") + " "
-	switch m.dialog {
-	case dialogHosts:
-		return badge + th.NameDim.Render("› ") + th.Header.Render("link a project on another machine")
-	case dialogRemote:
-		return badge + th.NameDim.Render("› ") + th.Header.Render(m.host)
-	case dialogNew:
-		return badge + th.NameDim.Render("› ") + th.Header.Render("add a project on this machine")
-	}
-	if !m.ready() {
-		return badge + th.NameDim.Render("surveying")
+	if m.dialog != dialogNone || !m.ready() {
+		return m.ruleCount()
 	}
 	running, attention := 0, 0
 	for _, v := range m.views {
@@ -174,7 +203,7 @@ func (m Model) header() string {
 			attention++
 		}
 	}
-	// Each count carries the glyph its rows carry, so the header is also the
+	// Each count carries the glyph its rows carry, so the rule is also the
 	// key to the list.
 	count := func(glyph string, n int, text string, s lipgloss.Style) string {
 		if n == 0 {
@@ -187,7 +216,8 @@ func (m Model) header() string {
 		need = "needs you"
 	}
 	sep := th.Path.Render(" · ")
-	return badge + count(th.Glyphs.Running, running, "running", th.Running) +
+	return m.ruleCount() +
+		sep + count(th.Glyphs.Running, running, "running", th.Running) +
 		sep + count(th.Glyphs.NeedsYou, attention, need, th.Attention)
 }
 
