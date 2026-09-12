@@ -5,7 +5,7 @@ package tui
 //
 // Two things can be lit at once: the row the keys act on, and the row the
 // pointer is over. They must not look alike, which is why hover has its own
-// background and never the selection's (decisions.md D36).
+// background and never the selection's (decisions.md D50).
 type hoverKind int
 
 const (

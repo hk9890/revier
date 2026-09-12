@@ -20,7 +20,7 @@ import (
 // There is no border. It drew a box around a surface that already fills the
 // terminal, which has its own edges, and charged two rows and four columns
 // for saying again where they are. The two rules inside do the separating a
-// box was doing.
+// box was doing (decisions.md D51).
 const (
 	chromeHeight = 6
 	marginRows   = 1

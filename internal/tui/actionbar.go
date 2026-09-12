@@ -21,7 +21,7 @@ import (
 //
 // A button carries its key. The bar is a second way to reach the same thing,
 // never the only way: an action with no key would be unreachable from the
-// keyboard, which is where this surface is driven from.
+// keyboard, which is where this surface is driven from (decisions.md D49).
 
 // barAction is one button: what it says, the key that does the same, and
 // what it runs.

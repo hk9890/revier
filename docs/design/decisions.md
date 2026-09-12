@@ -725,7 +725,7 @@ and a path fit — and the pane at ninety, so the frame stops at their sum and
 sits centred in whatever is left. Height is not capped: rows are what a list
 of ninety projects is short of.
 
-### D38 — the rows are a grid, and the frame takes the whole terminal — Accepted
+### D38 — the rows are a grid, and the frame takes the whole terminal — Accepted; border removed by D51
 
 Supersedes D37, which capped and centred the frame.
 
@@ -867,7 +867,7 @@ the next surface over this file.
 
 ## 2026-09-12
 
-### D42 — Tab moves the cursor into the pane; there is no target level — Accepted; typing amended by D43
+### D42 — Tab moves the cursor into the pane; there is no target level — Accepted; typing amended by D43, header removed by D51
 
 Narrows D28: Enter stays as it is, and Tab no longer opens a list.
 
@@ -1085,3 +1085,73 @@ So revier claims one pane option, `@revier`, holding space-separated
 `NAME=value` pairs, and the program that writes it packs them. The host parses
 pairs and knows nothing about which of them anything reads. A value containing
 a space cannot survive it; the variables revier reads are tokens.
+
+### D49 — what is not about one project stands on the top line, a button and a key each — Accepted
+
+Every key on the surface acted on the row under the cursor, or on the query.
+Adding a project, linking one on another machine and opening the
+configuration act on the installation instead, so none of them had a row to
+hang off, and a bare letter could not reach them: every printable rune is a
+filter character. alt+r reached the link dialog, and nothing on the screen
+said so.
+
+The first line of the surface is a bar of those actions: new (alt+n), remote
+(alt+r), config (alt+c). A button carries its key, declared in one place, so
+the bar is a second way to reach an action and never the only one; the
+surface is driven from the keyboard, and a button with no key would strand
+it. One click runs a button, because a button has nothing to select. A
+dialog takes the bar's line to name itself, since no button acts while one
+is up.
+
+new asks for one thing, the directory, and names the project after it, as
+`revier new` does, writing the same file. A directory that is not on this
+machine is refused: there is no `git_url` yet to clone it from. config opens
+`config.toml` and re-reads nothing, because the theme, the glyphs and the
+configured actions are read at start, and applying them while the surface
+runs would rebuild it under the user.
+
+A configured action is not a button. It runs against the selected project,
+so it belongs with the row's keys in the footer.
+
+### D50 — the pointer lights what it is over, a step below the selection — Accepted
+
+Narrows D33 and D36: the wheel and the clicks stay, and the pointer is now
+reported everywhere, not only while a button is down.
+
+A row, a target and a button looked the same whether a click would do
+anything or not. Whatever the pointer is over now takes a background. Two
+things can be lit at once - the row the keys act on, and the row under the
+pointer - so hover has its own background, a step below the selection's,
+and the selection moved up a step to keep them apart. The pointer lighting a
+row selects nothing, as D36 requires.
+
+Reporting every motion takes nothing D33 had not already traded: drag-select
+was given up for the wheel, and shift-drag still selects.
+
+A project row keeps D36's two clicks: selecting it costs nothing and opening
+it opens a window. A target keeps D42's one. Two clicks on a target were
+tried and undone, because once hover says a target is live, a first click
+that only moves the cursor is the wasted click D42 argued against.
+
+### D51 — no header and no border; the rule carries the counts — Accepted
+
+Narrows D38 and D42: the surface still takes the whole terminal, and D42's
+counts move to the rule.
+
+Above the list stood a header line with a badge naming the program and two
+counts, a query line, and a rule carrying one more count, all inside a
+border. The badge named the program the user had just started. The border
+boxed a surface that already fills the terminal, and charged two rows and
+four columns for repeating the terminal's own edges.
+
+Both are gone. The rule, which already carried how many rows the filter
+left and was otherwise empty, carries the counts too, and they count the
+list by what its agents are doing - blockers, working, idle - each project
+once under its worst agent, the state its row shows, so the rule is the key
+to the rows. Where the rule is too narrow for all of it, the counts go and
+the ratio stays, since the ratio changes as you type.
+
+The separating a border did is done by lines: a thin rule under the action
+bar, and a blank line between the query and the rule, so the query does not
+read as the rule's caption. The top of the surface is six lines, as it was
+with the header and the border, and the list gains the four columns.
