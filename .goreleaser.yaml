@@ -48,9 +48,10 @@ release:
   replace_existing_artifacts: true
 
 # The release notes are the version's CHANGELOG.md section, passed with
-# --release-notes (scripts/release-notes), not a commit list.
-changelog:
-  disable: true
+# --release-notes (scripts/release-notes), not a commit list. The changelog
+# pipe is what reads that file, so it must stay enabled: `changelog.disable`
+# skips the pipe and publishes a release with an empty body. A notes file
+# suppresses the commit list on its own.
 
 signs:
   - cmd: cosign

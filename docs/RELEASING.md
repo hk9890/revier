@@ -47,10 +47,13 @@ on a user-owned **private** repository.
    ```
 
 6. Verify. Expect 2 archives, 2 `.sbom.json`, `…_checksums.txt` and both
-   `…_checksums.txt.sig` and `…_checksums.txt.pem`.
+   `…_checksums.txt.sig` and `…_checksums.txt.pem`, and a body that is the
+   tag's CHANGELOG section — an empty body means GoReleaser dropped the notes
+   file, and `gh release edit vX.Y.Z --notes-file` repairs it without a
+   re-dispatch.
 
    ```bash
-   gh release view vX.Y.Z --json assets -q '.assets[].name'
+   gh release view vX.Y.Z --json assets,body -q '.body, (.assets[].name)'
    gh release download vX.Y.Z -p '*_linux_x64.tar.gz'
    gh attestation verify revier_X.Y.Z_linux_x64.tar.gz -R hk9890/revier
    ```
