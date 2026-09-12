@@ -778,7 +778,7 @@ the height, so neither waits under the other. A third column, the selected
 agent's live output, is the next use of a wide pane and is a decision of its
 own.
 
-### D40 — a remote project is surveyed and driven by the revier on its host — Accepted
+### D40 — a remote project is surveyed and driven by the revier on its host — Partly superseded by D41
 
 Supersedes the SSH half of D6. Containers stay out.
 
@@ -830,3 +830,37 @@ missing file there is found. ssh runs in batch mode with a connect timeout,
 so a survey never waits on a password prompt; `ControlMaster` in the ssh
 config is what makes the round trip cheap, and revier does not stand in for
 it.
+
+### D41 — a link is its own kind of file, not a project file with a host — Accepted
+
+Supersedes the file part of D40: what a remote project's file is, and where
+it lives. The rest of D40 stands: the survey over ssh, the merge, the pane,
+the attach, the forwarded agent commands and actions.
+
+D40 put `host = "buildbox"` on the project file and had the same file read
+on both machines. That was the wrong assumption. On the host, the file
+defines a project: a directory, its targets, its agent. Here, the file
+refers to one: which host, which name there, and the pane that reaches it.
+A definition and a reference are different kinds of thing, and one shape
+for both cost two workarounds - the host had to be told its own name in
+`config.toml`, or it asked itself over ssh, and the path was written in the
+host's terms so this side could not expand it.
+
+A link is a file in `projects/` with a `[remote]` table and nothing a
+project file needs: no `git_url`, no directory here. `host` is the ssh
+destination; `project` is the name on the host, and defaults to the link's
+own name. The two names may differ, since the file carries both: the host
+is asked by its name, the list shows this one, as `name@host`. The home
+target is derived - the ssh pane onto `revier open <project> --attach`
+there - unless the link declares one. A link may declare further targets,
+ordinary local windows onto the project: an editor over ssh, a page. A
+`path` is allowed, kept as written, for their templates; it is the host's
+path and is never a directory here.
+
+Nothing is read by both sides. The project file on the host has no host
+field, the host never asks itself, and the self-name line in `config.toml`
+is gone. One directory holds both kinds, told apart by the table at the top
+of the file, rather than a `links/` directory: a project is found by name
+everywhere, and two directories would have been two places to look. The
+onboarding flow that lists a host's projects and writes a link for one is
+the next surface over this file.

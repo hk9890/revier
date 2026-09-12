@@ -14,7 +14,7 @@ type Project struct {
     Name    ProjectName
     Path    string
     GitURL  string // what `revier open` clones when Path is missing (D30)
-    Host    string // the machine the project lives on, as ssh knows it; empty is this one (D40)
+    Remote  *Link  // set for a link: a project on another machine (D41)
     Targets []Target
     Vars    map[string]string // template values for launches
 }

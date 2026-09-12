@@ -115,7 +115,7 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 	for _, p := range a.projects {
 		// A remote project's path is on its host; a directory here of the
 		// same name is some other checkout.
-		if p.Host != "" {
+		if p.Remote != nil {
 			continue
 		}
 		root := filepath.Clean(p.Path)

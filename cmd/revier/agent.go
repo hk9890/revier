@@ -106,12 +106,12 @@ func waitFor(ctx context.Context, address, name string, until []revier.Status) (
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	r, err := a.remoteFor(address)
+	r, there, err := a.remoteFor(address)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
 	if r != nil {
-		status, err := r.Wait(ctx, address, name)
+		status, err := r.Wait(ctx, there, name)
 		if err != nil {
 			return revier.AgentState{Status: status}, fmt.Errorf("%s: %w", address, err)
 		}
@@ -143,13 +143,13 @@ func cmdAgentPrompt(args []string) error {
 	if err != nil {
 		return err
 	}
-	r, err := a.remoteFor(pos[0])
+	r, there, err := a.remoteFor(pos[0])
 	if err != nil {
 		return err
 	}
 	if r != nil {
 		// The remote revier makes every refusal and prints its own warning.
-		return r.Prompt(ctx, pos[0], pos[1])
+		return r.Prompt(ctx, there, pos[1])
 	}
 	ag, err := a.agent(ctx, pos[0])
 	if err != nil {
@@ -165,17 +165,26 @@ func cmdAgentPrompt(args []string) error {
 	return nil
 }
 
-// remoteFor returns the remote that drives the agent an address names, nil
-// when its project is on this machine (decisions.md D40). The address is
-// passed on as it is: what it names within the project is the remote's to
-// resolve, against the instances it can see.
-func (a *app) remoteFor(address string) (revier.Remote, error) {
-	name, _, _ := strings.Cut(address, ":")
+// remoteFor returns the remote that drives the agent an address names, and
+// the address as the host knows it; nil when the project is on this machine
+// (decisions.md D41).
+func (a *app) remoteFor(address string) (revier.Remote, string, error) {
+	name, sel, hasSel := strings.Cut(address, ":")
 	p, ok := a.project(revier.ProjectName(name))
 	if !ok {
-		return nil, fmt.Errorf("no project named %q", name)
+		return nil, "", fmt.Errorf("no project named %q", name)
 	}
-	return a.core.RemoteOf(p)
+	r, err := a.core.RemoteOf(p)
+	if err != nil || r == nil {
+		return nil, "", err
+	}
+	// The project has its own name on the host; what follows the colon is
+	// the host's to resolve.
+	there := string(p.Remote.Project)
+	if hasSel {
+		there += ":" + sel
+	}
+	return r, there, nil
 }
 
 // agent finds the agent an address names: <project>, or <project>:<target>,
