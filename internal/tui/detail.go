@@ -213,7 +213,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	m.tlines = m.tlines[:0]
 	for i, row := range m.targetRows() {
 		m.tlines = append(m.tlines, strings.Count(b.String(), "\n"))
-		b.WriteString(m.detailRow(row, w, m.focus == focusPane && i == m.tcursor))
+		b.WriteString(m.detailRow(row, w, m.focus == focusPane && i == m.tcursor, m.over.is(hoverTarget, i)))
 		b.WriteString("\n")
 	}
 
@@ -272,12 +272,16 @@ func (m Model) heading(title string, w int) string {
 // attached instance, which has a title and no key. A stopped target says
 // "stopped", where it said "-", which read as a value that failed to load.
 // The row under the pane's cursor carries the list's bar and selection
-// background across its width, so the two cursors read as one.
-func (m Model) detailRow(row targetRow, w int, sel bool) string {
+// background across its width, so the two cursors read as one; the row under
+// the pointer carries the hover background, because one click runs it.
+func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	th := m.theme
 	style := func(s lipgloss.Style) lipgloss.Style {
-		if sel {
+		switch {
+		case sel:
 			return th.OnSelection(s)
+		case over:
+			return th.OnHover(s)
 		}
 		return s
 	}
@@ -310,7 +314,7 @@ func (m Model) detailRow(row targetRow, w int, sel bool) string {
 			style(th.Accent).Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
 			style(stateStyle).Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
 	}
-	return fill(out, w, sel, th)
+	return fill(out, w, style)
 }
 
 func (m Model) detailAgent(a revier.AgentView, w int) string {

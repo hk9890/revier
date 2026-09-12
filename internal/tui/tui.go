@@ -111,7 +111,7 @@ type Model struct {
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
 	path   textinput.Model                  // the directory field of the new-project screen
-	hover  int                              // the action bar button under the pointer, or -1
+	over   hovered                          // what the pointer is on
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
 }
@@ -129,7 +129,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		hlist: newHostList(th), rlist: newRemoteList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
-		path: newPathInput(th), hover: -1,
+		path: newPathInput(th),
 		body: newBody(),
 	}
 	m.layout()

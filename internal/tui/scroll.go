@@ -26,6 +26,13 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		return
 	}
+	// The delegate renders the rows and is handed nothing but the row, so
+	// the hovered one is set on it before the list draws.
+	row := -1
+	if m.over.kind == hoverRow {
+		row = m.over.index
+	}
+	m.plist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())

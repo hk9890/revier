@@ -118,6 +118,12 @@ func lines(m tui.Model) []string {
 	return out
 }
 
+// The chrome lines, in the order View writes them.
+func barLine(m tui.Model) string  { return lines(m)[0] }
+func header(m tui.Model) string   { return lines(m)[1] }
+func query(m tui.Model) string    { return lines(m)[2] }
+func ruleLine(m tui.Model) string { return lines(m)[3] }
+
 // footer is the last content line: the key legend, or the last failure.
 func footer(m tui.Model) string {
 	l := lines(m)
@@ -171,11 +177,12 @@ func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
 			t.Errorf("the first frame says %q:\n%s", wrong, view)
 		}
 	}
-	if head := lines(m)[0]; !strings.Contains(head, "surveying") {
+	if head := header(m); !strings.Contains(head, "surveying") {
 		t.Errorf("header = %q, want it to say the survey is pending", head)
 	}
-	if m = survey(m); !strings.Contains(lines(m)[0], "90 projects") {
-		t.Errorf("after the survey the header should count:\n%s", m.View())
+	m = survey(m)
+	if strings.Contains(header(m), "surveying") || !strings.Contains(ruleLine(m), " 90/90 ") {
+		t.Errorf("after the survey the counts should be real:\n%s", m.View())
 	}
 }
 
@@ -209,7 +216,7 @@ func TestAFilterMatchingNothingSaysSo(t *testing.T) {
 	if !strings.Contains(view, `No project matches "zzz"`) {
 		t.Errorf("want the filter named as the reason:\n%s", view)
 	}
-	if rule := lines(m)[3]; !strings.Contains(rule, " 0/12 ") {
+	if rule := ruleLine(m); !strings.Contains(rule, " 0/12 ") {
 		t.Errorf("rule = %q, want the count to read 0/12", rule)
 	}
 	if strings.Contains(view, "No items") {
@@ -247,8 +254,8 @@ func TestEnterOnAProjectOpensItsHome(t *testing.T) {
 	if len(wm.Opened) != 0 {
 		t.Errorf("window Opened = %v, want nothing but home", wm.Opened)
 	}
-	if !strings.Contains(lines(m)[0], "2 projects") {
-		t.Errorf("enter must not leave the project level:\n%s", m.View())
+	if !strings.Contains(ruleLine(m), "/2 ") {
+		t.Errorf("enter must not leave the list:\n%s", m.View())
 	}
 }
 
@@ -282,7 +289,7 @@ func TestTabMovesTheCursorIntoThePaneAndEscReturns(t *testing.T) {
 	m, _ = press(m, "tab")
 	view := m.View()
 	// The key in the spelling the footer uses, not the configuration's.
-	for _, want := range []string{"3 projects", "project-00", "ctrl+shift+o"} {
+	for _, want := range []string{"3/3", "project-00", "ctrl+shift+o"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("after tab the surface lacks %q:\n%s", want, view)
 		}
@@ -324,8 +331,8 @@ func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
 	if !strings.Contains(body, "Targets") || !strings.Contains(body, "ctrl+shift+o") {
 		t.Errorf("the pane is not on screen:\n%s", m.View())
 	}
-	if !strings.Contains(lines(m)[0], "3 projects") {
-		t.Errorf("header = %q, want the counts kept", lines(m)[0])
+	if !strings.Contains(ruleLine(m), " 3/3 ") {
+		t.Errorf("rule = %q, want the list still under it", ruleLine(m))
 	}
 	m, _ = press(m, "esc")
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "project-00") {
@@ -341,7 +348,7 @@ func TestTypingInThePaneFiltersTheTargets(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	m, _ = press(m, "1")
 	m, _ = press(m, "tab")
-	if q := lines(m)[1]; !strings.Contains(q, "filter targets") {
+	if q := query(m); !strings.Contains(q, "filter targets") {
 		t.Errorf("query line = %q, want the target query, empty", q)
 	}
 	m, _ = press(m, "e")
@@ -356,7 +363,7 @@ func TestTypingInThePaneFiltersTheTargets(t *testing.T) {
 		t.Errorf("the target query filtered the projects:\n%s", body)
 	}
 	m, _ = press(m, "tab")
-	if q := lines(m)[1]; !strings.Contains(q, "❯ 1") {
+	if q := query(m); !strings.Contains(q, "❯ 1") {
 		t.Errorf("query line = %q, want the project query back", q)
 	}
 	if row := paneCursor(m); row != "" {
@@ -383,22 +390,15 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 	}
 }
 
-// A click on a target row in the pane moves the cursor to it, and a second
-// click runs it, as Enter on it does.
-func TestTwoClicksOnATargetInThePaneRunIt(t *testing.T) {
+// One click on a target row in the pane runs it, as Enter on it does: a
+// target is a thing to do, not a row to choose.
+func TestAClickOnATargetInThePaneRunsIt(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
-	if cmd != nil {
-		t.Fatalf("one click on a target ran it:\n%s", m.View())
-	}
-	if row := paneCursor(m); !strings.Contains(row, "editor") {
-		t.Errorf("pane cursor = %q after one click, want it on the editor", row)
-	}
-	m, cmd = clickCell(m, x, y)
 	if cmd == nil {
-		t.Fatalf("the second click ran nothing:\n%s", m.View())
+		t.Fatalf("the click ran nothing:\n%s", m.View())
 	}
 	cmd()
 	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
@@ -1015,7 +1015,7 @@ func TestADesktopKeyTheQueryOwnsEditsTheQuery(t *testing.T) {
 	if len(rt.Opened) != 0 || len(wm.Opened) != 0 {
 		t.Errorf("ctrl+u opened something: runtime %v, window %v", rt.Opened, wm.Opened)
 	}
-	if q := lines(m)[1]; !strings.Contains(q, "filter") {
+	if q := query(m); !strings.Contains(q, "filter") {
 		t.Errorf("query line = %q, want ctrl+u to have cleared it", q)
 	}
 }

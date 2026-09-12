@@ -184,7 +184,7 @@ func TestEditRunsTheEditorAndLeavesTheFilterAlone(t *testing.T) {
 		t.Fatal("want the editor command")
 	}
 	// The placeholder shows only while the query is empty.
-	if q := lines(m)[1]; !strings.Contains(q, "filter") {
+	if q := query(m); !strings.Contains(q, "filter") {
 		t.Errorf("query line = %q, the key reached the filter", q)
 	}
 }

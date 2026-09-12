@@ -33,6 +33,7 @@ type Theme struct {
 	Match       lipgloss.Style // the letters of a name the filter matched
 	Accent      lipgloss.Style // counts and the filter, inside the header
 	Cursor      lipgloss.Style // the selected row
+	Hover       lipgloss.Style // the row or button under the pointer
 	ProjectName lipgloss.Style // a project or target name
 	NameDim     lipgloss.Style // the same name, for something not running
 	Path        lipgloss.Style // a project path
@@ -189,7 +190,8 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 		Count:       fg(f.Overlay0()),
 		Match:       fg(f.Peach()).Bold(true),
 		Accent:      fg(f.Mauve()),
-		Cursor:      lipgloss.NewStyle().Foreground(c(f.Mauve())).Background(c(f.Surface0())).Bold(true),
+		Cursor:      lipgloss.NewStyle().Foreground(c(f.Mauve())).Background(c(f.Surface1())).Bold(true),
+		Hover:       lipgloss.NewStyle().Background(c(f.Surface0())),
 		ProjectName: fg(f.Text()),
 		NameDim:     fg(f.Overlay1()),
 		Path:        fg(f.Overlay0()),
@@ -238,4 +240,12 @@ func join(ss []string) string { return strings.Join(ss, ", ") }
 // than one band per styled run.
 func (t Theme) OnSelection(s lipgloss.Style) lipgloss.Style {
 	return s.Background(t.Cursor.GetBackground())
+}
+
+// OnHover is a style as it renders inside the row or button the pointer is
+// on. It is a step below the selection: two rows can be lit at once - the
+// one the keys act on and the one the pointer is over - and which of them
+// Enter means has to be readable at a glance.
+func (t Theme) OnHover(s lipgloss.Style) lipgloss.Style {
+	return s.Background(t.Hover.GetBackground())
 }

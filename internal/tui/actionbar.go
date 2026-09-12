@@ -13,11 +13,11 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-// The action bar is the line under the query: what the surface can do that is
-// not about the row under the cursor. Adding a project, linking one on
-// another machine and opening the configuration are all about the
-// installation, so none of them has a row to hang off, and none of them can
-// take a bare letter - every printable rune is a filter character.
+// The action bar is the top line: what the surface can do that is not about
+// the row under the cursor. Adding a project, linking one on another machine
+// and opening the configuration are all about the installation, so none of
+// them has a row to hang off, and none of them can take a bare letter -
+// every printable rune is a filter character.
 //
 // A button carries its key. The bar is a second way to reach the same thing,
 // never the only way: an action with no key would be unreachable from the
@@ -33,7 +33,7 @@ type barAction struct {
 
 var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openNew},
-	{label: "link", key: "alt+r", run: Model.openHosts},
+	{label: "remote", key: "alt+r", run: Model.openHosts},
 	{label: "config", key: "alt+c", run: Model.editConfig},
 }
 
@@ -47,9 +47,10 @@ type barCell struct {
 	x0, x1 int
 }
 
-// barLine is the bar's line inside the frame: after the header and the
-// query, before the rule.
-const barLine = 2
+// barLine is the bar's line inside the frame: the first of them. What can be
+// done to the installation stands above what is on it, and the query line
+// then sits directly over the rows it filters.
+const barLine = 0
 
 // barSeparator stands between two buttons. It is the header's own separator
 // between its counts: the eye already reads that mark on this surface as
@@ -59,7 +60,9 @@ const barSeparator = " · "
 
 func (m Model) barCells() []barCell {
 	out := make([]barCell, 0, len(barActions))
-	x := 1 // the line is drawn with a leading space
+	// A button's own leading space is the line's gutter, so the first label
+	// starts in the column every other line starts in.
+	x := 0
 	for _, a := range barActions {
 		text := " " + a.label + " " + a.key + " "
 		w := lipgloss.Width(text)
@@ -69,24 +72,23 @@ func (m Model) barCells() []barCell {
 	return out
 }
 
-// bar is the line as it is drawn. The hovered button takes the selected
-// row's background, which is what "this one" looks like everywhere else on
-// the surface. While a dialog or a delete question is up the line stays
-// blank rather than going away: the rows below must not jump by one.
+// bar is the line as it is drawn. The button under the pointer takes the
+// hover background, a step below the selected row's. While a dialog or a
+// delete question is up the line stays blank rather than going away: the
+// rows below must not jump by one.
 func (m Model) bar() string {
 	if m.dialog != dialogNone || m.confirm != "" {
 		return ""
 	}
 	th := m.theme
 	var b strings.Builder
-	b.WriteString(" ")
 	for i, c := range m.barCells() {
 		if i > 0 {
 			b.WriteString(th.Path.Render(barSeparator))
 		}
 		label, key := th.ProjectName, th.Help
-		if i == m.hover {
-			label, key = th.OnSelection(label).Bold(true), th.OnSelection(key)
+		if m.over.is(hoverBar, i) {
+			label, key = th.OnHover(label).Bold(true), th.OnHover(key)
 		}
 		b.WriteString(label.Render(" "+c.action.label+" ") + key.Render(c.action.key+" "))
 	}

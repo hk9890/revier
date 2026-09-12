@@ -14,12 +14,12 @@ import (
 )
 
 // barCell is a terminal cell inside the first button of the action bar: the
-// bar's row is under the header and the query line, and its first button
-// starts a column into the frame's content.
+// bar is the frame's first line, and its first label starts one column into
+// the content.
 func barCell(t *testing.T, m tui.Model) (x, y int) {
 	t.Helper()
 	mr, mc := margins(m)
-	return mc + 2 + 2, mr + 1 + 2
+	return mc + 2 + 1, mr + 1
 }
 
 // The bar stands under the query, and every button says its key: the bar is
@@ -28,8 +28,8 @@ func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	bar := lines(m)[2]
-	for _, want := range []string{"new", "alt+n", "link", "alt+r", "config", "alt+c"} {
+	bar := barLine(m)
+	for _, want := range []string{"new", "alt+n", "remote", "alt+r", "config", "alt+c"} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("bar = %q, want it to name %q", bar, want)
 		}
@@ -67,7 +67,7 @@ func TestOneClickOnAButtonOpensItsScreen(t *testing.T) {
 
 	x, y := barCell(t, m)
 	m = clickAt(m, x, y) // the first button, "new"
-	if head := lines(m)[0]; !strings.Contains(head, "add a project") {
+	if head := header(m); !strings.Contains(head, "add a project") {
 		t.Errorf("header = %q after a click on the new button, want the new-project screen", head)
 	}
 }
@@ -78,11 +78,11 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+n")
-	if head := lines(m)[0]; !strings.Contains(head, "add a project") {
+	if head := header(m); !strings.Contains(head, "add a project") {
 		t.Fatalf("header = %q after alt+n, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")
-	if head := lines(m)[0]; !strings.Contains(head, "projects") {
+	if head := header(m); !strings.Contains(head, "running") {
 		t.Errorf("header = %q after esc, want the surface back", head)
 	}
 }
@@ -154,4 +154,38 @@ func typeInto(m tui.Model, text string) tui.Model {
 		m, _ = press(m, string(r))
 	}
 	return m
+}
+
+// The pointer lights a row of the list and a target in the pane, and the
+// light is not the selection's: two rows can be marked at once, and which of
+// them Enter means must stay readable.
+func TestThePointerLightsARowAndATarget(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	_, mc := margins(m)
+
+	plain := m.View()
+	m = motion(m, mc+6, rowTop(m)+2) // the second row, not the selected one
+	if m.View() == plain {
+		t.Error("the list is unchanged with the pointer on a row")
+	}
+	if lit := selectedRow(t, m); !strings.Contains(lit, "project-02") {
+		t.Errorf("selected %q, want the pointer to have moved nothing", lit)
+	}
+
+	x, y := paneCell(t, m, "editor")
+	before := m.View()
+	if m = motion(m, x, y); m.View() == before {
+		t.Error("the pane is unchanged with the pointer on a target")
+	}
+}
+
+// rowTop is the terminal row the first row of the list is on.
+func rowTop(m tui.Model) int {
+	mr, _ := margins(m)
+	return mr + 1 + 4
 }

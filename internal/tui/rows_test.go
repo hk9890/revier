@@ -48,7 +48,7 @@ func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 		t.Fatalf("selected %q while typing, want the best match", row)
 	}
 	m, _ = press(m, "esc")
-	if rule := lines(m)[3]; !strings.Contains(rule, " 12/12 ") {
+	if rule := ruleLine(m); !strings.Contains(rule, " 12/12 ") {
 		t.Fatalf("rule = %q, want the filter cleared", rule)
 	}
 	if after := selectedRow(t, m); after != before {
@@ -156,7 +156,7 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 func TestTheHeaderSaysOneProjectNeedsYou(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	if head := lines(m)[0]; !strings.Contains(head, "1 needs you") {
+	if head := header(m); !strings.Contains(head, "1 needs you") {
 		t.Errorf("header = %q, want \"1 needs you\"", head)
 	}
 }
@@ -374,8 +374,8 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
 		t.Fatalf("runtime Opened = %v, want project-00's home", rt.Opened)
 	}
-	if !strings.Contains(lines(m)[0], "3 projects") {
-		t.Errorf("a double click must not leave the project level:\n%s", m.View())
+	if !strings.Contains(ruleLine(m), " 3/3 ") {
+		t.Errorf("a double click must not leave the list:\n%s", m.View())
 	}
 }
 

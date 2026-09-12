@@ -9,11 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/theme"
 )
 
-// The chrome above and below the list: a header, the query line, the action
-// bar, the rule under it, and the footer. The frame around all of it costs
+// The chrome above and below the list: the action bar, the header, the query
+// line, the rule under it, and the footer. The frame around all of it costs
 // two more rows and two columns, and the margin outside the frame two more
 // of each.
 const (
@@ -74,11 +73,13 @@ func (m *Model) layout() {
 func (m Model) View() string {
 	w, _ := m.inner()
 	var b strings.Builder
+	// The bar first: what can be done to the installation stands above what
+	// is on it, and the query then sits directly over the rows it filters.
+	b.WriteString(clipTo(m.bar(), w))
+	b.WriteString("\n")
 	b.WriteString(clipTo(m.header(), w))
 	b.WriteString("\n")
 	b.WriteString(clipTo(m.subtitle(), w))
-	b.WriteString("\n")
-	b.WriteString(clipTo(m.bar(), w))
 	b.WriteString("\n")
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
@@ -140,9 +141,13 @@ func (m Model) rule(width int) string {
 	return m.theme.NameDim.Render(count) + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
-// header is the one line that says what is on screen. It
-// counts, because with ninety projects the counts are the reason to look. The
-// filter is not here: it has its own line, with a cursor on it.
+// header is the one line that says what is on screen: how much of the list
+// is doing something. With ninety projects those two counts are the reason
+// to look.
+//
+// It does not count the projects. The rule under it already says how many
+// there are, and how many the filter left, which is the number that changes
+// as you type.
 //
 // A count that is zero is grey. "0 need you" in bold red read as an alarm on
 // every screen where nothing was wrong.
@@ -182,8 +187,7 @@ func (m Model) header() string {
 		need = "needs you"
 	}
 	sep := th.Path.Render(" · ")
-	return badge + th.Header.Render(fmt.Sprintf("%d projects", len(m.views))) +
-		sep + count(th.Glyphs.Running, running, "running", th.Running) +
+	return badge + count(th.Glyphs.Running, running, "running", th.Running) +
 		sep + count(th.Glyphs.NeedsYou, attention, need, th.Attention)
 }
 
@@ -253,18 +257,16 @@ func (m Model) footer() string {
 	return " " + m.help.ShortHelpView(keys)
 }
 
-// fill pads a rendered row to the width of the list, so the selection
-// highlight spans the row instead of ending at the last character.
-func fill(row string, width int, selected bool, th theme.Theme) string {
+// fill pads a rendered row to the width of the list, so the highlight on a
+// selected or hovered row spans the row instead of ending at the last
+// character. style is the row's own: whatever background its segments carry,
+// the padding carries too.
+func fill(row string, width int, style func(lipgloss.Style) lipgloss.Style) string {
 	gap := width - lipgloss.Width(row)
 	if gap <= 0 {
 		return row
 	}
-	pad := strings.Repeat(" ", gap)
-	if selected {
-		return row + th.OnSelection(lipgloss.NewStyle()).Render(pad)
-	}
-	return row + pad
+	return row + style(lipgloss.NewStyle()).Render(strings.Repeat(" ", gap))
 }
 
 // pad widens a cell to a column. It measures rendered width, so a glyph that

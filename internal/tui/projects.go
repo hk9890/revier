@@ -29,7 +29,7 @@ func (i projectItem) FilterValue() string { return string(i.view.Project.Name) }
 // hidden, because the surface renders the filter in the header and feeds the
 // text in itself (setFilter) - the list never sees a rune key.
 func newProjectList(th theme.Theme) list.Model {
-	l := list.New(nil, projectDelegate{theme: th}, 0, 0)
+	l := list.New(nil, projectDelegate{theme: th, hover: -1}, 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
@@ -42,8 +42,13 @@ func newProjectList(th theme.Theme) list.Model {
 
 // projectDelegate renders one row: a state mark, the name, and the worst
 // agent state in the project with what it is doing.
+//
+// hover is the row the pointer is on, or -1. It is set on the delegate
+// rather than read from the model because the list component renders through
+// the delegate and hands it nothing but the row.
 type projectDelegate struct {
 	theme theme.Theme
+	hover int
 }
 
 // Height is two: the name line and the path under it. The path is what tells
@@ -61,10 +66,14 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	th := d.theme
 	sel := index == m.Index()
+	over := index == d.hover && !sel
 
 	style := func(s lipgloss.Style) lipgloss.Style {
-		if sel {
+		switch {
+		case sel:
 			return th.OnSelection(s)
+		case over:
+			return th.OnHover(s)
 		}
 		return s
 	}
@@ -142,7 +151,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 
 	// The list renders into a strings.Builder, which cannot fail.
-	_, _ = fmt.Fprint(w, fill(first, width, sel, th)+"\n"+fill(second, width, sel, th))
+	_, _ = fmt.Fprint(w, fill(first, width, style)+"\n"+fill(second, width, style))
 }
 
 // The table's measures: the gap between its columns, the most the agent
