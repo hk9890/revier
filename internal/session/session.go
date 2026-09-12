@@ -67,14 +67,14 @@ type Target struct {
 	Name revier.TargetName `toml:"name" json:"name"`
 
 	// Panels are the agent conversations the target held, for the probes that
-	// can name one. Index is the panel's position among the target's agent
-	// panels, because a live panel's title is the agent's to change and is no
-	// identity at all.
+	// can name one. Index is the panel's position among all the target's
+	// panels, the position of its spec in the project file, because a live
+	// panel's title is the agent's to change and is no identity at all.
 	Panels []Panel `toml:"panel,omitempty" json:"panels,omitempty"`
 }
 
-// Panel is one agent conversation: which agent panel of the target, which
-// probe named it, and the probe's own word for the conversation.
+// Panel is one agent conversation: which panel of the target, which probe
+// named it, and the probe's own word for the conversation.
 type Panel struct {
 	Index   int              `toml:"index" json:"index"`
 	Harness string           `toml:"harness" json:"harness"`

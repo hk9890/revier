@@ -1045,13 +1045,19 @@ Storing the argv would freeze the config the same way storing the host would.
 `--resume`, the uuid, and `~/.claude/projects` never reach the core; only an
 opaque `SessionID` crosses the port.
 
-The identity of a panel across a restart is its index among the target's agent
-panels. A live panel's title is the agent's to rewrite — Claude Code replaces
-it with a summary of the turn — so a title is no identity at all, and the
-`PanelSpec` order is what both sides can agree on. Every way this can fail
-drops that one resume and starts the panel empty: a harness not installed
-here, a probe without the capability, an agent panel the project no longer
-declares.
+The identity of a panel across a restart is its position among all the
+target's panels, which is the position of its `PanelSpec`: a runtime lays
+panels out in the order they are declared. A live panel's title is the agent's
+to rewrite — Claude Code replaces it with a summary of the turn — so a title is
+no identity at all. Counting only the agent panels was rejected: save sees
+which panels a probe claims and restore sees which specs say `kind = "agent"`,
+and one declared agent that no probe claims makes the two counts disagree, so
+the conversation of the agent after it would start in it. A resume is applied
+only where the project still declares an agent at that position, which is what
+keeps a layout edited since the save from typing a resume flag into a shell.
+Every way this can fail drops that one resume and starts the panel empty: a
+harness not installed here, a probe without the capability, a position that is
+no longer an agent.
 
 The Claude probe reads the id from a user variable a `SessionStart` hook sets
 (`contrib/claude/revier-session-hook`), the path `CS_TAB` and `CS_STATE`

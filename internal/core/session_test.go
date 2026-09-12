@@ -86,9 +86,49 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if len(panels) != 1 {
 		t.Fatalf("panels = %+v, want the one agent", panels)
 	}
-	// Index 0: the first agent panel of the target, not the first panel.
-	if panels[0].Index != 0 || panels[0].Harness != "claude" || panels[0].Session != "abc-123" {
-		t.Errorf("panel = %+v, want the claude conversation at agent index 0", panels[0])
+	// Index 1: the agent's position among all the panels, beside the shell.
+	if panels[0].Index != 1 || panels[0].Harness != "claude" || panels[0].Session != "abc-123" {
+		t.Errorf("panel = %+v, want the claude conversation at position 1", panels[0])
+	}
+}
+
+// A declared agent that no probe claims is still a position. Save and restore
+// must count it the same way, or the conversation of the agent after it lands
+// in it: aider started on Claude's conversation, and Claude started empty.
+func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[0].Runtime.Panels = []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: []string{"aider"}},
+		{Kind: revier.PanelAgent, Command: []string{"claude"}},
+	}
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "aider"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+	)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}} // no aider probe
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := c.Session(context.Background(), report, "")
+
+	restored := hosttest.NewRuntime("rt")
+	c.Runtime = restored
+	plan := c.RestorePlan(s, core.Report{Views: []revier.ProjectView{{
+		Project: proj,
+		Targets: []revier.TargetView{{Name: "home", Available: true}},
+	}}})
+	if _, err := c.GoResuming(context.Background(), prepared(t, proj), "home", nil, plan[0].Resumes); err != nil {
+		t.Fatal(err)
+	}
+	panels := restored.Opened[0].Panels
+	if !slices.Equal(panels[0].Command, []string{"aider"}) {
+		t.Errorf("aider started as %v, want it untouched", panels[0].Command)
+	}
+	if want := []string{"claude", "--resume", "abc-123"}; !slices.Equal(panels[1].Command, want) {
+		t.Errorf("claude started as %v, want %v", panels[1].Command, want)
 	}
 }
 
@@ -219,7 +259,7 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
-	resumes := []core.Resume{{Index: 0, Harness: "claude", Session: "abc-123"}}
+	resumes := []core.Resume{{Index: 1, Harness: "claude", Session: "abc-123"}}
 	if _, err := c.GoResuming(context.Background(), p, "home", nil, resumes); err != nil {
 		t.Fatalf("GoResuming: %v", err)
 	}
@@ -246,7 +286,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
-	resumes := []core.Resume{{Index: 0, Harness: "claude", Session: "abc-123"}}
+	resumes := []core.Resume{{Index: 1, Harness: "claude", Session: "abc-123"}}
 	if _, err := c.GoResuming(context.Background(), p, "home", nil, resumes); err != nil {
 		t.Fatal(err)
 	}
@@ -270,21 +310,38 @@ func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 			core: func(rt *hosttest.FakeRuntime) *core.Core {
 				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 			},
-			resume: core.Resume{Index: 0, Harness: "opencode", Session: "abc-123"},
+			resume: core.Resume{Index: 1, Harness: "opencode", Session: "abc-123"},
 		},
 		{
 			name: "the probe cannot resume",
 			core: func(rt *hosttest.FakeRuntime) *core.Core {
 				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude"}}}
 			},
-			resume: core.Resume{Index: 0, Harness: "claude", Session: "abc-123"},
+			resume: core.Resume{Index: 1, Harness: "claude", Session: "abc-123"},
 		},
 		{
-			name: "no agent panel at that index any more",
+			name: "past the end of the layout",
 			core: func(rt *hosttest.FakeRuntime) *core.Core {
 				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 			},
 			resume: core.Resume{Index: 3, Harness: "claude", Session: "abc-123"},
+		},
+		{
+			// The file is meant to be hand-edited, so a typo is an input.
+			name: "a negative position",
+			core: func(rt *hosttest.FakeRuntime) *core.Core {
+				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+			},
+			resume: core.Resume{Index: -1, Harness: "claude", Session: "abc-123"},
+		},
+		{
+			// A layout edited since the save: the position is a shell now,
+			// and a resume flag typed into a shell is worse than none.
+			name: "the position is not an agent any more",
+			core: func(rt *hosttest.FakeRuntime) *core.Core {
+				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+			},
+			resume: core.Resume{Index: 0, Harness: "claude", Session: "abc-123"},
 		},
 	}
 	for _, tc := range cases {
@@ -294,9 +351,12 @@ func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 			if _, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{tc.resume}); err != nil {
 				t.Fatalf("GoResuming: %v", err)
 			}
-			want := []string{"claude", "--model", "opus"}
-			if got := rt.Opened[0].Panels[1].Command; !slices.Equal(got, want) {
-				t.Errorf("agent command = %v, want the project as written", got)
+			panels := rt.Opened[0].Panels
+			if !slices.Equal(panels[0].Command, []string{"zsh"}) {
+				t.Errorf("shell command = %v, want the project as written", panels[0].Command)
+			}
+			if want := []string{"claude", "--model", "opus"}; !slices.Equal(panels[1].Command, want) {
+				t.Errorf("agent command = %v, want the project as written", panels[1].Command)
 			}
 		})
 	}

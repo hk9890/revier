@@ -40,8 +40,8 @@ var restoreNames = map[RestoreAction]string{
 func (a RestoreAction) String() string { return restoreNames[a] }
 
 // Resume is one agent panel of a target to start on a conversation rather
-// than empty: which agent panel, which probe named the conversation, and the
-// probe's own word for it.
+// than empty: the panel's position in the realization, which probe named the
+// conversation, and the probe's own word for it.
 type Resume struct {
 	Index   int
 	Harness string
@@ -93,24 +93,24 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	return s
 }
 
-// conversations reads the agent panels of an instance and records the ones
-// whose probe can name what they hold.
+// conversations reads the panels of an instance and records the ones whose
+// probe can name what they hold.
 //
-// The index recorded is the panel's position among the instance's agent
-// panels, not among all its panels, because that is the identity restore can
-// act on: it maps to the nth agent panel of the realization. A live panel's
-// title is the agent's to rewrite - Claude Code replaces it with a summary of
-// the turn - so a title is no identity at all here.
+// The index recorded is the panel's position among all the instance's panels,
+// which is the position of its spec in the realization: a runtime lays panels
+// out in the order they are declared. Counting only some panels would need
+// save and restore to agree on which ones count, and they cannot: save sees
+// which panels a probe claims, restore sees which specs say kind = "agent",
+// and a declared agent no probe claims makes the two counts disagree. A live
+// panel's title is the agent's to rewrite - Claude Code replaces it with a
+// summary of the turn - so a title is no identity at all here.
 func (c *Core) conversations(ctx context.Context, inst revier.Instance) []session.Panel {
 	var out []session.Panel
-	nth := 0
-	for _, panel := range inst.Panels {
+	for i, panel := range inst.Panels {
 		probe, ok := c.probeFor(panel)
 		if !ok {
 			continue
 		}
-		i := nth
-		nth++
 		res, ok := probe.(revier.Resumable)
 		if !ok {
 			continue
@@ -186,26 +186,18 @@ func resumesOf(t session.Target) []Resume {
 
 // resuming returns the realization with its agent panels started on the
 // conversations they held. A resume that nothing here can honour - a probe
-// this machine does not run, one without the capability, an agent panel the
-// project no longer declares - is dropped, and that panel starts empty.
+// this machine does not run, one without the capability, a position the
+// project no longer declares as an agent - is dropped, and that panel starts
+// empty. The agent check is what keeps a layout edited since the save from
+// typing a resume flag into a shell.
 //
 // The panel slice is copied before anything is written to it: the realization
 // arrives sharing the prepared project's panels, and a restore must not edit
 // the project every later keypress reads.
 func (c *Core) resuming(real revier.Realization, resumes []Resume) revier.Realization {
-	if len(resumes) == 0 {
-		return real
-	}
-	var agents []int
-	for i, spec := range real.Panels {
-		if spec.Kind == revier.PanelAgent {
-			agents = append(agents, i)
-		}
-	}
-
 	var panels []revier.PanelSpec
 	for _, r := range resumes {
-		if r.Index >= len(agents) {
+		if r.Index < 0 || r.Index >= len(real.Panels) || real.Panels[r.Index].Kind != revier.PanelAgent {
 			continue
 		}
 		probe, ok := c.probeNamed(r.Harness)
@@ -219,8 +211,7 @@ func (c *Core) resuming(real revier.Realization, resumes []Resume) revier.Realiz
 		if panels == nil {
 			panels = append([]revier.PanelSpec(nil), real.Panels...)
 		}
-		i := agents[r.Index]
-		panels[i].Command = res.ResumeCommand(panels[i], r.Session)
+		panels[r.Index].Command = res.ResumeCommand(panels[r.Index], r.Session)
 	}
 	if panels != nil {
 		real.Panels = panels
