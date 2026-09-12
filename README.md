@@ -68,13 +68,14 @@ revier each log [run]         past runs, or how each project ended in one
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
-by name, Enter opens the project's home, Tab lists its targets, Enter on a
-target runs-or-raises it, Esc goes back. alt+e opens the selected project's
-file in `$EDITOR`; alt+d deletes it, after asking. alt+r links a project on
-another machine: it lists the hosts `~/.ssh/config` names, then the projects
-the revier on the chosen host has, and Enter on one writes the link. A
-configured action key runs
-the action against the selected project.
+by name, and Enter opens the project's home. Tab moves the cursor into the pane
+beside the list, onto the project's targets and attached instances: typing
+there filters them, Enter runs-or-raises the one under the cursor, and Tab or
+Esc brings the cursor back. alt+e opens the selected project's file in
+`$EDITOR`; alt+d deletes it, after asking. alt+r links a project on another
+machine: it lists the hosts `~/.ssh/config` names, then the projects the revier
+on the chosen host has, and Enter on one writes the link. A configured action
+key runs the action against the selected project.
 
 `revier each -- git pull --ff-only` runs one command in the directory of every
 project, one project at a time, and skips a project whose directory is missing.
