@@ -106,7 +106,8 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	// pane_title is free text and comes last, so SplitN gives it whatever it
 	// contains.
 	format := strings.Join([]string{
-		"#{pid}", "#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}", "#{pane_title}",
+		"#{pid}", "#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
+		"#{@" + varsOption + "}", "#{pane_title}",
 	}, sep)
 
 	out, err := h.run(ctx, "list-panes", "-a", "-F", format)
@@ -127,14 +128,14 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if line == "" {
 			continue
 		}
-		f := strings.SplitN(line, sep, 6)
-		if len(f) != 6 {
+		f := strings.SplitN(line, sep, 7)
+		if len(f) != 7 {
 			// A malformed line is skipped, never fatal. Panes belonging to
 			// other tools share this server, and one odd line must not blank
 			// every project revier knows about.
 			continue
 		}
-		serverPID, winID, paneID, panePID, paneCmd, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5]
+		serverPID, winID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
 		if seen[paneID] {
 			continue
 		}
@@ -155,6 +156,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			ID:      revier.PanelID(paneID),
 			Kind:    kindOf(paneCmd),
 			Title:   paneTitle,
+			Vars:    parseVars(paneVars),
 			PID:     pid,
 			Command: []string{paneCmd},
 		})
@@ -203,6 +205,38 @@ func windowOf(id string) string { return id[strings.LastIndex(id, "/")+1:] }
 
 // kindOf classifies a pane by its foreground command. The agent kind is what
 // the survey probes; everything else is a shell or a tool.
+// varsOption is the pane option a program leaves its panel variables in:
+// `tmux set -p @revier 'CS_TAB=1 CS_STATE=attn'`.
+//
+// kitty reports every user variable a pane set, because `kitten @ ls` carries
+// them as a map. tmux has no such map: a format can name an option but cannot
+// enumerate them, and asking pane by pane would be one call per pane, which is
+// the cost rule this host exists to respect. So revier claims one option and
+// the program writing it packs the pairs, which keeps this host free of any
+// knowledge of which variables a probe reads.
+const varsOption = "revier"
+
+// parseVars reads space-separated NAME=value pairs. A value containing a space
+// or the field separator cannot survive the round trip and is not supported;
+// the variables revier reads are tokens.
+func parseVars(s string) map[string]string {
+	if s == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, pair := range strings.Fields(s) {
+		name, value, ok := strings.Cut(pair, "=")
+		if !ok || name == "" {
+			continue
+		}
+		out[name] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func kindOf(cmd string) revier.PanelKind {
 	switch cmd {
 	case "claude", "claude-code", "opencode", "aider":

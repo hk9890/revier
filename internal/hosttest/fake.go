@@ -276,6 +276,43 @@ func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, e
 	return p.State, nil
 }
 
+// ResumableProbe is a FakeProbe that can also name the conversation a panel
+// holds, so a core test can exercise the resume half without Claude Code. The
+// id is the panel's Vars["session"], which is how the real probe reads one.
+type ResumableProbe struct {
+	*FakeProbe
+	// Flag is the argument name folded into a resumed command, standing in
+	// for the harness's own spelling of --resume.
+	Flag string
+	// SessionErr makes Session fail, for the path where a panel restores
+	// empty rather than failing the save.
+	SessionErr error
+}
+
+// NewResumableProbe returns a probe that claims every panel of the harness.
+func NewResumableProbe(harness, marker string) *ResumableProbe {
+	return &ResumableProbe{
+		FakeProbe: &FakeProbe{Harness: harness, Marker: marker},
+		Flag:      "--resume",
+	}
+}
+
+func (p *ResumableProbe) Session(_ context.Context, panel revier.Panel) (revier.SessionID, bool, error) {
+	if p.SessionErr != nil {
+		return "", false, p.SessionErr
+	}
+	id := panel.Vars["session"]
+	if id == "" {
+		return "", false, nil
+	}
+	return revier.SessionID(id), true, nil
+}
+
+func (p *ResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
+	cmd := append([]string{}, spec.Command...)
+	return append(cmd, p.Flag, string(id))
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

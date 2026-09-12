@@ -24,6 +24,7 @@ territory. revier is how you walk it.
 | **Home** | The project's workspace target — the terminal you live in and return to |
 | **Panel** | One pane inside a runtime target: an agent, a shell, a tool |
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
+| **Session** | A recorded set: which projects were open, which of their targets, and the conversation each agent held (D46) |
 
 Every operation in revier is the same one: **run-or-raise a named target, and
 remember where you came from.** Opening a project is run-or-raise on its home
@@ -100,6 +101,9 @@ revier attach          bind the focused instance to the current project
 revier list [--json]   machine-readable inventory
 revier status          the project for the current directory
 revier each -- <cmd>   run one command in every project's directory (D32)
+revier session save    record the projects that are open now (D46)
+revier session restore open what a saved session recorded
+revier session list    the saved sessions, newest first
 ```
 
 The TUI is one surface: a list of projects, sorted so the ones needing
@@ -128,7 +132,7 @@ the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30)
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
 | Popup window geometry | The compositor places windows. The rule that opens revier as a popup is user configuration. |
-| Session persistence across reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. |
+| The contents of a pane across a reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
 | Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. |
 
 ## Non-goals

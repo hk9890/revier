@@ -37,6 +37,10 @@ const (
 	varTab = "CS_TAB"
 	// varState is the hook-set edge record. Advisory only; see the package doc.
 	varState = "CS_STATE"
+	// varSession is the conversation the pane holds, set by the SessionStart
+	// hook in contrib/claude/revier-session-hook. It is what `revier session
+	// restore` starts the agent on.
+	varSession = "CS_SESSION"
 
 	// stateAttention is the value the Notification hook sets when Claude wants
 	// the human. It is the only CS_STATE value this probe acts on.
@@ -84,6 +88,34 @@ func (p *Probe) Inspect(_ context.Context, panel revier.Panel) (revier.AgentStat
 		state.Status = revier.StatusIdle
 	}
 	return state, nil
+}
+
+// Session reports the conversation the pane holds. Like Inspect it performs no
+// I/O: the id is on the panel already, put there by the SessionStart hook, so
+// the probe stays a pure function.
+//
+// The id is deliberately not derived from ~/.claude/projects when the variable
+// is absent. The only signal there is the newest transcript for the pane's
+// directory, which cannot tell two agents in one repository apart - the normal
+// case this feature exists for - and resuming the wrong conversation is worse
+// than resuming none.
+func (p *Probe) Session(_ context.Context, panel revier.Panel) (revier.SessionID, bool, error) {
+	id := panel.Vars[varSession]
+	if id == "" {
+		return "", false, nil
+	}
+	return revier.SessionID(id), true, nil
+}
+
+// ResumeCommand folds --resume into the panel as it is configured now, so a
+// project that runs its agent with a model flag keeps the flag. A spec with no
+// command of its own is the bare harness, which is what the launcher runs.
+func (p *Probe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
+	cmd := spec.Command
+	if len(cmd) == 0 {
+		cmd = []string{"claude"}
+	}
+	return append(append([]string{}, cmd...), "--resume", string(id))
 }
 
 // leading returns the first rune of a title, or 0 when it is empty.

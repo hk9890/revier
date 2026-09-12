@@ -310,6 +310,16 @@ type Result struct {
 // a one-way jump. bound is where the project's targets last landed; the caller
 // records Result.Ref there afterwards, so the next press needs no rule.
 func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
+	return c.GoResuming(ctx, p, name, bound, nil)
+}
+
+// GoResuming is Go with the agent panels of a launch started on the
+// conversations they held, which is what makes a restored workspace a
+// continuation rather than an empty one. It is Go in every other respect,
+// toggle-back included, and resumes apply only to the run half: a target
+// already up is raised as it stands, because the agent in it is already the
+// one the recording named.
+func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
 	i, ok := p.index(name)
 	if !ok {
 		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
@@ -330,7 +340,7 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 		if c.Window != nil {
 			res.Before = snap[c.Window.Name()]
 		}
-		ref, err := host.Open(ctx, real)
+		ref, err := host.Open(ctx, c.resuming(real, resumes))
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
 		}

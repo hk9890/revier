@@ -269,6 +269,36 @@ narrower interface would have forced the wrong signal.
 `StatusAttention` is the state the whole product exists to surface. It drives
 the TUI sort order.
 
+## Resumable
+
+An optional capability of an `AgentProbe`, detected by type assertion. A probe
+that implements it lets a restored workspace start its agent on the
+conversation it held rather than empty (D47). A probe that does not still
+restores the workspace, with an empty agent.
+
+```go
+// SessionID is a harness's own name for one conversation, opaque to revier.
+type SessionID string
+
+type Resumable interface {
+    // Session names the conversation the panel holds, false when it holds
+    // none.
+    Session(ctx context.Context, p Panel) (SessionID, bool, error)
+
+    // ResumeCommand returns the argv that starts the harness on that
+    // conversation, built from the panel as it is configured now.
+    ResumeCommand(spec PanelSpec, id SessionID) []string
+}
+```
+
+`ResumeCommand` receives the `PanelSpec` as the project declares it now, not an
+argv the recording stored. A stored argv would freeze the configuration: a
+project file that gained a model flag after the save would lose it on restore.
+The harness's own resume flag never reaches the core.
+
+There is no `Runtime` counterpart. Persistence across a reboot is either the
+runtime's already or impossible for it, and in both cases revier adds nothing.
+
 ## Core view types
 
 What `internal/core` produces, and what both the TUI and `--json` render.

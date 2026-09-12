@@ -1,0 +1,197 @@
+// Layer L1: the session store is files and names, with no host and no
+// substrate behind it.
+package session_test
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+func at(day int) time.Time { return time.Date(2026, 9, day, 14, 33, 5, 0, time.UTC) }
+
+func sample(day int, name string) session.Session {
+	return session.Session{
+		Name: name, At: at(day), Current: "revier",
+		Projects: []session.Project{{
+			Name: "revier",
+			Targets: []session.Target{
+				{Name: "home", Panels: []session.Panel{{Index: 0, Harness: "claude", Session: "abc-123"}}},
+				{Name: "editor"},
+			},
+		}},
+	}
+}
+
+func TestSaveThenLoadRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	if _, _, err := session.Save(root, sample(12, "before-reboot")); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.ID != "2026-09-12T14-33-05" {
+		t.Errorf("ID = %q, want the timestamp", got.ID)
+	}
+	if got.Name != "before-reboot" || got.Current != "revier" {
+		t.Errorf("label and current did not survive: %+v", got)
+	}
+	if len(got.Projects) != 1 || len(got.Projects[0].Targets) != 2 {
+		t.Fatalf("projects did not survive: %+v", got.Projects)
+	}
+	panels := got.Projects[0].Targets[0].Panels
+	if len(panels) != 1 || panels[0].Session != revier.SessionID("abc-123") || panels[0].Harness != "claude" {
+		t.Errorf("conversation did not survive: %+v", panels)
+	}
+	if got.Targets() != 2 {
+		t.Errorf("Targets = %d, want 2", got.Targets())
+	}
+}
+
+// The file is meant to be opened and edited - "restore all of that except
+// those three" - so a target is a table a key can be added to, not a bare
+// string in an array.
+func TestSavedFileIsReadableTOML(t *testing.T) {
+	root := t.TempDir()
+	stored, path, err := session.Save(root, sample(12, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The id comes back on the session, not only in the file: the caller has
+	// to print it and cannot predict a collision suffix.
+	if stored.ID != "2026-09-12T14-33-05" {
+		t.Errorf("Save returned ID %q, want the id it wrote", stored.ID)
+	}
+	if filepath.Dir(path) != session.Dir(root) {
+		t.Errorf("wrote to %s, want a file under %s", path, session.Dir(root))
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.panel]]", `name = "home"`} {
+		if !contains(string(b), want) {
+			t.Errorf("saved file has no %s:\n%s", want, b)
+		}
+	}
+}
+
+// An empty ref means the newest, which is what a restore after a reboot is.
+func TestLoadWithoutRefTakesTheNewest(t *testing.T) {
+	root := t.TempDir()
+	mustSave(t, root, sample(11, "older"))
+	mustSave(t, root, sample(13, "newer"))
+	mustSave(t, root, sample(12, "middle"))
+
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "newer" {
+		t.Errorf("Load(\"\") = %q, want the newest", got.Name)
+	}
+}
+
+func TestLoadByIDAndByName(t *testing.T) {
+	root := t.TempDir()
+	mustSave(t, root, sample(11, "nightly"))
+	mustSave(t, root, sample(13, "nightly"))
+
+	byID, err := session.Load(root, "2026-09-11T14-33-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !byID.At.Equal(at(11)) {
+		t.Errorf("by id took %v, want the 11th", byID.At)
+	}
+	// A name several sessions carry resolves to its newest holder.
+	byName, err := session.Load(root, "nightly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !byName.At.Equal(at(13)) {
+		t.Errorf("by name took %v, want the newest holder", byName.At)
+	}
+}
+
+// Two saves in one second are two sessions. Letting the second overwrite the
+// first would lose a desktop silently.
+func TestSaveInTheSameSecondKeepsBoth(t *testing.T) {
+	root := t.TempDir()
+	first := mustSave(t, root, sample(12, "one"))
+	second := mustSave(t, root, sample(12, "two"))
+	if first == second {
+		t.Fatalf("both saves wrote %s", first)
+	}
+	all, err := session.List(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Errorf("List = %d sessions, want 2", len(all))
+	}
+}
+
+// A store that was never written to is a normal outcome, not a failure: the
+// first restore on a machine that never saved.
+func TestLoadFromEmptyStore(t *testing.T) {
+	if _, err := session.Load(t.TempDir(), ""); !errors.Is(err, session.ErrNoSession) {
+		t.Errorf("err = %v, want ErrNoSession", err)
+	}
+	root := t.TempDir()
+	mustSave(t, root, sample(12, ""))
+	if _, err := session.Load(root, "nothing-by-that-name"); !errors.Is(err, session.ErrNoSession) {
+		t.Errorf("err = %v, want ErrNoSession", err)
+	}
+}
+
+// One hand-edited file must not hide every other session.
+func TestListSkipsAFileThatDoesNotParse(t *testing.T) {
+	root := t.TempDir()
+	mustSave(t, root, sample(12, "good"))
+	if err := os.WriteFile(filepath.Join(session.Dir(root), "broken.toml"), []byte("this is not ] toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	all, err := session.List(root)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 1 || all[0].Name != "good" {
+		t.Errorf("List = %+v, want the one good session", all)
+	}
+}
+
+func TestListOfMissingStore(t *testing.T) {
+	all, err := session.List(filepath.Join(t.TempDir(), "never-written"))
+	if err != nil {
+		t.Errorf("List of a missing store: %v", err)
+	}
+	if all != nil {
+		t.Errorf("List = %+v, want none", all)
+	}
+}
+
+func mustSave(t *testing.T, root string, s session.Session) string {
+	t.Helper()
+	_, path, err := session.Save(root, s)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	return path
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

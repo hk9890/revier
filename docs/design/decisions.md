@@ -977,3 +977,105 @@ destination anyone wants offered. A remote for a host is made when it is
 first asked about, and kept, so a link written while the surface runs is
 surveyed on the next refresh without a restart; the map the wiring built
 from the project files at start is gone.
+
+### D46 — the set of open projects is revier's; the contents of a pane are not — Accepted; narrows the scope row in product.md
+
+Session persistence across reboot was cut, on the grounds that the runtime
+owns persistence and revier does not paper over the difference between a tmux
+that has it and a kitty that does not. That reasoning holds, and nothing here
+contradicts it: the content of a pane — its processes, its scrollback, its
+shell history — is still the runtime's, and revier records none of it.
+
+What the cut also removed, and should not have, is the *declarative* half.
+Which projects were open, and which of their targets, is not the runtime's
+knowledge at all. It is revier's own model, it survives no reboot anywhere,
+and reconstructing it by hand is the thing that makes a restart expensive
+when twenty projects are open. So `revier session save` records that set and
+`revier session restore` opens it again.
+
+Restore is run-or-raise over the recorded names, which is what keeps this from
+being a second mechanism: a target already up is left alone, so a re-run is
+free and a half-finished restore is fixed by running it again. Launches are
+sequential, because a launch is attributed to the window that appears after it
+(D21) and two at once are two windows neither can claim.
+
+The file holds names and nothing else — no host, no ref, no argv. All of it is
+derived again at restore from the project file as it reads then, so a project
+edited between the two wins over the recording. A timestamp is the identity
+rather than a uuid: these files never leave the machine and never merge, so
+uniqueness across machines buys nothing, while sorting and being typeable are
+used on every restore.
+
+Attached instances are not recorded and cannot be. An attachment is a live id
+with no launch argv anywhere in the model (D20), so there is nothing that would
+bring one back; the save says how many it dropped, because discovering that
+after the reboot is the worst moment to discover it.
+
+The word "session" is D2's own rejected word, and it is used anyway: the
+private type `snapshot` in `internal/core` already means the instance listing
+of one survey, and two meanings of that word inside the package that owns both
+would cost more than one meaning of "session" across the product. D2 is
+unchanged — this is not session management, it is the project list written
+down.
+
+Left out: closing anything. `Host` has `Open`, `Focus` and `Focused` and no
+`Close`, and adding one across every host would buy nothing a reboot does not
+already do. Left out too: waiting for agents to fall quiet before saving. The
+survey already knows every agent's status, so it can be added when it is
+wanted, and nothing here has to change to allow it.
+
+### D47 — an agent panel is restored onto its conversation by its own probe — Accepted
+
+A restored workspace whose agent starts empty solves the cheap half of the
+problem. Reopening twenty terminals in the right directories was never the
+painful part; finding twenty conversations again is. So `AgentProbe` gains an
+optional capability, `Resumable`, detected by type assertion like
+`WindowWatcher` and `PanelWriter`: a probe that implements it names the
+conversation a panel holds, and builds the argv that starts the harness on it.
+
+It is the probe's and not the runtime's. tmux dies on a reboot like everything
+else, and what survives one is a tmux plugin the user installed, which is
+theirs and not revier's to mediate. There is no `Runtime` counterpart to this
+capability and there should not be one: either the runtime already handles it
+or it cannot, and in both cases revier adds nothing.
+
+`ResumeCommand` is handed the `PanelSpec` as the project declares it *now* and
+folds its own flag into that, rather than the snapshot storing a finished argv.
+Storing the argv would freeze the config the same way storing the host would.
+`--resume`, the uuid, and `~/.claude/projects` never reach the core; only an
+opaque `SessionID` crosses the port.
+
+The identity of a panel across a restart is its index among the target's agent
+panels. A live panel's title is the agent's to rewrite — Claude Code replaces
+it with a summary of the turn — so a title is no identity at all, and the
+`PanelSpec` order is what both sides can agree on. Every way this can fail
+drops that one resume and starts the panel empty: a harness not installed
+here, a probe without the capability, an agent panel the project no longer
+declares.
+
+The Claude probe reads the id from a user variable a `SessionStart` hook sets
+(`contrib/claude/revier-session-hook`), the path `CS_TAB` and `CS_STATE`
+already use. Deriving it instead from the newest transcript under
+`~/.claude/projects` for the pane's directory was rejected: it cannot tell two
+agents in one repository apart — the case this feature exists for — and
+resuming the wrong conversation is worse than resuming none. It would also
+make the probe do I/O, and the probe being a pure function is what keeps it at
+layer L1.
+
+### D48 — a tmux pane's variables arrive in one option revier owns — Accepted
+
+kitty reports every user variable a pane set, because `kitten @ ls` carries
+them as a map, and the Claude probe has always read `CS_TAB` and `CS_STATE`
+from it. tmux reported none: `Panel.Vars` was left nil there, so attention
+state never worked on tmux and a conversation id could not have either.
+
+tmux has no map to report. A format can name one option but cannot enumerate
+them, and asking pane by pane would be one call per pane, which is the cost
+rule the host exists to respect. Naming `CS_TAB` and `CS_STATE` in the format
+would have put a probe's vocabulary inside a runtime adapter, where two
+adapters could then disagree about what a variable is.
+
+So revier claims one pane option, `@revier`, holding space-separated
+`NAME=value` pairs, and the program that writes it packs them. The host parses
+pairs and knows nothing about which of them anything reads. A value containing
+a space cannot survive it; the variables revier reads are tokens.

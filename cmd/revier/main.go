@@ -51,6 +51,12 @@ usage:
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
                                 type one line into an agent and submit it
+  revier session save [--name label]
+                                record the projects that are open now
+  revier session restore [id|name] [--dry-run]
+                                open what a saved session recorded; the newest
+                                without an argument
+  revier session list [--json]  the saved sessions, newest first
   revier each -- <cmd>          run one command in every project's directory
   revier each log [run]         past runs of it, or one run's results
   revier version
@@ -170,6 +176,8 @@ func run(args []string) error {
 		return cmdLink(ctx, a, args)
 	case "status":
 		return cmdStatus(ctx, a, args)
+	case "session":
+		return cmdSession(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
 	default:
