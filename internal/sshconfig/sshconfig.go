@@ -51,7 +51,7 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
