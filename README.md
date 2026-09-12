@@ -27,7 +27,14 @@ the system and logs the decisions behind it.
 
 ## Install
 
-Download an archive from the
+With [mise](https://mise.jdx.dev), which reads the releases page and puts all
+three files on your PATH:
+
+```bash
+mise use -g github:hk9890/revier
+```
+
+Or download an archive from the
 [releases page](https://github.com/hk9890/revier/releases) and put its three
 files, `revier`, `revier-popup` and `revier-go`, on your PATH. Archives are
 named `revier_<version>_linux_<arch>.tar.gz`, with `x64` or `arm64` as the
@@ -168,8 +175,11 @@ Go 1.27, pinned with [mise](https://mise.jdx.dev).
 ```bash
 mise install
 mise run build     # ./bin/revier
-mise run install   # revier, revier-popup and revier-go into ~/.local/bin
 ```
+
+A build from source is `bin/revier` alone; the two desktop scripts are
+`contrib/gnome/revier-popup` and `contrib/gnome/revier-go`. Installing revier
+is [Install](#install) above.
 
 Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),
 [TESTING.md](docs/TESTING.md), [RUNNING.md](docs/RUNNING.md).
