@@ -14,15 +14,15 @@ import (
 )
 
 // barCell is a terminal cell inside the first button of the action bar: the
-// bar is the frame's first line, and its first label starts one column into
+// bar is the surface's first line, and its first label starts one column into
 // the content.
 func barCell(t *testing.T, m tui.Model) (x, y int) {
 	t.Helper()
 	mr, mc := margins(m)
-	return mc + 2 + 1, mr + 1
+	return mc + 1, mr
 }
 
-// The bar stands under the query, and every button says its key: the bar is
+// The bar is the top line, and every button says its key: the bar is
 // a second way to what the keyboard already reaches.
 func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	_, _, c, projects := world(t, 2)
@@ -68,7 +68,7 @@ func TestOneClickOnAButtonOpensItsScreen(t *testing.T) {
 	x, y := barCell(t, m)
 	m = clickAt(m, x, y) // the first button, "new"
 	if head := barLine(m); !strings.Contains(head, "add a project") {
-		t.Errorf("header = %q after a click on the new button, want the new-project screen", head)
+		t.Errorf("top line = %q after a click on the new button, want the new-project screen", head)
 	}
 }
 
@@ -79,10 +79,10 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 
 	m, _ = press(m, "alt+n")
 	if head := barLine(m); !strings.Contains(head, "add a project") {
-		t.Fatalf("header = %q after alt+n, want the new-project screen", head)
+		t.Fatalf("top line = %q after alt+n, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")
-	if r := ruleLine(m); !strings.Contains(r, "running") {
+	if r := ruleLine(m); !strings.Contains(r, "working") {
 		t.Errorf("rule = %q after esc, want the surface back", r)
 	}
 }
@@ -187,5 +187,5 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 // rowTop is the terminal row the first row of the list is on.
 func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
-	return mr + 1 + 4
+	return mr + 4
 }

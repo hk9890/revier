@@ -153,11 +153,11 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 }
 
 // The header's count agrees in number with what it counts.
-func TestTheHeaderSaysOneProjectNeedsYou(t *testing.T) {
+func TestTheRuleCountsTheOneBlocker(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	if head := ruleLine(m); !strings.Contains(head, "1 needs you") {
-		t.Errorf("rule = %q, want \"1 needs you\"", head)
+	if head := ruleLine(m); !strings.Contains(head, "1 blocker") {
+		t.Errorf("rule = %q, want \"1 blocker\"", head)
 	}
 }
 
@@ -191,17 +191,18 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 20)
 	g := theme.Default().Glyphs
 
-	var top string
+	widest := 0
 	for _, line := range strings.Split(m.View(), "\n") {
-		if w := lipgloss.Width(line); w > 380 {
+		w := lipgloss.Width(strings.TrimRight(line, " "))
+		if w > 380 {
 			t.Errorf("line is %d columns wide: %q", w, line)
 		}
-		if strings.Contains(line, "╭") {
-			top = line
+		if w > widest {
+			widest = w
 		}
 	}
-	if frame := lipgloss.Width(strings.TrimSpace(top)); frame < 370 {
-		t.Errorf("frame is %d wide, want the whole terminal but the margin:\n%s", frame, top)
+	if widest < 370 {
+		t.Errorf("the surface is %d wide, want the whole terminal but the margin:\n%s", widest, m.View())
 	}
 	r := rows(m)
 	first, second := r[0], r[2]
@@ -225,9 +226,8 @@ func TestTheListStopsAtItsTableWidth(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 40)
 	_, mc := margins(m)
-	// The border sits after the margin, the frame's border and padding, and
-	// the list.
-	if border := paneBorder(t, m); border != mc+2+110 {
+	// The border sits after the margin and the list.
+	if border := paneBorder(t, m); border != mc+110 {
 		t.Errorf("pane border at column %d, want the list capped at 110 columns", border)
 	}
 }
@@ -241,11 +241,11 @@ func TestTheAgentColumnGivesWayBeforeTheProjectColumn(t *testing.T) {
 		width                         int
 		activity, words, glyph, whole bool
 	}{
-		{160, true, true, true, true},    // room for everything
-		{60, false, true, true, true},    // the activity goes
-		{44, false, false, true, true},   // the words go
-		{40, false, false, false, true},  // the glyph goes, the name is whole
-		{30, false, false, false, false}, // only now is the name cut
+		{156, true, true, true, true},    // room for everything
+		{56, false, true, true, true},    // the activity goes
+		{40, false, false, true, true},   // the words go
+		{36, false, false, false, true},  // the glyph goes, the name is whole
+		{26, false, false, false, false}, // only now is the name cut
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
@@ -304,14 +304,14 @@ func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
 	if body := pane(tall); !strings.Contains(body, "f39") || strings.Contains(body, "...") {
 		t.Errorf("tall pane stops short of its rows:\n%s", body)
 	}
-	// Sixteen rows of pane; the facts take nine, the heading two.
+	// Seventeen rows of pane; the facts take nine, the heading two.
 	short := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)
 	body := pane(short)
 	if !strings.Contains(body, "f00") || strings.Contains(body, "f39") || !strings.HasSuffix(strings.TrimSpace(body), "...") {
 		t.Errorf("short pane does not end in an ellipsis inside its rows:\n%s", body)
 	}
-	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 16 {
-		t.Errorf("short pane is %d rows, want at most 16", n)
+	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 17 {
+		t.Errorf("short pane is %d rows, want at most 17", n)
 	}
 }
 
@@ -389,9 +389,12 @@ func clickAt(m tui.Model, x, y int) tui.Model {
 // its top border and the columns left of it.
 func margins(m tui.Model) (rows, cols int) {
 	for i, line := range strings.Split(m.View(), "\n") {
-		if strings.Contains(line, "╭") {
-			return i, len(line) - len(strings.TrimLeft(line, " "))
+		if strings.TrimSpace(line) == "" {
+			continue
 		}
+		// Every line of the surface starts with a gutter space of its own,
+		// which is not margin.
+		return i, len(line) - len(strings.TrimLeft(line, " ")) - 1
 	}
 	return 0, 0
 }

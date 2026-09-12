@@ -9,23 +9,27 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The chrome above and below the list: the action bar, a blank line, the
-// query line, the rule under it, and the footer. The frame around all of it
-// costs two more rows and two columns, and the margin outside the frame two
-// more of each.
+// The chrome above and below the list: the action bar, a line under it, the
+// query line, the rule under that, and the footer. The margin around all of
+// it costs two more rows and four more columns.
+//
+// There is no border. It drew a box around a surface that already fills the
+// terminal, which has its own edges, and charged two rows and four columns
+// for saying again where they are. The two rules inside do the separating a
+// box was doing.
 const (
 	chromeHeight = 5
-	frameHeight  = 2
-	frameWidth   = 4 // border and one column of padding on each side
 	marginRows   = 1
 	marginCols   = 2
 )
 
-// margins are what surrounds the frame: nothing on a small terminal, where
-// four rows and four columns of empty space cost two project rows, and one
-// row and two columns otherwise. The rows go first, because rows are what a
+// margins are what surrounds the surface: nothing on a small terminal, where
+// two rows and four columns of empty space cost a project row, and one row
+// and two columns otherwise. The rows go first, because rows are what a
 // list is short of: a wide and short terminal keeps the columns.
 func (m Model) margins() (rows, cols int) {
 	if m.width < 100 {
@@ -37,14 +41,13 @@ func (m Model) margins() (rows, cols int) {
 	return marginRows, marginCols
 }
 
-// inner is the size available inside the frame and the margin. The frame
-// takes the whole terminal (decisions.md D38): the rows are a grid, so a
-// wide row is a long activity line and not a state a screen away from its
-// name.
+// inner is the size available inside the margin. The surface takes the whole
+// terminal (decisions.md D38): the rows are a grid, so a wide row is a long
+// activity line and not a state a screen away from its name.
 func (m Model) inner() (w, h int) {
 	mr, mc := m.margins()
-	w = m.width - 2*mc - frameWidth
-	h = m.height - 2*mr - frameHeight - chromeHeight
+	w = m.width - 2*mc
+	h = m.height - 2*mr - chromeHeight
 	if w < 20 {
 		w = 20
 	}
@@ -63,7 +66,7 @@ func (m *Model) layout() {
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
-	// One column less than the frame's content: the footer is rendered with a
+	// One column less than the content: the footer is rendered with a
 	// leading space. help truncates on its own width and marks the cut with an
 	// ellipsis; sized to the terminal instead, it never cut, and View's own
 	// clip took the end of a word with no mark.
@@ -73,10 +76,12 @@ func (m *Model) layout() {
 func (m Model) View() string {
 	w, _ := m.inner()
 	var b strings.Builder
-	// The top line, then a blank one: the query reads as its own thing, and
-	// the eye does not run the buttons and the field together.
+	// A line under the top one: what can be done to the installation is not
+	// what is being looked for, and the two should not read as one block.
 	b.WriteString(clipTo(m.top(), w))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+	b.WriteString(m.thinRule(w))
+	b.WriteString("\n")
 	b.WriteString(clipTo(m.subtitle(), w))
 	b.WriteString("\n")
 	b.WriteString(m.rule(w))
@@ -96,15 +101,10 @@ func (m Model) View() string {
 	b.WriteString(clipTo(m.footer(), w))
 
 	mr, mc := m.margins()
-	// Width is the frame's outside, and the frame pads by one column on each
-	// side, so the content box is w.
-	return m.theme.Frame.
-		Margin(mr, mc).
-		Width(w + 2).
-		Render(b.String())
+	return m.theme.Frame.Margin(mr, mc).Width(w).Render(b.String())
 }
 
-// top is the frame's first line: the action bar on the surface, and the name
+// top is the surface's first line: the action bar on the surface, and the name
 // of a dialog standing over it. A dialog takes the bar's place rather than a
 // line of its own, because none of the bar's buttons acts while one is up.
 func (m Model) top() string {
@@ -120,6 +120,15 @@ func (m Model) top() string {
 		return m.bar()
 	}
 	return " " + m.theme.Header.Render(name)
+}
+
+// thinRule closes the top line off. It starts where every other line starts,
+// so it and the rule under the query are one pair rather than two edges.
+func (m Model) thinRule(width int) string {
+	if width < 2 {
+		return ""
+	}
+	return " " + m.theme.Border.Render(strings.Repeat("\u2500", width-1))
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or
@@ -158,7 +167,7 @@ func (m Model) rule(width int) string {
 }
 
 // pad0 puts a space on each side of a rule's head, so its text does not touch
-// the frame or the line. An empty head stays empty.
+// the margin or the line. An empty head stays empty.
 func pad0(head string) string {
 	if head == "" {
 		return ""
@@ -194,15 +203,7 @@ func (m Model) ruleHead() string {
 	if m.dialog != dialogNone || !m.ready() {
 		return m.ruleCount()
 	}
-	running, attention := 0, 0
-	for _, v := range m.views {
-		if v.Running {
-			running++
-		}
-		if v.Attention() {
-			attention++
-		}
-	}
+	blockers, working, idle := m.agentCounts()
 	// Each count carries the glyph its rows carry, so the rule is also the
 	// key to the list.
 	count := func(glyph string, n int, text string, s lipgloss.Style) string {
@@ -211,14 +212,36 @@ func (m Model) ruleHead() string {
 		}
 		return s.Render(fmt.Sprintf("%s %d %s", glyph, n, text))
 	}
-	need := "need you"
-	if attention == 1 {
-		need = "needs you"
+	blocked := "blockers"
+	if blockers == 1 {
+		blocked = "blocker"
 	}
 	sep := th.Path.Render(" · ")
 	return m.ruleCount() +
-		sep + count(th.Glyphs.Running, running, "running", th.Running) +
-		sep + count(th.Glyphs.NeedsYou, attention, need, th.Attention)
+		sep + count(th.Glyphs.NeedsYou, blockers, blocked, th.Attention) +
+		sep + count(th.Glyphs.Working, working, "working", th.Running) +
+		sep + count(th.Glyphs.Idle, idle, "idle", th.Idle)
+}
+
+// agentCounts is the list by what its agents are doing: a project counts
+// once, under its worst agent, which is the state its row shows. A project
+// with no agent - a workspace that is only a shell - counts in none of them.
+func (m Model) agentCounts() (blockers, working, idle int) {
+	for _, v := range m.views {
+		worst, ok := core.Worst(v.Agents)
+		if !ok {
+			continue
+		}
+		switch worst.Status {
+		case revier.StatusAttention:
+			blockers++
+		case revier.StatusRunning:
+			working++
+		case revier.StatusIdle:
+			idle++
+		}
+	}
+	return blockers, working, idle
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints

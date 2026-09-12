@@ -47,7 +47,7 @@ type barCell struct {
 	x0, x1 int
 }
 
-// barLine is the bar's line inside the frame: the first of them. What can be
+// barLine is the bar's line: the surface's first. What can be
 // done to the installation stands above what is on it, and the query line
 // then sits directly over the rows it filters.
 const barLine = 0
@@ -101,10 +101,10 @@ func (m Model) barAt(x, y int) int {
 		return -1
 	}
 	mr, mc := m.margins()
-	if y != mr+frameHeight/2+barLine {
+	if y != mr+barLine {
 		return -1
 	}
-	cx := x - (mc + frameWidth/2)
+	cx := x - mc
 	for i, c := range m.barCells() {
 		if cx >= c.x0 && cx < c.x1 {
 			return i

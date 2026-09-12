@@ -96,24 +96,23 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	return next.(tui.Model), cmd
 }
 
-// lines is the surface's content, with the frame taken off: the border rows
-// dropped and the border column stripped from each side. Tests assert on what
-// the surface says, not on where its box is drawn.
+// lines is the surface's content, with the margin taken off: its blank rows
+// dropped and each line right-trimmed. Tests assert on what the surface says,
+// not on where it sits in the terminal.
+//
+// The left margin stays on the line. Every line of the surface carries a
+// gutter space of its own, so a test that cared where a line starts would
+// have to count either way, and margins reads the margin off the render.
 func lines(m tui.Model) []string {
-	var out []string
-	for _, raw := range strings.Split(m.View(), "\n") {
-		line := strings.TrimRight(raw, " ")
-		trimmed := strings.TrimLeft(line, " ")
-		if strings.HasPrefix(trimmed, "╭") || strings.HasPrefix(trimmed, "╰") {
-			continue
-		}
-		if !strings.HasPrefix(trimmed, "│") {
-			out = append(out, line)
-			continue
-		}
-		body := strings.TrimPrefix(trimmed, "│")
-		body = strings.TrimSuffix(strings.TrimRight(body, " "), "│")
-		out = append(out, strings.TrimRight(body, " "))
+	out := strings.Split(m.View(), "\n")
+	for i := range out {
+		out[i] = strings.TrimRight(out[i], " ")
+	}
+	for len(out) > 0 && out[0] == "" {
+		out = out[1:]
+	}
+	for len(out) > 0 && out[len(out)-1] == "" {
+		out = out[:len(out)-1]
 	}
 	return out
 }
@@ -423,8 +422,8 @@ func paneCursor(m tui.Model) string {
 func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 	t.Helper()
 	for y, raw := range strings.Split(m.View(), "\n") {
-		// The frame's border, the list, the pane's border, the pane.
-		if parts := strings.Split(raw, "│"); len(parts) > 3 && strings.Contains(parts[2], text) {
+		// The list, the pane's border, the pane.
+		if parts := strings.Split(raw, "│"); len(parts) > 1 && strings.Contains(parts[1], text) {
 			return paneBorder(t, m) + 2, y
 		}
 	}
@@ -943,7 +942,6 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
 
-	// The frame draws its own border, so look inside it.
 	for i, line := range lines(m) {
 		if strings.Contains(line, "│") {
 			t.Errorf("80 columns should not split, line %d = %q", i, line)
@@ -1234,23 +1232,17 @@ func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
 }
 
 // paneColumns is the detail pane's rendered width, its border included: from
-// the border between list and pane to the frame's padding column.
+// the border between list and pane to the end of the line.
 func paneColumns(t *testing.T, m tui.Model) int {
 	t.Helper()
+	border := paneBorder(t, m)
+	widest := 0
 	for _, raw := range strings.Split(m.View(), "\n") {
-		r := []rune(raw)
-		var bars []int
-		for i, c := range r {
-			if c == '│' {
-				bars = append(bars, i)
-			}
-		}
-		if len(bars) == 3 {
-			return bars[2] - bars[1] - 1
+		if n := lipgloss.Width(strings.TrimRight(raw, " ")); n > widest {
+			widest = n
 		}
 	}
-	t.Fatalf("no line with a pane:\n%s", m.View())
-	return 0
+	return widest - border
 }
 
 // Where the picker's preview wraps, the pane wraps: a path and an activity
@@ -1317,18 +1309,18 @@ func TestDetailPaneCutsTreeRows(t *testing.T) {
 	}
 }
 
-// At eighty columns there is no pane, and the list does not wrap either: a
-// long path and a long activity line leave every row two lines high.
-func TestEightyColumnsCutsTheListRatherThanWrapping(t *testing.T) {
+// On a terminal too narrow for a pane the list does not wrap either: a long
+// path and a long activity line leave every row two lines high.
+func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 	c, projects := longWorld(t, "/p/"+strings.Repeat("deeply-nested/", 10)+"checkout")
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 76, 20)
 
 	r := rows(m)
 	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply") || !strings.Contains(r[2], "short") {
 		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
 	}
 	for i, line := range strings.Split(m.View(), "\n") {
-		if w := lipgloss.Width(line); w > 80 {
+		if w := lipgloss.Width(line); w > 76 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
 	}
@@ -1399,8 +1391,8 @@ func paneBorder(t *testing.T, m tui.Model) int {
 				bars = append(bars, i)
 			}
 		}
-		if len(bars) == 3 {
-			return bars[1]
+		if len(bars) == 1 {
+			return bars[0]
 		}
 	}
 	t.Fatalf("no line with a pane:\n%s", m.View())

@@ -88,8 +88,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
 	_, mc := m.margins()
-	left := mc + frameWidth/2
-	if x < left || x >= left+m.listWidth() {
+	if x < mc || x >= mc+m.listWidth() {
 		return 0, false
 	}
 	line, ok := m.bodyLine(y)
@@ -103,12 +102,11 @@ func (m Model) rowAt(x, y int) (int, bool) {
 	return index, true
 }
 
-// bodyLine is the line of the body a terminal row is on: below the border
-// row, the action bar, the header, the query line and the rule, and above
-// the footer.
+// bodyLine is the line of the body a terminal row is on: below the action
+// bar, the line under it, the query line and the rule, and above the footer.
 func (m Model) bodyLine(y int) (int, bool) {
 	mr, _ := m.margins()
-	top := mr + frameHeight/2 + chromeHeight - 1
+	top := mr + chromeHeight - 1
 	_, h := m.inner()
 	if y < top || y >= top+h {
 		return 0, false
@@ -117,11 +115,11 @@ func (m Model) bodyLine(y int) (int, bool) {
 }
 
 // overPane reports whether a column is inside the detail pane: right of the
-// margin, the frame's border and padding, and the list.
+// margin and the list.
 func (m Model) overPane(x int) bool {
 	if m.paneCols() == 0 {
 		return false
 	}
 	_, mc := m.margins()
-	return x >= mc+frameWidth/2+m.listWidth()
+	return x >= mc+m.listWidth()
 }
