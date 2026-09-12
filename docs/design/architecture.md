@@ -118,7 +118,7 @@ internal/core/         match, run-or-raise, toggle-back, resolution
 internal/config/       TOML load, template rendering, validation
 internal/state/        per-session attachments, which do not belong in config
 internal/checkout/     the clone of a missing project directory (D30)
-internal/sshconfig/    the hosts the ssh configuration names (D42)
+internal/sshconfig/    the hosts the ssh configuration names (D45)
 internal/adapter/
     kitty/
     tmux/

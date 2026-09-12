@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,22 +17,22 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The link dialog (decisions.md D42): alt+r lists the hosts the ssh
+// The link dialog (decisions.md D45): alt+r lists the hosts the ssh
 // configuration names, Enter on one asks the revier there for its projects,
 // and Enter on a project writes a link to it here, which is then a row like
-// any other. Two levels over the same list and pane the other two use.
+// any other. Two steps in the list's own place, with the pane beside them.
 
 // askTimeout bounds one ask of a host. Long enough for a cold ssh; short
 // enough that a host that is down is a message, not a wait.
 const askTimeout = 15 * time.Second
 
-// hostItem is one row at the host level.
+// hostItem is one row of the dialog's first step.
 type hostItem struct{ host string }
 
 func (i hostItem) FilterValue() string { return i.host }
 
-// remoteItem is one row at the remote level: a project on the host, and the
-// link here that already points at it, if any.
+// remoteItem is one row of the dialog's second step: a project on the host,
+// and the link here that already points at it, if any.
 type remoteItem struct {
 	view   revier.ProjectView
 	linked revier.ProjectName
@@ -49,8 +50,8 @@ type askedMsg struct {
 func newHostList(th theme.Theme) list.Model   { return plainList(hostDelegate{theme: th}) }
 func newRemoteList(th theme.Theme) list.Model { return plainList(remoteDelegate{theme: th}) }
 
-// plainList is a list with nothing of its own on screen and no filter, as
-// the target list is: the dialog's rows are few and each is a choice.
+// plainList is a list with nothing of its own on screen and no filter: the
+// dialog's rows are few and each of them is a choice.
 func plainList(d list.ItemDelegate) list.Model {
 	l := list.New(nil, d, 0, 0)
 	l.SetShowTitle(false)
@@ -123,9 +124,12 @@ func (d remoteDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	_, _ = fmt.Fprint(w, fill(row, m.Width(), sel, th))
 }
 
-// remotePathWidth is the room a project's path on the host has beside its
-// name, so the note after it stays on a narrow list.
-const remotePathWidth = 28
+// The dialog's columns. They are fixed, so a name and a path stay in one
+// column down the rows, and the note after them stays on a narrow list.
+const (
+	nameWidth       = 24
+	remotePathWidth = 28
+)
 
 // cursor is the bar down the left of a row, lit on the selected one.
 func cursor(th theme.Theme, sel bool) string {
@@ -135,8 +139,10 @@ func cursor(th theme.Theme, sel bool) string {
 	return th.Path.Render("  ")
 }
 
-// openHosts is alt+r: the host level, over the hosts the ssh configuration
-// names. No hosts is a message, not an empty list to be puzzled at.
+// openHosts is alt+r: the dialog's first step, over the hosts the ssh
+// configuration names. No hosts is a message, not an empty list to be
+// puzzled at. The cursor comes back to the list first, so the surface the
+// dialog stands over is the one it is left on.
 func (m Model) openHosts() (tea.Model, tea.Cmd) {
 	path, err := sshconfig.Path()
 	if err != nil {
@@ -158,12 +164,64 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 	}
 	_ = m.hlist.SetItems(items)
 	m.hlist.Select(0)
-	m.level = levelHosts
+	m.leavePane()
+	m.dialog = dialogHosts
 	return m, nil
 }
 
-// askHost is Enter at the host level: the host is asked for its projects,
-// off the terminal, and the answer opens the remote level.
+// dialogKey is every press while the dialog is up. It takes a step at a
+// time: up and down walk the rows, Enter takes the step, Esc goes back one,
+// and none of the surface's own keys act under it.
+func (m Model) dialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.err = nil
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Back):
+		m.stepBack()
+	case key.Matches(msg, m.keys.Up):
+		m.dialogList().CursorUp()
+	case key.Matches(msg, m.keys.Down):
+		m.dialogList().CursorDown()
+	case key.Matches(msg, m.keys.Enter):
+		return m.dialogEnter()
+	}
+	return m, nil
+}
+
+// dialogEnter takes the step the cursor is on: a host is asked for its
+// projects, a project of that host is linked.
+func (m Model) dialogEnter() (tea.Model, tea.Cmd) {
+	if m.dialog == dialogHosts {
+		return m.askHost()
+	}
+	return m.link()
+}
+
+// stepBack is Esc in the dialog: the second step goes back to the first, the
+// first back to the surface. An ask still out is abandoned with the step it
+// was made from, because its answer must not pull the surface back into a
+// dialog the user has just left.
+func (m *Model) stepBack() {
+	m.asking = ""
+	if m.dialog == dialogRemote {
+		m.dialog = dialogHosts
+		return
+	}
+	m.dialog = dialogNone
+}
+
+// dialogList is the list of the step in view. It is a pointer because the
+// cursor moves on it.
+func (m *Model) dialogList() *list.Model {
+	if m.dialog == dialogRemote {
+		return &m.rlist
+	}
+	return &m.hlist
+}
+
+// askHost is Enter on a host: the host is asked for its projects, off the
+// terminal, and the answer opens the second step.
 func (m Model) askHost() (tea.Model, tea.Cmd) {
 	it, ok := m.hlist.SelectedItem().(hostItem)
 	if !ok {
@@ -179,8 +237,8 @@ func (m Model) askHost() (tea.Model, tea.Cmd) {
 	}
 }
 
-// asked takes a host's answer. A failure stays at the host level, with the
-// failure in the footer; an answer is the remote level.
+// asked takes a host's answer. A failure stays on the hosts, with the
+// failure in the footer; an answer is the second step.
 func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	if msg.host != m.asking {
 		return m, nil // an answer to an ask the user has moved on from
@@ -197,7 +255,7 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	m.host = msg.host
 	_ = m.rlist.SetItems(items)
 	m.rlist.Select(0)
-	m.level = levelRemote
+	m.dialog = dialogRemote
 	if len(items) == 0 {
 		m.err = fmt.Errorf("%s has no projects; `revier new` there writes one", msg.host)
 	}
@@ -214,9 +272,9 @@ func (m Model) linkedAs(host string, project revier.ProjectName) revier.ProjectN
 	return ""
 }
 
-// link is Enter at the remote level: a link file for the project under the
-// cursor, under its own name, which is then a row. The row is put in at
-// once, as the next survey will show it, rather than a refresh later.
+// link is Enter on a project of the host: a link file for it, under its own
+// name, which is then a row. The row is put in at once, as the next survey
+// will show it, rather than a refresh later.
 func (m Model) link() (tea.Model, tea.Cmd) {
 	it, ok := m.rlist.SelectedItem().(remoteItem)
 	if !ok {
@@ -248,21 +306,21 @@ func (m Model) link() (tea.Model, tea.Cmd) {
 	view := it.view
 	view.Project, view.Running, view.Home, view.Targets = p.Project, false, revier.TargetRef{}, nil
 	m.views = sorted(append(m.views, view))
-	m.level = levelProjects
+	m.dialog = dialogNone
 	m.reload()
 	m.selectName(p.Name)
 	return m, nil
 }
 
-// remoteDetail is the pane at the remote level: what the host said about
-// the project under the cursor.
+// remoteDetail is the pane on the dialog's second step: what the host said
+// about the project under the cursor.
 func (m *Model) remoteDetail() string {
 	it, ok := m.rlist.SelectedItem().(remoteItem)
 	if !ok {
 		return ""
 	}
 	th, v := m.theme, it.view
-	w := m.paneWidth() - paneChrome
+	w := m.paneCols() - paneChrome
 	line := func(label, value string, style lipgloss.Style) string {
 		return hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style) + "\n"
 	}

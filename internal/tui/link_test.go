@@ -197,3 +197,20 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 		t.Errorf("selected %q, want the new link still on the cursor", row)
 	}
 }
+
+// The dialog stands over the surface and owns the keys: a letter does not
+// filter the list behind it, and Tab does not move a cursor that is not on
+// the surface (decisions.md D45).
+func TestTheDialogOwnsTheKeys(t *testing.T) {
+	m, _, _ := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha")
+	m = step(m, altR)
+
+	m, _ = press(m, "a")
+	m, _ = press(m, "tab")
+	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") {
+		t.Errorf("rows = %q, want the hosts untouched", r)
+	}
+	if f := footer(m); !strings.Contains(f, "list its projects") {
+		t.Errorf("footer = %q, want the dialog's own legend", f)
+	}
+}

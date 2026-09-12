@@ -88,7 +88,7 @@ against the scratch configuration above and read the screen back:
 t() { tmux -L revier-tui "$@"; }                # a function: zsh does not split a $T variable
 t new-session -d -s tui -x 100 -y 20 "REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"
 t capture-pane -p -t tui                        # the rows, as rendered
-t send-keys -t tui d e m Tab                    # type to filter, Tab lists the targets
+t send-keys -t tui d e m Tab                    # type to filter, Tab moves the cursor onto the targets
 for k in back clear quit; do t send-keys -t tui Escape; sleep 0.3; done   # one at a time: two quick Escapes read as alt+Escape
 t kill-server
 ```

@@ -1,6 +1,6 @@
 // Package sshconfig reads the hosts an ssh configuration names: the list
 // `ssh <tab>` offers, and the list the link dialog offers (decisions.md
-// D42).
+// D45).
 package sshconfig
 
 import (

@@ -44,7 +44,7 @@ func (c *Core) remote(host string) (revier.Remote, error) {
 }
 
 // ProjectsOn lists every project the revier on a host has, as it sees them:
-// what the link dialog offers to link (decisions.md D42).
+// what the link dialog offers to link (decisions.md D45).
 func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectView, error) {
 	return c.survey(ctx, host, nil)
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// cmdLink is the link dialog as a command (decisions.md D42): with nothing,
+// cmdLink is the link dialog as a command (decisions.md D45): with nothing,
 // the hosts the ssh configuration names; with a host, the projects the
 // revier there has; with a host and a project, a link to it written here.
 func cmdLink(ctx context.Context, a *app, args []string) error {

@@ -38,6 +38,21 @@ func (m Model) paneWidth() int {
 	return inner - list
 }
 
+// paneCols is the columns the pane renders in: its share beside the list,
+// or, on a terminal too narrow to split, the whole width while the cursor is
+// on it, where it stands in the list's place (decisions.md D42). Zero is a
+// pane not on screen.
+func (m Model) paneCols() int {
+	if pane := m.paneWidth(); pane > 0 {
+		return pane
+	}
+	if m.focus == focusPane {
+		w, _ := m.inner()
+		return w
+	}
+	return 0
+}
+
 // paneChrome is the border column and the padding column the pane's frame
 // takes from what it holds.
 const paneChrome = 2
@@ -53,16 +68,21 @@ func newDetail(th theme.Theme) viewport.Model {
 // syncDetail rebuilds the pane for whatever the cursor is on. It runs after
 // every message, because the cursor moves on a keypress and the content
 // changes on a survey. The wheel scrolls the pane; a survey keeps that
-// scroll, and a different project starts at its top.
+// scroll, and a different project starts at its top. The pane's own cursor
+// is kept on a row that exists, and on the screen.
 func (m *Model) syncDetail() {
-	if m.paneWidth() == 0 {
+	cols := m.paneCols()
+	if cols == 0 {
 		return
 	}
-	switch m.level {
-	case levelHosts:
+	// A viewport's width is its outside, border and padding included.
+	_, h := m.inner()
+	m.detail.Width, m.detail.Height = cols, h
+	switch m.dialog {
+	case dialogHosts:
 		m.detail.SetContent("")
 		return
-	case levelRemote:
+	case dialogRemote:
 		m.detail.SetContent(m.remoteDetail())
 		return
 	}
@@ -71,10 +91,25 @@ func (m *Model) syncDetail() {
 		m.detail.SetContent("")
 		return
 	}
+	m.tcursor = min(max(m.tcursor, 0), max(len(m.targetRows())-1, 0))
 	m.detail.SetContent(m.detailContent(v))
 	if v.Project.Name != m.shown {
 		m.shown = v.Project.Name
 		m.detail.GotoTop()
+	}
+	if m.focus == focusPane && m.tcursor < len(m.tlines) {
+		m.followPane(m.tlines[m.tcursor])
+	}
+}
+
+// followPane keeps a line of the pane on the screen, scrolling by the least
+// that does it, as the list does for its cursor.
+func (m *Model) followPane(line int) {
+	switch {
+	case line < m.detail.YOffset:
+		m.detail.SetYOffset(line)
+	case line >= m.detail.YOffset+m.detail.Height:
+		m.detail.SetYOffset(line - m.detail.Height + 1)
 	}
 }
 
@@ -86,9 +121,9 @@ func (m *Model) syncDetail() {
 // others leave. A wide pane puts the snapshot beside the rest, so both fill
 // the height and neither waits under the other (decisions.md D39).
 func (m *Model) detailContent(v revier.ProjectView) string {
-	w := m.paneWidth() - paneChrome
+	w := m.paneCols() - paneChrome
 	_, h := m.inner()
-	if m.paneWidth() < widePaneWidth {
+	if m.paneCols() < widePaneWidth {
 		facts := m.facts(v, w)
 		return facts + m.snapshot(v, w, h-strings.Count(facts, "\n"))
 	}
@@ -172,15 +207,13 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
+	// The rows Tab moves the cursor onto. Where each lands is recorded, so
+	// the cursor can be kept on screen and a click can find its row.
 	b.WriteString(m.heading("Targets", w))
-	for _, t := range v.Targets {
-		b.WriteString(m.detailTarget(t, w))
-		b.WriteString("\n")
-	}
-	for _, ref := range m.attached[v.Project.Name] {
-		b.WriteString(th.NameDim.Render(th.Glyphs.Running + " "))
-		b.WriteString(th.ProjectName.Render(clipTo(ref.Title, w-12)))
-		b.WriteString(th.Meta.Render(" attached"))
+	m.tlines = m.tlines[:0]
+	for i, row := range m.targetRows() {
+		m.tlines = append(m.tlines, strings.Count(b.String(), "\n"))
+		b.WriteString(m.detailRow(row, w, m.focus == focusPane && i == m.tcursor))
 		b.WriteString("\n")
 	}
 
@@ -234,28 +267,50 @@ func (m Model) heading(title string, w int) string {
 	return "\n" + th.Heading.Render(title) + " " + th.Border.Render(strings.Repeat("─", rule)) + "\n"
 }
 
-// detailTarget is one target: whether it is up, its name, its key in the
-// spelling the footer uses, and its state. A stopped target says "stopped",
-// where it said "-", which read as a value that failed to load.
-func (m Model) detailTarget(t revier.TargetView, w int) string {
+// detailRow is one row of the Targets section: a target - whether it is up,
+// its name, its key in the spelling the footer uses, and its state - or an
+// attached instance, which has a title and no key. A stopped target says
+// "stopped", where it said "-", which read as a value that failed to load.
+// The row under the pane's cursor carries the list's bar and selection
+// background across its width, so the two cursors read as one.
+func (m Model) detailRow(row targetRow, w int, sel bool) string {
 	th := m.theme
-	mark, markStyle := th.Glyphs.Stopped, th.NameDim
-	state, stateStyle := "stopped", th.Count
-	switch {
-	case !t.Available:
-		state = "no host here"
-	case !t.Ref.IsZero():
-		mark, markStyle = th.Glyphs.Running, th.Running
-		state, stateStyle = "running", th.Running
+	style := func(s lipgloss.Style) lipgloss.Style {
+		if sel {
+			return th.OnSelection(s)
+		}
+		return s
 	}
-	name := th.ProjectName
-	if t.Ref.IsZero() {
-		name = th.NameDim
+	bar := style(th.Path).Render(" ")
+	if sel {
+		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
-	return markStyle.Render(mark+" ") +
-		name.Render(pad(clipTo(string(t.Name), detailNameWidth-1), detailNameWidth)) +
-		th.Accent.Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
-		stateStyle.Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
+	out := bar + style(th.Path).Render(" ")
+	if ref := row.attached; !ref.IsZero() {
+		out += style(th.NameDim).Render(th.Glyphs.Running+" ") +
+			highlight(clipTo(ref.Title, w-12), row.matches, style(th.ProjectName), style(th.Match)) +
+			style(th.Meta).Render(" attached")
+	} else {
+		t := row.target
+		mark, markStyle := th.Glyphs.Stopped, th.NameDim
+		state, stateStyle := "stopped", th.Count
+		switch {
+		case !t.Available:
+			state = "no host here"
+		case !t.Ref.IsZero():
+			mark, markStyle = th.Glyphs.Running, th.Running
+			state, stateStyle = "running", th.Running
+		}
+		name := th.ProjectName
+		if t.Ref.IsZero() {
+			name = th.NameDim
+		}
+		out += style(markStyle).Render(mark+" ") +
+			pad(highlight(clipTo(string(t.Name), detailNameWidth-1), row.matches, style(name), style(th.Match)), detailNameWidth) +
+			style(th.Accent).Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
+			style(stateStyle).Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
+	}
+	return fill(out, w, sel, th)
 }
 
 func (m Model) detailAgent(a revier.AgentView, w int) string {
@@ -264,9 +319,9 @@ func (m Model) detailAgent(a revier.AgentView, w int) string {
 	if harness == "" {
 		harness = "agent"
 	}
-	// Indented past the targets' mark column, so the harness sits under the
-	// target names; the state glyph is in the label after it.
-	head := "  " + th.ProjectName.Render(pad(harness, detailNameWidth)) +
+	// Indented past the targets' bar and mark columns, so the harness sits
+	// under the target names; the state glyph is in the label after it.
+	head := "    " + th.ProjectName.Render(pad(harness, detailNameWidth)) +
 		statusStyle(th, a.State.Status).Render(pad(statusLabel(th, a.State.Status), detailStateWidth))
 	return hang(head, a.State.Activity, w, th.Path)
 }
