@@ -414,8 +414,13 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Back):
 		switch {
 		case m.level == levelTargets || m.level == levelHosts:
+			// An ask still out is abandoned with the level it was made
+			// from: its answer must not pull the surface back into the
+			// dialog the user has just left.
+			m.asking = ""
 			m.level = levelProjects
 		case m.level == levelRemote:
+			m.asking = ""
 			m.level = levelHosts
 		case m.filter != "":
 			m.setFilter("")

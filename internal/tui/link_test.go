@@ -158,3 +158,24 @@ func TestAltRWithNoHostsSaysSo(t *testing.T) {
 		t.Errorf("footer = %q, want no hosts said", f)
 	}
 }
+
+// Esc while a host is being asked abandons the ask: the answer that lands
+// afterwards must not pull the surface back into the dialog, nor leave the
+// project list under an "asking" footer.
+func TestEscDuringAnAskAbandonsIt(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "beta")
+	m = step(m, altR)
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter on a host started no ask")
+	}
+	m, _ = press(m, "esc")
+	if f := footer(m); strings.Contains(f, "asking") {
+		t.Errorf("footer = %q, want the project list's own legend", f)
+	}
+	next, _ := m.Update(cmd())
+	m = next.(tui.Model)
+	if h := lines(m)[0]; strings.Contains(h, "buildbox") {
+		t.Errorf("header = %q, want the project list, not the answered host", h)
+	}
+}
