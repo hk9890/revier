@@ -120,7 +120,7 @@ func lines(m tui.Model) []string {
 // The chrome lines, in the order View writes them.
 func barLine(m tui.Model) string  { return lines(m)[0] }
 func query(m tui.Model) string    { return lines(m)[2] }
-func ruleLine(m tui.Model) string { return lines(m)[3] }
+func ruleLine(m tui.Model) string { return lines(m)[4] }
 
 // footer is the last content line: the key legend, or the last failure.
 func footer(m tui.Model) string {
@@ -137,8 +137,9 @@ func rows(m tui.Model) []string {
 	return l[chromeLines:]
 }
 
-// The header, the query line, the action bar and the rule sit above the list.
-const chromeLines = 4
+// The action bar, the line under it, the query line, a blank line and the
+// rule sit above the list.
+const chromeLines = 5
 
 // The project the human is waiting on sorts above every other, whatever its
 // config order.

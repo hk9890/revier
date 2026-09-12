@@ -103,7 +103,8 @@ func (m Model) rowAt(x, y int) (int, bool) {
 }
 
 // bodyLine is the line of the body a terminal row is on: below the action
-// bar, the line under it, the query line and the rule, and above the footer.
+// bar, the line under it, the query line, the blank line and the rule, and
+// above the footer.
 func (m Model) bodyLine(y int) (int, bool) {
 	mr, _ := m.margins()
 	top := mr + chromeHeight - 1

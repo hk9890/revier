@@ -304,14 +304,14 @@ func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
 	if body := pane(tall); !strings.Contains(body, "f39") || strings.Contains(body, "...") {
 		t.Errorf("tall pane stops short of its rows:\n%s", body)
 	}
-	// Seventeen rows of pane; the facts take nine, the heading two.
+	// Sixteen rows of pane; the facts take nine, the heading two.
 	short := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)
 	body := pane(short)
 	if !strings.Contains(body, "f00") || strings.Contains(body, "f39") || !strings.HasSuffix(strings.TrimSpace(body), "...") {
 		t.Errorf("short pane does not end in an ellipsis inside its rows:\n%s", body)
 	}
-	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 17 {
-		t.Errorf("short pane is %d rows, want at most 17", n)
+	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 16 {
+		t.Errorf("short pane is %d rows, want at most 16", n)
 	}
 }
 

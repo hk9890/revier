@@ -187,5 +187,5 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 // rowTop is the terminal row the first row of the list is on.
 func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
-	return mr + 4
+	return mr + 5
 }

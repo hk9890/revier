@@ -14,7 +14,7 @@ import (
 )
 
 // The chrome above and below the list: the action bar, a line under it, the
-// query line, the rule under that, and the footer. The margin around all of
+// query line, a blank line, the rule, and the footer. The margin around all of
 // it costs two more rows and four more columns.
 //
 // There is no border. It drew a box around a surface that already fills the
@@ -22,7 +22,7 @@ import (
 // for saying again where they are. The two rules inside do the separating a
 // box was doing.
 const (
-	chromeHeight = 5
+	chromeHeight = 6
 	marginRows   = 1
 	marginCols   = 2
 )
@@ -82,8 +82,10 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.thinRule(w))
 	b.WriteString("\n")
+	// A blank line under the query: the field stands on its own, and the
+	// rule reads as the head of the list rather than the query's underline.
 	b.WriteString(clipTo(m.subtitle(), w))
-	b.WriteString("\n")
+	b.WriteString("\n\n")
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
 
