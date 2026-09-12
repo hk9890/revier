@@ -23,6 +23,9 @@ worktree has none.
 user's projects and state. `TMUX_TMPDIR` and `unset TMUX` move revier's tmux
 runtime, and every `tmux` command after them, onto a private server. Set all
 four, every time, in the one shell that runs the recipes below.
+`REVIER_SSH_CONFIG` points `revier link` and alt+r at a scratch ssh
+configuration instead of `~/.ssh/config`; set it whenever a recipe reaches
+the link dialog.
 
 ```bash
 S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"

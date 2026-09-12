@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -100,6 +101,40 @@ home = true
 	}
 	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
 		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
+	}
+}
+
+// `revier link` writes the smallest file that says where the project is,
+// and loads it back: the name on the host only when it differs.
+func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
+	root := t.TempDir()
+	p, err := config.CreateLink(root, "far", "buildbox", "")
+	if err != nil {
+		t.Fatalf("CreateLink: %v", err)
+	}
+	if p.Name != "far" || p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {
+		t.Errorf("link = %+v, want far on buildbox", p.Project)
+	}
+	body, err := os.ReadFile(config.ProjectFile(root, "far"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "project =") {
+		t.Errorf("file = %q: the same name is not written twice", body)
+	}
+
+	build, err := config.CreateLink(root, "build", "buildbox", "far")
+	if err != nil {
+		t.Fatalf("CreateLink: %v", err)
+	}
+	if build.Name != "build" || build.Remote.Project != "far" {
+		t.Errorf("link = %+v, want build here and far there", build.Project)
+	}
+	if _, err := config.CreateLink(root, "far", "buildbox", ""); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("err = %v, want the existing file kept", err)
+	}
+	if _, err := config.CreateLink(root, "bad", "-oProxyCommand=x", ""); err == nil {
+		t.Error("want the host refused before anything is written")
 	}
 }
 

@@ -194,6 +194,27 @@ func TestSurveyReportsAProjectItsHostDidNotList(t *testing.T) {
 	}
 }
 
+// A host with no remote yet gets one from the factory, once, and keeps it:
+// a link written while the surface runs, or a host the dialog asks about,
+// needs no restart.
+func TestARemoteIsMadeOnDemandAndKept(t *testing.T) {
+	made := 0
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), NewRemote: func(host string) revier.Remote {
+		made++
+		return hosttest.NewRemote(host, answer("far", revier.StatusIdle))
+	}}
+	views, err := c.ProjectsOn(context.Background(), "buildbox")
+	if err != nil || len(views) != 1 || views[0].Project.Name != "far" {
+		t.Fatalf("ProjectsOn = %+v, %v; want the host's one project", views, err)
+	}
+	if _, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("far"))}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if made != 1 {
+		t.Errorf("made %d remotes for one host, want 1", made)
+	}
+}
+
 func TestSurveyReportsAHostNothingIsWiredFor(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty")}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)

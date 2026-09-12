@@ -58,6 +58,14 @@ func (m *Model) syncDetail() {
 	if m.paneWidth() == 0 {
 		return
 	}
+	switch m.level {
+	case levelHosts:
+		m.detail.SetContent("")
+		return
+	case levelRemote:
+		m.detail.SetContent(m.remoteDetail())
+		return
+	}
 	v, ok := m.selected()
 	if !ok {
 		m.detail.SetContent("")

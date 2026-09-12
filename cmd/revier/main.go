@@ -40,6 +40,8 @@ usage:
                                 missing directory is cloned from git_url; --attach
                                 ends with this terminal on it (tmux)
   revier new [name]             write a project file for this directory
+  revier link [host [project]]  the ssh hosts; a host's projects; or a link to one,
+                                written here under --name or the project's own
   revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
@@ -164,6 +166,8 @@ func run(args []string) error {
 		return cmdRun(ctx, a, args)
 	case "attach":
 		return cmdAttach(ctx, a, args)
+	case "link":
+		return cmdLink(ctx, a, args)
 	case "status":
 		return cmdStatus(ctx, a, args)
 	case "keys":

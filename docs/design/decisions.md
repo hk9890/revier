@@ -864,3 +864,33 @@ of the file, rather than a `links/` directory: a project is found by name
 everywhere, and two directories would have been two places to look. The
 onboarding flow that lists a host's projects and writes a link for one is
 the next surface over this file.
+
+### D42 — a link is made from the host's own list, in the TUI or on the command line — Accepted
+
+A link file is three lines a person can write (D41), and the first time it
+is a page of the README to get right: which host, how it is spelled in the
+ssh configuration, what the project is called there. The dialog answers
+those from the two places that know: alt+r lists the hosts `~/.ssh/config`
+names, as `ssh <tab>` does, and Enter on one asks the revier there for its
+projects, `revier list --json` over ssh with no names. Enter on a project
+writes the link under the project's own name and returns to the list with
+the new row selected. A project already linked says under which name, and
+is not linked twice.
+
+The dialog is two more levels over the list and the pane the other two
+use, not a window of its own: the surface has one shape, and Esc walks back
+through it a level at a time. A host is asked off the terminal, with the
+ask in the footer, so a host that is down is a message after its connect
+timeout and not a frozen screen. `revier link [host [project]]` is the
+same three steps as a command, so the flow is tested without a screen and
+usable from a shell: nothing, the hosts; a host, its projects with the link
+here that points at each; both, the link written, under `--name` when the
+name here is to differ.
+
+The hosts come from the ssh configuration alone, `Include` followed and
+patterns left out, because a pattern is a rule and not a destination.
+`known_hosts` was left out: a machine reached once by address is not a
+destination anyone wants offered. A remote for a host is made when it is
+first asked about, and kept, so a link written while the surface runs is
+surveyed on the next refresh without a restart; the map the wiring built
+from the project files at start is gone.

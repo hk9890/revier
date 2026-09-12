@@ -106,8 +106,13 @@ func (m Model) View() string {
 // does not. The line stays, so the list does not jump by a row when the level
 // changes.
 func (m Model) subtitle(width int) string {
-	if m.level != levelTargets {
+	switch m.level {
+	case levelProjects:
 		return m.promptView()
+	case levelHosts:
+		return "  " + m.theme.Meta.Render(clipTo("the hosts ~/.ssh/config names", width-2))
+	case levelRemote:
+		return "  " + m.theme.Meta.Render(clipTo("projects the revier on "+m.host+" has", width-2))
 	}
 	v, ok := m.selected()
 	if !ok {
@@ -123,6 +128,10 @@ func (m Model) rule(width int) string {
 	switch {
 	case m.level == levelTargets:
 		count = fmt.Sprintf(" %d targets ", len(m.tlist.Items()))
+	case m.level == levelHosts:
+		count = fmt.Sprintf(" %d hosts ", len(m.hlist.Items()))
+	case m.level == levelRemote:
+		count = fmt.Sprintf(" %d projects ", len(m.rlist.Items()))
 	case !m.ready():
 		count = ""
 	}
@@ -142,8 +151,13 @@ func (m Model) rule(width int) string {
 func (m Model) header() string {
 	th := m.theme
 	badge := th.Badge.Render("revier") + " "
-	if m.level == levelTargets {
+	switch m.level {
+	case levelTargets:
 		return badge + th.NameDim.Render("› ") + th.Header.Render(string(m.current))
+	case levelHosts:
+		return badge + th.NameDim.Render("› ") + th.Header.Render("link a project on another machine")
+	case levelRemote:
+		return badge + th.NameDim.Render("› ") + th.Header.Render(m.host)
 	}
 	if !m.ready() {
 		return badge + th.NameDim.Render("surveying")
@@ -196,7 +210,7 @@ func (m Model) empty() string {
 		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
 	}
 	switch {
-	case m.level == levelTargets || !m.ready():
+	case m.level != levelProjects || !m.ready():
 		return ""
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
@@ -216,6 +230,9 @@ func (m Model) footer() string {
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
+	if m.asking != "" {
+		return m.askingLine()
+	}
 	err := m.err
 	if err == nil {
 		err = m.surveyErr
@@ -232,7 +249,7 @@ func (m Model) footer() string {
 		}
 		// Last, so a narrow footer cuts the file keys and not the row's own
 		// target keys: those change from row to row, and these never do.
-		keys = append(keys, m.keys.Edit, m.keys.Delete)
+		keys = append(keys, m.keys.Edit, m.keys.Delete, m.keys.Link)
 	}
 	return " " + m.help.ShortHelpView(keys)
 }

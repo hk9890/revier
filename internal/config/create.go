@@ -50,6 +50,23 @@ func ProjectFile(root string, name revier.ProjectName) string {
 // nothing at all. gitURL may be empty; a non-empty one must pass
 // ValidateGitURL.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
+	return write(root, name, projectTOML(name, dir, gitURL))
+}
+
+// CreateLink writes a link file for a project on another machine
+// (decisions.md D41), and loads it back as Create does. project is the
+// name on the host; empty is the link's own name.
+func CreateLink(root string, name revier.ProjectName, host string, project revier.ProjectName) (core.Project, error) {
+	if err := validateHost(host); err != nil {
+		return core.Project{}, fmt.Errorf("host: %w", err)
+	}
+	return write(root, name, linkTOML(name, host, project))
+}
+
+// write puts body under the project's file name and loads it back. An
+// existing file is never overwritten, and a file that does not load is
+// removed again, so the directory holds a project revier accepts or nothing.
+func write(root string, name revier.ProjectName, body string) (core.Project, error) {
 	if err := ValidateName(name); err != nil {
 		return core.Project{}, err
 	}
@@ -64,7 +81,7 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 	if err != nil {
 		return core.Project{}, err
 	}
-	_, werr := f.WriteString(projectTOML(name, dir, gitURL))
+	_, werr := f.WriteString(body)
 	if cerr := f.Close(); werr == nil {
 		werr = cerr
 	}

@@ -31,10 +31,10 @@ func (m *Model) syncBody() {
 
 // itemHeight is how many lines one row of the level in view takes.
 func (m Model) itemHeight() int {
-	if m.level == levelTargets {
-		return targetDelegate{}.Height()
+	if m.level == levelProjects {
+		return projectDelegate{}.Height()
 	}
-	return projectDelegate{}.Height()
+	return 1 // every other level's rows are one line
 }
 
 // follow keeps the selected row on the screen, scrolling by the least that

@@ -44,6 +44,8 @@ type level int
 const (
 	levelProjects level = iota
 	levelTargets
+	levelHosts  // the link dialog: which host
+	levelRemote // the link dialog: which project there
 )
 
 // Model is the bubbletea model. Construct it with New.
@@ -70,6 +72,8 @@ type Model struct {
 	level     level
 	current   revier.ProjectName // the project drilled into
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
+	host      string             // the host the remote level shows
+	asking    string             // the host an ask is out to, while it is
 	width     int
 	height    int
 
@@ -77,7 +81,9 @@ type Model struct {
 	// the component's; what a row looks like is the delegate's.
 	plist  list.Model
 	tlist  list.Model
-	filter string // typed at the project level, held here so a refresh can re-apply it
+	hlist  list.Model // the hosts, at the link dialog's first level
+	rlist  list.Model // a host's projects, at its second
+	filter string     // typed at the project level, held here so a refresh can re-apply it
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
@@ -100,6 +106,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
+		hlist: newHostList(th), rlist: newRemoteList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		body: newBody(),
@@ -248,6 +255,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editedMsg:
 		m.err = m.reread(msg)
 		return m, nil
+	case askedMsg:
+		return m.asked(msg)
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -404,8 +413,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		switch {
-		case m.level == levelTargets:
+		case m.level == levelTargets || m.level == levelHosts:
 			m.level = levelProjects
+		case m.level == levelRemote:
+			m.level = levelHosts
 		case m.filter != "":
 			m.setFilter("")
 		default:
@@ -426,6 +437,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.editFile()
 	case key.Matches(msg, m.keys.Delete) && m.level == levelProjects:
 		return m.askDelete()
+	case key.Matches(msg, m.keys.Link) && m.level == levelProjects:
+		return m.openHosts()
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd
@@ -444,8 +457,13 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // list is the list of the level in view. It is a pointer because the cursor
 // moves on it.
 func (m *Model) list() *list.Model {
-	if m.level == levelTargets {
+	switch m.level {
+	case levelTargets:
 		return &m.tlist
+	case levelHosts:
+		return &m.hlist
+	case levelRemote:
+		return &m.rlist
 	}
 	return &m.plist
 }
@@ -507,6 +525,12 @@ func (m Model) targetRows() []targetRow {
 // A project whose directory is not on this machine is cloned first, when its
 // file says from where, as `revier open` does.
 func (m Model) enter() (tea.Model, tea.Cmd) {
+	switch m.level {
+	case levelHosts:
+		return m.askHost()
+	case levelRemote:
+		return m.link()
+	}
 	if m.level == levelProjects {
 		v, ok := m.selected()
 		if !ok {
