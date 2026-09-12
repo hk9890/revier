@@ -173,6 +173,24 @@ func without(projects []core.Project, name revier.ProjectName) []core.Project {
 	return out
 }
 
+// uncovered carries the rows of projects the survey did not cover. A survey
+// started before a link was written answers after it, from the list it began
+// with, and would otherwise take the new row off the screen - and the cursor
+// with it - until the next refresh answered.
+func (m Model) uncovered(views []revier.ProjectView) []revier.ProjectView {
+	covered := make(map[revier.ProjectName]bool, len(views))
+	for _, v := range views {
+		covered[v.Project.Name] = true
+	}
+	out := views
+	for _, v := range m.views {
+		if !covered[v.Project.Name] {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // known drops the views of projects the surface no longer holds. A survey
 // started before a delete answers after it, and would otherwise put the
 // deleted row back for a refresh.

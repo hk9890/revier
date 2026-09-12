@@ -49,6 +49,8 @@ revier list [--json] [name..] the same, printed once, or for the named projects
 revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
                               with this terminal on it (tmux)
 revier new [name]             write a project file for this directory
+revier link [host [project]]  the ssh hosts; a host's projects; or a link to one,
+                              written here under --name or the project's own
 revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
 revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
@@ -68,7 +70,10 @@ revier each log [run]         past runs, or how each project ended in one
 In the TUI, projects whose agent is waiting for you sort first. Type to filter
 by name, Enter opens the project's home, Tab lists its targets, Enter on a
 target runs-or-raises it, Esc goes back. alt+e opens the selected project's
-file in `$EDITOR`; alt+d deletes it, after asking. A configured action key runs
+file in `$EDITOR`; alt+d deletes it, after asking. alt+r links a project on
+another machine: it lists the hosts `~/.ssh/config` names, then the projects
+the revier on the chosen host has, and Enter on one writes the link. A
+configured action key runs
 the action against the selected project.
 
 `revier each -- git pull --ff-only` runs one command in the directory of every
@@ -85,7 +90,8 @@ worked example, is [docs/design/extending.md](docs/design/extending.md).
 does the same for a name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
 
-A project can live on another machine. A link file in the same directory
+A project can live on another machine. `revier link <host> <project>`, or
+alt+r in the TUI, writes a link file for it in the same directory. The file
 names the host and, when it differs from the file's own name, the project's
 name there:
 

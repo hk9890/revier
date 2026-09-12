@@ -23,6 +23,7 @@ type keyMap struct {
 	Quit    key.Binding
 	Edit    key.Binding
 	Delete  key.Binding
+	Link    key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -44,6 +45,7 @@ func newKeyMap(actions []config.Action) keyMap {
 		// letter never reaches the filter.
 		Edit:   key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "edit")),
 		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
+		Link:   key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "link remote")),
 	}
 	for _, act := range actions {
 		c := actionChord(act)
@@ -65,7 +67,7 @@ func actionChord(act config.Action) core.Chord {
 // claims reports whether a press is the surface's own or an action's, which
 // the surface matches before any target key.
 func (k keyMap) claims(c core.Chord) bool {
-	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
+	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete, k.Link}, k.actions...) {
 		for _, name := range b.Keys() {
 			if own, err := core.ParseChord(name); err == nil && own == c {
 				return true
@@ -97,6 +99,17 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	}
 	out = append(out, k.Quit)
 	return append(out, k.actions...)
+}
+
+// helpForDialog is the footer while the link dialog is up. Its two steps
+// take the same keys and mean different things by them, and none of the
+// surface's own keys act under it.
+func (k keyMap) helpForDialog(d dialog) []key.Binding {
+	enter := "link"
+	if d == dialogHosts {
+		enter = "list its projects"
+	}
+	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
 }
 
 // targetHelp is the highlighted project's own target keys. They come from the

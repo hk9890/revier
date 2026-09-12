@@ -27,11 +27,26 @@ func (c *Core) RemoteOf(p Project) (revier.Remote, error) {
 }
 
 func (c *Core) remote(host string) (revier.Remote, error) {
-	r, ok := c.Remotes[host]
-	if !ok {
+	c.remotesMu.Lock()
+	defer c.remotesMu.Unlock()
+	if r, ok := c.Remotes[host]; ok {
+		return r, nil
+	}
+	if c.NewRemote == nil {
 		return nil, fmt.Errorf("no remote is wired for host %q", host)
 	}
+	if c.Remotes == nil {
+		c.Remotes = map[string]revier.Remote{}
+	}
+	r := c.NewRemote(host)
+	c.Remotes[host] = r
 	return r, nil
+}
+
+// ProjectsOn lists every project the revier on a host has, as it sees them:
+// what the link dialog offers to link (decisions.md D45).
+func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectView, error) {
+	return c.survey(ctx, host, nil)
 }
 
 // remoteAnswer is what a host said about one of its projects, or why it

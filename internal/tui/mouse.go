@@ -31,7 +31,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
-		if msg.Button == tea.MouseButtonLeft {
+		if msg.Button == tea.MouseButtonLeft && m.dialog == dialogNone {
 			return m.clickPane(msg.Y)
 		}
 		m.detail, _ = m.detail.Update(msg)
@@ -39,21 +39,26 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		m.plist.CursorUp()
+		m.bodyList().CursorUp()
 	case tea.MouseButtonWheelDown:
-		m.plist.CursorDown()
+		m.bodyList().CursorDown()
 	case tea.MouseButtonLeft:
 		index, ok := m.rowAt(msg.X, msg.Y)
 		if !ok {
 			return m, nil
 		}
 		m.err = nil
-		m.focus = focusList
-		m.plist.Select(index)
+		if m.dialog == dialogNone {
+			m.focus = focusList
+		}
+		m.bodyList().Select(index)
 		last := m.last
 		m.last = click{index: index, at: time.Now()}
 		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
 			m.last = click{}
+			if m.dialog != dialogNone {
+				return m.dialogEnter()
+			}
 			return m.enter()
 		}
 	}
@@ -93,7 +98,7 @@ func (m Model) rowAt(x, y int) (int, bool) {
 		return 0, false
 	}
 	index := (line + m.body.YOffset) / m.itemHeight()
-	if index >= len(m.plist.VisibleItems()) {
+	if index >= len(m.bodyList().VisibleItems()) {
 		return 0, false
 	}
 	return index, true

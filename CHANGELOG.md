@@ -18,6 +18,11 @@ tag.
   being one the host's configuration defines. A link may add targets of its
   own. A host that does not answer shows as unreachable and holds nothing
   else up.
+- **alt+r links a project on another machine.** It lists the hosts
+  `~/.ssh/config` names, then the projects the revier on the chosen host has,
+  and Enter on one writes the link and puts it in the list. `revier link
+  [host [project]]` is the same three steps as a command, with `--name` for
+  a different name here.
 - **`revier open --attach` ends with the terminal on the workspace**, on
   tmux. It is what the ssh pane of a remote project runs on the host.
 - **`revier list` takes project names** and lists those alone.

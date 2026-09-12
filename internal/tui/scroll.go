@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/viewport"
+import (
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
+)
 
 // The list component pages: its cursor walks to the bottom of a page and the
 // next press replaces every row on the screen. With ninety projects reached by
@@ -16,7 +19,7 @@ import "github.com/charmbracelet/bubbles/viewport"
 // rather than one screen of them: ninety projects is a hundred and eighty
 // lines, which is a rounding error next to the survey that produced them.
 func (m *Model) syncBody() {
-	l, itemHeight := &m.plist, m.itemHeight()
+	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())
 	if n < 1 {
@@ -29,8 +32,23 @@ func (m *Model) syncBody() {
 	m.follow(l.Index()*itemHeight, itemHeight)
 }
 
+// bodyList is the list the body scrolls: the link dialog's rows while it is
+// up, the projects otherwise. It is a pointer because the cursor moves on it.
+func (m *Model) bodyList() *list.Model {
+	switch m.dialog {
+	case dialogHosts:
+		return &m.hlist
+	case dialogRemote:
+		return &m.rlist
+	}
+	return &m.plist
+}
+
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
+	if m.dialog != dialogNone {
+		return 1 // a dialog's rows are one line each
+	}
 	return projectDelegate{}.Height()
 }
 

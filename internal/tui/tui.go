@@ -50,6 +50,17 @@ const (
 	focusPane
 )
 
+// dialog is the link dialog standing over the surface: which host, then
+// which of its projects (decisions.md D45). dialogNone is the surface
+// itself, which is where it is nearly always.
+type dialog int
+
+const (
+	dialogNone dialog = iota
+	dialogHosts
+	dialogRemote
+)
+
 // Model is the bubbletea model. Construct it with New.
 type Model struct {
 	core      *core.Core
@@ -77,13 +88,18 @@ type Model struct {
 	tlines    []int              // the pane line each target row is on, for the cursor and a click
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
+	dialog    dialog             // the link dialog, while it is up
+	host      string             // the host the dialog's second step shows
+	asking    string             // the host an ask is out to, while it is
 	width     int
 	height    int
 
 	// The project list. Cursor, paging and fuzzy filtering are the
 	// component's; what a row looks like is the delegate's.
 	plist  list.Model
-	filter string // the query, held here so a refresh can re-apply it
+	hlist  list.Model // the hosts, the link dialog's first step
+	rlist  list.Model // a host's projects, its second
+	filter string     // the query, held here so a refresh can re-apply it
 	keys   keyMap
 	help   help.Model
 	detail viewport.Model
@@ -106,7 +122,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		keys:  keys, help: newHelp(th), detail: newDetail(th),
+		hlist: newHostList(th), rlist: newRemoteList(th),
+		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		body: newBody(),
 	}
@@ -227,7 +244,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.surveyErr = msg.err
 		if msg.err == nil {
 			m.claimByPolling(msg.report, msg.before)
-			m.views = sorted(m.known(msg.report.Views))
+			m.views = sorted(m.known(m.uncovered(msg.report.Views)))
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
 		}
@@ -254,6 +271,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editedMsg:
 		m.err = m.reread(msg)
 		return m, nil
+	case askedMsg:
+		return m.asked(msg)
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -404,6 +423,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
+	if m.dialog != dialogNone {
+		return m.dialogKey(msg)
+	}
 	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
@@ -444,6 +466,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.editFile()
 	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
+	case key.Matches(msg, m.keys.Link):
+		return m.openHosts()
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd

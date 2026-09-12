@@ -52,7 +52,7 @@ func newApp(ctx context.Context) (*app, error) {
 		stateRoot: stateRoot,
 		// No keybinder: probing the desktop costs a process, and only
 		// `revier keys` reads one. cmdKeys selects it when it is needed.
-		core: newCore(cfg, rt, win, nil, projects),
+		core: newCore(cfg, rt, win, nil),
 	}, nil
 }
 

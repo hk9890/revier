@@ -172,21 +172,11 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 	return b
 }
 
-// remotes wires one ssh remote per host the project files name. A host is
-// not probed: whether it answers is learned by the survey, per refresh, and
-// reported on the projects that live there rather than refusing to start.
-func remotes(projects []core.Project) map[string]revier.Remote {
-	out := map[string]revier.Remote{}
-	for _, p := range projects {
-		if p.Remote != nil {
-			if _, ok := out[p.Remote.Host]; !ok {
-				out[p.Remote.Host] = ssh.New(p.Remote.Host)
-			}
-		}
-	}
-	return out
-}
+// sshRemote is the one remote adapter: the revier on a host, reached over
+// ssh. A host is not probed: whether it answers is learned when it is asked,
+// and reported on the projects that live there rather than refusing to start.
+func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
-func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder, projects []core.Project) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys, Remotes: remotes(projects)}
+func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
+	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
 }

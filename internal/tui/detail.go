@@ -78,6 +78,14 @@ func (m *Model) syncDetail() {
 	// A viewport's width is its outside, border and padding included.
 	_, h := m.inner()
 	m.detail.Width, m.detail.Height = cols, h
+	switch m.dialog {
+	case dialogHosts:
+		m.detail.SetContent("")
+		return
+	case dialogRemote:
+		m.detail.SetContent(m.remoteDetail())
+		return
+	}
 	v, ok := m.selected()
 	if !ok {
 		m.detail.SetContent("")

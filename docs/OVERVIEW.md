@@ -13,6 +13,7 @@ A findability map: where things live, and how to search for them.
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
+| `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
 | `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |

@@ -102,8 +102,15 @@ func (m Model) View() string {
 		Render(b.String())
 }
 
-// subtitle is the line under the header: the query, where typing filters.
+// subtitle is the line under the header: the query, where typing filters,
+// or what the link dialog's rows are.
 func (m Model) subtitle() string {
+	switch m.dialog {
+	case dialogHosts:
+		return "  " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
+	case dialogRemote:
+		return "  " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+	}
 	return m.promptView()
 }
 
@@ -111,7 +118,12 @@ func (m Model) subtitle() string {
 // picker does: how many rows survive the filter, out of how many there are.
 func (m Model) rule(width int) string {
 	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	if !m.ready() {
+	switch {
+	case m.dialog == dialogHosts:
+		count = fmt.Sprintf(" %d hosts ", len(m.hlist.Items()))
+	case m.dialog == dialogRemote:
+		count = fmt.Sprintf(" %d projects ", len(m.rlist.Items()))
+	case !m.ready():
 		count = ""
 	}
 	line := width - lipgloss.Width(count)
@@ -130,6 +142,12 @@ func (m Model) rule(width int) string {
 func (m Model) header() string {
 	th := m.theme
 	badge := th.Badge.Render("revier") + " "
+	switch m.dialog {
+	case dialogHosts:
+		return badge + th.NameDim.Render("› ") + th.Header.Render("link a project on another machine")
+	case dialogRemote:
+		return badge + th.NameDim.Render("› ") + th.Header.Render(m.host)
+	}
 	if !m.ready() {
 		return badge + th.NameDim.Render("surveying")
 	}
@@ -181,7 +199,7 @@ func (m Model) empty() string {
 		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
 	}
 	switch {
-	case !m.ready():
+	case m.dialog != dialogNone || !m.ready():
 		return ""
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
@@ -201,6 +219,9 @@ func (m Model) footer() string {
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
+	if m.asking != "" {
+		return m.askingLine()
+	}
 	err := m.err
 	if err == nil {
 		err = m.surveyErr
@@ -210,13 +231,16 @@ func (m Model) footer() string {
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
+	if m.dialog != dialogNone {
+		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))
+	}
 	keys := m.keys.helpFor(m.focus)
 	if v, ok := m.selected(); ok {
 		keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
 	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Edit, m.keys.Delete)
+	keys = append(keys, m.keys.Edit, m.keys.Delete, m.keys.Link)
 	return " " + m.help.ShortHelpView(keys)
 }
 

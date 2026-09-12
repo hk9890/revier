@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -38,10 +39,14 @@ type Core struct {
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
 
-	// Remotes are the revier installations on other machines, by host, for
-	// the projects whose file names one (decisions.md D40). A remote project
-	// on a host with no entry here is reported unreachable, not refused.
-	Remotes map[string]revier.Remote
+	// Remotes are the revier installations on other machines, by host
+	// (decisions.md D40). NewRemote makes one for a host not yet here - a
+	// link written while the surface runs, or a host the link dialog asks
+	// about - and the result is kept. With no NewRemote, a host with no
+	// entry is reported unreachable, not refused.
+	Remotes   map[string]revier.Remote
+	NewRemote func(host string) revier.Remote
+	remotesMu sync.Mutex
 
 	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
 	// provides no instances and takes no part in run-or-raise, and a machine
