@@ -27,8 +27,9 @@ func Path() (string, error) {
 // Hosts lists the destinations the file names, in file order, each once.
 // A `Host` line names one or more; a pattern - with a `*`, a `?` or a `!` -
 // is a rule and not a destination, and is left out. `Include` lines are
-// followed, a relative one against the file's own directory, as ssh
-// resolves them. A file that does not exist names nothing.
+// followed: a leading `~` is the home directory, as ssh reads it, and a
+// relative one is against the file's own directory. A file that does not
+// exist names nothing.
 func Hosts(path string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
@@ -72,6 +73,7 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 			}
 		case "include":
 			for _, pattern := range fields {
+				pattern = expandHome(pattern)
 				if !filepath.IsAbs(pattern) {
 					pattern = filepath.Join(filepath.Dir(path), pattern)
 				}
@@ -91,4 +93,19 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	return nil
+}
+
+// expandHome resolves a leading "~" in an Include path against the home
+// directory, which is how ssh reads it and the form a tool that drops a file
+// into ~/.ssh/config writes. A home that cannot be resolved leaves the path
+// as it stands, which then matches nothing.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }

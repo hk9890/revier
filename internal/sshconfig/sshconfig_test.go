@@ -62,6 +62,26 @@ func TestHostsFollowIncludes(t *testing.T) {
 	}
 }
 
+// `Include ~/.ssh/...` is the form a tool that drops a file beside the
+// configuration writes, and ssh reads the tilde as the home directory.
+func TestHostsFollowAnIncludeUnderTheHomeDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".ssh"), "extra", "Host farbox\n")
+	path := write(t, t.TempDir(), "config", "Include ~/.ssh/extra\nHost buildbox\n")
+
+	hosts, err := sshconfig.Hosts(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"farbox", "buildbox"}; !slices.Equal(hosts, want) {
+		t.Errorf("hosts = %v, want %v", hosts, want)
+	}
+}
+
 func TestAMissingFileNamesNothing(t *testing.T) {
 	hosts, err := sshconfig.Hosts(filepath.Join(t.TempDir(), "none"))
 	if err != nil || len(hosts) != 0 {
