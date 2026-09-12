@@ -93,7 +93,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		// host. A host without the checkout is said in words under the state.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
 		switch {
-		case v.Project.Host != "":
+		case v.Project.Remote != nil:
 			folder, folderStyle = th.Glyphs.Remote, th.Remote
 		case !v.PathExists:
 			folder, folderStyle = th.Glyphs.NoFolder, th.PathMissing
@@ -205,7 +205,7 @@ func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipglos
 	th := d.theme
 	if v.Unreachable != "" {
 		// The failure itself is the pane's: here there is room for the fact.
-		note := v.Project.Host + " unreachable"
+		note := v.Project.Remote.Host + " unreachable"
 		if lipgloss.Width(note) > room {
 			note = "unreachable"
 		}
@@ -216,8 +216,8 @@ func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipglos
 	}
 	if !v.PathExists {
 		note := "not on this machine"
-		if v.Project.Host != "" {
-			note = "not on " + v.Project.Host
+		if v.Project.Remote != nil {
+			note = "not on " + v.Project.Remote.Host
 		}
 		if v.Project.GitURL != "" {
 			note = "not cloned"

@@ -19,15 +19,8 @@ import (
 // remoteFile is a project on buildbox: its path is in that machine's terms,
 // and the home target here is the ssh pane onto the workspace there.
 const remoteFile = `
-path = "~/dev/%NAME%"
+[remote]
 host = "buildbox"
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "session:{{.Name}}"
-  launch = ["ssh", "-t", "buildbox", "revier", "open", "{{.Name}}", "--attach"]
-  match = { title = "^session:{{.Name}}$" }
 `
 
 // remoteOnDisk writes one remote project file and loads it the way the CLI
@@ -39,7 +32,7 @@ func remoteOnDisk(t *testing.T, name string) []core.Project {
 	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := config.LoadProjects(dir, "")
+	projects, err := config.LoadProjects(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

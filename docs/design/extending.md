@@ -15,9 +15,6 @@ name = "revier"
 path = "~/dev/github/revier"
 # Optional. Opening the project clones it here when path is missing.
 git_url = "git@github.com:hk9890/revier.git"
-# Optional. The ssh host the project lives on; the revier there is asked
-# about it, and path is in that machine's terms (decisions.md D40).
-# host = "buildbox"
 
 # The workspace. Home is where toggle-back returns.
 [[target]]
@@ -81,6 +78,28 @@ with `revier attach` also appears there and needs no config at all.
 
 Set `prefer = "runtime"` on a target to override which realization wins when
 both hosts are available.
+
+A link, in the same directory, is a project on another machine
+(decisions.md D41). It has a `[remote]` table and no directory here:
+
+```toml
+[remote]
+host = "buildbox"   # the ssh destination
+project = "far"     # its name there; defaults to this file's name
+
+# Optional: the path on the host, for templates in targets declared here.
+path = "~/dev/far"
+
+# Optional: further targets, local windows onto the project. The home
+# target, the ssh pane onto the workspace there, is derived unless one is
+# declared.
+[[target]]
+name = "editor"
+key  = "ctrl-shift-o"
+  [target.window]
+  launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
+  match = { title = "far \\[SSH: buildbox\\]" }
+```
 
 Actions are for commands that produce no instance to return to — a script, a
 sync, a clipboard copy. They live in `~/.config/revier/config.toml`:

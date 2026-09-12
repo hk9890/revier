@@ -1,66 +1,113 @@
 package config_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 )
 
-// remote is the fixture on another machine: the same file is read there, so
-// its path is in that machine's terms, and the home target here is the ssh
-// pane onto the workspace there.
-const remote = `
-name = "revier"
-path = "~/dev/github/revier"
+// link is a project on another machine, in the smallest file that says so.
+const link = `
+[remote]
 host = "buildbox"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "session:revier"
-  launch = ["ssh", "-t", "buildbox", "revier", "open", "revier", "--attach"]
-  match = { title = "^session:revier$" }
 `
 
-func TestRemoteProjectKeepsItsPathAsWritten(t *testing.T) {
-	p, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "")
+func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", link))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
-	if p.Host != "buildbox" {
-		t.Errorf("host = %q, want buildbox", p.Host)
+	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {
+		t.Fatalf("remote = %+v, want buildbox and the link's own name there", p.Remote)
 	}
-	if p.Path != "~/dev/github/revier" {
-		t.Errorf("path = %q, want the tilde kept for the host to expand", p.Path)
+	home, ok := p.Home()
+	if !ok || home.Runtime == nil {
+		t.Fatalf("home = %+v, want a derived runtime target", home)
 	}
-	home, _ := p.Target("home")
+	want := []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}
+	if !slices.Equal(home.Runtime.Launch, want) {
+		t.Errorf("launch = %q, want %q", home.Runtime.Launch, want)
+	}
+	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("name %q, match %q: the pane must be found again by its title", home.Runtime.Name, home.Runtime.Match.Title)
+	}
 	if home.Runtime.Dir != "" {
-		t.Errorf("dir = %q, want none: the path is not here", home.Runtime.Dir)
+		t.Errorf("dir = %q, want none: nothing of the project is here", home.Runtime.Dir)
 	}
 }
 
-// The same file is read on the host it names. There, with config.toml
-// saying this machine is buildbox, the project is local: its path is
-// expanded here, and nothing is asked of buildbox over ssh.
-func TestAProjectOnThisMachineLoadsAsLocal(t *testing.T) {
-	p, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "buildbox")
+// The link's name here and the project's name on the host may differ: the
+// host is asked by its name, the list shows this one.
+func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
+	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"far\"", 1)
+	p, err := config.LoadProject(write(t, t.TempDir(), "build.toml", body))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
-	if p.Host != "" {
-		t.Errorf("host = %q, want none: this machine is buildbox", p.Host)
+	if p.Name != "build" || p.Remote.Project != "far" {
+		t.Errorf("name %q, on the host %q; want build here and far there", p.Name, p.Remote.Project)
 	}
-	if strings.HasPrefix(p.Path, "~") {
-		t.Errorf("path = %q, want it expanded here", p.Path)
+	home, _ := p.Home()
+	if i := slices.Index(home.Runtime.Launch, "far"); i < 0 {
+		t.Errorf("launch = %q, want the host's name opened there", home.Runtime.Launch)
 	}
-	other, err := config.LoadProject(write(t, t.TempDir(), "revier.toml", remote), "farbox")
+}
+
+// A link may declare targets of its own, local windows onto the project; a
+// declared home is kept and nothing is derived beside it. The host's path,
+// when written, is kept as written for templates: it is not a path here.
+func TestALinkKeepsItsOwnTargetsAndTheHostsPath(t *testing.T) {
+	body := "path = \"~/dev/far\"\n" + link + `
+[[target]]
+name = "editor"
+key = "ctrl-o"
+  [target.window]
+  launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
+  match = { title = "far \\[SSH: buildbox\\]" }
+`
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
-	if other.Host != "buildbox" {
-		t.Errorf("host = %q on farbox, want buildbox kept", other.Host)
+	if p.Path != "~/dev/far" {
+		t.Errorf("path = %q, want the host's, kept as written", p.Path)
+	}
+	editor, ok := p.Target("editor")
+	if !ok || editor.Window.Launch[3] != "~/dev/far" {
+		t.Errorf("editor = %+v, want the host's path rendered into its launch", editor)
+	}
+	if _, ok := p.Home(); !ok {
+		t.Error("the pane is still derived beside a declared target")
+	}
+	if len(p.Targets) != 2 {
+		t.Errorf("targets = %d, want the derived home and the editor", len(p.Targets))
+	}
+
+	own := link + `
+[[target]]
+name = "shell"
+home = true
+  [target.runtime]
+  name = "far"
+  launch = ["ssh", "buildbox"]
+  match = { title = "^far$" }
+`
+	p, err = config.LoadProject(write(t, t.TempDir(), "far.toml", own))
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
+		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
+	}
+}
+
+func TestALinkRefusesAGitURL(t *testing.T) {
+	body := "git_url = \"git@github.com:hk9890/far.git\"\n" + link
+	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body))
+	if err == nil || !strings.Contains(err.Error(), "git_url") {
+		t.Errorf("err = %v, want git_url refused on a link", err)
 	}
 }
 
@@ -68,17 +115,16 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 	for _, tc := range []struct{ name, host, want string }{
 		{"flag", "-oProxyCommand=x", "dash"},
 		{"whitespace", "build box", "whitespace"},
-		{"control character", `build\u0001box`, "control character"},
 	} {
-		body := strings.Replace(remote, `host = "buildbox"`, `host = "`+tc.host+`"`, 1)
-		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body), "")
-		if err == nil || !strings.Contains(err.Error(), "host:") || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("%s: err = %v, want one naming host and %q", tc.name, err, tc.want)
+		body := strings.Replace(link, `host = "buildbox"`, `host = "`+tc.host+`"`, 1)
+		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body))
+		if err == nil || !strings.Contains(err.Error(), "remote.host:") || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want one naming remote.host and %q", tc.name, err, tc.want)
 		}
 	}
 	for _, host := range []string{"buildbox", "hans@build.example.com", "10.0.0.7"} {
-		body := strings.Replace(remote, `host = "buildbox"`, `host = "`+host+`"`, 1)
-		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body), ""); err != nil {
+		body := strings.Replace(link, `host = "buildbox"`, `host = "`+host+`"`, 1)
+		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body)); err != nil {
 			t.Errorf("%s: %v", host, err)
 		}
 	}

@@ -178,9 +178,9 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 func remotes(projects []core.Project) map[string]revier.Remote {
 	out := map[string]revier.Remote{}
 	for _, p := range projects {
-		if p.Host != "" {
-			if _, ok := out[p.Host]; !ok {
-				out[p.Host] = ssh.New(p.Host)
+		if p.Remote != nil {
+			if _, ok := out[p.Remote.Host]; !ok {
+				out[p.Remote.Host] = ssh.New(p.Remote.Host)
 			}
 		}
 	}

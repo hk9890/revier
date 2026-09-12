@@ -766,7 +766,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 	// A remote project's checkout and agents are its host's word, laid over
 	// this view by merge; the path is in the host's terms, and the pane here
 	// that reaches the project is not the agent in it.
-	local := p.Host == ""
+	local := p.Remote == nil
 	v := revier.ProjectView{Project: p.Project, PathExists: local && dirExists(p.Path)}
 
 	// Probe every matched instance, not only home. An agent is wherever the

@@ -48,7 +48,7 @@ func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[str
 			t.Fatal(err)
 		}
 	}
-	projects, err := config.LoadProjects(dir, "")
+	projects, err := config.LoadProjects(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

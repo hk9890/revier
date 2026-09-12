@@ -19,7 +19,7 @@ import (
 // onto the workspace there.
 func remoteProject(t *testing.T) core.Project {
 	t.Helper()
-	p, err := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Host: "buildbox", Targets: []revier.Target{
+	p, err := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "far", Launch: []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}, Match: revier.Match{Title: "^far$"}}},
 	}})
@@ -104,14 +104,14 @@ func TestRemoteForFindsTheHostOfARemoteProjectsAgent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
 
-	r, err := a.remoteFor("far:home")
-	if err != nil || r == nil || r.Name() != "buildbox" {
-		t.Errorf("remoteFor(far:home) = %v, %v; want buildbox", r, err)
+	r, there, err := a.remoteFor("far:home")
+	if err != nil || r == nil || r.Name() != "buildbox" || there != "far:home" {
+		t.Errorf("remoteFor(far:home) = %v, %q, %v; want buildbox and the address as the host knows it", r, there, err)
 	}
-	if r, err := a.remoteFor("demo"); err != nil || r != nil {
+	if r, _, err := a.remoteFor("demo"); err != nil || r != nil {
 		t.Errorf("remoteFor(demo) = %v, err %v; want a local project", r, err)
 	}
-	if _, err := a.remoteFor("nope:home"); err == nil {
+	if _, _, err := a.remoteFor("nope:home"); err == nil {
 		t.Error("remoteFor(nope:home): want the unknown project refused")
 	}
 }

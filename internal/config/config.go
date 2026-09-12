@@ -28,11 +28,6 @@ import (
 // Config is the global configuration: which adapters to prefer, the actions
 // the TUI exposes, and the external agent probes.
 type Config struct {
-	// Host is what the project files call this machine: the ssh name other
-	// machines reach it by. A project whose host is this name is local here,
-	// so the same file serves on both sides (decisions.md D40). Empty on a
-	// machine no project file names.
-	Host    string   `toml:"host"`
 	Hosts   Hosts    `toml:"hosts"`
 	UI      UI       `toml:"ui"`
 	Actions []Action `toml:"action"`
@@ -123,7 +118,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Host)
+	projects, err := LoadProjects(filepath.Join(root, "projects"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -174,8 +169,8 @@ func validateActions(actions []Action) error {
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
-// across machines. self is what the files call this machine, or empty.
-func LoadProjects(dir, self string) ([]core.Project, error) {
+// across machines.
+func LoadProjects(dir string) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -197,7 +192,7 @@ func LoadProjects(dir, self string) ([]core.Project, error) {
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
-		p, err := LoadProject(path, self)
+		p, err := LoadProject(path)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -219,15 +214,11 @@ func LoadProjects(dir, self string) ([]core.Project, error) {
 
 // LoadProject reads, validates, and prepares one project file. Every error
 // names the file: a rendering or compile failure is reported here, at load,
-// and never reaches a keystroke. self is what the files call this machine:
-// a project whose host is that name lives here, and loads as a local one.
-func LoadProject(path, self string) (core.Project, error) {
+// and never reaches a keystroke.
+func LoadProject(path string) (core.Project, error) {
 	var p revier.Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
-	}
-	if p.Host != "" && p.Host == self {
-		p.Host = ""
 	}
 	if p.Name == "" {
 		// Fall back to the file stem so a project file need not repeat its own
@@ -236,11 +227,13 @@ func LoadProject(path, self string) (core.Project, error) {
 	}
 	// A path is expanded once, here, so every consumer - templates, working
 	// directories, the cwd lookup - sees an absolute path and none of them
-	// hands a literal "~" to a program that does not expand it. A remote
-	// project's path is its host's to expand: the same file is read there,
-	// and the home directory here says nothing about the one there.
-	if p.Host == "" {
+	// hands a literal "~" to a program that does not expand it. A link's
+	// path is the host's, kept as written: the home directory here says
+	// nothing about the one there.
+	if p.Remote == nil {
 		p.Path = expandHome(p.Path)
+	} else {
+		link(&p)
 	}
 	for _, t := range p.Targets {
 		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
@@ -267,7 +260,7 @@ func LoadProject(path, self string) (core.Project, error) {
 func Validate(p revier.Project) error {
 	var errs []error
 
-	if p.Path == "" {
+	if p.Path == "" && p.Remote == nil {
 		errs = append(errs, errors.New("project has no path"))
 	}
 	if strings.ContainsRune(string(p.Name), ':') {
@@ -280,9 +273,14 @@ func Validate(p revier.Project) error {
 			errs = append(errs, fmt.Errorf("git_url: %w", err))
 		}
 	}
-	if p.Host != "" {
-		if err := validateHost(p.Host); err != nil {
-			errs = append(errs, fmt.Errorf("host: %w", err))
+	if p.Remote != nil {
+		if err := validateHost(p.Remote.Host); err != nil {
+			errs = append(errs, fmt.Errorf("remote.host: %w", err))
+		}
+		if p.GitURL != "" {
+			// The checkout is the host's to clone, from the git_url of the
+			// project file there; one here would be a copy nothing reads.
+			errs = append(errs, errors.New("a link has no git_url; the project file on the host has it"))
 		}
 	}
 

@@ -20,10 +20,10 @@ import (
 // RemoteOf returns the remote a project lives on: nil for a project on this
 // machine, and an error for a host nothing is wired for.
 func (c *Core) RemoteOf(p Project) (revier.Remote, error) {
-	if p.Host == "" {
+	if p.Remote == nil {
 		return nil, nil
 	}
-	return c.remote(p.Host)
+	return c.remote(p.Remote.Host)
 }
 
 func (c *Core) remote(host string) (revier.Remote, error) {
@@ -46,20 +46,20 @@ type remoteAnswer struct {
 // however many hosts and projects there are. It returns an answer for every
 // remote project, and nothing for a local one.
 func (c *Core) surveyRemotes(ctx context.Context, projects []Project) map[revier.ProjectName]remoteAnswer {
-	byHost := map[string][]revier.ProjectName{}
+	byHost := map[string][]Project{}
 	for _, p := range projects {
-		if p.Host != "" {
-			byHost[p.Host] = append(byHost[p.Host], p.Name)
+		if p.Remote != nil {
+			byHost[p.Remote.Host] = append(byHost[p.Remote.Host], p)
 		}
 	}
 	out := make(map[revier.ProjectName]remoteAnswer)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for host, names := range byHost {
+	for host, links := range byHost {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			answers := c.askRemote(ctx, host, names)
+			answers := c.askRemote(ctx, host, links)
 			mu.Lock()
 			maps.Copy(out, answers)
 			mu.Unlock()
@@ -69,15 +69,20 @@ func (c *Core) surveyRemotes(ctx context.Context, projects []Project) map[revier
 	return out
 }
 
-// askRemote surveys one host's projects. A host that fails answers for all
-// of them with the failure; one that answers but leaves a project out
+// askRemote surveys one host's projects, by the names they have there, and
+// answers by the names the links have here. A host that fails answers for
+// all of them with the failure; one that answers but leaves a project out
 // answers for that project with that.
-func (c *Core) askRemote(ctx context.Context, host string, names []revier.ProjectName) map[revier.ProjectName]remoteAnswer {
-	out := make(map[revier.ProjectName]remoteAnswer, len(names))
+func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[revier.ProjectName]remoteAnswer {
+	out := make(map[revier.ProjectName]remoteAnswer, len(links))
+	names := make([]revier.ProjectName, len(links))
+	for i, p := range links {
+		names[i] = p.Remote.Project
+	}
 	views, err := c.survey(ctx, host, names)
 	if err != nil {
-		for _, n := range names {
-			out[n] = remoteAnswer{err: err}
+		for _, p := range links {
+			out[p.Name] = remoteAnswer{err: err}
 		}
 		return out
 	}
@@ -85,11 +90,11 @@ func (c *Core) askRemote(ctx context.Context, host string, names []revier.Projec
 	for _, v := range views {
 		listed[v.Project.Name] = v
 	}
-	for _, n := range names {
-		if v, ok := listed[n]; ok {
-			out[n] = remoteAnswer{view: v}
+	for _, p := range links {
+		if v, ok := listed[p.Remote.Project]; ok {
+			out[p.Name] = remoteAnswer{view: v}
 		} else {
-			out[n] = remoteAnswer{err: fmt.Errorf("%s did not list project %q", host, n)}
+			out[p.Name] = remoteAnswer{err: fmt.Errorf("%s did not list project %q", host, p.Remote.Project)}
 		}
 	}
 	return out

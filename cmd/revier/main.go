@@ -370,7 +370,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	}
 	// A remote project's checkout is its host's to clone: the pane opened
 	// here runs `revier open` there, and that one clones (decisions.md D40).
-	if p.Host == "" {
+	if p.Remote == nil {
 		cloned, err := checkout.Ensure(p.Project, os.Stderr)
 		if err != nil {
 			return err
@@ -477,7 +477,7 @@ func (a *app) actionArgv(p core.Project, name string) ([]string, error) {
 		return nil, err
 	}
 	if r != nil {
-		return r.RunCommand(p.Name, name), nil
+		return r.RunCommand(p.Remote.Project, name), nil
 	}
 	return a.action(p, name)
 }
@@ -512,7 +512,7 @@ var errActionFailed = errors.New("the action failed")
 // calls, and an action - an editor, a long pull - runs as long as it runs.
 func runAction(p core.Project, argv []string) error {
 	c := exec.Command(argv[0], argv[1:]...)
-	if p.Host == "" {
+	if p.Remote == nil {
 		c.Dir = p.Path // a remote project's path is on its host, where the action runs
 	}
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr

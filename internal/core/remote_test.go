@@ -16,9 +16,9 @@ import (
 // pane onto the workspace there.
 func remoteProject(name string) revier.Project {
 	return revier.Project{
-		Name: revier.ProjectName(name),
-		Path: "~/dev/" + name,
-		Host: "buildbox",
+		Name:   revier.ProjectName(name),
+		Path:   "~/dev/" + name,
+		Remote: &revier.Link{Host: "buildbox", Project: revier.ProjectName(name)},
 		Targets: []revier.Target{{
 			Name: "home", Home: true,
 			Runtime: &revier.Realization{
@@ -143,6 +143,27 @@ func TestSurveyDoesNotProbeTheLocalPaneOfARemoteProject(t *testing.T) {
 	v := report.Views[0]
 	if !v.Running || len(v.Agents) != 0 {
 		t.Errorf("running = %v, agents = %+v: want the pane counted as the window and nothing as an agent", v.Running, v.Agents)
+	}
+}
+
+// A link's name here and the project's name on the host may differ: the
+// host is asked by its own name, and its answer lands on the link's.
+func TestSurveyAsksByTheHostsNameAndAnswersByTheLinks(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", answer("far", revier.StatusAttention))
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	link := remoteProject("build")
+	link.Remote.Project = "far"
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, link)}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if want := []revier.ProjectName{"far"}; len(remote.Asked) != 1 || !slices.Equal(remote.Asked[0], want) {
+		t.Errorf("asked %v, want %v: the host's name", remote.Asked, want)
+	}
+	v := report.Views[0]
+	if v.Project.Name != "build" || !v.Attention() || v.Unreachable != "" {
+		t.Errorf("view = %+v, want build here with far's attention", v)
 	}
 }
 

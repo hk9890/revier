@@ -26,15 +26,23 @@ type Project struct {
 	// project file travels between machines, and the checkout does not.
 	GitURL string `toml:"git_url" json:"git_url,omitempty"`
 
-	// Host names the machine the project lives on, as ssh knows it. Empty is
-	// this machine. A project with a host is surveyed and driven by the revier
-	// installed there (decisions.md D40): its runtime instances, its agents
-	// and its checkout are that machine's, and only the window a local
-	// target opens to reach them is this one's.
-	Host string `toml:"host" json:"host,omitempty"`
+	// Remote is set for a link: a project that lives on another machine and
+	// is surveyed and driven by the revier installed there (decisions.md
+	// D41). Its runtime instances, its agents and its checkout are that
+	// machine's; what is here is the pane that reaches it, and any target
+	// the link declares. Path, when set, is the path on the host, kept as
+	// written for templates; a link has no directory here.
+	Remote *Link `toml:"remote" json:"remote,omitempty"`
 
 	Targets []Target          `toml:"target" json:"targets"`
 	Vars    map[string]string `toml:"vars" json:"vars,omitempty"`
+}
+
+// Link is where a remote project is: the host as ssh knows it, and the name
+// the project has there, which need not be the link's own name here.
+type Link struct {
+	Host    string      `toml:"host" json:"host"`
+	Project ProjectName `toml:"project" json:"project"`
 }
 
 // Home returns the project's workspace target, the one toggle-back returns to.
@@ -53,8 +61,8 @@ func (p Project) Home() (Target, bool) {
 // The host follows the name, so a match position within the name still
 // points at the same letter of the label.
 func (p Project) Label() string {
-	if p.Host != "" {
-		return string(p.Name) + "@" + p.Host
+	if p.Remote != nil {
+		return string(p.Name) + "@" + p.Remote.Host
 	}
 	return string(p.Name)
 }

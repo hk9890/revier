@@ -124,8 +124,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		status, style = "not available", th.PathMissing
 	}
 	line("Status", status, style)
-	if v.Project.Host != "" {
-		line("Host", v.Project.Host, th.Path)
+	if v.Project.Remote != nil {
+		line("Host", v.Project.Remote.Host, th.Path)
 	}
 
 	// A host that did not answer has said nothing about the checkout.
@@ -149,8 +149,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// (decisions.md D40), so Enter is the same answer there.
 	if !v.PathExists && !v.Running && v.Unreachable == "" {
 		where, clone := "this machine", "Enter: clone and open"
-		if v.Project.Host != "" {
-			where, clone = v.Project.Host, "Enter: clone there and open"
+		if v.Project.Remote != nil {
+			where, clone = v.Project.Remote.Host, "Enter: clone there and open"
 		}
 		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
@@ -194,7 +194,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 // indentation. rows counts the heading; a listing that does not fit ends in
 // an ellipsis on its last row.
 func (m *Model) snapshot(v revier.ProjectView, w, rows int) string {
-	if !v.PathExists || v.Project.Host != "" {
+	if !v.PathExists || v.Project.Remote != nil {
 		return ""
 	}
 	tree := m.treeFor(v.Project.Path)

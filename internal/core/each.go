@@ -41,7 +41,7 @@ func Select(projects []Project, resolve func(path string) (string, bool), keep f
 	owner := map[string]revier.ProjectName{}
 	for _, p := range projects {
 		pick := Pick{Project: p}
-		if p.Host != "" {
+		if p.Remote != nil {
 			pick.Skip = SkipRemote
 			picks = append(picks, pick)
 			continue

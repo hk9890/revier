@@ -85,27 +85,23 @@ worked example, is [docs/design/extending.md](docs/design/extending.md).
 does the same for a name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
 
-A project can live on another machine. Its file says `host = "buildbox"`, an
-ssh destination, and its home target here is a pane that reaches it:
+A project can live on another machine. A link file in the same directory
+names the host and, when it differs from the file's own name, the project's
+name there:
 
 ```toml
-name = "far"
-path = "~/dev/far"
+[remote]
 host = "buildbox"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "session:far"
-  launch = ["ssh", "-t", "buildbox", "revier", "open", "far", "--attach"]
-  match = { title = "^session:far$" }
+project = "far"
 ```
 
-revier must be installed on the host, with tmux and the same project file
-under its `~/.config/revier/projects/`. The host's `config.toml` says what the
-files call it, `host = "buildbox"`, so that file is local there and the host
-does not ask itself over ssh. The list then shows the project as
+The pane that reaches the workspace is derived: `ssh -t buildbox revier open
+far --attach`. A link may add `[[target]]` entries of its own, such as an
+editor over ssh, and a `path` for their templates, which is the path on the
+host. It has no `git_url` and no directory here.
+
+revier must be installed on the host, with tmux and the project's own file
+under its `~/.config/revier/projects/`. The list then shows the link as
 `far@buildbox` with what the agent there is doing, read from the revier
 there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
 wait far ...` and `revier run <action> -p far` run on the host, so an action

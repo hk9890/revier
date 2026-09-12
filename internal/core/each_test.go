@@ -52,7 +52,7 @@ func TestSelectRunsEveryProjectThatHasADirectory(t *testing.T) {
 // its path resolves to on this one: the path is in the host's terms.
 func TestSelectLeavesARemoteProjectOut(t *testing.T) {
 	far := projectAt("far", "/a")
-	far.Host = "buildbox"
+	far.Remote = &revier.Link{Host: "buildbox", Project: "far"}
 	picks := core.Select([]core.Project{far, projectAt("a", "/a")}, dirs(map[string]string{"/a": "/a"}), nil)
 
 	if got := skips(picks); got["far"] != core.SkipRemote || got["a"] != "" {

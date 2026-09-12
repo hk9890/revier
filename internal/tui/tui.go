@@ -52,11 +52,8 @@ type Model struct {
 	projects  []core.Project
 	stateRoot string
 	actions   []config.Action
-	// self is what the project files call this machine, for a file read
-	// again after an edit, as config.Load read it at start.
-	self    string
-	refresh time.Duration
-	theme   theme.Theme
+	refresh   time.Duration
+	theme     theme.Theme
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
@@ -100,7 +97,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
-		core: c, projects: projects, stateRoot: stateRoot, actions: actions, self: cfg.Host,
+		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th), tlist: newTargetList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
@@ -522,7 +519,7 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		if home, ok := p.Home(); ok {
 			// A remote project's checkout is its host's: the pane opened
 			// here runs `revier open` there, which clones (decisions.md D40).
-			if p.Host != "" {
+			if p.Remote != nil {
 				return m, m.goTarget(p, home.Name)
 			}
 			if !v.PathExists && p.GitURL != "" {
@@ -650,7 +647,7 @@ func (m Model) actionArgv(p core.Project, act config.Action) ([]string, error) {
 		return nil, err
 	}
 	if r != nil {
-		return r.RunCommand(p.Name, act.Name), nil
+		return r.RunCommand(p.Remote.Project, act.Name), nil
 	}
 	argv, err := core.RenderArgv(p.Project, act.Run)
 	if err == nil && len(argv) == 0 {
@@ -681,7 +678,7 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 			return func() tea.Msg { return actedMsg{err: fmt.Errorf("action %q: %w", act.Name, err)} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
-		if p.Host == "" {
+		if p.Remote == nil {
 			cmd.Dir = p.Path // a remote project's path is on its host, where the action runs
 		}
 		project := p.Name

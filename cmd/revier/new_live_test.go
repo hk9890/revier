@@ -84,7 +84,7 @@ func TestNewWritesAProjectForTheDirectory(t *testing.T) {
 	if !strings.Contains(out, file) {
 		t.Errorf("new printed %q, want the file it wrote", out)
 	}
-	p, err := config.LoadProject(file, "")
+	p, err := config.LoadProject(file)
 	if err != nil {
 		t.Fatalf("the written file does not load: %v", err)
 	}
