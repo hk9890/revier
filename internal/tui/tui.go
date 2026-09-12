@@ -50,15 +50,17 @@ const (
 	focusPane
 )
 
-// dialog is the link dialog standing over the surface: which host, then
-// which of its projects (decisions.md D45). dialogNone is the surface
-// itself, which is where it is nearly always.
+// dialog is a screen standing over the surface: the link dialog's two steps
+// - which host, then which of its projects (decisions.md D45) - or the
+// new-project field. dialogNone is the surface itself, which is where it is
+// nearly always.
 type dialog int
 
 const (
 	dialogNone dialog = iota
 	dialogHosts
 	dialogRemote
+	dialogNew
 )
 
 // Model is the bubbletea model. Construct it with New.
@@ -108,6 +110,8 @@ type Model struct {
 	start  revier.ProjectName               // the project to open on, from the working directory
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
+	path   textinput.Model                  // the directory field of the new-project screen
+	hover  int                              // the action bar button under the pointer, or -1
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
 }
@@ -125,6 +129,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		hlist: newHostList(th), rlist: newRemoteList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
+		path: newPathInput(th), hover: -1,
 		body: newBody(),
 	}
 	m.layout()
@@ -273,6 +278,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case askedMsg:
 		return m.asked(msg)
+	case configEditedMsg:
+		m.err = msg.err
+		return m, nil
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -423,6 +431,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
+	if m.dialog == dialogNew {
+		return m.newKey(msg)
+	}
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)
 	}
@@ -466,8 +477,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.editFile()
 	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
-	case key.Matches(msg, m.keys.Link):
-		return m.openHosts()
+	}
+	if next, cmd, ok := m.barKey(msg); ok {
+		return next, cmd
 	}
 	if cmd, ok := m.action(msg); ok {
 		return m, cmd

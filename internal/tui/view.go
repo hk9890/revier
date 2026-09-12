@@ -12,11 +12,12 @@ import (
 	"github.com/hk9890/revier/internal/theme"
 )
 
-// The chrome above and below the list: a header, the query line, the rule
-// under it, and the footer. The frame around all of it costs two more rows
-// and two columns, and the margin outside the frame two more of each.
+// The chrome above and below the list: a header, the query line, the action
+// bar, the rule under it, and the footer. The frame around all of it costs
+// two more rows and two columns, and the margin outside the frame two more
+// of each.
 const (
-	chromeHeight = 4
+	chromeHeight = 5
 	frameHeight  = 2
 	frameWidth   = 4 // border and one column of padding on each side
 	marginRows   = 1
@@ -77,6 +78,8 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(clipTo(m.subtitle(), w))
 	b.WriteString("\n")
+	b.WriteString(clipTo(m.bar(), w))
+	b.WriteString("\n")
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
 
@@ -110,6 +113,8 @@ func (m Model) subtitle() string {
 		return "  " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
 	case dialogRemote:
 		return "  " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+	case dialogNew:
+		return " " + m.path.View()
 	}
 	return m.promptView()
 }
@@ -123,6 +128,8 @@ func (m Model) rule(width int) string {
 		count = fmt.Sprintf(" %d hosts ", len(m.hlist.Items()))
 	case m.dialog == dialogRemote:
 		count = fmt.Sprintf(" %d projects ", len(m.rlist.Items()))
+	case m.dialog == dialogNew:
+		count = ""
 	case !m.ready():
 		count = ""
 	}
@@ -147,6 +154,8 @@ func (m Model) header() string {
 		return badge + th.NameDim.Render("› ") + th.Header.Render("link a project on another machine")
 	case dialogRemote:
 		return badge + th.NameDim.Render("› ") + th.Header.Render(m.host)
+	case dialogNew:
+		return badge + th.NameDim.Render("› ") + th.Header.Render("add a project on this machine")
 	}
 	if !m.ready() {
 		return badge + th.NameDim.Render("surveying")
@@ -240,7 +249,7 @@ func (m Model) footer() string {
 	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Edit, m.keys.Delete, m.keys.Link)
+	keys = append(keys, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 

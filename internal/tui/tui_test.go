@@ -133,8 +133,8 @@ func rows(m tui.Model) []string {
 	return l[chromeLines:]
 }
 
-// The header, the query line and the rule sit above the list.
-const chromeLines = 3
+// The header, the query line, the action bar and the rule sit above the list.
+const chromeLines = 4
 
 // The project the human is waiting on sorts above every other, whatever its
 // config order.
@@ -209,7 +209,7 @@ func TestAFilterMatchingNothingSaysSo(t *testing.T) {
 	if !strings.Contains(view, `No project matches "zzz"`) {
 		t.Errorf("want the filter named as the reason:\n%s", view)
 	}
-	if rule := lines(m)[2]; !strings.Contains(rule, " 0/12 ") {
+	if rule := lines(m)[3]; !strings.Contains(rule, " 0/12 ") {
 		t.Errorf("rule = %q, want the count to read 0/12", rule)
 	}
 	if strings.Contains(view, "No items") {
@@ -383,15 +383,22 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 	}
 }
 
-// One click on a target row in the pane runs it, as Enter on it does.
-func TestAClickOnATargetInThePaneRunsIt(t *testing.T) {
+// A click on a target row in the pane moves the cursor to it, and a second
+// click runs it, as Enter on it does.
+func TestTwoClicksOnATargetInThePaneRunIt(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	x, y := paneCell(t, m, "editor")
-	next, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	m = next.(tui.Model)
+	m, cmd := clickCell(m, x, y)
+	if cmd != nil {
+		t.Fatalf("one click on a target ran it:\n%s", m.View())
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after one click, want it on the editor", row)
+	}
+	m, cmd = clickCell(m, x, y)
 	if cmd == nil {
-		t.Fatalf("the click ran nothing:\n%s", m.View())
+		t.Fatalf("the second click ran nothing:\n%s", m.View())
 	}
 	cmd()
 	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
@@ -1554,4 +1561,11 @@ func projectOrder(t *testing.T, m tui.Model) map[string]int {
 		out[fmt.Sprintf("project-%02d", i)] = i + 1
 	}
 	return out
+}
+
+// clickCell is one press of the left button on a terminal cell, with the
+// command it returned.
+func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
+	next, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	return next.(tui.Model), cmd
 }

@@ -48,7 +48,7 @@ func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 		t.Fatalf("selected %q while typing, want the best match", row)
 	}
 	m, _ = press(m, "esc")
-	if rule := lines(m)[2]; !strings.Contains(rule, " 12/12 ") {
+	if rule := lines(m)[3]; !strings.Contains(rule, " 12/12 ") {
 		t.Fatalf("rule = %q, want the filter cleared", rule)
 	}
 	if after := selectedRow(t, m); after != before {
@@ -336,7 +336,7 @@ func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
 func TestAClickSelectsTheRowUnderIt(t *testing.T) {
 	for _, tc := range []struct {
 		w, h, top int // top is the terminal row the first project row is on
-	}{{120, 20, 4}, {140, 30, 5}} {
+	}{{120, 20, 5}, {140, 30, 6}} {
 		_, _, c, projects := world(t, 4) // project-03, then 00, 01, 02
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.w, tc.h)
 		_, mc := margins(m)
@@ -363,9 +363,9 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	m = clickAt(m, 5, 4) // project-02
-	m = clickAt(m, 5, 6) // project-00: a second choice, not a double click
-	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = clickAt(m, 5, 5) // project-02
+	m = clickAt(m, 5, 7) // project-00: a second choice, not a double click
+	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = next.(tui.Model)
 	if cmd == nil {
 		t.Fatal("a double click on a row returned no command")

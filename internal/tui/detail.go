@@ -79,7 +79,7 @@ func (m *Model) syncDetail() {
 	_, h := m.inner()
 	m.detail.Width, m.detail.Height = cols, h
 	switch m.dialog {
-	case dialogHosts:
+	case dialogHosts, dialogNew:
 		m.detail.SetContent("")
 		return
 	case dialogRemote:

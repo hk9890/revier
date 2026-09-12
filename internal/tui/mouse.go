@@ -10,24 +10,51 @@ import (
 // click. The desktop's own is between 400 and 500 ms.
 const doubleClick = 400 * time.Millisecond
 
-// click is the last press of the left button: which row it landed on, and
-// when, so the next press can tell a double click from a second choice.
+// zone is where a click landed, so two clicks on the first row of the list
+// and the first row of the pane are two choices and not a double click.
+type zone int
+
+const (
+	zoneList zone = iota
+	zonePane
+)
+
+// click is the last press of the left button: where it landed, on which row,
+// and when, so the next press can tell a double click from a second choice.
 type click struct {
+	zone  zone
 	index int
 	at    time.Time
 }
 
-// mouse is the wheel and the left button, as the picker has them (fzf's
-// default mouse, which os-fzf.sh leaves on). The wheel over the detail pane
-// scrolls the pane, the one place with more to read than the screen holds;
-// anywhere else it moves the selection, one row a notch, the way the arrow
-// keys do. A click on a row selects it, and a second click on the same row
-// opens it, as Enter does (decisions.md D36).
+// mouse is the wheel, the pointer and the left button. The wheel over the
+// detail pane scrolls the pane, the one place with more to read than the
+// screen holds; anywhere else it moves the selection, one row a notch, the
+// way the arrow keys do. A click selects a row and a second click on it
+// opens the row, in the list and in the pane alike (decisions.md D36). The
+// action bar is the exception: a button has nothing to select, so one click
+// runs it, and the pointer resting on it lights it as the selected row is
+// lit.
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// A delete waiting for its answer holds the screen still: the question
 	// names one project, and a wheel moving the highlight to another would
 	// leave the user answering about a row they are no longer looking at.
-	if msg.Action != tea.MouseActionPress || m.confirm != "" {
+	if m.confirm != "" {
+		return m, nil
+	}
+	// The pointer moving is the only message that is not an act: it lights a
+	// button and changes nothing else.
+	if over := m.barAt(msg.X, msg.Y); over != m.hover {
+		m.hover = over
+	}
+	if msg.Action != tea.MouseActionPress {
+		return m, nil
+	}
+	if m.hover >= 0 {
+		if msg.Button == tea.MouseButtonLeft {
+			m.err = nil
+			return barActions[m.hover].run(m)
+		}
 		return m, nil
 	}
 	if m.overPane(msg.X) {
@@ -52,10 +79,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusList
 		}
 		m.bodyList().Select(index)
-		last := m.last
-		m.last = click{index: index, at: time.Now()}
-		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
-			m.last = click{}
+		if m.second(zoneList, index) {
 			if m.dialog != dialogNone {
 				return m.dialogEnter()
 			}
@@ -65,21 +89,36 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clickPane is a click in the pane. On a target row it runs the target, as
-// Enter on it does: one click, not two, because a target has no state worth
-// selecting other than running it (decisions.md D42). Anywhere else it does
-// nothing.
+// second records a press and reports whether it completes a double click:
+// the same row of the same zone, inside the double-click time.
+func (m *Model) second(z zone, index int) bool {
+	last := m.last
+	m.last = click{zone: z, index: index, at: time.Now()}
+	if last.zone != z || last.index != index || m.last.at.Sub(last.at) >= doubleClick {
+		return false
+	}
+	m.last = click{}
+	return true
+}
+
+// clickPane is a click on the pane. On a target row the first click moves
+// the cursor to it and the second runs it, as Enter on it does. Anywhere
+// else it does nothing.
 func (m Model) clickPane(y int) (tea.Model, tea.Cmd) {
 	line, ok := m.bodyLine(y)
 	if !ok {
 		return m, nil
 	}
 	for i, at := range m.tlines {
-		if at == line+m.detail.YOffset {
-			m.err = nil
-			m.focus, m.tcursor = focusPane, i
+		if at != line+m.detail.YOffset {
+			continue
+		}
+		m.err = nil
+		m.focus, m.tcursor = focusPane, i
+		if m.second(zonePane, i) {
 			return m, m.goRow(i)
 		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -105,7 +144,8 @@ func (m Model) rowAt(x, y int) (int, bool) {
 }
 
 // bodyLine is the line of the body a terminal row is on: below the border
-// row, the header, the query line and the rule, and above the footer.
+// row, the header, the query line, the action bar and the rule, and above
+// the footer.
 func (m Model) bodyLine(y int) (int, bool) {
 	mr, _ := m.margins()
 	top := mr + frameHeight/2 + chromeHeight - 1
