@@ -9,6 +9,13 @@ tag.
 
 ## Unreleased
 
+- **Tab moves the cursor into the pane, and the target list is gone.** The
+  list stays on the screen with the pane beside it; Tab moves the cursor onto
+  the project's targets and attached instances, where typing filters them,
+  Enter runs the one under the cursor, and Tab or Esc brings the cursor back.
+  A click on a target row runs it. On a terminal too narrow for both, the
+  pane stands in the list's place while the cursor is on it. Clearing the
+  query puts the cursor back on the project it was on before the first letter.
 - **A project can live on another machine.** A link file, `[remote]` with
   `host` and the project's name there, stands for it here, and revier on
   the host, installed with tmux and the project's own file, reports what
