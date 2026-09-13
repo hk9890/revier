@@ -14,6 +14,10 @@ import (
 // window the user did not ask for.
 var ErrNoTabs = errors.New("cannot open a tab inside another target")
 
+// errTab is resolveAt's refusal of a tab: it is reached through the target it
+// is inside, never matched on its own.
+var errTab = errors.New("a tab has no instance of its own")
+
 // PanelTargetVar is the panel variable that names the target a tab was
 // opened for. It is the tab's whole identity: a title is the program's to
 // change, and a position is not an identity (decisions.md D64).
@@ -89,7 +93,7 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // is current in it, the press goes home. Home that is the same instance is
 // reached by making its own first panel current, because focusing the
 // instance alone would leave the tab where it is.
-func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Result, error) {
+func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
 	t := p.Targets[i]
 	opener, err := c.tabHost(p, i)
 	if err != nil {
@@ -135,6 +139,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Res
 	// keep raising the instance after inside is removed from the file.
 	res := Result{Target: t.Runtime.Inside, Ref: in.Ref}
 	if !open {
+		res.Agents = inTab(resumes)
 		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
 			return Result{}, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
@@ -147,6 +152,20 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Res
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// inTab is what a tab target's restore does with its recorded agent: nothing.
+// The tab runs its own launch argv, and a resume flag added to an argv that is
+// not the agent starts a broken command, so the save warns instead.
+func inTab(resumes []Resume) []AgentOutcome {
+	if len(resumes) == 0 {
+		return nil
+	}
+	outcomes := make([]AgentOutcome, len(resumes))
+	for n := range outcomes {
+		outcomes[n] = AgentInTab
+	}
+	return outcomes
 }
 
 // goHomeFromTab is the second press on a tab. A home that holds the tab gets
@@ -167,7 +186,7 @@ func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in r
 // holds reports whether the named target's instance is in.
 func (c *Core) holds(snap snapshot, p Project, name revier.TargetName, bound Bindings, in revier.Instance) bool {
 	i, ok := p.index(name)
-	if !ok || p.isTab(i) {
+	if !ok {
 		return false
 	}
 	host, _, m, err := c.resolveAt(p, i)

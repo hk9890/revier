@@ -56,6 +56,44 @@ type window struct {
 	// focused".
 	AppearsFocused bool `json:"appears_focused"`
 	IsHidden       bool `json:"is_hidden"`
+	IsMinimized    bool `json:"is_minimized"`
+	// Workspace is -1 for a window on no workspace, and for one on all of
+	// them; nil only from a wctl that does not report it.
+	Workspace *int `json:"workspace_index"`
+}
+
+// unmapped reports whether a window is hidden for the one reason activate
+// cannot undo: mutter has created it and not yet shown it. A minimized window
+// and a window on another workspace are hidden too, and activate restores the
+// first and switches to the second, so both are windows revier can raise.
+// wctl reads an unmapped window the same way, as hidden while unminimized on
+// the active workspace; active is asked only for such a window.
+//
+// A window whose workspace cannot be told from the active one is kept. Kept,
+// an unshown window can be placed before mutter places it, for the moment it
+// takes to show; dropped, a window on another workspace is not found, and its
+// key fails.
+func (w window) unmapped(active func() (int, bool)) bool {
+	if !w.IsHidden || w.IsMinimized {
+		return false
+	}
+	if w.Workspace == nil || *w.Workspace < 0 {
+		return true
+	}
+	at, ok := active()
+	return ok && *w.Workspace == at
+}
+
+// shownWorkspace is the active workspace as the listing itself shows it: every
+// shown window on one workspace is on the active one. A sticky window reports
+// -1 and says nothing.
+func shownWorkspace(windows []window) (int, bool) {
+	for _, w := range windows {
+		if !w.IsHidden && w.Workspace != nil && *w.Workspace >= 0 {
+			return *w.Workspace, true
+		}
+	}
+	return 0, false
 }
 
 // Probe reports GNOME usable when wctl is on PATH and answers. It also checks
@@ -84,26 +122,61 @@ func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// Instances lists every window in one call. wctl returns the whole list, so a
-// refresh costs exactly one invocation regardless of how many projects exist.
+// Instances lists every window in one call. The active workspace comes from
+// that listing, and a second call asks for it only when no shown window says,
+// so a refresh costs one invocation in nearly every case and at most two,
+// regardless of how many projects exist.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	raw, err := h.run(ctx, "list", "--json")
 	if err != nil {
 		return nil, err
 	}
-	return h.decode(raw)
+	return h.decode(raw, h.activeWorkspace(ctx))
 }
 
-func (h *Host) decode(raw []byte) ([]revier.Instance, error) {
+// activeWorkspace asks wctl for the active workspace once, the first time it
+// is needed: a desktop with a hidden window and no shown one to read it from.
+func (h *Host) activeWorkspace(ctx context.Context) func() (int, bool) {
+	var at int
+	var ok, asked bool
+	return func() (int, bool) {
+		if asked {
+			return at, ok
+		}
+		asked = true
+		raw, err := h.run(ctx, "workspaces", "--json")
+		if err != nil {
+			return 0, false
+		}
+		var spaces []struct {
+			Index    int  `json:"index"`
+			IsActive bool `json:"is_active"`
+		}
+		if json.Unmarshal(raw, &spaces) != nil {
+			return 0, false
+		}
+		for _, s := range spaces {
+			if s.IsActive {
+				at, ok = s.Index, true
+			}
+		}
+		return at, ok
+	}
+}
+
+func (h *Host) decode(raw []byte, active func() (int, bool)) ([]revier.Instance, error) {
 	var windows []window
 	if err := json.Unmarshal(raw, &windows); err != nil {
 		return nil, fmt.Errorf("wctl list --json: %w", err)
 	}
+	if at, ok := shownWorkspace(windows); ok {
+		active = func() (int, bool) { return at, true }
+	}
 	out := make([]revier.Instance, 0, len(windows))
 	for _, w := range windows {
-		if w.IsHidden {
-			// A hidden window cannot be activated, so offering it as a match
-			// would produce a keypress that appears to do nothing.
+		if w.unmapped(active) {
+			// Not shown yet, so not placed: a match would place it before
+			// mutter does, and mutter's own placement would then win.
 			continue
 		}
 		out = append(out, revier.Instance{

@@ -1600,7 +1600,7 @@ with a window host, is no longer focused when the core finds no OS window for
 the instance. The press fails with `ErrUnraisable`, naming the target, and
 nothing moves. A visible refusal is better than a raise that looks half done.
 
-### D64 — a target can be a tab inside another target — Accepted; OpenTab widened to panel groups by D65
+### D64 — a target can be a tab inside another target — Accepted; OpenTab widened to panel groups by D65; how a session records a tab amended by D68
 
 Narrows D14: a target is still a named binding a project has, but its instance
 can be a tab of another target's instance, not only an instance of its own.
@@ -1712,3 +1712,74 @@ an optional `PanelFinder`: kitty reads the id in the kitty the command runs
 in. A runtime without a finder, whose ids are unique, has the core accept an
 id held by exactly one instance, and refuse one held by two.
 
+### D66 — a minimized window is a window revier can raise — Accepted
+
+The GNOME host dropped every window wctl reports as `is_hidden`, on the reading
+that a hidden window cannot be activated. That reading is wrong for two of the
+three ways a window is hidden. gnome-window-control's own source says
+`is_hidden` is true for a minimized window and for a window on another
+workspace, and `wctl activate` calls mutter's `activate`, which restores the
+first and switches to the second. Checked on this machine with a minimized
+kitty window: `is_hidden: true, is_minimized: true` before `wctl activate`,
+focused and shown after it. The workspace case was not checked here, because
+this machine has one workspace.
+
+Dropping those windows cost two things. A minimized window target, an editor,
+was not found, so its key launched a second copy. And a minimized kitty
+workspace had no OS window, so D63 refused its key.
+
+So the host now drops only a window mutter has not shown yet. wctl reads that
+case as hidden, not minimized, and on the active workspace or on none, and so
+does this host. That window is still dropped for the old reason, better stated:
+it is not placed, and a placement revier sent to it would lose to mutter's own.
+The active workspace is read from the same listing: a shown window that is on
+one workspace is on the active one. A second call, `wctl workspaces`, is made
+only when no shown window says, so a refresh is one call in nearly every case,
+also with several workspaces in use. When the active workspace cannot be
+learned at all, a hidden window with a workspace is kept. Kept, an unshown
+window can be placed before mutter places it, for the moment it takes to show;
+dropped, a window on another workspace is not found, and its key fails.
+
+### D67 — every named window of the process must be seen before its unnamed sibling is paired — Accepted
+
+Narrows D63's pairing.
+
+D63 set a named window's title aside and paired what was left. That trusts the
+window host to list the named window. When it does not, the one window left
+over may be the named window under a title it was not given - a program that
+retitles its OS window - and the unnamed window then takes that title. The next
+press raises the named window instead.
+
+So the pairing now also requires every named runtime window of the process to
+be found by its title. A process where one is not found is left unidentified.
+
+D63 could not afford this rule while the GNOME host dropped hidden windows: a
+minimized `tickets:revier` would have been unlisted, and the workspace beside
+it would lose its title again, which was the bug D63 fixed. D66 lists minimized
+windows, so the rule costs only a window mutter has not shown yet, which is
+gone within a moment.
+
+### D68 — a tab target's agent is recorded under the tab, and not resumed — Accepted
+
+Amends D64's last paragraph.
+
+D64 recorded a tab by its name and left its panel to the target of the
+instance that holds it. Under D62 every agent a probe claims is recorded in
+order, so an agent in a tab target became one more agent of the workspace. A
+restore then opened it twice: once as an agent tab of the workspace (D65), and
+once more when the tab target's step ran.
+
+So the panel that carries `revier_target` is recorded under its tab target,
+and left out of its instance's agents, while that tab target is open in that
+instance. A panel that names a target no longer a tab stays with its instance,
+so its agent is not lost.
+
+The agent is not resumed. A tab target runs its own launch argv, and nothing
+says that argv is the agent: a claude started by hand in the ticket viewer's
+tab would come back as `taskmgr-ui --resume <id>`. Two ways to resume were
+rejected. A `kind = "agent"` on the tab adds a field for a rare case, since an
+agent opened beside a workspace is an agent tab (D65), which is resumed. And
+resuming when the probe's program is the first word of the argv misses every
+launcher script. So the restore opens the tab with its plain argv and names the
+agent as not resumed, and the save names it first, while the agent still runs
+and can be moved into an agent tab.

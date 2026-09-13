@@ -3,8 +3,10 @@ package core_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -232,5 +234,97 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 	}
 	if a.Panel.ID != "2" || a.State.Status != revier.StatusRunning {
 		t.Errorf("agent = %+v, want the tab's panel 2", a)
+	}
+}
+
+// A tab opened for a target the project no longer declares is no tab target's
+// panel, so its agent stays with the instance rather than dropping out of the
+// save.
+func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	stale := agent("2", "old-7", "")
+	stale.Vars[core.PanelTargetVar] = "notes"
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), stale)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	s, _ := c.Session(context.Background(), report, "revier")
+	if home := s.Projects[0].Targets[0]; len(home.Agents) != 2 || home.Agents[1].Session != "old-7" {
+		t.Errorf("home = %+v, want both agents of its instance", home)
+	}
+}
+
+// A tab has no match of its own, and must not be read as one that matches
+// everything. A stray window is still a stray, and a focused window no target
+// declares still belongs to no project.
+func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	stray := rt.Add("htop", "kitty")
+	rt.SetFocus(stray)
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, tabProject())
+
+	if _, found, err := c.ProjectOfFocused(context.Background(), []core.Project{p}); err != nil || found {
+		t.Errorf("ProjectOfFocused = %v, %v; want no project for a window no target declares", found, err)
+	}
+	now := time.Now()
+	after, _ := rt.Instances(context.Background())
+	if _, ok := c.Claim(nil, after, core.Launch{Project: p, At: now}, now, []core.Project{p}); !ok {
+		t.Error("the stray was not claimed: a tab was taken to declare it")
+	}
+}
+
+// An agent in a tab target is recorded under the tab, not under the instance
+// that holds it, so a restore does not open it a second time as an extra agent
+// tab of the workspace. It is not resumed: the tab runs its own launch argv,
+// which need not be the agent, and a resume flag added to it would start a
+// broken command. The save says so while the agent still runs.
+func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	tabAgent := agent("2", "tab-9", "")
+	tabAgent.Vars[core.PanelTargetVar] = "tickets"
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), tabAgent)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	p := prepared(t, tabProject())
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	s, gaps := c.Session(context.Background(), report, "revier")
+	targets := s.Projects[0].Targets
+	if len(targets) != 2 || len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" {
+		t.Fatalf("targets = %+v, want home with its own agent only", targets)
+	}
+	if len(targets[1].Agents) != 1 || targets[1].Agents[0].Session != "tab-9" {
+		t.Fatalf("tickets = %+v, want the tab's agent", targets[1])
+	}
+	if !slices.Equal(gaps.InTab, []string{"revier:tickets"}) {
+		t.Errorf("gaps.InTab = %v, want the tab named at save time", gaps.InTab)
+	}
+
+	// A restore on a machine where the workspace is up and the tab is not.
+	restored := hosttest.NewRuntime("kitty")
+	restored.Add("session:revier", "kitty", agent("1", "abc-123", ""))
+	c.Runtime = restored
+	resumes := []core.Resume{{Harness: "claude", Session: "tab-9", Dir: t.TempDir()}}
+	res, err := c.GoResuming(context.Background(), p, "tickets", nil, resumes)
+	if err != nil {
+		t.Fatalf("GoResuming: %v", err)
+	}
+	if len(restored.Tabs) != 1 {
+		t.Fatalf("tabs = %d, want 1", len(restored.Tabs))
+	}
+	if real := restored.Tabs[0].Real; !slices.Equal(real.Launch, []string{"taskmgr-ui"}) || real.Dir != "/p" {
+		t.Errorf("tab launch = %v in %q, want the plain launch argv in the project", real.Launch, real.Dir)
+	}
+	if !slices.Equal(res.Agents, []core.AgentOutcome{core.AgentInTab}) {
+		t.Errorf("agents = %v, want the one agent reported as in a tab target", res.Agents)
+	}
+	if dry := c.Resumes(p, "tickets", resumes); !slices.Equal(dry, res.Agents) {
+		t.Errorf("dry run = %v, want what the restore did: %v", dry, res.Agents)
 	}
 }

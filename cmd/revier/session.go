@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -74,6 +75,10 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	// the reboot rather than found after it.
 	if gaps.Unnamed > 0 {
 		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(gaps.Unnamed, "agent"))
+	}
+	if len(gaps.InTab) > 0 {
+		fmt.Printf("  %s in a tab target, to be restored without its conversation: %s\n",
+			count(len(gaps.InTab), "agent"), strings.Join(gaps.InTab, ", "))
 	}
 	for _, err := range gaps.Failed {
 		fmt.Printf("    could not ask %v\n", err)
@@ -228,6 +233,9 @@ func resumeNote(verb string, agents []core.AgentOutcome, tabErr error) string {
 	}
 	if n[core.AgentDropped] > 0 {
 		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", count(n[core.AgentDropped], "agent"))
+	}
+	if n[core.AgentInTab] > 0 {
+		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", count(n[core.AgentInTab], "agent"))
 	}
 	if n[core.AgentNotAdded] > 0 {
 		note += fmt.Sprintf(", %s not restored: %v", count(n[core.AgentNotAdded], "agent"), tabErr)

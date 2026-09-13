@@ -69,6 +69,9 @@ const (
 	// AgentNotAdded is past the declared ones, and its tab failed to open
 	// after the workspace itself opened. Result.AgentErr says why.
 	AgentNotAdded
+	// AgentInTab ran in a tab target. The tab is opened with its own launch
+	// argv, which need not be the agent, so no resume flag is added to it.
+	AgentInTab
 )
 
 // RestoreStep is one recorded target and what restoring it means here.
@@ -108,26 +111,42 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
+		var tabAgents []agentPanel
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
 			if tv.Attached || tv.Name == "" || tv.Ref.IsZero() {
 				continue
 			}
-			// A tab's ref is the instance that holds it, whose panels are
-			// recorded under that instance's own target. The tab is recorded
-			// after it: a restore that reached the tab first would open the
-			// instance for it with none of its agents resumed.
+			inst, listed := byRef[key(tv.Ref)]
+			// A tab's ref is the instance that holds it. Its own panel is
+			// recorded under the tab, and the tab after the other targets: a
+			// restore that reached the tab first would open the instance for
+			// it with none of its agents resumed.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				tabs = append(tabs, session.Target{Name: tv.Name})
+				id, open := tabOf(inst, tv.Name)
+				for _, panel := range inst.Panels {
+					if !open || panel.ID != id {
+						continue
+					}
+					if probe, ok := c.probeFor(panel); ok {
+						tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
+						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
+					}
+				}
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
-			inst, ok := byRef[key(tv.Ref)]
-			if !ok {
+			if !listed {
 				continue
 			}
 			for _, panel := range inst.Panels {
+				// A tab's panel is its tab target's, and a restore of the
+				// instance would otherwise open it a second time.
+				if recordedAsTab(v, inst, panel) {
+					continue
+				}
 				if probe, ok := c.probeFor(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
@@ -135,6 +154,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 					})
 				}
 			}
+		}
+		for _, a := range tabAgents {
+			a.target += len(targets)
+			agents = append(agents, a)
 		}
 		targets = append(targets, tabs...)
 		if len(targets) > 0 {
@@ -154,13 +177,29 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	return s, gaps
 }
 
+// recordedAsTab reports whether the panel is the one an open tab target of the
+// view records as its own. A panel that names a target no longer a tab, or a
+// tab open in another instance, stays with its instance, so its agent is not
+// left out of the save.
+func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
+	name := revier.TargetName(panel.Vars[PanelTargetVar])
+	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) {
+		return false
+	}
+	tv, _ := targetView(v, name)
+	id, _ := tabOf(inst, name)
+	return key(tv.Ref) == key(inst.Ref) && id == panel.ID
+}
+
 // SessionGaps is what a save found open and could not record. Unnamed is the
 // agents recorded without a conversation. Failed holds why a probe could not
 // answer at all - claude not on PATH - so those agents are not mistaken for
-// the ones no listing could match.
+// the ones no listing could match. InTab addresses the agents that run in a
+// tab target, which a restore opens without their conversation.
 type SessionGaps struct {
 	Unnamed int
 	Failed  []error
+	InTab   []string
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being
@@ -297,6 +336,9 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	i, ok := p.index(name)
 	if !ok {
 		return nil
+	}
+	if p.isTab(i) {
+		return inTab(resumes)
 	}
 	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {
