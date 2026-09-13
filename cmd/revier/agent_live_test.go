@@ -1,9 +1,9 @@
 //go:build live
 
 // Layer L4 for `revier agent`: wait and prompt against real tmux panes, with
-// no window host. The agent is a stand-in that paints its state the way Claude
-// Code does, as the leading glyph of its pane title, and runs under the name
-// claude so the Claude probe claims it.
+// no window host. The agent is a stand-in that reports its state the way Claude
+// Code does, by rewriting its file in the sessions directory the fake claude
+// lists, and runs under the name claude so the Claude probe claims it.
 package main
 
 import (
@@ -20,14 +20,17 @@ import (
 // and works on it for a second. It starts a moment after the line arrives, as
 // a real agent does, so a prompt that returned without waiting for the turn
 // is caught still idle.
-const fakeAgent = `title() { printf '\033]2;%s\033\\' "$1"; }
-title '✳ Ready'
+const fakeAgent = `status() {
+  printf '{"pid": %s, "kind": "interactive", "status": "%s"}' $$ "$1" > "%SESSIONS%/$$.tmp"
+  mv "%SESSIONS%/$$.tmp" "%SESSIONS%/$$.json"
+}
+status idle
 while IFS= read -r line; do
   printf '%s' "$line" > "$0.got"
   sleep 0.3
-  title '⠧ Working on it'
+  status busy
   sleep 1
-  title '✳ Done'
+  status idle
 done
 `
 
@@ -83,7 +86,7 @@ func agents(t *testing.T) string {
 	root := os.Getenv("REVIER_CONFIG_HOME")
 	dir := t.TempDir()
 	agent, probe := filepath.Join(dir, "agent.sh"), filepath.Join(dir, "asker-probe")
-	if err := os.WriteFile(agent, []byte(fakeAgent), 0o644); err != nil {
+	if err := os.WriteFile(agent, []byte(strings.ReplaceAll(fakeAgent, "%SESSIONS%", sessionsDir)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(probe, []byte(askerProbe), 0o755); err != nil {
