@@ -122,11 +122,13 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			// it with none of its agents resumed.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				tabs = append(tabs, session.Target{Name: tv.Name})
-				if id, open := tabOf(inst, tv.Name); listed && open {
-					for _, panel := range inst.Panels {
-						if probe, ok := c.probeFor(panel); ok && panel.ID == id {
-							tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
-						}
+				id, open := tabOf(inst, tv.Name)
+				for _, panel := range inst.Panels {
+					if !open || panel.ID != id {
+						continue
+					}
+					if probe, ok := c.probeFor(panel); ok {
+						tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
 					}
 				}
 				continue
@@ -138,7 +140,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			for _, panel := range inst.Panels {
 				// A tab's panel is its tab target's, and a restore of the
 				// instance would otherwise open it a second time.
-				if panel.Vars[PanelTargetVar] != "" {
+				if recordedAsTab(v, inst, panel) {
 					continue
 				}
 				if probe, ok := c.probeFor(panel); ok {
@@ -169,6 +171,20 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 		t.Agents = append(t.Agents, session.Agent{Harness: a.probe.Name(), Session: named[i].ID, Dir: named[i].Dir})
 	}
 	return s, gaps
+}
+
+// recordedAsTab reports whether the panel is the one an open tab target of the
+// view records as its own. A panel that names a target no longer a tab, or a
+// tab open in another instance, stays with its instance, so its agent is not
+// left out of the save.
+func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
+	name := revier.TargetName(panel.Vars[PanelTargetVar])
+	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) {
+		return false
+	}
+	tv, _ := targetView(v, name)
+	id, _ := tabOf(inst, name)
+	return key(tv.Ref) == key(inst.Ref) && id == panel.ID
 }
 
 // SessionGaps is what a save found open and could not record. Unnamed is the

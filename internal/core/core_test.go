@@ -949,23 +949,35 @@ func TestANamedSiblingWindowDoesNotHideTheUnnamedOne(t *testing.T) {
 
 // A named window the window host does not list may be the window that is
 // left over, under a title the named window was not given. Lending that title
-// to the unnamed window would raise the named one on the next press.
+// to the unnamed window would raise the named one on the next press. Two named
+// windows of one title are two windows to find, not one.
 func TestAnUnlistedNamedSiblingLeavesTheUnnamedOneUnidentified(t *testing.T) {
-	rt := unnamedRuntime(t, 4242)
-	rt.AddInstance(revier.Instance{
-		Ref:   revier.TargetRef{Host: "rt", ID: "2", Title: "tickets:revier"},
-		Title: "tickets:revier", PID: 4242,
-	})
-	wm := hosttest.New("wm")
-	wm.AddInstance(revier.Instance{Title: "taskmgr", Class: "kitty", PID: 4242})
-	c := &core.Core{Runtime: rt, Window: wm}
+	for name, named := range map[string]int{"its only named sibling": 1, "one of two named siblings of one title": 2} {
+		t.Run(name, func(t *testing.T) {
+			rt := unnamedRuntime(t, 4242)
+			wm := hosttest.New("wm")
+			for n := range named {
+				rt.AddInstance(revier.Instance{
+					Ref:   revier.TargetRef{Host: "rt", ID: fmt.Sprint(n + 2), Title: "tickets:revier"},
+					Title: "tickets:revier", PID: 4242,
+				})
+				if n > 0 {
+					wm.AddInstance(revier.Instance{Title: "tickets:revier", Class: "kitty", PID: 4242})
+				}
+			}
+			wm.AddInstance(revier.Instance{Title: "taskmgr", Class: "kitty", PID: 4242})
+			c := &core.Core{Runtime: rt, Window: wm}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
-	if err != nil {
-		t.Fatalf("Survey: %v", err)
-	}
-	if report.Views[0].Running {
-		t.Error("the unnamed window took the only listed title, which may be its named sibling's window")
+			report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+			if err != nil {
+				t.Fatalf("Survey: %v", err)
+			}
+			for _, inst := range report.Instances {
+				if inst.Ref.Host == "rt" && inst.Ref.ID == "1" && inst.Title != "" {
+					t.Errorf("the unnamed window took %q, which may be its named sibling's window", inst.Title)
+				}
+			}
+		})
 	}
 }
 

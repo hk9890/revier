@@ -57,9 +57,9 @@ type window struct {
 	AppearsFocused bool `json:"appears_focused"`
 	IsHidden       bool `json:"is_hidden"`
 	IsMinimized    bool `json:"is_minimized"`
-	// Workspace is nil for a window mutter has placed on no workspace yet.
+	// Workspace is -1 for a window on no workspace, and for one on all of
+	// them; nil only from a wctl that does not report it.
 	Workspace *int `json:"workspace_index"`
-	OnAll     bool `json:"is_on_all_workspaces"`
 }
 
 // unmapped reports whether a window is hidden for the one reason activate
@@ -72,7 +72,7 @@ func (w window) unmapped(active func() (int, bool)) bool {
 	if !w.IsHidden || w.IsMinimized {
 		return false
 	}
-	if w.Workspace == nil || w.OnAll {
+	if w.Workspace == nil || *w.Workspace < 0 {
 		return true
 	}
 	at, ok := active()
@@ -105,8 +105,9 @@ func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// Instances lists every window in one call. wctl returns the whole list, so a
-// refresh costs exactly one invocation regardless of how many projects exist.
+// Instances lists every window in one call, and a second for the active
+// workspace when a hidden window needs it. wctl returns the whole list, so a
+// refresh costs at most two invocations regardless of how many projects exist.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	raw, err := h.run(ctx, "list", "--json")
 	if err != nil {

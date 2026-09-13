@@ -168,7 +168,8 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 // The pairing is by process, and it is refused unless that process owns
 // exactly one unnamed window on the runtime side and exactly one window on the
 // window host's side that no named runtime window already claims by title, and
-// every named runtime window of the process is found there by its title. D19
+// every named runtime window of the process is found there by its title, one
+// window per named window, so two named windows of one title need two. D19
 // rejected the process id for pairing a pane to a window, because every OS
 // window of one kitty process shares its pid; that objection is exactly this
 // refusal, so an ambiguous process is left as it was rather than guessed at
@@ -181,7 +182,7 @@ func (c *Core) identify(s snapshot) {
 	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
 
 	unnamed := map[int]int{}
-	claimed := map[int]map[string]bool{}
+	claimed := map[int]map[string]int{}
 	for _, r := range runtimes {
 		if r.PID == 0 {
 			continue
@@ -191,22 +192,22 @@ func (c *Core) identify(s snapshot) {
 			continue
 		}
 		if claimed[r.PID] == nil {
-			claimed[r.PID] = map[string]bool{}
+			claimed[r.PID] = map[string]int{}
 		}
-		claimed[r.PID][r.Title] = true
+		claimed[r.PID][r.Title]++
 	}
 	byPID := map[int]revier.Instance{}
 	seen := map[int]int{}
-	found := map[int]map[string]bool{}
+	found := map[int]map[string]int{}
 	for _, w := range windows {
 		if w.PID == 0 {
 			continue
 		}
-		if claimed[w.PID][w.Title] {
+		if claimed[w.PID][w.Title] > 0 {
 			if found[w.PID] == nil {
-				found[w.PID] = map[string]bool{}
+				found[w.PID] = map[string]int{}
 			}
-			found[w.PID][w.Title] = true
+			found[w.PID][w.Title]++
 			continue
 		}
 		seen[w.PID]++
@@ -214,7 +215,7 @@ func (c *Core) identify(s snapshot) {
 	}
 
 	for i, r := range runtimes {
-		if r.Title != "" || r.PID == 0 || unnamed[r.PID] != 1 || seen[r.PID] != 1 || len(found[r.PID]) != len(claimed[r.PID]) {
+		if r.Title != "" || r.PID == 0 || unnamed[r.PID] != 1 || seen[r.PID] != 1 || !maps.Equal(found[r.PID], claimed[r.PID]) {
 			continue
 		}
 		w := byPID[r.PID]

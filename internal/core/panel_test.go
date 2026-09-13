@@ -237,6 +237,26 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 	}
 }
 
+// A tab opened for a target the project no longer declares is no tab target's
+// panel, so its agent stays with the instance rather than dropping out of the
+// save.
+func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	stale := agent("2", "old-7", "")
+	stale.Vars[core.PanelTargetVar] = "notes"
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), stale)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	s, _ := c.Session(context.Background(), report, "revier")
+	if home := s.Projects[0].Targets[0]; len(home.Agents) != 2 || home.Agents[1].Session != "old-7" {
+		t.Errorf("home = %+v, want both agents of its instance", home)
+	}
+}
+
 // A tab has no match of its own, and must not be read as one that matches
 // everything. A stray window is still a stray, and a focused window no target
 // declares still belongs to no project.

@@ -100,7 +100,7 @@ func TestDecodeKeepsEveryHiddenWindowActivateCanRaise(t *testing.T) {
 		{"minimized", `"is_hidden": true, "is_minimized": true, "workspace_index": 0`, true, false},
 		{"on another workspace", `"is_hidden": true, "workspace_index": 1`, true, true},
 		{"unshown on the active workspace", `"is_hidden": true, "workspace_index": 0`, false, true},
-		{"unshown on no workspace", `"is_hidden": true, "workspace_index": null`, false, false},
+		{"unshown on no workspace", `"is_hidden": true, "workspace_index": -1`, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
