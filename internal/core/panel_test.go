@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -253,5 +254,55 @@ func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
 	after, _ := rt.Instances(context.Background())
 	if _, ok := c.Claim(nil, after, core.Launch{Project: p, At: now}, now, []core.Project{p}); !ok {
 		t.Error("the stray was not claimed: a tab was taken to declare it")
+	}
+}
+
+// An agent in a tab is recorded under the tab, not under the instance that
+// holds it, and restoring the tab starts it on its conversation in the tab.
+// Recorded under the instance, the restore opened it twice: once as an extra
+// agent of the workspace, and once as the tab.
+func TestATabsAgentIsRecordedAndRestoredOnce(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	tabAgent := agent("2", "tab-9", "")
+	tabAgent.Vars[core.PanelTargetVar] = "tickets"
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), tabAgent)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	p := prepared(t, tabProject())
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	s, _ := c.Session(context.Background(), report, "revier")
+	targets := s.Projects[0].Targets
+	if len(targets) != 2 || len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" {
+		t.Fatalf("targets = %+v, want home with its own agent only", targets)
+	}
+	if len(targets[1].Agents) != 1 || targets[1].Agents[0].Session != "tab-9" {
+		t.Fatalf("tickets = %+v, want the tab's agent", targets[1])
+	}
+
+	// A restore on a machine where the workspace is up and the tab is not.
+	restored := hosttest.NewRuntime("kitty")
+	restored.Add("session:revier", "kitty", agent("1", "abc-123", ""))
+	c.Runtime = restored
+	dir := t.TempDir()
+	res, err := c.GoResuming(context.Background(), p, "tickets", nil, []core.Resume{{Harness: "claude", Session: "tab-9", Dir: dir}})
+	if err != nil {
+		t.Fatalf("GoResuming: %v", err)
+	}
+	if len(restored.Tabs) != 1 {
+		t.Fatalf("tabs = %d, want 1", len(restored.Tabs))
+	}
+	real := restored.Tabs[0].Real
+	if want := []string{"taskmgr-ui", "--resume", "tab-9"}; !slices.Equal(real.Launch, want) || real.Dir != dir {
+		t.Errorf("tab launch = %v in %q, want %v in %q", real.Launch, real.Dir, want, dir)
+	}
+	if len(res.Agents) != 1 || res.Agents[0] != core.AgentResumed {
+		t.Errorf("agents = %v, want one resumed", res.Agents)
+	}
+	dry := c.Resumes(p, "tickets", []core.Resume{{Harness: "claude", Session: "tab-9"}, {Harness: "claude"}})
+	if !slices.Equal(dry, []core.AgentOutcome{core.AgentResumed, core.AgentDropped}) {
+		t.Errorf("dry run = %v, want the first resumed and the second dropped", dry)
 	}
 }

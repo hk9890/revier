@@ -172,7 +172,7 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 // rejected the process id for pairing a pane to a window, because every OS
 // window of one kitty process shares its pid; that objection is exactly this
 // refusal, so an ambiguous process is left as it was rather than guessed at
-// (decisions.md D63, D66). A named window the window host does not list could
+// (decisions.md D63, D67). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
@@ -375,7 +375,7 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
 	}
 	if p.isTab(i) {
-		return c.goTab(ctx, p, i, bound)
+		return c.goTab(ctx, p, i, bound, resumes)
 	}
 	t := p.Targets[i]
 	host, real, m, err := c.resolveAt(p, i)

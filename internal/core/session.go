@@ -108,26 +108,39 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
+		var tabAgents []agentPanel
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
 			if tv.Attached || tv.Name == "" || tv.Ref.IsZero() {
 				continue
 			}
-			// A tab's ref is the instance that holds it, whose panels are
-			// recorded under that instance's own target. The tab is recorded
-			// after it: a restore that reached the tab first would open the
-			// instance for it with none of its agents resumed.
+			inst, listed := byRef[key(tv.Ref)]
+			// A tab's ref is the instance that holds it. Its own panel is
+			// recorded under the tab, and the tab after the other targets: a
+			// restore that reached the tab first would open the instance for
+			// it with none of its agents resumed.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				tabs = append(tabs, session.Target{Name: tv.Name})
+				if id, open := tabOf(inst, tv.Name); listed && open {
+					for _, panel := range inst.Panels {
+						if probe, ok := c.probeFor(panel); ok && panel.ID == id {
+							tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
+						}
+					}
+				}
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
-			inst, ok := byRef[key(tv.Ref)]
-			if !ok {
+			if !listed {
 				continue
 			}
 			for _, panel := range inst.Panels {
+				// A tab's panel is its tab target's, and a restore of the
+				// instance would otherwise open it a second time.
+				if panel.Vars[PanelTargetVar] != "" {
+					continue
+				}
 				if probe, ok := c.probeFor(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
@@ -135,6 +148,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 					})
 				}
 			}
+		}
+		for _, a := range tabAgents {
+			a.target += len(targets)
+			agents = append(agents, a)
 		}
 		targets = append(targets, tabs...)
 		if len(targets) > 0 {
@@ -297,6 +314,10 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	i, ok := p.index(name)
 	if !ok {
 		return nil
+	}
+	if p.isTab(i) {
+		_, outcomes := c.tabResuming(*p.Targets[i].Runtime, resumes)
+		return outcomes
 	}
 	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {

@@ -93,7 +93,7 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // is current in it, the press goes home. Home that is the same instance is
 // reached by making its own first panel current, because focusing the
 // instance alone would leave the tab where it is.
-func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Result, error) {
+func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
 	t := p.Targets[i]
 	opener, err := c.tabHost(p, i)
 	if err != nil {
@@ -139,7 +139,9 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Res
 	// keep raising the instance after inside is removed from the file.
 	res := Result{Target: t.Runtime.Inside, Ref: in.Ref}
 	if !open {
-		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
+		real, outcomes := c.tabResuming(*t.Runtime, resumes)
+		res.Agents = outcomes
+		if tab, err = opener.OpenTab(ctx, in.Ref, real, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
 			return Result{}, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
 		res.Launched = true
@@ -151,6 +153,26 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Res
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// tabResuming is resuming for a tab: its one panel is the launch argv, so the
+// first recorded agent starts on its conversation there, and any other is
+// dropped. A save records at most one, because a tab is one panel.
+func (c *Core) tabResuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome) {
+	if len(resumes) == 0 {
+		return real, nil
+	}
+	panels, first, _ := c.layAgents([]revier.PanelSpec{{Kind: revier.PanelAgent, Command: real.Launch}}, resumes[:1])
+	real.Launch = panels[0].Command
+	if panels[0].Dir != "" {
+		real.Dir = panels[0].Dir
+	}
+	outcomes := make([]AgentOutcome, len(resumes))
+	for n := range outcomes {
+		outcomes[n] = AgentDropped
+	}
+	outcomes[0] = first[0]
+	return real, outcomes
 }
 
 // goHomeFromTab is the second press on a tab. A home that holds the tab gets

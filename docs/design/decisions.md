@@ -1600,7 +1600,7 @@ with a window host, is no longer focused when the core finds no OS window for
 the instance. The press fails with `ErrUnraisable`, naming the target, and
 nothing moves. A visible refusal is better than a raise that looks half done.
 
-### D64 — a target can be a tab inside another target — Accepted; OpenTab widened to panel groups by D65
+### D64 — a target can be a tab inside another target — Accepted; OpenTab widened to panel groups by D65; how a session records a tab amended by D68
 
 Narrows D14: a target is still a named binding a project has, but its instance
 can be a tab of another target's instance, not only an instance of its own.
@@ -1735,7 +1735,7 @@ it is not placed, and a placement revier sent to it would lose to mutter's own.
 The active workspace costs a second wctl call, made only when a window has that
 shape, so a refresh is still one call in the common case.
 
-### D66 — every named window of the process must be seen before its unnamed sibling is paired — Accepted
+### D67 — every named window of the process must be seen before its unnamed sibling is paired — Accepted
 
 Narrows D63's pairing.
 
@@ -1750,6 +1750,23 @@ be found by its title. A process where one is not found is left unidentified.
 
 D63 could not afford this rule while the GNOME host dropped hidden windows: a
 minimized `tickets:revier` would have been unlisted, and the workspace beside
-it would lose its title again, which was the bug D63 fixed. D65 lists minimized
+it would lose its title again, which was the bug D63 fixed. D66 lists minimized
 windows, so the rule costs only a window mutter has not shown yet, which is
 gone within a moment.
+
+### D68 — a tab's agent is recorded under the tab, and resumed in it — Accepted
+
+Amends D64's last paragraph.
+
+D64 recorded a tab by its name and left its panel to the target of the
+instance that holds it. Under D62 every agent a probe claims is recorded in
+order, so an agent in a tab became one more agent of the workspace. A restore
+then opened it twice: once as an extra agent tab of the workspace, started as
+a copy of the declared agent, and once more when the tab target's step ran.
+
+So the panel that carries `revier_target` is recorded under its tab target,
+and left out of its instance's agents. A tab is one panel, so it records at
+most one agent. Restoring the tab starts its launch argv as that agent, on its
+conversation and in its directory, by the same rules D62 lays over a layout; a
+second recorded agent, from a file edited by hand, is reported as not restored.
+The dry run says the same, because both go through one function.
