@@ -62,7 +62,7 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") {
 		t.Fatalf("rows = %q, want the two hosts", r)
 	}
-	if h := barLine(m); !strings.Contains(h, "link") {
+	if h := barLine(m); !strings.Contains(h, "Link") {
 		t.Errorf("header = %q, want the dialog named", h)
 	}
 
@@ -128,7 +128,7 @@ func TestEscWalksBackThroughTheDialog(t *testing.T) {
 		t.Errorf("rows = %q, want the hosts again", r)
 	}
 	m, _ = press(m, "esc")
-	if h := barLine(m); strings.Contains(h, "link") {
+	if h := barLine(m); strings.Contains(h, "Link") {
 		t.Errorf("header = %q, want the project list", h)
 	}
 }

@@ -113,15 +113,15 @@ func (m Model) top() string {
 	name := ""
 	switch m.dialog {
 	case dialogHosts:
-		name = "link a project on another machine"
+		name = "Link a project on another machine"
 	case dialogRemote:
 		name = m.host
 	case dialogNew:
-		name = "add a project on this machine"
+		name = "Add a project on this machine"
 	case dialogConfig:
-		name = "configuration"
+		name = "Configuration"
 	case dialogHelp:
-		name = "keyboard shortcuts"
+		name = "Keyboard shortcuts"
 	default:
 		return m.bar()
 	}
@@ -138,11 +138,13 @@ func (m Model) thinRule(width int) string {
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or
-// what the dialog's rows are.
+// what the dialog's rows are. The hosts step says nothing there - the title
+// over it already says what the rows are, and the rule under it counts them -
+// but it keeps the line, so the rows do not move as the step changes.
 func (m Model) subtitle() string {
 	switch m.dialog {
 	case dialogHosts:
-		return " " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
+		return ""
 	case dialogRemote:
 		return " " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
 	case dialogNew:

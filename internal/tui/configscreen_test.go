@@ -64,7 +64,7 @@ func TestAltCOpensTheConfigScreen(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+c")
-	if head := barLine(m); !strings.Contains(head, "configuration") {
+	if head := barLine(m); !strings.Contains(head, "Configuration") {
 		t.Fatalf("top line = %q, want the config screen", head)
 	}
 	for _, want := range []string{"catppuccin-mocha", "nerd", "alt-space", "auto", "in use: rt", "wm", "detected at start"} {
