@@ -1323,5 +1323,50 @@ and every comment in it stays, including one inside an array written over
 several lines. Every edit, an add included, names the actions as the screen
 read them, and it is refused if the file no longer holds them: the file was
 changed by hand while revier ran, and an add would otherwise write a second
-action under a name or a key the screen did not know was taken. Actions written as an inline array are refused too, because
-the line editor does not find them.
+action under a name or a key the screen did not know was taken. Actions
+written as an inline array are refused too, because the line editor does not
+find them.
+
+### D57 — targets most projects share are declared once, in config.toml — Accepted
+
+Narrows D14: a target is still a named binding a project has, but a project
+file no longer has to declare every target it has.
+
+The eighty-nine converted projects declared the same three targets - the
+workspace, IntelliJ and the ticket viewer - each with `{{.Name}}` where they
+differed. About four lines in ninety files were each project's own. Changing
+the editor meant editing every file.
+
+`config.toml` now takes `[[target]]` tables in the project file's form, and
+every project gets them. A project's target of the same name is merged into the
+shared one field by field, and a target of a new name is added after the shared
+ones. The merge is on the tables as TOML decodes them, before anything is
+validated or rendered, so everything after the load - validation, templates,
+keys, the TUI - sees a complete project as before.
+
+A table merges key by key at any depth, so a project that only differs in its
+editor's window title writes that title and keeps the shared class and launch.
+Any other value replaces the shared one whole, a list included. Merging `panels`
+item by item has no rule a reader could predict: a panel has no name to be
+matched on, and a position is not an identity.
+
+A shared target is checked once, in `config.toml`, for a name, a name given
+twice, and a value of the wrong type. Whether it is complete is checked per
+project after the merge, because a project may supply the part it leaves out.
+That error names the project file.
+
+A link has no shared targets. Its home is the derived ssh pane (D41), which a
+shared home would replace, and the project file on the host already has that
+host's shared targets.
+
+A project may not remove a shared target. Nothing needs to yet.
+
+`revier new` writes a file without targets when `config.toml` has shared
+targets, and the template of D30 when it has none.
+
+A name with a character a regexp reads, such as the dot in
+`dynatrace.agent.studio`, is matched through the shared `^session:{{.Name}}$`
+as it is, unescaped. A dot then matches any character. That still finds the
+project's own window, and it spares every shared match an escaping function.
+D30's `revier new` template still escapes it, as the file it writes has its
+own match.

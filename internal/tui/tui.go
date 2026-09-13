@@ -71,6 +71,7 @@ type Model struct {
 	projects  []core.Project
 	stateRoot string
 	actions   []config.Action
+	shared    []map[string]any // config.toml's shared targets, for a project file read again
 	refresh   time.Duration
 	theme     theme.Theme
 
@@ -137,7 +138,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
-		core: c, projects: projects, stateRoot: stateRoot, actions: actions,
+		core: c, projects: projects, stateRoot: stateRoot, actions: actions, shared: cfg.Targets,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
 		hlist: newHostList(th), rlist: newRemoteList(th),
