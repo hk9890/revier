@@ -100,6 +100,25 @@ func TestEveryGlyphIsOneCell(t *testing.T) {
 	}
 }
 
+// A spinner frame stands where the working glyph does, so it is one cell too.
+func TestEverySetSpinsInOneCell(t *testing.T) {
+	for setName := range glyphSets {
+		if len(spinners[setName]) < 2 {
+			t.Errorf("%s glyph set has no spinner", setName)
+			continue
+		}
+		// The header's still glyph is the icon the rows animate.
+		if first := spinners[setName][0]; glyphSets[setName].Working != first {
+			t.Errorf("%s working glyph = %q, want the spinner's first frame %q", setName, glyphSets[setName].Working, first)
+		}
+		for _, frame := range spinners[setName] {
+			if w := lipgloss.Width(frame); w != 1 {
+				t.Errorf("%s spinner frame %q, width %d, want 1", setName, frame, w)
+			}
+		}
+	}
+}
+
 func TestNoGlyphSetIsIncomplete(t *testing.T) {
 	for setName, g := range glyphSets {
 		v := reflect.ValueOf(g)

@@ -318,7 +318,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 }
 
 func (m Model) detailAgent(a revier.AgentView, w int) string {
-	th := m.theme
+	th := m.spun()
 	harness := a.State.Harness
 	if harness == "" {
 		harness = "agent"

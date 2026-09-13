@@ -54,8 +54,8 @@ func (m *Model) syncBody() {
 	if m.over.kind == hoverRow {
 		row = m.over.index
 	}
-	m.plist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
-	m.rlist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
+	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
+	m.rlist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())
