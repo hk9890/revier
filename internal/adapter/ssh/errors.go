@@ -101,13 +101,19 @@ func status(err error) int {
 // it is: a shim under a version manager is on the PATH of an interactive
 // shell and not on the one an ssh command gets, so the machine that answers
 // "command not found" is as often as not a machine with revier on it.
+//
+// The words count only where they name revier. A revier that ran, and failed
+// because a command of its own was not found, says the same words about that
+// command, and its PATH is not the fault.
 func isNotFound(low string, err error) bool {
-	if notFound[status(err)] {
-		return true
+	if low == "" {
+		return notFound[status(err)]
 	}
-	return strings.Contains(low, "command not found") ||
-		strings.Contains(low, "is not recognized") ||
-		strings.Contains(low, "revier: not found")
+	return strings.Contains(low, "command not found: revier") ||
+		strings.Contains(low, "revier: command not found") ||
+		strings.Contains(low, "revier: not found") ||
+		strings.Contains(low, "'revier' is not recognized") ||
+		strings.Contains(low, "unknown command: revier")
 }
 
 func reason(host, say string) error {
