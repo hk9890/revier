@@ -50,8 +50,8 @@ const (
 	focusPane
 )
 
-// dialog is a screen standing over the surface: the link dialog's two steps
-// - which host, then which of its projects (decisions.md D45) - the
+// dialog is a screen standing over the surface: the link dialog's three steps
+// - which host, which of its projects (decisions.md D45), and the link's name - the
 // new-project field, or the config screen. dialogNone is the surface itself, which is where it is
 // nearly always.
 type dialog int
@@ -60,6 +60,7 @@ const (
 	dialogNone dialog = iota
 	dialogHosts
 	dialogRemote
+	dialogLinkName
 	dialogNew
 	dialogConfig
 	dialogHelp
@@ -113,9 +114,13 @@ type Model struct {
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
 	path   textinput.Model                  // the directory field of the new-project screen
+	lname  textinput.Model                  // the name field of the link dialog's last step
 	over   hovered                          // what the pointer is on
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
+	// proposed is whether the link's name is still the one offered, which
+	// the first character typed replaces.
+	proposed bool
 
 	// The config screen.
 	ui        config.UI       // [ui] as config.toml holds it
@@ -143,7 +148,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		hlist: newHostList(th), rlist: newRemoteList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
-		path: newPathInput(th),
+		path: newPathInput(th), lname: newLinkNameInput(th),
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 	}
@@ -448,6 +453,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.dialog {
 	case dialogNew:
 		return m.newKey(msg)
+	case dialogLinkName:
+		return m.linkNameKey(msg)
 	case dialogConfig:
 		return m.configKey(msg)
 	case dialogHelp:

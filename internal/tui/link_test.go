@@ -70,11 +70,13 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	if last := remote.Asked[len(remote.Asked)-1]; len(last) != 0 {
 		t.Errorf("asked %v, want the dialog's ask to be for every project", remote.Asked)
 	}
+	// Two lines a project, as on the surface: the name, and the path with
+	// the note beside it.
 	r := rows(m)
-	if len(r) < 2 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[0], "linked as alpha") {
+	if len(r) < 4 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[1], "linked as alpha") {
 		t.Errorf("rows = %q, want alpha marked as linked", r)
 	}
-	if !strings.Contains(r[1], "beta") || strings.Contains(r[1], "linked") {
+	if !strings.Contains(r[2], "beta") || strings.Contains(r[3], "linked") {
 		t.Errorf("rows = %q, want beta unlinked", r)
 	}
 	if h := barLine(m); !strings.Contains(h, "buildbox") {
@@ -82,24 +84,106 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	}
 }
 
-// Enter on an unlinked project writes the link and returns to the list,
-// with the new row selected and shown as name@host.
-func TestEnterOnAHostsProjectWritesTheLink(t *testing.T) {
+// Enter on an unlinked project asks for the link's name, with
+// rs-<host>-<project> offered; Enter on that writes the link and returns to
+// the list, with the new row selected and shown as name@host.
+func TestEnterOnAHostsProjectWritesTheLinkUnderTheOfferedName(t *testing.T) {
 	m, _, root := linkWorld(t, nil, "beta")
 
 	m = step(m, altR)
 	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-
-	body, err := os.ReadFile(config.ProjectFile(root, "beta"))
-	if err != nil || !strings.Contains(string(body), `host = "buildbox"`) {
-		t.Fatalf("file = %q, %v; want the link written", body, err)
+	if q := query(m); !strings.Contains(q, "rs-buildbox-beta") {
+		t.Fatalf("field = %q, want the offered name", q)
 	}
-	if row := selectedRow(t, m); !strings.Contains(row, "beta@buildbox") {
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	body, err := os.ReadFile(config.ProjectFile(root, "rs-buildbox-beta"))
+	if err != nil || !strings.Contains(string(body), `host = "buildbox"`) || !strings.Contains(string(body), `project = "beta"`) {
+		t.Fatalf("file = %q, %v; want the link to beta written", body, err)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "rs-buildbox-beta@buildbox") {
 		t.Errorf("selected %q, want the new link", row)
 	}
 	if f := footer(m); strings.Contains(f, "already") {
 		t.Errorf("footer = %q, want no refusal", f)
+	}
+}
+
+// The first character typed replaces the offered name, and a name a project
+// here already has is said as it is typed. Enter on it writes nothing, so no
+// project here is overwritten.
+func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
+	m, _, root := linkWorld(t, remoteOnDisk(t, "alpha"), "beta")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	m, _ = press(m, "alph")
+	if q := query(m); !strings.Contains(q, "alph") || strings.Contains(q, "rs-") {
+		t.Fatalf("field = %q, want the offered name replaced", q)
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "exists here") {
+		t.Errorf("rows = %q, want a free name not warned about", rows(m))
+	}
+	m, _ = press(m, "a")
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, `"alpha" exists here`) {
+		t.Errorf("rows = %q, want the taken name said", rows(m))
+	}
+
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if h := barLine(m); !strings.Contains(h, "Name the link") {
+		t.Errorf("header = %q, want the name step still up", h)
+	}
+	files, _ := filepath.Glob(filepath.Join(root, "projects", "*.toml"))
+	if len(files) != 0 {
+		t.Errorf("a refused name wrote %v", files)
+	}
+
+	m, _ = press(m, "esc")
+	if f := footer(m); strings.Contains(f, "exists here") {
+		t.Errorf("footer = %q, want the refusal left with the name step", f)
+	}
+}
+
+// Esc on the name goes back to the host's projects, with the cursor on the
+// project it left.
+func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "beta", "gamma")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = press(m, "down")
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = press(m, "esc")
+	if h := barLine(m); !strings.Contains(h, "buildbox") || strings.Contains(h, "Name the link") {
+		t.Errorf("header = %q, want the host's projects", h)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "gamma") {
+		t.Errorf("selected %q, want gamma still under the cursor", row)
+	}
+}
+
+// A project whose checkout is missing on the host says it is missing there,
+// not here.
+func TestAHostsMissingCheckoutIsSaidAsMissingOnTheHost(t *testing.T) {
+	m, remote, _ := linkWorld(t, nil)
+	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}}}
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if r := rows(m); len(r) < 2 || !strings.Contains(r[1], "not on buildbox") {
+		t.Errorf("rows = %q, want the checkout said missing on buildbox", r)
+	}
+}
+
+// A path on the host is written against the host's home, as a path here is
+// against this one's.
+func TestAHostsPathIsWrittenAgainstItsHome(t *testing.T) {
+	m, remote, _ := linkWorld(t, nil)
+	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}, PathExists: true}}
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if r := rows(m); len(r) < 2 || !strings.Contains(r[1], "~/dev/delta") {
+		t.Errorf("rows = %q, want the path under ~", r)
 	}
 }
 
@@ -188,6 +272,7 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 	stale := m.Survey()
 
 	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
 

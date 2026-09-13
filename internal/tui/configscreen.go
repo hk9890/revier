@@ -256,10 +256,10 @@ func (m Model) runtimeChoice() string {
 func (m *Model) applyTheme(th theme.Theme) {
 	m.theme = th
 	m.hlist.SetDelegate(hostDelegate{theme: th})
-	m.rlist.SetDelegate(remoteDelegate{theme: th})
+	m.rlist.SetDelegate(projectDelegate{theme: th, hover: -1})
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.path, &m.chord} {
+	for _, in := range []*textinput.Model{&m.input, &m.path, &m.lname, &m.chord} {
 		styleField(in, th)
 	}
 	m.layout()

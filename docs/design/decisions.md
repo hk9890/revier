@@ -1381,3 +1381,37 @@ unsupported (D40), and such a panel reports unknown. An agent on another
 machine is already its host's word (D40), read by the revier there through the
 same listing. `claude` typed into a tmux shell is not matched by pid, the limit
 D55 records, and now reports unknown where it once read its title.
+
+### D58 — the link dialog names every link, and lists a host's projects as the surface does — Accepted
+
+Narrows D45: the hosts, the host's list and `revier link` stay as they are.
+Enter on a host's project no longer writes the link under the project's own
+name. It opens a third step, a field holding `rs-<host>-<project>`.
+
+The project's own name was the wrong default. A project checked out on two
+machines has the same name on both, so the first link from a machine that
+shares projects with this one was refused. The refusal pointed at a command
+to run outside the TUI. `rs-<host>-<project>` is not a name a project here
+takes by accident, and it says where the project lives before the row's
+`@host` does. The name is asked every time, not only on a collision,
+so every link is named the same way and the one keystroke Enter costs buys
+that. The offered name is drawn as a selection, and the first character
+typed replaces it.
+
+The field is checked on every keystroke: a name that is empty, not a file
+name, or the name of a project here is said under the field as it is typed.
+Enter on such a name writes nothing. A warning that Enter could confirm was
+the alternative, and it would overwrite a project file from a dialog with no
+undo.
+
+The host's list is drawn by the project table (D39) and not by a table of
+its own. The fixed columns of the old rows ran a long name into its path and
+cut the path to a stub. The table sizes its project column to the list, and
+a row already linked says under which name in the note under the state. A
+path on the host is written with its home as `~`. The host's home is not
+known here, so it is taken to be the directory under `/home` or `/Users` the
+path starts in; the pane still shows the path whole.
+
+`revier link` keeps the project's own name, with `--name` to change it. A
+command has no field to offer a name in, and a script that links a project
+expects the name it asked for.
