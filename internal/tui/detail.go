@@ -84,7 +84,7 @@ func (m *Model) syncDetail() {
 	case dialogHosts, dialogNew, dialogConfig:
 		m.detail.SetContent("")
 		return
-	case dialogRemote:
+	case dialogRemote, dialogLinkName:
 		m.detail.SetContent(m.remoteDetail())
 		return
 	}

@@ -16,7 +16,7 @@ import (
 )
 
 // The targets section of the config screen: the shared targets of
-// config.toml (decisions.md D58), one row each, and a row that adds one.
+// config.toml (decisions.md D59), one row each, and a row that adds one.
 // Enter opens a target's form: its name, key and home flag, then its runtime
 // and its window realization, each launch, match and place, and the
 // runtime's panels as a list with a form of their own. alt+d deletes a

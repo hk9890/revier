@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -19,8 +21,9 @@ import (
 
 // The link dialog (decisions.md D45): alt+r lists the hosts the ssh
 // configuration names, Enter on one asks the revier there for its projects,
-// and Enter on a project writes a link to it here, which is then a row like
-// any other. Two steps in the list's own place, with the pane beside them.
+// Enter on a project asks what to name the link, and Enter on the name writes
+// it here, which is then a row like any other. Three steps in the list's own
+// place, with the pane beside them.
 
 // askTimeout bounds one ask of a host. Long enough for a cold ssh; short
 // enough that a host that is down is a message, not a wait.
@@ -32,13 +35,41 @@ type hostItem struct{ host string }
 func (i hostItem) FilterValue() string { return i.host }
 
 // remoteItem is one row of the dialog's second step: a project on the host,
-// and the link here that already points at it, if any.
+// and the link here that already points at it, if any. It is drawn by the
+// project table, so the host's list reads as the one it is added to.
 type remoteItem struct {
 	view   revier.ProjectView
+	host   string
 	linked revier.ProjectName
 }
 
-func (i remoteItem) FilterValue() string { return string(i.view.Project.Name) }
+func (i remoteItem) FilterValue() string         { return string(i.view.Project.Name) }
+func (i remoteItem) rowView() revier.ProjectView { return i.view }
+func (i remoteItem) rowPath() string             { return remoteHome(i.view.Project.Path) }
+func (i remoteItem) rowMachine() string          { return i.host }
+
+func (i remoteItem) rowNote() string {
+	if i.linked == "" {
+		return ""
+	}
+	return "linked as " + string(i.linked)
+}
+
+// remoteHome writes a path on the host the way contractHome writes one here,
+// with its home directory as ~. The host's home is not known here, so it is
+// taken to be the directory under /home or /Users the path starts in.
+func remoteHome(p string) string {
+	for _, base := range []string{"/home/", "/Users/"} {
+		rest, ok := strings.CutPrefix(p, base)
+		if !ok {
+			continue
+		}
+		if _, tail, ok := strings.Cut(rest, "/"); ok {
+			return "~/" + tail
+		}
+	}
+	return p
+}
 
 // askedMsg is a host's answer to the dialog's ask, or why it gave none.
 type askedMsg struct {
@@ -47,8 +78,10 @@ type askedMsg struct {
 	err   error
 }
 
-func newHostList(th theme.Theme) list.Model   { return plainList(hostDelegate{theme: th}) }
-func newRemoteList(th theme.Theme) list.Model { return plainList(remoteDelegate{theme: th}) }
+func newHostList(th theme.Theme) list.Model { return plainList(hostDelegate{theme: th}) }
+func newRemoteList(th theme.Theme) list.Model {
+	return plainList(projectDelegate{theme: th, hover: -1})
+}
 
 // plainList is a list with nothing of its own on screen and no filter: the
 // dialog's rows are few and each of them is a choice.
@@ -86,52 +119,6 @@ func (d hostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	row := cursor(th, sel) + th.Remote.Render(th.Glyphs.Remote) + " " + style(th.ProjectName).Render(it.host)
 	_, _ = fmt.Fprint(w, fill(row, m.Width(), style))
 }
-
-type remoteDelegate struct{ theme theme.Theme }
-
-func (d remoteDelegate) Height() int                         { return 1 }
-func (d remoteDelegate) Spacing() int                        { return 0 }
-func (d remoteDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
-
-func (d remoteDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	it, ok := item.(remoteItem)
-	if !ok {
-		return
-	}
-	th := d.theme
-	sel := index == m.Index()
-	style := func(s lipgloss.Style) lipgloss.Style {
-		if sel {
-			return th.OnSelection(s)
-		}
-		return s
-	}
-	v := it.view
-	mark, markStyle := th.Glyphs.Stopped, th.NameDim
-	if v.Running {
-		mark, markStyle = th.Glyphs.Running, th.Running
-	}
-	// A project already linked is grey: Enter on it has nothing to write.
-	name, path := th.ProjectName, th.Path
-	note := ""
-	if it.linked != "" {
-		name = th.NameDim
-		note = "linked as " + string(it.linked)
-	}
-	row := cursor(th, sel) +
-		style(markStyle).Render(mark) + style(th.Path).Render(" ") +
-		style(name).Render(pad(string(v.Project.Name), nameWidth)) +
-		style(path).Render(pad(elide(contractHome(v.Project.Path), remotePathWidth), remotePathWidth+1)) +
-		style(th.Meta).Render(note)
-	_, _ = fmt.Fprint(w, fill(row, m.Width(), style))
-}
-
-// The dialog's columns. They are fixed, so a name and a path stay in one
-// column down the rows, and the note after them stays on a narrow list.
-const (
-	nameWidth       = 24
-	remotePathWidth = 28
-)
 
 // cursor is the bar down the left of a row, lit on the selected one.
 func cursor(th theme.Theme, sel bool) string {
@@ -252,7 +239,7 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	}
 	items := make([]list.Item, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, linked: m.linkedAs(msg.host, v.Project.Name)})
+		items = append(items, remoteItem{view: v, host: msg.host, linked: m.linkedAs(msg.host, v.Project.Name)})
 	}
 	m.host = msg.host
 	_ = m.rlist.SetItems(items)
@@ -274,9 +261,9 @@ func (m Model) linkedAs(host string, project revier.ProjectName) revier.ProjectN
 	return ""
 }
 
-// link is Enter on a project of the host: a link file for it, under its own
-// name, which is then a row. The row is put in at once, as the next survey
-// will show it, rather than a refresh later.
+// link is Enter on a project of the host: the step that names the link,
+// with a name that cannot be taken by a project here in the field. A project
+// already linked is refused, and says under which name.
 func (m Model) link() (tea.Model, tea.Cmd) {
 	it, ok := m.rlist.SelectedItem().(remoteItem)
 	if !ok {
@@ -286,9 +273,76 @@ func (m Model) link() (tea.Model, tea.Cmd) {
 		m.err = fmt.Errorf("%s on %s is already linked as %s", it.view.Project.Name, m.host, it.linked)
 		return m, nil
 	}
-	name := it.view.Project.Name
+	m.lname.SetValue(linkName(m.host, it.view.Project.Name))
+	m.lname.CursorEnd()
+	m.proposed = true
+	m.dialog = dialogLinkName
+	return m, m.lname.Focus()
+}
+
+// linkName is the name a link is offered under: the host and the project
+// there, behind "rs-", so a link does not take the name of a project here.
+func linkName(host string, project revier.ProjectName) string {
+	return "rs-" + host + "-" + string(project)
+}
+
+// linkNameKey is every press while the link is named. Enter writes it, Esc
+// goes back to the host's projects, and everything else is the field's. The
+// offered name is replaced by the first character typed, as a selected
+// field's is; any other edit keeps it.
+func (m Model) linkNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Back):
+		m.err = nil
+		m.dialog = dialogRemote
+		m.lname.Blur()
+		return m, nil
+	case key.Matches(msg, m.keys.Enter):
+		return m.writeLink()
+	}
+	m.err = nil
+	if m.proposed && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
+		m.lname.SetValue("")
+	}
+	m.proposed = false
+	in, cmd := m.lname.Update(msg)
+	m.lname = in
+	return m, cmd
+}
+
+// linkNameFault is why the name in the field cannot be written, or nil. It
+// is asked on every frame, so a name that is taken says so as it is typed.
+func (m Model) linkNameFault() error {
+	name := m.linkNameValue()
+	if name == "" {
+		return fmt.Errorf("give the link a name")
+	}
+	if err := config.ValidateName(name); err != nil {
+		return err
+	}
 	if p, ok := m.project(name); ok {
-		m.err = fmt.Errorf("project %q already exists: %s; link it as another name with `revier link %s %s --name <name>`", name, contractHome(p.File), m.host, name)
+		return fmt.Errorf("a project named %q exists here: %s", name, contractHome(p.File))
+	}
+	return nil
+}
+
+func (m Model) linkNameValue() revier.ProjectName {
+	return revier.ProjectName(strings.TrimSpace(m.lname.Value()))
+}
+
+// writeLink is Enter on the name: a link file under it, which is then a row.
+// A name that is taken writes nothing, so no project here is overwritten.
+// The row is put in at once, as the next survey will show it, rather than a
+// refresh later.
+func (m Model) writeLink() (tea.Model, tea.Cmd) {
+	it, ok := m.rlist.SelectedItem().(remoteItem)
+	if !ok {
+		return m, nil
+	}
+	if err := m.linkNameFault(); err != nil {
+		m.err = err
 		return m, nil
 	}
 	root, err := config.Root()
@@ -296,7 +350,7 @@ func (m Model) link() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	p, err := config.CreateLink(root, name, m.host, name)
+	p, err := config.CreateLink(root, m.linkNameValue(), m.host, it.view.Project.Name)
 	if err != nil {
 		m.err = err
 		return m, nil
@@ -309,9 +363,54 @@ func (m Model) link() (tea.Model, tea.Cmd) {
 	view.Project, view.Running, view.Home, view.Targets = p.Project, false, revier.TargetRef{}, nil
 	m.views = sorted(append(m.views, view))
 	m.dialog = dialogNone
+	m.lname.Blur()
 	m.reload()
 	m.selectName(p.Name)
 	return m, nil
+}
+
+// linkNameScreen is what stands in the list's place while the link is
+// named: what Enter writes, or why it writes nothing.
+func (m Model) linkNameScreen() string {
+	th := m.theme
+	w := m.listWidth()
+	say := func(s lipgloss.Style, text string) string {
+		return s.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
+	}
+	it, ok := m.rlist.SelectedItem().(remoteItem)
+	if !ok {
+		return ""
+	}
+	if err := m.linkNameFault(); err != nil {
+		return say(th.Attention, err.Error()) + "\n" +
+			say(th.Meta, "Enter writes nothing until the name is free")
+	}
+	root, err := config.Root()
+	if err != nil {
+		return say(th.Attention, err.Error())
+	}
+	return say(th.NameDim, "Enter writes") + "\n" +
+		say(th.Path, contractHome(config.ProjectFile(root, m.linkNameValue()))) + "\n" +
+		say(th.Meta, fmt.Sprintf("a link to %s on %s", it.view.Project.Name, m.host))
+}
+
+// linkNameView is the field, with the offered name drawn as a selection
+// until it is edited, because the first character typed replaces it.
+func (m Model) linkNameView() string {
+	in := m.lname
+	if m.proposed {
+		in.TextStyle = m.theme.OnSelection(m.theme.ProjectName)
+	}
+	return " " + in.View()
+}
+
+// newLinkNameInput is the field the link's name is typed in.
+func newLinkNameInput(th theme.Theme) textinput.Model {
+	in := textinput.New()
+	in.Prompt = promptMark
+	styleField(&in, th)
+	in.CharLimit = 128
+	return in
 }
 
 // remoteDetail is the pane on the dialog's second step: what the host said
@@ -338,8 +437,8 @@ func (m *Model) remoteDetail() string {
 	out += line("Status", status, style)
 	if it.linked != "" {
 		out += line("Linked as", string(it.linked), th.Remote)
-	} else {
-		out += th.Meta.Render(clipTo("Enter: link it here as "+string(v.Project.Name), w)) + "\n"
+	} else if m.dialog == dialogRemote {
+		out += th.Meta.Render(clipTo("Enter: name a link to it here", w)) + "\n"
 	}
 	if len(v.Agents) > 0 {
 		out += m.heading("Agents", w)
