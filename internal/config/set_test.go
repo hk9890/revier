@@ -171,3 +171,36 @@ func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {
 		t.Errorf("config.toml = %q, want it unchanged", got)
 	}
 }
+
+// A config.toml linked in from elsewhere, a dotfiles repository, is written
+// through the link, and the file keeps its permissions.
+func TestSetWritesThroughASymlinkAndKeepsTheMode(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(target, []byte("[ui]\ntheme = \"catppuccin-mocha\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := os.Symlink(target, config.File(root)); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set(root, "ui", "theme", "catppuccin-latte"); err != nil {
+		t.Fatal(err)
+	}
+	link, err := os.Lstat(config.File(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.Mode()&os.ModeSymlink == 0 {
+		t.Error("config.toml is no longer a symlink")
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode = %o, want 600", got)
+	}
+	if got, want := readConfig(t, root), "[ui]\ntheme = \"catppuccin-latte\"\n"; got != want {
+		t.Errorf("config.toml = %q, want %q", got, want)
+	}
+}

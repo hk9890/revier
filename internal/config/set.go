@@ -156,8 +156,17 @@ func valueEnd(lines []string, i, col int) (int, int) {
 }
 
 // replaceFile writes a file whole or not at all: a crash halfway through
-// leaves the old file, not half of the new one.
+// leaves the old file, not half of the new one. A symlink is written through,
+// so a config.toml linked in from a dotfiles repository stays linked, and the
+// file keeps its permissions.
 func replaceFile(path string, data []byte) error {
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -174,7 +183,7 @@ func replaceFile(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
