@@ -1497,3 +1497,21 @@ loads the projects again and has the new targets at once.
 The config screen now takes the whole width, as the help screen does. A form
 with notes beside its fields needs the columns, and the pane beside the
 screen was empty.
+
+### D61 — an action on one of revier's own keys is refused at load — Accepted
+
+Narrows D35's rule for action keys. The surface matches its own keys before
+any action, so an action on one of them never runs. The action bar (D49, D54)
+took alt+n, alt+c and alt+h, which were free before, and an action a user had
+on one of them stopped running with no word said. `config.Load` refuses such
+an action and names it, as it refuses a key the terminal cannot send.
+
+Letting the action win was rejected: the bar's keys would then depend on the
+configuration, and the help screen and the buttons would name keys that do
+something else. A target key on one of these chords is still not refused. It
+is a desktop key first, and on the surface it yields to revier's own key, as
+D35 already decided.
+
+The config screen refused these keys already (D56). The list `config.Load`
+reads is kept equal to the keys the TUI claims by a test, so a new button
+cannot bring the silent case back.

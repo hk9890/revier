@@ -9,6 +9,10 @@ tag.
 
 ## Unreleased
 
+- **Action required: an action on alt+n, alt+r, alt+c, alt+h, alt+e, alt+d,
+  ctrl+p, ctrl+n or ctrl+c is refused at start.** These keys are revier's
+  own, and an action on one of them never ran. Give the action another key in
+  `config.toml`; the error names the action.
 - **A Claude agent's state is what Claude Code reports.** revier reads
   `claude agents --json`, so a permission prompt or a question shows as
   attention on tmux as well as kitty, with no hook to install. The listing runs
