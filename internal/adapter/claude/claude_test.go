@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -315,8 +316,9 @@ func agents(out string, err error) func(context.Context) ([]byte, error) {
 }
 
 // A pane is matched to its conversation by the pid of its process and nothing
-// else, so two agents in one directory are told apart. The ids come back in the
-// panels' order, empty where nothing matched.
+// else, so two agents in one directory are told apart. The conversations come
+// back in the panels' order, each with the directory Claude lists it in, and
+// zero where nothing matched.
 func TestSessions(t *testing.T) {
 	p := &claude.Probe{Agents: agents(agentsJSON, nil)}
 	panels := []revier.Panel{
@@ -329,14 +331,14 @@ func TestSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sessions: %v", err)
 	}
-	want := []revier.SessionID{"b8f365f0-07ae-4464-867f-f8ac02c2f467", "", "39120ccd-8abd-434a-92c7-83ecac81fc32", ""}
-	if len(got) != len(want) {
-		t.Fatalf("Sessions = %v, want %v", got, want)
+	want := []revier.Conversation{
+		{ID: "b8f365f0-07ae-4464-867f-f8ac02c2f467", Dir: "/a"},
+		{},
+		{ID: "39120ccd-8abd-434a-92c7-83ecac81fc32", Dir: "/a"},
+		{},
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("panel %s = %q, want %q", panels[i].ID, got[i], want[i])
-		}
+	if !slices.Equal(got, want) {
+		t.Errorf("Sessions = %+v, want %+v", got, want)
 	}
 }
 
@@ -348,8 +350,8 @@ func TestSessionsIgnoresBackgroundSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0] != "" {
-		t.Errorf("a panel with no pid was given %q", got[0])
+	if got[0] != (revier.Conversation{}) {
+		t.Errorf("a panel with no pid was given %+v", got[0])
 	}
 }
 

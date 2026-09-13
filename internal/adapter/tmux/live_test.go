@@ -368,6 +368,41 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	}
 }
 
+// A panel with a directory of its own starts there, and one that asks for a
+// tab is split into the same window: a second window would be a second
+// instance, which the realization's match would not group with the first.
+func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {
+	h, c := server(t), ctx(t)
+	dir, own, tabbed := t.TempDir(), t.TempDir(), t.TempDir()
+	_, err := h.Open(c, revier.Realization{
+		Name: "session:demo", Dir: dir,
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: own},
+			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: tabbed, Tab: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || len(instances[0].Panels) != 3 {
+		t.Fatalf("instances = %+v, want one window of three panes", instances)
+	}
+	for i, want := range []string{own, dir, tabbed} {
+		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", instances[0].Panels[i].ID.String(), "#{pane_current_path}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(string(out)); got != want {
+			t.Errorf("pane %d starts in %q, want %q", i, got, want)
+		}
+	}
+}
+
 // Text arrives in the pane as typed, whatever it holds: a leading dash that
 // send-keys would read as a flag, a word that is a tmux key name, quotes, a
 // backslash, the format separator. The "\r" sent after it is the Enter that

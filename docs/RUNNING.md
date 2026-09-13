@@ -101,19 +101,32 @@ tmux kill-server                                 # the private server only
 ```
 
 The save asks `claude agents --json` which conversation each agent pane's
-process holds. To run the resume path, give the pane's file a `sessionId`, with
-the fake `claude` from the agent monitor recipe on PATH:
+process holds, and in which directory. To run the resume path, give the pane's
+file a `sessionId` and a `cwd`, with the fake `claude` from the agent monitor
+recipe on PATH:
 
 ```bash
-printf '{"pid": %s, "status": "idle", "sessionId": "abc-123"}' "$pid" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
+printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
 ./bin/revier session save   # prints "1 agent conversation recorded"
 ```
+
+To run the agents past the layout, split more agent panes into the workspace
+before the save, each in its own directory, and list each one's pid the same
+way:
+
+```bash
+tmux split-window -t home -c "$S/state" bash -c "exec -a claude sleep 600"
+```
+
+Remove one of those directories before the restore to see the agent start
+empty, and the restore say `directory gone`.
 
 Run a real `claude` in the pane instead to check against Claude Code itself:
 answer its trust prompt for the directory with "Yes", since the default exits.
 
 Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
-a restore acts on; it holds names alone, never a host or an argv.
+a restore acts on; it holds names, conversations and directories, never a host
+or an argv.
 
 ## Drive the TUI without a screen
 

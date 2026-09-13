@@ -73,6 +73,7 @@ type listedSession struct {
 	PID       int    `json:"pid"`
 	SessionID string `json:"sessionId"`
 	Status    string `json:"status"`
+	Cwd       string `json:"cwd"`
 }
 
 func (p *Probe) Name() string { return "claude" }
@@ -219,20 +220,24 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // command - as revier launches it. A pane where claude was typed into a shell
 // reports the shell, is not matched, and restores empty.
 //
+// The directory is the session's cwd as the listing gives it, which is where
+// Claude works and not where its pane was opened: an agent that entered a
+// worktree is listed in the worktree.
+//
 // It always runs the command rather than reuse the listing Inspect keeps: a
 // save records what holds now, and runs once.
-func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.SessionID, error) {
+func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
 	listed, err := p.list(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]revier.SessionID, len(panels))
+	out := make([]revier.Conversation, len(panels))
 	for i, panel := range panels {
-		if panel.PID != 0 {
-			ids[i] = revier.SessionID(listed[panel.PID].SessionID)
+		if s, ok := listed[panel.PID]; ok && panel.PID != 0 && s.SessionID != "" {
+			out[i] = revier.Conversation{ID: revier.SessionID(s.SessionID), Dir: s.Cwd}
 		}
 	}
-	return ids, nil
+	return out, nil
 }
 
 const (

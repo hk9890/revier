@@ -407,8 +407,13 @@ func isShell(cmd string) bool {
 
 // Open creates an OS window named r.Name holding r.Panels, or r.Launch alone
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
-// opens the OS window and every later one splits into it. With no kitty
+// opens the OS window, every later one splits into its first tab, and a panel
+// that asks for a tab gets one of its own in the same OS window. With no kitty
 // answering it starts one, on a socket that discovery finds again.
+//
+// A launch's --match selects a tab, so the OS window is named by the first
+// panel's window as window_id; id would be a tab id, which equals the window
+// id only in a kitty that has opened nothing else.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
@@ -425,10 +430,15 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
 	}
+	tabbed := false
 	for _, p := range panels[1:] {
-		args := []string{"--type=window", "--match", "id:" + strconv.Itoa(first), "--hold"}
-		if r.Dir != "" {
-			args = append(args, "--cwd", r.Dir)
+		kind := "--type=window"
+		if p.Tab {
+			kind, tabbed = "--type=tab", true
+		}
+		args := []string{kind, "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+		if dir := dirOf(r, p); dir != "" {
+			args = append(args, "--cwd", dir)
 		}
 		args = append(args, p.Command...)
 		id, err := h.launch(ctx, socket, args...)
@@ -436,6 +446,13 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 			return revier.TargetRef{}, err
 		}
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
+			return revier.TargetRef{}, err
+		}
+	}
+	// A new tab becomes the active one. The workspace is the first tab, so
+	// that is where the OS window is left.
+	if tabbed {
+		if _, err := h.kitten(ctx, socket, "focus-window", "--match", "id:"+strconv.Itoa(first)); err != nil {
 			return revier.TargetRef{}, err
 		}
 	}
@@ -455,6 +472,14 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		}
 	}
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
+}
+
+// dirOf is where a panel starts: its own directory, or the realization's.
+func dirOf(r revier.Realization, p revier.PanelSpec) string {
+	if p.Dir != "" {
+		return p.Dir
+	}
+	return r.Dir
 }
 
 // title gives a new window its panel title without taking the title away from
@@ -478,8 +503,8 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 		// otherwise pass that class, and its window rule, on to the workspace.
 		args := []string{"--type=os-window",
 			"--os-window-name", r.Name, "--os-window-title", r.Name, "--os-window-class", "kitty", "--hold"}
-		if r.Dir != "" {
-			args = append(args, "--cwd", r.Dir)
+		if dir := dirOf(r, p); dir != "" {
+			args = append(args, "--cwd", dir)
 		}
 		args = append(args, p.Command...)
 		id, err := h.launch(ctx, socket, args...)
@@ -515,8 +540,8 @@ func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.Pa
 	args := []string{"--detach", "--listen-on", "unix:@kitty-{kitty_pid}",
 		"-o", "allow_remote_control=socket-only",
 		"--name", r.Name, "--title", r.Name, "--hold"}
-	if r.Dir != "" {
-		args = append(args, "--directory", r.Dir)
+	if dir := dirOf(r, p); dir != "" {
+		args = append(args, "--directory", dir)
 	}
 	args = append(args, p.Command...)
 	if err := h.startProcess(ctx, args...); err != nil {

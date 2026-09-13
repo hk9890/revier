@@ -29,7 +29,7 @@ func agentProject() revier.Project {
 					Match: revier.Match{Title: "^session:revier$"},
 					Panels: []revier.PanelSpec{
 						{Kind: revier.PanelShell, Command: []string{"zsh"}},
-						{Kind: revier.PanelAgent, Command: []string{"claude", "--model", "opus"}},
+						{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}},
 					},
 				},
 			},
@@ -52,14 +52,42 @@ func agentProject() revier.Project {
 
 func resumable() *hosttest.ResumableProbe { return hosttest.NewResumableProbe("claude", "claude") }
 
-// The recording is names: which project, which target, and the conversation an
-// agent panel holds. A target with no live instance was not open and is left
-// out, so restoring opens what was there and nothing else.
+// agent is a live panel the fake probe claims, holding a conversation when id
+// is not empty, in dir when dir is not empty.
+func agent(panel revier.PanelID, id, dir string) revier.Panel {
+	vars := map[string]string{}
+	if id != "" {
+		vars["session"] = id
+	}
+	if dir != "" {
+		vars["dir"] = dir
+	}
+	return revier.Panel{ID: panel, Kind: revier.PanelAgent, Title: "claude", Vars: vars}
+}
+
+// launched restores one target from a recording and returns the panels the
+// host was asked to open.
+func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) []revier.PanelSpec {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c.Runtime = rt
+	if _, err := c.GoResuming(context.Background(), prepared(t, proj), "home", nil, resumes); err != nil {
+		t.Fatalf("GoResuming: %v", err)
+	}
+	if len(rt.Opened) != 1 {
+		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
+	}
+	return rt.Opened[0].Panels
+}
+
+// The recording is names: which project, which target, and what each agent was
+// doing. A target with no live instance was not open and is left out, so
+// restoring opens what was there and nothing else.
 func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+		agent("2", "abc-123", "/home/hans/dev/github/revier"),
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
@@ -83,80 +111,40 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if !slices.Equal(names, []revier.TargetName{"home"}) {
 		t.Errorf("targets = %v, want only the live one", names)
 	}
-	panels := s.Projects[0].Targets[0].Panels
-	if len(panels) != 1 {
-		t.Fatalf("panels = %+v, want the one agent", panels)
-	}
-	// Index 1: the agent's position among all the panels, beside the shell.
-	if panels[0].Index != 1 || panels[0].Harness != "claude" || panels[0].Session != "abc-123" {
-		t.Errorf("panel = %+v, want the claude conversation at position 1", panels[0])
+	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: "/home/hans/dev/github/revier"}}
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
+		t.Errorf("agents = %+v, want %+v", got, want)
 	}
 }
 
-// A declared agent that no probe claims is still a position. Save and restore
-// must count it the same way, or the conversation of the agent after it lands
-// in it: aider started on Claude's conversation, and Claude started empty.
-func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
-	proj := agentProject()
-	proj.Targets[0].Runtime.Panels = []revier.PanelSpec{
-		{Kind: revier.PanelAgent, Command: []string{"aider"}},
-		{Kind: revier.PanelAgent, Command: []string{"claude"}},
-	}
+// Every agent is recorded in the order the runtime lists it, the one with no
+// conversation too: the order is what a restore lays agents out by, and one
+// left out would move every agent after it.
+func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "aider"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+		agent("1", "first", "/a"),
+		revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"},
+		agent("3", "", ""),
+		agent("4", "third", "/a/.claude/worktrees/tui"),
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}} // no aider probe
-
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, _ := c.Session(context.Background(), report, "")
-
-	restored := hosttest.NewRuntime("rt")
-	c.Runtime = restored
-	plan := c.RestorePlan(s, core.Report{Views: []revier.ProjectView{{
-		Project: proj,
-		Targets: []revier.TargetView{{Name: "home", Available: true}},
-	}}})
-	if _, err := c.GoResuming(context.Background(), prepared(t, proj), "home", nil, plan[0].Resumes); err != nil {
-		t.Fatal(err)
-	}
-	panels := restored.Opened[0].Panels
-	if !slices.Equal(panels[0].Command, []string{"aider"}) {
-		t.Errorf("aider started as %v, want it untouched", panels[0].Command)
-	}
-	if want := []string{"claude", "--resume", "abc-123"}; !slices.Equal(panels[1].Command, want) {
-		t.Errorf("claude started as %v, want %v", panels[1].Command, want)
-	}
-}
-
-// An agent running where the project declares no agent - claude typed into a
-// shell panel, or a runtime target with no panels - gets no conversation in
-// the file: restore resumes only into a declared agent, and a recorded
-// conversation it drops would be reported as resumed. The save counts it.
-func TestSessionRecordsNoConversationForAnUndeclaredAgent(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "def-456"}},
-	)
-	probe := resumable()
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s, gaps := c.Session(context.Background(), report, "")
 
-	panels := s.Projects[0].Targets[0].Panels
-	if len(panels) != 1 || panels[0].Index != 1 || panels[0].Session != "def-456" {
-		t.Errorf("panels = %+v, want only the declared agent at position 1", panels)
+	want := []session.Agent{
+		{Harness: "claude", Session: "first", Dir: "/a"},
+		{Harness: "claude"},
+		{Harness: "claude", Session: "third", Dir: "/a/.claude/worktrees/tui"},
 	}
-	if gaps.Undeclared != 1 || gaps.Unnamed != 0 {
-		t.Errorf("gaps = %+v, want the shell's agent counted as undeclared", gaps)
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
+		t.Errorf("agents = %+v, want %+v", got, want)
+	}
+	if gaps.Unnamed != 1 {
+		t.Errorf("Unnamed = %d, want the one with no conversation", gaps.Unnamed)
 	}
 }
 
@@ -198,27 +186,26 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	}
 }
 
-// A probe without the capability, and one that cannot say, both leave the
-// panel unrecorded: it restores empty, which is the whole degradation. Either
-// way the save counts the agent as unnamed, so the gap is said before the
-// reboot.
+// A probe without the capability, and one that cannot say, both record the
+// agent with no conversation: it restores empty, which is the whole
+// degradation. Either way the save counts the agent as unnamed, so the gap is
+// said before the reboot.
 func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
-	)
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"))
+	noConversation := []session.Agent{{Harness: "claude"}}
+
 	plain := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude"}}}
 	report, err := plain.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s, gaps := plain.Session(context.Background(), report, "")
-	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
-		t.Errorf("panels = %+v, want none from a probe that cannot name one", panels)
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, noConversation) {
+		t.Errorf("agents = %+v, want the agent with no conversation from a probe that cannot name one", got)
 	}
 	if gaps.Unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent", gaps.Unnamed)
+		t.Errorf("Unnamed = %d, want the one agent", gaps.Unnamed)
 	}
 
 	failing := resumable()
@@ -229,16 +216,16 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, gaps = broken.Session(context.Background(), report, "")
-	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
-		t.Errorf("panels = %+v, want none when the probe failed", panels)
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, noConversation) {
+		t.Errorf("agents = %+v, want the agent with no conversation when the probe failed", got)
 	}
 	if gaps.Unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent", gaps.Unnamed)
+		t.Errorf("Unnamed = %d, want the one agent", gaps.Unnamed)
 	}
 	// The failure is said, with the probe's name, so an agent a broken probe
 	// could not name is not taken for one no listing matched.
 	if len(gaps.Failed) != 1 || !errors.Is(gaps.Failed[0], failing.SessionErr) || !strings.HasPrefix(gaps.Failed[0].Error(), "claude: ") {
-		t.Errorf("failed = %v, want the probe's error, named", gaps.Failed)
+		t.Errorf("Failed = %v, want the probe's error, named", gaps.Failed)
 	}
 }
 
@@ -250,17 +237,13 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+		agent("2", "abc-123", ""),
 	)
-	rt.Add("session:other", "kitty",
-		revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "claude"},
-		revier.Panel{ID: "4", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "def-456"}},
-	)
+	rt.Add("session:other", "kitty", agent("3", "", ""), agent("4", "def-456", ""))
 	other := agentProject()
 	other.Name = "other"
 	other.Targets[0].Runtime.Name = "session:other"
 	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
-	other.Targets[0].Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelAgent}}
 	probe := resumable()
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 
@@ -274,20 +257,20 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 		t.Errorf("Sessions was called %d times, want once for the whole save", probe.Calls)
 	}
 	if gaps.Unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent with no id", gaps.Unnamed)
+		t.Errorf("Unnamed = %d, want the one agent with no id", gaps.Unnamed)
 	}
 	if len(s.Projects) != 2 {
 		t.Fatalf("projects = %+v, want both", s.Projects)
 	}
-	got := map[revier.ProjectName][]session.Panel{}
+	got := map[revier.ProjectName][]session.Agent{}
 	for _, p := range s.Projects {
-		got[p.Name] = p.Targets[0].Panels
+		got[p.Name] = p.Targets[0].Agents
 	}
-	if p := got["revier"]; len(p) != 1 || p[0].Index != 1 || p[0].Session != "abc-123" {
-		t.Errorf("revier panels = %+v, want abc-123 at position 1", p)
+	if want := []session.Agent{{Harness: "claude", Session: "abc-123"}}; !slices.Equal(got["revier"], want) {
+		t.Errorf("revier agents = %+v, want %+v", got["revier"], want)
 	}
-	if p := got["other"]; len(p) != 1 || p[0].Index != 1 || p[0].Session != "def-456" {
-		t.Errorf("other panels = %+v, want def-456 at position 1", p)
+	if want := []session.Agent{{Harness: "claude"}, {Harness: "claude", Session: "def-456"}}; !slices.Equal(got["other"], want) {
+		t.Errorf("other agents = %+v, want %+v", got["other"], want)
 	}
 }
 
@@ -344,38 +327,129 @@ func TestRestorePlanKeepsTheFileOrder(t *testing.T) {
 	}
 }
 
-// The resume reaches the host as a rewritten panel command, with the project's
-// own arguments kept: a project that runs its agent with a model flag keeps
-// the flag across a restore.
-func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+// A dry run says what becomes of every recorded agent before anything opens,
+// from the same realization a launch resolves, so the two cannot disagree.
+func TestResumesSaysWhatBecomesOfEachAgent(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
+	worktree := t.TempDir()
 
-	resumes := []core.Resume{{Index: 1, Harness: "claude", Session: "abc-123"}}
-	res, err := c.GoResuming(context.Background(), p, "home", nil, resumes)
-	if err != nil {
-		t.Fatalf("GoResuming: %v", err)
+	home := c.Resumes(p, "home", []core.Resume{
+		{Harness: "claude", Session: "abc-123", Dir: worktree},
+		{Harness: "claude", Session: "def-456", Dir: worktree + "/removed"},
+		{Harness: "claude"},
+	})
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentDirGone, core.AgentEmpty}; !slices.Equal(home, want) {
+		t.Errorf("home agents = %v, want %v", home, want)
 	}
-	if res.Resumed != 1 {
-		t.Errorf("Resumed = %d, want the one agent", res.Resumed)
+	// notes launches a pager and declares no agent panel to start one from.
+	notes := c.Resumes(p, "notes", []core.Resume{{Harness: "claude", Session: "ghi-789"}})
+	if want := []core.AgentOutcome{core.AgentDropped}; !slices.Equal(notes, want) {
+		t.Errorf("notes agents = %v, want %v", notes, want)
 	}
-	if n := c.Resumes(p, "home", resumes); n != 1 {
-		t.Errorf("Resumes = %d, want the one a launch honours", n)
+}
+
+// A target a window host realizes here has no panels, whatever its runtime
+// realization declares: the launch drops its agents, and the dry run says so.
+func TestResumesLaysAgentsOverTheRealizationThatWins(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[0].Window = &revier.Realization{Launch: []string{"kitty"}, Match: revier.Match{Class: "^kitty$"}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
+
+	got := c.Resumes(prepared(t, proj), "home", []core.Resume{{Harness: "claude", Session: "abc-123"}})
+	if want := []core.AgentOutcome{core.AgentDropped}; !slices.Equal(got, want) {
+		t.Errorf("agents = %v, want %v", got, want)
 	}
-	if len(rt.Opened) != 1 {
-		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
-	}
-	panels := rt.Opened[0].Panels
+}
+
+// The resume reaches the host as a rewritten panel command, with the project's
+// own arguments kept, started in the directory the agent worked in: a project
+// that runs its agent with a model flag keeps the flag across a restore, and a
+// worktree agent carries on in its worktree.
+func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+	worktree := t.TempDir()
+
+	panels := launched(t, c, agentProject(), []core.Resume{{Harness: "claude", Session: "abc-123", Dir: worktree}})
 	if len(panels) != 2 {
-		t.Fatalf("panels = %+v, want both", panels)
+		t.Fatalf("panels = %+v, want the layout", panels)
 	}
-	if !slices.Equal(panels[0].Command, []string{"zsh"}) {
-		t.Errorf("the shell panel was rewritten: %v", panels[0].Command)
+	if !slices.Equal(panels[0].Command, []string{"zsh"}) || panels[0].Dir != "" {
+		t.Errorf("the shell panel was rewritten: %+v", panels[0])
 	}
 	want := []string{"claude", "--model", "opus", "--resume", "abc-123"}
 	if !slices.Equal(panels[1].Command, want) {
 		t.Errorf("agent command = %v, want %v", panels[1].Command, want)
+	}
+	if panels[1].Dir != worktree {
+		t.Errorf("agent starts in %q, want its worktree %q", panels[1].Dir, worktree)
+	}
+}
+
+// Agents past the ones the layout declares were opened beside it by hand. Each
+// comes back in a tab of its own, started the way the project starts its
+// declared agent, on its own conversation and in its own directory.
+func TestRestoreOpensTheAgentsPastTheLayoutInTabs(t *testing.T) {
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+	root, worktree := t.TempDir(), t.TempDir()
+
+	panels := launched(t, c, agentProject(), []core.Resume{
+		{Harness: "claude", Session: "declared", Dir: root},
+		{Harness: "claude", Session: "by-hand", Dir: worktree},
+		{Harness: "claude"},
+	})
+	want := []revier.PanelSpec{
+		{Kind: revier.PanelShell, Command: []string{"zsh"}},
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "declared"}, Dir: root},
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "by-hand"}, Dir: worktree, Tab: true},
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Tab: true},
+	}
+	if len(panels) != len(want) {
+		t.Fatalf("panels = %+v, want %d", panels, len(want))
+	}
+	for i := range want {
+		if !slices.Equal(panels[i].Command, want[i].Command) || panels[i].Dir != want[i].Dir ||
+			panels[i].Tab != want[i].Tab || panels[i].Kind != want[i].Kind || panels[i].Title != want[i].Title {
+			t.Errorf("panel %d = %+v, want %+v", i, panels[i], want[i])
+		}
+	}
+}
+
+// A worktree removed since the save: resumed anywhere else, the conversation
+// carries on in the wrong checkout and its edits land there. The agent starts
+// empty where the workspace starts instead.
+func TestRestoreStartsAnAgentEmptyWhenItsDirectoryIsGone(t *testing.T) {
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+	gone := t.TempDir() + "/removed-worktree"
+
+	panels := launched(t, c, agentProject(), []core.Resume{
+		{Harness: "claude", Session: "declared", Dir: gone},
+		{Harness: "claude", Session: "by-hand", Dir: gone},
+	})
+	if len(panels) != 3 {
+		t.Fatalf("panels = %+v, want the agent past the layout still opened", panels)
+	}
+	for _, p := range panels[1:] {
+		if !slices.Equal(p.Command, []string{"claude", "--model", "opus"}) || p.Dir != "" {
+			t.Errorf("agent = %+v, want it empty where the workspace starts", p)
+		}
+	}
+}
+
+// The launch reports what it did with each recorded agent, which is what the
+// restore prints: a count taken from the recording would say resumed for an
+// agent the launch dropped.
+func TestGoResumingReportsWhatBecameOfEachAgent(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: []revier.AgentProbe{resumable()}}
+	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+		{Harness: "claude", Session: "abc-123"},
+		{Harness: "opencode", Session: "def-456"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}; !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
 	}
 }
 
@@ -386,82 +460,48 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
-	resumes := []core.Resume{{Index: 1, Harness: "claude", Session: "abc-123"}}
+	resumes := []core.Resume{{Harness: "claude", Session: "abc-123", Dir: t.TempDir()}, {Harness: "claude", Session: "def-456"}}
 	if _, err := c.GoResuming(context.Background(), p, "home", nil, resumes); err != nil {
 		t.Fatal(err)
 	}
+	panels := p.Targets[0].Runtime.Panels
+	if len(panels) != 2 {
+		t.Errorf("the project now has %d panels, want its 2: a tab was added to it", len(panels))
+	}
 	want := []string{"claude", "--model", "opus"}
-	if got := p.Targets[0].Runtime.Panels[1].Command; !slices.Equal(got, want) {
-		t.Errorf("the project now reads %v, want %v: the resume was written into it", got, want)
+	if got := panels[1]; !slices.Equal(got.Command, want) || got.Dir != "" {
+		t.Errorf("the project now reads %+v, want %v: the resume was written into it", got, want)
 	}
 }
 
-// A recording this machine cannot honour is dropped, and that panel starts
+// A recording this machine cannot honour is dropped, and that agent starts
 // empty. Failing the restore instead would lose nineteen workspaces over one
 // harness that is not installed here.
 func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 	cases := []struct {
 		name   string
-		core   func(rt *hosttest.FakeRuntime) *core.Core
+		probes []revier.AgentProbe
 		resume core.Resume
 	}{
 		{
-			name: "no probe of that harness",
-			core: func(rt *hosttest.FakeRuntime) *core.Core {
-				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-			},
-			resume: core.Resume{Index: 1, Harness: "opencode", Session: "abc-123"},
+			name:   "no probe of that harness",
+			probes: []revier.AgentProbe{resumable()},
+			resume: core.Resume{Harness: "opencode", Session: "abc-123"},
 		},
 		{
-			name: "the probe cannot resume",
-			core: func(rt *hosttest.FakeRuntime) *core.Core {
-				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude"}}}
-			},
-			resume: core.Resume{Index: 1, Harness: "claude", Session: "abc-123"},
+			name:   "the probe cannot resume",
+			probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude"}},
+			resume: core.Resume{Harness: "claude", Session: "abc-123"},
 		},
 		{
-			name: "past the end of the layout",
-			core: func(rt *hosttest.FakeRuntime) *core.Core {
-				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-			},
-			resume: core.Resume{Index: 3, Harness: "claude", Session: "abc-123"},
-		},
-		{
-			// The file is meant to be hand-edited, so a typo is an input.
-			name: "a negative position",
-			core: func(rt *hosttest.FakeRuntime) *core.Core {
-				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-			},
-			resume: core.Resume{Index: -1, Harness: "claude", Session: "abc-123"},
-		},
-		{
-			// A layout edited since the save: the position is a shell now,
-			// and a resume flag typed into a shell is worse than none.
-			name: "the position is not an agent any more",
-			core: func(rt *hosttest.FakeRuntime) *core.Core {
-				return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-			},
-			resume: core.Resume{Index: 0, Harness: "claude", Session: "abc-123"},
+			name:   "no conversation recorded",
+			probes: []revier.AgentProbe{resumable()},
+			resume: core.Resume{Harness: "claude"},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rt := hosttest.NewRuntime("rt")
-			c := tc.core(rt)
-			p := prepared(t, agentProject())
-			res, err := c.GoResuming(context.Background(), p, "home", nil, []core.Resume{tc.resume})
-			if err != nil {
-				t.Fatalf("GoResuming: %v", err)
-			}
-			// Said as it is: a restore that reports a dropped resume as
-			// resumed hides the empty agent it started.
-			if res.Resumed != 0 {
-				t.Errorf("Resumed = %d, want none", res.Resumed)
-			}
-			if n := c.Resumes(p, "home", []core.Resume{tc.resume}); n != 0 {
-				t.Errorf("Resumes = %d, want none", n)
-			}
-			panels := rt.Opened[0].Panels
+			panels := launched(t, &core.Core{Probes: tc.probes}, agentProject(), []core.Resume{tc.resume})
 			if !slices.Equal(panels[0].Command, []string{"zsh"}) {
 				t.Errorf("shell command = %v, want the project as written", panels[0].Command)
 			}

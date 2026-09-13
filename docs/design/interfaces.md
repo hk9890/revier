@@ -207,6 +207,8 @@ type PanelSpec struct {
     Kind    PanelKind
     Title   string
     Command []string
+    Dir     string // set by a restore only, never read from a project file (D62)
+    Tab     bool   // set by a restore only: a tab of its own where the runtime has tabs (D62)
 }
 
 type PanelKind string
@@ -280,10 +282,17 @@ restores the workspace, with an empty agent.
 // SessionID is a harness's own name for one conversation, opaque to revier.
 type SessionID string
 
+// Conversation is a panel's conversation, and the directory the agent works
+// in. Either is empty when the harness does not say.
+type Conversation struct {
+    ID  SessionID
+    Dir string
+}
+
 type Resumable interface {
     // Sessions names the conversation each panel holds, in the panels'
-    // order, with an empty id for a panel that holds none.
-    Sessions(ctx context.Context, panels []Panel) ([]SessionID, error)
+    // order, with a zero Conversation for a panel that holds none.
+    Sessions(ctx context.Context, panels []Panel) ([]Conversation, error)
 
     // ResumeCommand returns the argv that starts the harness on that
     // conversation, built from the panel as it is configured now.
@@ -299,6 +308,11 @@ The harness's own resume flag never reaches the core.
 `Sessions` takes every panel of a save at once because the answer may cost a
 process: the Claude probe runs `claude agents --json` (D55). Twenty agents cost
 that once, the rule `Instances` follows.
+
+The directory is the agent's, not the pane's: an agent can work in a worktree
+of the project it was opened in. A restore starts the agent there, through
+`PanelSpec.Dir`, and opens an agent past the declared layout through
+`PanelSpec.Tab`. Neither field is read from a project file (D62).
 
 There is no `Runtime` counterpart. Persistence across a reboot is either the
 runtime's already or impossible for it, and in both cases revier adds nothing.

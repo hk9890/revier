@@ -125,6 +125,14 @@ which conversation each agent's process holds. An agent the save cannot name -
 `claude` typed into a tmux shell pane rather than started by revier - is named
 when you save, and comes back starting fresh.
 
+Every agent comes back, not only the one the layout declares: an agent you
+opened beside the workspace returns in a tab of its own, started the way the
+project starts its agent panel, and each agent starts in the directory it
+worked in. An agent whose worktree was removed since the save starts fresh in
+the project instead. The resume flag is added to the agent panel's `command`,
+so a command that wraps the agent must pass its arguments on:
+`["sh", "-lc", "exec my-agent \"$@\"", "sh"]`, not `["sh", "-lc", "my-agent"]`.
+
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
 Targets most projects share, such as an editor, are declared once as

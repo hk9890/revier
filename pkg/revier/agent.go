@@ -15,6 +15,18 @@ type PanelSpec struct {
 	Kind    PanelKind `toml:"kind" json:"kind"`
 	Title   string    `toml:"title" json:"title,omitempty"`
 	Command []string  `toml:"command" json:"command,omitempty"`
+
+	// Dir is where this panel starts, when it is not where the realization
+	// starts. No project file sets it: a restore does, for an agent that
+	// worked in a worktree of the project rather than in the project itself
+	// (decisions.md D62).
+	Dir string `toml:"-" json:"dir,omitempty"`
+
+	// Tab asks for the panel in a tab of its own inside the instance, where
+	// the runtime has tabs; one without splits it in like any other panel.
+	// No project file sets it either: it is how a restore brings back an
+	// agent the user opened beside the declared layout (decisions.md D62).
+	Tab bool `toml:"-" json:"tab,omitempty"`
 }
 
 type PanelKind string
@@ -154,6 +166,16 @@ func (p PanelID) String() string { return string(p) }
 // Only the probe that produced it knows how to spell it back into an argv.
 type SessionID string
 
+// Conversation is what a probe can say about the conversation a panel holds:
+// its id, and the directory the agent works in. The directory is the agent's
+// and not the panel's: an agent started in a project can work in one of its
+// worktrees, and resumed anywhere else it carries on in the wrong checkout.
+// Either is empty when the harness does not say.
+type Conversation struct {
+	ID  SessionID
+	Dir string
+}
+
 // Resumable is an optional capability of an AgentProbe, detected by type
 // assertion. A probe that implements it can name the conversation a panel
 // holds, so a workspace reopened after a reboot starts its agent where the
@@ -167,11 +189,12 @@ type SessionID string
 // flag's spelling never reaches the core.
 type Resumable interface {
 	// Sessions names the conversation each panel holds, in the panels'
-	// order, with an empty id for a panel that holds none. It is asked once
-	// for every panel of a save rather than once per panel, because the
-	// answer may cost a process - `claude agents --json` - and a save of
-	// twenty agents must cost that once, the rule Host.Instances follows.
-	Sessions(ctx context.Context, panels []Panel) ([]SessionID, error)
+	// order, with a zero Conversation for a panel that holds none. It is
+	// asked once for every panel of a save rather than once per panel,
+	// because the answer may cost a process - `claude agents --json` - and a
+	// save of twenty agents must cost that once, the rule Host.Instances
+	// follows.
+	Sessions(ctx context.Context, panels []Panel) ([]Conversation, error)
 
 	// ResumeCommand returns the argv that starts the harness on that
 	// conversation, built from the panel as it is configured now. The

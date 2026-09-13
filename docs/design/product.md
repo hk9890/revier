@@ -24,7 +24,7 @@ territory. revier is how you walk it.
 | **Home** | The project's workspace target — the terminal you live in and return to |
 | **Panel** | One pane inside a runtime target: an agent, a shell, a tool |
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
-| **Session** | A recorded set: which projects were open, which of their targets, and the conversation each agent held (D46) |
+| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation and directory (D46, D62) |
 
 Every operation in revier is the same one: **run-or-raise a named target, and
 remember where you came from.** Opening a project is run-or-raise on its home
