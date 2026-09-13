@@ -309,7 +309,7 @@ func (m Model) footer() string {
 		return m.deletePrompt()
 	}
 	if m.dialog == dialogConfig && m.dropping {
-		return m.dropActionPrompt()
+		return m.dropPrompt()
 	}
 	if m.asking != "" {
 		return m.askingLine()

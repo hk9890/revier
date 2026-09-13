@@ -134,18 +134,35 @@ const (
 	configInForm               // an action's form is up
 	configOnAction
 	configOnAdd
+	configInPanelForm // a panel of a target's form is up
+	configOnFormPanel // the target form's cursor is on a panel
+	configOnFormHome  // the target form's cursor is on the home flag
+	configInTargetForm
 )
 
 func (m Model) configHelp() configHelp {
 	_, onAction := m.actionRow()
+	_, onTarget := m.targetRow()
 	switch {
 	case m.chord.Focused():
 		return configTyping
 	case m.aform.open:
 		return configInForm
-	case onAction:
+	case m.tform.panel.open:
+		return configInPanelForm
+	case m.tform.open:
+		switch m.tform.rows()[m.tform.cursor].kind {
+		case rowPanel:
+			return configOnFormPanel
+		case rowAddPanel:
+			return configOnAdd
+		case rowHome:
+			return configOnFormHome
+		}
+		return configInTargetForm
+	case onAction, onTarget:
 		return configOnAction
-	case m.crow == m.addRow():
+	case m.crow == m.addRow(), m.crow == m.addTargetRow():
 		return configOnAdd
 	}
 	return configOnSetting
@@ -165,6 +182,17 @@ func (k keyMap) helpForConfig(h configHelp) []key.Binding {
 		}
 	case configOnAdd:
 		return []key.Binding{helpKey("↑↓", "move"), helpKey("enter", "add"), helpKey("esc", "back"), k.Quit}
+	case configInTargetForm:
+		return []key.Binding{helpKey("enter", "save"), helpKey("↑↓", "move"), helpKey("esc", "cancel"), k.Quit}
+	case configOnFormHome:
+		return []key.Binding{helpKey("←→", "change"), helpKey("enter", "save"), helpKey("↑↓", "move"), helpKey("esc", "cancel"), k.Quit}
+	case configOnFormPanel:
+		return []key.Binding{
+			helpKey("enter", "edit"), helpKey(k.Delete.Help().Key, "delete"), helpKey("↑↓", "move"),
+			helpKey("esc", "cancel"), k.Quit,
+		}
+	case configInPanelForm:
+		return []key.Binding{helpKey("enter", "keep"), helpKey("←→", "kind"), helpKey("tab", "next field"), helpKey("esc", "cancel"), k.Quit}
 	}
 	return []key.Binding{
 		helpKey("↑↓", "move"), helpKey("←→", "change"), helpKey("enter", "change/edit"),

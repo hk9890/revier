@@ -30,7 +30,7 @@ func editableModel(t *testing.T) (Model, string) {
 	if err := os.WriteFile(file, []byte(editable), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, err := config.LoadProject(file)
+	p, err := config.LoadProject(file, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

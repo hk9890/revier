@@ -77,29 +77,7 @@ func RemoveAction(root string, i int, was Action) error {
 			return nil, nil, ErrActionsChanged
 		}
 		t := entries[i]
-		var kept []string
-		if h := headerLine.FindStringSubmatch(lines[t.header]); h[3] != "" {
-			kept = append(kept, h[3])
-		}
-		for j := t.header + 1; j < t.end; j++ {
-			at := keyLine.FindStringSubmatchIndex(lines[j])
-			if at == nil {
-				kept = append(kept, lines[j])
-				continue
-			}
-			end, _ := valueEnd(lines, j, at[1])
-			for k, from := j, at[1]; k <= end; k, from = k+1, 0 {
-				if c := commentOf(lines[k], from); c != "" {
-					kept = append(kept, c)
-				}
-			}
-			j = end
-		}
-		if strings.TrimSpace(strings.Join(kept, "")) == "" {
-			kept = nil
-		}
-		out := slices.Concat(lines[:t.header], kept, lines[t.end:])
-		return out, slices.Delete(slices.Clone(have), i, i+1), nil
+		return dropLines(lines, t.header, t.end), slices.Delete(slices.Clone(have), i, i+1), nil
 	})
 }
 

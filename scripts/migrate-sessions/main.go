@@ -120,7 +120,7 @@ func convert(in, out string) error {
 	// The real gate: every file revier will read has to load, validate and
 	// prepare. A converter that writes ninety files revier rejects has done
 	// nothing.
-	projects, err := config.LoadProjects(out)
+	projects, err := config.LoadProjects(out, nil)
 	if err != nil {
 		return fmt.Errorf("the written projects do not load: %w", err)
 	}

@@ -48,9 +48,14 @@ func ProjectFile(root string, name revier.ProjectName) string {
 // it back. An existing file is never overwritten, and a file that does not
 // load is removed again, so Create leaves behind a project revier accepts or
 // nothing at all. gitURL may be empty; a non-empty one must pass
-// ValidateGitURL.
+// ValidateGitURL. When config.toml has shared targets, the file has no
+// targets of its own: the project has the shared ones.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
-	return write(root, name, projectTOML(name, dir, gitURL))
+	shared, err := sharedTargets(root)
+	if err != nil {
+		return core.Project{}, err
+	}
+	return write(root, name, projectTOML(name, dir, gitURL, len(shared) == 0), shared)
 }
 
 // CreateLink writes a link file for a project on another machine
@@ -60,13 +65,14 @@ func CreateLink(root string, name revier.ProjectName, host string, project revie
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)
 	}
-	return write(root, name, linkTOML(name, host, project))
+	// A link has no shared targets (decisions.md D59).
+	return write(root, name, linkTOML(name, host, project), nil)
 }
 
 // write puts body under the project's file name and loads it back. An
 // existing file is never overwritten, and a file that does not load is
 // removed again, so the directory holds a project revier accepts or nothing.
-func write(root string, name revier.ProjectName, body string) (core.Project, error) {
+func write(root string, name revier.ProjectName, body string, shared []map[string]any) (core.Project, error) {
 	if err := ValidateName(name); err != nil {
 		return core.Project{}, err
 	}
@@ -89,7 +95,7 @@ func write(root string, name revier.ProjectName, body string) (core.Project, err
 		_ = os.Remove(path)
 		return core.Project{}, werr
 	}
-	p, err := LoadProject(path)
+	p, err := LoadProject(path, shared)
 	if err != nil {
 		_ = os.Remove(path)
 		return core.Project{}, err
@@ -105,7 +111,10 @@ func write(root string, name revier.ProjectName, body string) (core.Project, err
 // and one written here would either repeat the user's own choice or conflict
 // with it; without one, the desktop chords the other projects declare still
 // reach these targets by name.
-func projectTOML(name revier.ProjectName, dir, gitURL string) string {
+//
+// With targets false the file is the project alone, for a configuration
+// whose shared targets give it its targets.
+func projectTOML(name revier.ProjectName, dir, gitURL string, targets bool) string {
 	var b strings.Builder
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 
@@ -114,6 +123,9 @@ func projectTOML(name revier.ProjectName, dir, gitURL string) string {
 	p("path = %s\n", quote(contractHome(dir)))
 	if gitURL != "" {
 		p("git_url = %s\n", quote(gitURL))
+	}
+	if !targets {
+		return b.String()
 	}
 	p("\n")
 

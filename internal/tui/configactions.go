@@ -38,12 +38,15 @@ type actionForm struct {
 
 // actionRow is the action the config screen's cursor is on, if it is on one.
 func (m Model) actionRow() (int, bool) {
-	i := m.crow - int(configRows)
+	i := m.crow - m.actionBase()
 	return i, i >= 0 && i < len(m.actions)
 }
 
 // addRow is the row that adds an action, the screen's last.
-func (m Model) addRow() int { return int(configRows) + len(m.actions) }
+func (m Model) addRow() int { return m.actionBase() + len(m.actions) }
+
+// actionBase is the row of the first action, after the targets section.
+func (m Model) actionBase() int { return m.addTargetRow() + 1 }
 
 // openActionForm opens the form for action i, or for a new action when i is
 // past the last.
@@ -127,7 +130,7 @@ func (m Model) saveAction() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.aform = actionForm{}
 	m.setActions(actions)
-	m.crow = int(configRows) + f.index
+	m.crow = m.actionBase() + f.index
 	return m, nil
 }
 
@@ -185,12 +188,17 @@ func (m Model) confirmDropAction(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) dropActionPrompt() string {
-	name := ""
+// dropPrompt is the delete question for the target or action under the
+// config screen's cursor.
+func (m Model) dropPrompt() string {
+	question := ""
 	if i, ok := m.actionRow(); ok {
-		name = m.actions[i].Name
+		question = fmt.Sprintf("delete action %q?", m.actions[i].Name)
 	}
-	return m.theme.Attention.Render(fmt.Sprintf(" delete action %q?  ", name)) +
+	if i, ok := m.targetRow(); ok {
+		question = fmt.Sprintf("delete target %q from every project?", m.targets[i].Name)
+	}
+	return m.theme.Attention.Render(" "+question+"  ") +
 		m.theme.Help.Render("y: delete · any other key: keep")
 }
 
