@@ -31,6 +31,17 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		return
 	}
+	// The help screen scrolls itself: its offset is the reader's, and a
+	// survey arriving under it must not move it.
+	if m.dialog == dialogHelp {
+		// It has no pane beside it, so it is wider than the list it
+		// stands over.
+		m.body.Width = m.listWidth()
+		offset := m.body.YOffset
+		m.body.SetContent(m.helpScreen())
+		m.body.SetYOffset(offset)
+		return
+	}
 	// The delegate renders the rows and is handed nothing but the row, so
 	// the hovered one is set on it before the list draws.
 	row := -1

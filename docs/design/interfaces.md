@@ -297,7 +297,7 @@ project file that gained a model flag after the save would lose it on restore.
 The harness's own resume flag never reaches the core.
 
 `Sessions` takes every panel of a save at once because the answer may cost a
-process: the Claude probe runs `claude agents --json` (D54). Twenty agents cost
+process: the Claude probe runs `claude agents --json` (D55). Twenty agents cost
 that once, the rule `Instances` follows.
 
 There is no `Runtime` counterpart. Persistence across a reboot is either the

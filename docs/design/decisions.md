@@ -1024,7 +1024,7 @@ already do. Left out too: waiting for agents to fall quiet before saving. The
 survey already knows every agent's status, so it can be added when it is
 wanted, and nothing here has to change to allow it.
 
-### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; where the id comes from superseded by D54
+### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; where the id comes from superseded by D55
 
 A restored workspace whose agent starts empty solves the cheap half of the
 problem. Reopening twenty terminals in the right directories was never the
@@ -1156,7 +1156,7 @@ bar, and a blank line between the query and the rule, so the query does not
 read as the rule's caption. The top of the surface is six lines, as it was
 with the header and the border, and the list gains the four columns.
 
-### D52 — the session hook reaches kitty through remote control, not an escape — Superseded by D54
+### D52 — the session hook reaches kitty through remote control, not an escape — Superseded by D55
 
 D47 said the `SessionStart` hook sets its variable by "the path `CS_TAB` and
 `CS_STATE` already use", and the hook wrote a `SetUserVar` escape to
@@ -1211,7 +1211,29 @@ still `revier keys apply`'s to change.
 Configured actions and probes are not on the screen yet. They are lists of
 records, and they are still edited in the file.
 
-### D54 — a conversation id comes from `claude agents --json`, not from a hook — Accepted
+### D54 — alt+h lists every key, read from where each key is declared — Accepted
+
+Extends D49 with a fourth button, beside the config screen of D53.
+
+The footer names the keys of the focus and the row under the cursor, and a
+narrow terminal cuts the rest with an ellipsis. The query's editing keys, the
+target keys of other projects and the desktop keys were on no screen at all,
+so a key used once a week had to be looked up in the configuration.
+
+help (alt+h) stands in the list's place and lists them all, grouped by what
+they act on: the list, the pane, the selected project, the top bar, the
+query, the target keys, the configured actions, and the desktop keys `revier
+keys install` claims. Each is read from its declaration - the key map, the
+bar, the target vocabulary, `[ui] trigger_key` - so the screen cannot name a
+key a press does not match. A target key the terminal delivers as another
+chord is listed under the chord that reaches the surface, and a desktop key
+that reaches it as nothing is listed only under the desktop.
+
+The screen takes the full width, because it is about no project and the pane
+would be empty. It only reads: the arrows and the wheel scroll it, Esc or
+alt+h leave it, and a typed letter reaches no filter behind it.
+
+### D55 — a conversation id comes from `claude agents --json`, not from a hook — Accepted
 
 D47 read the id from a user variable a `SessionStart` hook set, and D52 fixed
 how that hook reached kitty. Both assumed Claude Code offered no way to ask

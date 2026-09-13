@@ -9,10 +9,11 @@ tag.
 
 ## Unreleased
 
-- **A top line of actions: new, remote, config.** Each is a button and a key.
-  alt+n adds a project from a directory on this machine, writing the file
-  `revier new` writes; alt+r is the remote link dialog; alt+c opens
-  `config.toml` in `$EDITOR`.
+- **A top line of actions: new, remote, config, help.** Each is a button and a
+  key. alt+n adds a project from a directory on this machine, writing the file
+  `revier new` writes; alt+r is the remote link dialog; alt+c is the
+  config screen; alt+h lists every key revier answers to, in the
+  TUI and on the desktop.
 - **The pointer lights what it is over.** Rows, targets and buttons take a
   background a step below the selection's. A click on a project selects it and
   a double click opens it; one click runs a target or a button.

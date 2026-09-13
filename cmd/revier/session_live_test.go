@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The agent writes the arguments it was started with beside itself, which is
@@ -142,9 +143,25 @@ func markConversation(t *testing.T, id string) {
 // session, which is the event the whole feature exists for. The bindings left
 // in state now point at windows that do not exist, exactly as they would after
 // a real restart.
+//
+// kill-server returns before the server has exited. A command sent in that
+// window reaches a server that is going away and fails with "server exited
+// unexpectedly", which is not what a restore after a real reboot meets. So the
+// reboot is over only when no server answers.
 func reboot(t *testing.T) {
 	t.Helper()
 	_ = exec.Command("tmux", "kill-server").Run()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		out, err := exec.Command("tmux", "list-sessions").CombinedOutput()
+		if err != nil && (strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting")) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the tmux server is still answering after kill-server: %v: %s", err, out)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // The whole round trip, as a user runs it: save, reboot, restore.
