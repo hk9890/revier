@@ -20,3 +20,12 @@ func TestResumeNoteNamesAnAgentInATabTarget(t *testing.T) {
 		t.Errorf("note %q gives the dropped agent's reason", note)
 	}
 }
+
+// A conversation that was recorded and cannot be resumed here is named. Said
+// nothing, it reads as an agent that never had one.
+func TestResumeNoteNamesAnUnresumableConversation(t *testing.T) {
+	note := resumeNote("opened", []core.AgentOutcome{core.AgentResumed, core.AgentUnresumable, core.AgentEmpty}, nil)
+	if want := "opened, 1 agent resumed, 1 agent empty: no probe here resumes its harness in its panel"; note != want {
+		t.Errorf("note = %q, want %q", note, want)
+	}
+}

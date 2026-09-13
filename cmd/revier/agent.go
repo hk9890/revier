@@ -211,11 +211,11 @@ func cmdAgentNew(args []string) error {
 	if err != nil {
 		return err
 	}
-	p, target, ref, err := a.agentWorkspace(ctx, *project, *panel, *dir)
+	w, err := a.agentWorkspace(ctx, *project, *panel, *dir)
 	if err != nil {
 		return err
 	}
-	outcome, err := a.core.NewAgent(ctx, p, target, ref, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+	outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func cmdAgentNew(args []string) error {
 // opens its tab in: the owner of --panel; or the project -p names, else the
 // one --dir is in, else the one resolved as for any command, with the target
 // after -p's colon or the one declaring an agent.
-func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (core.Project, revier.TargetName, revier.TargetRef, error) {
+func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (core.Workspace, error) {
 	if panel != "" {
 		return a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
 	}
@@ -238,18 +238,17 @@ func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (c
 	if name != "" || dir == "" || !inDir {
 		var err error
 		if p, err = a.resolveProject(ctx, name); err != nil {
-			return core.Project{}, "", revier.TargetRef{}, err
+			return core.Workspace{}, err
 		}
 	}
 	t := revier.TargetName(target)
 	if t == "" {
 		var err error
 		if t, err = a.core.AgentTarget(p); err != nil {
-			return core.Project{}, "", revier.TargetRef{}, err
+			return core.Workspace{}, err
 		}
 	}
-	ref, err := a.core.AgentWorkspace(ctx, p, t, a.state.Bound[p.Name])
-	return p, t, ref, err
+	return a.core.AgentWorkspace(ctx, p, t, a.state.Bound[p.Name])
 }
 
 // remoteFor returns the remote that drives the agent an address names, and

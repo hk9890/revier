@@ -16,10 +16,11 @@ type PanelSpec struct {
 	Title   string    `toml:"title" json:"title,omitempty"`
 	Command []string  `toml:"command" json:"command,omitempty"`
 
-	// Dir is where this panel starts, when it is not where the realization
-	// starts. No project file sets it: a restore does, for an agent that
-	// worked in a worktree of the project rather than in the project itself
-	// (decisions.md D62), and so does `revier agent new`.
+	// Dir is where this panel starts. No project file sets it: the core fills
+	// it with the realization's Dir when it renders the project, so a host
+	// starts a panel in its Dir and decides nothing. A restore sets another,
+	// for an agent that worked in a worktree of the project rather than in the
+	// project itself (decisions.md D62), and so does `revier agent new`.
 	Dir string `toml:"-" json:"dir,omitempty"`
 }
 

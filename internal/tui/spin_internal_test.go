@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -40,5 +41,19 @@ func TestTheSpinnerStopsWhenNothingWorks(t *testing.T) {
 	}
 	if next.(Model).spinning {
 		t.Error("spinner still marked running, so no survey would start it again")
+	}
+}
+
+// A frame redraws nothing when no row on the screen and not the pane shows a
+// working agent: eight times a second, a rebuild of every row for a glyph
+// nobody can see is the whole cost of the spinner.
+func TestASpinUnderADialogRedrawsNothing(t *testing.T) {
+	m := spinModel(revier.StatusRunning)
+	m.dialog = dialogHelp
+	m.body.Width, m.body.Height = 40, 5
+	m.body.SetContent("left as it was")
+	next, _ := m.Update(spinMsg{})
+	if got := next.(Model).body.View(); !strings.Contains(got, "left as it was") {
+		t.Errorf("body = %q, want it not rebuilt for a frame no row shows", got)
 	}
 }

@@ -13,7 +13,8 @@ import (
 // never sees a `{{ }}`, which is what keeps templating out of every adapter.
 //
 // The fields available are those of revier.Project: {{.Name}}, {{.Path}}, and
-// {{.Vars.<key>}}. A realization that names no Dir gets the project path.
+// {{.Vars.<key>}}. A realization that names no Dir gets the project path, and
+// every panel gets the realization's Dir.
 func Render(p revier.Project) (revier.Project, error) {
 	out := p
 	out.Targets = make([]revier.Target, len(p.Targets))
@@ -72,6 +73,12 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 		for i, spec := range r.Panels {
 			if out.Panels[i].Title, err = expand(p, spec.Title); err != nil {
 				return revier.Realization{}, fmt.Errorf("panel[%d] title: %w", i, err)
+			}
+			// Every panel starts where the realization does unless a restore
+			// says otherwise, and that fallback is decided once, here, rather
+			// than in every runtime.
+			if out.Panels[i].Dir == "" {
+				out.Panels[i].Dir = out.Dir
 			}
 			if len(spec.Command) == 0 {
 				continue

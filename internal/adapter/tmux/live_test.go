@@ -338,8 +338,8 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	ref, err := h.Open(c, revier.Realization{
 		Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"},
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"sh", "-c", "sleep 30"}},
-			{Kind: revier.PanelShell, Title: "shell", Command: []string{"sh", "-c", "sleep 30"}},
+			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
+			{Kind: revier.PanelShell, Title: "shell", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
 		},
 	})
 	if err != nil {
@@ -364,12 +364,12 @@ func TestOpenBuildsThePanels(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := strings.TrimSpace(string(out)); got != dir {
-		t.Errorf("pane cwd = %q, want the realization's dir %q", got, dir)
+		t.Errorf("pane cwd = %q, want the panel's dir %q", got, dir)
 	}
 }
 
-// A panel with a directory of its own starts there, and one without starts
-// where the realization starts.
+// Each panel starts in its own directory, which need not be the realization's:
+// the core fills a panel's directory, and the host only follows it.
 func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {
 	h, c := server(t), ctx(t)
 	dir, own := t.TempDir(), t.TempDir()
@@ -377,7 +377,7 @@ func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {
 		Name: "session:demo", Dir: dir,
 		Panels: []revier.PanelSpec{
 			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: own},
-			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
 		},
 	})
 	if err != nil {
@@ -464,7 +464,7 @@ func TestHashSurvivesNameTitleAndDirectory(t *testing.T) {
 		}
 		ref, err := h.Open(c, revier.Realization{
 			Name: name, Dir: dir,
-			Panels: []revier.PanelSpec{{Title: name, Command: []string{"sh", "-c", "sleep 30"}}},
+			Panels: []revier.PanelSpec{{Title: name, Command: []string{"sh", "-c", "sleep 30"}, Dir: dir}},
 		})
 		if err != nil {
 			t.Fatalf("Open %q: %v", name, err)

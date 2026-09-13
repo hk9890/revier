@@ -72,6 +72,36 @@ type Target struct {
 	// first to the first agent panel the project declares, and so on, and
 	// opens the rest beside the layout (decisions.md D62).
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
+
+	// Panels is the format v0.3.0 saved: the conversations only, each at the
+	// position of its panel among all the target's panels. It is read and
+	// never written; List moves it into Agents, so a session saved before
+	// the upgrade still resumes its conversations.
+	Panels []v030Panel `toml:"panel,omitempty" json:"-"`
+}
+
+// v030Panel is one conversation as v0.3.0 recorded it.
+type v030Panel struct {
+	Index   int              `toml:"index"`
+	Harness string           `toml:"harness"`
+	Session revier.SessionID `toml:"session"`
+}
+
+// upgrade moves a v0.3.0 target's conversations into Agents, in panel order,
+// which is the order a restore lays agents out by. v0.3.0 recorded no agent
+// without a conversation and no directory, so those agents are not there to
+// hold a place, and each conversation resumes where the project starts.
+func (t *Target) upgrade() {
+	if len(t.Panels) == 0 {
+		return
+	}
+	sort.SliceStable(t.Panels, func(i, j int) bool { return t.Panels[i].Index < t.Panels[j].Index })
+	if len(t.Agents) == 0 {
+		for _, p := range t.Panels {
+			t.Agents = append(t.Agents, Agent{Harness: p.Harness, Session: p.Session})
+		}
+	}
+	t.Panels = nil
 }
 
 // Agent is one agent: which probe claimed it, and what that probe could say
@@ -167,6 +197,11 @@ func List(stateRoot string) ([]Session, error) {
 		}
 		if s.ID == "" {
 			s.ID = strings.TrimSuffix(e.Name(), ".toml")
+		}
+		for i := range s.Projects {
+			for j := range s.Projects[i].Targets {
+				s.Projects[i].Targets[j].upgrade()
+			}
 		}
 		out = append(out, s)
 	}

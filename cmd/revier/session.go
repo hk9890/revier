@@ -215,10 +215,10 @@ func cmdSessionList(a *app, args []string) error {
 
 // resumeNote says what opening a target did, or would do, to the agents it
 // recorded: how many start on their conversation, how many start empty because
-// the directory they worked in is gone, and how many cannot be started at all,
-// with tabErr for the ones whose tab failed to open.
-// An agent recorded with no conversation starts empty as it always would, and
-// is not worth a word.
+// the directory they worked in is gone or their conversation cannot be resumed
+// here, and how many cannot be started at all, with tabErr for the ones whose
+// tab failed to open. An agent recorded with no conversation starts empty as
+// it always would, and is not worth a word.
 func resumeNote(verb string, agents []core.AgentOutcome, tabErr error) string {
 	n := map[core.AgentOutcome]int{}
 	for _, o := range agents {
@@ -230,6 +230,9 @@ func resumeNote(verb string, agents []core.AgentOutcome, tabErr error) string {
 	}
 	if n[core.AgentDirGone] > 0 {
 		note += fmt.Sprintf(", %s empty: directory gone", count(n[core.AgentDirGone], "agent"))
+	}
+	if n[core.AgentUnresumable] > 0 {
+		note += fmt.Sprintf(", %s empty: no probe here resumes its harness in its panel", count(n[core.AgentUnresumable], "agent"))
 	}
 	if n[core.AgentDropped] > 0 {
 		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", count(n[core.AgentDropped], "agent"))

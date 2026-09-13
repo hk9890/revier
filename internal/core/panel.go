@@ -38,7 +38,7 @@ func (c *Core) tabHost(p Project, i int) (revier.PanelOpener, error) {
 	}
 	opener, ok := c.Runtime.(revier.PanelOpener)
 	if !ok {
-		return nil, fmt.Errorf("%w: target %q is inside %q, and the %s runtime has no tabs; remove inside to open it as a window of its own",
+		return nil, fmt.Errorf("%w: target %q is inside %q, and the %s runtime has no tabs; to open it as a window of its own, remove inside and give it a name and a match",
 			ErrNoTabs, t.Name, t.Runtime.Inside, c.Runtime.Name())
 	}
 	return opener, nil

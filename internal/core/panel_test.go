@@ -10,6 +10,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -299,8 +300,11 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	if len(targets) != 2 || len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" {
 		t.Fatalf("targets = %+v, want home with its own agent only", targets)
 	}
-	if len(targets[1].Agents) != 1 || targets[1].Agents[0].Session != "tab-9" {
-		t.Fatalf("tickets = %+v, want the tab's agent", targets[1])
+	if len(targets[1].Agents) != 1 || targets[1].Agents[0] != (session.Agent{Harness: "claude"}) {
+		t.Fatalf("tickets = %+v, want the tab's agent by harness alone", targets[1])
+	}
+	if s.Conversations() != 1 || gaps.Unnamed != 0 {
+		t.Errorf("conversations = %d, unnamed = %d, want the tab's agent in neither: it is never resumed", s.Conversations(), gaps.Unnamed)
 	}
 	if !slices.Equal(gaps.InTab, []string{"revier:tickets"}) {
 		t.Errorf("gaps.InTab = %v, want the tab named at save time", gaps.InTab)

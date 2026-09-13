@@ -39,9 +39,6 @@ func (c *Core) agentTab(real revier.Realization, r Resume) (revier.Realization, 
 		r.Harness = c.harnessOf(agent)
 	}
 	outcome := c.startAgent(&agent, r)
-	if agent.Dir == "" {
-		agent.Dir = real.Dir
-	}
 	tab := revier.Realization{Dir: agent.Dir, Panels: []revier.PanelSpec{agent}}
 	if shell, ok := declared(real.Panels, revier.PanelShell); ok {
 		shell.Dir = agent.Dir
@@ -50,11 +47,10 @@ func (c *Core) agentTab(real revier.Realization, r Resume) (revier.Realization, 
 	return tab, outcome
 }
 
-// harnessOf is the probe that claims what a declared agent panel runs, for a
-// conversation asked for without its harness: `revier agent new --resume`.
-// Without it, an opencode panel would be started on Claude Code's resume flag.
-// A command no probe claims - a wrapper - is left to the first probe that can
-// resume.
+// harnessOf is the probe that claims what a declared agent panel runs: the
+// harness a conversation asked for without one goes to, and the one a
+// recorded conversation must match to be resumed in the panel. A command no
+// probe claims - a wrapper - has none.
 func (c *Core) harnessOf(spec revier.PanelSpec) string {
 	if probe, ok := c.probeFor(revier.Panel{Kind: spec.Kind, Title: spec.Title, Command: spec.Command}); ok {
 		return probe.Name()
@@ -92,10 +88,11 @@ func (c *Core) agentTabs(host revier.Host, real revier.Realization, resumes []Re
 
 // addAgents opens an agent tab in a workspace that has just opened, for each
 // agent, in order, and then makes the panel that was current before them
-// current again: a restore leaves the workspace as it opened. A tab that
-// fails stops the rest, which are named as not added, and the error is
-// returned beside the outcomes: the workspace is open, so it is not the
-// launch's failure.
+// current again: a restore leaves the workspace as it opened, after a failed
+// tab too. A tab that fails stops the rest, which are named as not added, and
+// the error is returned beside the outcomes: the workspace is open, so it is
+// not the launch's failure. A failed OpenTab leaves no tab behind, so the
+// agent it names is not running anywhere.
 func (c *Core) addAgents(ctx context.Context, host revier.Host, real revier.Realization, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
 	tabs, outcomes := c.agentTabs(host, real, resumes)
 	opener, ok := host.(revier.PanelOpener)
@@ -104,6 +101,7 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, real revier.Real
 	}
 	var current revier.PanelID
 	opened := false
+	var failed error
 	for n, tab := range tabs {
 		if tab.Panels == nil {
 			continue
@@ -116,15 +114,16 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, real revier.Real
 			current, opened = cur, true
 		}
 		if _, err := opener.OpenTab(ctx, ref, tab, nil); err != nil {
-			return notAdded(outcomes, n), fmt.Errorf("%s: agent tab: %w", host.Name(), err)
+			outcomes, failed = notAdded(outcomes, n), fmt.Errorf("%s: agent tab: %w", host.Name(), err)
+			break
 		}
 	}
 	if opened && current != "" {
 		if err := opener.FocusPanel(ctx, ref, current); err != nil {
-			return outcomes, fmt.Errorf("%s: focus the workspace after its agent tabs: %w", host.Name(), err)
+			return outcomes, errors.Join(failed, fmt.Errorf("%s: focus the workspace after its agent tabs: %w", host.Name(), err))
 		}
 	}
-	return outcomes, nil
+	return outcomes, failed
 }
 
 // notAdded names the agent at n, and every later one that would have had a
@@ -158,26 +157,36 @@ func (c *Core) AgentTarget(p Project) (revier.TargetName, error) {
 	return "", fmt.Errorf("%s: targets %v declare an agent panel; name one as %s:<target>", p.Name, found, p.Name)
 }
 
+// Workspace is the open instance of a project's target that `revier agent
+// new` opens its tab in, with the listing it was found in: the tab is raised
+// from that listing, so one key press lists the hosts once.
+type Workspace struct {
+	Project Project
+	Target  revier.TargetName
+	Ref     revier.TargetRef
+	snap    snapshot
+}
+
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`.
-func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (revier.TargetRef, error) {
+func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Workspace, error) {
 	i, ok := p.index(name)
 	if !ok {
-		return revier.TargetRef{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return Workspace{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
 	}
 	host, _, m, err := c.resolveAt(p, i)
 	if err != nil {
-		return revier.TargetRef{}, err
+		return Workspace{}, err
 	}
 	snap, err := c.snapshot(ctx)
 	if err != nil {
-		return revier.TargetRef{}, err
+		return Workspace{}, err
 	}
 	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
-		return revier.TargetRef{}, fmt.Errorf("%s:%s: %w", p.Name, name, ErrNotOpen)
+		return Workspace{}, fmt.Errorf("%s:%s: %w", p.Name, name, ErrNotOpen)
 	}
-	return inst.Ref, nil
+	return Workspace{Project: p, Target: name, Ref: inst.Ref, snap: snap}, nil
 }
 
 // PanelOwner finds the project, target and open instance that hold a panel,
@@ -190,46 +199,67 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // Without one, the id must be held by exactly one instance, and two are
 // refused rather than guessed at: a guess opens the tab in a workspace the key
 // was not pressed in.
-func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (Project, revier.TargetName, revier.TargetRef, error) {
+//
+// One instance can back two targets. The target is the first of them that
+// declares an agent panel, because only that one has a tab to give.
+func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (Workspace, error) {
 	if c.Runtime == nil {
-		return Project{}, "", revier.TargetRef{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
+		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
 	}
 	snap, err := c.snapshot(ctx)
 	if err != nil {
-		return Project{}, "", revier.TargetRef{}, err
+		return Workspace{}, err
 	}
+	instances := snap[c.Runtime.Name()]
 	var ref revier.TargetRef
 	if finder, ok := c.Runtime.(revier.PanelFinder); ok {
-		if ref, err = finder.FindPanel(ctx, panel); err != nil {
-			return Project{}, "", revier.TargetRef{}, fmt.Errorf("%s: find panel %s: %w", c.Runtime.Name(), panel, err)
+		if ref, err = finder.FindPanel(instances, panel); err != nil {
+			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.Runtime.Name(), panel, err)
 		}
 	} else {
 		var found []revier.TargetRef
-		for _, inst := range snap[c.Runtime.Name()] {
-			if holds(inst, panel) {
+		for _, inst := range instances {
+			if holdsPanel(inst, panel) {
 				found = append(found, inst.Ref)
 			}
 		}
 		if len(found) > 1 {
-			return Project{}, "", revier.TargetRef{}, fmt.Errorf("panel %s: %w: %d instances hold it", panel, ErrAmbiguous, len(found))
+			return Workspace{}, fmt.Errorf("panel %s: %w: %d instances hold it", panel, ErrAmbiguous, len(found))
 		}
 		if len(found) == 1 {
 			ref = found[0]
 		}
 	}
 	if ref.IsZero() {
-		return Project{}, "", revier.TargetRef{}, fmt.Errorf("%w %s", ErrNoPanel, panel)
+		return Workspace{}, fmt.Errorf("%w %s", ErrNoPanel, panel)
 	}
+	var owner Workspace
 	for _, p := range projects {
-		for _, h := range c.running(snap, p, bound[p.Name], "") {
-			if key(h.inst.Ref) == key(ref) {
-				return p, h.target, ref, nil
+		for i, t := range p.Targets {
+			host, real, m, err := c.resolveAt(p, i)
+			if err != nil {
+				continue
+			}
+			if inst, ok := c.locate(snap, p, i, host, m, bound[p.Name][t.Name]); !ok || key(inst.Ref) != key(ref) {
+				continue
+			}
+			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap}
+			if _, ok := declared(real.Panels, revier.PanelAgent); ok {
+				return w, nil
+			}
+			if owner.Ref.IsZero() {
+				owner = w
 			}
 		}
 	}
-	return Project{}, "", revier.TargetRef{}, fmt.Errorf("panel %s: its window is no project's open workspace", panel)
+	if owner.Ref.IsZero() {
+		return Workspace{}, fmt.Errorf("panel %s: its window is no project's open workspace", panel)
+	}
+	return owner, nil
 }
-func holds(inst revier.Instance, panel revier.PanelID) bool {
+
+// holdsPanel reports whether one of the instance's panels has the id.
+func holdsPanel(inst revier.Instance, panel revier.PanelID) bool {
 	for _, p := range inst.Panels {
 		if p.ID == panel {
 			return true
@@ -238,16 +268,21 @@ func holds(inst revier.Instance, panel revier.PanelID) bool {
 	return false
 }
 
-// NewAgent opens an agent tab in the open instance of a project's target and
-// makes the new agent current in it: what a key pressed in a workspace asks
-// for. The agent starts as a restored one would, from r. An error comes with
-// AgentNotAdded.
-func (c *Core) NewAgent(ctx context.Context, p Project, name revier.TargetName, ref revier.TargetRef, r Resume) (AgentOutcome, error) {
-	i, ok := p.index(name)
+// NewAgent opens an agent tab in an open workspace, makes the new agent
+// current in it, and raises the OS window around it: what a key pressed in a
+// workspace asks for. The agent starts as a restored one would, from r. An
+// error before the tab opened comes with AgentNotAdded, and one after it with
+// what the agent in the open tab came to.
+//
+// An OS window the window host does not list is refused before the tab
+// opens, as Go refuses it: a focus with no raise is a GNOME "is ready" notice
+// (decisions.md D63).
+func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcome, error) {
+	i, ok := w.Project.index(w.Target)
 	if !ok {
-		return AgentNotAdded, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return AgentNotAdded, fmt.Errorf("%w: %s", ErrNoTarget, w.Target)
 	}
-	host, real, _, err := c.resolveAt(p, i)
+	host, real, _, err := c.resolveAt(w.Project, i)
 	if err != nil {
 		return AgentNotAdded, err
 	}
@@ -257,14 +292,19 @@ func (c *Core) NewAgent(ctx context.Context, p Project, name revier.TargetName, 
 	}
 	tab, outcome := c.agentTab(real, r)
 	if outcome == AgentDropped {
-		return AgentNotAdded, fmt.Errorf("%s:%s: %w", p.Name, name, ErrNoAgent)
+		return AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
 	}
-	panel, err := opener.OpenTab(ctx, ref, tab, nil)
+	inst, _ := byRef(w.snap, w.Ref)
+	osw, err := c.raisable(w.snap, inst, w.Target)
+	if err != nil {
+		return AgentNotAdded, err
+	}
+	panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
 	if err != nil {
 		return AgentNotAdded, fmt.Errorf("%s: agent tab: %w", host.Name(), err)
 	}
-	if err := opener.FocusPanel(ctx, ref, panel); err != nil {
-		return AgentNotAdded, fmt.Errorf("%s: focus the agent tab: %w", host.Name(), err)
+	if err := opener.FocusPanel(ctx, w.Ref, panel); err != nil {
+		return outcome, fmt.Errorf("%s: focus the agent tab: %w", host.Name(), err)
 	}
-	return outcome, nil
+	return outcome, c.raise(ctx, osw, w.Target)
 }
