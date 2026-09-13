@@ -230,3 +230,34 @@ func TestCreateWritesNoTargetsWhenTheyAreShared(t *testing.T) {
 		t.Errorf("targets = %v, want the shared ones", got)
 	}
 }
+
+// A project turns a shared standalone target into a tab with one line. The
+// shared match and name it keeps are not used, and do not refuse the load.
+func TestAProjectMakesASharedTargetATab(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", sharedConfig+`
+[[target]]
+name = "tickets"
+  [target.runtime]
+  name = "tickets:{{.Name}}"
+  launch = ["taskmgr-ui"]
+  match = { title = "^tickets:{{.Name}}$" }
+`)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "projects"), "revier.toml", `
+path = "/p"
+[[target]]
+name = "tickets"
+  [target.runtime]
+  inside = "home"
+`)
+	_, loaded, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := target(t, loaded[0], "tickets").Runtime; got.Inside != "home" || len(got.Launch) != 1 {
+		t.Errorf("tickets runtime = %+v, want the shared launch inside home", got)
+	}
+}

@@ -379,10 +379,24 @@ func Validate(p revier.Project) error {
 		if t.Window == nil && t.Runtime == nil {
 			errs = append(errs, fmt.Errorf("target %q declares no realization", t.Name))
 		}
+		tab := t.Runtime != nil && t.Runtime.Inside != ""
+		if tab {
+			errs = append(errs, validateTab(p, t)...)
+		}
+		if t.Window != nil && t.Window.Inside != "" {
+			// Only a runtime opens tabs. Ignored, it would open a window of its
+			// own, which is the choice inside was written to refuse.
+			errs = append(errs, fmt.Errorf("target %q window realization is inside %q; only a runtime realization can be a tab", t.Name, t.Window.Inside))
+		}
 		for kind, r := range map[revier.HostKind]*revier.Realization{
 			revier.HostWindow: t.Window, revier.HostRuntime: t.Runtime,
 		} {
 			if r == nil {
+				continue
+			}
+			if tab && kind == revier.HostRuntime {
+				// A tab is found by its target's name, so it needs no match
+				// and no name; validateTab has checked the rest.
 				continue
 			}
 			if r.Match.IsZero() {
@@ -430,6 +444,41 @@ func Validate(p revier.Project) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// validateTab checks a target declared inside another. Each rule is a tab
+// that would fail at the keypress: one with nothing to run, one inside a
+// target that is not an instance of the runtime, or one that is home itself.
+func validateTab(p revier.Project, t revier.Target) []error {
+	var errs []error
+	r := t.Runtime
+	if t.Home {
+		errs = append(errs, fmt.Errorf("target %q is home and inside %q; home is what the others open in", t.Name, r.Inside))
+	}
+	if t.Window != nil {
+		errs = append(errs, fmt.Errorf("target %q is inside %q and has a window realization; a tab has only the runtime", t.Name, r.Inside))
+	}
+	if len(r.Launch) == 0 {
+		errs = append(errs, fmt.Errorf("target %q is inside %q and has no launch argv to run in the tab", t.Name, r.Inside))
+	}
+	if len(r.Panels) > 0 {
+		errs = append(errs, fmt.Errorf("target %q is inside %q and declares panels; a tab runs one launch argv", t.Name, r.Inside))
+	}
+	if r.Inside == t.Name {
+		return append(errs, fmt.Errorf("target %q is inside itself", t.Name))
+	}
+	in, ok := p.Target(r.Inside)
+	switch {
+	case !ok:
+		errs = append(errs, fmt.Errorf("target %q is inside %q, which the project does not declare", t.Name, r.Inside))
+	case in.Runtime == nil:
+		errs = append(errs, fmt.Errorf("target %q is inside %q, which has no runtime realization to open a tab in", t.Name, r.Inside))
+	case in.Runtime.Inside != "":
+		errs = append(errs, fmt.Errorf("target %q is inside %q, which is itself a tab", t.Name, r.Inside))
+	case in.Window != nil:
+		errs = append(errs, fmt.Errorf("target %q is inside %q, which also has a window realization; the tab needs it on the runtime", t.Name, r.Inside))
+	}
+	return errs
 }
 
 // ValidateGitURL refuses a clone URL that is unsafe to hand to git or to keep

@@ -575,7 +575,8 @@ func TestNoBridgeWithoutOSWindows(t *testing.T) {
 }
 
 // Same title, different process: not the same window. The pid filter is what
-// keeps a stray window with a matching title from being raised.
+// keeps a stray window with a matching title from being raised, and with no
+// window of its own to raise the press is refused rather than half done.
 func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
@@ -586,15 +587,33 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	wm.SetFocus(other)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
-	if err != nil {
-		t.Fatalf("Go: %v", err)
+	_, err := c.Go(context.Background(), prepared(t, osWindowProject()), "diff", nil)
+	if !errors.Is(err, core.ErrUnraisable) {
+		t.Fatalf("err = %v, want ErrUnraisable: the only window of that title belongs to another process", err)
 	}
-	if res.Ref.Title != "diff:revier" {
-		t.Errorf("returned %v, want diff: the focused window belongs to another process", res.Ref)
+	if len(wm.Focuses) != 0 || len(rt.Focuses) != 0 {
+		t.Errorf("focuses = %v %v, want none: nothing moves when the window cannot be raised", wm.Focuses, rt.Focuses)
 	}
-	if len(wm.Focuses) != 0 {
-		t.Errorf("window focuses = %v, want none", wm.Focuses)
+}
+
+// Two unnamed windows in one process cannot be told apart, so neither is
+// raised. Focusing inside the terminal anyway is what made GNOME show "is
+// ready" in place of the window.
+func TestAnUnidentifiedOSWindowIsNotFocusedInsideTheTerminal(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	wm := hosttest.New("wm")
+	for _, title := range []string{"session:revier", "session:setup"} {
+		wm.AddInstance(revier.Instance{Title: title, Class: "kitty", PID: 4242})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+	bound := core.Bindings{"home": {Host: "rt", ID: "1"}}
+
+	_, err := c.Go(context.Background(), prepared(t, project()), "home", bound)
+	if !errors.Is(err, core.ErrUnraisable) {
+		t.Fatalf("err = %v, want ErrUnraisable", err)
+	}
+	if len(rt.Focuses) != 0 || len(wm.Focuses) != 0 {
+		t.Errorf("focuses = %v %v, want none", rt.Focuses, wm.Focuses)
 	}
 }
 
@@ -896,6 +915,35 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 	}
 	if report.Views[0].Running {
 		t.Error("a process owning two windows must not lend either title to the other")
+	}
+}
+
+// A named window launched into the same process - a ticket viewer beside the
+// session - claims its own title, which leaves one unnamed window and one
+// title. The pairing is not ambiguous, and the next press raises the session.
+func TestANamedSiblingWindowDoesNotHideTheUnnamedOne(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	rt.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "rt", ID: "2", Title: "tickets:revier"},
+		Title: "tickets:revier", PID: 4242,
+	})
+	wm := hosttest.New("wm")
+	for _, title := range []string{"tickets:revier", "session:revier"} {
+		wm.AddInstance(revier.Instance{
+			Ref:   revier.TargetRef{Host: "wm", ID: title},
+			Title: title, Class: "kitty", PID: 4242,
+		})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	if _, err := c.Go(context.Background(), prepared(t, project()), "home", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime opened %d instances, want none: the window was already there", len(rt.Opened))
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0].Title != "session:revier" {
+		t.Errorf("window host focused %+v, want session:revier raised", wm.Focuses)
 	}
 }
 

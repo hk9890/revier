@@ -52,6 +52,11 @@ type Fake struct {
 
 	// Sent records every text a FakeRuntime was asked to type, in order.
 	Sent []Sent
+	// Tabs records every tab a FakeRuntime was asked to open, and
+	// PanelFocuses every panel it was asked to focus, in order.
+	Tabs         []Tab
+	PanelFocuses []revier.PanelID
+	current      map[string]revier.PanelID
 	// OnSend runs after each SendText, so a test can make the agent react to
 	// its prompt the way a real one does.
 	OnSend func(panel revier.PanelID, text string)
@@ -94,6 +99,53 @@ func (f *FakeRuntime) SendText(_ context.Context, ref revier.TargetRef, panel re
 		on(panel, text)
 	}
 	return nil
+}
+
+// Tab is one OpenTab call.
+type Tab struct {
+	Ref   revier.TargetRef
+	Real  revier.Realization
+	Vars  map[string]string
+	Panel revier.PanelID
+}
+
+// OpenTab adds a panel carrying vars to the instance and records the call.
+// FakeRuntime implements revier.PanelOpener; a runtime without the capability
+// is a different double.
+func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.instances {
+		if f.instances[i].Ref.ID != ref.ID {
+			continue
+		}
+		f.nextID++
+		panel := revier.PanelID("tab" + strconv.Itoa(f.nextID))
+		f.instances[i].Panels = append(append([]revier.Panel(nil), f.instances[i].Panels...),
+			revier.Panel{ID: panel, Kind: revier.PanelTool, Vars: vars, Command: r.Launch})
+		f.Tabs = append(f.Tabs, Tab{Ref: ref, Real: r, Vars: vars, Panel: panel})
+		return panel, nil
+	}
+	return "", fmt.Errorf("%s: no instance %s", f.name, ref.ID)
+}
+
+// FocusPanel records the panel and makes it current in its instance.
+func (f *FakeRuntime) FocusPanel(_ context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.PanelFocuses = append(f.PanelFocuses, panel)
+	if f.current == nil {
+		f.current = map[string]revier.PanelID{}
+	}
+	f.current[ref.ID] = panel
+	return nil
+}
+
+// FocusedPanel reports the panel last focused in the instance.
+func (f *FakeRuntime) FocusedPanel(_ context.Context, ref revier.TargetRef) (revier.PanelID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.current[ref.ID], nil
 }
 
 // Retitle changes a panel's title wherever it is listed, as the program in it

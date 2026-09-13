@@ -79,6 +79,22 @@ with `revier attach` also appears there and needs no config at all.
 Set `prefer = "runtime"` on a target to override which realization wins when
 both hosts are available.
 
+Set `inside` on a runtime realization to open the target as a tab of another
+target's instance, not as an instance of its own (decisions.md D64). The tab
+needs a `launch`, and no `match` or `name`: revier marks the tab it opens and
+finds it again by that mark. It needs a runtime with tabs, which is kitty
+today; on any other runtime the key is refused with the reason.
+
+```toml
+[[target]]
+name = "tickets"
+key  = "ctrl-shift-t"
+
+  [target.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+```
+
 Targets most projects have in common are declared once, in
 `~/.config/revier/config.toml`, in the same form (decisions.md D59). Every
 project gets them, and its file then holds only what is its own:

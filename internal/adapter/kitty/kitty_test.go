@@ -609,3 +609,47 @@ func TestSendTextGoesThroughStdinToTheWindow(t *testing.T) {
 		t.Errorf("stdin = %q, want the text as it is", stdin[0])
 	}
 }
+
+// A tab opens beside the OS window's tabs, carries the vars the core gives it
+// as user vars, and runs the launch argv in the directory given.
+func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	var opener revier.PanelOpener = h
+	panel, err := opener.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"},
+		revier.Realization{Launch: []string{"taskmgr-ui"}, Dir: "/p"}, map[string]string{"revier_target": "tickets"})
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	if panel != "9" {
+		t.Errorf("panel = %s, want the id launch reported", panel)
+	}
+	calls := rec.all()
+	last := calls[len(calls)-1]
+	want := "launch --type=tab --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
+	if got := strings.Join(last.args, " "); got != want || last.socket != "unix:@kitty-4000" {
+		t.Errorf("last call = %s %q, want %q on unix:@kitty-4000", last.socket, got, want)
+	}
+}
+
+func TestFocusPanelFocusesThatWindow(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if err := h.FocusPanel(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4001/2"}, "7"); err != nil {
+		t.Fatalf("FocusPanel: %v", err)
+	}
+	calls := rec.all()
+	want := "focus-window --match id:7"
+	if len(calls) != 1 || strings.Join(calls[0].args, " ") != want || calls[0].socket != "unix:@kitty-4001" {
+		t.Errorf("calls = %+v, want one %q on the instance's own socket", calls, want)
+	}
+}
+
+func TestFocusedPanelIsTheActiveWindow(t *testing.T) {
+	h, _ := host(t, "unix:@kitty-4000")
+	panel, err := h.FocusedPanel(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"})
+	if err != nil {
+		t.Fatalf("FocusedPanel: %v", err)
+	}
+	if panel != "4" {
+		t.Errorf("panel = %s, want 4, the window Focus selects", panel)
+	}
+}

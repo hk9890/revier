@@ -120,6 +120,28 @@ type PanelWriter interface {
 	SendText(ctx context.Context, ref TargetRef, panel PanelID, text string) error
 }
 
+// PanelOpener is an optional capability of a Runtime, detected by type
+// assertion. A runtime that implements it can open a tab in an instance it
+// already holds and focus one panel of it, which is how a target declared
+// inside another is reached (decisions.md D64). A target that declares Inside
+// on a runtime that does not implement it is refused at the keypress, naming
+// the runtime.
+//
+// Which tab belongs to which target is the core's decision. The runtime only
+// sets vars on the panel it opens and reports them back in Panel.Vars.
+type PanelOpener interface {
+	// OpenTab opens r.Launch as a new tab of the instance, started in r.Dir,
+	// with vars set on its panel, and returns that panel.
+	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
+
+	// FocusPanel makes the panel current inside its instance, switching tab
+	// when it has to. Raising the OS window is not part of it.
+	FocusPanel(ctx context.Context, ref TargetRef, panel PanelID) error
+
+	// FocusedPanel reports the panel that is current inside the instance.
+	FocusedPanel(ctx context.Context, ref TargetRef) (PanelID, error)
+}
+
 type WindowEvent struct {
 	Kind     WindowEventKind
 	Instance Instance

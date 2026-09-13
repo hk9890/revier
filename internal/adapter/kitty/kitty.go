@@ -590,13 +590,23 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 // on Wayland this does not raise the OS window; the core raises it through the
 // window host.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
-	socket, id, err := parseRef(ref.ID)
+	socket, win, err := h.active(ctx, ref)
 	if err != nil {
 		return err
 	}
+	_, err = h.kitten(ctx, socket, "focus-window", "--match", "id:"+strconv.Itoa(win))
+	return err
+}
+
+// active finds the socket an instance lives on and the window current in it.
+func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, error) {
+	socket, id, err := parseRef(ref.ID)
+	if err != nil {
+		return "", 0, err
+	}
 	windows, err := h.ls(ctx, socket)
 	if err != nil {
-		return err
+		return "", 0, err
 	}
 	for _, w := range windows {
 		if w.ID != id {
@@ -604,12 +614,61 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 		}
 		win, ok := activeWindow(w)
 		if !ok {
-			return fmt.Errorf("kitty: os window %s has no windows", ref.ID)
+			return "", 0, fmt.Errorf("kitty: os window %s has no windows", ref.ID)
 		}
-		_, err := h.kitten(ctx, socket, "focus-window", "--match", "id:"+strconv.Itoa(win))
+		return socket, win, nil
+	}
+	return "", 0, fmt.Errorf("kitty: os window %s not found", ref.ID)
+}
+
+// OpenTab opens r.Launch as a new tab of the OS window. `launch --match`
+// names the tab the new one opens beside, reached here through the window
+// current in the OS window. The vars become user vars of the tab's window,
+// which ls reports back as the panel's Vars.
+func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
+	socket, win, err := h.active(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	args := []string{"--type=tab", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
+	names := make([]string, 0, len(vars))
+	for name := range vars {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		args = append(args, "--var", name+"="+vars[name])
+	}
+	if r.Dir != "" {
+		args = append(args, "--cwd", r.Dir)
+	}
+	args = append(args, r.Launch...)
+	id, err := h.launch(ctx, socket, args...)
+	if err != nil {
+		return "", err
+	}
+	return revier.PanelID(strconv.Itoa(id)), nil
+}
+
+// FocusPanel makes one kitty window current, switching to its tab. Under GNOME
+// on Wayland this does not raise the OS window; the core raises it.
+func (h *Host) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	socket, _, err := parseRef(ref.ID)
+	if err != nil {
 		return err
 	}
-	return fmt.Errorf("kitty: os window %s not found", ref.ID)
+	_, err = h.kitten(ctx, socket, "focus-window", "--match", "id:"+panel.String())
+	return err
+}
+
+// FocusedPanel reports the window current in the OS window: the active window
+// of its active tab.
+func (h *Host) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
+	_, win, err := h.active(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	return revier.PanelID(strconv.Itoa(win)), nil
 }
 
 // SendText types text into one kitty window, on the socket of the process the

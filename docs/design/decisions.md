@@ -1572,3 +1572,84 @@ checked against. No declared layout here has two agents.
 
 Remote agents in a tab - `ssh` in the foreground - are no probe's here. They are
 their host's, as in D40.
+
+### D63 — a named window does not hide its unnamed sibling, and a window that cannot be raised is not focused — Accepted
+
+Amends D22's refusal and D19's raise.
+
+D22 refused the pairing unless a kitty process owned exactly one OS window on
+each side. A window launched into a running kitty with its own
+`--os-window-name` lands in that process: the project's ticket viewer,
+`tickets:revier`, joined the process of the unnamed `session:revier`. The
+process then owned two windows, the refusal applied, and the session lost the
+title it had. `revier open revier` focused the kitty window without raising it,
+and GNOME answered with "session:revier is ready" in place of the raise.
+
+That process was never ambiguous. The named window already carries its title,
+and the window host lists a window with that same title. So the core sets that
+pair aside first, and pairs what is left: one unnamed runtime window and one
+unclaimed window of the same process. Two unnamed windows, or two unclaimed
+titles, are still refused, for D22's reason: a guessed title sends the next
+keypress to the wrong window.
+
+The refusal still leaves a window revier finds but cannot raise, and D19
+focused it inside the terminal anyway. On Wayland that request is exactly what
+GNOME turns into the notification: nothing comes forward, and a click on the
+notice finishes the raise. So a runtime that claims `OSWindows`, on a machine
+with a window host, is no longer focused when the core finds no OS window for
+the instance. The press fails with `ErrUnraisable`, naming the target, and
+nothing moves. A visible refusal is better than a raise that looks half done.
+
+### D64 — a target can be a tab inside another target — Accepted
+
+Narrows D14: a target is still a named binding a project has, but its instance
+can be a tab of another target's instance, not only an instance of its own.
+
+The ticket viewer is a separate kitty OS window. Sometimes that is right. Often
+the wanted place is the workspace, on the ticket tab, which is how the shell
+session tool laid it out. Both are the user's choice per target, so both stay:
+
+```toml
+[[target]]
+name = "tickets"
+  [target.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+```
+
+With `inside`, run-or-raise works on a tab. The core finds the instance of the
+named target, and in it the panel that carries `revier_target = "tickets"`. A
+tab that is there is focused, and its OS window raised. A tab that is not
+there is opened with that variable set. A target instance that is not there is
+opened first. Toggle-back is D19's with one more condition: the OS window has
+focus and the tab is the current panel. A home in the same instance is then
+reached by making its own first panel current, because focusing the instance
+alone leaves the tab in front.
+
+The identity is a variable revier sets, not a match. A title is the program's
+to change, and a position is not an identity: that is D59's objection to
+merging panels, and it applies here as well. Only a tab has one identity that
+revier can set and read back on every runtime that can open it. A split has no
+such identity on most runtimes, so a split is left out. `match` and `name` are
+not used for a tab. A shared target keeps them when a project changes it into a
+tab, and the load does not refuse them.
+
+Opening a tab and focusing one panel are facts about one tool, so they are an
+optional runtime capability, `PanelOpener`, detected by type assertion as
+`PanelWriter` is (D31). D62 rejected a `PanelAdder` port, because a restore
+opens only a target that is not running and knows the whole layout before the
+open. A tab key has no such moment: the workspace is usually open already, and
+the tab is added to it, so the capability is needed here. kitty implements it with `launch --type=tab --var` and
+`focus-window`. tmux does not yet: its instance is a tmux window, and a tab of
+it would be another tmux window, which is another instance. A runtime without
+the capability refuses the press with `ErrNoTabs`, naming the target and the
+runtime. Opening a separate window instead was rejected: that is the other
+choice, and the user did not make it.
+
+The load refuses a tab that is home, that has a window realization, panels, or
+no launch argv, and a tab inside a target that is missing, is itself a tab, has
+no runtime realization, or also has a window realization. Each would fail at
+the keypress.
+
+A session records a tab by its name. Its panels are recorded under the target
+of the instance that holds it, so an agent is recorded once.

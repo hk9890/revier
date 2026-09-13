@@ -159,26 +159,37 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 // window manager calls it.
 //
 // The pairing is by process, and it is refused unless that process owns
-// exactly one window on each side. D19 rejected the process id for pairing a
-// pane to a window, because every OS window of one kitty process shares its
-// pid; that objection is exactly this refusal, so an ambiguous process is left
-// as it was rather than guessed at.
+// exactly one unnamed window on the runtime side and exactly one window on the
+// window host's side that no named runtime window already claims by title.
+// D19 rejected the process id for pairing a pane to a window, because every OS
+// window of one kitty process shares its pid; that objection is exactly this
+// refusal, so an ambiguous process is left as it was rather than guessed at
+// (decisions.md D63).
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
 		return
 	}
 	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
 
-	perPID := map[int]int{}
+	unnamed := map[int]int{}
+	claimed := map[int]map[string]bool{}
 	for _, r := range runtimes {
-		if r.PID != 0 {
-			perPID[r.PID]++
+		if r.PID == 0 {
+			continue
 		}
+		if r.Title == "" {
+			unnamed[r.PID]++
+			continue
+		}
+		if claimed[r.PID] == nil {
+			claimed[r.PID] = map[string]bool{}
+		}
+		claimed[r.PID][r.Title] = true
 	}
 	byPID := map[int]revier.Instance{}
 	seen := map[int]int{}
 	for _, w := range windows {
-		if w.PID == 0 {
+		if w.PID == 0 || claimed[w.PID][w.Title] {
 			continue
 		}
 		seen[w.PID]++
@@ -186,7 +197,7 @@ func (c *Core) identify(s snapshot) {
 	}
 
 	for i, r := range runtimes {
-		if r.Title != "" || r.PID == 0 || perPID[r.PID] != 1 || seen[r.PID] != 1 {
+		if r.Title != "" || r.PID == 0 || unnamed[r.PID] != 1 || seen[r.PID] != 1 {
 			continue
 		}
 		w := byPID[r.PID]
@@ -232,6 +243,9 @@ func (c *Core) ProjectOfFocused(ctx context.Context, projects []Project) (Projec
 	}
 	for _, p := range projects {
 		for i := range p.Targets {
+			if p.isTab(i) {
+				continue
+			}
 			_, _, m, err := c.resolveAt(p, i)
 			if err != nil {
 				continue
@@ -311,8 +325,8 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 }
 
 // Result is what Go did. Target is the target the key landed on: the one
-// asked for, or the project's home when the press toggled back, and the one a
-// caller pins Ref to. Ref is where the key landed. Launched reports that the
+// asked for, the project's home when the press toggled back, or the target a
+// tab is inside, and the one a caller pins Ref to. Ref is where the key landed. Launched reports that the
 // run half ran; with a zero Ref the host could not name the window it
 // started, and Before is the window listing from before the launch, which
 // Bind diffs against. Agents is what the launch did with each recorded agent.
@@ -342,6 +356,9 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 	i, ok := p.index(name)
 	if !ok {
 		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+	}
+	if p.isTab(i) {
+		return c.goTab(ctx, p, i, bound)
 	}
 	t := p.Targets[i]
 	host, real, m, err := c.resolveAt(p, i)
@@ -388,17 +405,53 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 			return c.Go(ctx, p, home.Name, bound)
 		}
 	}
+	osw, err := c.raisable(snap, inst, name)
+	if err != nil {
+		return Result{}, err
+	}
 	if err := host.Focus(ctx, inst.Ref); err != nil {
 		return Result{}, fmt.Errorf("%s: focus %s: %w", host.Name(), name, err)
 	}
-	// A terminal cannot always raise the OS window it lives in - kitty on
-	// Wayland cannot - so when the window host sees that window, it raises it.
-	if osw, ok := c.osWindowOf(snap, inst); ok {
-		if err := c.Window.Focus(ctx, osw.Ref); err != nil {
-			return Result{}, fmt.Errorf("%s: raise %s: %w", c.Window.Name(), name, err)
-		}
+	if err := c.raise(ctx, osw, name); err != nil {
+		return Result{}, err
 	}
 	return Result{Target: name, Ref: inst.Ref}, nil
+}
+
+// ErrUnraisable is returned when a runtime instance's OS window cannot be
+// found in the window host's listing, so it could be focused inside the
+// terminal but not raised.
+var ErrUnraisable = errors.New("cannot raise: the window host lists no window for it")
+
+// raisable finds the OS window a raise of inst goes through: zero when inst
+// needs none, and an error when it needs one and the window host lists none.
+//
+// A terminal cannot always raise the OS window it lives in - kitty on Wayland
+// cannot - so the window host raises it. Focusing inside the terminal without
+// that raise is refused rather than done: GNOME answers such a request with a
+// "is ready" notification instead of the window, which reads as a raise that
+// half worked. The error names the target, and nothing moves (decisions.md
+// D63).
+func (c *Core) raisable(snap snapshot, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
+	if !c.bridged(inst) {
+		return revier.TargetRef{}, nil
+	}
+	osw, ok := c.osWindowOf(snap, inst)
+	if !ok {
+		return revier.TargetRef{}, fmt.Errorf("%s: %s: %w", c.Window.Name(), name, ErrUnraisable)
+	}
+	return osw.Ref, nil
+}
+
+// raise activates the OS window raisable found, if it found one.
+func (c *Core) raise(ctx context.Context, osw revier.TargetRef, name revier.TargetName) error {
+	if osw.IsZero() {
+		return nil
+	}
+	if err := c.Window.Focus(ctx, osw); err != nil {
+		return fmt.Errorf("%s: raise %s: %w", c.Window.Name(), name, err)
+	}
+	return nil
 }
 
 // Running reports whether a target has an instance to raise: its binding while
@@ -409,6 +462,14 @@ func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName, b
 	i, ok := p.index(name)
 	if !ok {
 		return false, fmt.Errorf("%w: %s", ErrNoTarget, name)
+	}
+	if p.isTab(i) {
+		snap, err := c.snapshot(ctx)
+		if err != nil {
+			return false, err
+		}
+		_, _, _, open, err := c.container(snap, p, i, bound)
+		return open, err
 	}
 	host, _, m, err := c.resolveAt(p, i)
 	if err != nil {
@@ -550,10 +611,7 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
-	if c.Window == nil || c.Runtime == nil || inst.Ref.Host != c.Runtime.Name() || inst.Title == "" {
-		return revier.Instance{}, false
-	}
-	if !c.Runtime.Capabilities().OSWindows {
+	if !c.bridged(inst) || inst.Title == "" {
 		return revier.Instance{}, false
 	}
 	for _, w := range snap[c.Window.Name()] {
@@ -566,6 +624,12 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 		return w, true
 	}
 	return revier.Instance{}, false
+}
+
+// bridged reports whether inst lives in an OS window the window host raises:
+// it is the runtime's, and the runtime reports OSWindows.
+func (c *Core) bridged(inst revier.Instance) bool {
+	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.Runtime.Capabilities().OSWindows
 }
 
 // Focus activates a bare ref on the host that produced it. The picker uses it
@@ -777,7 +841,7 @@ func (c *Core) declared(inst revier.Instance, projects []Project) bool {
 			if t.Window != nil && p.compiled[i].window.Matches(inst) {
 				return true
 			}
-			if t.Runtime != nil && p.compiled[i].runtime.Matches(inst) {
+			if t.Runtime != nil && !p.isTab(i) && p.compiled[i].runtime.Matches(inst) {
 				return true
 			}
 		}
@@ -812,6 +876,10 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 
 	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
+		if p.isTab(i) {
+			v.Targets = append(v.Targets, c.tabView(snap, p, i, bound, tv))
+			continue
+		}
 		host, _, m, err := c.resolveAt(p, i)
 		if err == nil {
 			tv.Available = true
