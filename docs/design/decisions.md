@@ -1732,8 +1732,13 @@ So the host now drops only a window mutter has not shown yet. wctl reads that
 case as hidden, not minimized, and on the active workspace or on none, and so
 does this host. That window is still dropped for the old reason, better stated:
 it is not placed, and a placement revier sent to it would lose to mutter's own.
-The active workspace costs a second wctl call, made only when a window has that
-shape, so a refresh is still one call in the common case.
+The active workspace is read from the same listing: a shown window that is on
+one workspace is on the active one. A second call, `wctl workspaces`, is made
+only when no shown window says, so a refresh is one call in nearly every case,
+also with several workspaces in use. When the active workspace cannot be
+learned at all, a hidden window with a workspace is kept. Kept, an unshown
+window can be placed before mutter places it, for the moment it takes to show;
+dropped, a window on another workspace is not found, and its key fails.
 
 ### D67 — every named window of the process must be seen before its unnamed sibling is paired — Accepted
 

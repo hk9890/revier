@@ -68,6 +68,11 @@ type window struct {
 // first and switches to the second, so both are windows revier can raise.
 // wctl reads an unmapped window the same way, as hidden while unminimized on
 // the active workspace; active is asked only for such a window.
+//
+// A window whose workspace cannot be told from the active one is kept. Kept,
+// an unshown window can be placed before mutter places it, for the moment it
+// takes to show; dropped, a window on another workspace is not found, and its
+// key fails.
 func (w window) unmapped(active func() (int, bool)) bool {
 	if !w.IsHidden || w.IsMinimized {
 		return false
@@ -76,7 +81,19 @@ func (w window) unmapped(active func() (int, bool)) bool {
 		return true
 	}
 	at, ok := active()
-	return !ok || *w.Workspace == at
+	return ok && *w.Workspace == at
+}
+
+// shownWorkspace is the active workspace as the listing itself shows it: every
+// shown window on one workspace is on the active one. A sticky window reports
+// -1 and says nothing.
+func shownWorkspace(windows []window) (int, bool) {
+	for _, w := range windows {
+		if !w.IsHidden && w.Workspace != nil && *w.Workspace >= 0 {
+			return *w.Workspace, true
+		}
+	}
+	return 0, false
 }
 
 // Probe reports GNOME usable when wctl is on PATH and answers. It also checks
@@ -105,9 +122,10 @@ func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// Instances lists every window in one call, and a second for the active
-// workspace when a hidden window needs it. wctl returns the whole list, so a
-// refresh costs at most two invocations regardless of how many projects exist.
+// Instances lists every window in one call. The active workspace comes from
+// that listing, and a second call asks for it only when no shown window says,
+// so a refresh costs one invocation in nearly every case and at most two,
+// regardless of how many projects exist.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	raw, err := h.run(ctx, "list", "--json")
 	if err != nil {
@@ -117,8 +135,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 }
 
 // activeWorkspace asks wctl for the active workspace once, the first time it
-// is needed. A refresh with no unmapped-looking window never asks, so the
-// listing stays one call in the common case.
+// is needed: a desktop with a hidden window and no shown one to read it from.
 func (h *Host) activeWorkspace(ctx context.Context) func() (int, bool) {
 	var at int
 	var ok, asked bool
@@ -151,6 +168,9 @@ func (h *Host) decode(raw []byte, active func() (int, bool)) ([]revier.Instance,
 	var windows []window
 	if err := json.Unmarshal(raw, &windows); err != nil {
 		return nil, fmt.Errorf("wctl list --json: %w", err)
+	}
+	if at, ok := shownWorkspace(windows); ok {
+		active = func() (int, bool) { return at, true }
 	}
 	out := make([]revier.Instance, 0, len(windows))
 	for _, w := range windows {

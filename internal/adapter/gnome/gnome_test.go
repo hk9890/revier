@@ -106,6 +106,7 @@ func TestDecodeKeepsEveryHiddenWindowActivateCanRaise(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			asked := false
 			active := func() (int, bool) { asked = true; return 0, true }
+			// Alone in the listing, so no shown window tells the workspace.
 			raw := `[{"id": 1, "title": "session:revier", "wm_class": "kitty", ` + tc.window + `}]`
 			got, err := (&gnome.Host{}).Decode([]byte(raw), active)
 			if err != nil {
@@ -118,6 +119,45 @@ func TestDecodeKeepsEveryHiddenWindowActivateCanRaise(t *testing.T) {
 				t.Errorf("asked for the active workspace = %v, want %v", asked, tc.asks)
 			}
 		})
+	}
+}
+
+// A shown window tells the active workspace, so a desktop in use costs no
+// second wctl call however many of its windows are on other workspaces.
+func TestDecodeReadsTheActiveWorkspaceFromAShownWindow(t *testing.T) {
+	raw := `[
+		{"id": 1, "title": "editor", "is_hidden": false, "workspace_index": -1},
+		{"id": 2, "title": "session:revier", "is_hidden": false, "workspace_index": 1},
+		{"id": 3, "title": "session:setup", "is_hidden": true, "workspace_index": 0},
+		{"id": 4, "title": "unshown", "is_hidden": true, "workspace_index": 1}
+	]`
+	asked := false
+	got, err := (&gnome.Host{}).Decode([]byte(raw), func() (int, bool) { asked = true; return 0, true })
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if asked {
+		t.Error("asked wctl for the active workspace; the shown window on workspace 1 says it")
+	}
+	var titles []string
+	for _, inst := range got {
+		titles = append(titles, inst.Title)
+	}
+	if want := "editor session:revier session:setup"; strings.Join(titles, " ") != want {
+		t.Errorf("kept %v, want %s: the window on workspace 0 is on another workspace, the one on 1 is unshown", titles, want)
+	}
+}
+
+// When the active workspace cannot be learned, a hidden window with a
+// workspace is kept: dropped, a window on another workspace is not found.
+func TestDecodeKeepsAHiddenWindowWhenTheWorkspaceIsUnknown(t *testing.T) {
+	raw := `[{"id": 1, "title": "session:revier", "is_hidden": true, "workspace_index": 2}]`
+	got, err := (&gnome.Host{}).Decode([]byte(raw), func() (int, bool) { return 0, false })
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d instances, want the window kept", len(got))
 	}
 }
 
