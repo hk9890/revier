@@ -14,9 +14,15 @@ this repository's delta, which wins where the two disagree.
 not a record of what is built — the code is that record — so a design doc
 describing something absent from `internal/` is intent, not documentation drift.
 
-A decision that turns out wrong is marked `Superseded by Dnn` in
-`docs/design/decisions.md`, with its original text left intact. Editing the old
-entry to look correct destroys the reason the newer one exists.
+`docs/design/decisions.md` holds only decisions in force:
+
+- Write an entry as the choice and the reason that decides it, in about five
+  lines. Put the behaviour it produces in the design doc that owns it.
+- Name a rejected alternative only where it would otherwise be proposed again.
+- When a decision replaces another, delete the old entry, say "Replaces ..."
+  in the new one, and repoint every `Dnn` citation in the tree. Git history
+  keeps the old text.
+- Never reuse a number.
 
 ## Deliberately absent
 

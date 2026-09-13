@@ -2,7 +2,7 @@
 # Opens the revier TUI as a popup terminal, or focuses the one already open.
 #
 # The window is a kitty with its own class, so a compositor rule can place it:
-# revier does not position its own window (docs/design/decisions.md D9). On
+# revier does not position its own window (docs/design/decisions.md D24). On
 # GNOME, the gnome-window-control extension's `wctl place` is that rule; add
 # one after the launch if you want a fixed position.
 set -eu

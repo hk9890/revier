@@ -8,7 +8,7 @@
 #
 # The fallback lives here and not in revier because revier is one process per
 # keypress and knows nothing about popups: opening a terminal window is the
-# compositor's business (docs/design/decisions.md D9).
+# compositor's business (docs/design/decisions.md D24).
 set -eu
 
 # The status has to be taken from the command itself. After `if cmd; then`,
