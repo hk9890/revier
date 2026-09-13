@@ -1041,7 +1041,7 @@ already do. Left out too: waiting for agents to fall quiet before saving. The
 survey already knows every agent's status, so it can be added when it is
 wanted, and nothing here has to change to allow it.
 
-### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; where the id comes from superseded by D55
+### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; where the id comes from superseded by D55; the panel identity superseded by D62
 
 A restored workspace whose agent starts empty solves the cheap half of the
 problem. Reopening twenty terminals in the right directories was never the
@@ -1515,3 +1515,60 @@ D35 already decided.
 The config screen refused these keys already (D56). The list `config.Load`
 reads is kept equal to the keys the TUI claims by a test, so a new button
 cannot bring the silent case back.
+
+### D62 — a restore brings back every agent, in order, in the directory it worked in — Accepted
+
+Supersedes D47's identity of an agent across a restart. The rest of D47
+stands: the resume is the probe's, and the argv is built from the project as it
+reads at restore.
+
+D47 restored an agent only where the project declares one, at the same
+position among the instance's panels. Two things on a real desktop defeated it.
+Most agents are opened by hand beside a workspace, in tabs of its OS window,
+and those were recorded at positions the layout does not declare and dropped.
+And the position counted every panel kitty lists, a hand-opened tab of another
+tool included, so even the declared agent was usually recorded somewhere else.
+A save of the revier workspace recorded four conversations, and a restore would
+have resumed none of them.
+
+The second problem is the directory. `claude --resume <id>` finds a
+conversation started in a worktree when it is run from the repository root, and
+the agent then carries on in the root. It works in the wrong checkout, and its
+next edit lands on `main`. That is worse than starting empty.
+
+So a save records every agent a probe claims, in the order the runtime lists
+them, with its conversation and its directory when the probe can say. An agent
+with neither is recorded too, because the order is the identity. A restore
+gives the first recorded agent to the first panel the layout declares as an
+agent, the second to the second, and opens every agent past those as a copy of
+the first declared agent panel, in a tab of its own where the runtime has tabs.
+The copy is how the project starts an agent: its launcher, its flags. Each agent
+starts in its recorded directory. A directory that is gone - a worktree removed
+since the save - starts the agent empty where the workspace starts, and the
+restore says so. A layout that declares no agent has nothing to copy, and its
+agents are named as not restored.
+
+The directory comes with the conversation: `Resumable.Sessions` returns a
+`Conversation` of id and directory, read from the same `claude agents --json`
+run, whose `cwd` is where Claude works rather than where its pane opened.
+`PanelSpec` gains `Dir` and `Tab`, which a restore sets and no project file can:
+both are closed to TOML. A project file holds how a project opens, and nothing
+about one session of it. kitty opens a `Tab` panel with `launch --type=tab`
+into the same OS window, whose panels it already lists across all tabs, so
+`Open` still produces what `Match` finds. tmux splits it into the window like
+any other panel, because a second window would be a second instance.
+
+A panel added to a workspace that is already open was the alternative: an
+optional `PanelAdder` capability, called after `Open`. It adds a port where a
+longer realization does the same job, and it is not needed. A restore opens
+only a target that is not running, so the whole layout is known before the
+open.
+
+The order rule loses the case D47 was written for. A layout that declares two
+agents, the first of a harness no probe here claims, gives the first recorded
+conversation to that first panel, and the resume flag goes to the wrong
+harness. Position avoided that, and failed on every real desktop this was
+checked against. No declared layout here has two agents.
+
+Remote agents in a tab - `ssh` in the foreground - are no probe's here. They are
+their host's, as in D40.

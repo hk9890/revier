@@ -6,11 +6,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 func at(day int) time.Time { return time.Date(2026, 9, day, 14, 33, 5, 0, time.UTC) }
@@ -21,7 +21,10 @@ func sample(day int, name string) session.Session {
 		Projects: []session.Project{{
 			Name: "revier",
 			Targets: []session.Target{
-				{Name: "home", Panels: []session.Panel{{Index: 0, Harness: "claude", Session: "abc-123"}}},
+				{Name: "home", Agents: []session.Agent{
+					{Harness: "claude", Session: "abc-123", Dir: "/home/hans/dev/github/revier/.claude/worktrees/tui"},
+					{Harness: "claude"},
+				}},
 				{Name: "editor"},
 			},
 		}},
@@ -46,9 +49,14 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 	if len(got.Projects) != 1 || len(got.Projects[0].Targets) != 2 {
 		t.Fatalf("projects did not survive: %+v", got.Projects)
 	}
-	panels := got.Projects[0].Targets[0].Panels
-	if len(panels) != 1 || panels[0].Session != revier.SessionID("abc-123") || panels[0].Harness != "claude" {
-		t.Errorf("conversation did not survive: %+v", panels)
+	// The agent with nothing to say survives too: it holds its place in the
+	// order a restore lays the agents out by.
+	want := sample(12, "").Projects[0].Targets[0].Agents
+	if agents := got.Projects[0].Targets[0].Agents; !slices.Equal(agents, want) {
+		t.Errorf("agents = %+v, want %+v", agents, want)
+	}
+	if got.Conversations() != 1 {
+		t.Errorf("Conversations = %d, want the one with an id", got.Conversations())
 	}
 	if got.Targets() != 2 {
 		t.Errorf("Targets = %d, want 2", got.Targets())
@@ -76,7 +84,7 @@ func TestSavedFileIsReadableTOML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.panel]]", `name = "home"`} {
+	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/hans/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`} {
 		if !contains(string(b), want) {
 			t.Errorf("saved file has no %s:\n%s", want, b)
 		}

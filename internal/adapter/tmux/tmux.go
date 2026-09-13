@@ -250,7 +250,8 @@ func kindOf(cmd string) revier.PanelKind {
 // Open creates a window named r.Name, starting the server and the session when
 // neither exists yet. With panels, the first panel is the window's pane and
 // every later one is split into it, side by side; without, the window runs
-// r.Launch alone.
+// r.Launch alone. A panel that asks for a tab is split in like the rest: a
+// tmux window is the instance, and a second window would be a second one.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the window")
@@ -267,8 +268,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	} else {
 		args = append(args, "-t", h.session()+":")
 	}
-	if r.Dir != "" {
-		args = append(args, "-c", literal(r.Dir))
+	if dir := dirOf(r, panels[0]); dir != "" {
+		args = append(args, "-c", literal(dir))
 	}
 	args = append(args, command(panels[0].Command)...)
 
@@ -287,8 +288,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 
 	for _, p := range panels[1:] {
 		args := []string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}
-		if r.Dir != "" {
-			args = append(args, "-c", literal(r.Dir))
+		if dir := dirOf(r, p); dir != "" {
+			args = append(args, "-c", literal(dir))
 		}
 		args = append(args, command(p.Command)...)
 		out, err := h.run(ctx, args...)
@@ -305,6 +306,14 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		}
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, window), Title: r.Name}, nil
+}
+
+// dirOf is where a panel starts: its own directory, or the realization's.
+func dirOf(r revier.Realization, p revier.PanelSpec) string {
+	if p.Dir != "" {
+		return p.Dir
+	}
+	return r.Dir
 }
 
 // literal escapes s for an argument tmux expands as a format, which -n, -c

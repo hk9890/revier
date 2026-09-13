@@ -315,14 +315,13 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 // caller pins Ref to. Ref is where the key landed. Launched reports that the
 // run half ran; with a zero Ref the host could not name the window it
 // started, and Before is the window listing from before the launch, which
-// Bind diffs against. Resumed is how many agent panels the launch started on
-// a recorded conversation.
+// Bind diffs against. Agents is what the launch did with each recorded agent.
 type Result struct {
 	Target   revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
 	Before   []revier.Instance
-	Resumed  int
+	Agents   []AgentOutcome
 }
 
 // Go runs-or-raises a target. Pressing the same key twice returns to the
@@ -360,7 +359,7 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 		if c.Window != nil {
 			res.Before = snap[c.Window.Name()]
 		}
-		real, res.Resumed = c.resuming(real, resumes)
+		real, res.Agents = c.resuming(real, resumes)
 		ref, err := host.Open(ctx, real)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)

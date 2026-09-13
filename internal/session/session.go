@@ -4,9 +4,9 @@
 // It holds names and nothing else. The host that realized a target, the
 // instance it landed on, and the argv it was launched with are all derived
 // again at restore from the project file as it reads then, so a project file
-// edited between the two wins over the recording. The one exception is the
-// agent session id, which no project file can carry because it did not exist
-// when the file was written.
+// edited between the two wins over the recording. The exception is what an
+// agent was doing - its conversation and the directory it worked in - which no
+// project file can carry, because neither existed when the file was written.
 //
 // It is separate from internal/state because the two have different
 // lifecycles. state.json is one live document, pruned on read against the
@@ -63,23 +63,24 @@ type Project struct {
 }
 
 // Target is a table rather than a bare name so a key can be added to it - as
-// Panels was - without breaking a format someone already has files in.
+// Agents was - without breaking a format someone already has files in.
 type Target struct {
 	Name revier.TargetName `toml:"name" json:"name"`
 
-	// Panels are the agent conversations the target held, for the probes that
-	// can name one. Index is the panel's position among all the target's
-	// panels, the position of its spec in the project file, because a live
-	// panel's title is the agent's to change and is no identity at all.
-	Panels []Panel `toml:"panel,omitempty" json:"panels,omitempty"`
+	// Agents are the agents the target's instance held, in the order the
+	// runtime listed them. The order is their identity: a restore gives the
+	// first to the first agent panel the project declares, and so on, and
+	// opens the rest beside the layout (decisions.md D62).
+	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
-// Panel is one agent conversation: which panel of the target, which probe
-// named it, and the probe's own word for the conversation.
-type Panel struct {
-	Index   int              `toml:"index" json:"index"`
+// Agent is one agent: which probe claimed it, and what that probe could say
+// about its conversation. An agent with neither holds its place in the order,
+// so the agents after it keep theirs.
+type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
-	Session revier.SessionID `toml:"session" json:"session"`
+	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`
+	Dir     string           `toml:"dir,omitempty" json:"dir,omitempty"`
 }
 
 // Dir is where sessions live under the state root.
@@ -171,6 +172,21 @@ func List(stateRoot string) ([]Session, error) {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	return out, nil
+}
+
+// Conversations counts the agents recorded with a conversation to resume.
+func (s Session) Conversations() int {
+	n := 0
+	for _, p := range s.Projects {
+		for _, t := range p.Targets {
+			for _, a := range t.Agents {
+				if a.Session != "" {
+					n++
+				}
+			}
+		}
+	}
+	return n
 }
 
 // Targets counts the targets across every project, the number a save reports.

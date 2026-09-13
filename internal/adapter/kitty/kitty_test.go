@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -276,6 +277,71 @@ func TestFocusSelectsTheActiveWindow(t *testing.T) {
 	}
 }
 
+// A panel a restore adds beside the layout asks for a tab: it opens as a tab
+// of the same OS window, found by the first panel's window id, and in its own
+// directory. The OS window is then left on its first tab, the workspace.
+func TestOpenPutsATabPanelInATabOfTheSameOSWindow(t *testing.T) {
+	h := &kitty.Host{}
+	var seq []string
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
+		seq = append(seq, strings.Join(args, " "))
+		switch args[0] {
+		case "launch":
+			if strings.Contains(strings.Join(args, " "), "--type=os-window") {
+				return []byte("7\n"), nil
+			}
+			return []byte("9\n"), nil
+		case "ls":
+			return json.Marshal([]map[string]any{{
+				"id": 3, "wm_name": "session:demo",
+				"tabs": []map[string]any{
+					{"windows": []map[string]any{{"id": 7}}},
+					{"is_active": true, "windows": []map[string]any{{"id": 9, "is_active": true}}},
+				},
+			}})
+		}
+		return nil, nil
+	})
+
+	_, err := h.Open(context.Background(), revier.Realization{
+		Name: "session:demo", Dir: "/home/user/dev/demo",
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "a"}, Dir: "/home/user/dev/demo/wt"},
+			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "b"}, Dir: "/home/user/dev/demo/other", Tab: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	launches := []string{}
+	for _, c := range seq {
+		if strings.HasPrefix(c, "launch ") {
+			launches = append(launches, c)
+		}
+	}
+	if len(launches) != 2 {
+		t.Fatalf("launches = %q, want two", launches)
+	}
+	if !strings.Contains(launches[0], "--cwd /home/user/dev/demo/wt ") {
+		t.Errorf("first launch %q does not start in the panel's own directory", launches[0])
+	}
+	for _, want := range []string{"launch --type=tab --match window_id:7 ", "--cwd /home/user/dev/demo/other ", "claude --resume b"} {
+		if !strings.Contains(launches[1], want) {
+			t.Errorf("tab launch %q lacks %q", launches[1], want)
+		}
+	}
+	focus := -1
+	for i, c := range seq {
+		if c == "focus-window --match id:7" {
+			focus = i
+		}
+	}
+	if focus < 0 || focus < slices.Index(seq, launches[1]) {
+		t.Errorf("the OS window was not left on the workspace's first tab:\n%s", strings.Join(seq, "\n"))
+	}
+}
+
 // Open is a launch sequence into the running kitty: the first panel opens the
 // OS window and carries its identity, later panels split into it. Never a
 // session file, which a running kitty answers with a second process.
@@ -340,7 +406,7 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 	if seq[1] != "set-window-title --temporary --match id:7 agent" {
 		t.Errorf("first title call = %q", seq[1])
 	}
-	for _, want := range []string{"launch --type=window", "--match id:7", "--cwd /home/user/dev/demo"} {
+	for _, want := range []string{"launch --type=window", "--match window_id:7", "--cwd /home/user/dev/demo"} {
 		if !strings.Contains(seq[2], want) {
 			t.Errorf("second launch %q lacks %q", seq[2], want)
 		}

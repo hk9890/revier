@@ -13,15 +13,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
 // The agent writes the arguments it was started with beside itself, which is
-// how the test reads back whether the restore resumed it. It runs under the
-// name claude so the Claude probe claims it.
+// how the test reads back whether the restore resumed it, and adds a line with
+// its directory to a log every agent shares. It runs under the name claude so
+// the Claude probe claims it.
 const sessionAgent = `printf '%s' "$*" > "$0.args"
+printf '%s %s\n' "$PWD" "$*" >> "$0.started"
 sleep 300
 `
 
@@ -144,6 +147,30 @@ func markConversation(t *testing.T, id string) {
 	t.Fatalf("no pane is running the agent:\n%s", out)
 }
 
+// agentPanes lists the pids of the panes running the agent, in the window's
+// order: the order a save records agents in.
+func agentPanes(t *testing.T) []string {
+	t.Helper()
+	var pids []string
+	out := tmuxRun(t, "list-panes", "-t", "work", "-F", "#{pane_pid} #{pane_current_command}")
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if pid, cmd, ok := strings.Cut(line, " "); ok && cmd == "claude" {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// listConversation makes the fake claude list the process pid as holding the
+// conversation id, worked on in dir.
+func listConversation(t *testing.T, pid, id, dir string) {
+	t.Helper()
+	session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "cwd": "` + dir + `", "status": "idle"}`
+	if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // reboot loses every window without touching the project files or the saved
 // session, which is the event the whole feature exists for. The bindings left
 // in state now point at windows that do not exist, exactly as they would after
@@ -214,6 +241,70 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(read)); got != "--resume abc-123" {
 		t.Errorf("the agent started with %q, want it resumed on abc-123", got)
+	}
+}
+
+// The agents opened by hand beside the workspace come back too, each on its
+// own conversation and in the directory it worked in. One whose worktree was
+// removed since the save starts empty in the project, and the restore says so:
+// resumed anywhere else it would carry on in the wrong checkout.
+func TestSessionRestoreBringsBackEveryAgentInItsOwnDirectory(t *testing.T) {
+	args := work(t)
+	agent := strings.TrimSuffix(args, ".args")
+	// The project's directory, where the workspace's panes start.
+	workdir := strings.SplitN(tmuxRun(t, "list-panes", "-t", "work", "-F", "#{pane_current_path}"), "\n", 2)[0]
+	worktree, removed := t.TempDir(), t.TempDir()
+
+	// Two more agents, opened by hand in the workspace's window.
+	for _, dir := range []string{worktree, removed} {
+		tmuxRun(t, "split-window", "-t", "work", "-c", dir, "bash", "-c", `exec -a claude bash "$0" "$@"`, agent)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	pids := agentPanes(t)
+	for len(pids) < 3 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		pids = agentPanes(t)
+	}
+	if len(pids) != 3 {
+		t.Fatalf("agent panes = %v, want 3", pids)
+	}
+	listConversation(t, pids[0], "in-root", workdir)
+	listConversation(t, pids[1], "in-worktree", worktree)
+	listConversation(t, pids[2], "in-removed", removed)
+
+	save := capture(t, "session", "save")
+	if !strings.Contains(save, "3 agent conversations recorded") {
+		t.Fatalf("save printed %q, want all three agents recorded", save)
+	}
+
+	reboot(t)
+	if err := os.RemoveAll(removed); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Remove(agent + ".started")
+
+	restore := capture(t, "session", "restore")
+	if !strings.Contains(restore, "opened, 2 agents resumed, 1 agent empty: directory gone") {
+		t.Errorf("restore printed %q, want what became of each agent", restore)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	var started []string
+	for len(started) < 3 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		read, _ := os.ReadFile(agent + ".started")
+		started = strings.Split(strings.TrimSpace(string(read)), "\n")
+		for i := range started {
+			started[i] = strings.TrimSpace(started[i])
+		}
+	}
+	slices.Sort(started)
+	want := []string{workdir, workdir + " --resume in-root", worktree + " --resume in-worktree"}
+	slices.Sort(want)
+	if !slices.Equal(started, want) {
+		t.Errorf("agents started as\n%s\nwant\n%s", strings.Join(started, "\n"), strings.Join(want, "\n"))
+	}
+	if n := len(agentPanes(t)); n != 3 {
+		t.Errorf("the workspace came back with %d agents, want 3", n)
 	}
 }
 

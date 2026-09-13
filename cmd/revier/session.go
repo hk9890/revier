@@ -67,16 +67,13 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	}
 	fmt.Printf("%s: %s, %s\n", stored.ID,
 		count(len(stored.Projects), "project"), count(stored.Targets(), "target"))
-	if n := conversations(stored); n > 0 {
+	if n := stored.Conversations(); n > 0 {
 		fmt.Printf("  %s recorded\n", count(n, "agent conversation"))
 	}
 	// Said now, while the agents still run, so the gap can be closed before
 	// the reboot rather than found after it.
 	if gaps.Unnamed > 0 {
 		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(gaps.Unnamed, "agent"))
-	}
-	if gaps.Undeclared > 0 {
-		fmt.Printf("  %s in a panel not declared kind = \"agent\", to be restored empty\n", count(gaps.Undeclared, "agent"))
 	}
 	for _, err := range gaps.Failed {
 		fmt.Printf("    could not ask %v\n", err)
@@ -206,18 +203,32 @@ func cmdSessionList(a *app, args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tNAME\tPROJECTS\tTARGETS\tAGENTS")
 	for _, s := range all {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), conversations(s))
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), s.Conversations())
 	}
 	return w.Flush()
 }
 
-// resumeNote says what opening a target did, or would do, naming the agents it
-// starts on a conversation rather than empty.
-func resumeNote(verb string, resumed int) string {
-	if resumed == 0 {
-		return verb
+// resumeNote says what opening a target did, or would do, to the agents it
+// recorded: how many start on their conversation, how many start empty because
+// the directory they worked in is gone, and how many cannot be started at all.
+// An agent recorded with no conversation starts empty as it always would, and
+// is not worth a word.
+func resumeNote(verb string, agents []core.AgentOutcome) string {
+	n := map[core.AgentOutcome]int{}
+	for _, o := range agents {
+		n[o]++
 	}
-	return fmt.Sprintf("%s, %s resumed", verb, count(resumed, "agent"))
+	note := verb
+	if n[core.AgentResumed] > 0 {
+		note += fmt.Sprintf(", %s resumed", count(n[core.AgentResumed], "agent"))
+	}
+	if n[core.AgentDirGone] > 0 {
+		note += fmt.Sprintf(", %s empty: directory gone", count(n[core.AgentDirGone], "agent"))
+	}
+	if n[core.AgentDropped] > 0 {
+		note += fmt.Sprintf(", %s not restored: no agent panel declared", count(n[core.AgentDropped], "agent"))
+	}
+	return note
 }
 
 // count writes a number and its noun, pluralised. A summary that reads
@@ -227,16 +238,6 @@ func count(n int, noun string) string {
 		return fmt.Sprintf("1 %s", noun)
 	}
 	return fmt.Sprintf("%d %ss", n, noun)
-}
-
-func conversations(s session.Session) int {
-	n := 0
-	for _, p := range s.Projects {
-		for _, t := range p.Targets {
-			n += len(t.Panels)
-		}
-	}
-	return n
 }
 
 func attachments(r core.Report) int {
