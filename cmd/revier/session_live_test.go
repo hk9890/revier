@@ -325,14 +325,37 @@ name = "notes"`)]
 }
 
 // Nothing saved is a normal outcome, not a failure: the first restore on a
-// machine that never saved.
+// machine that never saved, run from a login script that must not fail on it.
+// A session asked for by a name nothing has is a typo, and fails.
 func TestSessionRestoreWithNothingSaved(t *testing.T) {
 	scratch(t)
 	if out := capture(t, "session", "list"); !strings.Contains(out, "no saved sessions") {
 		t.Errorf("list printed %q, want it to say the store is empty", out)
 	}
-	err := run([]string{"session", "restore"})
+	if out := capture(t, "session", "restore"); !strings.Contains(out, "no saved session") {
+		t.Errorf("restore printed %q, want it to say there is nothing to restore", out)
+	}
+	err := run([]string{"session", "restore", "before-reboot"})
 	if err == nil || !strings.Contains(err.Error(), "no stored session") {
-		t.Errorf("err = %v, want it to say there is nothing to restore", err)
+		t.Errorf("err = %v, want the missing name refused", err)
+	}
+}
+
+// A save with nothing open writes nothing: it would become the newest session,
+// and a plain restore after the reboot would open it instead of the save made
+// before.
+func TestSessionSaveWithNothingOpenKeepsTheLastSession(t *testing.T) {
+	work(t)
+	capture(t, "session", "save", "--name", "before-reboot")
+	reboot(t)
+
+	if out := capture(t, "session", "save"); !strings.Contains(out, "nothing is open") {
+		t.Errorf("save printed %q, want it to say nothing was saved", out)
+	}
+	if out := capture(t, "session", "list"); strings.Count(out, "\n") != 2 || !strings.Contains(out, "before-reboot") {
+		t.Errorf("list printed %q, want the one session saved before the reboot", out)
+	}
+	if out := capture(t, "session", "restore"); !strings.Contains(out, "opened 2") {
+		t.Errorf("restore printed %q, want the saved session opened", out)
 	}
 }

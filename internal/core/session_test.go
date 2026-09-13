@@ -67,7 +67,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _, _ := c.Session(context.Background(), report, "revier")
+	s, _ := c.Session(context.Background(), report, "revier")
 
 	if s.Current != "revier" {
 		t.Errorf("Current = %q, want the focused project", s.Current)
@@ -113,7 +113,7 @@ func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _, _ := c.Session(context.Background(), report, "")
+	s, _ := c.Session(context.Background(), report, "")
 
 	restored := hosttest.NewRuntime("rt")
 	c.Runtime = restored
@@ -133,6 +133,33 @@ func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
 	}
 }
 
+// An agent running where the project declares no agent - claude typed into a
+// shell panel, or a runtime target with no panels - gets no conversation in
+// the file: restore resumes only into a declared agent, and a recorded
+// conversation it drops would be reported as resumed. The save counts it.
+func TestSessionRecordsNoConversationForAnUndeclaredAgent(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "def-456"}},
+	)
+	probe := resumable()
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, gaps := c.Session(context.Background(), report, "")
+
+	panels := s.Projects[0].Targets[0].Panels
+	if len(panels) != 1 || panels[0].Index != 1 || panels[0].Session != "def-456" {
+		t.Errorf("panels = %+v, want only the declared agent at position 1", panels)
+	}
+	if gaps.Undeclared != 1 || gaps.Unnamed != 0 {
+		t.Errorf("gaps = %+v, want the shell's agent counted as undeclared", gaps)
+	}
+}
+
 // A project with nothing open is not in the file: restoring it would open a
 // workspace the save did not have.
 func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
@@ -141,7 +168,7 @@ func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, _, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
+	if s, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
 		t.Errorf("Projects = %+v, want none", s.Projects)
 	}
 }
@@ -160,7 +187,7 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _, _ := c.Session(context.Background(), report, "")
+	s, _ := c.Session(context.Background(), report, "")
 	for _, tv := range s.Projects[0].Targets {
 		if tv.Name == "" {
 			t.Errorf("an attachment was recorded: %+v", tv)
@@ -178,19 +205,20 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
 	)
 	plain := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude"}}}
 	report, err := plain.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed, _ := plain.Session(context.Background(), report, "")
+	s, gaps := plain.Session(context.Background(), report, "")
 	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none from a probe that cannot name one", panels)
 	}
-	if unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent", unnamed)
+	if gaps.Unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent", gaps.Unnamed)
 	}
 
 	failing := resumable()
@@ -200,17 +228,17 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed, failed := broken.Session(context.Background(), report, "")
+	s, gaps = broken.Session(context.Background(), report, "")
 	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none when the probe failed", panels)
 	}
-	if unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent", unnamed)
+	if gaps.Unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent", gaps.Unnamed)
 	}
 	// The failure is said, with the probe's name, so an agent a broken probe
 	// could not name is not taken for one no listing matched.
-	if len(failed) != 1 || !errors.Is(failed[0], failing.SessionErr) || !strings.HasPrefix(failed[0].Error(), "claude: ") {
-		t.Errorf("failed = %v, want the probe's error, named", failed)
+	if len(gaps.Failed) != 1 || !errors.Is(gaps.Failed[0], failing.SessionErr) || !strings.HasPrefix(gaps.Failed[0].Error(), "claude: ") {
+		t.Errorf("failed = %v, want the probe's error, named", gaps.Failed)
 	}
 }
 
@@ -232,6 +260,7 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	other.Name = "other"
 	other.Targets[0].Runtime.Name = "session:other"
 	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
+	other.Targets[0].Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelAgent}}
 	probe := resumable()
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 
@@ -239,13 +268,13 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed, _ := c.Session(context.Background(), report, "")
+	s, gaps := c.Session(context.Background(), report, "")
 
 	if probe.Calls != 1 {
 		t.Errorf("Sessions was called %d times, want once for the whole save", probe.Calls)
 	}
-	if unnamed != 1 {
-		t.Errorf("unnamed = %d, want the one agent with no id", unnamed)
+	if gaps.Unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent with no id", gaps.Unnamed)
 	}
 	if len(s.Projects) != 2 {
 		t.Fatalf("projects = %+v, want both", s.Projects)
@@ -324,8 +353,15 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	p := prepared(t, agentProject())
 
 	resumes := []core.Resume{{Index: 1, Harness: "claude", Session: "abc-123"}}
-	if _, err := c.GoResuming(context.Background(), p, "home", nil, resumes); err != nil {
+	res, err := c.GoResuming(context.Background(), p, "home", nil, resumes)
+	if err != nil {
 		t.Fatalf("GoResuming: %v", err)
+	}
+	if res.Resumed != 1 {
+		t.Errorf("Resumed = %d, want the one agent", res.Resumed)
+	}
+	if n := c.Resumes(p, "home", resumes); n != 1 {
+		t.Errorf("Resumes = %d, want the one a launch honours", n)
 	}
 	if len(rt.Opened) != 1 {
 		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
@@ -412,8 +448,18 @@ func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rt := hosttest.NewRuntime("rt")
 			c := tc.core(rt)
-			if _, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{tc.resume}); err != nil {
+			p := prepared(t, agentProject())
+			res, err := c.GoResuming(context.Background(), p, "home", nil, []core.Resume{tc.resume})
+			if err != nil {
 				t.Fatalf("GoResuming: %v", err)
+			}
+			// Said as it is: a restore that reports a dropped resume as
+			// resumed hides the empty agent it started.
+			if res.Resumed != 0 {
+				t.Errorf("Resumed = %d, want none", res.Resumed)
+			}
+			if n := c.Resumes(p, "home", []core.Resume{tc.resume}); n != 0 {
+				t.Errorf("Resumes = %d, want none", n)
 			}
 			panels := rt.Opened[0].Panels
 			if !slices.Equal(panels[0].Command, []string{"zsh"}) {

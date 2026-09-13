@@ -52,7 +52,13 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	s, unnamed, failed := a.core.Session(ctx, report, a.state.Current)
+	s, gaps := a.core.Session(ctx, report, a.state.Current)
+	// An empty save would become the newest session, which a plain restore
+	// opens: the save made before a reboot would lose to one made after it.
+	if len(s.Projects) == 0 {
+		fmt.Println("nothing is open; no session saved")
+		return nil
+	}
 	s.At, s.Name = time.Now(), *name
 
 	stored, path, err := session.Save(a.stateRoot, s)
@@ -66,10 +72,13 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	}
 	// Said now, while the agents still run, so the gap can be closed before
 	// the reboot rather than found after it.
-	if unnamed > 0 {
-		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(unnamed, "agent"))
+	if gaps.Unnamed > 0 {
+		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(gaps.Unnamed, "agent"))
 	}
-	for _, err := range failed {
+	if gaps.Undeclared > 0 {
+		fmt.Printf("  %s in a panel not declared kind = \"agent\", to be restored empty\n", count(gaps.Undeclared, "agent"))
+	}
+	for _, err := range gaps.Failed {
 		fmt.Printf("    could not ask %v\n", err)
 	}
 	// Named up front, not discovered during a restore after the reboot. An
@@ -101,6 +110,10 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		ref = pos[0]
 	}
 	s, err := session.Load(a.stateRoot, ref)
+	if ref == "" && errors.Is(err, session.ErrNoSession) {
+		fmt.Println("no saved session. write one with revier session save")
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -110,14 +123,10 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	opened, failed := 0, 0
+	opened, pending, failed := 0, 0, 0
 	for _, step := range a.core.RestorePlan(s, report) {
 		if step.Action != core.RestoreLaunch {
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, step.Action)
-			continue
-		}
-		if *dry {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", step))
 			continue
 		}
 		p, ok := a.project(step.Project)
@@ -127,15 +136,26 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, core.RestoreNoProject)
 			continue
 		}
+		if *dry {
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", a.core.Resumes(p, step.Target, step.Resumes)))
+			continue
+		}
 		// One project's failure is not the restore's: nineteen workspaces
 		// still come back, and the one that did not is named.
-		if _, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes); err != nil {
+		ref, resumed, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes)
+		if err != nil {
 			failed++
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%v\n", step.Project, step.Target, err)
 			continue
 		}
+		// A window that has not shown yet is not a target that came back.
+		if ref.IsZero() {
+			pending++
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("launched, not up yet", resumed))
+			continue
+		}
 		opened++
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("opened", step))
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("opened", resumed))
 	}
 	if err := w.Flush(); err != nil {
 		return err
@@ -153,7 +173,11 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 			}
 		}
 	}
-	fmt.Printf("%s: opened %d\n", s.ID, opened)
+	if pending > 0 {
+		fmt.Printf("%s: opened %d, %d not up yet\n", s.ID, opened, pending)
+	} else {
+		fmt.Printf("%s: opened %d\n", s.ID, opened)
+	}
 	if failed > 0 {
 		return fmt.Errorf("%d targets did not open", failed)
 	}
@@ -189,11 +213,11 @@ func cmdSessionList(a *app, args []string) error {
 
 // resumeNote says what opening a target did, or would do, naming the agents it
 // starts on a conversation rather than empty.
-func resumeNote(verb string, step core.RestoreStep) string {
-	if len(step.Resumes) == 0 {
+func resumeNote(verb string, resumed int) string {
+	if resumed == 0 {
 		return verb
 	}
-	return fmt.Sprintf("%s, %s resumed", verb, count(len(step.Resumes), "agent"))
+	return fmt.Sprintf("%s, %s resumed", verb, count(resumed, "agent"))
 }
 
 // count writes a number and its noun, pluralised. A summary that reads
