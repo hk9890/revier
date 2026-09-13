@@ -9,6 +9,7 @@ package kitty_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"slices"
 	"strings"
@@ -447,8 +448,8 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 		Name: "session:demo", Dir: "/home/user/dev/demo",
 		Match: revier.Match{Title: "^session:demo$"},
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"claude"}},
-			{Kind: revier.PanelShell, Title: "shell"},
+			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"claude"}, Dir: "/home/user/dev/demo"},
+			{Kind: revier.PanelShell, Title: "shell", Dir: "/home/user/dev/demo"},
 		},
 	})
 	if err != nil {
@@ -622,7 +623,7 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 
 	ref, err := h.Open(context.Background(), revier.Realization{
 		Name: "session:demo", Dir: "/d", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{{Title: "agent", Command: []string{"claude"}}, {Title: "shell"}},
+		Panels: []revier.PanelSpec{{Title: "agent", Command: []string{"claude"}, Dir: "/d"}, {Title: "shell", Dir: "/d"}},
 	})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -736,24 +737,107 @@ func TestFindPanelTakesTheWindowOfTheKittyTheCommandRunsIn(t *testing.T) {
 	h, _ := host(t, "unix:@kitty-4000", "unix:@kitty-4001")
 
 	h.SetOwnSocket(func() string { return "unix:@kitty-4001" })
-	ref, err := h.FindPanel(context.Background(), "3")
+	ref, err := h.FindPanel(listed(t, h), "3")
 	if err != nil || ref.ID != "@kitty-4001/2" {
 		t.Errorf("from kitty 4001: ref = %+v, %v, want @kitty-4001/2", ref, err)
 	}
-	if ref, err := h.FindPanel(context.Background(), "99"); err != nil || !ref.IsZero() {
+	if ref, err := h.FindPanel(listed(t, h), "99"); err != nil || !ref.IsZero() {
 		t.Errorf("unknown window: ref = %+v, %v, want none", ref, err)
 	}
 
 	for _, own := range []string{"", "unix:@kitty-9999"} {
 		h.SetOwnSocket(func() string { return own })
-		if _, err := h.FindPanel(context.Background(), "3"); err == nil || !strings.Contains(err.Error(), "2 kitty processes") {
+		if _, err := h.FindPanel(listed(t, h), "3"); err == nil || !strings.Contains(err.Error(), "2 kitty processes") {
 			t.Errorf("own socket %q: err = %v, want the id refused as held by two kitties", own, err)
 		}
 	}
 
 	one, _ := host(t, "unix:@kitty-4000")
 	one.SetOwnSocket(func() string { return "" })
-	if ref, err := one.FindPanel(context.Background(), "3"); err != nil || ref.ID != "@kitty-4000/2" {
+	if ref, err := one.FindPanel(listed(t, one), "3"); err != nil || ref.ID != "@kitty-4000/2" {
 		t.Errorf("one kitty: ref = %+v, %v, want @kitty-4000/2", ref, err)
+	}
+}
+
+// listed is the host's own listing, the one the core hands FindPanel.
+func listed(t *testing.T, h *kitty.Host) []revier.Instance {
+	t.Helper()
+	instances, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	return instances
+}
+
+// FindPanel reads the listing it is handed and lists nothing itself: the key
+// press has already listed every kitty.
+func TestFindPanelListsNothing(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000", "unix:@kitty-4001")
+	h.SetOwnSocket(func() string { return "unix:@kitty-4001" })
+	instances := listed(t, h)
+	before := len(rec.all())
+	if _, err := h.FindPanel(instances, "3"); err != nil {
+		t.Fatalf("FindPanel: %v", err)
+	}
+	if calls := rec.all()[before:]; len(calls) != 0 {
+		t.Errorf("FindPanel ran %+v, want no kitten call", calls)
+	}
+}
+
+// A tab whose second launch fails closes the window its first launch opened:
+// the core names that agent as not added, and it must not run on in a tab
+// without its shell.
+func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
+	h := newHost()
+	rec := &recorder{}
+	raw := fixture(t)
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	launches := 0
+	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+		rec.add(socket, args)
+		switch args[0] {
+		case "ls":
+			return raw, nil
+		case "launch":
+			launches++
+			if launches == 2 {
+				return nil, errors.New("kitty went away")
+			}
+		}
+		return []byte("9\n"), nil
+	})
+	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "b"}},
+			{Kind: revier.PanelShell},
+		},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "kitty went away") {
+		t.Fatalf("err = %v, want the launch's error", err)
+	}
+	calls := rec.all()
+	if got := strings.Join(calls[len(calls)-1].args, " "); got != "close-window --match id:9" {
+		t.Errorf("last call = %q, want the agent's window closed", got)
+	}
+}
+
+// Every foreground process is walked up to its window's root. A parent the
+// walks share is read once per listing, not once per walk.
+func TestInstancesReadsEachParentOncePerListing(t *testing.T) {
+	h, _ := host(t, "unix:@kitty-4000")
+	reads := map[int]int{}
+	h.SetParents(func(pid int) (int, bool) {
+		reads[pid]++
+		ppid, ok := parents[pid]
+		return ppid, ok
+	})
+	listed(t, h)
+	if len(reads) == 0 {
+		t.Fatal("no parent read: the fixture no longer exercises the walk")
+	}
+	for pid, n := range reads {
+		if n > 1 {
+			t.Errorf("parent of %d read %d times in one listing, want once", pid, n)
+		}
 	}
 }

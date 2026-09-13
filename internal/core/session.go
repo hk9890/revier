@@ -49,15 +49,19 @@ type Resume struct {
 	Dir     string
 }
 
-// AgentOutcome is what restoring one recorded agent comes to.
+// AgentOutcome is what restoring one recorded agent comes to. The zero value
+// is no outcome, so a slot nothing wrote to is not read as a resume.
 type AgentOutcome uint8
 
 const (
 	// AgentResumed starts on the conversation it held, in its directory.
-	AgentResumed AgentOutcome = iota
-	// AgentEmpty starts with no conversation: none was recorded, or nothing
-	// here can resume it.
+	AgentResumed AgentOutcome = iota + 1
+	// AgentEmpty starts with no conversation, because none was recorded.
 	AgentEmpty
+	// AgentUnresumable starts empty although a conversation was recorded: no
+	// probe here can resume that harness, or the panel it starts in runs
+	// another harness, whose command a resume flag would break.
+	AgentUnresumable
 	// AgentDirGone starts empty in the project, because the directory it
 	// worked in is gone - a worktree removed since the save. Resuming it
 	// anywhere else would carry the conversation on in the wrong checkout.
@@ -111,7 +115,6 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
-		var tabAgents []agentPanel
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
@@ -122,19 +125,22 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			// A tab's ref is the instance that holds it. Its own panel is
 			// recorded under the tab, and the tab after the other targets: a
 			// restore that reached the tab first would open the instance for
-			// it with none of its agents resumed.
+			// it with none of its agents resumed. Its agent is recorded by
+			// harness alone: a restore never resumes it (decisions.md D68), so
+			// its conversation is neither asked for nor counted as recorded.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
-				tabs = append(tabs, session.Target{Name: tv.Name})
+				tab := session.Target{Name: tv.Name}
 				id, open := tabOf(inst, tv.Name)
 				for _, panel := range inst.Panels {
 					if !open || panel.ID != id {
 						continue
 					}
 					if probe, ok := c.probeFor(panel); ok {
-						tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
+						tab.Agents = append(tab.Agents, session.Agent{Harness: probe.Name()})
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
+				tabs = append(tabs, tab)
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
@@ -154,10 +160,6 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 					})
 				}
 			}
-		}
-		for _, a := range tabAgents {
-			a.target += len(targets)
-			agents = append(agents, a)
 		}
 		targets = append(targets, tabs...)
 		if len(targets) > 0 {
@@ -379,14 +381,23 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.
 // starts the agent empty where the realization starts: its conversation
 // resumed there would carry on in the wrong checkout, and its edits would
 // land there. Every other way a resume can fail starts the agent empty.
+//
+// The conversation is resumed only into a panel that runs its harness: a
+// claude conversation laid over an opencode panel would start `opencode
+// --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
 func (c *Core) startAgent(spec *revier.PanelSpec, r Resume) AgentOutcome {
 	if r.Dir != "" && !dirExists(r.Dir) {
 		return AgentDirGone
 	}
-	spec.Dir = r.Dir
-	res, ok := c.resumer(r.Harness)
-	if r.Session == "" || !ok {
+	if r.Dir != "" {
+		spec.Dir = r.Dir
+	}
+	if r.Session == "" {
 		return AgentEmpty
+	}
+	res, ok := c.resumer(r.Harness)
+	if runs := c.harnessOf(*spec); !ok || (runs != "" && r.Harness != "" && runs != r.Harness) {
+		return AgentUnresumable
 	}
 	spec.Command = res.ResumeCommand(*spec, r.Session)
 	return AgentResumed

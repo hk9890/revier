@@ -299,6 +299,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if mouse, ok := msg.(tea.MouseMsg); ok && mouse.Action == tea.MouseActionMotion && mm.over == m.over {
 		return mm, cmd
 	}
+	if _, ok := msg.(spinMsg); ok {
+		mm.redrawSpin()
+		return mm, cmd
+	}
 	mm.syncDetail()
 	mm.syncBody()
 	// A key, a survey or a screen change can move what is under a pointer
@@ -879,13 +883,39 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 // behind one that needs you.
 func (m Model) anyWorking() bool {
 	for _, v := range m.views {
-		for _, a := range v.Agents {
-			if a.State.Status == revier.StatusRunning {
-				return true
-			}
+		if working(v) {
+			return true
 		}
 	}
 	return false
+}
+
+// working reports an agent of the project in a turn.
+func working(v revier.ProjectView) bool {
+	for _, a := range v.Agents {
+		if a.State.Status == revier.StatusRunning {
+			return true
+		}
+	}
+	return false
+}
+
+// redrawSpin redraws what a spinner frame changes, and nothing else: the rows while
+// one on the screen has a working agent, and the pane while its project has
+// one. A frame comes eight times a second, and a working agent behind the
+// filter or a dialog would otherwise rebuild the whole surface for no glyph.
+func (m *Model) redrawSpin() {
+	if m.dialog.hasRows() {
+		for _, item := range m.bodyList().VisibleItems() {
+			if row, ok := item.(tableRow); ok && working(row.rowView()) {
+				m.syncBody()
+				break
+			}
+		}
+	}
+	if v, ok := m.selected(); ok && m.dialog == dialogNone && working(v) {
+		m.syncDetail()
+	}
 }
 
 // spun is the theme with the working glyph at the current spinner frame, for

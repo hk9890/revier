@@ -381,7 +381,7 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	if len(panels) != 2 {
 		t.Fatalf("panels = %+v, want the layout", panels)
 	}
-	if !slices.Equal(panels[0].Command, []string{"zsh"}) || panels[0].Dir != "" {
+	if !slices.Equal(panels[0].Command, []string{"zsh"}) || panels[0].Dir != "/home/hans/dev/github/revier" {
 		t.Errorf("the shell panel was rewritten: %+v", panels[0])
 	}
 	want := []string{"claude", "--model", "opus", "--resume", "abc-123"}
@@ -436,7 +436,7 @@ func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 		t.Fatalf("GoResuming: %v", err)
 	}
 	samePanels(t, "opened", rt.Opened[0].Panels, []revier.PanelSpec{
-		{Kind: revier.PanelShell, Command: []string{"zsh"}},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/hans/dev/github/revier"},
 		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "declared"}, Dir: root},
 	})
 	tabs := tabPanels(rt)
@@ -472,7 +472,7 @@ func TestRestoreStartsAnAgentEmptyWhenItsDirectoryIsGone(t *testing.T) {
 		{Harness: "claude", Session: "by-hand", Dir: gone},
 	})
 	declared := rt.Opened[0].Panels[1]
-	if !slices.Equal(declared.Command, []string{"claude", "--model", "opus"}) || declared.Dir != "" {
+	if !slices.Equal(declared.Command, []string{"claude", "--model", "opus"}) || declared.Dir != "/home/hans/dev/github/revier" {
 		t.Errorf("declared agent = %+v, want it empty where the workspace starts", declared)
 	}
 	tabs := tabPanels(rt)
@@ -496,8 +496,8 @@ func TestRestoreOpensTheTabAgentNewOpens(t *testing.T) {
 
 	rt := hosttest.NewRuntime("rt")
 	c = &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	ref := rt.Add("session:revier", "")
-	if _, err := c.NewAgent(context.Background(), prepared(t, agentProject()), "home", ref, core.Resume{Session: "by-hand", Dir: worktree}); err != nil {
+	rt.Add("session:revier", "")
+	if _, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{Session: "by-hand", Dir: worktree}); err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
 	samePanels(t, "agent new tab", tabPanels(rt)[0], restoredTab)
@@ -526,6 +526,9 @@ func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
 	if res.AgentErr == nil || !strings.Contains(res.AgentErr.Error(), "kitty went away") {
 		t.Errorf("AgentErr = %v, want the reason", res.AgentErr)
 	}
+	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != hosttest.OpenedPanel {
+		t.Errorf("panel focuses = %v, want the workspace's current panel again after the failed tab", rt.PanelFocuses)
+	}
 }
 
 // The launch reports what it did with each recorded agent, which is what the
@@ -540,7 +543,7 @@ func TestGoResumingReportsWhatBecameOfEachAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}; !slices.Equal(res.Agents, want) {
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentUnresumable}; !slices.Equal(res.Agents, want) {
 		t.Errorf("Agents = %v, want %v", res.Agents, want)
 	}
 }
@@ -561,7 +564,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 		t.Errorf("the project now has %d panels, want its 2: a tab was added to it", len(panels))
 	}
 	want := []string{"claude", "--model", "opus"}
-	if got := panels[1]; !slices.Equal(got.Command, want) || got.Dir != "" {
+	if got := panels[1]; !slices.Equal(got.Command, want) || got.Dir != "/home/hans/dev/github/revier" {
 		t.Errorf("the project now reads %+v, want %v: the resume was written into it", got, want)
 	}
 }

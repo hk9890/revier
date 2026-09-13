@@ -257,7 +257,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	panels := r.Panels
 	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch}}
+		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
 	}
 
 	format := "#{pid}" + sep + "#{window_id}" + sep + "#{pane_id}"
@@ -267,7 +267,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	} else {
 		args = append(args, "-t", h.session()+":")
 	}
-	if dir := dirOf(r, panels[0]); dir != "" {
+	if dir := panels[0].Dir; dir != "" {
 		args = append(args, "-c", literal(dir))
 	}
 	args = append(args, command(panels[0].Command)...)
@@ -287,8 +287,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 
 	for _, p := range panels[1:] {
 		args := []string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}
-		if dir := dirOf(r, p); dir != "" {
-			args = append(args, "-c", literal(dir))
+		if p.Dir != "" {
+			args = append(args, "-c", literal(p.Dir))
 		}
 		args = append(args, command(p.Command)...)
 		out, err := h.run(ctx, args...)
@@ -305,13 +305,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		}
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, window), Title: r.Name}, nil
-}
-
-func dirOf(r revier.Realization, p revier.PanelSpec) string {
-	if p.Dir != "" {
-		return p.Dir
-	}
-	return r.Dir
 }
 
 // literal escapes s for an argument tmux expands as a format, which -n, -c

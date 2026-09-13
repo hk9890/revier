@@ -206,27 +206,22 @@ func (h *Host) launch(ctx context.Context, socket string, args ...string) (int, 
 // with --copy-env (verified on kitty 0.48; without it the variable is empty).
 // A command started outside kitty, or from a kitty that has exited, names no
 // process that answers; then the id must be held in exactly one kitty.
-func (h *Host) FindPanel(ctx context.Context, panel revier.PanelID) (revier.TargetRef, error) {
-	listings, err := h.list(ctx)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
+func (h *Host) FindPanel(instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
 	own := "unix:" + strings.TrimPrefix(h.here(), "unix:")
-	for _, l := range listings {
-		if l.socket == own {
-			listings = []listing{l}
-			break
+	var mine []revier.Instance
+	for _, inst := range instances {
+		if socket, _, err := parseRef(inst.Ref.ID); err == nil && socket == own {
+			mine = append(mine, inst)
 		}
 	}
+	if len(mine) > 0 {
+		instances = mine
+	}
 	var found []revier.TargetRef
-	for _, l := range listings {
-		for _, w := range l.windows {
-			for _, t := range w.Tabs {
-				for _, win := range t.Windows {
-					if strconv.Itoa(win.ID) == string(panel) {
-						found = append(found, revier.TargetRef{Host: h.Name(), ID: refID(l.socket, w.ID), Title: w.WMName})
-					}
-				}
+	for _, inst := range instances {
+		for _, p := range inst.Panels {
+			if p.ID == panel {
+				found = append(found, inst.Ref)
 			}
 		}
 	}
@@ -344,6 +339,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 // way back.
 func (h *Host) decode(l listing) []revier.Instance {
 	pid := pidOf(l.socket)
+	parent := h.parents()
 	out := make([]revier.Instance, 0, len(l.windows))
 	for _, w := range l.windows {
 		// An OS window kitty opened for itself carries the default instance
@@ -362,7 +358,7 @@ func (h *Host) decode(l listing) []revier.Instance {
 		}
 		for _, t := range w.Tabs {
 			for _, win := range t.Windows {
-				inst.Panels = append(inst.Panels, h.panelOf(win))
+				inst.Panels = append(inst.Panels, panelOf(win, parent))
 			}
 		}
 		out = append(out, inst)
@@ -404,8 +400,8 @@ func pidOf(socket string) int {
 	return n
 }
 
-func (h *Host) panelOf(w window) revier.Panel {
-	kind, cmd, pid := classify(w.Foreground, w.PID, h.parentOf)
+func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
+	kind, cmd, pid := classify(w.Foreground, w.PID, parent)
 	if pid == 0 {
 		pid = w.PID
 	}
@@ -488,6 +484,26 @@ func rank(pid, root int, parent func(int) (int, bool)) int {
 	return detached
 }
 
+// parents is parentOf remembered for one listing. Every foreground process of
+// every window is walked up to its window's root, and the shells and
+// wrappers those walks share would otherwise be read from /proc again for
+// each one.
+func (h *Host) parents() func(pid int) (int, bool) {
+	type answer struct {
+		ppid int
+		ok   bool
+	}
+	seen := map[int]answer{}
+	return func(pid int) (int, bool) {
+		if a, ok := seen[pid]; ok {
+			return a.ppid, a.ok
+		}
+		ppid, ok := h.parentOf(pid)
+		seen[pid] = answer{ppid, ok}
+		return ppid, ok
+	}
+}
+
 // parentOf reads a process's parent from /proc. kitty is a host on this
 // machine, so its pids are this machine's.
 func (h *Host) parentOf(pid int) (int, bool) {
@@ -537,7 +553,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	panels := r.Panels
 	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch}}
+		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
 	}
 
 	socket, first, err := h.openFirst(ctx, r, panels[0])
@@ -549,8 +565,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	for _, p := range panels[1:] {
 		args := []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
-		if dir := dirOf(r, p); dir != "" {
-			args = append(args, "--cwd", dir)
+		if p.Dir != "" {
+			args = append(args, "--cwd", p.Dir)
 		}
 		args = append(args, p.Command...)
 		id, err := h.launch(ctx, socket, args...)
@@ -578,14 +594,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
 }
 
-// dirOf is where a panel starts: its own directory, or the realization's.
-func dirOf(r revier.Realization, p revier.PanelSpec) string {
-	if p.Dir != "" {
-		return p.Dir
-	}
-	return r.Dir
-}
-
 // title gives a new window its panel title without taking the title away from
 // the program inside. `launch --title` pins a title for good, and a pinned
 // title is exactly what the Claude probe must not see: it reads the live title
@@ -607,8 +615,8 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 		// otherwise pass that class, and its window rule, on to the workspace.
 		args := []string{"--type=os-window",
 			"--os-window-name", r.Name, "--os-window-title", r.Name, "--os-window-class", "kitty", "--hold"}
-		if dir := dirOf(r, p); dir != "" {
-			args = append(args, "--cwd", dir)
+		if p.Dir != "" {
+			args = append(args, "--cwd", p.Dir)
 		}
 		args = append(args, p.Command...)
 		id, err := h.launch(ctx, socket, args...)
@@ -644,8 +652,8 @@ func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.Pa
 	args := []string{"--detach", "--listen-on", "unix:@kitty-{kitty_pid}",
 		"-o", "allow_remote_control=socket-only",
 		"--name", r.Name, "--title", r.Name, "--hold"}
-	if dir := dirOf(r, p); dir != "" {
-		args = append(args, "--directory", dir)
+	if p.Dir != "" {
+		args = append(args, "--directory", p.Dir)
 	}
 	args = append(args, p.Command...)
 	if err := h.startProcess(ctx, args...); err != nil {
@@ -731,14 +739,33 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, e
 // goes last so the panels keep their order in the listing a save records
 // agents by. The vars become user vars of the tab's first window, which ls
 // reports back as the panel's Vars.
+//
+// A launch or a title that fails closes the windows the tab already opened:
+// the core names the agent of a failed tab as not added, and it must not be
+// running in a tab without its shell.
 func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	socket, win, err := h.active(ctx, ref)
 	if err != nil {
 		return "", err
 	}
+	var opened []int
+	panel, err := h.openTab(ctx, socket, win, r, vars, &opened)
+	if err != nil {
+		for _, id := range opened {
+			// Best effort: the launch error is the one worth reporting.
+			_, _ = h.kitten(ctx, socket, "close-window", "--match", "id:"+strconv.Itoa(id))
+		}
+		return "", err
+	}
+	return panel, nil
+}
+
+// openTab is OpenTab's launches into the OS window whose current window is
+// win, with every window it opens added to opened.
+func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
 	panels := r.Panels
 	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch}}
+		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
 	}
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
@@ -755,14 +782,15 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		if i > 0 {
 			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
 		}
-		if dir := dirOf(r, p); dir != "" {
-			args = append(args, "--cwd", dir)
+		if p.Dir != "" {
+			args = append(args, "--cwd", p.Dir)
 		}
 		args = append(args, p.Command...)
 		id, err := h.launch(ctx, socket, args...)
 		if err != nil {
 			return "", err
 		}
+		*opened = append(*opened, id)
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
 			return "", err
 		}

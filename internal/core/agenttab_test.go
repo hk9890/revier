@@ -25,6 +25,17 @@ func openWorkspace(t *testing.T, panels ...revier.Panel) (*core.Core, *hosttest.
 	return c, rt, prepared(t, agentProject()), ref
 }
 
+// newAgent is `revier agent new -p <project>:<target>`: the workspace found,
+// then the tab opened in it.
+func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetName, r core.Resume) (core.AgentOutcome, error) {
+	t.Helper()
+	w, err := c.AgentWorkspace(context.Background(), p, target, nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	return c.NewAgent(context.Background(), w, r)
+}
+
 // The key's tab: the project's agent panel on the conversation asked for, and
 // the project's shell, both in the directory asked for, opened in the open
 // workspace, with the new agent made current.
@@ -32,7 +43,7 @@ func TestNewAgentOpensAnAgentTabInTheOpenWorkspace(t *testing.T) {
 	c, rt, p, ref := openWorkspace(t)
 	dir := t.TempDir()
 
-	outcome, err := c.NewAgent(context.Background(), p, "home", ref, core.Resume{Session: "abc-123", Dir: dir})
+	outcome, err := newAgent(t, c, p, "home", core.Resume{Session: "abc-123", Dir: dir})
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
@@ -57,9 +68,9 @@ func TestNewAgentOpensAnAgentTabInTheOpenWorkspace(t *testing.T) {
 // With no conversation and no directory, the agent starts empty where the
 // workspace starts.
 func TestNewAgentStartsEmptyInTheProject(t *testing.T) {
-	c, rt, p, ref := openWorkspace(t)
+	c, rt, p, _ := openWorkspace(t)
 
-	outcome, err := c.NewAgent(context.Background(), p, "home", ref, core.Resume{})
+	outcome, err := newAgent(t, c, p, "home", core.Resume{})
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
@@ -80,14 +91,14 @@ func TestNewAgentResumesOnlyTheHarnessTheAgentPanelRuns(t *testing.T) {
 	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
-	ref := rt.Add("session:revier", "")
+	rt.Add("session:revier", "")
 
-	outcome, err := c.NewAgent(context.Background(), prepared(t, proj), "home", ref, core.Resume{Session: "abc-123"})
+	outcome, err := newAgent(t, c, prepared(t, proj), "home", core.Resume{Session: "abc-123"})
 	if err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
-	if outcome != core.AgentEmpty {
-		t.Errorf("outcome = %v, want empty", outcome)
+	if outcome != core.AgentUnresumable {
+		t.Errorf("outcome = %v, want unresumable", outcome)
 	}
 	if got := rt.Tabs[0].Real.Panels[0].Command; !slices.Equal(got, []string{"opencode"}) {
 		t.Errorf("agent command = %q, want opencode without a resume flag", got)
@@ -104,8 +115,8 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 	if _, err := c.AgentWorkspace(context.Background(), p, "home", nil); !errors.Is(err, core.ErrNotOpen) {
 		t.Errorf("closed workspace: err = %v, want ErrNotOpen", err)
 	}
-	ref := rt.Add("notes:revier", "")
-	outcome, err := c.NewAgent(context.Background(), p, "notes", ref, core.Resume{})
+	rt.Add("notes:revier", "")
+	outcome, err := newAgent(t, c, p, "notes", core.Resume{})
 	if !errors.Is(err, core.ErrNoAgent) || outcome != core.AgentNotAdded {
 		t.Errorf("target with no agent panel: %v, %v, want ErrNoAgent and not added", outcome, err)
 	}
@@ -119,9 +130,9 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{resumable()}}
-	ref := rt.Add("session:revier", "")
+	rt.Add("session:revier", "")
 
-	_, err := c.NewAgent(context.Background(), prepared(t, agentProject()), "home", ref, core.Resume{})
+	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
 	if !errors.Is(err, core.ErrNoAgentTabs) || !strings.Contains(err.Error(), "rt") {
 		t.Errorf("err = %v, want ErrNoAgentTabs naming the runtime", err)
 	}
@@ -185,12 +196,37 @@ func twoWorkspaces(t *testing.T, revierPanels, otherPanels []revier.Panel) (*cor
 func TestPanelOwnerFindsTheWorkspaceHoldingAPanel(t *testing.T) {
 	c, _, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}, {ID: "2"}}, []revier.Panel{{ID: "7"}})
 
-	p, target, ref, err := c.PanelOwner(context.Background(), projects, nil, "7")
+	w, err := c.PanelOwner(context.Background(), projects, nil, "7")
 	if err != nil {
 		t.Fatalf("PanelOwner: %v", err)
 	}
-	if p.Name != "other" || target != "home" || ref != other {
-		t.Errorf("owner = %s:%s %+v, want other:home %+v", p.Name, target, ref, other)
+	if w.Project.Name != "other" || w.Target != "home" || w.Ref != other {
+		t.Errorf("owner = %s:%s %+v, want other:home %+v", w.Project.Name, w.Target, w.Ref, other)
+	}
+}
+
+// One instance backs two targets, and only the second declares an agent
+// panel. The key opens its tab from that one, not from the first target in
+// the file, which has no tab to give.
+func TestPanelOwnerTakesTheTargetThatDeclaresAnAgent(t *testing.T) {
+	proj := agentProject()
+	plain := *proj.Targets[1].Runtime
+	plain.Match.Title = proj.Targets[0].Runtime.Match.Title
+	proj.Targets[1].Runtime = &plain
+	proj.Targets[0], proj.Targets[1] = proj.Targets[1], proj.Targets[0]
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	ref := rt.Add("session:revier", "", revier.Panel{ID: "5"})
+
+	w, err := c.PanelOwner(context.Background(), []core.Project{prepared(t, proj)}, nil, "5")
+	if err != nil {
+		t.Fatalf("PanelOwner: %v", err)
+	}
+	if w.Target != "home" || w.Ref != ref {
+		t.Errorf("owner = %s %+v, want home %+v", w.Target, w.Ref, ref)
+	}
+	if _, err := c.NewAgent(context.Background(), w, core.Resume{}); err != nil {
+		t.Errorf("NewAgent: %v, want the tab opened", err)
 	}
 }
 
@@ -199,7 +235,7 @@ func TestPanelOwnerFindsTheWorkspaceHoldingAPanel(t *testing.T) {
 func TestPanelOwnerRefusesAnIDTwoWorkspacesHold(t *testing.T) {
 	c, _, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
-	if _, _, _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrAmbiguous) {
+	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrAmbiguous) {
 		t.Errorf("err = %v, want ErrAmbiguous", err)
 	}
 }
@@ -211,7 +247,7 @@ type finding struct {
 	ref revier.TargetRef
 }
 
-func (f finding) FindPanel(context.Context, revier.PanelID) (revier.TargetRef, error) {
+func (f finding) FindPanel([]revier.Instance, revier.PanelID) (revier.TargetRef, error) {
 	return f.ref, nil
 }
 
@@ -221,15 +257,15 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 	_, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
 	c := &core.Core{Runtime: finding{rt, other}}
-	if p, _, ref, err := c.PanelOwner(context.Background(), projects, nil, "1"); err != nil || p.Name != "other" || ref != other {
-		t.Errorf("owner = %s %+v, %v, want other %+v", p.Name, ref, err, other)
+	if w, err := c.PanelOwner(context.Background(), projects, nil, "1"); err != nil || w.Project.Name != "other" || w.Ref != other {
+		t.Errorf("owner = %s %+v, %v, want other %+v", w.Project.Name, w.Ref, err, other)
 	}
 	c = &core.Core{Runtime: finding{rt, revier.TargetRef{}}}
-	if _, _, _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrNoPanel) {
+	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrNoPanel) {
 		t.Errorf("nothing found: err = %v, want ErrNoPanel", err)
 	}
 	c = &core.Core{Runtime: finding{rt, rt.Add("a kitty window of no project", "")}}
-	if _, _, _, err := c.PanelOwner(context.Background(), projects, nil, "1"); err == nil || !strings.Contains(err.Error(), "no project") {
+	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); err == nil || !strings.Contains(err.Error(), "no project") {
 		t.Errorf("found in no workspace: err = %v, want it named", err)
 	}
 }
@@ -238,7 +274,7 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 func TestPanelOwnerNamesAnUnknownPanel(t *testing.T) {
 	c, _, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 
-	_, _, _, err := c.PanelOwner(context.Background(), projects, nil, "42")
+	_, err := c.PanelOwner(context.Background(), projects, nil, "42")
 	if !errors.Is(err, core.ErrNoPanel) || !strings.Contains(err.Error(), "42") {
 		t.Errorf("err = %v, want ErrNoPanel naming 42", err)
 	}
@@ -258,5 +294,54 @@ func TestAgentTargetIsTheTargetDeclaringAnAgent(t *testing.T) {
 	two.Targets[1].Runtime = &second
 	if _, err := c.AgentTarget(prepared(t, two)); err == nil {
 		t.Error("two targets with an agent panel: want an error asking for one")
+	}
+}
+
+// A key pressed in a kitty workspace on GNOME raises the OS window around the
+// new agent through the window host. kitty's own focus of an unfocused OS
+// window is an "is ready" notice, not the window.
+func TestNewAgentRaisesTheOSWindow(t *testing.T) {
+	rt, wm, homeWm, _ := osWindowHosts()
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
+
+	if _, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{}); err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != homeWm {
+		t.Errorf("window focuses = %v, want the workspace's OS window %v raised", wm.Focuses, homeWm)
+	}
+}
+
+// With no OS window to raise, nothing opens: the tab would come up behind, and
+// its focus would be the notice D63 refuses.
+func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
+	rt, _, _, _ := osWindowHosts()
+	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
+
+	outcome, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
+	if !errors.Is(err, core.ErrUnraisable) || outcome != core.AgentNotAdded {
+		t.Errorf("%v, %v, want ErrUnraisable and not added", outcome, err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Errorf("Tabs = %+v, want none opened", rt.Tabs)
+	}
+}
+
+// A restore lays a recorded conversation over the declared agent panel only
+// when that panel runs its harness. A claude conversation over an opencode
+// panel would start `opencode --resume <claude id>`: the agent starts empty
+// instead, and the restore says why.
+func TestRestoreDoesNotResumeAConversationIntoAnotherHarness(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
+
+	resumes := []core.Resume{{Harness: "claude", Session: "abc-123"}}
+	panels := launched(t, c, proj, resumes)
+	if got := panels[1].Command; !slices.Equal(got, []string{"opencode"}) {
+		t.Errorf("agent command = %q, want opencode as declared", got)
+	}
+	if got := c.Resumes(prepared(t, proj), "home", resumes); !slices.Equal(got, []core.AgentOutcome{core.AgentUnresumable}) {
+		t.Errorf("outcomes = %v, want unresumable", got)
 	}
 }

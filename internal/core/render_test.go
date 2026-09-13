@@ -154,3 +154,24 @@ func TestRenderArgv(t *testing.T) {
 		t.Error("a missing key must be an error, not an empty argument")
 	}
 }
+
+// A panel starts where its realization starts. The fallback is the core's, so
+// no runtime decides it and none can forget it.
+func TestRenderFillsEveryPanelDirFromItsRealization(t *testing.T) {
+	p := revier.Project{
+		Name: "x", Path: "/home/user/dev/x",
+		Targets: []revier.Target{{Name: "home", Runtime: &revier.Realization{
+			Match:  revier.Match{Title: "^x$"},
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}},
+		}}},
+	}
+	out, err := core.Render(p)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	for i, panel := range out.Targets[0].Runtime.Panels {
+		if panel.Dir != "/home/user/dev/x" {
+			t.Errorf("panel %d starts in %q, want the realization's dir", i, panel.Dir)
+		}
+	}
+}

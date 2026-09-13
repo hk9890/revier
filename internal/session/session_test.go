@@ -203,3 +203,46 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// A session saved by v0.3.0 recorded its conversations as panels, by position.
+// Read after the upgrade, it restores those conversations in panel order
+// rather than losing them without a word.
+func TestASessionSavedByV030KeepsItsConversations(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	v030 := `id = "2026-09-01T10-00-00"
+at = 2026-09-01T10:00:00Z
+
+[[project]]
+name = "revier"
+
+[[project.target]]
+name = "home"
+
+[[project.target.panel]]
+index = 3
+harness = "opencode"
+session = "later"
+
+[[project.target.panel]]
+index = 1
+harness = "claude"
+session = "first"
+`
+	if err := os.WriteFile(filepath.Join(session.Dir(root), "2026-09-01T10-00-00.toml"), []byte(v030), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []session.Agent{{Harness: "claude", Session: "first"}, {Harness: "opencode", Session: "later"}}
+	if agents := got.Projects[0].Targets[0].Agents; !slices.Equal(agents, want) {
+		t.Errorf("agents = %+v, want %+v", agents, want)
+	}
+	if got.Conversations() != 2 {
+		t.Errorf("Conversations = %d, want both counted", got.Conversations())
+	}
+}
