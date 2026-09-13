@@ -46,6 +46,10 @@ type Realization struct {
     Dir    string     // working directory for Launch and every panel; the project path when empty
     Match  Match      // how to recognise an existing instance
     Panels []PanelSpec // runtime hosts only: the layout for a Home target
+
+    // Inside names another target; this one is then a tab of that target's
+    // instance, found by its name, and Match and Name are not used (D64).
+    Inside TargetName
 }
 
 // Match recognises an instance. An empty field does not constrain; every
@@ -156,6 +160,21 @@ const (
     WindowClosed
     WindowFocused
 )
+```
+
+## PanelOpener
+
+```go
+// PanelOpener is an optional capability of a Runtime, detected by type
+// assertion. A runtime that implements it can open a tab in an instance and
+// focus one panel of it, which is how a target with Inside is reached (D64).
+// Which tab belongs to which target is the core's: the runtime sets vars on
+// the panel it opens and reports them back in Panel.Vars.
+type PanelOpener interface {
+    OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
+    FocusPanel(ctx context.Context, ref TargetRef, panel PanelID) error
+    FocusedPanel(ctx context.Context, ref TargetRef) (PanelID, error)
+}
 ```
 
 ## Attacher

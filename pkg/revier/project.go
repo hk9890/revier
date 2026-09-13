@@ -135,6 +135,13 @@ type Realization struct {
 	//
 	// A window host that cannot place windows ignores it.
 	Place string `toml:"place" json:"place,omitempty"`
+
+	// Inside names another target of the project, and makes this one a tab
+	// of that target's instance rather than an instance of its own. Runtime
+	// realizations only, on a runtime that implements PanelOpener. The tab is
+	// found by the target's name, which revier sets on it, so Match and Name
+	// are not used (decisions.md D64).
+	Inside TargetName `toml:"inside" json:"inside,omitempty"`
 }
 
 // Match recognises an instance. An empty field does not constrain; every

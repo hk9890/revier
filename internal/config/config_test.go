@@ -202,6 +202,36 @@ func TestValidateRejects(t *testing.T) {
 			revier.Project{Name: "a:b", Path: "/p", Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
 			`project name "a:b"`,
 		},
+		{
+			"tab inside an undeclared target",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Inside = "nowhere" }),
+			`target "tickets" is inside "nowhere", which the project does not declare`,
+		},
+		{
+			"tab inside itself",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Inside = "tickets" }),
+			`target "tickets" is inside itself`,
+		},
+		{
+			"tab with nothing to run",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Launch = nil }),
+			"has no launch argv to run in the tab",
+		},
+		{
+			"tab with a window realization",
+			tabProject(func(tab *revier.Target) { tab.Window = &base }),
+			"a tab has only the runtime",
+		},
+		{
+			"tab inside a tab",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Inside = "notes" }),
+			`inside "notes", which is itself a tab`,
+		},
+		{
+			"tab inside a window-only target",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Inside = "editor" }),
+			`inside "editor", which has no runtime realization`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -213,6 +243,26 @@ func TestValidateRejects(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// tabProject is a valid project with a tab target, tickets, changed by edit.
+// notes is a second tab, so a tab inside a tab has one to name.
+func tabProject(edit func(tab *revier.Target)) revier.Project {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:p", Launch: []string{"x"}, Match: revier.Match{Title: "^session:p$"}}},
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}}},
+		{Name: "notes", Runtime: &revier.Realization{Inside: "home", Launch: []string{"notes"}}},
+		{Name: "tickets", Runtime: &revier.Realization{Inside: "home", Launch: []string{"taskmgr-ui"}}},
+	}}
+	edit(&p.Targets[3])
+	return p
+}
+
+// A tab is found by its target's name, so it needs neither a match nor a name.
+func TestValidateAcceptsATabWithNoMatchAndNoName(t *testing.T) {
+	if err := config.Validate(tabProject(func(*revier.Target) {})); err != nil {
+		t.Fatalf("Validate: %v", err)
 	}
 }
 

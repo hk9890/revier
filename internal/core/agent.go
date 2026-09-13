@@ -193,7 +193,8 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 	var out []held
 	seen := map[string]bool{}
 	for i, t := range p.Targets {
-		if only != "" && t.Name != only {
+		// A tab's panel is listed with the instance that holds it.
+		if only != "" && t.Name != only || p.isTab(i) {
 			continue
 		}
 		host, _, m, err := c.resolveAt(p, i)

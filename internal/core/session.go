@@ -111,8 +111,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
+			// A tab's ref is the instance that holds it, whose panels are
+			// recorded under that instance's own target.
 			inst, ok := byRef[key(tv.Ref)]
-			if !ok {
+			if !ok || isTab(v.Project, tv.Name) {
 				continue
 			}
 			for _, panel := range inst.Panels {
@@ -148,6 +150,16 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 type SessionGaps struct {
 	Unnamed int
 	Failed  []error
+}
+
+// isTab reports whether the named target is a tab inside another.
+func isTab(p revier.Project, name revier.TargetName) bool {
+	for _, t := range p.Targets {
+		if t.Name == name {
+			return t.Runtime != nil && t.Runtime.Inside != ""
+		}
+	}
+	return false
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being
