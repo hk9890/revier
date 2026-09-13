@@ -200,6 +200,30 @@ func TestInspectRunsTheListingOnlyWhenASessionChanged(t *testing.T) {
 	}
 }
 
+// A run the caller's deadline cut short is not kept: the next caller with
+// time left runs the command again rather than read the timeout for MaxAge.
+func TestInspectDoesNotKeepARunItsCallerCancelled(t *testing.T) {
+	start := time.Unix(1_800_000_000, 0)
+	runs := 0
+	run := func(ctx context.Context) ([]byte, error) {
+		runs++
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return []byte(`[{"pid": 101, "status": "idle"}]`), nil
+	}
+	p := &claude.Probe{Agents: run, SessionsDir: filepath.Join(t.TempDir(), "absent"), Now: (&clock{t: start}).now}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := p.Inspect(cancelled, revier.Panel{PID: 101}); err == nil {
+		t.Fatal("Inspect on a cancelled context returned no error")
+	}
+	if got := inspect(t, p, 101); got != revier.StatusIdle || runs != 2 {
+		t.Errorf("after a cancelled run: %v after %d runs, want idle after 2", got, runs)
+	}
+}
+
 // A change the directory does not show is still seen, MaxAge late.
 func TestInspectRunsTheListingAtLeastEveryMaxAge(t *testing.T) {
 	start := time.Unix(1_800_000_000, 0)
@@ -364,6 +388,31 @@ func TestResumeCommand(t *testing.T) {
 			"an npm install, under node",
 			revier.PanelSpec{Command: []string{"node", "/home/hans/.npm-global/bin/claude"}},
 			[]string{"node", "/home/hans/.npm-global/bin/claude", "--resume", "abc-123"},
+		},
+		{
+			"a continue flag, dropped",
+			revier.PanelSpec{Command: []string{"claude", "--continue", "--model", "opus", "-c"}},
+			[]string{"claude", "--model", "opus", "--resume", "abc-123"},
+		},
+		{
+			"a resume of its own, with and without a value",
+			revier.PanelSpec{Command: []string{"claude", "-r", "old", "--resume", "--model", "opus", "--resume=older"}},
+			[]string{"claude", "--model", "opus", "--resume", "abc-123"},
+		},
+		{
+			"a session id of its own",
+			revier.PanelSpec{Command: []string{"claude", "--session-id", "0000", "--session-id=1111"}},
+			[]string{"claude", "--resume", "abc-123"},
+		},
+		{
+			"a wrapper's own flags, kept",
+			revier.PanelSpec{Command: []string{"bash", "-c", "exec -a claude bash \"$0\" \"$@\"", "/tmp/agent.sh", "-c"}},
+			[]string{"bash", "-c", "exec -a claude bash \"$0\" \"$@\"", "/tmp/agent.sh", "-c", "--resume", "abc-123"},
+		},
+		{
+			"flags after claude under node, dropped",
+			revier.PanelSpec{Command: []string{"node", "-r", "tsx", "/opt/bin/claude", "-c"}},
+			[]string{"node", "-r", "tsx", "/opt/bin/claude", "--resume", "abc-123"},
 		},
 	}
 	for _, tc := range cases {

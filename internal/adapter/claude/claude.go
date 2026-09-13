@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -114,6 +115,10 @@ func Status(listed string) revier.Status {
 // sessions directory changed or the listing is MaxAge old. The directory is
 // read before the command runs, so a change made while it runs is seen by the
 // next call.
+//
+// A run the caller's context cut short is not kept: it says the caller ran
+// out of time, not what Claude Code answers, and kept it would blank every
+// agent until MaxAge.
 func (p *Probe) listing(ctx context.Context) (map[int]listedSession, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -121,7 +126,11 @@ func (p *Probe) listing(ctx context.Context) (map[int]listedSession, error) {
 	if !p.at.IsZero() && p.now().Sub(p.at) < MaxAge && sameStamp(stamp, p.stamp) {
 		return p.listed, p.err
 	}
-	p.listed, p.err = p.list(ctx)
+	listed, err := p.list(ctx)
+	if err != nil && ctx.Err() != nil {
+		return nil, err
+	}
+	p.listed, p.err = listed, err
 	p.at, p.stamp = p.now(), stamp
 	return p.listed, p.err
 }
@@ -226,8 +235,15 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.S
 	return ids, nil
 }
 
+// waitDelay is how long the listing's output is waited for once its context
+// is done. Without it a child of claude that keeps stdout open holds the
+// command past its deadline, and the probe's lock with it.
+const waitDelay = time.Second
+
 func claudeAgents(ctx context.Context) ([]byte, error) {
-	out, err := exec.CommandContext(ctx, "claude", "agents", "--json").Output()
+	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
+	cmd.WaitDelay = waitDelay
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("claude agents --json: %w", err)
 	}
@@ -237,12 +253,47 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 // ResumeCommand folds --resume into the panel as it is configured now, so a
 // project that runs its agent with a model flag keeps the flag. A spec with no
 // command of its own is the bare harness, which is what the launcher runs.
+//
+// A flag that picks the conversation itself - --continue, --resume, or
+// --session-id - is dropped first: it contradicts the recorded conversation,
+// and Claude Code either refuses the pair or opens the other one.
 func (p *Probe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
 	cmd := spec.Command
 	if len(cmd) == 0 {
 		cmd = []string{"claude"}
 	}
-	return append(append([]string{}, cmd...), "--resume", string(id))
+	return append(withoutConversation(cmd), "--resume", string(id))
+}
+
+// withoutConversation is a copy of argv without the flags that choose a
+// conversation. Only the words after claude itself are Claude Code's flags:
+// the -c of a `bash -c` wrapper is the shell's. A command that does not name
+// claude is a wrapper that cannot be read, and is kept whole. --resume takes
+// an optional value, so the word after it is its value unless it is a flag.
+func withoutConversation(argv []string) []string {
+	at := slices.IndexFunc(argv, func(a string) bool {
+		base := filepath.Base(a)
+		return base == "claude" || base == "claude-code"
+	})
+	if at < 0 {
+		return slices.Clone(argv)
+	}
+	out := slices.Clone(argv[:at+1])
+	for i := at + 1; i < len(argv); i++ {
+		switch a := argv[i]; {
+		case a == "-c" || a == "--continue":
+		case a == "-r" || a == "--resume":
+			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "-") {
+				i++
+			}
+		case a == "--session-id":
+			i++
+		case strings.HasPrefix(a, "--resume=") || strings.HasPrefix(a, "--session-id="):
+		default:
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // leading returns the first rune of a title, or 0 when it is empty.
