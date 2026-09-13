@@ -19,14 +19,8 @@ type PanelSpec struct {
 	// Dir is where this panel starts, when it is not where the realization
 	// starts. No project file sets it: a restore does, for an agent that
 	// worked in a worktree of the project rather than in the project itself
-	// (decisions.md D62).
+	// (decisions.md D62), and so does `revier agent new`.
 	Dir string `toml:"-" json:"dir,omitempty"`
-
-	// Tab asks for the panel in a tab of its own inside the instance, where
-	// the runtime has tabs; one without splits it in like any other panel.
-	// No project file sets it either: it is how a restore brings back an
-	// agent the user opened beside the declared layout (decisions.md D62).
-	Tab bool `toml:"-" json:"tab,omitempty"`
 }
 
 type PanelKind string

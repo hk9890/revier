@@ -277,68 +277,60 @@ func TestFocusSelectsTheActiveWindow(t *testing.T) {
 	}
 }
 
-// A panel a restore adds beside the layout asks for a tab: it opens as a tab
-// of the same OS window, found by the first panel's window id, and in its own
-// directory. The OS window is then left on its first tab, the workspace.
-func TestOpenPutsATabPanelInATabOfTheSameOSWindow(t *testing.T) {
-	h := &kitty.Host{}
-	var seq []string
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
-	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
-		seq = append(seq, strings.Join(args, " "))
-		switch args[0] {
-		case "launch":
-			if strings.Contains(strings.Join(args, " "), "--type=os-window") {
-				return []byte("7\n"), nil
-			}
-			return []byte("9\n"), nil
-		case "ls":
-			return json.Marshal([]map[string]any{{
-				"id": 3, "wm_name": "session:demo",
-				"tabs": []map[string]any{
-					{"windows": []map[string]any{{"id": 7}}},
-					{"is_active": true, "windows": []map[string]any{{"id": 9, "is_active": true}}},
-				},
-			}})
-		}
-		return nil, nil
-	})
-
-	_, err := h.Open(context.Background(), revier.Realization{
-		Name: "session:demo", Dir: "/home/user/dev/demo",
+// An agent tab is a group of panels: the first opens the tab, last among the
+// OS window's tabs so a save records its agents in the same order, and every
+// later one splits into it by the id the tab's launch reported. Each panel
+// starts in its own directory and gets its title. No launch keeps kitty's
+// focus: the core focuses the panel it wants after.
+func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	panel, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Dir: "/home/user/dev/demo",
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "a"}, Dir: "/home/user/dev/demo/wt"},
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "b"}, Dir: "/home/user/dev/demo/other", Tab: true},
+			{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--resume", "b"}, Dir: "/home/user/dev/demo/wt"},
+			{Kind: revier.PanelShell, Title: "shell", Dir: "/home/user/dev/demo/wt"},
 		},
-	})
+	}, nil)
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("OpenTab: %v", err)
 	}
-	launches := []string{}
-	for _, c := range seq {
-		if strings.HasPrefix(c, "launch ") {
-			launches = append(launches, c)
+	if panel != "9" {
+		t.Errorf("panel = %s, want the id the tab's launch reported", panel)
+	}
+	var launches, titles []string
+	for _, c := range rec.all() {
+		switch c.args[0] {
+		case "launch":
+			launches = append(launches, strings.Join(c.args, " "))
+		case "set-window-title":
+			titles = append(titles, strings.Join(c.args, " "))
 		}
 	}
-	if len(launches) != 2 {
-		t.Fatalf("launches = %q, want two", launches)
+	want := []string{
+		"launch --type=tab --location=last --match window_id:4 --hold --cwd /home/user/dev/demo/wt claude --resume b",
+		"launch --type=window --match window_id:9 --hold --cwd /home/user/dev/demo/wt",
 	}
-	if !strings.Contains(launches[0], "--cwd /home/user/dev/demo/wt ") {
-		t.Errorf("first launch %q does not start in the panel's own directory", launches[0])
+	if !slices.Equal(launches, want) {
+		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
 	}
-	for _, want := range []string{"launch --type=tab --match window_id:7 ", "--cwd /home/user/dev/demo/other ", "claude --resume b"} {
-		if !strings.Contains(launches[1], want) {
-			t.Errorf("tab launch %q lacks %q", launches[1], want)
+	if len(titles) != 2 || !strings.HasSuffix(titles[0], "Claude Code") || !strings.HasSuffix(titles[1], "shell") {
+		t.Errorf("titles = %q, want each panel's own", titles)
+	}
+}
+
+// An OS window that is gone has nothing to open a tab in, and nothing is
+// launched into another one.
+func TestOpenTabRefusesAnOSWindowThatIsGone(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/999"},
+		revier.Realization{Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}, nil)
+	if err == nil {
+		t.Fatal("OpenTab into a missing OS window: want an error")
+	}
+	for _, c := range rec.all() {
+		if c.args[0] == "launch" {
+			t.Errorf("launched %q into a kitty without the OS window", c.args)
 		}
-	}
-	focus := -1
-	for i, c := range seq {
-		if c == "focus-window --match id:7" {
-			focus = i
-		}
-	}
-	if focus < 0 || focus < slices.Index(seq, launches[1]) {
-		t.Errorf("the OS window was not left on the workspace's first tab:\n%s", strings.Join(seq, "\n"))
 	}
 }
 
@@ -610,7 +602,7 @@ func TestSendTextGoesThroughStdinToTheWindow(t *testing.T) {
 	}
 }
 
-// A tab opens beside the OS window's tabs, carries the vars the core gives it
+// A tab opens after the OS window's tabs, carries the vars the core gives it
 // as user vars, and runs the launch argv in the directory given.
 func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
@@ -625,7 +617,7 @@ func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	}
 	calls := rec.all()
 	last := calls[len(calls)-1]
-	want := "launch --type=tab --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
+	want := "launch --type=tab --location=last --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
 	if got := strings.Join(last.args, " "); got != want || last.socket != "unix:@kitty-4000" {
 		t.Errorf("last call = %s %q, want %q on unix:@kitty-4000", last.socket, got, want)
 	}
@@ -651,5 +643,35 @@ func TestFocusedPanelIsTheActiveWindow(t *testing.T) {
 	}
 	if panel != "4" {
 		t.Errorf("panel = %s, want 4, the window Focus selects", panel)
+	}
+}
+
+// A kitty window id is one kitty process's: both sockets here hold window 3.
+// The id means the window of the kitty the command was started from, which
+// KITTY_LISTEN_ON names; with no such kitty answering, the id must be in one
+// kitty only.
+func TestFindPanelTakesTheWindowOfTheKittyTheCommandRunsIn(t *testing.T) {
+	h, _ := host(t, "unix:@kitty-4000", "unix:@kitty-4001")
+
+	h.SetOwnSocket(func() string { return "unix:@kitty-4001" })
+	ref, err := h.FindPanel(context.Background(), "3")
+	if err != nil || ref.ID != "@kitty-4001/2" {
+		t.Errorf("from kitty 4001: ref = %+v, %v, want @kitty-4001/2", ref, err)
+	}
+	if ref, err := h.FindPanel(context.Background(), "99"); err != nil || !ref.IsZero() {
+		t.Errorf("unknown window: ref = %+v, %v, want none", ref, err)
+	}
+
+	for _, own := range []string{"", "unix:@kitty-9999"} {
+		h.SetOwnSocket(func() string { return own })
+		if _, err := h.FindPanel(context.Background(), "3"); err == nil || !strings.Contains(err.Error(), "2 kitty processes") {
+			t.Errorf("own socket %q: err = %v, want the id refused as held by two kitties", own, err)
+		}
+	}
+
+	one, _ := host(t, "unix:@kitty-4000")
+	one.SetOwnSocket(func() string { return "" })
+	if ref, err := one.FindPanel(context.Background(), "3"); err != nil || ref.ID != "@kitty-4000/2" {
+		t.Errorf("one kitty: ref = %+v, %v, want @kitty-4000/2", ref, err)
 	}
 }

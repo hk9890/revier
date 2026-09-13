@@ -55,9 +55,10 @@ var socketPattern = regexp.MustCompile(`^@kitty-\d+$`)
 // Host is a kitty Runtime. The zero value uses the real kitten binary and
 // discovers sockets; tests inject recorders through export_test.go.
 type Host struct {
-	run     func(ctx context.Context, socket, stdin string, args ...string) ([]byte, error)
-	sockets func() []string
-	start   func(ctx context.Context, args ...string) error
+	run       func(ctx context.Context, socket, stdin string, args ...string) ([]byte, error)
+	sockets   func() []string
+	start     func(ctx context.Context, args ...string) error
+	ownSocket func() string
 }
 
 func (h *Host) Name() string { return "kitty" }
@@ -196,6 +197,53 @@ func (h *Host) launch(ctx context.Context, socket string, args ...string) (int, 
 		return 0, fmt.Errorf("kitty: launch reported %q, not a window id", strings.TrimSpace(string(out)))
 	}
 	return id, nil
+}
+
+// FindPanel reports the OS window that holds a kitty window id. A window id is
+// one kitty process's, and KITTY_LISTEN_ON names the kitty a command runs in:
+// a window's environment carries it, and a key's background launch gets it
+// with --copy-env (verified on kitty 0.48; without it the variable is empty).
+// A command started outside kitty, or from a kitty that has exited, names no
+// process that answers; then the id must be held in exactly one kitty.
+func (h *Host) FindPanel(ctx context.Context, panel revier.PanelID) (revier.TargetRef, error) {
+	listings, err := h.list(ctx)
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
+	own := "unix:" + strings.TrimPrefix(h.here(), "unix:")
+	for _, l := range listings {
+		if l.socket == own {
+			listings = []listing{l}
+			break
+		}
+	}
+	var found []revier.TargetRef
+	for _, l := range listings {
+		for _, w := range l.windows {
+			for _, t := range w.Tabs {
+				for _, win := range t.Windows {
+					if strconv.Itoa(win.ID) == string(panel) {
+						found = append(found, revier.TargetRef{Host: h.Name(), ID: refID(l.socket, w.ID), Title: w.WMName})
+					}
+				}
+			}
+		}
+	}
+	switch len(found) {
+	case 0:
+		return revier.TargetRef{}, nil
+	case 1:
+		return found[0], nil
+	}
+	return revier.TargetRef{}, fmt.Errorf("kitty: window %s is in %d kitty processes; run the command from inside the kitty you mean", panel, len(found))
+}
+
+// here is the control socket of the kitty this process was started from.
+func (h *Host) here() string {
+	if h.ownSocket != nil {
+		return h.ownSocket()
+	}
+	return os.Getenv("KITTY_LISTEN_ON")
 }
 
 func (h *Host) socketList() []string {
@@ -407,9 +455,8 @@ func isShell(cmd string) bool {
 
 // Open creates an OS window named r.Name holding r.Panels, or r.Launch alone
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
-// opens the OS window, every later one splits into its first tab, and a panel
-// that asks for a tab gets one of its own in the same OS window. With no kitty
-// answering it starts one, on a socket that discovery finds again.
+// opens the OS window and every later one splits into its first tab. With no
+// kitty answering it starts one, on a socket that discovery finds again.
 //
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
@@ -430,13 +477,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
 	}
-	tabbed := false
 	for _, p := range panels[1:] {
-		kind := "--type=window"
-		if p.Tab {
-			kind, tabbed = "--type=tab", true
-		}
-		args := []string{kind, "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+		args := []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
 		if dir := dirOf(r, p); dir != "" {
 			args = append(args, "--cwd", dir)
 		}
@@ -449,14 +491,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 			return revier.TargetRef{}, err
 		}
 	}
-	// A new tab becomes the active one. The workspace is the first tab, so
-	// that is where the OS window is left.
-	if tabbed {
-		if _, err := h.kitten(ctx, socket, "focus-window", "--match", "id:"+strconv.Itoa(first)); err != nil {
-			return revier.TargetRef{}, err
-		}
-	}
-
 	// The launch reports a window id; the instance is the OS window around it.
 	windows, err := h.ls(ctx, socket)
 	if err != nil {
@@ -621,16 +655,23 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, e
 	return "", 0, fmt.Errorf("kitty: os window %s not found", ref.ID)
 }
 
-// OpenTab opens r.Launch as a new tab of the OS window. `launch --match`
-// names the tab the new one opens beside, reached here through the window
-// current in the OS window. The vars become user vars of the tab's window,
-// which ls reports back as the panel's Vars.
+// OpenTab opens a new last tab of the OS window: r.Launch alone, or r.Panels
+// with the first as the tab and every later one split into it. `launch
+// --match` names the OS window through the window current in it, and the tab
+// goes last so the panels keep their order in the listing a save records
+// agents by. The vars become user vars of the tab's first window, which ls
+// reports back as the panel's Vars.
 func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	socket, win, err := h.active(ctx, ref)
 	if err != nil {
 		return "", err
 	}
-	args := []string{"--type=tab", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
+	panels := r.Panels
+	if len(panels) == 0 {
+		panels = []revier.PanelSpec{{Command: r.Launch}}
+	}
+
+	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
 	names := make([]string, 0, len(vars))
 	for name := range vars {
 		names = append(names, name)
@@ -639,15 +680,27 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	for _, name := range names {
 		args = append(args, "--var", name+"="+vars[name])
 	}
-	if r.Dir != "" {
-		args = append(args, "--cwd", r.Dir)
+	first := 0
+	for i, p := range panels {
+		if i > 0 {
+			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+		}
+		if dir := dirOf(r, p); dir != "" {
+			args = append(args, "--cwd", dir)
+		}
+		args = append(args, p.Command...)
+		id, err := h.launch(ctx, socket, args...)
+		if err != nil {
+			return "", err
+		}
+		if err := h.title(ctx, socket, id, p.Title); err != nil {
+			return "", err
+		}
+		if i == 0 {
+			first = id
+		}
 	}
-	args = append(args, r.Launch...)
-	id, err := h.launch(ctx, socket, args...)
-	if err != nil {
-		return "", err
-	}
-	return revier.PanelID(strconv.Itoa(id)), nil
+	return revier.PanelID(strconv.Itoa(first)), nil
 }
 
 // FocusPanel makes one kitty window current, switching to its tab. Under GNOME

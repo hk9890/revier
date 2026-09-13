@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,11 +19,21 @@ const agentUsage = `revier agent - drive one agent from a script
 usage:
   revier agent wait <agent> --until <status> [--timeout <seconds>]
   revier agent prompt <agent> [--] <text>
+  revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
   --until    idle, running, attention, or stopped (idle or attention)
   --timeout  give up after this many seconds and exit 2; 0 waits for good
+  --panel    the open workspace that holds this panel; kitty's
+             @active-kitty-window-id is the window a key was pressed in
+  --resume   start the agent on this conversation
+  --dir      start the agent and its shell here, not in the project
+
+new opens a tab in an open workspace: the project's agent panel and its
+shell, the tab a restore adds for an agent opened beside the workspace.
+Without -p or --panel the project is the one --dir is in, else the one this
+directory resolves to.
 
 wait prints the status it ended on. prompt types one line and submits it,
 and returns once an idle agent has started on it, so
@@ -53,6 +64,8 @@ func cmdAgent(args []string) error {
 		return cmdAgentWait(args)
 	case "prompt":
 		return cmdAgentPrompt(args)
+	case "new":
+		return cmdAgentNew(args)
 	default:
 		fmt.Fprint(os.Stderr, agentUsage)
 		return fmt.Errorf("unknown agent command %q", sub)
@@ -163,6 +176,80 @@ func cmdAgentPrompt(args []string) error {
 		fmt.Fprintf(os.Stderr, "revier: warning: %s was still idle after the prompt was delivered; check the panel before waiting on it\n", pos[0])
 	}
 	return nil
+}
+
+// cmdAgentNew adds an agent tab to an open workspace. It is what the kitty
+// hotkey runs, so it prints nothing on success: there is no terminal to read
+// it in.
+func cmdAgentNew(args []string) error {
+	fs := flag.NewFlagSet("agent new", flag.ContinueOnError)
+	project := projectFlag(fs)
+	panel := fs.String("panel", "", "the open workspace holding this panel")
+	resume := fs.String("resume", "", "the conversation to start the agent on")
+	dir := fs.String("dir", "", "the directory the agent starts in")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 || (*project != "" && *panel != "") {
+		return errors.New("usage: revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]")
+	}
+	if *dir != "" {
+		abs, err := filepath.Abs(*dir)
+		if err != nil {
+			return err
+		}
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			return fmt.Errorf("--dir %s: not a directory", *dir)
+		}
+		*dir = abs
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	a, err := newApp(ctx)
+	if err != nil {
+		return err
+	}
+	p, target, ref, err := a.agentWorkspace(ctx, *project, *panel, *dir)
+	if err != nil {
+		return err
+	}
+	outcome, err := a.core.NewAgent(ctx, p, target, ref, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+	if err != nil {
+		return err
+	}
+	if *resume != "" && outcome != core.AgentResumed {
+		fmt.Fprintf(os.Stderr, "revier: warning: no probe here can resume %s; the agent started empty\n", *resume)
+	}
+	return nil
+}
+
+// agentWorkspace is the project, target and open instance `revier agent new`
+// opens its tab in: the owner of --panel; or the project -p names, else the
+// one --dir is in, else the one resolved as for any command, with the target
+// after -p's colon or the one declaring an agent.
+func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (core.Project, revier.TargetName, revier.TargetRef, error) {
+	if panel != "" {
+		return a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
+	}
+	name, target, _ := strings.Cut(project, ":")
+	p, inDir := a.projectForPath(dir)
+	if name != "" || dir == "" || !inDir {
+		var err error
+		if p, err = a.resolveProject(ctx, name); err != nil {
+			return core.Project{}, "", revier.TargetRef{}, err
+		}
+	}
+	t := revier.TargetName(target)
+	if t == "" {
+		var err error
+		if t, err = a.core.AgentTarget(p); err != nil {
+			return core.Project{}, "", revier.TargetRef{}, err
+		}
+	}
+	ref, err := a.core.AgentWorkspace(ctx, p, t, a.state.Bound[p.Name])
+	return p, t, ref, err
 }
 
 // remoteFor returns the remote that drives the agent an address names, and

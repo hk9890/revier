@@ -63,8 +63,12 @@ const (
 	// anywhere else would carry the conversation on in the wrong checkout.
 	AgentDirGone
 	// AgentDropped is not restored: the target declares no agent panel to
-	// start it from.
+	// start it from, or it is past the declared ones and the runtime cannot
+	// open a tab in an open instance.
 	AgentDropped
+	// AgentNotAdded is past the declared ones, and its tab failed to open
+	// after the workspace itself opened. Result.AgentErr says why.
+	AgentNotAdded
 )
 
 // RestoreStep is one recorded target and what restoring it means here.
@@ -270,97 +274,92 @@ func resumesOf(t session.Target) []Resume {
 }
 
 // resuming returns the realization with the recorded agents laid over its
-// layout, and what became of each. The panel slice is copied before anything
-// is written to it: the realization arrives sharing the prepared project's
-// panels, and a restore must not edit the project every later keypress reads.
-func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome) {
+// declared agent panels, what became of each of those, and the recorded agents
+// past them, which the launch adds once the instance is open. The panel slice
+// is copied before anything is written to it: the realization arrives sharing
+// the prepared project's panels, and a restore must not edit the project every
+// later keypress reads.
+func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome, []Resume) {
 	if len(resumes) == 0 {
-		return real, nil
+		return real, nil, nil
 	}
 	var outcomes []AgentOutcome
-	real.Panels, outcomes = c.layAgents(real.Panels, resumes)
-	return real, outcomes
+	var extra []Resume
+	real.Panels, outcomes, extra = c.layAgents(real.Panels, resumes)
+	return real, outcomes, extra
 }
 
 // Resumes is what a launch of the target would do with a step's recorded
 // agents now, for a dry run that says what a restore would do. It lays them
-// over the realization a launch resolves, so the two cannot disagree.
+// over the realization a launch resolves, and builds the agent tabs a launch
+// would add, so the two cannot disagree.
 func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []AgentOutcome {
 	i, ok := p.index(name)
 	if !ok {
 		return nil
 	}
-	_, real, _, err := c.resolveAt(p, i)
+	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {
 		return nil
 	}
-	_, outcomes := c.resuming(real, resumes)
-	return outcomes
+	_, outcomes, extra := c.resuming(real, resumes)
+	_, added := c.agentTabs(host, real, extra)
+	return append(outcomes, added...)
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each
-// comes to (decisions.md D61).
+// comes to (decisions.md D62, D63).
 //
 // The first recorded agent goes to the first panel declared as an agent, the
-// second to the second, and so on. Every agent past the declared ones is a
-// panel of its own, in a tab where the runtime has tabs, started as a copy of
-// the first declared agent panel: most agents are opened by hand beside a
-// workspace, and the declared agent is how this project starts one. A layout
-// that declares no agent has nothing to copy, and those agents are dropped.
+// second to the second, and so on. The agents past the declared ones are
+// returned: each is added to the open instance as an agent tab, which is what
+// `revier agent new` adds, so an agent opened by hand beside a workspace comes
+// back the way it was opened.
+func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.PanelSpec, []AgentOutcome, []Resume) {
+	panels := append([]revier.PanelSpec(nil), layout...)
+	var outcomes []AgentOutcome
+	n := 0
+	for i := range panels {
+		if panels[i].Kind != revier.PanelAgent || n == len(resumes) {
+			continue
+		}
+		outcomes = append(outcomes, c.startAgent(&panels[i], resumes[n]))
+		n++
+	}
+	return panels, outcomes, resumes[n:]
+}
+
+// startAgent points an agent panel at its recorded directory and conversation,
+// and says what the agent comes to.
 //
 // An agent starts in the directory it worked in, and on its conversation when
 // one was recorded and its probe here can resume it. A directory that is gone
 // starts the agent empty where the realization starts: its conversation
 // resumed there would carry on in the wrong checkout, and its edits would
 // land there. Every other way a resume can fail starts the agent empty.
-func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.PanelSpec, []AgentOutcome) {
-	panels := append([]revier.PanelSpec(nil), layout...)
-	var slots []int
-	for i, p := range panels {
-		if p.Kind == revier.PanelAgent {
-			slots = append(slots, i)
-		}
+func (c *Core) startAgent(spec *revier.PanelSpec, r Resume) AgentOutcome {
+	if r.Dir != "" && !dirExists(r.Dir) {
+		return AgentDirGone
 	}
-
-	outcomes := make([]AgentOutcome, len(resumes))
-	for n, r := range resumes {
-		at := 0
-		switch {
-		case n < len(slots):
-			at = slots[n]
-		case len(slots) > 0:
-			template := layout[slots[0]]
-			panels = append(panels, revier.PanelSpec{
-				Kind: revier.PanelAgent, Title: template.Title, Command: template.Command, Tab: true,
-			})
-			at = len(panels) - 1
-		default:
-			outcomes[n] = AgentDropped
-			continue
-		}
-
-		spec := &panels[at]
-		if r.Dir != "" && !dirExists(r.Dir) {
-			outcomes[n] = AgentDirGone
-			continue
-		}
-		spec.Dir = r.Dir
-		res, ok := c.resumer(r.Harness)
-		if r.Session == "" || !ok {
-			outcomes[n] = AgentEmpty
-			continue
-		}
-		spec.Command = res.ResumeCommand(*spec, r.Session)
-		outcomes[n] = AgentResumed
+	spec.Dir = r.Dir
+	res, ok := c.resumer(r.Harness)
+	if r.Session == "" || !ok {
+		return AgentEmpty
 	}
-	return panels, outcomes
+	spec.Command = res.ResumeCommand(*spec, r.Session)
+	return AgentResumed
 }
 
-// resumer is the probe of that name here, when it can resume.
+// resumer is the probe of that name here, when it can resume. With no name it
+// is the first probe that can: `revier agent new --resume` names a
+// conversation and not the harness that holds it.
 func (c *Core) resumer(harness string) (revier.Resumable, bool) {
 	for _, probe := range c.Probes {
+		res, ok := probe.(revier.Resumable)
+		if harness == "" && ok {
+			return res, true
+		}
 		if probe.Name() == harness {
-			res, ok := probe.(revier.Resumable)
 			return res, ok
 		}
 	}

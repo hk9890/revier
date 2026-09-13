@@ -1516,7 +1516,7 @@ The config screen refused these keys already (D56). The list `config.Load`
 reads is kept equal to the keys the TUI claims by a test, so a new button
 cannot bring the silent case back.
 
-### D62 — a restore brings back every agent, in order, in the directory it worked in — Accepted
+### D62 — a restore brings back every agent, in order, in the directory it worked in — Accepted; how an agent past the layout is opened superseded by D65
 
 Supersedes D47's identity of an agent across a restart. The rest of D47
 stands: the resume is the probe's, and the argv is built from the project as it
@@ -1600,7 +1600,7 @@ with a window host, is no longer focused when the core finds no OS window for
 the instance. The press fails with `ErrUnraisable`, naming the target, and
 nothing moves. A visible refusal is better than a raise that looks half done.
 
-### D64 — a target can be a tab inside another target — Accepted
+### D64 — a target can be a tab inside another target — Accepted; OpenTab widened to panel groups by D65
 
 Narrows D14: a target is still a named binding a project has, but its instance
 can be a tab of another target's instance, not only an instance of its own.
@@ -1653,3 +1653,62 @@ the keypress.
 
 A session records a tab by its name. Its panels are recorded under the target
 of the instance that holds it, so an agent is recorded once.
+### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore — Accepted
+
+Supersedes D62's way of opening an agent past the declared layout. Widens
+D64's `PanelOpener.OpenTab` from one launch to a group of panels. The rest of
+D62 stands: every agent is recorded in order, with its conversation and
+directory, and the declared agent panels take the first ones.
+
+D62 opened the agents past the layout as extra `PanelSpec.Tab` panels of the
+launch. A restore is not the only thing that opens such an agent. The user
+opens most of them with a key in a running workspace, and that key ran a shell
+script outside revier: a tab with an agent and a shell split, in the directory
+of the focused window. So a restored agent came back in a different shape
+from the one it was opened in - a tab with no shell - and nothing shared the
+two paths, so they could drift apart.
+
+`revier agent new` now opens that tab, and a restore opens a tab for every
+agent past the layout through the same core functions once the workspace is
+open. The tab holds a copy of the first declared agent panel, started on the
+conversation and in the directory asked for, and a copy of the first declared
+shell panel split into it, in the same directory. There is one builder, so the
+key and the restore cannot disagree about the tab.
+
+A tab in an open instance is what D64's `PanelOpener` already opens for a tab
+target. A second capability for the same mechanism was the first version of
+this change, and it was dropped: two kitty tab launches for one thing drift
+apart as easily as the two paths above. So `OpenTab` takes a realization with
+`Panels` as well as one with `Launch`, and opens the tab last in the OS window,
+so the agents in it keep the order a later save records them by.
+`PanelSpec.Tab` goes: no path sets it. The focus is `FocusPanel`'s: the key
+makes the new agent current; a restore makes the panel that was current when
+the workspace opened current again after its tabs.
+
+The cost is tmux. D64 left tmux without `PanelOpener`, because a tab of a tmux
+window would be another tmux window, which is another instance. D62 split the
+agents past the layout into the window instead. Now a restore on tmux opens
+the declared layout and names the other agents as not restored, and `revier
+agent new` on tmux is refused, naming the runtime. The agents are still
+recorded, so a restore on a runtime with tabs brings them back.
+
+A tab that fails after the workspace opened does not fail the launch. The
+workspace is open, so it is still focused and bound. The restore names the
+agents whose tabs did not open, with the reason. Reporting the target as not
+opened would leave an open window that no binding knows.
+
+The key knows only the window it was pressed in: kitty passes
+`@active-kitty-window-id`. `--panel` finds the open workspace that holds that
+panel. A kitty window id is one kitty process's, so two processes can each
+hold a window of that id, and the id alone can name a workspace in a kitty the
+key was not pressed in. The focused window was the first answer, since a key
+is pressed in it, and it failed: two kitty processes on GNOME both reported a
+window as focused at the same moment. A kitty window's environment carries
+`KITTY_LISTEN_ON`, and a background launch with `--copy-env` gets the
+environment of the window the key was pressed in, so the command knows its own
+kitty. Without `--copy-env` it gets the kitty process's environment, which
+names none. Which instance an id means is therefore a runtime's to say, as
+an optional `PanelFinder`: kitty reads the id in the kitty the command runs
+in. A runtime without a finder, whose ids are unique, has the core accept an
+id held by exactly one instance, and refuse one held by two.
+
