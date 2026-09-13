@@ -1299,10 +1299,12 @@ key. An action is run by name with `revier run`, so a name is refused when
 another action has it. The rules `config.Load` applies to an action key still
 hold, because the write runs them.
 
-An `[[action]]` entry is edited line by line, as D53 edits a key. A changed
-value is put in place of the old one. A deleted entry loses its header and its
-values, and every comment in it stays, including one inside an array written
-over several lines. The edit names the action as the screen read it, and it is
-refused if the file no longer holds that action: the file was changed by hand
-while revier ran. Actions written as an inline array are refused too, because
+An `[[action]]` entry is edited line by line, as D53 edits a key. Only a
+changed value is written, in place of the old one, so an unchanged array keeps
+its lines and its comments. A deleted entry loses its header and its values,
+and every comment in it stays, including one inside an array written over
+several lines. Every edit, an add included, names the actions as the screen
+read them, and it is refused if the file no longer holds them: the file was
+changed by hand while revier ran, and an add would otherwise write a second
+action under a name or a key the screen did not know was taken. Actions written as an inline array are refused too, because
 the line editor does not find them.

@@ -36,7 +36,7 @@ var (
 func TestAddActionAppendsATable(t *testing.T) {
 	root := writeConfig(t, twoActions)
 	lint := config.Action{Key: "alt+l", Name: "lint", Run: []string{"mise", "run", "lint"}}
-	if err := config.AddAction(root, lint); err != nil {
+	if err := config.AddAction(root, []config.Action{copyPath, sync}, lint); err != nil {
 		t.Fatal(err)
 	}
 	want := twoActions + "\n[[action]]\nkey = \"alt+l\"\nname = \"lint\"\nrun = [\"mise\", \"run\", \"lint\"]\n"
@@ -47,7 +47,7 @@ func TestAddActionAppendsATable(t *testing.T) {
 
 func TestAddActionWritesAMissingFile(t *testing.T) {
 	root := t.TempDir()
-	if err := config.AddAction(root, sync); err != nil {
+	if err := config.AddAction(root, nil, sync); err != nil {
 		t.Fatal(err)
 	}
 	want := "[[action]]\nkey = \"ctrl+g\"\nname = \"sync\"\nrun = [\"git\", \"pull\"]\n"
@@ -72,6 +72,21 @@ run = [
 ]`, `key = "alt+y" # yank
 name = "copy"
 run = ["xclip", "{{.Path}}"]`, 1)
+	if got := readConfig(t, root); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A value that did not change is not written: a renamed action keeps its
+// array over several lines, and the comment inside it.
+func TestReplaceActionWritesOnlyWhatChanged(t *testing.T) {
+	root := writeConfig(t, twoActions)
+	renamed := copyPath
+	renamed.Name = "copy"
+	if err := config.ReplaceAction(root, 0, copyPath, renamed); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(twoActions, `name = "copy path"`, `name = "copy"`, 1)
 	if got := readConfig(t, root); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
@@ -125,6 +140,11 @@ func TestAnEditToAChangedActionIsRefused(t *testing.T) {
 	if err := config.ReplaceAction(root, 2, sync, sync); !errors.Is(err, config.ErrActionsChanged) {
 		t.Errorf("ReplaceAction past the end = %v, want ErrActionsChanged", err)
 	}
+	// sync was added by hand since the caller read only copy path, so adding
+	// sync again would write it twice.
+	if err := config.AddAction(root, []config.Action{copyPath}, sync); !errors.Is(err, config.ErrActionsChanged) {
+		t.Errorf("AddAction over an action added by hand = %v, want ErrActionsChanged", err)
+	}
 	if got := readConfig(t, root); got != twoActions {
 		t.Errorf("config.toml changed:\n%s", got)
 	}
@@ -137,7 +157,7 @@ func TestAddActionRefusesAnInvalidAction(t *testing.T) {
 		{Key: "g", Name: "typed", Run: []string{"true"}},
 		{Key: "ctrl+g", Name: "empty"},
 	} {
-		if err := config.AddAction(root, act); err == nil {
+		if err := config.AddAction(root, []config.Action{copyPath, sync}, act); err == nil {
 			t.Errorf("AddAction(%+v) accepted", act)
 		}
 	}
@@ -151,7 +171,7 @@ func TestAddActionRefusesAnInvalidAction(t *testing.T) {
 func TestActionsNotWrittenAsTablesAreRefused(t *testing.T) {
 	text := "action = [{ key = \"ctrl+g\", name = \"sync\", run = [\"git\", \"pull\"] }]\n"
 	root := writeConfig(t, text)
-	if err := config.AddAction(root, copyPath); err == nil || !strings.Contains(err.Error(), "by hand") {
+	if err := config.AddAction(root, nil, copyPath); err == nil || !strings.Contains(err.Error(), "by hand") {
 		t.Errorf("AddAction = %v, want a refusal", err)
 	}
 	if got := readConfig(t, root); got != text {

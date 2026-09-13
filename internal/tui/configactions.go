@@ -114,7 +114,7 @@ func (m Model) saveAction() (tea.Model, tea.Cmd) {
 	}
 	actions := slices.Clone(m.actions)
 	if f.index == len(actions) {
-		err = withConfigRoot(func(root string) error { return config.AddAction(root, act) })
+		err = withConfigRoot(func(root string) error { return config.AddAction(root, m.actions, act) })
 		actions = append(actions, act)
 	} else {
 		err = withConfigRoot(func(root string) error { return config.ReplaceAction(root, f.index, m.actions[f.index], act) })

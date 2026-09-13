@@ -12,9 +12,14 @@ import (
 // as the caller read it: the file was changed by hand since.
 var ErrActionsChanged = errors.New("the actions in config.toml changed since revier read them; restart revier")
 
-// AddAction writes a new [[action]] table at the end of config.toml.
-func AddAction(root string, act Action) error {
+// AddAction writes a new [[action]] table at the end of config.toml, which
+// must still hold the actions was. A name or a key is checked against was, so
+// an action added to the file by hand since could otherwise be added twice.
+func AddAction(root string, was []Action, act Action) error {
 	return editActions(root, func(lines []string, _ []table, have []Action) ([]string, []Action, error) {
+		if !slices.EqualFunc(have, was, sameAction) {
+			return nil, nil, ErrActionsChanged
+		}
 		out := strings.TrimRight(strings.Join(lines, "\n"), "\n")
 		if out != "" {
 			out += "\n\n"
@@ -32,8 +37,9 @@ func AddAction(root string, act Action) error {
 }
 
 // ReplaceAction writes act in place of the i-th action, which must still be
-// was. Each value is put where it stands, so the entry's comments and any key
-// revier does not know stay as they were.
+// was. Only a value that changed is written, where it stands, so the entry's
+// comments, a value's own spelling and any key revier does not know stay as
+// they were.
 func ReplaceAction(root string, i int, was, act Action) error {
 	return editActions(root, func(lines []string, _ []table, have []Action) ([]string, []Action, error) {
 		if i >= len(have) || !sameAction(have[i], was) {
@@ -43,7 +49,14 @@ func ReplaceAction(root string, i int, was, act Action) error {
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, v := range values {
+		old, err := actionValues(was)
+		if err != nil {
+			return nil, nil, err
+		}
+		for j, v := range values {
+			if v == old[j] {
+				continue
+			}
 			// Each put can move the lines after it, so the entry is found
 			// again for the next one.
 			lines = putKey(lines, actionTables(lines)[i], v.key, v.literal)
@@ -56,7 +69,8 @@ func ReplaceAction(root string, i int, was, act Action) error {
 
 // RemoveAction deletes the i-th action, which must still be was. Its header
 // and its values go; its comments stay, including one written after a value
-// or inside an array over several lines. An entry left with nothing but blank lines goes whole.
+// or inside an array over several lines. An entry left with nothing but blank
+// lines goes whole.
 func RemoveAction(root string, i int, was Action) error {
 	return editActions(root, func(lines []string, entries []table, have []Action) ([]string, []Action, error) {
 		if i >= len(have) || !sameAction(have[i], was) {
