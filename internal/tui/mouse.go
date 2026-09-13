@@ -38,14 +38,11 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	m.cell = &pointerCell{x: msg.X, y: msg.Y}
 	m.over = m.hoverAt(msg.X, msg.Y)
-	// The new-project and config screens have no list rows: the project list
-	// is behind them, and a click or a notch must not move a selection nobody
-	// can see.
-	if msg.Action != tea.MouseActionPress || m.rowless() {
+	if msg.Action != tea.MouseActionPress {
 		return m, nil
 	}
-	// The help screen has no rows either, and more lines than a short
-	// terminal holds: the wheel scrolls it, and a click does nothing.
+	// The help screen has no rows, and more lines than a short terminal
+	// holds: the wheel scrolls it, and a click does nothing.
 	if m.dialog == dialogHelp {
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
@@ -53,6 +50,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		case tea.MouseButtonWheelDown:
 			m.body.ScrollDown(1)
 		}
+		return m, nil
+	}
+	if !m.dialog.hasRows() {
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonLeft {
@@ -98,16 +98,11 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// rowless reports a screen standing over the list with no rows of its own.
-func (m Model) rowless() bool {
-	return m.dialog == dialogNew || m.dialog == dialogLinkName || m.dialog == dialogConfig
-}
-
 // rowAt is the list row under a terminal cell, if a row is there: the cell is
 // inside the list, and not on the header, the footer or the space below the
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
-	if m.rowless() || m.dialog == dialogHelp {
+	if !m.dialog.hasRows() {
 		return 0, false
 	}
 	_, mc := m.margins()

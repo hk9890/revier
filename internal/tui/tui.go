@@ -66,6 +66,23 @@ const (
 	dialogHelp
 )
 
+// hasRows reports a screen whose body is list rows: what a click selects and
+// the wheel moves through. Every other screen stands over the project list
+// with text of its own, and a press must not reach a row nobody can see.
+func (d dialog) hasRows() bool {
+	switch d {
+	case dialogNone, dialogHosts, dialogRemote:
+		return true
+	}
+	return false
+}
+
+// hasPane reports a screen with the detail pane beside it. The help and
+// config screens are about no project, so they take the whole width.
+func (d dialog) hasPane() bool {
+	return d != dialogHelp && d != dialogConfig
+}
+
 // Model is the bubbletea model. Construct it with New.
 type Model struct {
 	core      *core.Core

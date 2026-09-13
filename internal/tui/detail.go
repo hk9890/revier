@@ -31,9 +31,7 @@ const (
 // pane takes the rest.
 func (m Model) paneWidth() int {
 	inner, _ := m.inner()
-	// The help and config screens are about no project, so they take the
-	// whole width.
-	if m.dialog == dialogHelp || m.dialog == dialogConfig || inner < minListWidth+minPaneWidth {
+	if !m.dialog.hasPane() || inner < minListWidth+minPaneWidth {
 		return 0
 	}
 	list := min(max(inner/2, minListWidth), maxListWidth)
