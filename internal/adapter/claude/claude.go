@@ -1,50 +1,36 @@
 // Package claude implements the AgentProbe for Claude Code.
 //
-// Two signals reach a panel, and they are not equally trustworthy.
+// The state is Claude Code's own word, read from `claude agents --json`: every
+// live session with the pid of its process and its status. A panel is matched
+// to its session by pid and nothing else (decisions.md D55, D57).
 //
-// The live window title carries a leading state glyph. That glyph is a LEVEL:
-// it describes what Claude is doing right now, it is repainted continuously,
-// and it arrives on remote and container panes alike.
+// The listing costs a process, and a survey runs every second. So the probe
+// keeps the last answer and runs the command again only when an answer may
+// have changed: when a file under the sessions directory was written, added or
+// removed since the last run, or when the answer is MaxAge old. Claude Code
+// rewrites its session file on every status change. Only the files' times are
+// read; their content is not an interface, and a Claude Code that stops
+// touching them costs the state MaxAge of delay and nothing else.
 //
-// The CS_STATE user variable is set by Claude Code's own hooks
-// (UserPromptSubmit/Stop/Notification). It records EDGES, not levels: nothing
-// clears "attn" until the next Stop, and "busy" survives a turn interrupted
-// with Esc, so a pane sitting at rest can carry "busy" indefinitely. Read as a
-// level it reports work on an idle pane.
-//
-// So the glyph decides running versus not-running, and CS_STATE is consulted
-// only for the one thing the glyph cannot express: that Claude asked for the
-// human and has not been answered. An unrecognised glyph degrades to idle, so
-// a future Claude change can only understate activity rather than assert a
-// wrong state.
-//
-// This mirrors the rule proven in the shell implementation this replaces
-// (dotfiles/kitty/.config/kitty/watchers/cs_tab_title.py in the setup repo).
+// The pane title supplies the activity line only: the listing names a session
+// but carries no summary of the turn.
 package claude
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 const (
-	// varTab marks a pane as a Claude agent. kt-new-agent.sh emits it as a
-	// SetUserVar OSC before exec, so it reaches the local terminal for native,
-	// container, and SSH panes alike.
-	varTab = "CS_TAB"
-	// varState is the hook-set edge record. Advisory only; see the package doc.
-	varState = "CS_STATE"
-
-	// stateAttention is the value the Notification hook sets when Claude wants
-	// the human. It is the only CS_STATE value this probe acts on.
-	stateAttention = "attn"
-
 	// glyphAtRest is U+2733, the marker Claude shows while it is not working.
 	glyphAtRest = '✳'
 
@@ -54,43 +40,162 @@ const (
 	defaultTitle = "Claude Code"
 )
 
-// Probe reads Claude Code panels.
+// MaxAge is the longest a listing is used without running the command again,
+// for a change the sessions directory did not show.
+const MaxAge = 10 * time.Second
+
+// Probe reads Claude Code panels. The zero value is ready to use; it holds the
+// last listing, so it is shared by pointer.
 type Probe struct {
-	// Now is injected so tests can pin Since. Nil means time.Now.
+	// Now is injected so tests can pin Since and the listing's age. Nil means
+	// time.Now.
 	Now func() time.Time
 
 	// Agents returns what `claude agents --json` prints. It is injected so a
 	// test can answer without Claude Code installed. Nil runs the command.
 	Agents func(ctx context.Context) ([]byte, error)
+
+	// SessionsDir is where Claude Code keeps a file per live session. Empty
+	// means $CLAUDE_CONFIG_DIR/sessions, or ~/.claude/sessions without it.
+	SessionsDir string
+
+	mu     sync.Mutex
+	listed map[int]listedSession // by pid
+	err    error
+	at     time.Time
+	stamp  map[string]time.Time // the sessions directory at the last run
+}
+
+// listedSession is one entry of `claude agents --json`. A background session
+// has no pid, and no pane to be in.
+type listedSession struct {
+	PID       int    `json:"pid"`
+	SessionID string `json:"sessionId"`
+	Status    string `json:"status"`
 }
 
 func (p *Probe) Name() string { return "claude" }
 
-// Match recognises a Claude pane by its marker variable, falling back to the
-// foreground command for a pane started outside the marked launcher.
+// Match recognises a Claude pane by its foreground command.
 func (p *Probe) Match(panel revier.Panel) bool {
-	return panel.Vars[varTab] == "1" || panel.Runs("claude") || panel.Runs("claude-code")
+	return panel.Runs("claude") || panel.Runs("claude-code")
 }
 
-// Inspect derives the state. It performs no I/O: everything it needs is
-// already on the panel, which is what makes the whole probe a pure function
-// and testable at layer L1.
-func (p *Probe) Inspect(_ context.Context, panel revier.Panel) (revier.AgentState, error) {
-	now := time.Now
-	if p.Now != nil {
-		now = p.Now
+// Inspect reports the status the listing gives the panel's process. A panel
+// with no session in it is unknown: Claude is running there, but revier
+// cannot see what it does.
+func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentState, error) {
+	listed, err := p.listing(ctx)
+	if err != nil {
+		return revier.AgentState{}, err
 	}
-
-	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title), Since: now()}
-	switch {
-	case IsSpinner(leading(panel.Title)):
-		state.Status = revier.StatusRunning
-	case panel.Vars[varState] == stateAttention:
-		state.Status = revier.StatusAttention
-	default:
-		state.Status = revier.StatusIdle
+	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title), Since: p.now()}
+	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
+		state.Status = Status(s.Status)
 	}
 	return state, nil
+}
+
+// Status maps a listed status. A value Claude Code adds later is unknown, not
+// idle: a new status is more likely a new way to wait than a new way to rest.
+func Status(listed string) revier.Status {
+	switch listed {
+	case "busy":
+		return revier.StatusRunning
+	case "waiting":
+		return revier.StatusAttention
+	case "idle":
+		return revier.StatusIdle
+	}
+	return revier.StatusUnknown
+}
+
+// listing returns the last listing, running the command again when the
+// sessions directory changed or the listing is MaxAge old. The directory is
+// read before the command runs, so a change made while it runs is seen by the
+// next call.
+func (p *Probe) listing(ctx context.Context) (map[int]listedSession, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	stamp := p.readStamp()
+	if !p.at.IsZero() && p.now().Sub(p.at) < MaxAge && sameStamp(stamp, p.stamp) {
+		return p.listed, p.err
+	}
+	p.listed, p.err = p.list(ctx)
+	p.at, p.stamp = p.now(), stamp
+	return p.listed, p.err
+}
+
+// readStamp is the modification time of every file in the sessions directory.
+// A directory that cannot be read is empty, which leaves MaxAge to notice.
+func (p *Probe) readStamp() map[string]time.Time {
+	entries, err := os.ReadDir(p.sessionsDir())
+	if err != nil {
+		return nil
+	}
+	stamp := make(map[string]time.Time, len(entries))
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil {
+			stamp[e.Name()] = info.ModTime()
+		}
+	}
+	return stamp
+}
+
+func sameStamp(a, b map[string]time.Time) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for name, t := range a {
+		if u, ok := b[name]; !ok || !u.Equal(t) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *Probe) sessionsDir() string {
+	if p.SessionsDir != "" {
+		return p.SessionsDir
+	}
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return filepath.Join(dir, "sessions")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".claude", "sessions")
+}
+
+func (p *Probe) now() time.Time {
+	if p.Now != nil {
+		return p.Now()
+	}
+	return time.Now()
+}
+
+// list runs the command once and indexes its answer by pid.
+func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
+	run := p.Agents
+	if run == nil {
+		run = claudeAgents
+	}
+	out, err := run(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var listed []listedSession
+	if err := json.Unmarshal(out, &listed); err != nil {
+		return nil, fmt.Errorf("claude agents --json: %w", err)
+	}
+	byPID := make(map[int]listedSession, len(listed))
+	for _, s := range listed {
+		if s.PID != 0 {
+			byPID[s.PID] = s
+		}
+	}
+	return byPID, nil
 }
 
 // Sessions names the conversation each pane holds, from one run of `claude
@@ -105,34 +210,18 @@ func (p *Probe) Inspect(_ context.Context, panel revier.Panel) (revier.AgentStat
 // command - as revier launches it. A pane where claude was typed into a shell
 // reports the shell, is not matched, and restores empty.
 //
-// Both pids are of live processes, listed now, so a pid reused since cannot
-// match a conversation that is not there.
+// It always runs the command rather than reuse the listing Inspect keeps: a
+// save records what holds now, and runs once.
 func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.SessionID, error) {
-	run := p.Agents
-	if run == nil {
-		run = claudeAgents
-	}
-	out, err := run(ctx)
+	listed, err := p.list(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var listed []struct {
-		PID       int    `json:"pid"`
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(out, &listed); err != nil {
-		return nil, fmt.Errorf("claude agents --json: %w", err)
-	}
-	byPID := make(map[int]revier.SessionID, len(listed))
-	for _, a := range listed {
-		// A background session has no pid, and no pane to be in.
-		if a.PID != 0 && a.SessionID != "" {
-			byPID[a.PID] = revier.SessionID(a.SessionID)
-		}
-	}
 	ids := make([]revier.SessionID, len(panels))
 	for i, panel := range panels {
-		ids[i] = byPID[panel.PID]
+		if panel.PID != 0 {
+			ids[i] = revier.SessionID(listed[panel.PID].SessionID)
+		}
 	}
 	return ids, nil
 }

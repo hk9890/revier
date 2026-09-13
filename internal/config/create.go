@@ -65,7 +65,7 @@ func CreateLink(root string, name revier.ProjectName, host string, project revie
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)
 	}
-	// A link has no shared targets (decisions.md D57).
+	// A link has no shared targets (decisions.md D58).
 	return write(root, name, linkTOML(name, host, project), nil)
 }
 

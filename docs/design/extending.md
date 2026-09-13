@@ -80,7 +80,7 @@ Set `prefer = "runtime"` on a target to override which realization wins when
 both hosts are available.
 
 Targets most projects have in common are declared once, in
-`~/.config/revier/config.toml`, in the same form (decisions.md D57). Every
+`~/.config/revier/config.toml`, in the same form (decisions.md D58). Every
 project gets them, and its file then holds only what is its own:
 
 ```toml

@@ -104,6 +104,7 @@ func scratch(t *testing.T) string {
 
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
+	fakeClaude(t)
 	return workdir
 }
 

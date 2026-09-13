@@ -3,7 +3,10 @@ package claude_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/pkg/revier"
@@ -16,9 +19,8 @@ func TestMatch(t *testing.T) {
 		panel revier.Panel
 		want  bool
 	}{
-		{"marker variable", revier.Panel{Vars: map[string]string{"CS_TAB": "1"}}, true},
-		{"marker unset", revier.Panel{Vars: map[string]string{"CS_TAB": "0"}}, false},
 		{"foreground command", revier.Panel{Command: []string{"claude"}}, true},
+		{"the old marker variable alone claims nothing", revier.Panel{Command: []string{"zsh"}, Vars: map[string]string{"CS_TAB": "1"}}, false},
 		{"absolute path command", revier.Panel{Command: []string{"/home/hans/.local/bin/claude"}}, true},
 		{"an npm install, under node", revier.Panel{Command: []string{"node", "/home/hans/.npm-global/bin/claude"}}, true},
 		{"a file called claude in an editor", revier.Panel{Command: []string{"nvim", "internal/adapter/claude"}}, false},
@@ -34,31 +36,51 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-// The glyph is the level. CS_STATE is consulted only for attention, and never
-// to claim work: a stale "busy" must not paint a running state on an idle pane.
-func TestInspectStatus(t *testing.T) {
-	p := &claude.Probe{}
+func TestStatus(t *testing.T) {
+	cases := map[string]revier.Status{
+		"busy":    revier.StatusRunning,
+		"waiting": revier.StatusAttention,
+		"idle":    revier.StatusIdle,
+		"":        revier.StatusUnknown,
+		"shell":   revier.StatusUnknown,
+		"paused":  revier.StatusUnknown,
+	}
+	for in, want := range cases {
+		if got := claude.Status(in); got != want {
+			t.Errorf("Status(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// statusJSON lists one interactive session per status, by pid, beside a
+// background session, which has none.
+const statusJSON = `[
+  {"id": "22e0eb3a", "kind": "background", "sessionId": "22e0eb3a-0c4c", "state": "blocked"},
+  {"pid": 101, "kind": "interactive", "sessionId": "a", "status": "busy"},
+  {"pid": 102, "kind": "interactive", "sessionId": "b", "status": "waiting", "waitingFor": "permission prompt"},
+  {"pid": 103, "kind": "interactive", "sessionId": "c", "status": "idle"}
+]`
+
+// The state is the listing's, found by pid. The title says nothing about it:
+// a spinner on an idle session and a rest glyph on a busy one both read as the
+// listing says. A pane Claude does not list is unknown, not idle.
+func TestInspectReadsTheListing(t *testing.T) {
+	p := &claude.Probe{Agents: agents(statusJSON, nil), SessionsDir: t.TempDir()}
 	cases := []struct {
 		name  string
-		title string
-		state string
+		panel revier.Panel
 		want  revier.Status
 	}{
-		{"braille spinner means running", "⠧ Investigating setup", "", revier.StatusRunning},
-		{"circle spinner means running", "◑ Refactoring", "", revier.StatusRunning},
-		{"at-rest glyph means idle", "✳ Ready", "", revier.StatusIdle},
-		{"no glyph means idle", "zsh", "", revier.StatusIdle},
-		{"empty title means idle", "", "", revier.StatusIdle},
-		{"attn without a spinner is attention", "✳ Ready", "attn", revier.StatusAttention},
-		{"a stale busy never claims running", "✳ Ready", "busy", revier.StatusIdle},
-		{"waiting is idle", "✳ Ready", "waiting", revier.StatusIdle},
-		{"the spinner wins over attn", "⠧ Working", "attn", revier.StatusRunning},
-		{"an unknown glyph degrades to idle", "☀ Odd", "", revier.StatusIdle},
+		{"busy is running", revier.Panel{PID: 101, Title: "✳ Ready"}, revier.StatusRunning},
+		{"waiting is attention", revier.Panel{PID: 102, Title: "✳ Ready"}, revier.StatusAttention},
+		{"idle is idle", revier.Panel{PID: 103, Title: "⠧ Working"}, revier.StatusIdle},
+		{"a pid not listed is unknown", revier.Panel{PID: 999}, revier.StatusUnknown},
+		{"no pid is unknown", revier.Panel{}, revier.StatusUnknown},
+		{"the old hook variable is not read", revier.Panel{PID: 103, Vars: map[string]string{"CS_STATE": "attn"}}, revier.StatusIdle},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			panel := revier.Panel{Title: tc.title, Vars: map[string]string{"CS_STATE": tc.state}}
-			got, err := p.Inspect(context.Background(), panel)
+			got, err := p.Inspect(context.Background(), tc.panel)
 			if err != nil {
 				t.Fatalf("Inspect: %v", err)
 			}
@@ -69,6 +91,150 @@ func TestInspectStatus(t *testing.T) {
 				t.Errorf("Harness = %q", got.Harness)
 			}
 		})
+	}
+}
+
+func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
+	p := &claude.Probe{Agents: agents(statusJSON, nil), SessionsDir: t.TempDir()}
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101, Title: "⠧ Investigating setup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Activity != "Investigating setup" {
+		t.Errorf("Activity = %q", got.Activity)
+	}
+}
+
+// A listing that cannot be had is the probe's error; the core turns it into
+// unknown for the panel.
+func TestInspectReportsWhatItCannotRead(t *testing.T) {
+	p := &claude.Probe{Agents: agents("", errors.New("exec: claude: not found")), SessionsDir: t.TempDir()}
+	if _, err := p.Inspect(context.Background(), revier.Panel{PID: 101}); err == nil {
+		t.Error("Inspect returned no error")
+	}
+}
+
+// counted answers from a listing the test can change, and counts the runs.
+type counted struct {
+	out  string
+	runs int
+}
+
+func (c *counted) agents(context.Context) ([]byte, error) {
+	c.runs++
+	return []byte(c.out), nil
+}
+
+// clock is a time the test moves by hand.
+type clock struct{ t time.Time }
+
+func (c *clock) now() time.Time { return c.t }
+
+// touch creates the file if it is missing and sets its modification time.
+func touch(t *testing.T, path string, at time.Time) {
+	t.Helper()
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chtimes(path, at, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func inspect(t *testing.T, p *claude.Probe, pid int) revier.Status {
+	t.Helper()
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: pid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got.Status
+}
+
+// The command runs again only when an answer may have changed: a session file
+// written, added or removed, or the listing MaxAge old. Every survey of a
+// quiet desktop reuses the last answer.
+func TestInspectRunsTheListingOnlyWhenASessionChanged(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Unix(1_800_000_000, 0)
+	file := filepath.Join(dir, "101.json")
+	touch(t, file, start)
+	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
+	clk := &clock{t: start}
+	p := &claude.Probe{Agents: src.agents, SessionsDir: dir, Now: clk.now}
+
+	if got := inspect(t, p, 101); got != revier.StatusIdle || src.runs != 1 {
+		t.Fatalf("first read: %v after %d runs, want idle after 1", got, src.runs)
+	}
+
+	// Nothing written: the next surveys reuse the answer, even a stale one.
+	src.out = `[{"pid": 101, "status": "busy"}]`
+	clk.t = start.Add(time.Second)
+	inspect(t, p, 101)
+	clk.t = start.Add(2 * time.Second)
+	if got := inspect(t, p, 101); got != revier.StatusIdle || src.runs != 1 {
+		t.Fatalf("quiet directory: %v after %d runs, want the cached idle after 1", got, src.runs)
+	}
+
+	// Claude Code rewrites its file on a status change.
+	touch(t, file, start.Add(2*time.Second))
+	if got := inspect(t, p, 101); got != revier.StatusRunning || src.runs != 2 {
+		t.Fatalf("file rewritten: %v after %d runs, want running after 2", got, src.runs)
+	}
+
+	// A session that starts adds a file.
+	src.out = `[{"pid": 101, "status": "busy"}, {"pid": 102, "status": "waiting"}]`
+	touch(t, filepath.Join(dir, "102.json"), start)
+	if got := inspect(t, p, 102); got != revier.StatusAttention || src.runs != 3 {
+		t.Fatalf("file added: %v after %d runs, want attention after 3", got, src.runs)
+	}
+
+	// A session that ends removes one.
+	src.out = `[{"pid": 101, "status": "busy"}]`
+	if err := os.Remove(filepath.Join(dir, "102.json")); err != nil {
+		t.Fatal(err)
+	}
+	if got := inspect(t, p, 102); got != revier.StatusUnknown || src.runs != 4 {
+		t.Fatalf("file removed: %v after %d runs, want unknown after 4", got, src.runs)
+	}
+}
+
+// A change the directory does not show is still seen, MaxAge late.
+func TestInspectRunsTheListingAtLeastEveryMaxAge(t *testing.T) {
+	start := time.Unix(1_800_000_000, 0)
+	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
+	clk := &clock{t: start}
+	p := &claude.Probe{Agents: src.agents, SessionsDir: filepath.Join(t.TempDir(), "absent"), Now: clk.now}
+
+	inspect(t, p, 101)
+	src.out = `[{"pid": 101, "status": "waiting"}]`
+	clk.t = start.Add(claude.MaxAge - time.Millisecond)
+	if got := inspect(t, p, 101); got != revier.StatusIdle || src.runs != 1 {
+		t.Fatalf("before MaxAge: %v after %d runs, want the cached idle after 1", got, src.runs)
+	}
+	clk.t = start.Add(claude.MaxAge)
+	if got := inspect(t, p, 101); got != revier.StatusAttention || src.runs != 2 {
+		t.Fatalf("at MaxAge: %v after %d runs, want attention after 2", got, src.runs)
+	}
+}
+
+// The sessions directory follows Claude Code's own configuration home.
+func TestInspectWatchesClaudeConfigDir(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	start := time.Unix(1_800_000_000, 0)
+	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
+	p := &claude.Probe{Agents: src.agents, Now: (&clock{t: start}).now}
+
+	inspect(t, p, 101)
+	touch(t, filepath.Join(home, "sessions", "101.json"), start)
+	inspect(t, p, 101)
+	if src.runs != 2 {
+		t.Errorf("a file under $CLAUDE_CONFIG_DIR/sessions ran the listing %d times, want 2", src.runs)
 	}
 }
 

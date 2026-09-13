@@ -1327,7 +1327,63 @@ action under a name or a key the screen did not know was taken. Actions
 written as an inline array are refused too, because the line editor does not
 find them.
 
-### D57 — targets most projects share are declared once, in config.toml — Accepted
+### D57 — a Claude agent's state comes from `claude agents --json`, not from its title — Accepted
+
+D55 left this open. The Claude probe read state from two terminal signals: the
+glyph at the start of the pane title, and the `CS_STATE` variable a hook set.
+Both reach revier only if the terminal carries them. On tmux the title arrives
+only when tmux accepts the title escape, and `CS_STATE` only when a hook writes
+the `@revier` option (D48). Where either is missing, an agent that waits on a
+permission prompt shows as idle, which is the one state the product exists to
+surface.
+
+The listing D55 already reads carries the state itself. Claude Code derives it
+from its own UI and reports it per session: `status` is `busy` while a turn
+runs, `idle` at rest, and `waiting` while it is blocked on the human, with
+`waitingFor` naming why - `permission prompt`, `input needed`, `sandbox
+request`, `worker request`, `dialog open`. Checked against Claude Code 2.1.270,
+in its binary and in the agent-view documentation, which names `--json` as the
+interface for scripts. `waitingFor` arrived in 2.1.162, and 2.1.212 moved the
+sandbox and MCP-input waits from working to waiting, so 2.1.212 is the oldest
+version whose answer is complete.
+
+So the probe maps the listing, matched to the panel by pid as D55 does:
+`busy` is running, `waiting` is attention, `idle` is idle, and any other value
+is unknown. An unknown value reports unknown and not idle, the opposite of the
+glyph rule it replaces: a status Claude Code adds later is more likely a new
+kind of wait than a new kind of rest. A panel the probe matches with no session
+in the listing is unknown too. The title glyph, `CS_STATE` and `CS_TAB` are no
+longer read; a panel is claimed by its foreground command. The title still
+supplies `Activity`, because the listing carries a session name and no summary
+of the turn, and a title that does not arrive costs the summary and no longer
+the state.
+
+The listing costs a process: about 80 ms and 175 MB each run. Run on every one
+second survey, that is a constant share of a core spent watching. So the probe
+runs it again only when an answer may have changed. Claude Code rewrites
+`~/.claude/sessions/<pid>.json` in place on every status change, and the probe
+compares those files' modification times, and the set of files, against the
+last run. It runs the listing when they differ, and at least every ten seconds
+regardless. Only the times are read. The files' content is not a documented
+interface, and parsing it would make revier depend on it: if Claude Code moves
+or stops touching them, the state still comes from the listing, only up to ten
+seconds late. inotify was considered for the same trigger and rejected: it
+adds a watcher goroutine and a dependency to learn what one directory read per
+survey already tells.
+
+The cached answer makes `Inspect` read state the core did not pass in, which
+D47 kept it free of. The source is injected, as `Sessions` already injects
+`Agents`, so the probe stays testable at layer L1. The port does not change:
+the cache is a fact about one tool, and it stays in the adapter.
+
+What this does not cover. A Claude session in a container writes to the
+container's home and reports pids from another namespace; containers are
+unsupported (D40), and such a panel reports unknown. An agent on another
+machine is already its host's word (D40), read by the revier there through the
+same listing. `claude` typed into a tmux shell is not matched by pid, the limit
+D55 records, and now reports unknown where it once read its title.
+
+### D58 — targets most projects share are declared once, in config.toml — Accepted
 
 Narrows D14: a target is still a named binding a project has, but a project
 file no longer has to declare every target it has.
@@ -1371,9 +1427,9 @@ project's own window, and it spares every shared match an escaping function.
 D30's `revier new` template still escapes it, as the file it writes has its
 own match.
 
-### D58 — shared targets are edited on the config screen — Accepted
+### D59 — shared targets are edited on the config screen — Accepted
 
-Narrows D57: the shared targets it put in `config.toml` are on the screen, with
+Narrows D58: the shared targets it put in `config.toml` are on the screen, with
 add, change and delete, as D56 put the actions there.
 
 The screen lists each shared target by key, name and where it opens. Enter

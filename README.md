@@ -17,7 +17,7 @@ territory.
 Early, but usable. Linux only.
 
 Working: project files, run-or-raise with toggle-back, the project resolved
-from the focused window, agent state for Claude Code (opencode is recognised
+from the focused window, agent state for Claude Code 2.1.212 or newer (opencode is recognised
 but reports no state), external probes, kitty and tmux runtime hosts, GNOME and
 sway window hosts, claim-on-appear for windows opened after a launch, the TUI,
 every command below, and the GNOME keybindings under `contrib/`.
