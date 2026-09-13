@@ -20,6 +20,9 @@ type hovered struct {
 	index int
 }
 
+// pointerCell is the terminal cell the pointer is on.
+type pointerCell struct{ x, y int }
+
 func (h hovered) is(k hoverKind, index int) bool {
 	return h.kind == k && h.index == index
 }

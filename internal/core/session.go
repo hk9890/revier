@@ -67,19 +67,18 @@ type RestoreStep struct {
 // live id with no launch argv anywhere in the model, so there is nothing to
 // record that would bring one back. The caller reports how many were dropped.
 //
-// Unnamed is the number of agent panels recorded without a conversation, so a
-// save can say so while the agents are still running. A resume that cannot
-// happen is otherwise found after the reboot, which is the worst moment.
-// Failed holds why a probe could not answer at all - claude not on PATH - so
-// those agents are not mistaken for the ones no listing could match. Neither
+// What the save could not record is returned beside it, so a save can say so
+// while the agents are still running. A resume that cannot happen is
+// otherwise found after the reboot, which is the worst moment. None of it
 // fails the save.
-func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName) (s session.Session, unnamed int, failed []error) {
+func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName) (session.Session, SessionGaps) {
 	byRef := make(map[string]revier.Instance, len(r.Instances))
 	for _, inst := range r.Instances {
 		byRef[key(inst.Ref)] = inst
 	}
 
-	s = session.Session{Current: current}
+	s := session.Session{Current: current}
+	var gaps SessionGaps
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets []session.Target
@@ -94,8 +93,14 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			if !ok {
 				continue
 			}
+			specs := runtimePanels(v.Project, tv.Name)
 			for i, panel := range inst.Panels {
-				if probe, ok := c.probeFor(panel); ok {
+				probe, ok := c.probeFor(panel)
+				switch {
+				case !ok:
+				case !agentAt(specs, i):
+					gaps.Undeclared++
+				default:
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
 						index: i, panel: panel, probe: probe,
@@ -109,15 +114,47 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	}
 
 	ids, failed := c.conversations(ctx, agents)
+	gaps.Failed = failed
 	for i, a := range agents {
 		if ids[i] == "" {
-			unnamed++
+			gaps.Unnamed++
 			continue
 		}
 		t := &s.Projects[a.project].Targets[a.target]
 		t.Panels = append(t.Panels, session.Panel{Index: a.index, Harness: a.probe.Name(), Session: ids[i]})
 	}
-	return s, unnamed, failed
+	return s, gaps
+}
+
+// SessionGaps is what a save found open and could not record.
+//
+// Unnamed is the agent panels recorded without a conversation. Undeclared is
+// the agents running in a panel the project does not declare kind = "agent":
+// restore resumes only into a declared agent, so their conversation is not
+// recorded at all. Failed holds why a probe could not answer - claude not on
+// PATH - so those agents are not mistaken for the ones no listing could match.
+type SessionGaps struct {
+	Unnamed    int
+	Undeclared int
+	Failed     []error
+}
+
+// runtimePanels is the panels the named target's runtime realization
+// declares, in the order a runtime lays them out.
+func runtimePanels(p revier.Project, name revier.TargetName) []revier.PanelSpec {
+	for _, t := range p.Targets {
+		if t.Name == name && t.Runtime != nil {
+			return t.Runtime.Panels
+		}
+	}
+	return nil
+}
+
+// agentAt reports whether a position of a layout is a declared agent: the one
+// place a resume is written, so a layout edited since the save does not get a
+// resume flag typed into a shell.
+func agentAt(panels []revier.PanelSpec, i int) bool {
+	return i >= 0 && i < len(panels) && panels[i].Kind == revier.PanelAgent
 }
 
 // agentPanel is one panel a probe claimed, and where its conversation goes in
@@ -240,7 +277,7 @@ func resumesOf(t session.Target) []Resume {
 }
 
 // resuming returns the realization with its agent panels started on the
-// conversations they held. A resume that nothing here can honour - a probe
+// conversations they held, and how many it started so. A resume that nothing here can honour - a probe
 // this machine does not run, one without the capability, a position the
 // project no longer declares as an agent - is dropped, and that panel starts
 // empty. The agent check is what keeps a layout edited since the save from
@@ -249,10 +286,11 @@ func resumesOf(t session.Target) []Resume {
 // The panel slice is copied before anything is written to it: the realization
 // arrives sharing the prepared project's panels, and a restore must not edit
 // the project every later keypress reads.
-func (c *Core) resuming(real revier.Realization, resumes []Resume) revier.Realization {
+func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, int) {
 	var panels []revier.PanelSpec
+	honoured := 0
 	for _, r := range resumes {
-		if r.Index < 0 || r.Index >= len(real.Panels) || real.Panels[r.Index].Kind != revier.PanelAgent {
+		if !agentAt(real.Panels, r.Index) {
 			continue
 		}
 		probe, ok := c.probeNamed(r.Harness)
@@ -267,11 +305,27 @@ func (c *Core) resuming(real revier.Realization, resumes []Resume) revier.Realiz
 			panels = append([]revier.PanelSpec(nil), real.Panels...)
 		}
 		panels[r.Index].Command = res.ResumeCommand(panels[r.Index], r.Session)
+		honoured++
 	}
 	if panels != nil {
 		real.Panels = panels
 	}
-	return real
+	return real, honoured
+}
+
+// Resumes is how many of a step's resumes a launch of the target would honour
+// now, for a dry run that says what a restore would do.
+func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) int {
+	i, ok := p.index(name)
+	if !ok {
+		return 0
+	}
+	_, real, _, err := c.resolveAt(p, i)
+	if err != nil {
+		return 0
+	}
+	_, n := c.resuming(real, resumes)
+	return n
 }
 
 func (c *Core) probeNamed(name string) (revier.AgentProbe, bool) {

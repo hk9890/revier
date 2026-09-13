@@ -49,12 +49,22 @@ const (
 // up and down move the list, enter activates, esc goes back. Without this
 // split the input would swallow the keys that drive the list.
 func (m Model) promptKey(msg tea.KeyMsg) bool {
+	if altRune(msg) {
+		return false
+	}
 	switch msg.Type {
 	case tea.KeyRunes, tea.KeySpace, tea.KeyBackspace, tea.KeyDelete,
 		tea.KeyLeft, tea.KeyRight, tea.KeyHome, tea.KeyEnd:
 		return true
 	}
 	return slices.Contains(queryKeys, msg.String())
+}
+
+// altRune reports an alt chord of a printable key. It is a key of the
+// surface's, or of nothing, and never text: a field that took it would type
+// its letter, so alt+h on the new-project screen wrote an h into the path.
+func altRune(msg tea.KeyMsg) bool {
+	return msg.Type == tea.KeyRunes && msg.Alt
 }
 
 // queryKeys are word and line editing, the readline keys a query field is

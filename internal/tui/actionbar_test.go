@@ -5,12 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 )
 
@@ -109,6 +111,61 @@ func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
 		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// With shared targets in config.toml the written file declares none of its
+// own, so the screen names the shared targets rather than promise the
+// template's agent, shell and editor.
+func TestTheNewProjectScreenNamesTheSharedTargets(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	shared := []map[string]any{{
+		"name": "browser",
+		"window": map[string]any{
+			"launch": []any{"firefox"}, "match": map[string]any{"class": "^firefox$"},
+		},
+	}}
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
+	m = resize(m, 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "~/dev/widget")
+
+	body := strings.Join(lines(m), "\n")
+	if !strings.Contains(body, "shared targets: browser") {
+		t.Errorf("screen = %q, want the shared targets named", body)
+	}
+	if strings.Contains(body, "an agent, a shell and an editor") {
+		t.Errorf("screen = %q, want no promise of the template's targets", body)
+	}
+}
+
+// An alt chord is a key, not text: pressed on the new-project screen, or on the
+// list, it types nothing.
+func TestAnAltChordTypesNothing(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	alt := func(m tui.Model, r rune) tui.Model {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true})
+		return next.(tui.Model)
+	}
+
+	m = alt(m, 'x')
+	if q := query(m); strings.Contains(q, "x") {
+		t.Errorf("query = %q after alt+x, want nothing typed", q)
+	}
+	m = alt(m, 'n')
+	m = typeInto(m, "/tmp/w")
+	m = alt(m, 'c')
+	m = alt(m, 'x')
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
+		t.Fatalf("top line = %q, want the new-project screen still up", head)
+	}
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "/tmp/w\n") {
+		t.Errorf("screen = %q, want the path as typed and no letter of an alt chord", body)
 	}
 }
 
@@ -229,6 +286,41 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 	before := m.View()
 	if m = motion(m, x, y); m.View() == before {
 		t.Error("the pane is unchanged with the pointer on a target")
+	}
+}
+
+// The light follows what is under the pointer, not the index it was on: after
+// the keyboard scrolls the list, the surface is the one a fresh move of the
+// pointer to the same cell draws.
+func TestThePointerLightStaysOnWhatIsUnderIt(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 12)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
+	_, mc := margins(m)
+	x, y := mc+6, rowTop(m)
+
+	got := motion(m, x, y)
+	for range 11 {
+		got, _ = press(got, "down")
+	}
+	if want := motion(got, x, y); got.View() != want.View() {
+		t.Errorf("after a scroll the light is not on the row under the pointer:\n%s\nwant:\n%s", got.View(), want.View())
+	}
+}
+
+// Moving the pointer within one row redraws nothing that differs.
+func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	_, mc := margins(m)
+
+	m = motion(m, mc+6, rowTop(m)+2)
+	before := m.View()
+	if m = motion(m, mc+9, rowTop(m)+2); m.View() != before {
+		t.Error("the surface changed with the pointer still on the same row")
 	}
 }
 

@@ -59,11 +59,32 @@ func TestClassifySeesTheShellCannotFindRevier(t *testing.T) {
 		{"zsh", "zsh:1: command not found: revier", exitErr(t, "127")},
 		{"bash", "bash: line 1: revier: command not found", exitErr(t, "127")},
 		{"powershell", "The term 'revier' is not recognized as a name of a cmdlet.", exitErr(t, "1")},
+		{"dash", "sh: 1: revier: not found", exitErr(t, "127")},
+		{"fish", "fish: Unknown command: revier", exitErr(t, "127")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ssh.Classify("box", nil, tc.stderr, tc.err).Error()
 			if !strings.Contains(got, "PATH ssh gives") {
 				t.Errorf("classify = %q, want the PATH named", got)
+			}
+		})
+	}
+}
+
+// A revier that ran and could not find a command of its own is not a revier
+// missing from the PATH: its words are passed through.
+func TestClassifyDoesNotReadAnotherMissingCommandAsRevier(t *testing.T) {
+	for _, tc := range []struct {
+		name, stderr string
+		err          error
+	}{
+		{"exit 1", "probe: sh: mise: command not found", exitErr(t, "1")},
+		{"exit 127", "sh: 1: mise: not found", exitErr(t, "127")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ssh.Classify("box", []string{"revier", "list"}, tc.stderr, tc.err).Error()
+			if strings.Contains(got, "PATH ssh gives") || !strings.Contains(got, "mise") {
+				t.Errorf("classify = %q, want the remote's own words passed through", got)
 			}
 		})
 	}

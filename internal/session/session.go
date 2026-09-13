@@ -29,9 +29,10 @@ import (
 )
 
 // ErrNoSession is returned when no stored session answers the request: an
-// empty store, or a name and id that name none. It is a normal outcome - the
-// first restore on a machine that never saved - and the caller says so rather
-// than reporting a failure.
+// empty store, or a name and id that name none. An empty store asked for the
+// newest session is a normal outcome - the first restore on a machine that
+// never saved - and the caller says so rather than reporting a failure. A
+// name that names nothing is a typo, and is one.
 var ErrNoSession = errors.New("no stored session")
 
 // Session is one recorded set of open projects.

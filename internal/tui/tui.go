@@ -66,6 +66,23 @@ const (
 	dialogHelp
 )
 
+// hasRows reports a screen whose body is list rows: what a click selects and
+// the wheel moves through. Every other screen stands over the project list
+// with text of its own, and a press must not reach a row nobody can see.
+func (d dialog) hasRows() bool {
+	switch d {
+	case dialogNone, dialogHosts, dialogRemote:
+		return true
+	}
+	return false
+}
+
+// hasPane reports a screen with the detail pane beside it. The help and
+// config screens are about no project, so they take the whole width.
+func (d dialog) hasPane() bool {
+	return d != dialogHelp && d != dialogConfig
+}
+
 // Model is the bubbletea model. Construct it with New.
 type Model struct {
 	core      *core.Core
@@ -117,6 +134,7 @@ type Model struct {
 	path   textinput.Model                  // the directory field of the new-project screen
 	lname  textinput.Model                  // the name field of the link dialog's last step
 	over   hovered                          // what the pointer is on
+	cell   *pointerCell                     // where the pointer last was, nil before it moved
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
 	// proposed is whether the link's name is still the one offered, which
@@ -264,8 +282,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return next, cmd
 	}
+	// The pointer moving within one row, or over nothing, changes nothing on
+	// the screen, and a terminal reports every cell it crosses.
+	if mouse, ok := msg.(tea.MouseMsg); ok && mouse.Action == tea.MouseActionMotion && mm.over == m.over {
+		return mm, cmd
+	}
 	mm.syncDetail()
 	mm.syncBody()
+	// A key, a survey or a screen change can move what is under a pointer
+	// that stayed where it was, so what it is over is asked again.
+	if mm.cell != nil {
+		if over := mm.hoverAt(mm.cell.x, mm.cell.y); over != mm.over {
+			mm.over = over
+			mm.syncDetail()
+			mm.syncBody()
+		}
+	}
 	return mm, cmd
 }
 

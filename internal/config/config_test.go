@@ -616,6 +616,8 @@ func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
 		"ctrl-shift-y": "reaches a terminal as ctrl+y",
 		"super-y":      "never reaches a terminal",
 		"<Nonsense>y":  "Nonsense",
+		"alt-c":        "one of revier's own keys",
+		"ctrl-n":       "one of revier's own keys",
 	} {
 		root := t.TempDir()
 		write(t, root, "config.toml", "[[action]]\nkey = \""+key+"\"\nname = \"sync\"\nrun = [\"true\"]\n")

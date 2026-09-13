@@ -55,6 +55,9 @@ func (m Model) newKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Enter):
 		return m.createProject()
 	}
+	if altRune(msg) {
+		return m, nil
+	}
 	m.err = nil
 	in, cmd := m.path.Update(msg)
 	m.path = in
@@ -71,7 +74,7 @@ func (m Model) createProject() (tea.Model, tea.Cmd) {
 		m.err = fmt.Errorf("give the directory of the project to add")
 		return m, nil
 	}
-	dir = expandHome(dir)
+	dir = config.ExpandHome(dir)
 	if !filepath.IsAbs(dir) {
 		abs, err := filepath.Abs(dir)
 		if err != nil {
@@ -124,25 +127,26 @@ func (m Model) newScreen() string {
 		return say(th.NameDim, "The directory of a project on this machine.") + "\n" +
 			say(th.Meta, "Its name is the directory's own.")
 	}
-	name := config.NameFor(expandHome(dir))
+	name := config.NameFor(config.ExpandHome(dir))
 	root, err := config.Root()
 	if err != nil {
 		return say(th.Attention, err.Error())
 	}
 	return say(th.NameDim, "Enter writes") + "\n" +
 		say(th.Path, contractHome(config.ProjectFile(root, name))) + "\n" +
-		say(th.Meta, fmt.Sprintf("an agent, a shell and an editor for %q", name))
+		say(th.Meta, m.newTargets(name))
 }
 
-// expandHome resolves a leading "~" against the user's home directory, so a
-// path typed the way it is spoken reaches the file system.
-func expandHome(p string) string {
-	if p != "~" && !strings.HasPrefix(p, "~/") {
-		return p
+// newTargets says what the written project will run. With shared targets in
+// config.toml the file declares no targets of its own, and the project gets
+// the shared ones.
+func (m Model) newTargets(name revier.ProjectName) string {
+	if len(m.targets) == 0 {
+		return fmt.Sprintf("an agent, a shell and an editor for %q", name)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return p
+	names := make([]string, len(m.targets))
+	for i, t := range m.targets {
+		names[i] = string(t.Name)
 	}
-	return filepath.Join(home, strings.TrimPrefix(p, "~"))
+	return fmt.Sprintf("%q with the shared targets: %s", name, strings.Join(names, ", "))
 }

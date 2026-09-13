@@ -302,6 +302,9 @@ func (m Model) linkNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Enter):
 		return m.writeLink()
 	}
+	if altRune(msg) {
+		return m, nil
+	}
 	m.err = nil
 	if m.proposed && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
 		m.lname.SetValue("")

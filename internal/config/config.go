@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -133,7 +134,7 @@ func parse(data []byte) (*Config, error) {
 		if pr.Name == "" || pr.Exec == "" {
 			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
 		}
-		cfg.Probes[i].Exec = expandHome(pr.Exec)
+		cfg.Probes[i].Exec = ExpandHome(pr.Exec)
 	}
 
 	if _, err := cfg.Theme(); err != nil {
@@ -166,10 +167,20 @@ func (c *Config) TriggerKey() (core.Chord, error) {
 	return core.ParseChord(c.UI.TriggerKey)
 }
 
+// SurfaceKeys are the chords the TUI answers to itself, ahead of any action:
+// moving, quitting, editing and deleting a project file, and the action bar's
+// buttons. Only the ctrl and alt chords are here, because an action can have
+// no other key.
+var SurfaceKeys = []core.Chord{
+	"ctrl+p", "ctrl+n", "ctrl+c",
+	"alt+e", "alt+d",
+	"alt+n", "alt+r", "alt+c", "alt+h",
+}
+
 // validateActions refuses an action the TUI can never run. An action's key is
 // the TUI's alone - no desktop binding carries it - so a key the terminal
-// does not deliver, or one the filter takes as typed text, does nothing, and
-// the only place to say so is here.
+// does not deliver, one the filter takes as typed text, or one the TUI takes
+// for itself does nothing, and the only place to say so is here.
 func validateActions(actions []Action) error {
 	var errs []error
 	for _, act := range actions {
@@ -189,6 +200,8 @@ func validateActions(actions []Action) error {
 			errs = append(errs, fmt.Errorf("action %q: key %q never reaches a terminal", act.Name, act.Key))
 		case sent != chord:
 			errs = append(errs, fmt.Errorf("action %q: key %q reaches a terminal as %s; bind that instead", act.Name, act.Key, sent))
+		case slices.Contains(SurfaceKeys, chord):
+			errs = append(errs, fmt.Errorf("action %q: key %q is one of revier's own keys; give it another", act.Name, act.Key))
 		}
 	}
 	return errors.Join(errs...)
@@ -258,14 +271,14 @@ func LoadProject(path string, shared []map[string]any) (core.Project, error) {
 	// path is the host's, kept as written: the home directory here says
 	// nothing about the one there.
 	if p.Remote == nil {
-		p.Path = expandHome(p.Path)
+		p.Path = ExpandHome(p.Path)
 	} else {
 		link(&p)
 	}
 	for _, t := range p.Targets {
 		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
 			if r != nil {
-				r.Dir = expandHome(r.Dir)
+				r.Dir = ExpandHome(r.Dir)
 			}
 		}
 	}
@@ -470,8 +483,9 @@ func oneWord(s string) error {
 // https://user:token@host/...
 var httpsUserinfo = regexp.MustCompile(`^https://[^/]+@`)
 
-// expandHome resolves a leading "~" against the user's home directory.
-func expandHome(p string) string {
+// ExpandHome resolves a leading "~" against the user's home directory, so a
+// path typed the way it is spoken reaches the file system.
+func ExpandHome(p string) string {
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p
 	}
