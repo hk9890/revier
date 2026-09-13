@@ -36,6 +36,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m, nil
 	}
+	m.cell = &pointerCell{x: msg.X, y: msg.Y}
 	m.over = m.hoverAt(msg.X, msg.Y)
 	// The new-project and config screens have no list rows: the project list
 	// is behind them, and a click or a notch must not move a selection nobody

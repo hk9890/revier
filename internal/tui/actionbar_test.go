@@ -261,6 +261,41 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 	}
 }
 
+// The light follows what is under the pointer, not the index it was on: after
+// the keyboard scrolls the list, the surface is the one a fresh move of the
+// pointer to the same cell draws.
+func TestThePointerLightStaysOnWhatIsUnderIt(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 12)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
+	_, mc := margins(m)
+	x, y := mc+6, rowTop(m)
+
+	got := motion(m, x, y)
+	for range 11 {
+		got, _ = press(got, "down")
+	}
+	if want := motion(got, x, y); got.View() != want.View() {
+		t.Errorf("after a scroll the light is not on the row under the pointer:\n%s\nwant:\n%s", got.View(), want.View())
+	}
+}
+
+// Moving the pointer within one row redraws nothing that differs.
+func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	_, mc := margins(m)
+
+	m = motion(m, mc+6, rowTop(m)+2)
+	before := m.View()
+	if m = motion(m, mc+9, rowTop(m)+2); m.View() != before {
+		t.Error("the surface changed with the pointer still on the same row")
+	}
+}
+
 // rowTop is the terminal row the first row of the list is on.
 func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
