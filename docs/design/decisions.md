@@ -975,8 +975,12 @@ A host that fails says why in one line of revier's own words, not in ssh's.
 out the remedy; ``host key not known - run `ssh router` once to accept it`` is
 the same fault with the next step in it. The failures worth naming are ssh's
 usual ones - an unknown host key, a refused key, a name that does not resolve,
-nothing on port 22 - and the two the other end gives: a machine with no revier
-on it, and a code-hosting service, which answers and runs nothing. ssh's own
+nothing on port 22 - and the two the other end gives: a shell that cannot find
+revier, and a code-hosting service, which answers and runs nothing. The shell
+that cannot find revier is not told it is not installed, because it usually
+is: a shim under a version manager is on an interactive shell's PATH and not
+on the PATH an ssh command gets, so the line names the PATH and where the
+shims belong. ssh's own
 are told from the remote's by the status it exits with, 255 and nothing
 else's, so a remote revier that says "permission denied" about a file of its
 own is not read as a refused key. Anything unrecognised passes through whole,

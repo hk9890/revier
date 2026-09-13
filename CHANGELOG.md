@@ -17,8 +17,8 @@ tag.
 - **A host that cannot be reached says what to do about it.** The remote
   dialog and `revier link` turn ssh's usual failures into one line each: an
   unknown host key, a refused key, a name that does not resolve, nothing on
-  port 22, a machine with no revier installed, a code-hosting service that
-  runs nothing.
+  port 22, a revier the PATH of an ssh command does not reach, a code-hosting
+  service that runs nothing.
 - **The pointer lights what it is over.** Rows, targets and buttons take a
   background a step below the selection's. A click on a project selects it and
   a double click opens it; one click runs a target or a button.

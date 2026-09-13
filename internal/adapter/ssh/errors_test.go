@@ -50,7 +50,7 @@ func TestClassifyNamesTheCauseAndTheRemedy(t *testing.T) {
 
 // A shell that cannot find revier says so in its own words, which differ by
 // shell and by platform. The status it exits with does not.
-func TestClassifySeesRevierIsNotInstalled(t *testing.T) {
+func TestClassifySeesTheShellCannotFindRevier(t *testing.T) {
 	for _, tc := range []struct {
 		name, stderr string
 		err          error
@@ -62,8 +62,8 @@ func TestClassifySeesRevierIsNotInstalled(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ssh.Classify("box", nil, tc.stderr, tc.err).Error()
-			if !strings.Contains(got, "revier is not installed there") {
-				t.Errorf("classify = %q, want revier named as missing", got)
+			if !strings.Contains(got, "PATH ssh gives") {
+				t.Errorf("classify = %q, want the PATH named", got)
 			}
 		})
 	}

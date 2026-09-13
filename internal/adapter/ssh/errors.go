@@ -64,7 +64,7 @@ func classify(ctx context.Context, host string, args []string, stderr string, er
 		return reason(host, say)
 	}
 	if isNotFound(low, err) {
-		return reason(host, "reachable, but revier is not installed there")
+		return reason(host, "no revier on the PATH ssh gives - put mise or asdf shims in ~/.zshenv")
 	}
 	if errors.Is(err, exec.ErrNotFound) {
 		return reason(host, "no ssh on this machine")
@@ -96,9 +96,11 @@ func status(err error) int {
 	return -1
 }
 
-// isNotFound reports whether the remote shell could not find revier: the
-// status it exits with, or, for a shell that exits with something of its own,
-// the words it says.
+// isNotFound reports whether the remote shell could not find revier. It is
+// not the same as revier not being installed, and the message does not say
+// it is: a shim under a version manager is on the PATH of an interactive
+// shell and not on the one an ssh command gets, so the machine that answers
+// "command not found" is as often as not a machine with revier on it.
 func isNotFound(low string, err error) bool {
 	if notFound[status(err)] {
 		return true
