@@ -92,6 +92,8 @@ type Model struct {
 	shared    []map[string]any // config.toml's shared targets, for a project file read again
 	refresh   time.Duration
 	theme     theme.Theme
+	frame     int  // the spinner frame a working agent shows
+	spinning  bool // whether a spin tick is out, so a survey starts no second one
 
 	views    []revier.ProjectView // attention first, then config order
 	windows  []revier.Instance    // the window host's listing at the last survey
@@ -201,6 +203,16 @@ type windowMsg struct {
 }
 
 type tickMsg struct{}
+
+// spinMsg advances the working spinner. It runs on its own timer, because
+// the survey's is seconds long and a spinner that fast does not read as one.
+type spinMsg struct{}
+
+const spinInterval = 120 * time.Millisecond
+
+func spin() tea.Cmd {
+	return tea.Tick(spinInterval, func(time.Time) tea.Msg { return spinMsg{} })
+}
 
 // actedMsg follows a Go, a Focus, or an action; the next survey shows the
 // result. Its state changes are applied here, on the update loop, and never
@@ -315,7 +327,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
 		}
+		if !m.spinning && m.anyWorking() {
+			m.spinning = true
+			return m, tea.Batch(tick(m.refresh), spin())
+		}
 		return m, tick(m.refresh)
+	case spinMsg:
+		// The spinner stops when nothing works, so an idle surface does not
+		// redraw; the next survey that finds a working agent starts it again.
+		if !m.anyWorking() {
+			m.spinning = false
+			return m, nil
+		}
+		m.frame++
+		return m, spin()
 	case windowMsg:
 		if !msg.ok {
 			return m, nil // the watcher ended; polling still claims
@@ -847,4 +872,28 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}), true
 	}
 	return nil, false
+}
+
+// anyWorking reports an agent in a turn anywhere on the surface, the pane's
+// included: a project's row shows its worst agent, and a working one can sit
+// behind one that needs you.
+func (m Model) anyWorking() bool {
+	for _, v := range m.views {
+		for _, a := range v.Agents {
+			if a.State.Status == revier.StatusRunning {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// spun is the theme with the working glyph at the current spinner frame, for
+// the rows and the pane.
+func (m Model) spun() theme.Theme {
+	th := m.theme
+	if len(th.Spinner) > 0 {
+		th.Glyphs.Working = th.Spinner[m.frame%len(th.Spinner)]
+	}
+	return th
 }

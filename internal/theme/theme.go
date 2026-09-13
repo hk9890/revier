@@ -25,6 +25,10 @@ import (
 type Theme struct {
 	Name   string
 	Glyphs Glyphs
+	// Spinner is the frames a working agent's glyph cycles through in the
+	// rows and the pane. The header's count keeps Glyphs.Working, because a
+	// count that moves draws the eye to a number that needs nothing.
+	Spinner []string
 
 	Header      lipgloss.Style // the name a dialog gives itself
 	Heading     lipgloss.Style // a section title in the detail pane
@@ -92,18 +96,19 @@ type Glyphs struct {
 //
 // The unicode agent glyphs are one family: a diamond for an agent waiting on
 // the user, solid when it is blocked on an answer and hollow when it has only
-// finished its turn, and a play mark for one that is working.
+// finished its turn. A working agent's glyph is a spinner's first frame in
+// every set: the rows animate it, and the header shows it still.
 var glyphSets = map[string]Glyphs{
 	"unicode": {
 		Running: "\u25cf", Stopped: "\u25cb", Cursor: "\u258c",
-		NeedsYou: "\u25c6", Working: "\u25b6", Idle: "\u25c7", Unknown: "?",
+		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
 	},
 	"nerd": {
 		Running:  "\uf111", // nf-fa-circle
 		Stopped:  "\uf10c", // nf-fa-circle_o
 		Cursor:   "\u258c", // a half block, as in the unicode set
 		NeedsYou: "\uf0f3", // nf-fa-bell
-		Working:  "\uf110", // nf-fa-spinner
+		Working:  "\u280b", // braille, the first spinner frame
 		Idle:     "\uf04c", // nf-fa-pause
 		Unknown:  "\uf128", // nf-fa-question
 		Folder:   "\uf07b", // nf-fa-folder
@@ -112,9 +117,19 @@ var glyphSets = map[string]Glyphs{
 	},
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
-		NeedsYou: "!", Working: "~", Idle: ".", Unknown: "?",
+		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
 	},
 }
+
+// spinners are the frames per glyph set. Nerd takes the braille frames too:
+// the font's spinner icons are rotations of one picture, not a sequence.
+var spinners = map[string][]string{
+	"unicode": brailleFrames,
+	"nerd":    brailleFrames,
+	"ascii":   {"|", "/", "-", "\\"},
+}
+
+var brailleFrames = []string{"\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"}
 
 var flavors = map[string]catppuccin.Flavor{
 	"catppuccin-mocha":     catppuccin.Mocha,
@@ -161,7 +176,9 @@ func Lookup(name, glyphs string) (Theme, error) {
 	if !ok {
 		return Theme{}, &UnknownError{Kind: "glyph set", Name: glyphs, Valid: GlyphSets()}
 	}
-	return fromFlavor(name, f, g), nil
+	t := fromFlavor(name, f, g)
+	t.Spinner = spinners[glyphs]
+	return t, nil
 }
 
 // fromFlavor maps a Catppuccin flavour onto the roles. The mapping follows the
