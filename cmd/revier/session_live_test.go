@@ -22,7 +22,6 @@ import (
 // how the test reads back whether the restore resumed it. It runs under the
 // name claude so the Claude probe claims it.
 const sessionAgent = `printf '%s' "$*" > "$0.args"
-printf '\033]2;%s\033\\' '✳ Ready'
 sleep 300
 `
 
@@ -67,32 +66,38 @@ func work(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, "projects", "work.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fakeClaude(t)
 	capture(t, "open", "work")
 	capture(t, "go", "notes", "-p", "work")
 	return agent + ".args"
 }
 
-// agentsFile is where the fake claude reads what `claude agents --json`
-// prints. It starts as an empty listing: no conversation is known.
-var agentsFile string
+// claudeBin is the directory holding the fake claude, and sessionsDir the
+// sessions directory it answers from.
+var claudeBin, sessionsDir string
 
-// fakeClaude puts a claude first on PATH that answers `agents --json` from
-// agentsFile, so the probe asks the real command line it asks in use while the
-// test decides the answer. It also keeps the suite from reading the user's
-// real sessions, and lets it run where Claude Code is not installed.
+// fakeClaude puts a claude first on PATH whose `agents --json` lists the files
+// in a scratch sessions directory, one session each, and points
+// CLAUDE_CONFIG_DIR at it. A stand-in agent reports its state the way Claude
+// Code does, by writing its file there, and the probe asks the real command
+// line it asks in use. It also keeps the suite from reading the user's real
+// sessions, and lets it run where Claude Code is not installed.
 func fakeClaude(t *testing.T) {
 	t.Helper()
-	bin := t.TempDir()
-	agentsFile = filepath.Join(bin, "agents.json")
-	if err := os.WriteFile(agentsFile, []byte("[]"), 0o644); err != nil {
+	claudeBin = t.TempDir()
+	home := t.TempDir()
+	sessionsDir = filepath.Join(home, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\n[ \"$1 $2\" = 'agents --json' ] || exit 2\ncat '" + agentsFile + "'\n"
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
+	script := "#!/bin/sh\n[ \"$1 $2\" = 'agents --json' ] || exit 2\n" +
+		"sep=''; printf '['\n" +
+		"for f in '" + sessionsDir + "'/*.json; do [ -e \"$f\" ] || continue; printf '%s' \"$sep\"; cat \"$f\"; sep=','; done\n" +
+		"printf ']'\n"
+	if err := os.WriteFile(filepath.Join(claudeBin, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", claudeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
 }
 
 // tmuxRun runs a tmux command against the test's own server.
@@ -129,8 +134,8 @@ func markConversation(t *testing.T, id string) {
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		pid, cmd, ok := strings.Cut(line, " ")
 		if ok && cmd == "claude" {
-			listing := `[{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "status": "idle"}]`
-			if err := os.WriteFile(agentsFile, []byte(listing), 0o644); err != nil {
+			session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "status": "idle"}`
+			if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			return
@@ -232,7 +237,7 @@ func TestSessionSaveNamesAgentsItCannotResume(t *testing.T) {
 func TestSessionSaveSaysWhyItCouldNotAsk(t *testing.T) {
 	work(t)
 	broken := "#!/bin/sh\necho 'claude: not logged in' >&2\nexit 1\n"
-	if err := os.WriteFile(filepath.Join(filepath.Dir(agentsFile), "claude"), []byte(broken), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(claudeBin, "claude"), []byte(broken), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	save := capture(t, "session", "save")

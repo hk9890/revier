@@ -9,6 +9,14 @@ tag.
 
 ## Unreleased
 
+- **A Claude agent's state is what Claude Code reports.** revier reads
+  `claude agents --json`, so a permission prompt or a question shows as
+  attention on tmux as well as kitty, with no hook to install. The listing runs
+  again when a session changes, and at least every ten seconds. The pane title
+  is the activity line only, and `CS_STATE` and `CS_TAB` are no longer read.
+  Needs Claude Code 2.1.212 or newer; a pane Claude Code does not list reads
+  as unknown.
+
 - **A top line of actions: new, remote, config, help.** Each is a button and a
   key. alt+n adds a project from a directory on this machine, writing the file
   `revier new` writes; alt+r is the remote link dialog; alt+c is the
