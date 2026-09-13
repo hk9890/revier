@@ -1210,3 +1210,25 @@ still `revier keys apply`'s to change.
 
 Configured actions and probes are not on the screen yet. They are lists of
 records, and they are still edited in the file.
+
+### D54 — alt+h lists every key, read from where each key is declared — Accepted
+
+Extends D49 with a fourth button, beside the config screen of D53.
+
+The footer names the keys of the focus and the row under the cursor, and a
+narrow terminal cuts the rest with an ellipsis. The query's editing keys, the
+target keys of other projects and the desktop keys were on no screen at all,
+so a key used once a week had to be looked up in the configuration.
+
+help (alt+h) stands in the list's place and lists them all, grouped by what
+they act on: the list, the pane, the selected project, the top bar, the
+query, the target keys, the configured actions, and the desktop keys `revier
+keys install` claims. Each is read from its declaration - the key map, the
+bar, the target vocabulary, `[ui] trigger_key` - so the screen cannot name a
+key a press does not match. A target key the terminal delivers as another
+chord is listed under the chord that reaches the surface, and a desktop key
+that reaches it as nothing is listed only under the desktop.
+
+The screen takes the full width, because it is about no project and the pane
+would be empty. It only reads: the arrows and the wheel scroll it, Esc or
+alt+h leave it, and a typed letter reaches no filter behind it.

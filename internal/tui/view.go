@@ -120,6 +120,8 @@ func (m Model) top() string {
 		name = "add a project on this machine"
 	case dialogConfig:
 		name = "configuration"
+	case dialogHelp:
+		name = "keyboard shortcuts"
 	default:
 		return m.bar()
 	}
@@ -151,6 +153,8 @@ func (m Model) subtitle() string {
 			where = contractHome(config.File(root))
 		}
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
+	case dialogHelp:
+		return " " + m.theme.Meta.Render("every key revier answers to")
 	}
 	return m.promptView()
 }
@@ -195,7 +199,7 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
 	case m.dialog == dialogRemote:
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
-	case m.dialog == dialogNew, m.dialog == dialogConfig:
+	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogHelp:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")

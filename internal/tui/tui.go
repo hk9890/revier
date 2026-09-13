@@ -62,6 +62,7 @@ const (
 	dialogRemote
 	dialogNew
 	dialogConfig
+	dialogHelp
 )
 
 // Model is the bubbletea model. Construct it with New.
@@ -447,6 +448,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.newKey(msg)
 	case dialogConfig:
 		return m.configKey(msg)
+	case dialogHelp:
+		return m.helpScreenKey(msg)
 	}
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)

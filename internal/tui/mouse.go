@@ -43,6 +43,17 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress || m.rowless() {
 		return m, nil
 	}
+	// The help screen has no rows either, and more lines than a short
+	// terminal holds: the wheel scrolls it, and a click does nothing.
+	if m.dialog == dialogHelp {
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.body.ScrollUp(1)
+		case tea.MouseButtonWheelDown:
+			m.body.ScrollDown(1)
+		}
+		return m, nil
+	}
 	if msg.Button == tea.MouseButtonLeft {
 		switch m.over.kind {
 		case hoverBar:
@@ -95,7 +106,7 @@ func (m Model) rowless() bool {
 // inside the list, and not on the header, the footer or the space below the
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
-	if m.rowless() {
+	if m.rowless() || m.dialog == dialogHelp {
 		return 0, false
 	}
 	_, mc := m.margins()
