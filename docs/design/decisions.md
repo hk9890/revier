@@ -1370,3 +1370,40 @@ as it is, unescaped. A dot then matches any character. That still finds the
 project's own window, and it spares every shared match an escaping function.
 D30's `revier new` template still escapes it, as the file it writes has its
 own match.
+
+### D58 — shared targets are edited on the config screen — Accepted
+
+Narrows D57: the shared targets it put in `config.toml` are on the screen, with
+add, change and delete, as D56 put the actions there.
+
+The screen lists each shared target by key, name and where it opens. Enter
+opens a form under the row: the name, the key and the home flag, then the
+runtime and the window realization, each with its name, command, match title,
+match class and place. The runtime's panels are a list inside the form, and
+Enter on one opens a form of its kind, title and command. A realization whose
+fields are all empty, with no panels, is none. A panel change is kept in the
+form and written only when the target is saved, so Esc leaves the file as it
+was.
+
+The form shows what a target is made of and hides what it rarely needs. `dir`,
+`prefer` and a match's `pid` are not on it; they are kept as the file has
+them.
+
+An entry is edited line by line, as D56 edits an action, one level deeper. A
+changed value is written in place; a realization or a panel added is a table
+added at the end of what it belongs under, indented two spaces a level as the
+project files are; one deleted loses its tables and values, and its comments
+stay. A match written inline is written whole, with the keys the form does not
+show kept. The form tells the writer which panel of the file each of its
+panels was, so a panel deleted before another does not move its comments onto
+the next.
+
+A write is refused unless every project still loads with the result. A shared
+target is part of every project, so a change that breaks one - a target
+deleted that a project only overrides, a place of three tokens - would refuse
+the next start. The refusal names the project file. After a write the surface
+loads the projects again and has the new targets at once.
+
+The config screen now takes the whole width, as the help screen does. A form
+with notes beside its fields needs the columns, and the pane beside the
+screen was empty.

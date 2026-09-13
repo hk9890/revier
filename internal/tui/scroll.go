@@ -27,6 +27,7 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		return
 	case dialogConfig:
+		m.body.Width = m.listWidth()
 		text, at := m.configScreen()
 		m.body.SetContent(text)
 		m.follow(at, 1)
