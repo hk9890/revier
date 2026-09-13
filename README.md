@@ -129,8 +129,9 @@ Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
 Targets most projects share, such as an editor, are declared once as
 `[[target]]` in `~/.config/revier/config.toml`; a project file then overrides
-only the fields it changes, and adds targets of its own. `revier new` writes one for the current directory, and `revier open <name>`
-does the same for a name revier does not know yet. A project whose directory is
+only the fields it changes, and adds targets of its own. `revier new` writes
+one for the current directory, and `revier open <name>` does the same for a
+name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
 
 A project can live on another machine. `revier link <host> <project>`, or

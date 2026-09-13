@@ -109,6 +109,8 @@ func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		m.dialog = dialogNone
+		// The screen took the pane's width; the list gets its own back.
+		m.layout()
 	case key.Matches(msg, m.keys.Up):
 		m.crow = max(m.crow-1, 0)
 	case key.Matches(msg, m.keys.Down):
