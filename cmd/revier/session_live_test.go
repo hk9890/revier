@@ -209,6 +209,24 @@ func TestSessionSaveNamesAgentsItCannotResume(t *testing.T) {
 	}
 }
 
+// A claude that cannot answer at all - not on PATH, or broken - is said with
+// its reason, so those agents are not taken for ones no listing matched. The
+// save still succeeds.
+func TestSessionSaveSaysWhyItCouldNotAsk(t *testing.T) {
+	work(t)
+	broken := "#!/bin/sh\necho 'claude: not logged in' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(filepath.Dir(agentsFile), "claude"), []byte(broken), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	save := capture(t, "session", "save")
+	if !strings.Contains(save, "1 agent without a conversation id") {
+		t.Errorf("save printed %q, want the unnamed agent counted", save)
+	}
+	if !strings.Contains(save, "could not ask claude: claude agents --json") {
+		t.Errorf("save printed %q, want why the probe could not answer", save)
+	}
+}
+
 // Restore is run-or-raise, so running it against a desktop that is already up
 // opens nothing and says so. That is what makes a half-finished restore safe
 // to simply run again.

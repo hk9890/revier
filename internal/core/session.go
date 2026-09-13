@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
@@ -69,7 +70,10 @@ type RestoreStep struct {
 // Unnamed is the number of agent panels recorded without a conversation, so a
 // save can say so while the agents are still running. A resume that cannot
 // happen is otherwise found after the reboot, which is the worst moment.
-func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName) (s session.Session, unnamed int) {
+// Failed holds why a probe could not answer at all - claude not on PATH - so
+// those agents are not mistaken for the ones no listing could match. Neither
+// fails the save.
+func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName) (s session.Session, unnamed int, failed []error) {
 	byRef := make(map[string]revier.Instance, len(r.Instances))
 	for _, inst := range r.Instances {
 		byRef[key(inst.Ref)] = inst
@@ -104,7 +108,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 		}
 	}
 
-	ids := c.conversations(ctx, agents)
+	ids, failed := c.conversations(ctx, agents)
 	for i, a := range agents {
 		if ids[i] == "" {
 			unnamed++
@@ -113,7 +117,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 		t := &s.Projects[a.project].Targets[a.target]
 		t.Panels = append(t.Panels, session.Panel{Index: a.index, Harness: a.probe.Name(), Session: ids[i]})
 	}
-	return s, unnamed
+	return s, unnamed, failed
 }
 
 // agentPanel is one panel a probe claimed, and where its conversation goes in
@@ -136,35 +140,45 @@ type agentPanel struct {
 // conversations asks each resumable probe once, for every panel it claimed
 // across the whole save, and returns an id per agent panel in order. A panel
 // whose probe cannot resume, cannot say, or failed gets an empty id: it
-// restores empty, which is not a failure of the save.
-func (c *Core) conversations(ctx context.Context, agents []agentPanel) []revier.SessionID {
+// restores empty, which is not a failure of the save; a probe that failed is
+// returned with its error, named.
+func (c *Core) conversations(ctx context.Context, agents []agentPanel) ([]revier.SessionID, []error) {
+	var failed []error
 	ids := make([]revier.SessionID, len(agents))
-	byProbe := map[revier.AgentProbe][]int{}
-	var order []revier.AgentProbe
+	// Grouped by name, the identity a restore finds a probe by. A probe is an
+	// interface value, and one whose dynamic type is not comparable panics as
+	// a map key.
+	byProbe := map[string][]int{}
+	var order []string
 	for i, a := range agents {
 		if _, ok := a.probe.(revier.Resumable); !ok {
 			continue
 		}
-		if _, seen := byProbe[a.probe]; !seen {
-			order = append(order, a.probe)
+		name := a.probe.Name()
+		if _, seen := byProbe[name]; !seen {
+			order = append(order, name)
 		}
-		byProbe[a.probe] = append(byProbe[a.probe], i)
+		byProbe[name] = append(byProbe[name], i)
 	}
-	for _, probe := range order {
-		at := byProbe[probe]
+	for _, name := range order {
+		at := byProbe[name]
 		panels := make([]revier.Panel, len(at))
 		for j, i := range at {
 			panels[j] = agents[i].panel
 		}
-		named, err := probe.(revier.Resumable).Sessions(ctx, panels)
-		if err != nil || len(named) != len(panels) {
+		named, err := agents[at[0]].probe.(revier.Resumable).Sessions(ctx, panels)
+		if err == nil && len(named) != len(panels) {
+			err = fmt.Errorf("answered %d panels of %d", len(named), len(panels))
+		}
+		if err != nil {
+			failed = append(failed, fmt.Errorf("%s: %w", name, err))
 			continue
 		}
 		for j, i := range at {
 			ids[i] = named[j]
 		}
 	}
-	return ids
+	return ids, failed
 }
 
 // RestorePlan decides what each recorded target means on this machine now. It

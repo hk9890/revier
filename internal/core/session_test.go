@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
@@ -66,7 +67,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), report, "revier")
+	s, _, _ := c.Session(context.Background(), report, "revier")
 
 	if s.Current != "revier" {
 		t.Errorf("Current = %q, want the focused project", s.Current)
@@ -112,7 +113,7 @@ func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := c.Session(context.Background(), report, "")
+	s, _, _ := c.Session(context.Background(), report, "")
 
 	restored := hosttest.NewRuntime("rt")
 	c.Runtime = restored
@@ -140,7 +141,7 @@ func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
+	if s, _, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
 		t.Errorf("Projects = %+v, want none", s.Projects)
 	}
 }
@@ -159,7 +160,7 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := c.Session(context.Background(), report, "")
+	s, _, _ := c.Session(context.Background(), report, "")
 	for _, tv := range s.Projects[0].Targets {
 		if tv.Name == "" {
 			t.Errorf("an attachment was recorded: %+v", tv)
@@ -184,7 +185,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed := plain.Session(context.Background(), report, "")
+	s, unnamed, _ := plain.Session(context.Background(), report, "")
 	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none from a probe that cannot name one", panels)
 	}
@@ -199,12 +200,17 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed = broken.Session(context.Background(), report, "")
+	s, unnamed, failed := broken.Session(context.Background(), report, "")
 	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none when the probe failed", panels)
 	}
 	if unnamed != 1 {
 		t.Errorf("unnamed = %d, want the one agent", unnamed)
+	}
+	// The failure is said, with the probe's name, so an agent a broken probe
+	// could not name is not taken for one no listing matched.
+	if len(failed) != 1 || !errors.Is(failed[0], failing.SessionErr) || !strings.HasPrefix(failed[0].Error(), "claude: ") {
+		t.Errorf("failed = %v, want the probe's error, named", failed)
 	}
 }
 
@@ -233,7 +239,7 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, unnamed := c.Session(context.Background(), report, "")
+	s, unnamed, _ := c.Session(context.Background(), report, "")
 
 	if probe.Calls != 1 {
 		t.Errorf("Sessions was called %d times, want once for the whole save", probe.Calls)

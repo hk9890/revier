@@ -52,7 +52,7 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	s, unnamed := a.core.Session(ctx, report, a.state.Current)
+	s, unnamed, failed := a.core.Session(ctx, report, a.state.Current)
 	s.At, s.Name = time.Now(), *name
 
 	stored, path, err := session.Save(a.stateRoot, s)
@@ -68,6 +68,9 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	// the reboot rather than found after it.
 	if unnamed > 0 {
 		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(unnamed, "agent"))
+	}
+	for _, err := range failed {
+		fmt.Printf("    could not ask %v\n", err)
 	}
 	// Named up front, not discovered during a restore after the reboot. An
 	// attachment is a live id with no launch argv anywhere in the model, so
