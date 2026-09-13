@@ -29,6 +29,7 @@ var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openNew},
 	{label: "remote", key: "alt+r", run: Model.openHosts},
 	{label: "config", key: "alt+c", run: Model.openConfig},
+	{label: "help", key: helpBarKey, run: Model.openHelp},
 }
 
 // barCell is a button's place on the bar: the text as it is drawn, and the

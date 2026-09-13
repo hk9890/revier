@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/tui"
 )
 
@@ -29,7 +30,7 @@ func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	bar := barLine(m)
-	for _, want := range []string{"new", "alt+n", "remote", "alt+r", "config", "alt+c"} {
+	for _, want := range []string{"new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("bar = %q, want it to name %q", bar, want)
 		}
@@ -127,6 +128,65 @@ func TestTheNewProjectScreenRefusesAMissingDirectory(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(filepath.Join(root, "projects")); err == nil && len(entries) > 0 {
 		t.Errorf("wrote %v for a directory that is not there", entries)
+	}
+}
+
+// alt+h lists every key: the surface's own, the target keys, the configured
+// actions and the desktop key that opens revier. Esc goes back to the list.
+func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 80)
+
+	m, _ = press(m, "alt+h")
+	if head := barLine(m); !strings.Contains(head, "keyboard shortcuts") {
+		t.Fatalf("top line = %q after alt+h, want the help screen", head)
+	}
+	screen := strings.Join(lines(m), "\n")
+	for _, want := range []string{
+		"alt+n", "alt+r", "alt+c", "alt+h", "alt+e", "alt+d", "ctrl+w", "ctrl+c",
+		"ctrl+y", "sync",
+		"ctrl+shift+u", "go to home",
+		"alt+space", "open revier",
+	} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("help screen does not name %q:\n%s", want, screen)
+		}
+	}
+
+	m, _ = press(m, "esc")
+	if r := ruleLine(m); !strings.Contains(r, "working") {
+		t.Errorf("rule = %q after esc, want the surface back", r)
+	}
+}
+
+// The key that opens the help screen closes it, and a letter typed on it
+// does not reach the filter behind it.
+func TestAltHClosesTheHelpScreenAndFiltersNothing(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 40)
+
+	m, _ = press(m, "alt+h")
+	m, _ = press(m, "x")
+	m, _ = press(m, "alt+h")
+	if head := barLine(m); !strings.Contains(head, "help") {
+		t.Fatalf("top line = %q after alt+h twice, want the bar back", head)
+	}
+	if q := query(m); strings.Contains(q, "x") {
+		t.Errorf("query = %q, want the letter typed on the help screen dropped", q)
+	}
+}
+
+// On a terminal shorter than the list of keys, the arrows scroll the screen.
+func TestTheHelpScreenScrolls(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 16)
+
+	m, _ = press(m, "alt+h")
+	top := m.View()
+	m, _ = press(m, "down")
+	if m.View() == top {
+		t.Error("the help screen is unchanged after down on a short terminal")
 	}
 }
 
