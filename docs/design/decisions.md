@@ -1024,7 +1024,7 @@ already do. Left out too: waiting for agents to fall quiet before saving. The
 survey already knows every agent's status, so it can be added when it is
 wanted, and nothing here has to change to allow it.
 
-### D47 — an agent panel is restored onto its conversation by its own probe — Accepted
+### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; the hook's mechanism amended by D52
 
 A restored workspace whose agent starts empty solves the cheap half of the
 problem. Reopening twenty terminals in the right directories was never the
@@ -1156,7 +1156,28 @@ bar, and a blank line between the query and the rule, so the query does not
 read as the rule's caption. The top of the surface is six lines, as it was
 with the header and the border, and the list gains the four columns.
 
-### D52 — config is a screen, and a change applies as it is made — Accepted
+### D52 — the session hook reaches kitty through remote control, not an escape — Accepted
+
+D47 said the `SessionStart` hook sets its variable by "the path `CS_TAB` and
+`CS_STATE` already use", and the hook wrote a `SetUserVar` escape to
+`/dev/tty`. Neither held. `CS_TAB` is an escape, but a launcher emits it before
+exec, from a shell that has a terminal. `CS_STATE` is set by a hook, and that
+hook calls `kitten @ set-user-vars` on `KITTY_WINDOW_ID`. A Claude Code hook
+runs with no controlling terminal, so the escape never reached kitty: the hook
+exited 0, the window carried no `CS_SESSION`, and a save recorded no
+conversation. revier degraded as designed and restored an empty agent, which
+is why nothing failed loudly.
+
+It was found by the first run against a real agent in a real kitty, the one
+layer the automated suites cannot reach. The tmux branch was unaffected: it
+sets a pane option through the tmux client, which needs no terminal either.
+
+The hook now calls `kitten @ set-user-vars --match id:$KITTY_WINDOW_ID` on
+`$KITTY_LISTEN_ON`, the mechanism `CS_STATE` has always used, and does nothing
+outside kitty. Verified on screen: the variable appears, the save records it,
+and the restored agent answers from the conversation it held.
+
+### D53 — config is a screen, and a change applies as it is made — Accepted
 
 Narrows D49: config stays a button on the top line with alt+c, and no longer
 opens `config.toml` in `$EDITOR`.
