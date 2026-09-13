@@ -155,6 +155,11 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 	}
+	// The first survey matches through the bindings too. Left to the survey's
+	// own answer to fill in, they reach only the second one, a refresh later.
+	if st, err := state.Load(stateRoot); err == nil {
+		m.keep(st)
+	}
 	// config.Load has decoded them already, so this cannot fail.
 	m.targets, _ = config.DecodeTargets(cfg.Targets)
 	m.layout()
