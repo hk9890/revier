@@ -16,6 +16,10 @@ tag.
   is the activity line only, and `CS_STATE` and `CS_TAB` are no longer read.
   Needs Claude Code 2.1.212 or newer; a pane Claude Code does not list reads
   as unknown.
+- **The TUI is right on its first screen.** A workspace revier knows only by
+  where it last landed showed as stopped, with no agent, until the next
+  refresh a second later. Its state and its agent now show on the first
+  screen.
 
 - **A top line of actions: new, remote, config, help.** Each is a button and a
   key. alt+n adds a project from a directory on this machine, writing the file

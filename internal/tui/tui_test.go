@@ -815,6 +815,32 @@ func TestASurveyKeepsABindingWrittenWhileItListed(t *testing.T) {
 	}
 }
 
+// The first survey already knows where targets last landed. Without the
+// bindings in state it misses a workspace whose title moved, shows it stopped
+// with no agent, and the right answer waits a whole refresh.
+func TestTheFirstSurveyUsesTheBindingsInState(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	renamed := rt.Add("renamed", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	root := stateWith(t, nil)
+	st, _ := state.Load(root)
+	st.Bind("project-00", "home", renamed)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	m := resize(refreshed(t, c, projects, root, nil), 120, 20)
+
+	for _, row := range rows(m) {
+		if strings.Contains(row, "project-00") {
+			if !strings.Contains(row, "needs a decision") {
+				t.Errorf("row = %q, want the bound workspace's agent on the first survey", row)
+			}
+			return
+		}
+	}
+	t.Fatalf("no row for project-00:\n%s", m.View())
+}
+
 // A background refresh replaces every row. The cursor must stay on the
 // project the user was looking at, not on the row index it happened to sit
 // at: attention sorting moves rows, so an index points at a different project
