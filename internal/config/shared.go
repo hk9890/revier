@@ -49,27 +49,39 @@ func validateShared(shared []map[string]any) error {
 }
 
 // decodeProject reads a project file with the shared targets merged in. The
-// file is decoded as it is first, so an error in it is reported against its
-// own lines; the merged tables are decoded again only once both halves are
-// known to decode.
+// file is read once and parsed once as tables; the typed decode of the file
+// alone runs only where it is the answer - no shared targets, or a link - or
+// where the merge failed, so an error in the file is still reported against
+// its own lines.
 func decodeProject(path string, shared []map[string]any) (revier.Project, error) {
-	var p revier.Project
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return revier.Project{}, err
+	}
+	own := func() (revier.Project, error) {
+		var p revier.Project
+		_, err := toml.Decode(string(data), &p)
 		return p, err
+	}
+	if len(shared) == 0 {
+		return own()
+	}
+	var raw map[string]any
+	if _, err := toml.Decode(string(data), &raw); err != nil {
+		return revier.Project{}, err
 	}
 	// A link's home is the ssh pane onto the host, and the project file
 	// there already has the host's shared targets.
-	if len(shared) == 0 || p.Remote != nil {
-		return p, nil
-	}
-	var raw map[string]any
-	if _, err := toml.DecodeFile(path, &raw); err != nil {
-		return p, err
+	if _, link := raw["remote"]; link {
+		return own()
 	}
 	raw["target"] = mergeTargets(shared, tablesOf(raw["target"]))
 	var merged revier.Project
 	if err := recode(raw, &merged); err != nil {
-		return p, fmt.Errorf("with the shared targets of config.toml: %w", err)
+		if p, ownErr := own(); ownErr != nil {
+			return p, ownErr
+		}
+		return revier.Project{}, fmt.Errorf("with the shared targets of config.toml: %w", err)
 	}
 	return merged, nil
 }

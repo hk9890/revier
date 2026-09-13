@@ -196,6 +196,21 @@ func TestAProjectIncompleteAfterTheMergeIsRefused(t *testing.T) {
 	}
 }
 
+// A value of the wrong type in the project file itself is reported against
+// the file's own line, not as a failure of the merge.
+func TestAWrongTypeInTheProjectFileIsReportedAtItsLine(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", sharedConfig)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n\n[[target]]\nname = \"home\"\nhome = \"yes\"\n")
+	_, _, err := config.Load(root)
+	if err == nil || !strings.Contains(err.Error(), "line 5") || strings.Contains(err.Error(), "shared targets") {
+		t.Errorf("Load = %v, want the error at line 5 of demo.toml", err)
+	}
+}
+
 // With shared targets, a new project file holds the project alone.
 func TestCreateWritesNoTargetsWhenTheyAreShared(t *testing.T) {
 	root := t.TempDir()
