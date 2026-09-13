@@ -281,9 +281,9 @@ restores the workspace, with an empty agent.
 type SessionID string
 
 type Resumable interface {
-    // Session names the conversation the panel holds, false when it holds
-    // none.
-    Session(ctx context.Context, p Panel) (SessionID, bool, error)
+    // Sessions names the conversation each panel holds, in the panels'
+    // order, with an empty id for a panel that holds none.
+    Sessions(ctx context.Context, panels []Panel) ([]SessionID, error)
 
     // ResumeCommand returns the argv that starts the harness on that
     // conversation, built from the panel as it is configured now.
@@ -295,6 +295,10 @@ type Resumable interface {
 argv the recording stored. A stored argv would freeze the configuration: a
 project file that gained a model flag after the save would lose it on restore.
 The harness's own resume flag never reaches the core.
+
+`Sessions` takes every panel of a save at once because the answer may cost a
+process: the Claude probe runs `claude agents --json` (D54). Twenty agents cost
+that once, the rule `Instances` follows.
 
 There is no `Runtime` counterpart. Persistence across a reboot is either the
 runtime's already or impossible for it, and in both cases revier adds nothing.

@@ -66,9 +66,32 @@ func work(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, "projects", "work.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	fakeClaude(t)
 	capture(t, "open", "work")
 	capture(t, "go", "notes", "-p", "work")
 	return agent + ".args"
+}
+
+// agentsFile is where the fake claude reads what `claude agents --json`
+// prints. It starts as an empty listing: no conversation is known.
+var agentsFile string
+
+// fakeClaude puts a claude first on PATH that answers `agents --json` from
+// agentsFile, so the probe asks the real command line it asks in use while the
+// test decides the answer. It also keeps the suite from reading the user's
+// real sessions, and lets it run where Claude Code is not installed.
+func fakeClaude(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	agentsFile = filepath.Join(bin, "agents.json")
+	if err := os.WriteFile(agentsFile, []byte("[]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\n[ \"$1 $2\" = 'agents --json' ] || exit 2\ncat '" + agentsFile + "'\n"
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // tmuxRun runs a tmux command against the test's own server.
@@ -96,15 +119,19 @@ func windowNames(t *testing.T) string {
 	return string(out)
 }
 
-// markConversation puts a session id on the agent's pane the way the
-// SessionStart hook in contrib/claude does, so the probe has one to record.
+// markConversation makes the fake claude list the agent's pane as holding a
+// conversation, by the pid tmux reports for that pane - the pid Claude Code
+// lists for its own process when it is the pane's command.
 func markConversation(t *testing.T, id string) {
 	t.Helper()
-	out := tmuxRun(t, "list-panes", "-a", "-F", "#{pane_id} #{pane_current_command}")
+	out := tmuxRun(t, "list-panes", "-a", "-F", "#{pane_pid} #{pane_current_command}")
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		pane, cmd, ok := strings.Cut(line, " ")
+		pid, cmd, ok := strings.Cut(line, " ")
 		if ok && cmd == "claude" {
-			tmuxRun(t, "set-option", "-p", "-t", pane, "@revier", "CS_SESSION="+id)
+			listing := `[{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "status": "idle"}]`
+			if err := os.WriteFile(agentsFile, []byte(listing), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			return
 		}
 	}
@@ -165,6 +192,20 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(read)); got != "--resume abc-123" {
 		t.Errorf("the agent started with %q, want it resumed on abc-123", got)
+	}
+}
+
+// An agent Claude Code does not list - claude typed into a shell, or a version
+// that no longer answers - is said at save time, while it still runs, rather
+// than found empty after the reboot.
+func TestSessionSaveNamesAgentsItCannotResume(t *testing.T) {
+	work(t)
+	save := capture(t, "session", "save")
+	if !strings.Contains(save, "1 agent without a conversation id") {
+		t.Errorf("save printed %q, want the unnamed agent named", save)
+	}
+	if strings.Contains(save, "conversation recorded") {
+		t.Errorf("save printed %q, want no conversation recorded", save)
 	}
 }
 

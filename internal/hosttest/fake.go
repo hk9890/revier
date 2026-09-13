@@ -278,15 +278,19 @@ func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, e
 
 // ResumableProbe is a FakeProbe that can also name the conversation a panel
 // holds, so a core test can exercise the resume half without Claude Code. The
-// id is the panel's Vars["session"], which is how the real probe reads one.
+// id is the panel's Vars["session"], a stand-in for the listing the real probe
+// matches panels against.
 type ResumableProbe struct {
 	*FakeProbe
 	// Flag is the argument name folded into a resumed command, standing in
 	// for the harness's own spelling of --resume.
 	Flag string
-	// SessionErr makes Session fail, for the path where a panel restores
+	// SessionErr makes Sessions fail, for the path where a panel restores
 	// empty rather than failing the save.
 	SessionErr error
+	// Calls counts Sessions calls, so a test can assert a save asks once
+	// whatever the number of agents.
+	Calls int
 }
 
 // NewResumableProbe returns a probe that claims every panel of the harness.
@@ -297,15 +301,16 @@ func NewResumableProbe(harness, marker string) *ResumableProbe {
 	}
 }
 
-func (p *ResumableProbe) Session(_ context.Context, panel revier.Panel) (revier.SessionID, bool, error) {
+func (p *ResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.SessionID, error) {
+	p.Calls++
 	if p.SessionErr != nil {
-		return "", false, p.SessionErr
+		return nil, p.SessionErr
 	}
-	id := panel.Vars["session"]
-	if id == "" {
-		return "", false, nil
+	ids := make([]revier.SessionID, len(panels))
+	for i, panel := range panels {
+		ids[i] = revier.SessionID(panel.Vars["session"])
 	}
-	return revier.SessionID(id), true, nil
+	return ids, nil
 }
 
 func (p *ResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {

@@ -52,7 +52,7 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	s := a.core.Session(ctx, report, a.state.Current)
+	s, unnamed := a.core.Session(ctx, report, a.state.Current)
 	s.At, s.Name = time.Now(), *name
 
 	stored, path, err := session.Save(a.stateRoot, s)
@@ -63,6 +63,11 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 		count(len(stored.Projects), "project"), count(stored.Targets(), "target"))
 	if n := conversations(stored); n > 0 {
 		fmt.Printf("  %s recorded\n", count(n, "agent conversation"))
+	}
+	// Said now, while the agents still run, so the gap can be closed before
+	// the reboot rather than found after it.
+	if unnamed > 0 {
+		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(unnamed, "agent"))
 	}
 	// Named up front, not discovered during a restore after the reboot. An
 	// attachment is a live id with no launch argv anywhere in the model, so

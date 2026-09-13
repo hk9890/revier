@@ -117,9 +117,10 @@ they have no name to be reopened by. Sessions live in
 `~/.local/state/revier/sessions/`, one readable TOML file each.
 
 An agent comes back on the conversation it held if its probe can name one.
-Claude Code can, once `contrib/claude/revier-session-hook` is installed as a
-`SessionStart` hook; without it the workspace still comes back, with the agent
-starting fresh.
+Claude Code can, with nothing to install: the save asks `claude agents --json`
+which conversation each agent's process holds. An agent the save cannot name -
+`claude` typed into a tmux shell pane rather than started by revier - is named
+when you save, and comes back starting fresh.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).

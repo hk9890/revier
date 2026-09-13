@@ -66,7 +66,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s := c.Session(context.Background(), report, "revier")
+	s, _ := c.Session(context.Background(), report, "revier")
 
 	if s.Current != "revier" {
 		t.Errorf("Current = %q, want the focused project", s.Current)
@@ -112,7 +112,7 @@ func TestResumeLandsOnItsOwnPanelBesideAnUnclaimedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := c.Session(context.Background(), report, "")
+	s, _ := c.Session(context.Background(), report, "")
 
 	restored := hosttest.NewRuntime("rt")
 	c.Runtime = restored
@@ -140,7 +140,7 @@ func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
+	if s, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
 		t.Errorf("Projects = %+v, want none", s.Projects)
 	}
 }
@@ -159,7 +159,7 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := c.Session(context.Background(), report, "")
+	s, _ := c.Session(context.Background(), report, "")
 	for _, tv := range s.Projects[0].Targets {
 		if tv.Name == "" {
 			t.Errorf("an attachment was recorded: %+v", tv)
@@ -171,7 +171,9 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 }
 
 // A probe without the capability, and one that cannot say, both leave the
-// panel unrecorded: it restores empty, which is the whole degradation.
+// panel unrecorded: it restores empty, which is the whole degradation. Either
+// way the save counts the agent as unnamed, so the gap is said before the
+// reboot.
 func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
@@ -182,8 +184,12 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if panels := plain.Session(context.Background(), report, "").Projects[0].Targets[0].Panels; len(panels) != 0 {
+	s, unnamed := plain.Session(context.Background(), report, "")
+	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none from a probe that cannot name one", panels)
+	}
+	if unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent", unnamed)
 	}
 
 	failing := resumable()
@@ -193,8 +199,60 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if panels := broken.Session(context.Background(), report, "").Projects[0].Targets[0].Panels; len(panels) != 0 {
+	s, unnamed = broken.Session(context.Background(), report, "")
+	if panels := s.Projects[0].Targets[0].Panels; len(panels) != 0 {
 		t.Errorf("panels = %+v, want none when the probe failed", panels)
+	}
+	if unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent", unnamed)
+	}
+}
+
+// The probe may answer with a process - `claude agents --json` - so a save
+// asks it once for every agent it claimed, across every project, not once per
+// panel. An agent with an id and one without are told apart in that one
+// answer.
+func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "abc-123"}},
+	)
+	rt.Add("session:other", "kitty",
+		revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "claude"},
+		revier.Panel{ID: "4", Kind: revier.PanelAgent, Title: "claude", Vars: map[string]string{"session": "def-456"}},
+	)
+	other := agentProject()
+	other.Name = "other"
+	other.Targets[0].Runtime.Name = "session:other"
+	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
+	probe := resumable()
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject()), prepared(t, other)}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, unnamed := c.Session(context.Background(), report, "")
+
+	if probe.Calls != 1 {
+		t.Errorf("Sessions was called %d times, want once for the whole save", probe.Calls)
+	}
+	if unnamed != 1 {
+		t.Errorf("unnamed = %d, want the one agent with no id", unnamed)
+	}
+	if len(s.Projects) != 2 {
+		t.Fatalf("projects = %+v, want both", s.Projects)
+	}
+	got := map[revier.ProjectName][]session.Panel{}
+	for _, p := range s.Projects {
+		got[p.Name] = p.Targets[0].Panels
+	}
+	if p := got["revier"]; len(p) != 1 || p[0].Index != 1 || p[0].Session != "abc-123" {
+		t.Errorf("revier panels = %+v, want abc-123 at position 1", p)
+	}
+	if p := got["other"]; len(p) != 1 || p[0].Index != 1 || p[0].Session != "def-456" {
+		t.Errorf("other panels = %+v, want def-456 at position 1", p)
 	}
 }
 
