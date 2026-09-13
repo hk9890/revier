@@ -24,6 +24,9 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -37,10 +40,6 @@ const (
 	varTab = "CS_TAB"
 	// varState is the hook-set edge record. Advisory only; see the package doc.
 	varState = "CS_STATE"
-	// varSession is the conversation the pane holds, set by the SessionStart
-	// hook in contrib/claude/revier-session-hook. It is what `revier session
-	// restore` starts the agent on.
-	varSession = "CS_SESSION"
 
 	// stateAttention is the value the Notification hook sets when Claude wants
 	// the human. It is the only CS_STATE value this probe acts on.
@@ -59,6 +58,10 @@ const (
 type Probe struct {
 	// Now is injected so tests can pin Since. Nil means time.Now.
 	Now func() time.Time
+
+	// Agents returns what `claude agents --json` prints. It is injected so a
+	// test can answer without Claude Code installed. Nil runs the command.
+	Agents func(ctx context.Context) ([]byte, error)
 }
 
 func (p *Probe) Name() string { return "claude" }
@@ -90,21 +93,56 @@ func (p *Probe) Inspect(_ context.Context, panel revier.Panel) (revier.AgentStat
 	return state, nil
 }
 
-// Session reports the conversation the pane holds. Like Inspect it performs no
-// I/O: the id is on the panel already, put there by the SessionStart hook, so
-// the probe stays a pure function.
+// Sessions names the conversation each pane holds, from one run of `claude
+// agents --json`: Claude Code's scripting interface, which lists every active
+// interactive session with the pid of its process. A pane is matched by that
+// pid and nothing else, so two agents in one repository are told apart - the
+// case this feature exists for, and the one a guess from the newest transcript
+// under ~/.claude/projects gets wrong.
 //
-// The id is deliberately not derived from ~/.claude/projects when the variable
-// is absent. The only signal there is the newest transcript for the pane's
-// directory, which cannot tell two agents in one repository apart - the normal
-// case this feature exists for - and resuming the wrong conversation is worse
-// than resuming none.
-func (p *Probe) Session(_ context.Context, panel revier.Panel) (revier.SessionID, bool, error) {
-	id := panel.Vars[varSession]
-	if id == "" {
-		return "", false, nil
+// The pid is the Claude process itself. kitty reports the foreground process,
+// and tmux the pane's own process, which is Claude when it is the pane's
+// command - as revier launches it. A pane where claude was typed into a shell
+// reports the shell, is not matched, and restores empty.
+//
+// Both pids are of live processes, listed now, so a pid reused since cannot
+// match a conversation that is not there.
+func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.SessionID, error) {
+	run := p.Agents
+	if run == nil {
+		run = claudeAgents
 	}
-	return revier.SessionID(id), true, nil
+	out, err := run(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var listed []struct {
+		PID       int    `json:"pid"`
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(out, &listed); err != nil {
+		return nil, fmt.Errorf("claude agents --json: %w", err)
+	}
+	byPID := make(map[int]revier.SessionID, len(listed))
+	for _, a := range listed {
+		// A background session has no pid, and no pane to be in.
+		if a.PID != 0 && a.SessionID != "" {
+			byPID[a.PID] = revier.SessionID(a.SessionID)
+		}
+	}
+	ids := make([]revier.SessionID, len(panels))
+	for i, panel := range panels {
+		ids[i] = byPID[panel.PID]
+	}
+	return ids, nil
+}
+
+func claudeAgents(ctx context.Context) ([]byte, error) {
+	out, err := exec.CommandContext(ctx, "claude", "agents", "--json").Output()
+	if err != nil {
+		return nil, fmt.Errorf("claude agents --json: %w", err)
+	}
+	return out, nil
 }
 
 // ResumeCommand folds --resume into the panel as it is configured now, so a

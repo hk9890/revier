@@ -93,13 +93,18 @@ tmux kill-server                                 # the private server only
 ./bin/revier session restore                     # the newest, opened in file order
 ```
 
-Put a conversation on an agent pane before saving, so the resume path runs.
-It is what `contrib/claude/revier-session-hook` writes on a real agent:
+The save asks `claude agents --json` which conversation each agent pane's
+process holds. A stand-in agent is in no listing, so to run the resume path put
+a `claude` first on PATH that lists the pane's pid:
 
 ```bash
-tmux set-option -p -t agent @revier CS_SESSION=abc-123
-tmux list-panes -a -F '#{pane_id} #{pane_current_command} #{@revier}'
+mkdir -p "$S/bin"; pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
+printf '#!/bin/sh\necho %s\n' "'[{\"pid\": $pid, \"sessionId\": \"abc-123\"}]'" > "$S/bin/claude"; chmod +x "$S/bin/claude"
+PATH="$S/bin:$PATH" ./bin/revier session save   # prints "1 agent conversation recorded"
 ```
+
+Run a real `claude` in the pane instead to check against Claude Code itself:
+answer its trust prompt for the directory with "Yes", since the default exits.
 
 Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
 a restore acts on; it holds names alone, never a host or an argv.
