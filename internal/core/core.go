@@ -336,6 +336,9 @@ type Result struct {
 	Launched bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
+	// AgentErr is why an agent tab failed to open in a workspace that did
+	// open: the launch succeeded, and the agents it names are AgentNotAdded.
+	AgentErr error
 }
 
 // Go runs-or-raises a target. Pressing the same key twice returns to the
@@ -376,16 +379,25 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 		if c.Window != nil {
 			res.Before = snap[c.Window.Name()]
 		}
-		real, res.Agents = c.resuming(real, resumes)
-		ref, err := host.Open(ctx, real)
+		// The agent tabs are copies of the realization as declared, not of
+		// the launch the first agents were written into.
+		launch, agents, extra := c.resuming(real, resumes)
+		ref, err := host.Open(ctx, launch)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
 		}
 		if ref.IsZero() {
 			// The host launched a process and cannot name the window it will
-			// produce; a window host is like this. Bind waits for it.
+			// produce; a window host is like this. Bind waits for it, and
+			// nothing can be added to a window not yet named.
+			for range extra {
+				agents = append(agents, AgentDropped)
+			}
+			res.Agents = agents
 			return res, nil
 		}
+		added, err := c.addAgents(ctx, host, real, ref, extra)
+		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do

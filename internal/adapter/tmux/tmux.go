@@ -250,8 +250,7 @@ func kindOf(cmd string) revier.PanelKind {
 // Open creates a window named r.Name, starting the server and the session when
 // neither exists yet. With panels, the first panel is the window's pane and
 // every later one is split into it, side by side; without, the window runs
-// r.Launch alone. A panel that asks for a tab is split in like the rest: a
-// tmux window is the instance, and a second window would be a second one.
+// r.Launch alone.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the window")
@@ -308,7 +307,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, window), Title: r.Name}, nil
 }
 
-// dirOf is where a panel starts: its own directory, or the realization's.
 func dirOf(r revier.Realization, p revier.PanelSpec) string {
 	if p.Dir != "" {
 		return p.Dir

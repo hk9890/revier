@@ -368,18 +368,16 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	}
 }
 
-// A panel with a directory of its own starts there, and one that asks for a
-// tab is split into the same window: a second window would be a second
-// instance, which the realization's match would not group with the first.
+// A panel with a directory of its own starts there, and one without starts
+// where the realization starts.
 func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {
 	h, c := server(t), ctx(t)
-	dir, own, tabbed := t.TempDir(), t.TempDir(), t.TempDir()
+	dir, own := t.TempDir(), t.TempDir()
 	_, err := h.Open(c, revier.Realization{
 		Name: "session:demo", Dir: dir,
 		Panels: []revier.PanelSpec{
 			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: own},
 			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: tabbed, Tab: true},
 		},
 	})
 	if err != nil {
@@ -389,18 +387,24 @@ func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
 	}
-	if len(instances) != 1 || len(instances[0].Panels) != 3 {
-		t.Fatalf("instances = %+v, want one window of three panes", instances)
+	if len(instances) != 1 || len(instances[0].Panels) != 2 {
+		t.Fatalf("instances = %+v, want one window of two panes", instances)
 	}
-	for i, want := range []string{own, dir, tabbed} {
-		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", instances[0].Panels[i].ID.String(), "#{pane_current_path}").Output()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := strings.TrimSpace(string(out)); got != want {
+	for i, want := range []string{own, dir} {
+		if got := paneValue(t, h, instances[0].Panels[i].ID, "#{pane_current_path}"); got != want {
 			t.Errorf("pane %d starts in %q, want %q", i, got, want)
 		}
 	}
+}
+
+// paneValue is one format of one pane.
+func paneValue(t *testing.T, h *tmux.Host, pane revier.PanelID, format string) string {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", pane.String(), format).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // Text arrives in the pane as typed, whatever it holds: a leading dash that

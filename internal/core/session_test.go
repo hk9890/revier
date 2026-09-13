@@ -69,6 +69,13 @@ func agent(panel revier.PanelID, id, dir string) revier.Panel {
 // host was asked to open.
 func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) []revier.PanelSpec {
 	t.Helper()
+	return restored(t, c, proj, resumes).Opened[0].Panels
+}
+
+// restored restores one target from a recording and returns the runtime, for
+// the panels it opened and the agent tabs it added after.
+func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) *hosttest.FakeRuntime {
+	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
 	if _, err := c.GoResuming(context.Background(), prepared(t, proj), "home", nil, resumes); err != nil {
@@ -77,7 +84,7 @@ func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Re
 	if len(rt.Opened) != 1 {
 		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
 	}
-	return rt.Opened[0].Panels
+	return rt
 }
 
 // The recording is names: which project, which target, and what each agent was
@@ -386,32 +393,70 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	}
 }
 
-// Agents past the ones the layout declares were opened beside it by hand. Each
-// comes back in a tab of its own, started the way the project starts its
-// declared agent, on its own conversation and in its own directory.
-func TestRestoreOpensTheAgentsPastTheLayoutInTabs(t *testing.T) {
+// samePanels reports every difference between two panel lists.
+func samePanels(t *testing.T, what string, got, want []revier.PanelSpec) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s = %+v, want %d panels", what, got, len(want))
+	}
+	for i := range want {
+		if !slices.Equal(got[i].Command, want[i].Command) || got[i].Dir != want[i].Dir ||
+			got[i].Kind != want[i].Kind || got[i].Title != want[i].Title {
+			t.Errorf("%s panel %d = %+v, want %+v", what, i, got[i], want[i])
+		}
+	}
+}
+
+// tabPanels is the panels of each agent tab a runtime was asked to open.
+func tabPanels(rt *hosttest.FakeRuntime) [][]revier.PanelSpec {
+	var out [][]revier.PanelSpec
+	for _, tab := range rt.Tabs {
+		out = append(out, tab.Real.Panels)
+	}
+	return out
+}
+
+// Agents past the ones the layout declares were opened beside it by hand. Once
+// the workspace is open, each gets an agent tab, in order - the tab `revier
+// agent new` opens: the project's agent panel on its own conversation and the
+// project's shell, both in the agent's directory. The panel that was current
+// when the workspace opened is current again after them.
+func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
 	root, worktree := t.TempDir(), t.TempDir()
 
-	panels := launched(t, c, agentProject(), []core.Resume{
+	rt := hosttest.NewRuntime("rt")
+	c.Runtime = rt
+	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
 		{Harness: "claude", Session: "declared", Dir: root},
 		{Harness: "claude", Session: "by-hand", Dir: worktree},
 		{Harness: "claude"},
 	})
-	want := []revier.PanelSpec{
+	if err != nil {
+		t.Fatalf("GoResuming: %v", err)
+	}
+	samePanels(t, "opened", rt.Opened[0].Panels, []revier.PanelSpec{
 		{Kind: revier.PanelShell, Command: []string{"zsh"}},
 		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "declared"}, Dir: root},
-		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "by-hand"}, Dir: worktree, Tab: true},
-		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Tab: true},
+	})
+	tabs := tabPanels(rt)
+	if len(tabs) != 2 {
+		t.Fatalf("tabs = %+v, want an agent tab for each agent past the layout", tabs)
 	}
-	if len(panels) != len(want) {
-		t.Fatalf("panels = %+v, want %d", panels, len(want))
+	project := "/home/hans/dev/github/revier"
+	samePanels(t, "first tab", tabs[0], []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "by-hand"}, Dir: worktree},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: worktree},
+	})
+	samePanels(t, "second tab", tabs[1], []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Dir: project},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: project},
+	})
+	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != hosttest.OpenedPanel {
+		t.Errorf("panel focuses = %v, want the workspace's current panel last", rt.PanelFocuses)
 	}
-	for i := range want {
-		if !slices.Equal(panels[i].Command, want[i].Command) || panels[i].Dir != want[i].Dir ||
-			panels[i].Tab != want[i].Tab || panels[i].Kind != want[i].Kind || panels[i].Title != want[i].Title {
-			t.Errorf("panel %d = %+v, want %+v", i, panels[i], want[i])
-		}
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentResumed, core.AgentEmpty}; !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
 	}
 }
 
@@ -422,17 +467,64 @@ func TestRestoreStartsAnAgentEmptyWhenItsDirectoryIsGone(t *testing.T) {
 	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
 	gone := t.TempDir() + "/removed-worktree"
 
-	panels := launched(t, c, agentProject(), []core.Resume{
+	rt := restored(t, c, agentProject(), []core.Resume{
 		{Harness: "claude", Session: "declared", Dir: gone},
 		{Harness: "claude", Session: "by-hand", Dir: gone},
 	})
-	if len(panels) != 3 {
-		t.Fatalf("panels = %+v, want the agent past the layout still opened", panels)
+	declared := rt.Opened[0].Panels[1]
+	if !slices.Equal(declared.Command, []string{"claude", "--model", "opus"}) || declared.Dir != "" {
+		t.Errorf("declared agent = %+v, want it empty where the workspace starts", declared)
 	}
-	for _, p := range panels[1:] {
-		if !slices.Equal(p.Command, []string{"claude", "--model", "opus"}) || p.Dir != "" {
-			t.Errorf("agent = %+v, want it empty where the workspace starts", p)
-		}
+	tabs := tabPanels(rt)
+	if len(tabs) != 1 {
+		t.Fatalf("tabs = %+v, want the agent past the layout still opened", tabs)
+	}
+	if tab := tabs[0][0]; !slices.Equal(tab.Command, []string{"claude", "--model", "opus"}) || tab.Dir != "/home/hans/dev/github/revier" {
+		t.Errorf("tab agent = %+v, want it empty where the workspace starts", tab)
+	}
+}
+
+// A restore and `revier agent new` build an agent tab through the same code:
+// the tab a restore opens for an agent is the tab agent new opens for the same
+// conversation and directory.
+func TestRestoreOpensTheTabAgentNewOpens(t *testing.T) {
+	worktree := t.TempDir()
+	r := core.Resume{Harness: "claude", Session: "by-hand", Dir: worktree}
+
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+	restoredTab := tabPanels(restored(t, c, agentProject(), []core.Resume{{Harness: "claude"}, r}))[0]
+
+	rt := hosttest.NewRuntime("rt")
+	c = &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	ref := rt.Add("session:revier", "")
+	if _, err := c.NewAgent(context.Background(), prepared(t, agentProject()), "home", ref, core.Resume{Session: "by-hand", Dir: worktree}); err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	samePanels(t, "agent new tab", tabPanels(rt)[0], restoredTab)
+}
+
+// A tab that fails after the workspace opened does not fail the launch: the
+// workspace is focused and returned for binding, and the agents past the
+// layout are named as not added, with the reason.
+func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.OpenTabErr = errors.New("kitty went away")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+
+	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+		{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}, {Harness: "claude", Session: "c"},
+	})
+	if err != nil {
+		t.Fatalf("GoResuming: %v, want the open workspace kept", err)
+	}
+	if res.Ref.IsZero() || len(rt.Focuses) != 1 || rt.Focuses[0] != res.Ref {
+		t.Errorf("Ref = %+v, focuses = %+v, want the workspace returned and focused", res.Ref, rt.Focuses)
+	}
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentNotAdded, core.AgentNotAdded}; !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
+	}
+	if res.AgentErr == nil || !strings.Contains(res.AgentErr.Error(), "kitty went away") {
+		t.Errorf("AgentErr = %v, want the reason", res.AgentErr)
 	}
 }
 

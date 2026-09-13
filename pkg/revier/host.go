@@ -130,8 +130,11 @@ type PanelWriter interface {
 // Which tab belongs to which target is the core's decision. The runtime only
 // sets vars on the panel it opens and reports them back in Panel.Vars.
 type PanelOpener interface {
-	// OpenTab opens r.Launch as a new tab of the instance, started in r.Dir,
-	// with vars set on its panel, and returns that panel.
+	// OpenTab opens a new tab of the instance, after the ones it holds, and
+	// returns its first panel. The tab runs r.Launch, or holds r.Panels with
+	// every later panel split into the first, each panel started in its Dir or
+	// else r.Dir. vars are set on the first panel. It is a tab target's tab
+	// (D64) and the agent tab of `revier agent new` and a restore (D65).
 	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
 
 	// FocusPanel makes the panel current inside its instance, switching tab
@@ -140,6 +143,17 @@ type PanelOpener interface {
 
 	// FocusedPanel reports the panel that is current inside the instance.
 	FocusedPanel(ctx context.Context, ref TargetRef) (PanelID, error)
+}
+
+// PanelFinder is an optional capability of a Runtime, detected by type
+// assertion. FindPanel reports the instance that holds a panel id as the
+// calling process names it, and a zero ref when none does. It exists because
+// a panel id can be one runtime process's: a kitty window id is, and the id a
+// kitty key passes means a window of the kitty the key was pressed in, which
+// only the runtime can tell from the environment it started the command with
+// (decisions.md D65). A runtime whose ids are unique needs no finder.
+type PanelFinder interface {
+	FindPanel(ctx context.Context, panel PanelID) (TargetRef, error)
 }
 
 type WindowEvent struct {

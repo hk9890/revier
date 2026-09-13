@@ -52,6 +52,9 @@ usage:
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
                                 type one line into an agent and submit it
+  revier agent new [-p name | --panel id] [--resume id] [--dir path]
+                                add an agent tab, with its shell, to an open
+                                workspace (kitty)
   revier session save [--name label]
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]

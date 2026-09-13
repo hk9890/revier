@@ -112,14 +112,16 @@ printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pi
 
 To run the agents past the layout, split more agent panes into the workspace
 before the save, each in its own directory, and list each one's pid the same
-way:
+way. tmux has no tabs to open them in, so the restore names them as not
+restored:
 
 ```bash
 tmux split-window -t home -c "$S/state" bash -c "exec -a claude sleep 600"
 ```
 
-Remove one of those directories before the restore to see the agent start
-empty, and the restore say `directory gone`.
+Opening them as tabs, and `revier agent new`, need the kitty runtime: verify
+them with the kitty recipe under "When a screen is unavoidable", on a scratch
+project whose home declares `panels` with a `kind = "agent"` panel.
 
 Run a real `claude` in the pane instead to check against Claude Code itself:
 answer its trust prompt for the directory with "Yes", since the default exits.
