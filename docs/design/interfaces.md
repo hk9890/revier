@@ -303,7 +303,7 @@ the TUI sort order.
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe
 that implements it lets a restored workspace start its agent on the
-conversation it held rather than empty (D47). A probe that does not still
+conversation it held rather than empty (D62). A probe that does not still
 restores the workspace, with an empty agent.
 
 ```go

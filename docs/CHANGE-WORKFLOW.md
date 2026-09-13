@@ -38,6 +38,6 @@ Use the `commit-commands:commit` skill for the standard flow.
 
 - `mise run quality:full` passes — `quality` alone skips the live substrates,
   the only layers that prove an adapter drives its tool.
-- A change to the model is recorded in `docs/design/decisions.md`, and any
-  entry it invalidates is marked `Superseded by Dnn` rather than edited.
+- A change to the model is recorded in `docs/design/decisions.md`, as
+  [DOCUMENTING.md](DOCUMENTING.md) says.
 - A new host ships the host tests [TESTING.md](TESTING.md) requires.
