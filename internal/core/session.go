@@ -69,6 +69,9 @@ const (
 	// AgentNotAdded is past the declared ones, and its tab failed to open
 	// after the workspace itself opened. Result.AgentErr says why.
 	AgentNotAdded
+	// AgentInTab ran in a tab target. The tab is opened with its own launch
+	// argv, which need not be the agent, so no resume flag is added to it.
+	AgentInTab
 )
 
 // RestoreStep is one recorded target and what restoring it means here.
@@ -129,6 +132,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 					}
 					if probe, ok := c.probeFor(panel); ok {
 						tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
+						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
 				continue
@@ -190,10 +194,12 @@ func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Pane
 // SessionGaps is what a save found open and could not record. Unnamed is the
 // agents recorded without a conversation. Failed holds why a probe could not
 // answer at all - claude not on PATH - so those agents are not mistaken for
-// the ones no listing could match.
+// the ones no listing could match. InTab addresses the agents that run in a
+// tab target, which a restore opens without their conversation.
 type SessionGaps struct {
 	Unnamed int
 	Failed  []error
+	InTab   []string
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being
@@ -332,8 +338,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 		return nil
 	}
 	if p.isTab(i) {
-		_, outcomes := c.tabResuming(*p.Targets[i].Runtime, resumes)
-		return outcomes
+		return inTab(resumes)
 	}
 	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {

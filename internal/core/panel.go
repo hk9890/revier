@@ -139,9 +139,8 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// keep raising the instance after inside is removed from the file.
 	res := Result{Target: t.Runtime.Inside, Ref: in.Ref}
 	if !open {
-		real, outcomes := c.tabResuming(*t.Runtime, resumes)
-		res.Agents = outcomes
-		if tab, err = opener.OpenTab(ctx, in.Ref, real, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
+		res.Agents = inTab(resumes)
+		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
 			return Result{}, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
 		res.Launched = true
@@ -155,24 +154,18 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	return res, nil
 }
 
-// tabResuming is resuming for a tab: its one panel is the launch argv, so the
-// first recorded agent starts on its conversation there, and any other is
-// dropped. A save records at most one, because a tab is one panel.
-func (c *Core) tabResuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome) {
+// inTab is what a tab target's restore does with its recorded agent: nothing.
+// The tab runs its own launch argv, and a resume flag added to an argv that is
+// not the agent starts a broken command, so the save warns instead.
+func inTab(resumes []Resume) []AgentOutcome {
 	if len(resumes) == 0 {
-		return real, nil
-	}
-	panels, first, _ := c.layAgents([]revier.PanelSpec{{Kind: revier.PanelAgent, Command: real.Launch}}, resumes[:1])
-	real.Launch = panels[0].Command
-	if panels[0].Dir != "" {
-		real.Dir = panels[0].Dir
+		return nil
 	}
 	outcomes := make([]AgentOutcome, len(resumes))
 	for n := range outcomes {
-		outcomes[n] = AgentDropped
+		outcomes[n] = AgentInTab
 	}
-	outcomes[0] = first[0]
-	return real, outcomes
+	return outcomes
 }
 
 // goHomeFromTab is the second press on a tab. A home that holds the tab gets

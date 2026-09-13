@@ -277,11 +277,12 @@ func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
 	}
 }
 
-// An agent in a tab is recorded under the tab, not under the instance that
-// holds it, and restoring the tab starts it on its conversation in the tab.
-// Recorded under the instance, the restore opened it twice: once as an extra
-// agent of the workspace, and once as the tab.
-func TestATabsAgentIsRecordedAndRestoredOnce(t *testing.T) {
+// An agent in a tab target is recorded under the tab, not under the instance
+// that holds it, so a restore does not open it a second time as an extra agent
+// tab of the workspace. It is not resumed: the tab runs its own launch argv,
+// which need not be the agent, and a resume flag added to it would start a
+// broken command. The save says so while the agent still runs.
+func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	tabAgent := agent("2", "tab-9", "")
 	tabAgent.Vars[core.PanelTargetVar] = "tickets"
@@ -293,7 +294,7 @@ func TestATabsAgentIsRecordedAndRestoredOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), report, "revier")
+	s, gaps := c.Session(context.Background(), report, "revier")
 	targets := s.Projects[0].Targets
 	if len(targets) != 2 || len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" {
 		t.Fatalf("targets = %+v, want home with its own agent only", targets)
@@ -301,28 +302,29 @@ func TestATabsAgentIsRecordedAndRestoredOnce(t *testing.T) {
 	if len(targets[1].Agents) != 1 || targets[1].Agents[0].Session != "tab-9" {
 		t.Fatalf("tickets = %+v, want the tab's agent", targets[1])
 	}
+	if !slices.Equal(gaps.InTab, []string{"revier:tickets"}) {
+		t.Errorf("gaps.InTab = %v, want the tab named at save time", gaps.InTab)
+	}
 
 	// A restore on a machine where the workspace is up and the tab is not.
 	restored := hosttest.NewRuntime("kitty")
 	restored.Add("session:revier", "kitty", agent("1", "abc-123", ""))
 	c.Runtime = restored
-	dir := t.TempDir()
-	res, err := c.GoResuming(context.Background(), p, "tickets", nil, []core.Resume{{Harness: "claude", Session: "tab-9", Dir: dir}})
+	resumes := []core.Resume{{Harness: "claude", Session: "tab-9", Dir: t.TempDir()}}
+	res, err := c.GoResuming(context.Background(), p, "tickets", nil, resumes)
 	if err != nil {
 		t.Fatalf("GoResuming: %v", err)
 	}
 	if len(restored.Tabs) != 1 {
 		t.Fatalf("tabs = %d, want 1", len(restored.Tabs))
 	}
-	real := restored.Tabs[0].Real
-	if want := []string{"taskmgr-ui", "--resume", "tab-9"}; !slices.Equal(real.Launch, want) || real.Dir != dir {
-		t.Errorf("tab launch = %v in %q, want %v in %q", real.Launch, real.Dir, want, dir)
+	if real := restored.Tabs[0].Real; !slices.Equal(real.Launch, []string{"taskmgr-ui"}) || real.Dir != "/p" {
+		t.Errorf("tab launch = %v in %q, want the plain launch argv in the project", real.Launch, real.Dir)
 	}
-	if len(res.Agents) != 1 || res.Agents[0] != core.AgentResumed {
-		t.Errorf("agents = %v, want one resumed", res.Agents)
+	if !slices.Equal(res.Agents, []core.AgentOutcome{core.AgentInTab}) {
+		t.Errorf("agents = %v, want the one agent reported as in a tab target", res.Agents)
 	}
-	dry := c.Resumes(p, "tickets", []core.Resume{{Harness: "claude", Session: "tab-9"}, {Harness: "claude"}})
-	if !slices.Equal(dry, []core.AgentOutcome{core.AgentResumed, core.AgentDropped}) {
-		t.Errorf("dry run = %v, want the first resumed and the second dropped", dry)
+	if dry := c.Resumes(p, "tickets", resumes); !slices.Equal(dry, res.Agents) {
+		t.Errorf("dry run = %v, want what the restore did: %v", dry, res.Agents)
 	}
 }

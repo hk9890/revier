@@ -1754,19 +1754,27 @@ it would lose its title again, which was the bug D63 fixed. D66 lists minimized
 windows, so the rule costs only a window mutter has not shown yet, which is
 gone within a moment.
 
-### D68 — a tab's agent is recorded under the tab, and resumed in it — Accepted
+### D68 — a tab target's agent is recorded under the tab, and not resumed — Accepted
 
 Amends D64's last paragraph.
 
 D64 recorded a tab by its name and left its panel to the target of the
 instance that holds it. Under D62 every agent a probe claims is recorded in
-order, so an agent in a tab became one more agent of the workspace. A restore
-then opened it twice: once as an extra agent tab of the workspace, started as
-a copy of the declared agent, and once more when the tab target's step ran.
+order, so an agent in a tab target became one more agent of the workspace. A
+restore then opened it twice: once as an agent tab of the workspace (D65), and
+once more when the tab target's step ran.
 
 So the panel that carries `revier_target` is recorded under its tab target,
-and left out of its instance's agents. A tab is one panel, so it records at
-most one agent. Restoring the tab starts its launch argv as that agent, on its
-conversation and in its directory, by the same rules D62 lays over a layout; a
-second recorded agent, from a file edited by hand, is reported as not restored.
-The dry run says the same, because both go through one function.
+and left out of its instance's agents, while that tab target is open in that
+instance. A panel that names a target no longer a tab stays with its instance,
+so its agent is not lost.
+
+The agent is not resumed. A tab target runs its own launch argv, and nothing
+says that argv is the agent: a claude started by hand in the ticket viewer's
+tab would come back as `taskmgr-ui --resume <id>`. Two ways to resume were
+rejected. A `kind = "agent"` on the tab adds a field for a rare case, since an
+agent opened beside a workspace is an agent tab (D65), which is resumed. And
+resuming when the probe's program is the first word of the argv misses every
+launcher script. So the restore opens the tab with its plain argv and names the
+agent as not resumed, and the save names it first, while the agent still runs
+and can be moved into an agent tab.
