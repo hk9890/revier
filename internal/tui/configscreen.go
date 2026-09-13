@@ -76,6 +76,7 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.leavePane()
 	m.crow = int(rowTheme)
+	m.refused = ""
 	m.dialog = dialogConfig
 	return m, nil
 }
@@ -182,7 +183,14 @@ func (m Model) switchRuntime(step int) (tea.Model, tea.Cmd) {
 	if m.switching != "" {
 		return m, nil
 	}
-	next := cycle(append([]string{autoRuntime}, m.runtimes...), m.runtimeChoice(), step)
+	// A choice that did not probe is stepped from, not the configured one:
+	// stepping from the configured one would offer the refused choice again,
+	// and a direction with a broken host in it would go nowhere.
+	from := m.runtimeChoice()
+	if m.refused != "" {
+		from = m.refused
+	}
+	next := cycle(append([]string{autoRuntime}, m.runtimes...), from, step)
 	want := []string{}
 	if next != autoRuntime {
 		want = []string{next}
@@ -200,11 +208,14 @@ func (m Model) switchRuntime(step int) (tea.Model, tea.Cmd) {
 // runtimeSwitched takes a probed choice: written, and the core swapped for
 // one over the host it selected. The next survey reads the new host.
 func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
+	tried := m.switching
 	m.switching = ""
 	if msg.err != nil {
 		m.err = msg.err
+		m.refused = tried
 		return m, nil
 	}
+	m.refused = ""
 	if err := writeConfig("hosts", "runtime", msg.want); err != nil {
 		m.err = err
 		return m, nil

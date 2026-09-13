@@ -122,6 +122,7 @@ type Model struct {
 	runtimes  []string        // the runtime hosts the screen offers besides auto
 	pick      RuntimeSelector // probes a runtime choice, as startup does
 	switching string          // the runtime choice being probed
+	refused   string          // the last runtime choice that did not probe, stepped from next
 	crow      int             // the row the screen's cursor is on
 	chord     textinput.Model // the trigger key, while it is typed
 }

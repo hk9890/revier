@@ -192,3 +192,33 @@ func TestTheConfigScreenKeepsARuntimeThatDoesNotProbe(t *testing.T) {
 		t.Errorf("config screen does not show the old runtime still in use:\n%s", screen(m))
 	}
 }
+
+// A host that does not probe is stepped past: the next press in the same
+// direction offers the choice after it, not the refused one again.
+func TestTheConfigScreenStepsPastARuntimeThatDoesNotProbe(t *testing.T) {
+	root := configRoot(t, "")
+	_, _, c, projects := world(t, 1)
+	var asked [][]string
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
+		WithRuntimes([]string{"kitty", "tmux"}, func(_ context.Context, want []string) (revier.Runtime, error) {
+			asked = append(asked, want)
+			if len(want) == 1 && want[0] == "kitty" {
+				return nil, errors.New("kitty: no remote control")
+			}
+			return hosttest.NewRuntime(want[0]), nil
+		})
+
+	m, cmd := press(onRuntimeRow(m), "right")
+	m = run(m, cmd)
+	m, cmd = press(m, "right")
+	m = run(m, cmd)
+	if !strings.Contains(screen(m), "in use: tmux") {
+		t.Errorf("config screen does not show tmux in use:\n%s", screen(m))
+	}
+	if len(asked) != 2 || asked[1][0] != "tmux" {
+		t.Fatalf("probed %v, want kitty and then tmux", asked)
+	}
+	if got, want := configText(t, root), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+		t.Errorf("config.toml = %q, want %q", got, want)
+	}
+}
