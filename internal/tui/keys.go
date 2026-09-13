@@ -114,6 +114,8 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	switch d {
 	case dialogHosts:
 		enter = "list its projects"
+	case dialogRemote:
+		enter = "name the link"
 	case dialogNew:
 		return []key.Binding{helpKey("enter", "add the project"), helpKey("esc", "back"), k.Quit}
 	case dialogHelp:

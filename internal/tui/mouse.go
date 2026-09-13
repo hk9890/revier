@@ -99,7 +99,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 // rowless reports a screen standing over the list with no rows of its own.
 func (m Model) rowless() bool {
-	return m.dialog == dialogNew || m.dialog == dialogConfig
+	return m.dialog == dialogNew || m.dialog == dialogLinkName || m.dialog == dialogConfig
 }
 
 // rowAt is the list row under a terminal cell, if a row is there: the cell is

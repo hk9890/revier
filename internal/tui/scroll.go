@@ -26,6 +26,10 @@ func (m *Model) syncBody() {
 		m.body.SetContent(m.newScreen())
 		m.body.SetYOffset(0)
 		return
+	case dialogLinkName:
+		m.body.SetContent(m.linkNameScreen())
+		m.body.SetYOffset(0)
+		return
 	case dialogConfig:
 		text, at := m.configScreen()
 		m.body.SetContent(text)
@@ -50,6 +54,7 @@ func (m *Model) syncBody() {
 		row = m.over.index
 	}
 	m.plist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
+	m.rlist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())
@@ -77,8 +82,8 @@ func (m *Model) bodyList() *list.Model {
 
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
-	if m.dialog != dialogNone {
-		return 1 // a dialog's rows are one line each
+	if m.dialog == dialogHosts {
+		return 1 // a host is its name alone
 	}
 	return projectDelegate{}.Height()
 }

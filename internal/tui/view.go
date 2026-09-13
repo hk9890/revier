@@ -116,6 +116,11 @@ func (m Model) top() string {
 		name = "Link a project on another machine"
 	case dialogRemote:
 		name = m.host
+	case dialogLinkName:
+		name = "Name the link"
+		if it, ok := m.rlist.SelectedItem().(remoteItem); ok {
+			name += " to " + string(it.view.Project.Name) + " on " + m.host
+		}
 	case dialogNew:
 		name = "Add a project on this machine"
 	case dialogConfig:
@@ -146,7 +151,9 @@ func (m Model) subtitle() string {
 	case dialogHosts:
 		return ""
 	case dialogRemote:
-		return " " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+		return " " + m.theme.Meta.Render("the projects on "+m.host)
+	case dialogLinkName:
+		return m.linkNameView()
 	case dialogNew:
 		return " " + m.path.View()
 	case dialogConfig:
@@ -201,7 +208,7 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
 	case m.dialog == dialogRemote:
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
-	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogHelp:
+	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
