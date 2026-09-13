@@ -1024,7 +1024,7 @@ already do. Left out too: waiting for agents to fall quiet before saving. The
 survey already knows every agent's status, so it can be added when it is
 wanted, and nothing here has to change to allow it.
 
-### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; the hook's mechanism amended by D52
+### D47 — an agent panel is restored onto its conversation by its own probe — Accepted; where the id comes from superseded by D55
 
 A restored workspace whose agent starts empty solves the cheap half of the
 problem. Reopening twenty terminals in the right directories was never the
@@ -1156,7 +1156,7 @@ bar, and a blank line between the query and the rule, so the query does not
 read as the rule's caption. The top of the surface is six lines, as it was
 with the header and the border, and the list gains the four columns.
 
-### D52 — the session hook reaches kitty through remote control, not an escape — Accepted
+### D52 — the session hook reaches kitty through remote control, not an escape — Superseded by D55
 
 D47 said the `SessionStart` hook sets its variable by "the path `CS_TAB` and
 `CS_STATE` already use", and the hook wrote a `SetUserVar` escape to
@@ -1233,9 +1233,50 @@ The screen takes the full width, because it is about no project and the pane
 would be empty. It only reads: the arrows and the wheel scroll it, Esc or
 alt+h leave it, and a typed letter reaches no filter behind it.
 
+### D55 — a conversation id comes from `claude agents --json`, not from a hook — Accepted
+
+D47 read the id from a user variable a `SessionStart` hook set, and D52 fixed
+how that hook reached kitty. Both assumed Claude Code offered no way to ask
+which conversation a running process holds. It does: `claude agents --json`,
+documented "for scripting", lists every active interactive session with the pid
+of its process and its `sessionId`. A save now runs it once and matches each
+agent panel by pid. The hook, and the `CS_SESSION` variable it set, are gone.
+
+This is better on every axis the hook was judged on. There is nothing to
+install, so the feature works on the first save. Agents already running are
+named too, where the hook named only sessions started after it was installed —
+and the case this exists for is twenty agents open when a restart is due. The
+id no longer travels through a terminal, so there is no kitty path and tmux
+path to get right separately. And the match is by pid, which is exact: two
+agents in one repository are told apart, the property D47 rejected the
+transcript guess for lacking.
+
+Checked against Claude Code 2.1 with a real agent before it was built: the
+listed pid is the one tmux reports for the pane when Claude is the pane's
+command; after `/clear` the listing carries the new conversation's id; after
+`--resume <id>` the new process is listed under the same id. The command
+answers in about a tenth of a second.
+
+`Resumable` asks for every panel of a save at once, `Sessions(ctx, panels)`,
+rather than once per panel. The answer costs a process, and a save of twenty
+agents must cost it once — the rule `Host.Instances` follows for the same
+reason.
+
+What it cannot see: a pane where `claude` was typed into a shell. tmux reports
+the pane's first process, the shell, and the pid matches nothing. kitty reports
+the foreground process and is not affected, and revier always launches an agent
+as the pane's own command. A save counts the agents it could not name and says
+so while they still run, which also makes a future change to the command
+visible at the first save rather than after a reboot.
+
+The same listing reports each session's `status`: `idle`, `busy`, and
+`waiting` while a permission prompt is up. That is the attention signal the
+`CS_STATE` hooks provide, available the same way, and it is left for a
+decision of its own.
+
 ## 2026-09-13
 
-### D55 — actions are edited on the config screen — Accepted
+### D56 — actions are edited on the config screen — Accepted
 
 Narrows D53: configured actions are on the screen. Probes are still edited in
 the file.

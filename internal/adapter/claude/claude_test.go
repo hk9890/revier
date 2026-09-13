@@ -2,6 +2,7 @@ package claude_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
@@ -107,32 +108,72 @@ func TestSpinnerRanges(t *testing.T) {
 // checked by the compiler anywhere else.
 var _ revier.Resumable = (*claude.Probe)(nil)
 
-// The id comes off the panel and nowhere else. A pane with no variable holds
-// no conversation this probe will name: the only other signal is the newest
-// transcript for the pane's directory, which cannot tell two agents in one
-// repository apart, and resuming the wrong conversation is worse than
-// resuming none.
-func TestSession(t *testing.T) {
-	p := &claude.Probe{}
-	cases := []struct {
-		name  string
-		panel revier.Panel
-		want  revier.SessionID
-		held  bool
-	}{
-		{"the hook has run", revier.Panel{Vars: map[string]string{"CS_SESSION": "abc-123"}}, "abc-123", true},
-		{"no hook installed", revier.Panel{Vars: map[string]string{"CS_TAB": "1"}}, "", false},
-		{"set but empty", revier.Panel{Vars: map[string]string{"CS_SESSION": ""}}, "", false},
-		{"no variables at all", revier.Panel{}, "", false},
+// agentsJSON is `claude agents --json` as Claude Code 2.1 prints it: a
+// background session with no pid, and interactive sessions with the pid of
+// their process.
+const agentsJSON = `[
+  {"id": "22e0eb3a", "cwd": "/w", "kind": "background", "startedAt": 1786802305922,
+   "sessionId": "22e0eb3a-0c4c-4857-ba01-5503c5ccee83", "name": "review", "state": "blocked"},
+  {"pid": 583601, "cwd": "/a", "kind": "interactive", "startedAt": 1789118141564,
+   "sessionId": "39120ccd-8abd-434a-92c7-83ecac81fc32", "name": "a", "status": "idle"},
+  {"pid": 610851, "cwd": "/a", "kind": "interactive", "startedAt": 1789118532755,
+   "sessionId": "b8f365f0-07ae-4464-867f-f8ac02c2f467", "name": "b", "status": "waiting"}
+]`
+
+func agents(out string, err error) func(context.Context) ([]byte, error) {
+	return func(context.Context) ([]byte, error) { return []byte(out), err }
+}
+
+// A pane is matched to its conversation by the pid of its process and nothing
+// else, so two agents in one directory are told apart. The ids come back in the
+// panels' order, empty where nothing matched.
+func TestSessions(t *testing.T) {
+	p := &claude.Probe{Agents: agents(agentsJSON, nil)}
+	panels := []revier.Panel{
+		{ID: "1", PID: 610851},
+		{ID: "2", PID: 999999}, // a pid Claude does not list: claude typed into a shell
+		{ID: "3", PID: 583601}, // same directory as the first, a different conversation
+		{ID: "4"},              // a runtime that could not see the process
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, held, err := p.Session(context.Background(), tc.panel)
-			if err != nil {
-				t.Fatalf("Session: %v", err)
-			}
-			if got != tc.want || held != tc.held {
-				t.Errorf("Session = (%q, %v), want (%q, %v)", got, held, tc.want, tc.held)
+	got, err := p.Sessions(context.Background(), panels)
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	want := []revier.SessionID{"b8f365f0-07ae-4464-867f-f8ac02c2f467", "", "39120ccd-8abd-434a-92c7-83ecac81fc32", ""}
+	if len(got) != len(want) {
+		t.Fatalf("Sessions = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("panel %s = %q, want %q", panels[i].ID, got[i], want[i])
+		}
+	}
+}
+
+// A background session has no pid. It must not become the conversation of a
+// panel that reports none.
+func TestSessionsIgnoresBackgroundSessions(t *testing.T) {
+	p := &claude.Probe{Agents: agents(agentsJSON, nil)}
+	got, err := p.Sessions(context.Background(), []revier.Panel{{ID: "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "" {
+		t.Errorf("a panel with no pid was given %q", got[0])
+	}
+}
+
+// Claude Code missing, or printing something else, is the probe's error to
+// return; the core turns it into agents that restore empty.
+func TestSessionsReportsWhatItCannotRead(t *testing.T) {
+	for name, run := range map[string]func(context.Context) ([]byte, error){
+		"the command failed": agents("", errors.New("exec: claude: not found")),
+		"not json":           agents("Usage: claude agents [options]", nil),
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := &claude.Probe{Agents: run}
+			if _, err := p.Sessions(context.Background(), []revier.Panel{{PID: 583601}}); err == nil {
+				t.Error("Sessions returned no error")
 			}
 		})
 	}

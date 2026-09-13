@@ -166,10 +166,12 @@ type SessionID string
 // that current spec and folds its own resume flag into it, which is why the
 // flag's spelling never reaches the core.
 type Resumable interface {
-	// Session names the conversation the panel holds, false when it holds
-	// none. It is called on the panels a survey already listed, so an
-	// implementation reads what is on the Panel rather than going to look.
-	Session(ctx context.Context, p Panel) (SessionID, bool, error)
+	// Sessions names the conversation each panel holds, in the panels'
+	// order, with an empty id for a panel that holds none. It is asked once
+	// for every panel of a save rather than once per panel, because the
+	// answer may cost a process - `claude agents --json` - and a save of
+	// twenty agents must cost that once, the rule Host.Instances follows.
+	Sessions(ctx context.Context, panels []Panel) ([]SessionID, error)
 
 	// ResumeCommand returns the argv that starts the harness on that
 	// conversation, built from the panel as it is configured now. The
