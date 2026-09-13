@@ -59,6 +59,7 @@ type Host struct {
 	sockets   func() []string
 	start     func(ctx context.Context, args ...string) error
 	ownSocket func() string
+	parent    func(pid int) (int, bool)
 }
 
 func (h *Host) Name() string { return "kitty" }
@@ -333,7 +334,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	}
 	var out []revier.Instance
 	for _, l := range listings {
-		out = append(out, decode(l)...)
+		out = append(out, h.decode(l)...)
 	}
 	return out, nil
 }
@@ -341,7 +342,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 // decode turns one socket's listing into instances. The instance id carries
 // the socket, because OS window ids are per process and Focus must find its
 // way back.
-func decode(l listing) []revier.Instance {
+func (h *Host) decode(l listing) []revier.Instance {
 	pid := pidOf(l.socket)
 	out := make([]revier.Instance, 0, len(l.windows))
 	for _, w := range l.windows {
@@ -361,7 +362,7 @@ func decode(l listing) []revier.Instance {
 		}
 		for _, t := range w.Tabs {
 			for _, win := range t.Windows {
-				inst.Panels = append(inst.Panels, panelOf(win))
+				inst.Panels = append(inst.Panels, h.panelOf(win))
 			}
 		}
 		out = append(out, inst)
@@ -403,8 +404,8 @@ func pidOf(socket string) int {
 	return n
 }
 
-func panelOf(w window) revier.Panel {
-	kind, cmd, pid := classify(w.Foreground)
+func (h *Host) panelOf(w window) revier.Panel {
+	kind, cmd, pid := classify(w.Foreground, w.PID, h.parentOf)
 	if pid == 0 {
 		pid = w.PID
 	}
@@ -418,25 +419,94 @@ func panelOf(w window) revier.Panel {
 	}
 }
 
-// classify reads the foreground process group as kitty lists it, outermost
-// first. The panel's command is the outermost program that is neither kitty's
-// `run-shell` wrapper nor a shell: a `--hold` window wraps its command in both,
-// and a program the panel runs stays the command while it runs a tool of its
-// own. Whether that program is an agent is the probes' to say, so no harness
-// is named here - a probe declared in config is for one this adapter was not
-// written with. With nothing but wrappers and shells, the panel is a shell.
-func classify(fg []process) (revier.PanelKind, []string, int) {
+// classify reads the foreground process group of a window whose own process
+// is root. The panel's command is the program nearest root that is neither
+// kitty's `run-shell` wrapper nor a shell: a `--hold` window wraps its command
+// in both, and a program the panel runs stays the command while it runs a
+// tool of its own. Whether that program is an agent is the probes' to say, so
+// no harness is named here - a probe declared in config is for one this
+// adapter was not written with. With nothing but wrappers and shells, the
+// panel is a shell.
+//
+// Nearness is by parent, not by kitty's order. kitty lists the group by pid,
+// and a pid says nothing about who started whom once pids wrap. A process
+// that has left root's tree is not the panel's at all: `wl-copy`, which Claude
+// Code starts to hold the clipboard, forks, lets its parent exit, and stays in
+// the group, often with a lower pid than the agent. Taken as the command, it
+// hid the agent from every probe. A process whose parents cannot be read -
+// gone between the listing and the read - keeps kitty's order, after the ones
+// placed in the tree.
+func classify(fg []process, root int, parent func(pid int) (int, bool)) (revier.PanelKind, []string, int) {
+	var own []process
+	best, bestRank := -1, 0
 	for _, p := range fg {
+		r := rank(p.PID, root, parent)
+		if r == detached {
+			continue
+		}
+		own = append(own, p)
 		if len(p.Cmdline) == 0 || isRunShell(p.Cmdline) || isShell(base(p.Cmdline[0])) {
 			continue
 		}
-		return revier.PanelTool, p.Cmdline, p.PID
+		if best < 0 || r < bestRank {
+			best, bestRank = len(own)-1, r
+		}
 	}
-	if len(fg) == 0 {
+	if best >= 0 {
+		return revier.PanelTool, own[best].Cmdline, own[best].PID
+	}
+	if len(own) == 0 {
 		return revier.PanelShell, nil, 0
 	}
-	last := fg[len(fg)-1]
+	last := own[len(own)-1]
 	return revier.PanelShell, last.Cmdline, last.PID
+}
+
+// Ranks of a process that is not placed by its depth under the window's root.
+const (
+	unknown  = 1 << 20 // its parents could not be read: after every placed one
+	detached = -1      // its parents lead somewhere else: not the panel's
+)
+
+// rank is how many parents up from pid the window's root is, unknown when a
+// parent cannot be read, and detached when the chain ends without reaching
+// root - at init or a subreaper.
+func rank(pid, root int, parent func(int) (int, bool)) int {
+	for depth := 0; depth < 64; depth++ {
+		if pid == root {
+			return depth
+		}
+		next, ok := parent(pid)
+		if !ok {
+			return unknown
+		}
+		if next <= 1 {
+			return detached
+		}
+		pid = next
+	}
+	return detached
+}
+
+// parentOf reads a process's parent from /proc. kitty is a host on this
+// machine, so its pids are this machine's.
+func (h *Host) parentOf(pid int) (int, bool) {
+	if h.parent != nil {
+		return h.parent(pid)
+	}
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, false
+	}
+	// The command name in parentheses may hold spaces and parentheses of its
+	// own; the fields after its last ')' are fixed: state, then ppid.
+	rest := stat[bytes.LastIndexByte(stat, ')')+1:]
+	fields := strings.Fields(string(rest))
+	if len(fields) < 2 {
+		return 0, false
+	}
+	ppid, err := strconv.Atoi(fields[1])
+	return ppid, err == nil
 }
 
 func base(arg string) string { return arg[strings.LastIndex(arg, "/")+1:] }

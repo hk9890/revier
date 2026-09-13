@@ -52,11 +52,31 @@ func (r *recorder) all() []call {
 	return append([]call(nil), r.calls...)
 }
 
+// parents is the process tree behind every recorded listing here, child to
+// parent. The pids are made up, so the host must not read them from this
+// machine's /proc, where they belong to other processes.
+var parents = map[int]int{
+	4002: 4001, 4003: 4002,
+	5002: 5001, 5003: 5002, 5021: 5020,
+	6002: 6001, 6003: 6002, 6004: 6003,
+	7002: 7001, 7003: 1,
+}
+
+// newHost is a Host that reads the process tree from parents.
+func newHost() *kitty.Host {
+	h := &kitty.Host{}
+	h.SetParents(func(pid int) (int, bool) {
+		ppid, ok := parents[pid]
+		return ppid, ok
+	})
+	return h
+}
+
 // host returns a Host whose kitten answers from the fixture on every socket
 // given, recording each call.
 func host(t *testing.T, sockets ...string) (*kitty.Host, *recorder) {
 	t.Helper()
-	h := &kitty.Host{}
+	h := newHost()
 	rec := &recorder{}
 	raw := fixture(t)
 	h.SetSockets(func() []string { return sockets })
@@ -162,7 +182,7 @@ func TestPanelsCarryWhatTheProbeReads(t *testing.T) {
 // the run-shell wrapper and a login shell, so its probe keeps claiming it.
 // The adapter names no harness: which program is an agent is the probe's.
 func TestADeclaredHarnessRunningAToolIsStillTheCommand(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
 		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
@@ -187,10 +207,72 @@ func TestADeclaredHarnessRunningAToolIsStillTheCommand(t *testing.T) {
 	}
 }
 
+// The order kitty listed on a real desktop: a wl-copy Claude Code left holding
+// the clipboard, detached from the window's tree, sorted before the agent by
+// its lower pid. The agent is still the panel's command; taking wl-copy hid it
+// from every probe, so it was neither shown nor saved.
+func TestAProcessDetachedFromTheWindowIsNotTheCommand(t *testing.T) {
+	windows := func(fg []map[string]any) ([]byte, error) {
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 38, "pid": 7001, "foreground_processes": fg}}}}}})
+	}
+	wlCopy := map[string]any{"pid": 7003, "cmdline": []string{"wl-copy", "--type", "text/plain"}}
+	wrapper := map[string]any{"pid": 7001, "cmdline": []string{"/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh"}}
+	agent := map[string]any{"pid": 7002, "cmdline": []string{"claude"}}
+	shell := map[string]any{"pid": 7001, "cmdline": []string{"/usr/bin/zsh", "-i"}}
+
+	cases := []struct {
+		name string
+		fg   []map[string]any
+		kind revier.PanelKind
+		cmd  string
+		pid  int
+	}{
+		{"before the agent", []map[string]any{wlCopy, wrapper, agent}, revier.PanelTool, "claude", 7002},
+		{"after the agent", []map[string]any{wrapper, agent, wlCopy}, revier.PanelTool, "claude", 7002},
+		{"in a shell", []map[string]any{wlCopy, shell}, revier.PanelShell, "/usr/bin/zsh", 7001},
+	}
+	for _, tc := range cases {
+		h := newHost()
+		h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+		h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) { return windows(tc.fg) })
+		got, err := h.Instances(context.Background())
+		if err != nil {
+			t.Fatalf("%s: Instances: %v", tc.name, err)
+		}
+		panel := got[0].Panels[0]
+		if panel.Kind != tc.kind || len(panel.Command) == 0 || panel.Command[0] != tc.cmd || panel.PID != tc.pid {
+			t.Errorf("%s: panel = %s %v pid %d, want %s %s pid %d", tc.name, panel.Kind, panel.Command, panel.PID, tc.kind, tc.cmd, tc.pid)
+		}
+	}
+}
+
+// A process whose parents cannot be read - gone between the listing and the
+// read - keeps kitty's order, after every process placed in the window's tree.
+func TestAProcessWithUnreadableParentsComesAfterThePlacedOnes(t *testing.T) {
+	h := newHost()
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 1, "pid": 7001,
+				"foreground_processes": []map[string]any{
+					{"pid": 9999, "cmdline": []string{"gone"}},
+					{"pid": 7002, "cmdline": []string{"claude"}},
+				}}}}}}})
+	})
+	got, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if panel := got[0].Panels[0]; !panel.Runs("claude") {
+		t.Errorf("panel command = %v, want claude, which is placed in the tree", panel.Command)
+	}
+}
+
 // A panel whose group holds only the wrapper and shells has no program of its
 // own running: it is a shell, and a probe's marker left in it is stale.
 func TestAPanelOfOnlyShellsIsAShell(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
 		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
@@ -338,7 +420,7 @@ func TestOpenTabRefusesAnOSWindowThatIsGone(t *testing.T) {
 // OS window and carries its identity, later panels split into it. Never a
 // session file, which a running kitty answers with a second process.
 func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	var calls []call
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
@@ -441,7 +523,7 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 }
 
 func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	var calls []call
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
@@ -476,7 +558,7 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 // process started from it. Open launches into the first socket that answers,
 // not into the first one listed, or every launch fails on the dead one.
 func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	var launches []call
 	h.SetSockets(func() []string { return []string{"unix:@kitty-stale", "unix:@kitty-4000"} })
 	h.SetStarter(func(context.Context, ...string) error {
@@ -511,7 +593,7 @@ func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
 // With no kitty running, Open starts one on a socket discovery recognises and
 // waits for it to answer.
 func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	var started []string
 	running := false
 	h.SetStarter(func(_ context.Context, args ...string) error {
@@ -576,7 +658,7 @@ func TestOpenRequiresAName(t *testing.T) {
 // through stdin: kitty reads an argument for escapes, and a backslash in the
 // prompt must arrive as a backslash.
 func TestSendTextGoesThroughStdinToTheWindow(t *testing.T) {
-	h := &kitty.Host{}
+	h := newHost()
 	var got []call
 	var stdin []string
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
