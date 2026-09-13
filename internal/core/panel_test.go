@@ -188,3 +188,49 @@ func TestTheSurveyReportsAnOpenTabOnce(t *testing.T) {
 		t.Errorf("agents = %d, want 2, each panel once", len(v.Agents))
 	}
 }
+
+// A tab declared before the target it is inside is recorded after it. A
+// restore walks the file in order, and reaching the tab first would open the
+// workspace for it with none of its agents resumed.
+func TestASessionRecordsATabAfterItsInstance(t *testing.T) {
+	proj := tabProject()
+	proj.Targets[0], proj.Targets[1] = proj.Targets[1], proj.Targets[0]
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		agent("1", "abc-123", ""),
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Vars: map[string]string{core.PanelTargetVar: "tickets"}},
+	)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	s, _ := c.Session(context.Background(), report, "revier")
+	targets := s.Projects[0].Targets
+	if len(targets) != 2 || targets[0].Name != "home" || targets[1].Name != "tickets" {
+		t.Fatalf("targets = %+v, want home, then the tickets tab", targets)
+	}
+	if len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" || len(targets[1].Agents) != 0 {
+		t.Errorf("targets = %+v, want the one agent under home", targets)
+	}
+}
+
+// A tab named in an agent address is its own panel, not the instance's.
+func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		agentPanel("1", "idle"),
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "busy", Command: []string{"agent"},
+			Vars: map[string]string{core.PanelTargetVar: "tickets"}},
+	)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}
+
+	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	if err != nil {
+		t.Fatalf("Agent(tickets): %v", err)
+	}
+	if a.Panel.ID != "2" || a.State.Status != revier.StatusRunning {
+		t.Errorf("agent = %+v, want the tab's panel 2", a)
+	}
+}

@@ -383,6 +383,11 @@ func Validate(p revier.Project) error {
 		if tab {
 			errs = append(errs, validateTab(p, t)...)
 		}
+		if t.Window != nil && t.Window.Inside != "" {
+			// Only a runtime opens tabs. Ignored, it would open a window of its
+			// own, which is the choice inside was written to refuse.
+			errs = append(errs, fmt.Errorf("target %q window realization is inside %q; only a runtime realization can be a tab", t.Name, t.Window.Inside))
+		}
 		for kind, r := range map[revier.HostKind]*revier.Realization{
 			revier.HostWindow: t.Window, revier.HostRuntime: t.Runtime,
 		} {

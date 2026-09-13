@@ -433,7 +433,7 @@ var ErrUnraisable = errors.New("cannot raise: the window host lists no window fo
 // half worked. The error names the target, and nothing moves (decisions.md
 // D63).
 func (c *Core) raisable(snap snapshot, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
-	if c.Window == nil || c.Runtime == nil || inst.Ref.Host != c.Runtime.Name() || !c.Runtime.Capabilities().OSWindows {
+	if !c.bridged(inst) {
 		return revier.TargetRef{}, nil
 	}
 	osw, ok := c.osWindowOf(snap, inst)
@@ -611,10 +611,7 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
-	if c.Window == nil || c.Runtime == nil || inst.Ref.Host != c.Runtime.Name() || inst.Title == "" {
-		return revier.Instance{}, false
-	}
-	if !c.Runtime.Capabilities().OSWindows {
+	if !c.bridged(inst) || inst.Title == "" {
 		return revier.Instance{}, false
 	}
 	for _, w := range snap[c.Window.Name()] {
@@ -627,6 +624,12 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 		return w, true
 	}
 	return revier.Instance{}, false
+}
+
+// bridged reports whether inst lives in an OS window the window host raises:
+// it is the runtime's, and the runtime reports OSWindows.
+func (c *Core) bridged(inst revier.Instance) bool {
+	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.Runtime.Capabilities().OSWindows
 }
 
 // Focus activates a bare ref on the host that produced it. The picker uses it

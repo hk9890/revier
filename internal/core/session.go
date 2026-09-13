@@ -103,18 +103,24 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	var gaps SessionGaps
 	var agents []agentPanel
 	for _, v := range r.Views {
-		var targets []session.Target
+		var targets, tabs []session.Target
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
 			if tv.Attached || tv.Name == "" || tv.Ref.IsZero() {
 				continue
 			}
-			targets = append(targets, session.Target{Name: tv.Name})
 			// A tab's ref is the instance that holds it, whose panels are
-			// recorded under that instance's own target.
+			// recorded under that instance's own target. The tab is recorded
+			// after it: a restore that reached the tab first would open the
+			// instance for it with none of its agents resumed.
+			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
+				tabs = append(tabs, session.Target{Name: tv.Name})
+				continue
+			}
+			targets = append(targets, session.Target{Name: tv.Name})
 			inst, ok := byRef[key(tv.Ref)]
-			if !ok || isTab(v.Project, tv.Name) {
+			if !ok {
 				continue
 			}
 			for _, panel := range inst.Panels {
@@ -126,6 +132,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 				}
 			}
 		}
+		targets = append(targets, tabs...)
 		if len(targets) > 0 {
 			s.Projects = append(s.Projects, session.Project{Name: v.Project.Name, Targets: targets})
 		}
@@ -150,16 +157,6 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 type SessionGaps struct {
 	Unnamed int
 	Failed  []error
-}
-
-// isTab reports whether the named target is a tab inside another.
-func isTab(p revier.Project, name revier.TargetName) bool {
-	for _, t := range p.Targets {
-		if t.Name == name {
-			return t.Runtime != nil && t.Runtime.Inside != ""
-		}
-	}
-	return false
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being

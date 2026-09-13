@@ -193,8 +193,15 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 	var out []held
 	seen := map[string]bool{}
 	for i, t := range p.Targets {
-		// A tab's panel is listed with the instance that holds it.
-		if only != "" && t.Name != only || p.isTab(i) {
+		if only != "" && t.Name != only {
+			continue
+		}
+		if p.isTab(i) {
+			// A tab's panel is listed with the instance that holds it, and
+			// alone when the tab is asked for by name.
+			if only != "" {
+				out = append(out, c.heldTab(snap, p, i, bound)...)
+			}
 			continue
 		}
 		host, _, m, err := c.resolveAt(p, i)
@@ -207,6 +214,22 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 		}
 	}
 	return out
+}
+
+// heldTab is the open tab of the i-th target: the instance that holds it,
+// narrowed to the tab's own panel.
+func (c *Core) heldTab(snap snapshot, p Project, i int, bound Bindings) []held {
+	in, _, tab, open, err := c.container(snap, p, i, bound)
+	if err != nil || !open {
+		return nil
+	}
+	for _, panel := range in.Panels {
+		if panel.ID == tab {
+			in.Panels = []revier.Panel{panel}
+			return []held{{target: p.Targets[i].Name, inst: in}}
+		}
+	}
+	return nil
 }
 
 // agentProbe returns the probe that reads the panel, when the panel is an

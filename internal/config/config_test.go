@@ -232,6 +232,15 @@ func TestValidateRejects(t *testing.T) {
 			tabProject(func(tab *revier.Target) { tab.Runtime.Inside = "editor" }),
 			`inside "editor", which has no runtime realization`,
 		},
+		{
+			"window realization inside a target",
+			func() revier.Project {
+				p := tabProject(func(*revier.Target) {})
+				p.Targets[1].Window.Inside = "home"
+				return p
+			}(),
+			`target "editor" window realization is inside "home"`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

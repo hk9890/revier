@@ -20,10 +20,10 @@ var ErrNoTabs = errors.New("cannot open a tab inside another target")
 const PanelTargetVar = "revier_target"
 
 // isTab reports whether the i-th target is a tab inside another target.
-func (p Project) isTab(i int) bool {
-	r := p.Targets[i].Runtime
-	return r != nil && r.Inside != ""
-}
+func (p Project) isTab(i int) bool { return tabTarget(p.Targets[i]) }
+
+// tabTarget reports whether t is a tab inside another target.
+func tabTarget(t revier.Target) bool { return t.Runtime != nil && t.Runtime.Inside != "" }
 
 // tabHost is the runtime that opens the i-th target's tab, when there is one
 // that can.
@@ -51,9 +51,6 @@ func (c *Core) container(snap snapshot, p Project, i int, bound Bindings) (in re
 	host, _, m, err := c.resolveAt(p, j)
 	if err != nil {
 		return revier.Instance{}, false, "", false, err
-	}
-	if host.Name() != c.Runtime.Name() {
-		return revier.Instance{}, false, "", false, fmt.Errorf("target %q is inside %q, which opens on %s, not on the runtime", t.Name, t.Runtime.Inside, host.Name())
 	}
 	in, found = c.locate(snap, p, j, host, m, bound[t.Runtime.Inside])
 	if !found {
@@ -108,19 +105,17 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings) (Res
 	}
 	// An instance opened for the tab was focused by that Go, and the window
 	// host may not list its OS window yet: it is raised by the launch, not here.
+	// It holds no tab yet, so only its ref is needed.
 	opened := !found
 	if opened {
 		res, err := c.Go(ctx, p, t.Runtime.Inside, bound)
 		if err != nil {
 			return Result{}, err
 		}
-		if snap, err = c.snapshot(ctx); err != nil {
-			return Result{}, err
+		if res.Ref.IsZero() {
+			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and cannot name it", c.Runtime.Name(), t.Runtime.Inside, t.Name)
 		}
-		if in, found = byRef(snap, res.Ref); !found {
-			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and it is not listed", c.Runtime.Name(), t.Runtime.Inside, t.Name)
-		}
-		tab, open = tabOf(in, t.Name)
+		in = revier.Instance{Ref: res.Ref}
 	}
 
 	if open && c.focusedOn(ctx, snap, in) {
@@ -187,7 +182,7 @@ func (c *Core) holds(snap snapshot, p Project, name revier.TargetName, bound Bin
 // runtime can open it, and its ref is the instance that holds it while the tab
 // is open. The instance's agents are its own target's to report.
 func (c *Core) tabView(snap snapshot, p Project, i int, bound Bindings, tv revier.TargetView) revier.TargetView {
-	if _, err := c.tabHost(p, i); err != nil {
+	if _, ok := c.Runtime.(revier.PanelOpener); !ok {
 		return tv
 	}
 	in, _, _, open, err := c.container(snap, p, i, bound)

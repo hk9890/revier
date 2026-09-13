@@ -93,7 +93,7 @@ func PrepareProject(p revier.Project) (Project, error) {
 		// A tab inside another target is found by its name, not by a match:
 		// its compiled match stays zero, and every lookup goes through
 		// container instead.
-		if t.Runtime != nil && t.Runtime.Inside == "" {
+		if t.Runtime != nil && !tabTarget(t) {
 			if compiled[i].runtime, err = compileMatch(t.Name, revier.HostRuntime, t.Runtime.Match); err != nil {
 				return Project{}, err
 			}
