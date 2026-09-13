@@ -128,7 +128,9 @@ type Model struct {
 	crow      int             // the row the screen's cursor is on
 	chord     textinput.Model // the trigger key, while it is typed
 	aform     actionForm      // the action being added or changed, while its form is up
-	dropping  bool            // whether the action under the cursor waits on a y to be deleted
+	targets   []revier.Target // the shared targets, typed, as config.toml holds them
+	tform     targetForm      // the shared target being added or changed, while its form is up
+	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -148,6 +150,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 	}
+	// config.Load has decoded them already, so this cannot fail.
+	m.targets, _ = config.DecodeTargets(cfg.Targets)
 	m.layout()
 	return m
 }

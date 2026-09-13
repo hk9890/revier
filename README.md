@@ -93,8 +93,8 @@ The top line holds what is not about one project, each with its key: **new**
 links a project on another machine from the hosts `~/.ssh/config` names and the
 projects the revier on the chosen host has, **config** (alt+c) sets the
 theme, the glyphs, the trigger key and the runtime host, and adds, changes and
-deletes actions, each written to `config.toml` and applied as it changes,
-comments kept, and **help** (alt+h)
+deletes shared targets and actions, each written to `config.toml` and applied
+as it changes, comments kept, and **help** (alt+h)
 lists every key: the surface's own, the target keys, the configured actions
 and the desktop keys. The rule over the list counts the projects by what
 their agents are doing: blockers, working, idle.

@@ -78,6 +78,7 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 	m.crow = int(rowTheme)
 	m.refused = ""
 	m.aform = actionForm{}
+	m.tform = targetForm{}
 	m.dropping = false
 	m.body.SetYOffset(0)
 	m.dialog = dialogConfig
@@ -92,11 +93,17 @@ func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.chordKey(msg)
 	case m.aform.open:
 		return m.actionFormKey(msg)
+	case m.tform.open:
+		return m.targetFormKey(msg)
 	case m.dropping:
+		if _, onTarget := m.targetRow(); onTarget {
+			return m.confirmDropTarget(msg)
+		}
 		return m.confirmDropAction(msg)
 	}
 	m.err = nil
 	_, onAction := m.actionRow()
+	_, onTarget := m.targetRow()
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -106,10 +113,12 @@ func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.crow = max(m.crow-1, 0)
 	case key.Matches(msg, m.keys.Down):
 		m.crow = min(m.crow+1, m.addRow())
-	case onAction && key.Matches(msg, m.keys.Delete):
+	case (onAction || onTarget) && key.Matches(msg, m.keys.Delete):
 		m.dropping = true
+	case onTarget && key.Matches(msg, m.keys.Enter), m.crow == m.addTargetRow() && key.Matches(msg, m.keys.Enter):
+		return m.openTargetForm(m.crow - int(configRows))
 	case onAction && key.Matches(msg, m.keys.Enter), m.crow == m.addRow() && key.Matches(msg, m.keys.Enter):
-		return m.openActionForm(m.crow - int(configRows))
+		return m.openActionForm(m.crow - m.actionBase())
 	case configRow(m.crow) == rowTrigger && key.Matches(msg, m.keys.Enter):
 		m.chord.SetValue(m.ui.TriggerKey)
 		m.chord.CursorEnd()
@@ -308,7 +317,8 @@ func (m Model) configScreen() (string, int) {
 	var b strings.Builder
 	at := 0
 	row := func(r int, label, value, note string) {
-		sel := m.crow == r
+		// While a form is open its own cursor is the one on screen.
+		sel := m.crow == r && !m.tform.open
 		if sel {
 			at = strings.Count(b.String(), "\n")
 		}
@@ -346,6 +356,23 @@ func (m Model) configScreen() (string, int) {
 	row(int(rowRuntime), "runtime", "‹ "+m.runtimeChoice()+" ›", note)
 	info("window", hostName(m.core.Window), "detected at start")
 
+	b.WriteString(m.heading("Targets", w))
+	tform := func() {
+		lines, line := m.targetFormLines(w)
+		at = strings.Count(b.String(), "\n") + line
+		b.WriteString(strings.Join(lines, "\n") + "\n")
+	}
+	for i, t := range m.targets {
+		row(int(configRows)+i, keyLabel(t.Key), string(t.Name), describeTarget(t))
+		if m.tform.open && m.tform.index == i {
+			tform()
+		}
+	}
+	row(m.addTargetRow(), "+", "add a target", "every project has it")
+	if m.tform.open && m.tform.index == len(m.targets) {
+		tform()
+	}
+
 	b.WriteString(m.heading("Actions", w))
 	form := func() {
 		lines, field := m.actionFormLines(w)
@@ -357,7 +384,7 @@ func (m Model) configScreen() (string, int) {
 			form()
 			continue
 		}
-		row(int(configRows)+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
+		row(m.actionBase()+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
 	}
 	if m.aform.open && m.aform.index == len(m.actions) {
 		form()
