@@ -182,23 +182,23 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 
 // goTargetResuming is goTarget with the agent panels of a launch started on
 // the conversations a saved session recorded for them. It also returns what
-// the launch did with each recorded agent. A zero ref with no error is a target launched and not
+// the launch did with each recorded agent, in the Result. A zero ref with no error is a target launched and not
 // yet up.
-func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, []core.AgentOutcome, error) {
+func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, core.Result, error) {
 	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
 		// Every binding of a target consumes its launch, so a launch still on
 		// record has not landed, whatever an older binding says.
 		up, err := a.core.Running(ctx, p, name, a.state.Bound[p.Name])
 		if err != nil {
-			return revier.TargetRef{}, nil, err
+			return revier.TargetRef{}, core.Result{}, err
 		}
 		if !up {
-			return revier.TargetRef{}, nil, nil // still coming up; the first press is waiting for it
+			return revier.TargetRef{}, core.Result{}, nil // still coming up; the first press is waiting for it
 		}
 	}
 	res, err := a.core.GoResuming(ctx, p, name, a.state.Bound[p.Name], resumes)
 	if err != nil {
-		return revier.TargetRef{}, nil, err
+		return revier.TargetRef{}, core.Result{}, err
 	}
 	landed, ref := res.Target, res.Ref
 	if res.Launched && ref.IsZero() {
@@ -208,10 +208,10 @@ func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.
 		})
 		inst, ok, err := a.core.Bind(ctx, p, landed, res.Before, bindWait)
 		if err != nil {
-			return revier.TargetRef{}, nil, err
+			return revier.TargetRef{}, core.Result{}, err
 		}
 		if !ok {
-			return revier.TargetRef{}, res.Agents, nil // the TUI binds it if it appears later
+			return revier.TargetRef{}, res, nil // the TUI binds it if it appears later
 		}
 		ref = inst.Ref
 	}
@@ -221,7 +221,7 @@ func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.
 			s.Launch = nil
 		}
 	})
-	return ref, res.Agents, nil
+	return ref, res, nil
 }
 
 // launchedAction records that an action ran, so a window that appears within

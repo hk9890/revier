@@ -63,8 +63,15 @@ const (
 	// anywhere else would carry the conversation on in the wrong checkout.
 	AgentDirGone
 	// AgentDropped is not restored: the target declares no agent panel to
-	// start it from.
+	// start it from, or it is past the declared ones and the runtime cannot
+	// open a tab in an open instance.
 	AgentDropped
+	// AgentNotAdded is past the declared ones, and its tab failed to open
+	// after the workspace itself opened. Result.AgentErr says why.
+	AgentNotAdded
+	// AgentInTab ran in a tab target. The tab is opened with its own launch
+	// argv, which need not be the agent, so no resume flag is added to it.
+	AgentInTab
 )
 
 // RestoreStep is one recorded target and what restoring it means here.
@@ -104,26 +111,42 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
+		var tabAgents []agentPanel
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
 			if tv.Attached || tv.Name == "" || tv.Ref.IsZero() {
 				continue
 			}
-			// A tab's ref is the instance that holds it, whose panels are
-			// recorded under that instance's own target. The tab is recorded
-			// after it: a restore that reached the tab first would open the
-			// instance for it with none of its agents resumed.
+			inst, listed := byRef[key(tv.Ref)]
+			// A tab's ref is the instance that holds it. Its own panel is
+			// recorded under the tab, and the tab after the other targets: a
+			// restore that reached the tab first would open the instance for
+			// it with none of its agents resumed.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				tabs = append(tabs, session.Target{Name: tv.Name})
+				id, open := tabOf(inst, tv.Name)
+				for _, panel := range inst.Panels {
+					if !open || panel.ID != id {
+						continue
+					}
+					if probe, ok := c.probeFor(panel); ok {
+						tabAgents = append(tabAgents, agentPanel{project: len(s.Projects), target: len(tabs) - 1, panel: panel, probe: probe})
+						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
+					}
+				}
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
-			inst, ok := byRef[key(tv.Ref)]
-			if !ok {
+			if !listed {
 				continue
 			}
 			for _, panel := range inst.Panels {
+				// A tab's panel is its tab target's, and a restore of the
+				// instance would otherwise open it a second time.
+				if recordedAsTab(v, inst, panel) {
+					continue
+				}
 				if probe, ok := c.probeFor(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
@@ -131,6 +154,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 					})
 				}
 			}
+		}
+		for _, a := range tabAgents {
+			a.target += len(targets)
+			agents = append(agents, a)
 		}
 		targets = append(targets, tabs...)
 		if len(targets) > 0 {
@@ -150,13 +177,29 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	return s, gaps
 }
 
+// recordedAsTab reports whether the panel is the one an open tab target of the
+// view records as its own. A panel that names a target no longer a tab, or a
+// tab open in another instance, stays with its instance, so its agent is not
+// left out of the save.
+func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
+	name := revier.TargetName(panel.Vars[PanelTargetVar])
+	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) {
+		return false
+	}
+	tv, _ := targetView(v, name)
+	id, _ := tabOf(inst, name)
+	return key(tv.Ref) == key(inst.Ref) && id == panel.ID
+}
+
 // SessionGaps is what a save found open and could not record. Unnamed is the
 // agents recorded without a conversation. Failed holds why a probe could not
 // answer at all - claude not on PATH - so those agents are not mistaken for
-// the ones no listing could match.
+// the ones no listing could match. InTab addresses the agents that run in a
+// tab target, which a restore opens without their conversation.
 type SessionGaps struct {
 	Unnamed int
 	Failed  []error
+	InTab   []string
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being
@@ -270,97 +313,95 @@ func resumesOf(t session.Target) []Resume {
 }
 
 // resuming returns the realization with the recorded agents laid over its
-// layout, and what became of each. The panel slice is copied before anything
-// is written to it: the realization arrives sharing the prepared project's
-// panels, and a restore must not edit the project every later keypress reads.
-func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome) {
+// declared agent panels, what became of each of those, and the recorded agents
+// past them, which the launch adds once the instance is open. The panel slice
+// is copied before anything is written to it: the realization arrives sharing
+// the prepared project's panels, and a restore must not edit the project every
+// later keypress reads.
+func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome, []Resume) {
 	if len(resumes) == 0 {
-		return real, nil
+		return real, nil, nil
 	}
 	var outcomes []AgentOutcome
-	real.Panels, outcomes = c.layAgents(real.Panels, resumes)
-	return real, outcomes
+	var extra []Resume
+	real.Panels, outcomes, extra = c.layAgents(real.Panels, resumes)
+	return real, outcomes, extra
 }
 
 // Resumes is what a launch of the target would do with a step's recorded
 // agents now, for a dry run that says what a restore would do. It lays them
-// over the realization a launch resolves, so the two cannot disagree.
+// over the realization a launch resolves, and builds the agent tabs a launch
+// would add, so the two cannot disagree.
 func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []AgentOutcome {
 	i, ok := p.index(name)
 	if !ok {
 		return nil
 	}
-	_, real, _, err := c.resolveAt(p, i)
+	if p.isTab(i) {
+		return inTab(resumes)
+	}
+	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {
 		return nil
 	}
-	_, outcomes := c.resuming(real, resumes)
-	return outcomes
+	_, outcomes, extra := c.resuming(real, resumes)
+	_, added := c.agentTabs(host, real, extra)
+	return append(outcomes, added...)
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each
-// comes to (decisions.md D61).
+// comes to (decisions.md D62, D63).
 //
 // The first recorded agent goes to the first panel declared as an agent, the
-// second to the second, and so on. Every agent past the declared ones is a
-// panel of its own, in a tab where the runtime has tabs, started as a copy of
-// the first declared agent panel: most agents are opened by hand beside a
-// workspace, and the declared agent is how this project starts one. A layout
-// that declares no agent has nothing to copy, and those agents are dropped.
+// second to the second, and so on. The agents past the declared ones are
+// returned: each is added to the open instance as an agent tab, which is what
+// `revier agent new` adds, so an agent opened by hand beside a workspace comes
+// back the way it was opened.
+func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.PanelSpec, []AgentOutcome, []Resume) {
+	panels := append([]revier.PanelSpec(nil), layout...)
+	var outcomes []AgentOutcome
+	n := 0
+	for i := range panels {
+		if panels[i].Kind != revier.PanelAgent || n == len(resumes) {
+			continue
+		}
+		outcomes = append(outcomes, c.startAgent(&panels[i], resumes[n]))
+		n++
+	}
+	return panels, outcomes, resumes[n:]
+}
+
+// startAgent points an agent panel at its recorded directory and conversation,
+// and says what the agent comes to.
 //
 // An agent starts in the directory it worked in, and on its conversation when
 // one was recorded and its probe here can resume it. A directory that is gone
 // starts the agent empty where the realization starts: its conversation
 // resumed there would carry on in the wrong checkout, and its edits would
 // land there. Every other way a resume can fail starts the agent empty.
-func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.PanelSpec, []AgentOutcome) {
-	panels := append([]revier.PanelSpec(nil), layout...)
-	var slots []int
-	for i, p := range panels {
-		if p.Kind == revier.PanelAgent {
-			slots = append(slots, i)
-		}
+func (c *Core) startAgent(spec *revier.PanelSpec, r Resume) AgentOutcome {
+	if r.Dir != "" && !dirExists(r.Dir) {
+		return AgentDirGone
 	}
-
-	outcomes := make([]AgentOutcome, len(resumes))
-	for n, r := range resumes {
-		at := 0
-		switch {
-		case n < len(slots):
-			at = slots[n]
-		case len(slots) > 0:
-			template := layout[slots[0]]
-			panels = append(panels, revier.PanelSpec{
-				Kind: revier.PanelAgent, Title: template.Title, Command: template.Command, Tab: true,
-			})
-			at = len(panels) - 1
-		default:
-			outcomes[n] = AgentDropped
-			continue
-		}
-
-		spec := &panels[at]
-		if r.Dir != "" && !dirExists(r.Dir) {
-			outcomes[n] = AgentDirGone
-			continue
-		}
-		spec.Dir = r.Dir
-		res, ok := c.resumer(r.Harness)
-		if r.Session == "" || !ok {
-			outcomes[n] = AgentEmpty
-			continue
-		}
-		spec.Command = res.ResumeCommand(*spec, r.Session)
-		outcomes[n] = AgentResumed
+	spec.Dir = r.Dir
+	res, ok := c.resumer(r.Harness)
+	if r.Session == "" || !ok {
+		return AgentEmpty
 	}
-	return panels, outcomes
+	spec.Command = res.ResumeCommand(*spec, r.Session)
+	return AgentResumed
 }
 
-// resumer is the probe of that name here, when it can resume.
+// resumer is the probe of that name here, when it can resume. With no name it
+// is the first probe that can: `revier agent new --resume` names a
+// conversation and not the harness that holds it.
 func (c *Core) resumer(harness string) (revier.Resumable, bool) {
 	for _, probe := range c.Probes {
+		res, ok := probe.(revier.Resumable)
+		if harness == "" && ok {
+			return res, true
+		}
 		if probe.Name() == harness {
-			res, ok := probe.(revier.Resumable)
 			return res, ok
 		}
 	}

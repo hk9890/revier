@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -75,6 +76,10 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if gaps.Unnamed > 0 {
 		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(gaps.Unnamed, "agent"))
 	}
+	if len(gaps.InTab) > 0 {
+		fmt.Printf("  %s in a tab target, to be restored without its conversation: %s\n",
+			count(len(gaps.InTab), "agent"), strings.Join(gaps.InTab, ", "))
+	}
 	for _, err := range gaps.Failed {
 		fmt.Printf("    could not ask %v\n", err)
 	}
@@ -134,12 +139,12 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 			continue
 		}
 		if *dry {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", a.core.Resumes(p, step.Target, step.Resumes)))
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", a.core.Resumes(p, step.Target, step.Resumes), nil))
 			continue
 		}
 		// One project's failure is not the restore's: nineteen workspaces
 		// still come back, and the one that did not is named.
-		ref, resumed, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes)
+		ref, res, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes)
 		if err != nil {
 			failed++
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%v\n", step.Project, step.Target, err)
@@ -148,11 +153,11 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		// A window that has not shown yet is not a target that came back.
 		if ref.IsZero() {
 			pending++
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("launched, not up yet", resumed))
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("launched, not up yet", res.Agents, res.AgentErr))
 			continue
 		}
 		opened++
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("opened", resumed))
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("opened", res.Agents, res.AgentErr))
 	}
 	if err := w.Flush(); err != nil {
 		return err
@@ -210,10 +215,11 @@ func cmdSessionList(a *app, args []string) error {
 
 // resumeNote says what opening a target did, or would do, to the agents it
 // recorded: how many start on their conversation, how many start empty because
-// the directory they worked in is gone, and how many cannot be started at all.
+// the directory they worked in is gone, and how many cannot be started at all,
+// with tabErr for the ones whose tab failed to open.
 // An agent recorded with no conversation starts empty as it always would, and
 // is not worth a word.
-func resumeNote(verb string, agents []core.AgentOutcome) string {
+func resumeNote(verb string, agents []core.AgentOutcome, tabErr error) string {
 	n := map[core.AgentOutcome]int{}
 	for _, o := range agents {
 		n[o]++
@@ -226,7 +232,13 @@ func resumeNote(verb string, agents []core.AgentOutcome) string {
 		note += fmt.Sprintf(", %s empty: directory gone", count(n[core.AgentDirGone], "agent"))
 	}
 	if n[core.AgentDropped] > 0 {
-		note += fmt.Sprintf(", %s not restored: no agent panel declared", count(n[core.AgentDropped], "agent"))
+		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", count(n[core.AgentDropped], "agent"))
+	}
+	if n[core.AgentInTab] > 0 {
+		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", count(n[core.AgentInTab], "agent"))
+	}
+	if n[core.AgentNotAdded] > 0 {
+		note += fmt.Sprintf(", %s not restored: %v", count(n[core.AgentNotAdded], "agent"), tabErr)
 	}
 	return note
 }

@@ -167,13 +167,23 @@ const (
 ```go
 // PanelOpener is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can open a tab in an instance and
-// focus one panel of it, which is how a target with Inside is reached (D64).
-// Which tab belongs to which target is the core's: the runtime sets vars on
-// the panel it opens and reports them back in Panel.Vars.
+// focus one panel of it, which is how a target with Inside is reached (D64)
+// and how an agent is opened beside a workspace (D65). OpenTab opens the tab
+// last, running r.Launch or holding r.Panels with every later panel split
+// into the first. Which tab belongs to which target is the core's: the
+// runtime sets vars on the first panel and reports them back in Panel.Vars.
 type PanelOpener interface {
     OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
     FocusPanel(ctx context.Context, ref TargetRef, panel PanelID) error
     FocusedPanel(ctx context.Context, ref TargetRef) (PanelID, error)
+}
+
+// PanelFinder is an optional capability of a Runtime. FindPanel reports the
+// instance holding a panel id as the calling process names it, a zero ref for
+// none: a kitty window id is one kitty process's, and the kitty a command was
+// started from is the one it means (D65).
+type PanelFinder interface {
+    FindPanel(ctx context.Context, panel PanelID) (TargetRef, error)
 }
 ```
 
@@ -226,8 +236,7 @@ type PanelSpec struct {
     Kind    PanelKind
     Title   string
     Command []string
-    Dir     string // set by a restore only, never read from a project file (D62)
-    Tab     bool   // set by a restore only: a tab of its own where the runtime has tabs (D62)
+    Dir     string // set by a restore and `revier agent new`, never read from a project file (D62)
 }
 
 type PanelKind string
@@ -330,8 +339,8 @@ that once, the rule `Instances` follows.
 
 The directory is the agent's, not the pane's: an agent can work in a worktree
 of the project it was opened in. A restore starts the agent there, through
-`PanelSpec.Dir`, and opens an agent past the declared layout through
-`PanelSpec.Tab`. Neither field is read from a project file (D62).
+`PanelSpec.Dir`, which is not read from a project file (D62). An agent past the
+declared layout gets a tab once the instance is open, through `PanelOpener` (D65).
 
 There is no `Runtime` counterpart. Persistence across a reboot is either the
 runtime's already or impossible for it, and in both cases revier adds nothing.

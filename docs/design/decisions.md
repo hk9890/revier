@@ -283,3 +283,29 @@ raise becomes a GNOME "is ready" notice, so the press fails with
 variable revier sets, because a title or a position is not one. `PanelOpener` is
 optional, and a runtime without it refuses; it does not open a window the user
 did not choose.
+
+### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore
+
+`revier agent new` and a restore open the same tab: a copy of the first
+declared agent panel and a split of the first declared shell panel. One builder
+keeps the key and the restore from drifting apart. `OpenTab` takes a panel
+group, so no second capability exists. On tmux, which has no tabs, a restore
+names the extra agents as not restored. The key finds its workspace through the
+runtime's optional `PanelFinder`, because a kitty window id is unique only in
+one kitty process.
+
+### D66 — a minimized window is a window revier can raise
+
+`wctl activate` restores a minimized window and switches to another workspace.
+Dropping hidden windows made an editor key launch a second copy. Only a window
+mutter has not shown yet is dropped.
+
+### D67 — every named window of the process must be seen before its unnamed sibling is paired
+
+Narrows D63. A named window the host does not list may be the one left over, and
+the unnamed window would take its title.
+
+### D68 — a tab target's agent is recorded under the tab, and not resumed
+
+Recorded under the workspace, it was restored twice. A tab target's argv is not
+known to be the agent, so a resume could run `taskmgr-ui --resume <id>`.
