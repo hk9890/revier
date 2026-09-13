@@ -1290,3 +1290,38 @@ The same listing reports each session's `status`: `idle`, `busy`, and
 `waiting` while a permission prompt is up. That is the attention signal the
 `CS_STATE` hooks provide, available the same way, and it is left for a
 decision of its own.
+
+## 2026-09-13
+
+### D56 — actions are edited on the config screen — Accepted
+
+Narrows D53: configured actions are on the screen. Probes are still edited in
+the file.
+
+The screen lists each action by key, name and command, with a row that adds
+one. Enter opens a form of three fields: name, command and key. alt+d deletes
+the action after a y. A change is written when it is saved, and the surface
+binds the new keys at once: the footer, the help screen and the target keys
+that yield to an action are rebuilt from the new list.
+
+The command is one line, split into words the way a shell splits them: quotes
+group, a backslash escapes, and a `{{ }}` template is one word. It is written
+as the argv the file already holds, so an action written by hand and one made
+on the screen are the same. One field per word was the alternative, and it is
+slower to type for the common case of a short command.
+
+A key that already means something on the surface is refused and named: a
+key of revier's own, a query editing key, another action's key, or a target
+key. An action is run by name with `revier run`, so a name is refused when
+another action has it. The rules `config.Load` applies to an action key still
+hold, because the write runs them.
+
+An `[[action]]` entry is edited line by line, as D53 edits a key. Only a
+changed value is written, in place of the old one, so an unchanged array keeps
+its lines and its comments. A deleted entry loses its header and its values,
+and every comment in it stays, including one inside an array written over
+several lines. Every edit, an add included, names the actions as the screen
+read them, and it is refused if the file no longer holds them: the file was
+changed by hand while revier ran, and an add would otherwise write a second
+action under a name or a key the screen did not know was taken. Actions written as an inline array are refused too, because
+the line editor does not find them.

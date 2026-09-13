@@ -77,6 +77,9 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 	m.leavePane()
 	m.crow = int(rowTheme)
 	m.refused = ""
+	m.aform = actionForm{}
+	m.dropping = false
+	m.body.SetYOffset(0)
 	m.dialog = dialogConfig
 	return m, nil
 }
@@ -84,10 +87,16 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 // configKey is every press on the config screen. Left and right change the
 // row's value; Enter does the same, or opens the trigger key for typing.
 func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.chord.Focused() {
+	switch {
+	case m.chord.Focused():
 		return m.chordKey(msg)
+	case m.aform.open:
+		return m.actionFormKey(msg)
+	case m.dropping:
+		return m.confirmDropAction(msg)
 	}
 	m.err = nil
+	_, onAction := m.actionRow()
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -96,7 +105,11 @@ func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Up):
 		m.crow = max(m.crow-1, 0)
 	case key.Matches(msg, m.keys.Down):
-		m.crow = min(m.crow+1, int(configRows)-1)
+		m.crow = min(m.crow+1, m.addRow())
+	case onAction && key.Matches(msg, m.keys.Delete):
+		m.dropping = true
+	case onAction && key.Matches(msg, m.keys.Enter), m.crow == m.addRow() && key.Matches(msg, m.keys.Enter):
+		return m.openActionForm(m.crow - int(configRows))
 	case configRow(m.crow) == rowTrigger && key.Matches(msg, m.keys.Enter):
 		m.chord.SetValue(m.ui.TriggerKey)
 		m.chord.CursorEnd()
@@ -253,11 +266,15 @@ func (m *Model) applyTheme(th theme.Theme) {
 }
 
 func writeConfig(table, key string, value any) error {
+	return withConfigRoot(func(root string) error { return config.Set(root, table, key, value) })
+}
+
+func withConfigRoot(write func(root string) error) error {
 	root, err := config.Root()
 	if err != nil {
 		return err
 	}
-	return config.Set(root, table, key, value)
+	return write(root)
 }
 
 // cycle is the value step places after current, wrapping at both ends. A
@@ -283,13 +300,18 @@ func orDefault(value, fallback string) string {
 // configLabelWidth is the column the values start in.
 const configLabelWidth = 14
 
-// configScreen stands in the list's place while the screen is up.
-func (m Model) configScreen() string {
+// configScreen stands in the list's place while the screen is up, and the
+// line the cursor is on, which the body keeps in view.
+func (m Model) configScreen() (string, int) {
 	th := m.theme
 	w := m.listWidth()
 	var b strings.Builder
-	row := func(r configRow, label, value, note string) {
-		sel := configRow(m.crow) == r
+	at := 0
+	row := func(r int, label, value, note string) {
+		sel := m.crow == r
+		if sel {
+			at = strings.Count(b.String(), "\n")
+		}
 		style := func(s lipgloss.Style) lipgloss.Style {
 			if sel {
 				return th.OnSelection(s)
@@ -308,22 +330,41 @@ func (m Model) configScreen() string {
 	}
 
 	b.WriteString(m.heading("Appearance", w))
-	row(rowTheme, "theme", "‹ "+orDefault(m.ui.Theme, theme.DefaultTheme)+" ›", "")
-	row(rowGlyphs, "glyphs", "‹ "+orDefault(m.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")
+	row(int(rowTheme), "theme", "‹ "+orDefault(m.ui.Theme, theme.DefaultTheme)+" ›", "")
+	row(int(rowGlyphs), "glyphs", "‹ "+orDefault(m.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")
 	trigger := orDefault(m.ui.TriggerKey, config.DefaultTriggerKey)
 	if m.chord.Focused() {
 		trigger = m.chord.View()
 	}
-	row(rowTrigger, "trigger key", trigger, "the desktop key that opens revier")
+	row(int(rowTrigger), "trigger key", trigger, "the desktop key that opens revier")
 
 	b.WriteString(m.heading("Hosts", w))
 	note := "in use: " + hostName(m.core.Runtime)
 	if m.switching != "" {
 		note = "checking " + m.switching + "…"
 	}
-	row(rowRuntime, "runtime", "‹ "+m.runtimeChoice()+" ›", note)
+	row(int(rowRuntime), "runtime", "‹ "+m.runtimeChoice()+" ›", note)
 	info("window", hostName(m.core.Window), "detected at start")
-	return b.String()
+
+	b.WriteString(m.heading("Actions", w))
+	form := func() {
+		lines, field := m.actionFormLines(w)
+		at = strings.Count(b.String(), "\n") + field
+		b.WriteString(strings.Join(lines, "\n") + "\n")
+	}
+	for i, act := range m.actions {
+		if m.aform.open && m.aform.index == i {
+			form()
+			continue
+		}
+		row(int(configRows)+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
+	}
+	if m.aform.open && m.aform.index == len(m.actions) {
+		form()
+	} else {
+		row(m.addRow(), "+", "add an action", "run in the selected project, bound to a key")
+	}
+	return b.String(), at
 }
 
 // hostName is a host's name, or "none" for no host.
