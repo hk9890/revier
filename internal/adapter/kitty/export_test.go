@@ -13,4 +13,5 @@ func (h *Host) SetSockets(f func() []string) { h.sockets = f }
 
 func (h *Host) SetStarter(f func(ctx context.Context, args ...string) error) { h.start = f }
 
-func (h *Host) SetOwnSocket(f func() string) { h.ownSocket = f }
+func (h *Host) SetOwnSocket(f func() string)           { h.ownSocket = f }
+func (h *Host) SetParents(f func(pid int) (int, bool)) { h.parent = f }
