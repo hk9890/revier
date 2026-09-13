@@ -27,6 +27,8 @@ func DecodeBuiltin(raw []byte) []revier.Binding { return decodeBuiltin(raw) }
 
 // Decode and DecodeFocused expose the parsers to the L3 tests, which run
 // against recorded wctl output rather than a live GNOME session.
-func (h *Host) Decode(raw []byte) ([]revier.Instance, error) { return h.decode(raw) }
+func (h *Host) Decode(raw []byte, active func() (int, bool)) ([]revier.Instance, error) {
+	return h.decode(raw, active)
+}
 
 func (h *Host) DecodeFocused(raw []byte) (revier.TargetRef, error) { return h.decodeFocused(raw) }

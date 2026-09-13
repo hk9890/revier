@@ -1712,3 +1712,25 @@ an optional `PanelFinder`: kitty reads the id in the kitty the command runs
 in. A runtime without a finder, whose ids are unique, has the core accept an
 id held by exactly one instance, and refuse one held by two.
 
+### D66 — a minimized window is a window revier can raise — Accepted
+
+The GNOME host dropped every window wctl reports as `is_hidden`, on the reading
+that a hidden window cannot be activated. That reading is wrong for two of the
+three ways a window is hidden. gnome-window-control's own source says
+`is_hidden` is true for a minimized window and for a window on another
+workspace, and `wctl activate` calls mutter's `activate`, which restores the
+first and switches to the second. Checked on this machine with a minimized
+kitty window: `is_hidden: true, is_minimized: true` before `wctl activate`,
+focused and shown after it. The workspace case was not checked here, because
+this machine has one workspace.
+
+Dropping those windows cost two things. A minimized window target, an editor,
+was not found, so its key launched a second copy. And a minimized kitty
+workspace had no OS window, so D63 refused its key.
+
+So the host now drops only a window mutter has not shown yet. wctl reads that
+case as hidden, not minimized, and on the active workspace or on none, and so
+does this host. That window is still dropped for the old reason, better stated:
+it is not placed, and a placement revier sent to it would lose to mutter's own.
+The active workspace costs a second wctl call, made only when a window has that
+shape, so a refresh is still one call in the common case.
