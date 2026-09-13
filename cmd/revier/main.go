@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -234,7 +235,10 @@ func cmdTUI(a *app) error {
 	if p, err := a.resolveProject(context.Background(), ""); err == nil {
 		start = p.Name
 	}
-	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start)
+	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
+		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
+			return selectRuntime(ctx, want, runtimeAdapters())
+		})
 	// Cell motion reports the wheel and clicks, and takes plain drag-to-select
 	// from the terminal; shift-drag still selects in kitty and most others.
 	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion()).Run()

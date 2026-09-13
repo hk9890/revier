@@ -118,6 +118,8 @@ func (m Model) top() string {
 		name = m.host
 	case dialogNew:
 		name = "add a project on this machine"
+	case dialogConfig:
+		name = "configuration"
 	default:
 		return m.bar()
 	}
@@ -143,6 +145,12 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
 	case dialogNew:
 		return " " + m.path.View()
+	case dialogConfig:
+		where := "config.toml"
+		if root, err := config.Root(); err == nil {
+			where = contractHome(config.File(root))
+		}
+		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
 	}
 	return m.promptView()
 }
@@ -187,7 +195,7 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
 	case m.dialog == dialogRemote:
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
-	case m.dialog == dialogNew:
+	case m.dialog == dialogNew, m.dialog == dialogConfig:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -298,6 +306,9 @@ func (m Model) footer() string {
 		// One line, whatever the error: a joined error is one per line, and a
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
+	}
+	if m.dialog == dialogConfig {
+		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.chord.Focused()))
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))

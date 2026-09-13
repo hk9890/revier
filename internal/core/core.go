@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"sync"
@@ -52,6 +53,23 @@ type Core struct {
 	// provides no instances and takes no part in run-or-raise, and a machine
 	// with no desktop leaves it nil.
 	KeyBinder revier.KeyBinder
+}
+
+// WithRuntime is the same core over another runtime host. It is a new core
+// and not a changed field, so a survey still running on the old one reads
+// the host it started with, and the two never share a mutable map: the
+// remotes known so far are copied.
+func (c *Core) WithRuntime(rt revier.Runtime) *Core {
+	c.remotesMu.Lock()
+	defer c.remotesMu.Unlock()
+	return &Core{
+		Runtime:   rt,
+		Window:    c.Window,
+		Probes:    c.Probes,
+		Remotes:   maps.Clone(c.Remotes),
+		NewRemote: c.NewRemote,
+		KeyBinder: c.KeyBinder,
+	}
 }
 
 // hosts returns the configured hosts, window first so the default resolution

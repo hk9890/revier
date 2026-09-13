@@ -96,25 +96,13 @@ func Root() (string, error) {
 // A missing root or a missing config.toml is not an error: revier starts with
 // no projects rather than refusing to run.
 func Load(root string) (*Config, []core.Project, error) {
-	cfg := &Config{}
-	cfgPath := filepath.Join(root, "config.toml")
-	if _, err := toml.DecodeFile(cfgPath, cfg); err != nil && !os.IsNotExist(err) {
+	cfgPath := File(root)
+	data, err := os.ReadFile(cfgPath)
+	if err != nil && !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
-	for i, pr := range cfg.Probes {
-		if pr.Name == "" || pr.Exec == "" {
-			return nil, nil, fmt.Errorf("%s: probe %d needs both name and exec", cfgPath, i+1)
-		}
-		cfg.Probes[i].Exec = expandHome(pr.Exec)
-	}
-
-	if _, err := cfg.Theme(); err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
-	}
-	if _, err := cfg.TriggerKey(); err != nil {
-		return nil, nil, fmt.Errorf("%s: ui.trigger_key: %w", cfgPath, err)
-	}
-	if err := validateActions(cfg.Actions); err != nil {
+	cfg, err := parse(data)
+	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
@@ -123,6 +111,37 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, err
 	}
 	return cfg, projects, nil
+}
+
+// File is config.toml under a configuration root.
+func File(root string) string {
+	return filepath.Join(root, "config.toml")
+}
+
+// parse decodes and validates the text of config.toml. Load and Set both
+// run it, so a value Set writes is one Load accepts at the next start.
+func parse(data []byte) (*Config, error) {
+	cfg := &Config{}
+	if _, err := toml.Decode(string(data), cfg); err != nil {
+		return nil, err
+	}
+	for i, pr := range cfg.Probes {
+		if pr.Name == "" || pr.Exec == "" {
+			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
+		}
+		cfg.Probes[i].Exec = expandHome(pr.Exec)
+	}
+
+	if _, err := cfg.Theme(); err != nil {
+		return nil, err
+	}
+	if _, err := cfg.TriggerKey(); err != nil {
+		return nil, fmt.Errorf("ui.trigger_key: %w", err)
+	}
+	if err := validateActions(cfg.Actions); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // Theme resolves the configured palette and glyph set. An empty [ui] table

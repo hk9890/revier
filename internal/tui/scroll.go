@@ -19,10 +19,15 @@ import (
 // rather than one screen of them: ninety projects is a hundred and eighty
 // lines, which is a rounding error next to the survey that produced them.
 func (m *Model) syncBody() {
-	// The new-project screen has no rows: the body says what the field will
-	// write.
-	if m.dialog == dialogNew {
+	// The new-project and config screens have no list rows: the body is
+	// their own text.
+	switch m.dialog {
+	case dialogNew:
 		m.body.SetContent(m.newScreen())
+		m.body.SetYOffset(0)
+		return
+	case dialogConfig:
+		m.body.SetContent(m.configScreen())
 		m.body.SetYOffset(0)
 		return
 	}

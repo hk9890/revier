@@ -51,8 +51,8 @@ const (
 )
 
 // dialog is a screen standing over the surface: the link dialog's two steps
-// - which host, then which of its projects (decisions.md D45) - or the
-// new-project field. dialogNone is the surface itself, which is where it is
+// - which host, then which of its projects (decisions.md D45) - the
+// new-project field, or the config screen. dialogNone is the surface itself, which is where it is
 // nearly always.
 type dialog int
 
@@ -61,6 +61,7 @@ const (
 	dialogHosts
 	dialogRemote
 	dialogNew
+	dialogConfig
 )
 
 // Model is the bubbletea model. Construct it with New.
@@ -114,6 +115,16 @@ type Model struct {
 	over   hovered                          // what the pointer is on
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
+
+	// The config screen.
+	ui        config.UI       // [ui] as config.toml holds it
+	runtime   []string        // [hosts] runtime as config.toml holds it
+	runtimes  []string        // the runtime hosts the screen offers besides auto
+	pick      RuntimeSelector // probes a runtime choice, as startup does
+	switching string          // the runtime choice being probed
+	refused   string          // the last runtime choice that did not probe, stepped from next
+	crow      int             // the row the screen's cursor is on
+	chord     textinput.Model // the trigger key, while it is typed
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -131,6 +142,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
 		path: newPathInput(th),
 		body: newBody(),
+		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 	}
 	m.layout()
 	return m
@@ -278,9 +290,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case askedMsg:
 		return m.asked(msg)
-	case configEditedMsg:
-		m.err = msg.err
-		return m, nil
+	case runtimeMsg:
+		return m.runtimeSwitched(msg)
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -431,8 +442,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
-	if m.dialog == dialogNew {
+	switch m.dialog {
+	case dialogNew:
 		return m.newKey(msg)
+	case dialogConfig:
+		return m.configKey(msg)
 	}
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)

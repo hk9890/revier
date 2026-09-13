@@ -1176,3 +1176,37 @@ The hook now calls `kitten @ set-user-vars --match id:$KITTY_WINDOW_ID` on
 `$KITTY_LISTEN_ON`, the mechanism `CS_STATE` has always used, and does nothing
 outside kitty. Verified on screen: the variable appears, the save records it,
 and the restored agent answers from the conversation it held.
+
+### D53 — config is a screen, and a change applies as it is made — Accepted
+
+Narrows D49: config stays a button on the top line with alt+c, and no longer
+opens `config.toml` in `$EDITOR`.
+
+The editor opened an empty file on most machines, because the defaults are
+not written down, so the user saw nothing to change and no list of what could
+be. The screen shows every setting it offers with its current value: the
+theme, the glyph set and the trigger key under `[ui]`, and the runtime host
+under `[hosts]`. The window host is shown and not offered. Which one a
+machine has belongs to its desktop, and sway cannot be chosen inside GNOME.
+
+A change is written when it is made, and applied when it is written. D49 kept
+the configuration unread while the surface ran, so that nothing was rebuilt
+under the user. That reason does not hold for a change the user makes on the
+screen. The theme and the glyphs repaint in place, and the lists keep their
+cursors. A runtime choice is probed first and written only when it is usable,
+because a configured host that does not probe refuses the next start. The
+surface then swaps in a new core over that host, so a survey already running
+finishes on the host it started with.
+
+The file is edited line by line, not re-encoded. A TOML encoder writes back
+only what it decoded, and comments are not decoded. The value is put in place
+of the old one under its table, and every other line stays as it was. The
+result is validated as a start validates it, and read back, before it is
+written. A key the line editor cannot find, such as a dotted key, is refused
+instead of being written twice.
+
+The trigger key is only written to `config.toml`. The desktop binding is
+still `revier keys apply`'s to change.
+
+Configured actions and probes are not on the screen yet. They are lists of
+records, and they are still edited in the file.

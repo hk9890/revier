@@ -130,18 +130,6 @@ func TestTheNewProjectScreenRefusesAMissingDirectory(t *testing.T) {
 	}
 }
 
-// alt+c needs an editor to hand the file to, and says so when there is none.
-func TestTheConfigButtonNeedsAnEditor(t *testing.T) {
-	t.Setenv("EDITOR", "")
-	_, _, c, projects := world(t, 1)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-
-	m, _ = press(m, "alt+c")
-	if f := footer(m); !strings.Contains(f, "$EDITOR is not set") {
-		t.Errorf("footer = %q, want the missing editor named", f)
-	}
-}
-
 // motion is the pointer moving over a terminal cell, pressing nothing.
 func motion(m tui.Model, x, y int) tui.Model {
 	next, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})

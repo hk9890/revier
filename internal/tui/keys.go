@@ -120,6 +120,18 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
 }
 
+// helpForConfig is the footer on the config screen, and while its trigger
+// key is typed.
+func (k keyMap) helpForConfig(typing bool) []key.Binding {
+	if typing {
+		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "cancel"), k.Quit}
+	}
+	return []key.Binding{
+		helpKey("↑↓", "move"), helpKey("←→", "change"), helpKey("enter", "change/edit"),
+		helpKey("esc", "back"), k.Quit,
+	}
+}
+
 // targetHelp is the highlighted project's own target keys. They come from the
 // row rather than from configuration, because which keys do anything depends
 // on which project the cursor is on.

@@ -37,9 +37,10 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.over = m.hoverAt(msg.X, msg.Y)
-	// The new-project screen has no rows: the project list is behind it, and
-	// a click or a notch must not move a selection nobody can see.
-	if msg.Action != tea.MouseActionPress || m.dialog == dialogNew {
+	// The new-project and config screens have no list rows: the project list
+	// is behind them, and a click or a notch must not move a selection nobody
+	// can see.
+	if msg.Action != tea.MouseActionPress || m.rowless() {
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonLeft {
@@ -85,11 +86,16 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// rowless reports a screen standing over the list with no rows of its own.
+func (m Model) rowless() bool {
+	return m.dialog == dialogNew || m.dialog == dialogConfig
+}
+
 // rowAt is the list row under a terminal cell, if a row is there: the cell is
 // inside the list, and not on the header, the footer or the space below the
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
-	if m.dialog == dialogNew {
+	if m.rowless() {
 		return 0, false
 	}
 	_, mc := m.margins()
