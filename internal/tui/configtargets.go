@@ -209,7 +209,7 @@ func (m Model) targetFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case row.kind == rowHome && (msg.Type == tea.KeyLeft || msg.Type == tea.KeyRight || msg.Type == tea.KeySpace):
 		m.tform.home = !m.tform.home
 		return m, nil
-	case row.kind == rowField:
+	case row.kind == rowField && !altRune(msg):
 		in, cmd := m.tform.fields[row.field].Update(msg)
 		m.tform.fields[row.field] = in
 		return m, cmd
@@ -377,6 +377,7 @@ func (m Model) panelFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.kind = revier.PanelKind(cycle(panelKinds, string(p.kind), -1))
 	case p.field == pfKind && msg.Type == tea.KeyRight:
 		p.kind = revier.PanelKind(cycle(panelKinds, string(p.kind), +1))
+	case altRune(msg):
 	case p.field == pfTitle:
 		var cmd tea.Cmd
 		p.title, cmd = p.title.Update(msg)

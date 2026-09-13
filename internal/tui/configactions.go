@@ -86,6 +86,8 @@ func (m Model) actionFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.moveField(-1)
 	case key.Matches(msg, m.keys.Enter):
 		return m.saveAction()
+	case altRune(msg):
+		return m, nil
 	}
 	in, cmd := m.aform.fields[m.aform.field].Update(msg)
 	m.aform.fields[m.aform.field] = in

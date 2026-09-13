@@ -55,6 +55,9 @@ func (m Model) newKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Enter):
 		return m.createProject()
 	}
+	if altRune(msg) {
+		return m, nil
+	}
 	m.err = nil
 	in, cmd := m.path.Update(msg)
 	m.path = in

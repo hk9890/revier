@@ -141,6 +141,34 @@ func TestTheNewProjectScreenNamesTheSharedTargets(t *testing.T) {
 	}
 }
 
+// An alt chord is a key, not text: pressed on the new-project screen, or on the
+// list, it types nothing.
+func TestAnAltChordTypesNothing(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	alt := func(m tui.Model, r rune) tui.Model {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true})
+		return next.(tui.Model)
+	}
+
+	m = alt(m, 'x')
+	if q := query(m); strings.Contains(q, "x") {
+		t.Errorf("query = %q after alt+x, want nothing typed", q)
+	}
+	m = alt(m, 'n')
+	m = typeInto(m, "/tmp/w")
+	m = alt(m, 'c')
+	m = alt(m, 'x')
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
+		t.Fatalf("top line = %q, want the new-project screen still up", head)
+	}
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "/tmp/w\n") {
+		t.Errorf("screen = %q, want the path as typed and no letter of an alt chord", body)
+	}
+}
+
 // A directory that is not there is refused, and nothing is written.
 func TestTheNewProjectScreenRefusesAMissingDirectory(t *testing.T) {
 	root := t.TempDir()

@@ -157,6 +157,8 @@ func (m Model) chordKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ui.TriggerKey = raw
 		m.chord.Blur()
 		return m, nil
+	case altRune(msg):
+		return m, nil
 	}
 	in, cmd := m.chord.Update(msg)
 	m.chord = in
