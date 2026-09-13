@@ -20,10 +20,11 @@ run = ["git", "pull"]
 var syncAction = config.Action{Key: "ctrl+g", Name: "sync", Run: []string{"git", "pull"}}
 
 // onActionRow opens the config screen with the cursor on the i-th action row,
-// or on the add row past the last.
+// or on the add row past the last. The model has no shared targets, so the
+// targets section is its add row alone.
 func onActionRow(m tui.Model, i int) tui.Model {
 	m, _ = press(m, "alt+c")
-	for range 4 + i {
+	for range 5 + i {
 		m, _ = press(m, "down")
 	}
 	return m

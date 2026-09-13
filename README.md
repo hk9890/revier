@@ -93,8 +93,8 @@ The top line holds what is not about one project, each with its key: **new**
 links a project on another machine from the hosts `~/.ssh/config` names and the
 projects the revier on the chosen host has, **config** (alt+c) sets the
 theme, the glyphs, the trigger key and the runtime host, and adds, changes and
-deletes actions, each written to `config.toml` and applied as it changes,
-comments kept, and **help** (alt+h)
+deletes shared targets and actions, each written to `config.toml` and applied
+as it changes, comments kept, and **help** (alt+h)
 lists every key: the surface's own, the target keys, the configured actions
 and the desktop keys. The rule over the list counts the projects by what
 their agents are doing: blockers, working, idle.
@@ -127,8 +127,11 @@ when you save, and comes back starting fresh.
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
-`revier new` writes one for the current directory, and `revier open <name>`
-does the same for a name revier does not know yet. A project whose directory is
+Targets most projects share, such as an editor, are declared once as
+`[[target]]` in `~/.config/revier/config.toml`; a project file then overrides
+only the fields it changes, and adds targets of its own. `revier new` writes
+one for the current directory, and `revier open <name>` does the same for a
+name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
 
 A project can live on another machine. `revier link <host> <project>`, or

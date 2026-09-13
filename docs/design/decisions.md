@@ -1323,8 +1323,9 @@ and every comment in it stays, including one inside an array written over
 several lines. Every edit, an add included, names the actions as the screen
 read them, and it is refused if the file no longer holds them: the file was
 changed by hand while revier ran, and an add would otherwise write a second
-action under a name or a key the screen did not know was taken. Actions written as an inline array are refused too, because
-the line editor does not find them.
+action under a name or a key the screen did not know was taken. Actions
+written as an inline array are refused too, because the line editor does not
+find them.
 
 ### D57 — a Claude agent's state comes from `claude agents --json`, not from its title — Accepted
 
@@ -1415,3 +1416,84 @@ path starts in; the pane still shows the path whole.
 `revier link` keeps the project's own name, with `--name` to change it. A
 command has no field to offer a name in, and a script that links a project
 expects the name it asked for.
+
+### D59 — targets most projects share are declared once, in config.toml — Accepted
+
+Narrows D14: a target is still a named binding a project has, but a project
+file no longer has to declare every target it has.
+
+The eighty-nine converted projects declared the same three targets - the
+workspace, IntelliJ and the ticket viewer - each with `{{.Name}}` where they
+differed. About four lines in ninety files were each project's own. Changing
+the editor meant editing every file.
+
+`config.toml` now takes `[[target]]` tables in the project file's form, and
+every project gets them. A project's target of the same name is merged into the
+shared one field by field, and a target of a new name is added after the shared
+ones. The merge is on the tables as TOML decodes them, before anything is
+validated or rendered, so everything after the load - validation, templates,
+keys, the TUI - sees a complete project as before.
+
+A table merges key by key at any depth, so a project that only differs in its
+editor's window title writes that title and keeps the shared class and launch.
+Any other value replaces the shared one whole, a list included. Merging `panels`
+item by item has no rule a reader could predict: a panel has no name to be
+matched on, and a position is not an identity.
+
+A shared target is checked once, in `config.toml`, for a name, a name given
+twice, and a value of the wrong type. Whether it is complete is checked per
+project after the merge, because a project may supply the part it leaves out.
+That error names the project file.
+
+A link has no shared targets. Its home is the derived ssh pane (D41), which a
+shared home would replace, and the project file on the host already has that
+host's shared targets.
+
+A project may not remove a shared target. Nothing needs to yet.
+
+`revier new` writes a file without targets when `config.toml` has shared
+targets, and the template of D30 when it has none.
+
+A name with a character a regexp reads, such as the dot in
+`dynatrace.agent.studio`, is matched through the shared `^session:{{.Name}}$`
+as it is, unescaped. A dot then matches any character. That still finds the
+project's own window, and it spares every shared match an escaping function.
+D30's `revier new` template still escapes it, as the file it writes has its
+own match.
+
+### D60 — shared targets are edited on the config screen — Accepted
+
+Narrows D59: the shared targets it put in `config.toml` are on the screen, with
+add, change and delete, as D56 put the actions there.
+
+The screen lists each shared target by key, name and where it opens. Enter
+opens a form under the row: the name, the key and the home flag, then the
+runtime and the window realization, each with its name, command, match title,
+match class and place. The runtime's panels are a list inside the form, and
+Enter on one opens a form of its kind, title and command. A realization whose
+fields are all empty, with no panels, is none. A panel change is kept in the
+form and written only when the target is saved, so Esc leaves the file as it
+was.
+
+The form shows what a target is made of and hides what it rarely needs. `dir`,
+`prefer` and a match's `pid` are not on it; they are kept as the file has
+them.
+
+An entry is edited line by line, as D56 edits an action, one level deeper. A
+changed value is written in place; a realization or a panel added is a table
+added at the end of what it belongs under, indented two spaces a level as the
+project files are; one deleted loses its tables and values, and its comments
+stay. A match written inline is written whole, with the keys the form does not
+show kept. The form tells the writer which panel of the file each of its
+panels was, so a panel deleted before another does not move its comments onto
+the next.
+
+A write is refused unless every project still loads with the result. A shared
+target is part of every project, so a change that breaks one - a target
+deleted that a project only overrides, a place of three tokens - would refuse
+the next start. The refusal names the project file. After a write the surface
+loads the projects again and has the new targets at once.
+
+The config screen now takes the whole width, as the help screen does. A form
+with notes beside its fields needs the columns, and the pane beside the
+screen was empty.

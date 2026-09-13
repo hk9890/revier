@@ -16,7 +16,7 @@ host = "buildbox"
 `
 
 func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", link))
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
 // host is asked by its name, the list shows this one.
 func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"far\"", 1)
-	p, err := config.LoadProject(write(t, t.TempDir(), "build.toml", body))
+	p, err := config.LoadProject(write(t, t.TempDir(), "build.toml", body), nil)
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -68,7 +68,7 @@ key = "ctrl-o"
   launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
   match = { title = "far \\[SSH: buildbox\\]" }
 `
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body))
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -95,7 +95,7 @@ home = true
   launch = ["ssh", "buildbox"]
   match = { title = "^far$" }
 `
-	p, err = config.LoadProject(write(t, t.TempDir(), "far.toml", own))
+	p, err = config.LoadProject(write(t, t.TempDir(), "far.toml", own), nil)
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 
 func TestALinkRefusesAGitURL(t *testing.T) {
 	body := "git_url = \"git@github.com:hk9890/far.git\"\n" + link
-	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body))
+	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	if err == nil || !strings.Contains(err.Error(), "git_url") {
 		t.Errorf("err = %v, want git_url refused on a link", err)
 	}
@@ -152,14 +152,14 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 		{"whitespace", "build box", "whitespace"},
 	} {
 		body := strings.Replace(link, `host = "buildbox"`, `host = "`+tc.host+`"`, 1)
-		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body))
+		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body), nil)
 		if err == nil || !strings.Contains(err.Error(), "remote.host:") || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want one naming remote.host and %q", tc.name, err, tc.want)
 		}
 	}
 	for _, host := range []string{"buildbox", "hans@build.example.com", "10.0.0.7"} {
 		body := strings.Replace(link, `host = "buildbox"`, `host = "`+host+`"`, 1)
-		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body)); err != nil {
+		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body), nil); err != nil {
 			t.Errorf("%s: %v", host, err)
 		}
 	}

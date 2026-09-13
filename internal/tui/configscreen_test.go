@@ -78,6 +78,21 @@ func TestAltCOpensTheConfigScreen(t *testing.T) {
 	}
 }
 
+// The screen takes the pane's width while it is up, and Esc gives the list
+// its own width back: the surface renders as it did before the screen.
+func TestLeavingTheConfigScreenRestoresTheListWidth(t *testing.T) {
+	configRoot(t, "")
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30)
+	before := m.View()
+
+	m, _ = press(m, "alt+c")
+	m, _ = press(m, "esc")
+	if got := m.View(); got != before {
+		t.Errorf("surface after the config screen =\n%s\nwant\n%s", got, before)
+	}
+}
+
 // A new theme is written at once, the file's comments kept, and the screen
 // shows it without a restart.
 func TestTheConfigScreenWritesTheThemeAndKeepsComments(t *testing.T) {

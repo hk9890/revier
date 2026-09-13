@@ -70,7 +70,7 @@ func (m Model) editFile() (tea.Model, tea.Cmd) {
 // project as it was: the error names what is wrong, and the next edit can fix
 // it, while a project dropped from the list could not be reached to edit.
 func (m *Model) reread(msg editedMsg) error {
-	p, err := config.LoadProject(msg.file)
+	p, err := config.LoadProject(msg.file, m.shared)
 	if err != nil {
 		return fmt.Errorf("%w; %s is shown as it was before the edit", err, msg.project)
 	}

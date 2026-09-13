@@ -79,6 +79,43 @@ with `revier attach` also appears there and needs no config at all.
 Set `prefer = "runtime"` on a target to override which realization wins when
 both hosts are available.
 
+Targets most projects have in common are declared once, in
+`~/.config/revier/config.toml`, in the same form (decisions.md D59). Every
+project gets them, and its file then holds only what is its own:
+
+```toml
+# config.toml
+[[target]]
+name = "editor"
+key  = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"]
+  match  = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+```
+
+```toml
+# projects/platform.toml
+path = "~/dev/platform"
+
+# Same name: merged into the shared editor. Only the title changes; the key,
+# the launch and the class stay the shared ones.
+[[target]]
+name = "editor"
+  [target.window]
+  match = { title = "^platform-service( |$)" }
+
+# A new name: a target of this project alone.
+[[target]]
+name = "pulls"
+  [target.window]
+  launch = ["google-chrome", "--app=https://github.com/hk9890/platform/pulls"]
+  match  = { class = "^chrome-github" }
+```
+
+A table merges key by key, at any depth. Any other value - a string, a list
+such as `panels` or `launch` - replaces the shared one whole. A link has no
+shared targets.
+
 A link, in the same directory, is a project on another machine
 (decisions.md D41). It has a `[remote]` table and no directory here:
 

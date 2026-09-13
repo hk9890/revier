@@ -26,12 +26,16 @@ import (
 )
 
 // Config is the global configuration: which adapters to prefer, the actions
-// the TUI exposes, and the external agent probes.
+// the TUI exposes, the external agent probes, and the targets every project
+// shares.
 type Config struct {
 	Hosts   Hosts    `toml:"hosts"`
 	UI      UI       `toml:"ui"`
 	Actions []Action `toml:"action"`
 	Probes  []Probe  `toml:"probe"`
+	// Targets are the shared targets, as TOML decoded them, so a project
+	// can override any one field of one (shared.go).
+	Targets []map[string]any `toml:"target"`
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -106,7 +110,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"))
+	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Targets)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,6 +143,9 @@ func parse(data []byte) (*Config, error) {
 		return nil, fmt.Errorf("ui.trigger_key: %w", err)
 	}
 	if err := validateActions(cfg.Actions); err != nil {
+		return nil, err
+	}
+	if err := validateShared(cfg.Targets); err != nil {
 		return nil, err
 	}
 	return cfg, nil
@@ -188,8 +195,8 @@ func validateActions(actions []Action) error {
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
-// across machines.
-func LoadProjects(dir string) ([]core.Project, error) {
+// across machines. shared are config.toml's shared targets.
+func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -211,7 +218,7 @@ func LoadProjects(dir string) ([]core.Project, error) {
 	var errs []error
 	for _, name := range names {
 		path := filepath.Join(dir, name)
-		p, err := LoadProject(path)
+		p, err := LoadProject(path, shared)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -233,10 +240,11 @@ func LoadProjects(dir string) ([]core.Project, error) {
 
 // LoadProject reads, validates, and prepares one project file. Every error
 // names the file: a rendering or compile failure is reported here, at load,
-// and never reaches a keystroke.
-func LoadProject(path string) (core.Project, error) {
-	var p revier.Project
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+// and never reaches a keystroke. shared are config.toml's shared targets,
+// merged in before anything is checked.
+func LoadProject(path string, shared []map[string]any) (core.Project, error) {
+	p, err := decodeProject(path, shared)
+	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
 	if p.Name == "" {
