@@ -87,6 +87,12 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
 	case "down":
 		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "up":
+		msg = tea.KeyMsg{Type: tea.KeyUp}
+	case "left":
+		msg = tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		msg = tea.KeyMsg{Type: tea.KeyRight}
 	case "backspace":
 		msg = tea.KeyMsg{Type: tea.KeyBackspace}
 	default:

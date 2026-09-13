@@ -20,17 +20,23 @@ const promptMark = "❯ "
 func newPrompt(th theme.Theme) textinput.Model {
 	in := textinput.New()
 	in.Prompt = promptMark
-	in.PromptStyle = th.Accent
-	in.TextStyle = th.ProjectName
-	in.Cursor.Style = th.Accent
+	styleField(&in, th)
 	in.Placeholder = projectPlaceholder
-	in.PlaceholderStyle = th.NameDim
 	in.CharLimit = 64
 	// Focused from the start: the surface filters as you type, so the query
 	// line is always where a keystroke lands. Init calls Focus again for the
 	// blink command; this call is what makes the input accept keys at all.
 	_ = in.Focus()
 	return in
+}
+
+// styleField gives a text field the theme's colours. The fields are restyled
+// in place when the theme changes, so their text and cursor survive it.
+func styleField(in *textinput.Model, th theme.Theme) {
+	in.PromptStyle = th.Accent
+	in.TextStyle = th.ProjectName
+	in.Cursor.Style = th.Accent
+	in.PlaceholderStyle = th.NameDim
 }
 
 // What the query line says when it is empty: which rows a keystroke filters.

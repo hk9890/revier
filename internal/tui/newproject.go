@@ -25,11 +25,8 @@ import (
 func newPathInput(th theme.Theme) textinput.Model {
 	in := textinput.New()
 	in.Prompt = promptMark
-	in.PromptStyle = th.Accent
-	in.TextStyle = th.ProjectName
-	in.Cursor.Style = th.Accent
+	styleField(&in, th)
 	in.Placeholder = "~/dev/example"
-	in.PlaceholderStyle = th.NameDim
 	in.CharLimit = 512
 	return in
 }

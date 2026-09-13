@@ -1,0 +1,324 @@
+package tui
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// The config screen, alt+c: one row per key of config.toml it can change.
+// A change is written the moment it is made, with the file's comments kept
+// (config.Set), and applied the moment it is written: the theme and the
+// glyphs repaint the surface, and a runtime host is swapped in for the next
+// survey. The window host is shown and not offered: which one a machine has
+// is its desktop's, not a choice.
+
+// configRow is a row of the screen the cursor can be on.
+type configRow int
+
+const (
+	rowTheme configRow = iota
+	rowGlyphs
+	rowTrigger
+	rowRuntime
+	configRows
+)
+
+// autoRuntime is the runtime choice that writes no host: startup searches the
+// compiled-in hosts in their default order.
+const autoRuntime = "auto"
+
+// RuntimeSelector picks the runtime host for a configured preference list,
+// probing as startup does. An empty list is the default search.
+type RuntimeSelector func(ctx context.Context, want []string) (revier.Runtime, error)
+
+// runtimeTimeout bounds one probe of a runtime host.
+const runtimeTimeout = 10 * time.Second
+
+// runtimeMsg is a runtime choice probed: the host it selected, or why none.
+type runtimeMsg struct {
+	want    []string
+	runtime revier.Runtime
+	err     error
+}
+
+// WithRuntimes gives the config screen the runtime hosts it offers and the
+// selector that probes them. The adapters are wired in cmd/revier alone, so
+// the surface is handed both rather than naming a host itself.
+func (m Model) WithRuntimes(choices []string, pick RuntimeSelector) Model {
+	m.runtimes, m.pick = choices, pick
+	return m
+}
+
+func newChordInput(th theme.Theme) textinput.Model {
+	in := textinput.New()
+	styleField(&in, th)
+	in.Prompt = ""
+	in.Placeholder = config.DefaultTriggerKey
+	in.CharLimit = 64
+	return in
+}
+
+// openConfig is the "config" button and alt+c.
+func (m Model) openConfig() (tea.Model, tea.Cmd) {
+	m.err = nil
+	m.leavePane()
+	m.crow = int(rowTheme)
+	m.dialog = dialogConfig
+	return m, nil
+}
+
+// configKey is every press on the config screen. Left and right change the
+// row's value; Enter does the same, or opens the trigger key for typing.
+func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.chord.Focused() {
+		return m.chordKey(msg)
+	}
+	m.err = nil
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Back):
+		m.dialog = dialogNone
+	case key.Matches(msg, m.keys.Up):
+		m.crow = max(m.crow-1, 0)
+	case key.Matches(msg, m.keys.Down):
+		m.crow = min(m.crow+1, int(configRows)-1)
+	case configRow(m.crow) == rowTrigger && key.Matches(msg, m.keys.Enter):
+		m.chord.SetValue(m.ui.TriggerKey)
+		m.chord.CursorEnd()
+		return m, m.chord.Focus()
+	case msg.Type == tea.KeyLeft:
+		return m.change(-1)
+	case msg.Type == tea.KeyRight, key.Matches(msg, m.keys.Enter):
+		return m.change(+1)
+	}
+	return m, nil
+}
+
+// chordKey is a press while the trigger key is typed. Enter writes it, Esc
+// leaves it as it was.
+func (m Model) chordKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Back):
+		m.err = nil
+		m.chord.Blur()
+		return m, nil
+	case key.Matches(msg, m.keys.Enter):
+		raw := strings.TrimSpace(m.chord.Value())
+		if _, err := core.ParseChord(raw); err != nil {
+			m.err = err
+			return m, nil
+		}
+		if err := writeConfig("ui", "trigger_key", raw); err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.err = nil
+		m.ui.TriggerKey = raw
+		m.chord.Blur()
+		return m, nil
+	}
+	in, cmd := m.chord.Update(msg)
+	m.chord = in
+	return m, cmd
+}
+
+// change steps the value of the row under the cursor.
+func (m Model) change(step int) (tea.Model, tea.Cmd) {
+	ui := m.ui
+	switch configRow(m.crow) {
+	case rowTheme:
+		ui.Theme = cycle(theme.Themes(), orDefault(ui.Theme, theme.DefaultTheme), step)
+		return m.setUI(ui, "theme", ui.Theme), nil
+	case rowGlyphs:
+		ui.Glyphs = cycle(theme.GlyphSets(), orDefault(ui.Glyphs, theme.DefaultGlyphs), step)
+		return m.setUI(ui, "glyphs", ui.Glyphs), nil
+	case rowRuntime:
+		return m.switchRuntime(step)
+	}
+	return m, nil
+}
+
+// setUI writes one key of [ui] and repaints the surface in the result.
+func (m Model) setUI(ui config.UI, key, value string) Model {
+	th, err := theme.Lookup(ui.Theme, ui.Glyphs)
+	if err != nil {
+		m.err = err
+		return m
+	}
+	if err := writeConfig("ui", key, value); err != nil {
+		m.err = err
+		return m
+	}
+	m.ui = ui
+	m.applyTheme(th)
+	return m
+}
+
+// switchRuntime probes the next runtime choice, off the update loop: a probe
+// runs the host's own tool. The choice is written only once a host answers,
+// because a configured host that probes badly is a startup error, and the
+// next start must not be refused over a choice made here.
+func (m Model) switchRuntime(step int) (tea.Model, tea.Cmd) {
+	if m.pick == nil {
+		m.err = errors.New("this surface has no runtime hosts to choose from")
+		return m, nil
+	}
+	if m.switching != "" {
+		return m, nil
+	}
+	next := cycle(append([]string{autoRuntime}, m.runtimes...), m.runtimeChoice(), step)
+	want := []string{}
+	if next != autoRuntime {
+		want = []string{next}
+	}
+	m.switching = next
+	pick := m.pick
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), runtimeTimeout)
+		defer cancel()
+		rt, err := pick(ctx, want)
+		return runtimeMsg{want: want, runtime: rt, err: err}
+	}
+}
+
+// runtimeSwitched takes a probed choice: written, and the core swapped for
+// one over the host it selected. The next survey reads the new host.
+func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
+	m.switching = ""
+	if msg.err != nil {
+		m.err = msg.err
+		return m, nil
+	}
+	if err := writeConfig("hosts", "runtime", msg.want); err != nil {
+		m.err = err
+		return m, nil
+	}
+	m.runtime = msg.want
+	m.core = m.core.WithRuntime(msg.runtime)
+	return m, nil
+}
+
+// runtimeChoice is the configured runtime preference as the screen names it:
+// auto for none, the host for one it offers, and the list as written for
+// anything else.
+func (m Model) runtimeChoice() string {
+	switch {
+	case len(m.runtime) == 0:
+		return autoRuntime
+	case len(m.runtime) == 1 && slices.Contains(m.runtimes, m.runtime[0]):
+		return m.runtime[0]
+	}
+	return strings.Join(m.runtime, ", ")
+}
+
+// applyTheme repaints every part of the surface that was built with a theme.
+// The lists keep their items and cursors; only their styles change.
+func (m *Model) applyTheme(th theme.Theme) {
+	m.theme = th
+	m.hlist.SetDelegate(hostDelegate{theme: th})
+	m.rlist.SetDelegate(remoteDelegate{theme: th})
+	m.help = newHelp(th)
+	m.detail.Style = newDetail(th).Style
+	for _, in := range []*textinput.Model{&m.input, &m.path, &m.chord} {
+		styleField(in, th)
+	}
+	m.layout()
+}
+
+func writeConfig(table, key string, value any) error {
+	root, err := config.Root()
+	if err != nil {
+		return err
+	}
+	return config.Set(root, table, key, value)
+}
+
+// cycle is the value step places after current, wrapping at both ends. A
+// current value not among them steps onto the first, or the last.
+func cycle(values []string, current string, step int) string {
+	i := slices.Index(values, current)
+	switch {
+	case i >= 0:
+		return values[(i+step+len(values))%len(values)]
+	case step < 0:
+		return values[len(values)-1]
+	}
+	return values[0]
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+// configLabelWidth is the column the values start in.
+const configLabelWidth = 14
+
+// configScreen stands in the list's place while the screen is up.
+func (m Model) configScreen() string {
+	th := m.theme
+	w := m.listWidth()
+	var b strings.Builder
+	row := func(r configRow, label, value, note string) {
+		sel := configRow(m.crow) == r
+		style := func(s lipgloss.Style) lipgloss.Style {
+			if sel {
+				return th.OnSelection(s)
+			}
+			return s
+		}
+		line := cursor(th, sel) + style(th.Meta).Render(pad(label, configLabelWidth)) + style(th.ProjectName).Render(value)
+		if note != "" {
+			line += style(th.Path).Render("  " + note)
+		}
+		b.WriteString(fill(clipTo(line, w), w, style) + "\n")
+	}
+	info := func(label, value, note string) {
+		line := th.Path.Render("  ") + th.Meta.Render(pad(label, configLabelWidth)) + th.NameDim.Render(value) + th.Path.Render("  "+note)
+		b.WriteString(clipTo(line, w) + "\n")
+	}
+
+	b.WriteString(m.heading("Appearance", w))
+	row(rowTheme, "theme", "‹ "+orDefault(m.ui.Theme, theme.DefaultTheme)+" ›", "")
+	row(rowGlyphs, "glyphs", "‹ "+orDefault(m.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")
+	trigger := orDefault(m.ui.TriggerKey, config.DefaultTriggerKey)
+	if m.chord.Focused() {
+		trigger = m.chord.View()
+	}
+	row(rowTrigger, "trigger key", trigger, "the desktop key that opens revier")
+
+	b.WriteString(m.heading("Hosts", w))
+	note := "in use: " + hostName(m.core.Runtime)
+	if m.switching != "" {
+		note = "checking " + m.switching + "…"
+	}
+	row(rowRuntime, "runtime", "‹ "+m.runtimeChoice()+" ›", note)
+	info("window", hostName(m.core.Window), "detected at start")
+	return b.String()
+}
+
+// hostName is a host's name, or "none" for no host.
+func hostName(h revier.Host) string {
+	if h == nil {
+		return "none"
+	}
+	return h.Name()
+}

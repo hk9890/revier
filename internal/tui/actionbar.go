@@ -1,16 +1,10 @@
 package tui
 
 import (
-	"errors"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/hk9890/revier/internal/config"
 )
 
 // The action bar is the top line: what the surface can do that is not about
@@ -34,7 +28,7 @@ type barAction struct {
 var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openNew},
 	{label: "remote", key: "alt+r", run: Model.openHosts},
-	{label: "config", key: "alt+c", run: Model.editConfig},
+	{label: "config", key: "alt+c", run: Model.openConfig},
 }
 
 // barCell is a button's place on the bar: the text as it is drawn, and the
@@ -122,47 +116,4 @@ func (m Model) barKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	return m, nil, false
-}
-
-// configEditedMsg follows the editor exiting on the configuration file.
-type configEditedMsg struct{ err error }
-
-// editConfig hands config.toml to $EDITOR, as alt+e hands over a project
-// file. The file is created if it is not there yet, so the editor opens the
-// file the surface names rather than reporting it missing.
-//
-// Nothing is re-read afterwards: the theme, the glyph set and the configured
-// actions are read once at startup, and applying them here would rebuild the
-// surface underneath the user. The change lands on the next start.
-func (m Model) editConfig() (tea.Model, tea.Cmd) {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		m.err = errors.New("$EDITOR is not set, so there is nothing to edit the configuration with")
-		return m, nil
-	}
-	root, err := config.Root()
-	if err != nil {
-		m.err = err
-		return m, nil
-	}
-	file := filepath.Join(root, "config.toml")
-	if err := touch(file); err != nil {
-		m.err = err
-		return m, nil
-	}
-	return m, tea.ExecProcess(exec.Command(editor, file), func(err error) tea.Msg {
-		return configEditedMsg{err: err}
-	})
-}
-
-// touch makes sure a file exists, and its directory with it.
-func touch(file string) error {
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	return f.Close()
 }

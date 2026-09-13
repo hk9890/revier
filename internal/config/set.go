@@ -1,0 +1,181 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+)
+
+// Set writes one value into config.toml and leaves every other line of the
+// file as it was: comments, order and spacing. A TOML encoder cannot do that -
+// it writes what it decoded, and a comment is not decoded - so the value is
+// put in place of the old one on its own line, under its table, and the table
+// is added at the end when the file has none.
+//
+// The result is parsed and validated as Load does before anything is written,
+// and read back: a key the line editor does not find where it looks, such as
+// one written as a dotted key or an inline table, would otherwise land twice
+// or not at all. That is refused, and the file stays as it was.
+func Set(root, table, key string, value any) error {
+	path := File(root)
+	old, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	literal, err := literalOf(value)
+	if err != nil {
+		return fmt.Errorf("%s.%s: %w", table, key, err)
+	}
+	text := setKey(string(old), table, key, literal)
+	if _, err := parse([]byte(text)); err != nil {
+		return fmt.Errorf("%s: %s.%s: %w", path, table, key, err)
+	}
+	if got, err := valueAt(text, table, key); err != nil || got != literal {
+		return fmt.Errorf("%s: %s.%s is not written as a plain key under [%s]; change it by hand", path, table, key, table)
+	}
+	return replaceFile(path, []byte(text))
+}
+
+// literalOf is a value as TOML writes it: a quoted string, an array.
+func literalOf(value any) (string, error) {
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(map[string]any{"v": value}); err != nil {
+		return "", err
+	}
+	return strings.TrimPrefix(strings.TrimSpace(b.String()), "v = "), nil
+}
+
+// valueAt is what a decoder reads at table.key, written back as a literal.
+func valueAt(text, table, key string) (string, error) {
+	var doc map[string]any
+	if _, err := toml.Decode(text, &doc); err != nil {
+		return "", err
+	}
+	t, _ := doc[table].(map[string]any)
+	v, ok := t[key]
+	if !ok {
+		return "", fmt.Errorf("%s.%s is not set", table, key)
+	}
+	return literalOf(v)
+}
+
+var (
+	// headerLine is a table header, [name] or [[name]], with an optional
+	// comment after it.
+	headerLine = regexp.MustCompile(`^\s*(\[\[?)\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$`)
+	// keyLine is the start of a bare key's line, up to where its value begins.
+	keyLine = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*`)
+)
+
+// setKey puts key = literal under [table] in text. An existing value is
+// replaced where it stands, and whatever followed it on its last line - a
+// comment - is kept. A missing key goes after the table's last value, and a
+// missing table at the end of the file.
+func setKey(text, table, key, literal string) string {
+	lines := strings.Split(text, "\n")
+	inTable, seen, last := false, false, -1
+	for i := 0; i < len(lines); i++ {
+		if h := headerLine.FindStringSubmatch(lines[i]); h != nil {
+			inTable = h[1] == "[" && h[2] == table
+			if inTable {
+				seen, last = true, i
+			}
+			continue
+		}
+		at := keyLine.FindStringSubmatchIndex(lines[i])
+		if at == nil {
+			continue
+		}
+		end, col := valueEnd(lines, i, at[1])
+		if inTable {
+			if lines[i][at[2]:at[3]] == key {
+				lines[i] = lines[i][:at[1]] + literal + lines[end][col:]
+				return strings.Join(slices.Delete(lines, i+1, end+1), "\n")
+			}
+			last = end
+		}
+		// A value over several lines is skipped whole, so a line inside an
+		// array is never read as a header or a key.
+		i = end
+	}
+	entry := key + " = " + literal
+	if seen {
+		return strings.Join(slices.Insert(lines, last+1, entry), "\n")
+	}
+	out := strings.TrimRight(text, "\n")
+	if out != "" {
+		out += "\n\n"
+	}
+	return out + "[" + table + "]\n" + entry + "\n"
+}
+
+// valueEnd finds where a value that starts at lines[i][col] ends: the line it
+// ends on, and the column after its last character. A bracket opens a value
+// that runs until it is closed, over as many lines as that takes; a quote
+// hides brackets and comment marks inside it.
+func valueEnd(lines []string, i, col int) (int, int) {
+	depth := 0
+	var quote byte
+	end, endCol := i, col
+	for ; i < len(lines); i, col = i+1, 0 {
+		line := lines[i]
+	scan:
+		for j := col; j < len(line); j++ {
+			c := line[j]
+			switch {
+			case quote != 0:
+				if c == '\\' && quote == '"' {
+					j++
+				} else if c == quote {
+					quote, end, endCol = 0, i, j+1
+				}
+			case c == '"' || c == '\'':
+				quote = c
+			case c == '#':
+				break scan
+			case c == '[' || c == '{':
+				depth++
+			case c == ']' || c == '}':
+				depth--
+				end, endCol = i, j+1
+			case c == ' ' || c == '\t':
+			default:
+				end, endCol = i, j+1
+			}
+		}
+		if depth <= 0 {
+			return end, endCol
+		}
+	}
+	return end, endCol
+}
+
+// replaceFile writes a file whole or not at all: a crash halfway through
+// leaves the old file, not half of the new one.
+func replaceFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".config.toml.*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
