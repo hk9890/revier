@@ -160,11 +160,13 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 //
 // The pairing is by process, and it is refused unless that process owns
 // exactly one unnamed window on the runtime side and exactly one window on the
-// window host's side that no named runtime window already claims by title.
-// D19 rejected the process id for pairing a pane to a window, because every OS
+// window host's side that no named runtime window already claims by title, and
+// every named runtime window of the process is found there by its title. D19
+// rejected the process id for pairing a pane to a window, because every OS
 // window of one kitty process shares its pid; that objection is exactly this
 // refusal, so an ambiguous process is left as it was rather than guessed at
-// (decisions.md D63).
+// (decisions.md D63, D66). A named window the window host does not list could
+// be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
 		return
@@ -188,8 +190,16 @@ func (c *Core) identify(s snapshot) {
 	}
 	byPID := map[int]revier.Instance{}
 	seen := map[int]int{}
+	found := map[int]map[string]bool{}
 	for _, w := range windows {
-		if w.PID == 0 || claimed[w.PID][w.Title] {
+		if w.PID == 0 {
+			continue
+		}
+		if claimed[w.PID][w.Title] {
+			if found[w.PID] == nil {
+				found[w.PID] = map[string]bool{}
+			}
+			found[w.PID][w.Title] = true
 			continue
 		}
 		seen[w.PID]++
@@ -197,7 +207,7 @@ func (c *Core) identify(s snapshot) {
 	}
 
 	for i, r := range runtimes {
-		if r.Title != "" || r.PID == 0 || unnamed[r.PID] != 1 || seen[r.PID] != 1 {
+		if r.Title != "" || r.PID == 0 || unnamed[r.PID] != 1 || seen[r.PID] != 1 || len(found[r.PID]) != len(claimed[r.PID]) {
 			continue
 		}
 		w := byPID[r.PID]

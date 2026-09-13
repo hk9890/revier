@@ -947,6 +947,28 @@ func TestANamedSiblingWindowDoesNotHideTheUnnamedOne(t *testing.T) {
 	}
 }
 
+// A named window the window host does not list may be the window that is
+// left over, under a title the named window was not given. Lending that title
+// to the unnamed window would raise the named one on the next press.
+func TestAnUnlistedNamedSiblingLeavesTheUnnamedOneUnidentified(t *testing.T) {
+	rt := unnamedRuntime(t, 4242)
+	rt.AddInstance(revier.Instance{
+		Ref:   revier.TargetRef{Host: "rt", ID: "2", Title: "tickets:revier"},
+		Title: "tickets:revier", PID: 4242,
+	})
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "taskmgr", Class: "kitty", PID: 4242})
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if report.Views[0].Running {
+		t.Error("the unnamed window took the only listed title, which may be its named sibling's window")
+	}
+}
+
 // With no window host there is nothing to ask, and the behaviour is what it
 // was: an unnamed window stays unidentified.
 func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {

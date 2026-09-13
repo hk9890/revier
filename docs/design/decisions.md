@@ -1734,3 +1734,22 @@ does this host. That window is still dropped for the old reason, better stated:
 it is not placed, and a placement revier sent to it would lose to mutter's own.
 The active workspace costs a second wctl call, made only when a window has that
 shape, so a refresh is still one call in the common case.
+
+### D66 — every named window of the process must be seen before its unnamed sibling is paired — Accepted
+
+Narrows D63's pairing.
+
+D63 set a named window's title aside and paired what was left. That trusts the
+window host to list the named window. When it does not, the one window left
+over may be the named window under a title it was not given - a program that
+retitles its OS window - and the unnamed window then takes that title. The next
+press raises the named window instead.
+
+So the pairing now also requires every named runtime window of the process to
+be found by its title. A process where one is not found is left unidentified.
+
+D63 could not afford this rule while the GNOME host dropped hidden windows: a
+minimized `tickets:revier` would have been unlisted, and the workspace beside
+it would lose its title again, which was the bug D63 fixed. D65 lists minimized
+windows, so the rule costs only a window mutter has not shown yet, which is
+gone within a moment.
