@@ -29,13 +29,23 @@ func (i projectItem) rowView() revier.ProjectView { return i.view }
 func (i projectItem) rowPath() string             { return contractHome(i.view.Project.Path) }
 func (i projectItem) rowNote() string             { return "" }
 
+func (i projectItem) rowMachine() string {
+	if i.view.Project.Remote != nil {
+		return i.view.Project.Remote.Host
+	}
+	return ""
+}
+
 // tableRow is an item the project table draws: the projects here, and the
 // projects of a host in the link dialog. The two differ in whose home a path
-// is written against, and in what the row says in place of what is open.
+// is written against, in what the row says in place of what is open, and in
+// which machine a missing checkout is missing from.
 type tableRow interface {
 	rowView() revier.ProjectView
 	rowPath() string
 	rowNote() string
+	// rowMachine is the host the checkout belongs on, or "" for this machine.
+	rowMachine() string
 }
 
 // newProjectList is the picker. Filtering is on but its own filter bar is
@@ -159,7 +169,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 	// A missing path stays grey: the note under the state says it, and a
 	// third of the rows in maroon from end to end read as a list of errors.
-	note := d.note(v, agentCol, style)
+	note := d.note(v, it.rowMachine(), agentCol, style)
 	if rowNote != "" {
 		note = style(th.Meta).Render(ellipsis(rowNote, agentCol))
 	}
@@ -229,8 +239,9 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 // be. A directory that is not here is said in words (decisions.md D30), and
 // what Enter does about it is the pane's to say. A stopped project with its
 // checkout in place has nothing to say, and neither does one with only its
-// home open: that is what the green mark says.
-func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
+// home open: that is what the green mark says. machine is the host the
+// checkout belongs on, or "" for this machine.
+func (d projectDelegate) note(v revier.ProjectView, machine string, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	th := d.theme
 	if v.Unreachable != "" {
 		// The failure itself is the pane's: here there is room for the fact.
@@ -245,8 +256,8 @@ func (d projectDelegate) note(v revier.ProjectView, room int, style func(lipglos
 	}
 	if !v.PathExists {
 		note := "not on this machine"
-		if v.Project.Remote != nil {
-			note = "not on " + v.Project.Remote.Host
+		if machine != "" {
+			note = "not on " + machine
 		}
 		if v.Project.GitURL != "" {
 			note = "not cloned"

@@ -139,6 +139,11 @@ func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
 	if len(files) != 0 {
 		t.Errorf("a refused name wrote %v", files)
 	}
+
+	m, _ = press(m, "esc")
+	if f := footer(m); strings.Contains(f, "exists here") {
+		t.Errorf("footer = %q, want the refusal left with the name step", f)
+	}
 }
 
 // Esc on the name goes back to the host's projects, with the cursor on the
@@ -155,6 +160,18 @@ func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "gamma") {
 		t.Errorf("selected %q, want gamma still under the cursor", row)
+	}
+}
+
+// A project whose checkout is missing on the host says it is missing there,
+// not here.
+func TestAHostsMissingCheckoutIsSaidAsMissingOnTheHost(t *testing.T) {
+	m, remote, _ := linkWorld(t, nil)
+	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}}}
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if r := rows(m); len(r) < 2 || !strings.Contains(r[1], "not on buildbox") {
+		t.Errorf("rows = %q, want the checkout said missing on buildbox", r)
 	}
 }
 
