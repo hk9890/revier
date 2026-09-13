@@ -13,3 +13,8 @@ func Quote(s string) string { return quote(s) }
 
 // Options exposes the flags every call carries.
 func Options() []string { return options }
+
+// Classify exposes classify, with a context a test does not have to make.
+func Classify(host string, args []string, stderr string, err error) error {
+	return classify(context.Background(), host, args, stderr, err)
+}

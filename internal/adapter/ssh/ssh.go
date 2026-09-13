@@ -46,8 +46,9 @@ var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 
 // exec runs one command on the remote and returns what it wrote. The remote
 // shell joins the words ssh is given back into one line, so each is quoted
-// here to reach the remote revier as the one argument it was. A failure
-// carries the remote's stderr, or ssh's own, as its text.
+// here to reach the remote revier as the one argument it was. A failure is
+// classified: what ssh or the remote shell said, in one line that says what
+// to do about it.
 func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, error) {
 	words := make([]string, len(args))
 	for i, a := range args {
@@ -58,11 +59,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	c := exec.CommandContext(ctx, "ssh", full...)
 	c.Stdout, c.Stderr = &out, &errb
 	if err := c.Run(); err != nil {
-		msg := strings.TrimSpace(errb.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, errb.Bytes(), fmt.Errorf("%s: %s: %s", r.host, strings.Join(args, " "), msg)
+		return nil, errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
 	}
 	return out.Bytes(), errb.Bytes(), nil
 }

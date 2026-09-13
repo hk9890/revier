@@ -68,7 +68,7 @@ func TestOneClickOnAButtonOpensItsScreen(t *testing.T) {
 
 	x, y := barCell(t, m)
 	m = clickAt(m, x, y) // the first button, "new"
-	if head := barLine(m); !strings.Contains(head, "add a project") {
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
 		t.Errorf("top line = %q after a click on the new button, want the new-project screen", head)
 	}
 }
@@ -79,7 +79,7 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+n")
-	if head := barLine(m); !strings.Contains(head, "add a project") {
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
 		t.Fatalf("top line = %q after alt+n, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")
@@ -139,7 +139,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 80)
 
 	m, _ = press(m, "alt+h")
-	if head := barLine(m); !strings.Contains(head, "keyboard shortcuts") {
+	if head := barLine(m); !strings.Contains(head, "Keyboard shortcuts") {
 		t.Fatalf("top line = %q after alt+h, want the help screen", head)
 	}
 	screen := strings.Join(lines(m), "\n")
@@ -249,7 +249,7 @@ func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
 	m, _ = press(m, "alt+n")
 	m = clickAt(m, mc+6, rowTop(m)+2)
 	m = clickAt(m, mc+6, rowTop(m)+2)
-	if head := barLine(m); !strings.Contains(head, "add a project") {
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
 		t.Fatalf("top line = %q after a double click, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")

@@ -970,6 +970,19 @@ usable from a shell: nothing, the hosts; a host, its projects with the link
 here that points at each; both, the link written, under `--name` when the
 name here is to differ.
 
+A host that fails says why in one line of revier's own words, not in ssh's.
+`Host key verification failed.` names the fault and leaves the reader to work
+out the remedy; ``host key not known - run `ssh router` once to accept it`` is
+the same fault with the next step in it. The failures worth naming are ssh's
+usual ones - an unknown host key, a refused key, a name that does not resolve,
+nothing on port 22 - and the two the other end gives: a machine with no revier
+on it, and a code-hosting service, which answers and runs nothing. ssh's own
+are told from the remote's by the status it exits with, 255 and nothing
+else's, so a remote revier that says "permission denied" about a file of its
+own is not read as a refused key. Anything unrecognised passes through whole,
+the command with it. OpenSSH is not translated, so its words are the same
+wherever ssh runs.
+
 The hosts come from the ssh configuration alone, `Include` followed and
 patterns left out, because a pattern is a rule and not a destination.
 `known_hosts` was left out: a machine reached once by address is not a
