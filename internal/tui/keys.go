@@ -122,11 +122,47 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
 }
 
-// helpForConfig is the footer on the config screen, and while its trigger
-// key is typed.
-func (k keyMap) helpForConfig(typing bool) []key.Binding {
-	if typing {
+// configHelp is what the config screen's cursor is on, which decides its
+// footer.
+type configHelp int
+
+const (
+	configOnSetting configHelp = iota
+	configTyping               // the trigger key is typed
+	configInForm               // an action's form is up
+	configOnAction
+	configOnAdd
+)
+
+func (m Model) configHelp() configHelp {
+	_, onAction := m.actionRow()
+	switch {
+	case m.chord.Focused():
+		return configTyping
+	case m.aform.open:
+		return configInForm
+	case onAction:
+		return configOnAction
+	case m.crow == m.addRow():
+		return configOnAdd
+	}
+	return configOnSetting
+}
+
+// helpForConfig is the footer on the config screen.
+func (k keyMap) helpForConfig(h configHelp) []key.Binding {
+	switch h {
+	case configTyping:
 		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "cancel"), k.Quit}
+	case configInForm:
+		return []key.Binding{helpKey("enter", "save"), helpKey("tab", "next field"), helpKey("esc", "cancel"), k.Quit}
+	case configOnAction:
+		return []key.Binding{
+			helpKey("↑↓", "move"), helpKey("enter", "edit"), helpKey(k.Delete.Help().Key, "delete"),
+			helpKey("esc", "back"), k.Quit,
+		}
+	case configOnAdd:
+		return []key.Binding{helpKey("↑↓", "move"), helpKey("enter", "add"), helpKey("esc", "back"), k.Quit}
 	}
 	return []key.Binding{
 		helpKey("↑↓", "move"), helpKey("←→", "change"), helpKey("enter", "change/edit"),

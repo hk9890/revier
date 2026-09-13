@@ -27,8 +27,9 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		return
 	case dialogConfig:
-		m.body.SetContent(m.configScreen())
-		m.body.SetYOffset(0)
+		text, at := m.configScreen()
+		m.body.SetContent(text)
+		m.follow(at, 1)
 		return
 	}
 	// The help screen scrolls itself: its offset is the reader's, and a

@@ -72,46 +72,70 @@ var (
 	keyLine = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*`)
 )
 
-// setKey puts key = literal under [table] in text. An existing value is
-// replaced where it stands, and whatever followed it on its last line - a
-// comment - is kept. A missing key goes after the table's last value, and a
-// missing table at the end of the file.
+// setKey puts key = literal under [table] in text. A missing table is added
+// at the end of the file.
 func setKey(text, table, key, literal string) string {
 	lines := strings.Split(text, "\n")
-	inTable, seen, last := false, false, -1
-	for i := 0; i < len(lines); i++ {
-		if h := headerLine.FindStringSubmatch(lines[i]); h != nil {
-			inTable = h[1] == "[" && h[2] == table
-			if inTable {
-				seen, last = true, i
-			}
-			continue
+	for _, t := range tables(lines) {
+		if !t.array && t.name == table {
+			return strings.Join(putKey(lines, t, key, literal), "\n")
 		}
-		at := keyLine.FindStringSubmatchIndex(lines[i])
-		if at == nil {
-			continue
-		}
-		end, col := valueEnd(lines, i, at[1])
-		if inTable {
-			if lines[i][at[2]:at[3]] == key {
-				lines[i] = lines[i][:at[1]] + literal + lines[end][col:]
-				return strings.Join(slices.Delete(lines, i+1, end+1), "\n")
-			}
-			last = end
-		}
-		// A value over several lines is skipped whole, so a line inside an
-		// array is never read as a header or a key.
-		i = end
-	}
-	entry := key + " = " + literal
-	if seen {
-		return strings.Join(slices.Insert(lines, last+1, entry), "\n")
 	}
 	out := strings.TrimRight(text, "\n")
 	if out != "" {
 		out += "\n\n"
 	}
-	return out + "[" + table + "]\n" + entry + "\n"
+	return out + "[" + table + "]\n" + key + " = " + literal + "\n"
+}
+
+// table is the lines of one table in a file: its header, and the line after
+// its last. The lines before the first header are a table with no header, at
+// -1.
+type table struct {
+	array  bool // [[name]], one entry of an array of tables
+	name   string
+	header int
+	end    int
+}
+
+// tables splits a file into its tables. A value over several lines is skipped
+// whole, so a line inside an array is never read as a header.
+func tables(lines []string) []table {
+	var out []table
+	cur := table{header: -1}
+	for i := 0; i < len(lines); i++ {
+		if h := headerLine.FindStringSubmatch(lines[i]); h != nil {
+			cur.end = i
+			out = append(out, cur)
+			cur = table{array: h[1] == "[[", name: h[2], header: i}
+			continue
+		}
+		if at := keyLine.FindStringSubmatchIndex(lines[i]); at != nil {
+			i, _ = valueEnd(lines, i, at[1])
+		}
+	}
+	cur.end = len(lines)
+	return append(out, cur)
+}
+
+// putKey puts key = literal in table t. An existing value is replaced where
+// it stands, and whatever followed it on its last line - a comment - is kept.
+// A missing key goes after the table's last value.
+func putKey(lines []string, t table, key, literal string) []string {
+	last := t.header
+	for i := t.header + 1; i < t.end; i++ {
+		at := keyLine.FindStringSubmatchIndex(lines[i])
+		if at == nil {
+			continue
+		}
+		end, col := valueEnd(lines, i, at[1])
+		if lines[i][at[2]:at[3]] == key {
+			lines[i] = lines[i][:at[1]] + literal + lines[end][col:]
+			return slices.Delete(lines, i+1, end+1)
+		}
+		last, i = end, end
+	}
+	return slices.Insert(lines, last+1, key+" = "+literal)
 }
 
 // valueEnd finds where a value that starts at lines[i][col] ends: the line it

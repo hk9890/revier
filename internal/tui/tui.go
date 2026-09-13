@@ -126,6 +126,8 @@ type Model struct {
 	refused   string          // the last runtime choice that did not probe, stepped from next
 	crow      int             // the row the screen's cursor is on
 	chord     textinput.Model // the trigger key, while it is typed
+	aform     actionForm      // the action being added or changed, while its form is up
+	dropping  bool            // whether the action under the cursor waits on a y to be deleted
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's

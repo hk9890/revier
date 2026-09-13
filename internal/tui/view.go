@@ -299,6 +299,9 @@ func (m Model) footer() string {
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
+	if m.dialog == dialogConfig && m.dropping {
+		return m.dropActionPrompt()
+	}
 	if m.asking != "" {
 		return m.askingLine()
 	}
@@ -312,7 +315,7 @@ func (m Model) footer() string {
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
 	if m.dialog == dialogConfig {
-		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.chord.Focused()))
+		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))

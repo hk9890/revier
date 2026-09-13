@@ -1232,3 +1232,36 @@ that reaches it as nothing is listed only under the desktop.
 The screen takes the full width, because it is about no project and the pane
 would be empty. It only reads: the arrows and the wheel scroll it, Esc or
 alt+h leave it, and a typed letter reaches no filter behind it.
+
+## 2026-09-13
+
+### D55 — actions are edited on the config screen — Accepted
+
+Narrows D53: configured actions are on the screen. Probes are still edited in
+the file.
+
+The screen lists each action by key, name and command, with a row that adds
+one. Enter opens a form of three fields: name, command and key. alt+d deletes
+the action after a y. A change is written when it is saved, and the surface
+binds the new keys at once: the footer, the help screen and the target keys
+that yield to an action are rebuilt from the new list.
+
+The command is one line, split into words the way a shell splits them: quotes
+group, a backslash escapes, and a `{{ }}` template is one word. It is written
+as the argv the file already holds, so an action written by hand and one made
+on the screen are the same. One field per word was the alternative, and it is
+slower to type for the common case of a short command.
+
+A key that already means something on the surface is refused and named: a
+key of revier's own, a query editing key, another action's key, or a target
+key. An action is run by name with `revier run`, so a name is refused when
+another action has it. The rules `config.Load` applies to an action key still
+hold, because the write runs them.
+
+An `[[action]]` entry is edited line by line, as D53 edits a key. A changed
+value is put in place of the old one. A deleted entry loses its header and its
+values, and every comment in it stays, including one inside an array written
+over several lines. The edit names the action as the screen read it, and it is
+refused if the file no longer holds that action: the file was changed by hand
+while revier ran. Actions written as an inline array are refused too, because
+the line editor does not find them.
