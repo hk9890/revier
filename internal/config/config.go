@@ -134,7 +134,7 @@ func parse(data []byte) (*Config, error) {
 		if pr.Name == "" || pr.Exec == "" {
 			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
 		}
-		cfg.Probes[i].Exec = expandHome(pr.Exec)
+		cfg.Probes[i].Exec = ExpandHome(pr.Exec)
 	}
 
 	if _, err := cfg.Theme(); err != nil {
@@ -271,14 +271,14 @@ func LoadProject(path string, shared []map[string]any) (core.Project, error) {
 	// path is the host's, kept as written: the home directory here says
 	// nothing about the one there.
 	if p.Remote == nil {
-		p.Path = expandHome(p.Path)
+		p.Path = ExpandHome(p.Path)
 	} else {
 		link(&p)
 	}
 	for _, t := range p.Targets {
 		for _, r := range []*revier.Realization{t.Window, t.Runtime} {
 			if r != nil {
-				r.Dir = expandHome(r.Dir)
+				r.Dir = ExpandHome(r.Dir)
 			}
 		}
 	}
@@ -483,8 +483,9 @@ func oneWord(s string) error {
 // https://user:token@host/...
 var httpsUserinfo = regexp.MustCompile(`^https://[^/]+@`)
 
-// expandHome resolves a leading "~" against the user's home directory.
-func expandHome(p string) string {
+// ExpandHome resolves a leading "~" against the user's home directory, so a
+// path typed the way it is spoken reaches the file system.
+func ExpandHome(p string) string {
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p
 	}

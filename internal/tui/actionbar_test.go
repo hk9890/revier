@@ -5,12 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 )
 
@@ -109,6 +111,33 @@ func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
 		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// With shared targets in config.toml the written file declares none of its
+// own, so the screen names the shared targets rather than promise the
+// template's agent, shell and editor.
+func TestTheNewProjectScreenNamesTheSharedTargets(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	shared := []map[string]any{{
+		"name": "browser",
+		"window": map[string]any{
+			"launch": []any{"firefox"}, "match": map[string]any{"class": "^firefox$"},
+		},
+	}}
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
+	m = resize(m, 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "~/dev/widget")
+
+	body := strings.Join(lines(m), "\n")
+	if !strings.Contains(body, "shared targets: browser") {
+		t.Errorf("screen = %q, want the shared targets named", body)
+	}
+	if strings.Contains(body, "an agent, a shell and an editor") {
+		t.Errorf("screen = %q, want no promise of the template's targets", body)
 	}
 }
 
