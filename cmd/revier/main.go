@@ -237,7 +237,7 @@ func cmdTUI(a *app) error {
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start)
 	// Cell motion reports the wheel and clicks, and takes plain drag-to-select
 	// from the terminal; shift-drag still selects in kitty and most others.
-	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion()).Run()
 	return err
 }
 

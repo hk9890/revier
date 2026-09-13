@@ -9,23 +9,27 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The chrome above and below the list: a header, the query line, the rule
-// under it, and the footer. The frame around all of it costs two more rows
-// and two columns, and the margin outside the frame two more of each.
+// The chrome above and below the list: the action bar, a line under it, the
+// query line, a blank line, the rule, and the footer. The margin around all of
+// it costs two more rows and four more columns.
+//
+// There is no border. It drew a box around a surface that already fills the
+// terminal, which has its own edges, and charged two rows and four columns
+// for saying again where they are. The two rules inside do the separating a
+// box was doing (decisions.md D51).
 const (
-	chromeHeight = 4
-	frameHeight  = 2
-	frameWidth   = 4 // border and one column of padding on each side
+	chromeHeight = 6
 	marginRows   = 1
 	marginCols   = 2
 )
 
-// margins are what surrounds the frame: nothing on a small terminal, where
-// four rows and four columns of empty space cost two project rows, and one
-// row and two columns otherwise. The rows go first, because rows are what a
+// margins are what surrounds the surface: nothing on a small terminal, where
+// two rows and four columns of empty space cost a project row, and one row
+// and two columns otherwise. The rows go first, because rows are what a
 // list is short of: a wide and short terminal keeps the columns.
 func (m Model) margins() (rows, cols int) {
 	if m.width < 100 {
@@ -37,14 +41,13 @@ func (m Model) margins() (rows, cols int) {
 	return marginRows, marginCols
 }
 
-// inner is the size available inside the frame and the margin. The frame
-// takes the whole terminal (decisions.md D38): the rows are a grid, so a
-// wide row is a long activity line and not a state a screen away from its
-// name.
+// inner is the size available inside the margin. The surface takes the whole
+// terminal (decisions.md D38): the rows are a grid, so a wide row is a long
+// activity line and not a state a screen away from its name.
 func (m Model) inner() (w, h int) {
 	mr, mc := m.margins()
-	w = m.width - 2*mc - frameWidth
-	h = m.height - 2*mr - frameHeight - chromeHeight
+	w = m.width - 2*mc
+	h = m.height - 2*mr - chromeHeight
 	if w < 20 {
 		w = 20
 	}
@@ -63,7 +66,7 @@ func (m *Model) layout() {
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
-	// One column less than the frame's content: the footer is rendered with a
+	// One column less than the content: the footer is rendered with a
 	// leading space. help truncates on its own width and marks the cut with an
 	// ellipsis; sized to the terminal instead, it never cut, and View's own
 	// clip took the end of a word with no mark.
@@ -73,10 +76,16 @@ func (m *Model) layout() {
 func (m Model) View() string {
 	w, _ := m.inner()
 	var b strings.Builder
-	b.WriteString(clipTo(m.header(), w))
+	// A line under the top one: what can be done to the installation is not
+	// what is being looked for, and the two should not read as one block.
+	b.WriteString(clipTo(m.top(), w))
 	b.WriteString("\n")
+	b.WriteString(m.thinRule(w))
+	b.WriteString("\n")
+	// A blank line under the query: the field stands on its own, and the
+	// rule reads as the head of the list rather than the query's underline.
 	b.WriteString(clipTo(m.subtitle(), w))
-	b.WriteString("\n")
+	b.WriteString("\n\n")
 	b.WriteString(m.rule(w))
 	b.WriteString("\n")
 
@@ -94,73 +103,110 @@ func (m Model) View() string {
 	b.WriteString(clipTo(m.footer(), w))
 
 	mr, mc := m.margins()
-	// Width is the frame's outside, and the frame pads by one column on each
-	// side, so the content box is w.
-	return m.theme.Frame.
-		Margin(mr, mc).
-		Width(w + 2).
-		Render(b.String())
+	return m.theme.Frame.Margin(mr, mc).Width(w).Render(b.String())
 }
 
-// subtitle is the line under the header: the query, where typing filters,
-// or what the link dialog's rows are.
+// top is the surface's first line: the action bar on the surface, and the name
+// of a dialog standing over it. A dialog takes the bar's place rather than a
+// line of its own, because none of the bar's buttons acts while one is up.
+func (m Model) top() string {
+	name := ""
+	switch m.dialog {
+	case dialogHosts:
+		name = "link a project on another machine"
+	case dialogRemote:
+		name = m.host
+	case dialogNew:
+		name = "add a project on this machine"
+	default:
+		return m.bar()
+	}
+	return " " + m.theme.Header.Render(name)
+}
+
+// thinRule closes the top line off. It starts where every other line starts,
+// so it and the rule under the query are one pair rather than two edges.
+func (m Model) thinRule(width int) string {
+	if width < 2 {
+		return ""
+	}
+	return " " + m.theme.Border.Render(strings.Repeat("\u2500", width-1))
+}
+
+// subtitle is the line over the rule: the query, where typing filters, or
+// what the dialog's rows are.
 func (m Model) subtitle() string {
 	switch m.dialog {
 	case dialogHosts:
-		return "  " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
+		return " " + m.theme.Meta.Render("the hosts ~/.ssh/config names")
 	case dialogRemote:
-		return "  " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+		return " " + m.theme.Meta.Render("projects the revier on "+m.host+" has")
+	case dialogNew:
+		return " " + m.path.View()
 	}
 	return m.promptView()
 }
 
-// rule separates the chrome from the list, and carries the count the way the
-// picker does: how many rows survive the filter, out of how many there are.
+// rule separates the chrome from the list and carries every number on the
+// screen: how many rows survive the filter out of how many there are, the way
+// the picker says it, and beside that how much of the list is doing
+// something. The two counts had a line of their own and did not earn it -
+// they are three words that never move - so they sit on the line that was
+// already mostly empty.
 func (m Model) rule(width int) string {
-	count := fmt.Sprintf(" %d/%d ", len(m.plist.VisibleItems()), len(m.views))
-	switch {
-	case m.dialog == dialogHosts:
-		count = fmt.Sprintf(" %d hosts ", len(m.hlist.Items()))
-	case m.dialog == dialogRemote:
-		count = fmt.Sprintf(" %d projects ", len(m.rlist.Items()))
-	case !m.ready():
-		count = ""
+	head := pad0(m.ruleHead())
+	// A list too narrow for all of it keeps the ratio and drops the counts:
+	// the ratio is the number that changes as you type.
+	if lipgloss.Width(head) > width {
+		head = pad0(m.ruleCount())
 	}
-	line := width - lipgloss.Width(count)
+	head = clipTo(head, width)
+	line := width - lipgloss.Width(head)
 	if line < 0 {
 		line = 0
 	}
-	return m.theme.NameDim.Render(count) + m.theme.Border.Render(strings.Repeat("─", line))
+	return head + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
-// header is the one line that says what is on screen. It
-// counts, because with ninety projects the counts are the reason to look. The
-// filter is not here: it has its own line, with a cursor on it.
+// pad0 puts a space on each side of a rule's head, so its text does not touch
+// the margin or the line. An empty head stays empty.
+func pad0(head string) string {
+	if head == "" {
+		return ""
+	}
+	return " " + head + " "
+}
+
+// ruleCount is how many rows are under the rule: how many the filter left out
+// of how many there are, the way the picker says it, or what the step of a
+// dialog is listing.
+func (m Model) ruleCount() string {
+	th := m.theme
+	switch {
+	case m.dialog == dialogHosts:
+		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
+	case m.dialog == dialogRemote:
+		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
+	case m.dialog == dialogNew:
+		return ""
+	case !m.ready():
+		return th.NameDim.Render("surveying")
+	}
+	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
+}
+
+// ruleHead is what the rule says before its line: the count, and on the
+// surface how much of the list is doing something.
 //
 // A count that is zero is grey. "0 need you" in bold red read as an alarm on
 // every screen where nothing was wrong.
-func (m Model) header() string {
+func (m Model) ruleHead() string {
 	th := m.theme
-	badge := th.Badge.Render("revier") + " "
-	switch m.dialog {
-	case dialogHosts:
-		return badge + th.NameDim.Render("› ") + th.Header.Render("link a project on another machine")
-	case dialogRemote:
-		return badge + th.NameDim.Render("› ") + th.Header.Render(m.host)
+	if m.dialog != dialogNone || !m.ready() {
+		return m.ruleCount()
 	}
-	if !m.ready() {
-		return badge + th.NameDim.Render("surveying")
-	}
-	running, attention := 0, 0
-	for _, v := range m.views {
-		if v.Running {
-			running++
-		}
-		if v.Attention() {
-			attention++
-		}
-	}
-	// Each count carries the glyph its rows carry, so the header is also the
+	blockers, working, idle := m.agentCounts()
+	// Each count carries the glyph its rows carry, so the rule is also the
 	// key to the list.
 	count := func(glyph string, n int, text string, s lipgloss.Style) string {
 		if n == 0 {
@@ -168,14 +214,36 @@ func (m Model) header() string {
 		}
 		return s.Render(fmt.Sprintf("%s %d %s", glyph, n, text))
 	}
-	need := "need you"
-	if attention == 1 {
-		need = "needs you"
+	blocked := "blockers"
+	if blockers == 1 {
+		blocked = "blocker"
 	}
 	sep := th.Path.Render(" · ")
-	return badge + th.Header.Render(fmt.Sprintf("%d projects", len(m.views))) +
-		sep + count(th.Glyphs.Running, running, "running", th.Running) +
-		sep + count(th.Glyphs.NeedsYou, attention, need, th.Attention)
+	return m.ruleCount() +
+		sep + count(th.Glyphs.NeedsYou, blockers, blocked, th.Attention) +
+		sep + count(th.Glyphs.Working, working, "working", th.Running) +
+		sep + count(th.Glyphs.Idle, idle, "idle", th.Idle)
+}
+
+// agentCounts is the list by what its agents are doing: a project counts
+// once, under its worst agent, which is the state its row shows. A project
+// with no agent - a workspace that is only a shell - counts in none of them.
+func (m Model) agentCounts() (blockers, working, idle int) {
+	for _, v := range m.views {
+		worst, ok := core.Worst(v.Agents)
+		if !ok {
+			continue
+		}
+		switch worst.Status {
+		case revier.StatusAttention:
+			blockers++
+		case revier.StatusRunning:
+			working++
+		case revier.StatusIdle:
+			idle++
+		}
+	}
+	return blockers, working, idle
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints
@@ -240,22 +308,20 @@ func (m Model) footer() string {
 	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Edit, m.keys.Delete, m.keys.Link)
+	keys = append(keys, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 
-// fill pads a rendered row to the width of the list, so the selection
-// highlight spans the row instead of ending at the last character.
-func fill(row string, width int, selected bool, th theme.Theme) string {
+// fill pads a rendered row to the width of the list, so the highlight on a
+// selected or hovered row spans the row instead of ending at the last
+// character. style is the row's own: whatever background its segments carry,
+// the padding carries too.
+func fill(row string, width int, style func(lipgloss.Style) lipgloss.Style) string {
 	gap := width - lipgloss.Width(row)
 	if gap <= 0 {
 		return row
 	}
-	pad := strings.Repeat(" ", gap)
-	if selected {
-		return row + th.OnSelection(lipgloss.NewStyle()).Render(pad)
-	}
-	return row + pad
+	return row + style(lipgloss.NewStyle()).Render(strings.Repeat(" ", gap))
 }
 
 // pad widens a cell to a column. It measures rendered width, so a glyph that

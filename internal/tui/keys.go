@@ -23,7 +23,6 @@ type keyMap struct {
 	Quit    key.Binding
 	Edit    key.Binding
 	Delete  key.Binding
-	Link    key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -45,7 +44,6 @@ func newKeyMap(actions []config.Action) keyMap {
 		// letter never reaches the filter.
 		Edit:   key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "edit")),
 		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
-		Link:   key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "link remote")),
 	}
 	for _, act := range actions {
 		c := actionChord(act)
@@ -67,11 +65,18 @@ func actionChord(act config.Action) core.Chord {
 // claims reports whether a press is the surface's own or an action's, which
 // the surface matches before any target key.
 func (k keyMap) claims(c core.Chord) bool {
-	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete, k.Link}, k.actions...) {
+	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
 		for _, name := range b.Keys() {
 			if own, err := core.ParseChord(name); err == nil && own == c {
 				return true
 			}
+		}
+	}
+	// The action bar's keys are the surface's too: they are not on any
+	// binding, because a button carries its own key.
+	for _, a := range barActions {
+		if own, err := core.ParseChord(a.key); err == nil && own == c {
+			return true
 		}
 	}
 	return false
@@ -106,8 +111,11 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 // surface's own keys act under it.
 func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	enter := "link"
-	if d == dialogHosts {
+	switch d {
+	case dialogHosts:
 		enter = "list its projects"
+	case dialogNew:
+		return []key.Binding{helpKey("enter", "add the project"), helpKey("esc", "back"), k.Quit}
 	}
 	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
 }

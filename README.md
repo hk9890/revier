@@ -85,10 +85,19 @@ by name, and Enter opens the project's home. Tab moves the cursor into the pane
 beside the list, onto the project's targets and attached instances: typing
 there filters them, Enter runs-or-raises the one under the cursor, and Tab or
 Esc brings the cursor back. alt+e opens the selected project's file in
-`$EDITOR`; alt+d deletes it, after asking. alt+r links a project on another
-machine: it lists the hosts `~/.ssh/config` names, then the projects the revier
-on the chosen host has, and Enter on one writes the link. A configured action
-key runs the action against the selected project.
+`$EDITOR`; alt+d deletes it, after asking. A configured action key runs the
+action against the selected project.
+
+The top line holds what is not about one project, each with its key: **new**
+(alt+n) adds a project from a directory on this machine, **remote** (alt+r)
+links a project on another machine from the hosts `~/.ssh/config` names and the
+projects the revier on the chosen host has, and **config** (alt+c) opens
+`config.toml` in `$EDITOR`. The rule over the list counts the projects by what
+their agents are doing: blockers, working, idle.
+
+With the mouse, whatever the pointer is over lights up. A click on a project
+selects it and a double click opens it; one click on a target or a top-line
+button runs it.
 
 `revier each -- git pull --ff-only` runs one command in the directory of every
 project, one project at a time, and skips a project whose directory is missing.

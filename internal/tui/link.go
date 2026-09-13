@@ -77,12 +77,14 @@ func (d hostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	th := d.theme
 	sel := index == m.Index()
-	bar, name := cursor(th, sel), th.ProjectName
-	if sel {
-		name = th.OnSelection(name)
+	style := func(s lipgloss.Style) lipgloss.Style {
+		if sel {
+			return th.OnSelection(s)
+		}
+		return s
 	}
-	row := bar + th.Remote.Render(th.Glyphs.Remote) + " " + name.Render(it.host)
-	_, _ = fmt.Fprint(w, fill(row, m.Width(), sel, th))
+	row := cursor(th, sel) + th.Remote.Render(th.Glyphs.Remote) + " " + style(th.ProjectName).Render(it.host)
+	_, _ = fmt.Fprint(w, fill(row, m.Width(), style))
 }
 
 type remoteDelegate struct{ theme theme.Theme }
@@ -121,7 +123,7 @@ func (d remoteDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		style(name).Render(pad(string(v.Project.Name), nameWidth)) +
 		style(path).Render(pad(elide(contractHome(v.Project.Path), remotePathWidth), remotePathWidth+1)) +
 		style(th.Meta).Render(note)
-	_, _ = fmt.Fprint(w, fill(row, m.Width(), sel, th))
+	_, _ = fmt.Fprint(w, fill(row, m.Width(), style))
 }
 
 // The dialog's columns. They are fixed, so a name and a path stay in one

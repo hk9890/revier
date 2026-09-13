@@ -19,6 +19,20 @@ import (
 // rather than one screen of them: ninety projects is a hundred and eighty
 // lines, which is a rounding error next to the survey that produced them.
 func (m *Model) syncBody() {
+	// The new-project screen has no rows: the body says what the field will
+	// write.
+	if m.dialog == dialogNew {
+		m.body.SetContent(m.newScreen())
+		m.body.SetYOffset(0)
+		return
+	}
+	// The delegate renders the rows and is handed nothing but the row, so
+	// the hovered one is set on it before the list draws.
+	row := -1
+	if m.over.kind == hoverRow {
+		row = m.over.index
+	}
+	m.plist.SetDelegate(projectDelegate{theme: m.theme, hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())

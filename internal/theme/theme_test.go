@@ -62,12 +62,22 @@ func TestEveryRoleIsSetInEveryFlavour(t *testing.T) {
 			if !ok {
 				continue
 			}
+			if backgroundOnly[f.Name] {
+				if _, unset := style.GetBackground().(lipgloss.NoColor); unset {
+					t.Errorf("%s: role %s has no background", name, f.Name)
+				}
+				continue
+			}
 			if _, unset := style.GetForeground().(lipgloss.NoColor); unset {
 				t.Errorf("%s: role %s has no foreground", name, f.Name)
 			}
 		}
 	}
 }
+
+// backgroundOnly are the roles that lend a background to text styled by
+// another role and never render text themselves.
+var backgroundOnly = map[string]bool{"Hover": true}
 
 // optional are the glyphs a set may leave out: the folder column, which a set
 // draws for both states or not at all.

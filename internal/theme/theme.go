@@ -26,13 +26,13 @@ type Theme struct {
 	Name   string
 	Glyphs Glyphs
 
-	Badge       lipgloss.Style // the product name, as a tag at the start of the header
-	Header      lipgloss.Style // the top line
+	Header      lipgloss.Style // the name a dialog gives itself
 	Heading     lipgloss.Style // a section title in the detail pane
 	Count       lipgloss.Style // a count that is zero, and so says nothing is wrong
 	Match       lipgloss.Style // the letters of a name the filter matched
-	Accent      lipgloss.Style // counts and the filter, inside the header
+	Accent      lipgloss.Style // the filter mark, and a target key
 	Cursor      lipgloss.Style // the selected row
+	Hover       lipgloss.Style // the row or button under the pointer
 	ProjectName lipgloss.Style // a project or target name
 	NameDim     lipgloss.Style // the same name, for something not running
 	Path        lipgloss.Style // a project path
@@ -44,7 +44,7 @@ type Theme struct {
 	Attention   lipgloss.Style // an agent waiting for the user, and errors
 	Border      lipgloss.Style // pane separators
 	Help        lipgloss.Style // the key legend
-	Frame       lipgloss.Style // the border around the whole surface
+	Frame       lipgloss.Style // the block the whole surface is rendered in
 }
 
 // Glyphs is the marker set. Every glyph is one cell wide, whatever the set.
@@ -172,9 +172,9 @@ func Lookup(name, glyphs string) (Theme, error) {
 // Three departures from it. A path is a step dimmer than a stopped name, so the
 // names are what the eye lands on. A missing path is maroon, not red: on a
 // machine that has a third of the checkouts, red on every third row drowned
-// out the red that means an agent wants you. And the header is quiet text
-// behind a badge, where it was red throughout, so the one red count in it is
-// the one that needs reading.
+// out the red that means an agent wants you. And the counts on the rule are
+// quiet, where the header they came from was red throughout, so the one red
+// count among them is the one that needs reading.
 func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	c := func(col catppuccin.Color) lipgloss.Color { return lipgloss.Color(col.Hex) }
 	fg := func(col catppuccin.Color) lipgloss.Style {
@@ -183,13 +183,13 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 	return Theme{
 		Name:        name,
 		Glyphs:      g,
-		Badge:       fg(f.Base()).Background(c(f.Mauve())).Bold(true).Padding(0, 1),
 		Header:      fg(f.Text()).Bold(true),
 		Heading:     fg(f.Blue()).Bold(true),
 		Count:       fg(f.Overlay0()),
 		Match:       fg(f.Peach()).Bold(true),
 		Accent:      fg(f.Mauve()),
-		Cursor:      lipgloss.NewStyle().Foreground(c(f.Mauve())).Background(c(f.Surface0())).Bold(true),
+		Cursor:      lipgloss.NewStyle().Foreground(c(f.Mauve())).Background(c(f.Surface1())).Bold(true),
+		Hover:       lipgloss.NewStyle().Background(c(f.Surface0())),
 		ProjectName: fg(f.Text()),
 		NameDim:     fg(f.Overlay1()),
 		Path:        fg(f.Overlay0()),
@@ -201,10 +201,7 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
 		Attention:   fg(f.Red()).Bold(true),
 		Border:      fg(f.Surface1()),
 		Help:        fg(f.Overlay0()),
-		Frame: fg(f.Text()).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(c(f.Surface1())).
-			Padding(0, 1),
+		Frame:       fg(f.Text()),
 	}
 }
 
@@ -238,4 +235,12 @@ func join(ss []string) string { return strings.Join(ss, ", ") }
 // than one band per styled run.
 func (t Theme) OnSelection(s lipgloss.Style) lipgloss.Style {
 	return s.Background(t.Cursor.GetBackground())
+}
+
+// OnHover is a style as it renders inside the row or button the pointer is
+// on. It is a step below the selection: two rows can be lit at once - the
+// one the keys act on and the one the pointer is over - and which of them
+// Enter means has to be readable at a glance.
+func (t Theme) OnHover(s lipgloss.Style) lipgloss.Style {
+	return s.Background(t.Hover.GetBackground())
 }

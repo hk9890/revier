@@ -48,7 +48,7 @@ func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 		t.Fatalf("selected %q while typing, want the best match", row)
 	}
 	m, _ = press(m, "esc")
-	if rule := lines(m)[2]; !strings.Contains(rule, " 12/12 ") {
+	if rule := ruleLine(m); !strings.Contains(rule, " 12/12 ") {
 		t.Fatalf("rule = %q, want the filter cleared", rule)
 	}
 	if after := selectedRow(t, m); after != before {
@@ -153,11 +153,11 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 }
 
 // The header's count agrees in number with what it counts.
-func TestTheHeaderSaysOneProjectNeedsYou(t *testing.T) {
+func TestTheRuleCountsTheOneBlocker(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	if head := lines(m)[0]; !strings.Contains(head, "1 needs you") {
-		t.Errorf("header = %q, want \"1 needs you\"", head)
+	if head := ruleLine(m); !strings.Contains(head, "1 blocker") {
+		t.Errorf("rule = %q, want \"1 blocker\"", head)
 	}
 }
 
@@ -191,17 +191,18 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 20)
 	g := theme.Default().Glyphs
 
-	var top string
+	widest := 0
 	for _, line := range strings.Split(m.View(), "\n") {
-		if w := lipgloss.Width(line); w > 380 {
+		w := lipgloss.Width(strings.TrimRight(line, " "))
+		if w > 380 {
 			t.Errorf("line is %d columns wide: %q", w, line)
 		}
-		if strings.Contains(line, "╭") {
-			top = line
+		if w > widest {
+			widest = w
 		}
 	}
-	if frame := lipgloss.Width(strings.TrimSpace(top)); frame < 370 {
-		t.Errorf("frame is %d wide, want the whole terminal but the margin:\n%s", frame, top)
+	if widest < 370 {
+		t.Errorf("the surface is %d wide, want the whole terminal but the margin:\n%s", widest, m.View())
 	}
 	r := rows(m)
 	first, second := r[0], r[2]
@@ -225,9 +226,8 @@ func TestTheListStopsAtItsTableWidth(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 40)
 	_, mc := margins(m)
-	// The border sits after the margin, the frame's border and padding, and
-	// the list.
-	if border := paneBorder(t, m); border != mc+2+110 {
+	// The border sits after the margin and the list.
+	if border := paneBorder(t, m); border != mc+110 {
 		t.Errorf("pane border at column %d, want the list capped at 110 columns", border)
 	}
 }
@@ -241,11 +241,11 @@ func TestTheAgentColumnGivesWayBeforeTheProjectColumn(t *testing.T) {
 		width                         int
 		activity, words, glyph, whole bool
 	}{
-		{160, true, true, true, true},    // room for everything
-		{60, false, true, true, true},    // the activity goes
-		{44, false, false, true, true},   // the words go
-		{40, false, false, false, true},  // the glyph goes, the name is whole
-		{30, false, false, false, false}, // only now is the name cut
+		{156, true, true, true, true},    // room for everything
+		{56, false, true, true, true},    // the activity goes
+		{40, false, false, true, true},   // the words go
+		{36, false, false, false, true},  // the glyph goes, the name is whole
+		{26, false, false, false, false}, // only now is the name cut
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
@@ -336,7 +336,7 @@ func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
 func TestAClickSelectsTheRowUnderIt(t *testing.T) {
 	for _, tc := range []struct {
 		w, h, top int // top is the terminal row the first project row is on
-	}{{120, 20, 4}, {140, 30, 5}} {
+	}{{120, 20, 5}, {140, 30, 6}} {
 		_, _, c, projects := world(t, 4) // project-03, then 00, 01, 02
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.w, tc.h)
 		_, mc := margins(m)
@@ -363,9 +363,9 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	m = clickAt(m, 5, 4) // project-02
-	m = clickAt(m, 5, 6) // project-00: a second choice, not a double click
-	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = clickAt(m, 5, 5) // project-02
+	m = clickAt(m, 5, 7) // project-00: a second choice, not a double click
+	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = next.(tui.Model)
 	if cmd == nil {
 		t.Fatal("a double click on a row returned no command")
@@ -374,8 +374,8 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
 		t.Fatalf("runtime Opened = %v, want project-00's home", rt.Opened)
 	}
-	if !strings.Contains(lines(m)[0], "3 projects") {
-		t.Errorf("a double click must not leave the project level:\n%s", m.View())
+	if !strings.Contains(ruleLine(m), " 3/3 ") {
+		t.Errorf("a double click must not leave the list:\n%s", m.View())
 	}
 }
 
@@ -389,9 +389,12 @@ func clickAt(m tui.Model, x, y int) tui.Model {
 // its top border and the columns left of it.
 func margins(m tui.Model) (rows, cols int) {
 	for i, line := range strings.Split(m.View(), "\n") {
-		if strings.Contains(line, "╭") {
-			return i, len(line) - len(strings.TrimLeft(line, " "))
+		if strings.TrimSpace(line) == "" {
+			continue
 		}
+		// Every line of the surface starts with a gutter space of its own,
+		// which is not margin.
+		return i, len(line) - len(strings.TrimLeft(line, " ")) - 1
 	}
 	return 0, 0
 }
