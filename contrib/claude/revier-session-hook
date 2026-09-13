@@ -34,9 +34,10 @@ if [ -n "${TMUX:-}" ]; then
 	exit 0
 fi
 
-# kitty reads the OSC from the pane's own terminal. It goes to the tty, not to
-# stdout, which Claude Code captures.
-# A session with no controlling terminal - `claude -p` in a script - has no
-# /dev/tty to write to. There is then no panel to mark, and the hook says so by
-# succeeding: failing it would report an error on every such start.
-printf '\033]1337;SetUserVar=%s=%s\007' CS_SESSION "$(printf '%s' "$id" | base64 | tr -d '\n')" >/dev/tty 2>/dev/null || true
+# kitty: set the variable through remote control, on the window the agent runs
+# in. A hook has no controlling terminal, so an escape written to /dev/tty never
+# reaches kitty. Outside kitty there is no panel to mark, and the hook succeeds:
+# failing it would report an error on every such start.
+[ -n "${KITTY_WINDOW_ID:-}" ] || exit 0
+kitten @ ${KITTY_LISTEN_ON:+--to "$KITTY_LISTEN_ON"} set-user-vars \
+	--match "id:${KITTY_WINDOW_ID}" "CS_SESSION=$id" >/dev/null 2>&1 || true
