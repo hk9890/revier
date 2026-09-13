@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -232,5 +233,25 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 	}
 	if a.Panel.ID != "2" || a.State.Status != revier.StatusRunning {
 		t.Errorf("agent = %+v, want the tab's panel 2", a)
+	}
+}
+
+// A tab has no match of its own, and must not be read as one that matches
+// everything. A stray window is still a stray, and a focused window no target
+// declares still belongs to no project.
+func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	stray := rt.Add("htop", "kitty")
+	rt.SetFocus(stray)
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, tabProject())
+
+	if _, found, err := c.ProjectOfFocused(context.Background(), []core.Project{p}); err != nil || found {
+		t.Errorf("ProjectOfFocused = %v, %v; want no project for a window no target declares", found, err)
+	}
+	now := time.Now()
+	after, _ := rt.Instances(context.Background())
+	if _, ok := c.Claim(nil, after, core.Launch{Project: p, At: now}, now, []core.Project{p}); !ok {
+		t.Error("the stray was not claimed: a tab was taken to declare it")
 	}
 }

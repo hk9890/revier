@@ -90,10 +90,14 @@ func PrepareProject(p revier.Project) (Project, error) {
 				compiled[i].hasClass = true
 			}
 		}
-		// A tab inside another target is found by its name, not by a match:
-		// its compiled match stays zero, and every lookup goes through
-		// container instead.
-		if t.Runtime != nil && !tabTarget(t) {
+		// A tab inside another target is found by its name, not by a match.
+		// Its compiled match matches nothing, so no loop over compiled
+		// matches can take a tab for an instance.
+		if tabTarget(t) {
+			compiled[i].runtime = matchesNothing
+			continue
+		}
+		if t.Runtime != nil {
 			if compiled[i].runtime, err = compileMatch(t.Name, revier.HostRuntime, t.Runtime.Match); err != nil {
 				return Project{}, err
 			}
@@ -101,6 +105,10 @@ func PrepareProject(p revier.Project) (Project, error) {
 	}
 	return Project{Project: rendered, compiled: compiled}, nil
 }
+
+// matchesNothing is a compiled match no instance satisfies. The zero
+// CompiledMatch is the opposite: it constrains nothing and matches every one.
+var matchesNothing, _ = revier.Match{Title: `[^\s\S]`}.Compile()
 
 func compileMatch(name revier.TargetName, kind revier.HostKind, m revier.Match) (revier.CompiledMatch, error) {
 	if m.IsZero() {

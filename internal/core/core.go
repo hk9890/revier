@@ -121,7 +121,14 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 
 // resolveAt resolves the i-th target of a prepared project, returning the
 // compiled match of the realization that won.
+//
+// A tab has no instance of its own to match, and is refused here. Every lookup
+// that walks a project's targets resolves each one first, so a tab fails
+// closed in all of them; the few that serve tabs branch before this.
 func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
+	if p.isTab(i) {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("target %q: %w", p.Targets[i].Name, errTab)
+	}
 	host, real, kind, err := c.resolve(p.Targets[i])
 	if err != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, err
@@ -253,9 +260,6 @@ func (c *Core) ProjectOfFocused(ctx context.Context, projects []Project) (Projec
 	}
 	for _, p := range projects {
 		for i := range p.Targets {
-			if p.isTab(i) {
-				continue
-			}
 			_, _, m, err := c.resolveAt(p, i)
 			if err != nil {
 				continue
@@ -863,7 +867,7 @@ func (c *Core) declared(inst revier.Instance, projects []Project) bool {
 			if t.Window != nil && p.compiled[i].window.Matches(inst) {
 				return true
 			}
-			if t.Runtime != nil && !p.isTab(i) && p.compiled[i].runtime.Matches(inst) {
+			if t.Runtime != nil && p.compiled[i].runtime.Matches(inst) {
 				return true
 			}
 		}

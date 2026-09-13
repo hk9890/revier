@@ -14,6 +14,10 @@ import (
 // window the user did not ask for.
 var ErrNoTabs = errors.New("cannot open a tab inside another target")
 
+// errTab is resolveAt's refusal of a tab: it is reached through the target it
+// is inside, never matched on its own.
+var errTab = errors.New("a tab has no instance of its own")
+
 // PanelTargetVar is the panel variable that names the target a tab was
 // opened for. It is the tab's whole identity: a title is the program's to
 // change, and a position is not an identity (decisions.md D64).
@@ -167,7 +171,7 @@ func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in r
 // holds reports whether the named target's instance is in.
 func (c *Core) holds(snap snapshot, p Project, name revier.TargetName, bound Bindings, in revier.Instance) bool {
 	i, ok := p.index(name)
-	if !ok || p.isTab(i) {
+	if !ok {
 		return false
 	}
 	host, _, m, err := c.resolveAt(p, i)
