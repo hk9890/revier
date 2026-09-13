@@ -259,12 +259,12 @@ const (
 `Inspect` receives the whole `Panel` rather than a narrow signal, because which
 signal is trustworthy differs per harness and is not obvious.
 
-The Claude adapter is the worked example. Claude Code sets a live window title
-carrying a state glyph, and it also sets a user variable from its hooks. The
-title glyph is a *level* — it describes the state right now. The hook variable
-records *edges*, so it reports `busy` indefinitely after a turn interrupted with
-Esc. The probe reads the glyph and treats the hook variable as advisory. A
-narrower interface would have forced the wrong signal.
+The Claude adapter is the worked example. Its state does not come from the panel
+at all: Claude Code reports each session's status in `claude agents --json`, and
+the probe uses the panel's `PID` to find the session and its `Title` only for
+the activity line (D57). It first read a state glyph from `Title` and a hook
+variable from `Vars`. The signal changed and the port did not, which a narrower
+interface would not have allowed.
 
 `StatusAttention` is the state the whole product exists to surface. It drives
 the TUI sort order.

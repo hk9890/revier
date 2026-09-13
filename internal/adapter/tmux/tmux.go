@@ -206,7 +206,7 @@ func windowOf(id string) string { return id[strings.LastIndex(id, "/")+1:] }
 // kindOf classifies a pane by its foreground command. The agent kind is what
 // the survey probes; everything else is a shell or a tool.
 // varsOption is the pane option a program leaves its panel variables in:
-// `tmux set -p @revier 'CS_TAB=1 CS_STATE=attn'`.
+// `tmux set -p @revier 'NAME=value OTHER=value'`.
 //
 // kitty reports every user variable a pane set, because `kitten @ ls` carries
 // them as a map. tmux has no such map: a format can name an option but cannot

@@ -64,13 +64,20 @@ Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
 To exercise the agent monitor, launch the pane as `claude`, so the Claude probe
-claims it, and give it a Claude-style title. The leading glyph is the state
-signal:
+claims it. Its state is what `claude agents --json` lists for the pane's pid
+(`docs/design/decisions.md` D57), so put a `claude` first on PATH that lists
+the files of a scratch sessions directory, and write the pane's file there:
 
 ```bash
 launch = ["bash", "-c", "exec -a claude sleep 600"]   # in the target, instead of sleep
-tmux select-pane -t agent -T '⠧ Working on it'   # spinner -> running
-tmux select-pane -t agent -T '✳ Ready'           # at rest  -> idle
+export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
+printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"; chmod +x "$S/bin/claude"
+export PATH="$S/bin:$PATH"                            # every revier below asks this claude, never the real one
+pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
+st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
+st busy       # -> running
+st waiting    # -> attention
+st idle       # -> idle
 ./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
 ./bin/revier agent prompt demo 'hello'                    # types into that pane only; warns, as sleep never starts a turn
 tmux capture-pane -p -t agent                             # the text arrived
@@ -94,13 +101,12 @@ tmux kill-server                                 # the private server only
 ```
 
 The save asks `claude agents --json` which conversation each agent pane's
-process holds. A stand-in agent is in no listing, so to run the resume path put
-a `claude` first on PATH that lists the pane's pid:
+process holds. To run the resume path, give the pane's file a `sessionId`, with
+the fake `claude` from the agent monitor recipe on PATH:
 
 ```bash
-mkdir -p "$S/bin"; pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
-printf '#!/bin/sh\necho %s\n' "'[{\"pid\": $pid, \"sessionId\": \"abc-123\"}]'" > "$S/bin/claude"; chmod +x "$S/bin/claude"
-PATH="$S/bin:$PATH" ./bin/revier session save   # prints "1 agent conversation recorded"
+printf '{"pid": %s, "status": "idle", "sessionId": "abc-123"}' "$pid" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
+./bin/revier session save   # prints "1 agent conversation recorded"
 ```
 
 Run a real `claude` in the pane instead to check against Claude Code itself:
@@ -126,11 +132,13 @@ t kill-server
 Enter on a project runs its home target, so press it only on a scratch project
 whose launch is harmless, such as `sh -c "sleep 600"`.
 
-To see the agent line change without a keypress, retitle the agent pane on the
-scratch server while the TUI runs, then capture again after a refresh:
+To see the agent line change without a keypress, write the agent pane's session
+file while the TUI runs, then capture again after a refresh. Start the TUI with
+the fake `claude` and `CLAUDE_CONFIG_DIR` from the agent monitor recipe in its
+environment:
 
 ```bash
-tmux select-pane -t agent -T '⠧ Working on it'
+st waiting    # the row moves to the top as attention
 ```
 
 ## Drive the core without any configuration
