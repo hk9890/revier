@@ -267,13 +267,13 @@ func (m Model) heading(title string, w int) string {
 	return "\n" + th.Heading.Render(title) + " " + th.Border.Render(strings.Repeat("─", rule)) + "\n"
 }
 
-// detailRow is one row of the Targets section: a target - whether it is up,
-// its name, its key in the spelling the footer uses, and its state - or an
-// attached instance, which has a title and no key. A stopped target says
-// "stopped", where it said "-", which read as a value that failed to load.
-// The row under the pane's cursor carries the list's bar and selection
-// background across its width, so the two cursors read as one; the row under
-// the pointer carries the hover background, because one click runs it.
+// detailRow is one row of the Targets section: a target - its name, whether
+// it is up, and its key in the spelling the footer uses - or an attached
+// instance, which has a title and no key. A stopped target says "stopped",
+// where it said "-", which read as a value that failed to load. The row under
+// the pane's cursor carries the list's bar and selection background across its
+// width, so the two cursors read as one; the row under the pointer carries the
+// hover background, because one click runs it.
 func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	th := m.theme
 	style := func(s lipgloss.Style) lipgloss.Style {
@@ -289,54 +289,68 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	if sel {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
-	out := bar + style(th.Path).Render(" ")
+	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))
+	space := style(lipgloss.NewStyle())
 	if ref := row.attached; !ref.IsZero() {
-		out += style(th.NameDim).Render(th.Glyphs.Running+" ") +
-			highlight(clipTo(ref.Title, w-12), row.matches, style(th.ProjectName), style(th.Match)) +
-			style(th.Meta).Render(" attached")
-	} else {
-		t := row.target
-		mark, markStyle := th.Glyphs.Stopped, th.NameDim
-		state, stateStyle := "stopped", th.Count
-		switch {
-		case !t.Available:
-			state = "no host here"
-		case !t.Ref.IsZero():
-			mark, markStyle = th.Glyphs.Running, th.Running
-			state, stateStyle = "running", th.Running
-		}
-		name := th.ProjectName
-		if t.Ref.IsZero() {
-			name = th.NameDim
-		}
-		out += style(markStyle).Render(mark+" ") +
-			pad(highlight(clipTo(string(t.Name), detailNameWidth-1), row.matches, style(name), style(th.Match)), detailNameWidth) +
-			style(th.Accent).Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
-			style(stateStyle).Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
+		head := gridHead(lead, style(th.NameDim).Render("attached"), style(th.Running).Render(th.Glyphs.Running+" running"), space)
+		title := highlight(ref.Title, row.matches, style(th.ProjectName), style(th.Match))
+		return fill(clipTo(head+ellipsis(title, gridRest(w)), w), w, style)
 	}
-	return fill(out, w, style)
+	t := row.target
+	mark, state, stateStyle, name := th.Glyphs.Stopped, "stopped", th.Count, th.NameDim
+	switch {
+	case !t.Available:
+		state = "no host here"
+	case !t.Ref.IsZero():
+		mark, state, stateStyle, name = th.Glyphs.Running, "running", th.Running, th.ProjectName
+	}
+	head := gridHead(lead,
+		highlight(string(t.Name), row.matches, style(name), style(th.Match)),
+		style(stateStyle).Render(mark+" "+state), space)
+	return fill(clipTo(head+style(th.Accent).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
 }
 
+// detailAgent is one row of the Agents section, on the Targets section's grid:
+// the harness under the target names, the state glyph and words under theirs,
+// and the activity where their keys are.
 func (m Model) detailAgent(a revier.AgentView, w int) string {
 	th := m.spun()
 	harness := a.State.Harness
 	if harness == "" {
 		harness = "agent"
 	}
-	// Indented past the targets' bar and mark columns, so the harness sits
-	// under the target names; the state glyph is in the label after it.
-	head := "    " + th.ProjectName.Render(pad(harness, detailNameWidth)) +
-		statusStyle(th, a.State.Status).Render(pad(statusLabel(th, a.State.Status), detailStateWidth))
-	return hang(head, a.State.Activity, w, th.Path)
+	head := gridHead(strings.Repeat(" ", detailLeadWidth),
+		th.ProjectName.Render(harness),
+		statusStyle(th, a.State.Status).Render(statusLabel(th, a.State.Status)), lipgloss.NewStyle())
+	return hang(clipTo(head, w), a.State.Activity, w, th.Path)
 }
 
-// The pane's columns. Narrower than the list's, because the pane is. An
-// agent's state column fits its widest label, "◆ needs you", and no more, so
-// the activity after it has the room: it is the part of that line worth
-// reading.
+// gridHead is the start of a row of the pane's grid, the part both sections
+// share: the lead, then the name and the state, each cut to leave a gap before
+// the next column, so no name or state can push the columns after it. space
+// styles the padding, so a selected row's background runs unbroken.
+func gridHead(lead, name, state string, space lipgloss.Style) string {
+	return lead + gridCell(name, detailNameWidth, space) + gridCell(state, detailStateWidth, space)
+}
+
+func gridCell(s string, width int, space lipgloss.Style) string {
+	s = clipTo(s, width-1)
+	return s + space.Render(strings.Repeat(" ", width-lipgloss.Width(s)))
+}
+
+// gridRest is the width left after gridHead: a target's key, or the first line
+// of an agent's activity.
+func gridRest(w int) int {
+	return w - detailLeadWidth - detailNameWidth - detailStateWidth
+}
+
+// The pane's columns. Narrower than the list's, because the pane is. The lead
+// is the cursor bar and a space. The state column fits the widest state, a
+// glyph and "no host here", and a gap, so the key or activity after it has the
+// room.
 const (
 	detailLabelWidth = 9
+	detailLeadWidth  = 2
 	detailNameWidth  = 10
-	detailKeyWidth   = 16
-	detailStateWidth = 13
+	detailStateWidth = 15
 )
