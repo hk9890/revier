@@ -114,7 +114,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	if opened {
 		res, err := c.Go(ctx, p, t.Runtime.Inside, bound)
 		if err != nil {
-			return Result{}, err
+			return res, err // an instance opened and not focused is still pinned
 		}
 		if res.Ref.IsZero() {
 			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and cannot name it", c.Runtime.Name(), t.Runtime.Inside, t.Name)

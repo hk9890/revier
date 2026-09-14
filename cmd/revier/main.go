@@ -533,6 +533,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	for _, act := range a.cfg.Actions {
 		if act.Name == name {
 			run, known = act.Run, true
+			break
 		}
 	}
 	if !known {

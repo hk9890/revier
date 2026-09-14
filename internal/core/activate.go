@@ -50,6 +50,7 @@ func (c *Core) comingUp(ctx context.Context, p Project, name revier.TargetName, 
 	// record has not landed, whatever an older binding says.
 	up, err := c.Running(ctx, p, name, bound)
 	if err != nil {
+		slog.Error("go: is the pending launch up", "project", p.Name, "target", name, "err", err)
 		return false, err
 	}
 	if !up {

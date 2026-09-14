@@ -540,7 +540,9 @@ const BindPoll = 250 * time.Millisecond
 // a title settles later, which is exactly when a rule would miss it. A window
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
-// which. It gives up after wait and reports false.
+// which. It gives up after wait and reports false. A window it found and
+// could not raise is reported with the failure, as Go reports an instance it
+// launched and could not focus, so the caller pins it.
 func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
 	defer func() {
@@ -580,7 +582,7 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 		if len(candidates) == 1 {
 			w := candidates[0]
 			if err := c.Window.Focus(ctx, w.Ref); err != nil {
-				return revier.Instance{}, false, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
+				return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
 			}
 			c.place(ctx, *p.Targets[i].Window, w.Ref)
 			return w, true, nil

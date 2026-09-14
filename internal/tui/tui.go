@@ -827,10 +827,10 @@ func (m Model) bindLaunch(msg launchedMsg) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
 		inst, ok, err := c.Bind(ctx, msg.project, l.Target, msg.before, core.BindWait)
-		if err != nil || !ok {
+		if !ok {
 			return actedMsg{err: err}
 		}
-		return actedMsg{bind: &binding{project: l.Project, target: l.Target, ref: inst.Ref}}
+		return actedMsg{err: err, bind: &binding{project: l.Project, target: l.Target, ref: inst.Ref}}
 	}
 }
 

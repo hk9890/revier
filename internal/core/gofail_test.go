@@ -7,6 +7,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A launch that fails leaves nothing to pin.
@@ -48,6 +49,41 @@ func TestGoKeepsTheRefOfAnOpenedInstanceItCouldNotFocus(t *testing.T) {
 	}
 	if len(wm.Opened) != 1 || again.Ref != res.Ref {
 		t.Errorf("second press: opened %d, ref %v; want the first instance raised", len(wm.Opened), again.Ref)
+	}
+}
+
+// A window Bind found and could not raise still exists. It comes back with the
+// error, so the caller pins it and the next press does not wait for a window
+// that is already there.
+func TestBindKeepsAWindowItCouldNotRaise(t *testing.T) {
+	wm := hosttest.New("wm")
+	editor := wm.Add("Visual Studio Code", "code")
+	wm.FocusErr = errors.New("no such window")
+	c := &core.Core{Window: wm}
+
+	inst, ok, err := c.Bind(context.Background(), prepared(t, project()), "editor", nil, 0)
+	if !errors.Is(err, wm.FocusErr) {
+		t.Fatalf("err = %v, want the focus failure", err)
+	}
+	if !ok || inst.Ref != editor {
+		t.Errorf("Bind = %+v, %v; want the editor %v", inst, ok, editor)
+	}
+}
+
+// A workspace opened for a tab and not focused still exists. Its ref comes
+// back with the error, as Go's does.
+func TestATabKeepsTheWorkspaceItOpenedAndCouldNotFocus(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.FocusErr = errors.New("no such window")
+	c := &core.Core{Runtime: rt}
+
+	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	if !errors.Is(err, rt.FocusErr) {
+		t.Fatalf("err = %v, want the focus failure", err)
+	}
+	if res.Ref.IsZero() || res.Target != "home" || len(rt.Opened) != 1 {
+		t.Errorf("result = %+v, opened %d; want the opened workspace's ref on home", res, len(rt.Opened))
 	}
 }
 

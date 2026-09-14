@@ -192,12 +192,13 @@ func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.
 		// Recorded before the wait, so a second press during it does not
 		// launch again.
 		a.update(func(s *state.State) { s.Launched(p.Name, landed, time.Now()) })
-		inst, ok, err := a.core.Bind(ctx, p, landed, res.Before, core.BindWait)
-		if err != nil {
-			return revier.TargetRef{}, res, err // the launch ran, and its agents came to res.Agents
-		}
+		var inst revier.Instance
+		var ok bool
+		inst, ok, err = a.core.Bind(ctx, p, landed, res.Before, core.BindWait)
 		if !ok {
-			return revier.TargetRef{}, res, nil // the TUI binds it if it appears later
+			// With no error, the TUI binds the window if it appears later. With
+			// one, the launch ran, and its agents came to res.Agents.
+			return revier.TargetRef{}, res, err
 		}
 		ref = inst.Ref
 	}

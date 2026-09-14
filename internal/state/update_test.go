@@ -41,16 +41,18 @@ func TestUpdateLosesNoConcurrentChange(t *testing.T) {
 // An update that changes nothing writes nothing.
 func TestUpdateSavesOnlyAChange(t *testing.T) {
 	root := t.TempDir()
-	if _, err := state.Update(root, func(*state.State) bool { return false }); err != nil {
-		t.Fatalf("Update: %v", err)
-	}
 	if _, err := state.Update(root, func(s *state.State) bool {
-		if s.Current != "" {
-			t.Errorf("current = %q, want the empty state: nothing was saved", s.Current)
-		}
+		s.Current = "demo"
 		return false
 	}); err != nil {
 		t.Fatalf("Update: %v", err)
+	}
+	got, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Current != "" {
+		t.Errorf("current = %q, want the empty state: nothing was saved", got.Current)
 	}
 }
 
