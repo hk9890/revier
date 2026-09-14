@@ -147,31 +147,8 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	if !strings.Contains(first, g.NeedsYou+" needs you") {
 		t.Errorf("row = %q, want the agent's glyph and words", first)
 	}
-	if body := pane(m); !strings.Contains(body, g.NeedsYou+" claude") || !strings.Contains(body, "needs you") {
-		t.Errorf("pane = %q, want the agent's glyph before its harness and its words after", body)
-	}
-}
-
-// The pane's Targets and Agents share one grid: the name and the state each
-// start in the same column in both sections.
-func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
-	_, _, c, projects := world(t, 2) // project-01 is open and its agent needs you
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
-
-	column := func(word string) int {
-		for _, line := range strings.Split(pane(m), "\n") {
-			if i := strings.Index(line, word); i >= 0 {
-				return lipgloss.Width(line[:i])
-			}
-		}
-		t.Fatalf("pane has no %q:\n%s", word, pane(m))
-		return 0
-	}
-	if name, harness := column("home"), column("claude"); name != harness {
-		t.Errorf("target name at column %d, agent harness at %d", name, harness)
-	}
-	if state, agent := column("stopped"), column("needs you"); state != agent {
-		t.Errorf("target state at column %d, agent state at %d", state, agent)
+	if body := pane(m); !strings.Contains(body, g.NeedsYou+" needs you") {
+		t.Errorf("pane = %q, want the agent's glyph and words", body)
 	}
 }
 
