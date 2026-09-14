@@ -141,6 +141,9 @@ type Model struct {
 	cell   *pointerCell                     // where the pointer last was, nil before it moved
 	body   viewport.Model                   // the scrolling window over the list
 	last   click                            // the last click on a row, for telling a double click
+	press  *pointerCell                     // where the left button went down, while it is down
+	sel    selection                        // the box a drag is selecting
+	copied int                              // the characters the last selection copied, shown until the next press
 	// proposed is whether the link's name is still the one offered, which
 	// the first character typed replaces.
 	proposed bool
@@ -393,6 +396,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
+		m.copied = 0
+		if m.sel.active {
+			return m.selectingKey(msg)
+		}
 		return m.key(msg)
 	case tea.MouseMsg:
 		return m.mouse(msg)

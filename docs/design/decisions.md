@@ -319,3 +319,11 @@ does not promise. Logging is not a port: it names no tool, so the core logs
 directly. A poll that recurs logs a failure once until it changes or recovers,
 and a slow run once a minute, so a host down for an hour does not bury the
 operations.
+
+### D70 — a drag selects a box of the screen and copies it; revier draws it
+
+The terminal selects only with shift held, tells revier nothing, and clears the
+selection when a refresh rewrites a line under it; the surface must keep
+refreshing. So revier draws the box over the screen as the drag found it, and
+copies with OSC 52. A button or target runs on release, so a drag from one runs
+nothing.

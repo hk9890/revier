@@ -104,7 +104,9 @@ their agents are doing: blockers, working, idle.
 
 With the mouse, whatever the pointer is over lights up. A click on a project
 selects it and a double click opens it; one click on a target or a top-line
-button runs it.
+button runs it. A drag selects a box of the screen, holds the screen still
+while it lasts, and copies the box's text to the clipboard on release; Esc
+drops it.
 
 `revier each -- git pull --ff-only` runs one command in the directory of every
 project, one project at a time, and skips a project whose directory is missing.

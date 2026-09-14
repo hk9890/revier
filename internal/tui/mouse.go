@@ -25,10 +25,11 @@ type click struct {
 // A row of the list is chosen with one click and opened with a second, as a
 // row of a file manager is: choosing it costs nothing and opening it opens a
 // window. A target in the pane and a button on the bar are not rows but
-// things to do, and one click does them (decisions.md D36, D42, D50).
+// things to do, and one click does them, on release, so a drag that begins on
+// one runs nothing (decisions.md D36, D42, D50, D70).
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
-// before they are.
+// before they are. A drag selects text instead (selection.go).
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// A delete waiting for its answer holds the screen still: the question
 	// names one project, and a wheel moving the highlight to another would
@@ -38,8 +39,17 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	m.cell = &pointerCell{x: msg.X, y: msg.Y}
 	m.over = m.hoverAt(msg.X, msg.Y)
-	if msg.Action != tea.MouseActionPress {
+	switch {
+	case msg.Action == tea.MouseActionRelease:
+		return m.release(msg)
+	case msg.Action == tea.MouseActionMotion && m.press != nil:
+		return m.drag(msg), nil
+	case msg.Action != tea.MouseActionPress:
 		return m, nil
+	}
+	m.copied = 0
+	if msg.Button == tea.MouseButtonLeft {
+		m.press = m.cell
 	}
 	// The help screen has no rows, and more lines than a short terminal
 	// holds: the wheel scrolls it, and a click does nothing.
@@ -55,16 +65,8 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if !m.dialog.hasRows() {
 		return m, nil
 	}
-	if msg.Button == tea.MouseButtonLeft {
-		switch m.over.kind {
-		case hoverBar:
-			m.err = nil
-			return barActions[m.over.index].run(m)
-		case hoverTarget:
-			m.err = nil
-			m.focus, m.tcursor = focusPane, m.over.index
-			return m, m.goRow(m.over.index)
-		}
+	if msg.Button == tea.MouseButtonLeft && (m.over.kind == hoverBar || m.over.kind == hoverTarget) {
+		return m, nil
 	}
 	if m.overPane(msg.X) {
 		m.detail, _ = m.detail.Update(msg)
@@ -94,6 +96,23 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			return m.enter()
 		}
+	}
+	return m, nil
+}
+
+// clickAction runs the button or pane target a click was released on.
+func (m Model) clickAction() (tea.Model, tea.Cmd) {
+	if !m.dialog.hasRows() {
+		return m, nil
+	}
+	switch m.over.kind {
+	case hoverBar:
+		m.err = nil
+		return barActions[m.over.index].run(m)
+	case hoverTarget:
+		m.err = nil
+		m.focus, m.tcursor = focusPane, m.over.index
+		return m, m.goRow(m.over.index)
 	}
 	return m, nil
 }

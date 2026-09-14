@@ -381,8 +381,8 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 
 // clickAt is one press of the left button on a terminal cell.
 func clickAt(m tui.Model, x, y int) tui.Model {
-	next, _ := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	return next.(tui.Model)
+	m, _ = clickCell(m, x, y)
+	return m
 }
 
 // margins reads the frame's margin off the rendered surface: the rows above

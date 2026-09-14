@@ -74,6 +74,9 @@ func (m *Model) layout() {
 }
 
 func (m Model) View() string {
+	if m.sel.active {
+		return m.sel.view()
+	}
 	w, _ := m.inner()
 	var b strings.Builder
 	// A line under the top one: what can be done to the installation is not
@@ -322,6 +325,9 @@ func (m Model) footer() string {
 		// One line, whatever the error: a joined error is one per line, and a
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
+	}
+	if m.copied > 0 {
+		return m.theme.NameDim.Render(fmt.Sprintf(" Copied %d characters.", m.copied))
 	}
 	if m.dialog == dialogConfig {
 		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
