@@ -36,9 +36,11 @@ type Remote interface {
 	NewShell(ctx context.Context, address string) error
 
 	// FocusAgent makes the tab of the agent an address names current in its
-	// workspace: `revier agent focus` there. The terminal attached to that
+	// workspace: `revier agent focus` there. ref is the instance the remote's
+	// survey reported the agent in, which narrows a panel id held in more
+	// than one; zero, the address alone decides. The terminal attached to that
 	// workspace shows the tab.
-	FocusAgent(ctx context.Context, address string) error
+	FocusAgent(ctx context.Context, address string, ref TargetRef) error
 
 	// RunCommand is the argv that runs `revier run <action> -p <project>`
 	// on the remote, for the caller to run here with the terminal: an

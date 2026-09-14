@@ -228,8 +228,9 @@ type Remote interface {
     NewShell(ctx context.Context, address string) error
 
     // FocusAgent is `revier agent focus` there: the agent's tab made current
-    // in its workspace, which the attached pane shows.
-    FocusAgent(ctx context.Context, address string) error
+    // in its workspace, which the attached pane shows. ref is the instance
+    // the remote reported the agent in (D75).
+    FocusAgent(ctx context.Context, address string, ref TargetRef) error
 
     // RunCommand is the argv that runs `revier run <action> -p <project>`
     // there, for the caller to run here with the terminal. The action is
@@ -386,6 +387,7 @@ type TargetView struct {
 
 type AgentView struct {
     Panel PanelID
+    Ref   TargetRef // the instance holding the panel; a panel id is one process's (D75)
     State AgentState
 }
 ```

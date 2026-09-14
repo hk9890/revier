@@ -27,8 +27,8 @@ type FakeRemote struct {
 	Runs    []Run
 	// Tabs records every NewAgent and NewShell, in order.
 	Tabs []RemoteTab
-	// Focused records the address of every FocusAgent, in order.
-	Focused []string
+	// Focused records every FocusAgent, in order.
+	Focused []RemoteFocus
 }
 
 // RemoteTab is one tab asked of the remote: an agent, with the conversation
@@ -53,10 +53,16 @@ func (f *FakeRemote) NewShell(_ context.Context, address string) error {
 	return f.Err
 }
 
-func (f *FakeRemote) FocusAgent(_ context.Context, address string) error {
+// RemoteFocus is one agent asked to be focused on the remote.
+type RemoteFocus struct {
+	Address string
+	Ref     revier.TargetRef
+}
+
+func (f *FakeRemote) FocusAgent(_ context.Context, address string, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Focused = append(f.Focused, address)
+	f.Focused = append(f.Focused, RemoteFocus{Address: address, Ref: ref})
 	return f.Err
 }
 

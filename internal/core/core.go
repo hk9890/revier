@@ -996,7 +996,7 @@ func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.Agent
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
 		if probe, ok := c.agentProbe(panel); ok {
-			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, inst.Ref, panel)})
+			out = append(out, revier.AgentView{Panel: panel.ID, Ref: inst.Ref, State: c.read(ctx, probe, inst.Ref, panel)})
 		}
 	}
 	return out

@@ -123,16 +123,28 @@ func TestNewAgentAndNewShellRunTheCommandsOnTheHost(t *testing.T) {
 }
 
 // An agent is focused by the revier on the host, for the address as the host
-// knows it.
+// knows it, and in the instance the host reported it in when there is one.
 func TestFocusAgentRunsTheCommandOnTheHost(t *testing.T) {
 	r := ssh.New("buildbox")
 	calls := record(r, "", nil)
-	if err := r.FocusAgent(context.Background(), "demo:7"); err != nil {
+	ctx := context.Background()
+	if err := r.FocusAgent(ctx, "demo:1", revier.TargetRef{Host: "kitty", ID: "/tmp/kitty-2/1"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"revier", "agent", "focus", "demo:7"}
-	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
-		t.Errorf("ran %v, want %v", *calls, want)
+	if err := r.FocusAgent(ctx, "demo:7", revier.TargetRef{}); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"revier", "agent", "focus", "demo:1", "--ref", "/tmp/kitty-2/1"},
+		{"revier", "agent", "focus", "demo:7"},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("ran %v, want %v", *calls, want)
+	}
+	for i := range want {
+		if !slices.Equal((*calls)[i], want[i]) {
+			t.Errorf("call %d ran %v, want %v", i, (*calls)[i], want[i])
+		}
 	}
 }
 

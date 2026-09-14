@@ -151,7 +151,7 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	c, bound, panel := m.core, m.bound[p.Name], rows[i].agent.Panel
+	c, bound, agent := m.core, m.bound[p.Name], rows[i].agent
 	// For a link GoAgent raises the pane onto the host, and a pane still
 	// coming up from an earlier press is not launched again (decisions.md
 	// D21), as goTarget does not launch it again.
@@ -167,7 +167,7 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 				return actedMsg{err: err}
 			}
 		}
-		res, err := c.GoAgent(ctx, p, panel, bound)
+		res, err := c.GoAgent(ctx, p, agent, bound)
 		if err != nil || res.Target == "" {
 			return actedMsg{err: err}
 		}
