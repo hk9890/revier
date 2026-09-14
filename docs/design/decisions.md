@@ -289,8 +289,7 @@ did not choose.
 `revier agent new` and a restore open the same tab: a copy of the first
 declared agent panel and a split of the first declared shell panel. One builder
 keeps the key and the restore from drifting apart. `OpenTab` takes a panel
-group, so no second capability exists. On tmux, which has no tabs, a restore
-names the extra agents as not restored. The key finds its workspace through the
+group, so no second capability exists. The key finds its workspace through the
 runtime's optional `PanelFinder`, because a kitty window id is unique only in
 one kitty process.
 
@@ -319,6 +318,18 @@ does not promise. Logging is not a port: it names no tool, so the core logs
 directly. A poll that recurs logs a failure once until it changes or recovers,
 and a slow run once a minute, so a host down for an hour does not bury the
 operations.
+
+### D70 — a tmux instance is a session, and its windows are tabs
+
+One session held every workspace as a window, so a window was both an instance
+and the only thing a tab could be, and two terminals attached to two workspaces
+shared the session's current window and switched each other. A session per
+instance gives tmux the shape of a kitty OS window: `OpenTab` adds a window,
+and `attach-session` reaches one workspace. The name lives in `@revier-name`,
+because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
+of several terminals is meant, so `Focus` switches only the terminal of the
+pane it runs in, or the one terminal attached, and records the focus in
+`@revier-focus` for `Focused` to report when neither decides.
 
 ### D71 — an agent or a shell asked for a remote project opens on its host
 

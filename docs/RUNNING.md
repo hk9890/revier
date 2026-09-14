@@ -88,7 +88,7 @@ configuration above: without it, it reaches the user's real agent.
 
 ## Drive save and restore across a reboot
 
-`tmux kill-server` on the private server is the reboot: every window is gone
+`tmux kill-server` on the private server is the reboot: every workspace is gone
 and the bindings in state point at nothing, while the project files and the
 saved session are untouched.
 
@@ -110,18 +110,15 @@ printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pi
 ./bin/revier session save   # prints "1 agent conversation recorded"
 ```
 
-To run the agents past the layout, split more agent panes into the workspace
-before the save, each in its own directory, and list each one's pid the same
-way. tmux has no tabs to open them in, so the restore names them as not
-restored:
+To run the agents past the layout, open more agents before the save, each in
+its own directory, and list each one's pid the same way. The project's home
+must declare `panels` with a `kind = "agent"` panel. The restore opens each as
+a window of the workspace's session:
 
 ```bash
-tmux split-window -t home -c "$S/state" bash -c "exec -a claude sleep 600"
+./bin/revier agent new -p demo --dir "$S/state"
+tmux list-windows -t home                        # the layout, then one window per agent
 ```
-
-Opening them as tabs, and `revier agent new`, need the kitty runtime: verify
-them with the kitty recipe under "When a screen is unavoidable", on a scratch
-project whose home declares `panels` with a `kind = "agent"` panel.
 
 Run a real `claude` in the pane instead to check against Claude Code itself:
 answer its trust prompt for the directory with "Yes", since the default exits.
@@ -178,8 +175,8 @@ with no window host, which is the expected headless result and not a failure.
 ## Inspect the private server
 
 ```bash
-tmux -L revier-drive list-panes -a -F '#{window_id} #{window_name} #{pane_current_command}'
-tmux -L revier-drive display-message -p -t revier-drive: '#{window_id}'   # current window
+tmux -L revier-drive list-panes -a -F '#{session_id} #{@revier-name} #{window_id} #{pane_current_command}'
+tmux -L revier-drive show-options -s -v @revier-focus   # the session Focus left current
 ```
 
 `-L revier-drive` is what keeps this off the user's default server. A tmux

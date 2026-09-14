@@ -72,7 +72,9 @@ revier agent prompt <project>[:<target>] <text>
                               type one line into the agent and submit it
 revier agent new [-p <project> | --panel <id>] [--resume <id>] [--dir <path>]
                               add an agent tab to an open workspace: the
-                              project's agent panel and its shell (kitty)
+                              project's agent panel and its shell
+revier shell new [-p <project> | --panel <id>] [--dir <path>]
+                              add a shell tab to an open workspace
 revier session save [--name label]
                               record the projects that are open now
 revier session restore [id|name] [--dry-run]
@@ -128,18 +130,18 @@ which conversation each agent's process holds. An agent the save cannot name -
 `claude` typed into a tmux shell pane rather than started by revier - is named
 when you save, and comes back starting fresh.
 
-Every agent comes back, not only the one the layout declares: in kitty, an
-agent you opened beside the workspace returns as the tab `revier agent new`
-opens, and each agent starts in the directory it worked in. An agent whose
-worktree was removed since the save starts fresh in the project instead. tmux
-has no tabs, so there the agents past the layout are named as not restored.
+Every agent comes back, not only the one the layout declares: an agent you
+opened beside the workspace returns as the tab `revier agent new` opens, and
+each agent starts in the directory it worked in. An agent whose worktree was
+removed since the save starts fresh in the project instead.
 The resume flag is added to the agent panel's `command`, so a command that
 wraps the agent must pass its arguments on:
 `["sh", "-lc", "exec my-agent \"$@\"", "sh"]`, not `["sh", "-lc", "my-agent"]`.
 
-`revier agent new` opens such an agent by hand, in kitty: a tab with the
-project's agent panel and its shell panel split into it, in `--dir`, in the
-workspace that is open. A kitty key can pass the window it was pressed in, and
+`revier agent new` opens such an agent by hand: a tab with the project's agent
+panel and its shell panel split into it, in `--dir`, in the workspace that is
+open. In tmux a workspace is a session, and the tab is a window of it. A kitty
+key can pass the window it was pressed in, and
 the workspace is found from it. `--copy-env` tells revier which kitty process
 the window id belongs to, since every kitty counts its windows from 1:
 

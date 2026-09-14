@@ -728,7 +728,7 @@ func (c *Core) focusAuthority() revier.Host {
 // So only the focus authority's answer counts, and only about its own ids.
 // Ids are host-scoped - a GNOME window id and a tmux pane id are unrelated
 // numbers - so comparing across hosts is meaningless, and a runtime's "current
-// pane" says nothing about OS focus: a tmux window can be current while the
+// pane" says nothing about OS focus: a tmux session can be current while the
 // user is looking at the editor.
 //
 // A runtime instance is therefore judged through the OS window that holds it,
