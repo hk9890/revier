@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -66,10 +67,17 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	targets, conversations, attached := stored.Targets(), stored.Conversations(), attachments(report)
+	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path,
+		"projects", len(stored.Projects), "targets", targets, "conversations", conversations,
+		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", attached)
+	for _, err := range gaps.Failed {
+		slog.Warn("session save: probe could not be asked", "err", err)
+	}
 	fmt.Printf("%s: %s, %s\n", stored.ID,
-		count(len(stored.Projects), "project"), count(stored.Targets(), "target"))
-	if n := stored.Conversations(); n > 0 {
-		fmt.Printf("  %s recorded\n", count(n, "agent conversation"))
+		count(len(stored.Projects), "project"), count(targets, "target"))
+	if conversations > 0 {
+		fmt.Printf("  %s recorded\n", count(conversations, "agent conversation"))
 	}
 	// Said now, while the agents still run, so the gap can be closed before
 	// the reboot rather than found after it.
@@ -86,8 +94,8 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	// Named up front, not discovered during a restore after the reboot. An
 	// attachment is a live id with no launch argv anywhere in the model, so
 	// there is nothing that could bring one back.
-	if n := attachments(report); n > 0 {
-		fmt.Printf("  %s not recorded; they have no name to be reopened by\n", count(n, "attached instance"))
+	if attached > 0 {
+		fmt.Printf("  %s not recorded; they have no name to be reopened by\n", count(attached, "attached instance"))
 	}
 	fmt.Printf("  %s\n", path)
 	return nil
@@ -126,8 +134,10 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	opened, pending, failed := 0, 0, 0
+	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", *dry)
 	for _, step := range a.core.RestorePlan(s, report) {
 		if step.Action != core.RestoreLaunch {
+			slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String())
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, step.Action)
 			continue
 		}
@@ -135,16 +145,21 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		if !ok {
 			// The plan was built from this survey, so a project it knew
 			// cannot be missing here. Reported rather than asserted.
+			slog.Warn("restore step: planned project not loaded", "project", step.Project, "target", step.Target)
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, core.RestoreNoProject)
 			continue
 		}
+		slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String(), "dry_run", *dry)
 		if *dry {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", a.core.Resumes(p, step.Target, step.Resumes), nil))
+			outcomes := a.core.Resumes(p, step.Target, step.Resumes)
+			logResumes(step, outcomes, true)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", outcomes, nil))
 			continue
 		}
 		// One project's failure is not the restore's: nineteen workspaces
 		// still come back, and the one that did not is named.
 		ref, res, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes)
+		logResumes(step, res.Agents, false)
 		if err != nil {
 			failed++
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%v\n", step.Project, step.Target, err)
@@ -175,6 +190,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 			}
 		}
 	}
+	slog.Info("session restored", "id", s.ID, "opened", opened, "pending", pending, "failed", failed)
 	if pending > 0 {
 		fmt.Printf("%s: opened %d, %d not up yet\n", s.ID, opened, pending)
 	} else {
@@ -211,6 +227,21 @@ func cmdSessionList(a *app, args []string) error {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), s.Conversations())
 	}
 	return w.Flush()
+}
+
+// logResumes writes one line per recorded agent of a step: the conversation
+// and directory it was recorded with, and what the launch did with it. The
+// outcomes are in the order of the step's resumes; a press that failed before
+// it launched has none, and every agent is logged with outcome none.
+func logResumes(step core.RestoreStep, outcomes []core.AgentOutcome, dry bool) {
+	for i, r := range step.Resumes {
+		outcome := "none"
+		if i < len(outcomes) {
+			outcome = outcomes[i].String()
+		}
+		slog.Info("restore agent", "project", step.Project, "target", step.Target, "dry_run", dry,
+			"harness", r.Harness, "session", r.Session, "dir", r.Dir, "outcome", outcome)
+	}
 }
 
 // resumeNote says what opening a target did, or would do, to the agents it

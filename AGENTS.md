@@ -55,6 +55,12 @@ opens a window, starts a terminal, or talks to a window manager.** This product
 manipulates the user's live desktop; the doc carries the substrates that let you
 verify a change without touching it.
 
+### Finding out what revier did
+
+**MUST read [docs/MONITORING.md](docs/MONITORING.md) before you open a log file
+or explain a past run, restore or keypress.** Every process writes to one daily
+file, so a line means nothing until you know which process wrote it.
+
 ### Cutting a release, or changing what a release ships
 
 **MUST read [docs/RELEASING.md](docs/RELEASING.md) before tagging a version,

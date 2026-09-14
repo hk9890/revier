@@ -17,8 +17,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -77,7 +79,10 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	// as an option.
 	c := exec.Command("git", "clone", "--", p.GitURL, p.Path)
 	c.Stdout, c.Stderr = out, out
-	if err := c.Run(); err != nil {
+	start := time.Now()
+	err = c.Run()
+	logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
+	if err != nil {
 		return false, fmt.Errorf("project %q: git clone %s: %w", p.Name, p.GitURL, err)
 	}
 	Trust(p.Path, out)

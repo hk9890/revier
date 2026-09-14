@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"slices"
@@ -132,6 +133,7 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
+	slog.Info("project deleted", "project", name, "path", p.File)
 	m.projects = without(m.projects, name)
 	m.views = m.known(m.views)
 	m.tkeys = targetKeys(m.projects, m.keys)

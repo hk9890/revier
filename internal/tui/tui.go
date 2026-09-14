@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"sort"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -249,6 +251,7 @@ func (m Model) Init() tea.Cmd {
 		if err == nil {
 			return tea.Batch(m.Survey(), waitEvent(events), blink)
 		}
+		slog.Warn("window watch, claiming by polling only", "host", m.core.Window.Name(), "err", err)
 	}
 	return tea.Batch(m.Survey(), blink)
 }
@@ -272,7 +275,7 @@ func (m Model) Survey() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		// A state that cannot be read is nil, which lets nothing be pruned.
-		before, _ := state.Load(root)
+		before, _ := loadState(root)
 		// No attachments: the surface lists them from state, which a claim
 		// updates between surveys, so a claimed window shows at once rather
 		// than a refresh later.
@@ -293,6 +296,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	mm, ok := next.(Model)
 	if !ok {
 		return next, cmd
+	}
+	if mm.err != nil && mm.err != m.err && !loggedAlready(msg) {
+		slog.Error("tui", "err", mm.err)
 	}
 	// The pointer moving within one row, or over nothing, changes nothing on
 	// the screen, and a terminal reports every cell it crosses.
@@ -315,6 +321,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return mm, cmd
+}
+
+// loggedAlready reports a message whose error the operation behind it has
+// logged: a Go, a bind, a focus or an action. Every other error set on m.err -
+// a form refused, a file that did not load, a clone - is logged by Update. A
+// failed survey is shown from m.surveyErr and logged by core.Survey.
+func loggedAlready(msg tea.Msg) bool {
+	_, ok := msg.(actedMsg)
+	return ok
 }
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -395,7 +410,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // drops attachments and bindings whose instances are gone, of those the
 // survey started from: one written while it listed is the next survey's.
 func (m *Model) claimByPolling(report core.Report, before *state.State) {
-	st, err := state.Load(m.stateRoot)
+	st, err := loadState(m.stateRoot)
 	if err != nil {
 		return
 	}
@@ -403,21 +418,22 @@ func (m *Model) claimByPolling(report core.Report, before *state.State) {
 	if l, ok := m.launch(st); ok && m.surveyed {
 		now := time.Now()
 		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
-			settle(st, claimed)
+			settle(st, claimed, "poll")
 			changed = true
 		} else if !l.Pending(now) {
+			slog.Info("claim: launch expired with no window claimed", "project", l.Project.Name, "target", l.Target, "launched_at", l.At)
 			st.Launch, changed = nil, true // expired
 		}
 	}
 	if changed {
-		_ = st.Save(m.stateRoot)
+		saveState(st, m.stateRoot)
 	}
 	m.keep(st)
 }
 
 // claimByEvent is the same decision for a window a watching host reported.
 func (m *Model) claimByEvent(inst revier.Instance) {
-	st, err := state.Load(m.stateRoot)
+	st, err := loadState(m.stateRoot)
 	if err != nil {
 		return
 	}
@@ -429,9 +445,23 @@ func (m *Model) claimByEvent(inst revier.Instance) {
 	if !ok {
 		return
 	}
-	settle(st, claimed)
-	_ = st.Save(m.stateRoot)
+	settle(st, claimed, "event")
+	saveState(st, m.stateRoot)
 	m.keep(st)
+}
+
+// loadState and saveState are every read and write of state on the surface. A
+// state file that cannot be read or written costs the next keypress a
+// fallback, not the surface, so it is logged and not shown; the surface does
+// both every refresh, so a failure that lasts is one line (logging.Repeat).
+func loadState(root string) (*state.State, error) {
+	st, err := state.Load(root)
+	logging.Repeat("state load", "state load", err, "root", root)
+	return st, err
+}
+
+func saveState(st *state.State, root string) {
+	logging.Repeat("state save", "state save", st.Save(root), "root", root)
 }
 
 // keep holds the parts of state the surface reads between refreshes.
@@ -452,7 +482,8 @@ func (m Model) launch(st *state.State) (core.Launch, bool) {
 }
 
 // settle writes a claim into state and consumes the launch.
-func settle(st *state.State, c core.Claimed) {
+func settle(st *state.State, c core.Claimed, by string) {
+	slog.Info("claim", "project", st.Launch.Project, "target", c.Target, "ref", c.Ref, "by", by)
 	if c.Target != "" {
 		st.Bind(st.Launch.Project, c.Target, c.Ref)
 	} else {
@@ -467,7 +498,7 @@ func (m *Model) apply(msg actedMsg) {
 	if msg.launch == nil && msg.bind == nil {
 		return
 	}
-	st, err := state.Load(m.stateRoot)
+	st, err := loadState(m.stateRoot)
 	if err != nil {
 		return
 	}
@@ -485,7 +516,7 @@ func (m *Model) apply(msg actedMsg) {
 			st.Launch = nil
 		}
 	}
-	_ = st.Save(m.stateRoot)
+	saveState(st, m.stateRoot)
 	m.keep(st)
 }
 
@@ -717,7 +748,10 @@ func (m Model) goRow(i int) tea.Cmd {
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			return actedMsg{err: c.Focus(ctx, ref)}
+			start := time.Now()
+			err := c.Focus(ctx, ref)
+			logging.Op("focus attached", start, err, "ref", ref)
+			return actedMsg{err: err}
 		}
 	}
 	v, _ := m.selected()
@@ -776,8 +810,14 @@ func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), bindWait)
 		defer cancel()
 		if pending {
-			if up, err := c.Running(ctx, p, name, bound); err != nil || !up {
+			up, err := c.Running(ctx, p, name, bound)
+			if err != nil {
+				slog.Error("go: is the pending launch up", "project", p.Name, "target", name, "err", err)
 				return actedMsg{err: err}
+			}
+			if !up {
+				slog.Info("go: launch still coming up, not launched again", "project", p.Name, "target", name)
+				return actedMsg{}
 			}
 		}
 		res, err := c.Go(ctx, p, name, bound)
@@ -862,14 +902,18 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		argv, err := m.actionArgv(p, act)
 		if err != nil {
-			return func() tea.Msg { return actedMsg{err: fmt.Errorf("action %q: %w", act.Name, err)} }, true
+			err = fmt.Errorf("action %q: %w", act.Name, err)
+			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
+			return func() tea.Msg { return actedMsg{err: err} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
 		if p.Remote == nil {
 			cmd.Dir = p.Path // a remote project's path is on its host, where the action runs
 		}
 		project := p.Name
+		start := time.Now()
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
+			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
 			// An action may open anything; the window that appears next is
 			// the project's (claim-on-appear).
 			return actedMsg{err: err, launch: &state.Launch{Project: project, At: time.Now()}}

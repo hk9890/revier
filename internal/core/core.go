@@ -8,12 +8,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -370,7 +372,19 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 // toggle-back included, and resumes apply only to the run half: a target
 // already up is raised as it stands, because the agent in it is already the
 // one the recording named.
-func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
+//
+// Every call is one line of the log, and a Go that calls Go writes one more:
+// a toggle back for the Go home, a tab for the Go of its workspace.
+func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
+	start := time.Now()
+	defer func() {
+		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
+			"launched", res.Launched, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
+	}()
+	return c.goResuming(ctx, p, name, bound, resumes)
+}
+
+func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
 	i, ok := p.index(name)
 	if !ok {
 		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
@@ -418,7 +432,8 @@ func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName
 		// accident of the host - the window opens behind on the ones that do
 		// not. Go always leaves the target focused.
 		if err := host.Focus(ctx, ref); err != nil {
-			return Result{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+			// The launch ran: its agents are reported with the failure.
+			return Result{Target: name, Launched: true, Agents: res.Agents, AgentErr: res.AgentErr}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
 		res.Ref = ref
 		c.place(ctx, real, ref)
@@ -520,7 +535,15 @@ const BindPoll = 250 * time.Millisecond
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
 // which. It gives up after wait and reports false.
-func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (revier.Instance, bool, error) {
+func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (inst revier.Instance, ok bool, err error) {
+	start := time.Now()
+	defer func() {
+		logging.Op("bind", start, err, "project", p.Name, "target", name, "bound", ok, "ref", inst.Ref)
+	}()
+	return c.bind(ctx, p, name, before, wait)
+}
+
+func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (revier.Instance, bool, error) {
 	i, ok := p.index(name)
 	if !ok || c.Window == nil || p.Targets[i].Window == nil {
 		return revier.Instance{}, false, nil
@@ -556,7 +579,12 @@ func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, befo
 			c.place(ctx, *p.Targets[i].Window, w.Ref)
 			return w, true, nil
 		}
-		if len(candidates) > 1 || !time.Now().Before(deadline) {
+		if len(candidates) > 1 {
+			slog.Warn("bind: more than one new window of the class, none bound", "project", p.Name, "target", name, "candidates", len(candidates))
+			return revier.Instance{}, false, nil
+		}
+		if !time.Now().Before(deadline) {
+			slog.Warn("bind: no window appeared in the wait, left to the TUI", "project", p.Name, "target", name, "wait", wait.String())
 			return revier.Instance{}, false, nil
 		}
 		select {
@@ -592,11 +620,14 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 	if ref.Host != c.Window.Name() {
 		w, ok := c.windowOfNew(ctx, ref)
 		if !ok {
+			slog.Warn("place: the window host never listed the new window", "ref", ref, "place", real.Place)
 			return
 		}
 		target = w
 	}
-	_ = placer.Place(ctx, target, strings.Fields(real.Place))
+	if err := placer.Place(ctx, target, strings.Fields(real.Place)); err != nil {
+		slog.Warn("place", "ref", target, "place", real.Place, "err", err)
+	}
 }
 
 // windowOfNew waits for the window host to report the OS window of a runtime
@@ -605,7 +636,8 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.TargetRef, bool) {
 	deadline := time.Now().Add(PlaceWait)
 	for {
-		if snap, err := c.snapshot(ctx); err == nil {
+		snap, err := c.snapshot(ctx)
+		if err == nil {
 			if inst, ok := byRef(snap, ref); ok {
 				if w, ok := c.osWindowOf(snap, inst); ok {
 					return w.Ref, true
@@ -613,6 +645,9 @@ func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.Ta
 			}
 		}
 		if !time.Now().Before(deadline) {
+			if err != nil {
+				slog.Warn("place: listing the hosts", "err", err)
+			}
 			return revier.TargetRef{}, false
 		}
 		select {
@@ -714,6 +749,7 @@ func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instanc
 	}
 	cur, err := auth.Focused(ctx)
 	if err != nil {
+		slog.Warn("toggle-back: focused, taken as not focused", "host", auth.Name(), "err", err)
 		return false
 	}
 	return cur.Host == want.Host && cur.ID == want.ID
@@ -741,7 +777,18 @@ type Report struct {
 // Every project here is already rendered and compiled; a project that could
 // not be was refused at load, so the survey has no per-project error path and
 // does no work that a previous refresh did not also have to do.
-func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
+//
+// The TUI surveys every refresh, so a survey is logged only when it failed or
+// was slow, and a failure that repeats only once (logging.Poll).
+func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (r Report, err error) {
+	start := time.Now()
+	defer func() {
+		logging.Poll("survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
+	}()
+	return c.buildReport(ctx, projects, bound, attached)
+}
+
+func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
 	// The remote hosts are asked while the local ones are listed: a round
 	// trip to another machine is the slow part, and the local listing need not
 	// wait for it.
@@ -949,7 +996,7 @@ func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.Agent
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
 		if probe, ok := c.agentProbe(panel); ok {
-			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, panel)})
+			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, inst.Ref, panel)})
 		}
 	}
 	return out
@@ -967,8 +1014,13 @@ func (c *Core) probeFor(panel revier.Panel) (revier.AgentProbe, bool) {
 
 // read runs a probe over a panel. A probe that fails reports unknown rather
 // than failing the survey: one broken harness must not blank the dashboard.
-func (c *Core) read(ctx context.Context, probe revier.AgentProbe, panel revier.Panel) revier.AgentState {
+//
+// A failure is logged once per panel until it changes. A panel id is unique
+// only within its instance - a kitty window id within one kitty process - so
+// the instance names the panel too.
+func (c *Core) read(ctx context.Context, probe revier.AgentProbe, ref revier.TargetRef, panel revier.Panel) revier.AgentState {
 	state, err := probe.Inspect(ctx, panel)
+	logging.Repeat("probe\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "probe", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
 	if err != nil {
 		return revier.AgentState{Harness: probe.Name(), Status: revier.StatusUnknown}
 	}

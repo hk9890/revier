@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -248,6 +249,7 @@ func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
 	}
 	m.runtime = msg.want
 	m.core = m.core.WithRuntime(msg.runtime)
+	slog.Info("runtime switched", "want", msg.want, "runtime", hostName(msg.runtime))
 	return m, nil
 }
 

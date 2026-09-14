@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"slices"
@@ -26,6 +27,7 @@ import (
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
@@ -89,12 +91,44 @@ const exitTimeout = 2
 const exitEachFailed = 5
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
-		status, say := outcome(err)
-		if say {
-			fmt.Fprintln(os.Stderr, "revier:", err)
-		}
-		os.Exit(status)
+	start := time.Now()
+	args := os.Args[1:]
+	openLog(args)
+	err := run(args)
+	if err == nil {
+		logging.Op("command", start, nil, "args", args, "exit", 0)
+		return
+	}
+	status, say := outcome(err)
+	logging.Op("command", start, err, "args", args, "exit", status)
+	if say {
+		fmt.Fprintln(os.Stderr, "revier:", err)
+	}
+	os.Exit(status)
+}
+
+// openLog starts the day's log for this process. A log that cannot be opened
+// costs the record, not the command.
+//
+// `list` records only what went wrong. A surface with a linked project runs
+// `revier list` on that host every refresh (decisions.md D40), one process a
+// second, so its successes would bury the host's own log.
+func openLog(args []string) {
+	cmd := "tui"
+	if len(args) > 0 {
+		cmd = args[0]
+	}
+	level := slog.LevelInfo
+	if cmd == "list" {
+		level = slog.LevelWarn
+	}
+	root, err := state.Root()
+	if err == nil {
+		err = logging.Setup(root, cmd, level)
+	}
+	if err != nil {
+		slog.SetDefault(slog.New(slog.DiscardHandler))
+		fmt.Fprintf(os.Stderr, "revier: warning: no log: %v\n", err)
 	}
 }
 
@@ -275,7 +309,10 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// What the survey can judge: a ref written after this, by another
 	// process, is to a window the listing may have missed. A state that
 	// cannot be read is nil, and a nil state lets nothing be pruned.
-	before, _ := state.Load(a.stateRoot)
+	before, err := state.Load(a.stateRoot)
+	if err != nil {
+		slog.Warn("state load, nothing pruned", "err", err)
+	}
 	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
@@ -441,6 +478,9 @@ func (a *app) attach(ref revier.TargetRef) error {
 	if err != nil {
 		return err
 	}
+	// The exec replaces the process, so the command's own line is never
+	// written: this one stands for it.
+	slog.Info("attach", "ref", ref, "argv", argv)
 	return syscall.Exec(path, argv, os.Environ())
 }
 
@@ -536,7 +576,10 @@ func runAction(p core.Project, argv []string) error {
 		c.Dir = p.Path // a remote project's path is on its host, where the action runs
 	}
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := c.Run(); err != nil {
+	start := time.Now()
+	err := c.Run()
+	logging.Op("action", start, err, "project", p.Name, "argv", argv)
+	if err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}
 	return nil

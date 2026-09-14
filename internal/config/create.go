@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -100,6 +101,7 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 		_ = os.Remove(path)
 		return core.Project{}, err
 	}
+	slog.Info("project created", "project", name, "path", path)
 	return p, nil
 }
 
