@@ -1587,9 +1587,10 @@ func projectOrder(t *testing.T, m tui.Model) map[string]int {
 	return out
 }
 
-// clickCell is one press of the left button on a terminal cell, with the
-// command it returned.
+// clickCell is one press and release of the left button on a terminal cell,
+// with the command either returned.
 func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
-	next, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	return next.(tui.Model), cmd
+	next, pressed := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	next, released := next.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	return next.(tui.Model), tea.Batch(pressed, released)
 }

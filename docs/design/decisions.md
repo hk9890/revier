@@ -340,3 +340,11 @@ would run outside the workspace the host's revier surveys, so `agent new` and
 `agent prompt` does. The home goes as the project alone, and a target only the
 host has goes by name; a target the link declares here is a local window and
 opens here. `--dir` is a path on this machine and is not sent.
+
+### D72 — a drag selects a box of the screen and copies it; revier draws it
+
+The terminal selects only with shift held, tells revier nothing, and clears the
+selection when a refresh rewrites a line under it; the surface must keep
+refreshing. So revier draws the box over the screen as the drag found it, and
+copies with OSC 52. A button or target runs on release, so a drag from one runs
+nothing.
