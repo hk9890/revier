@@ -80,7 +80,7 @@ func (m Model) actionFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.aform = actionForm{}
 		return m, nil
-	case key.Matches(msg, m.keys.Targets, m.keys.Down):
+	case key.Matches(msg, m.keys.Next, m.keys.Down):
 		return m.moveField(+1)
 	case msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
 		return m.moveField(-1)

@@ -26,7 +26,7 @@ type click struct {
 // row of a file manager is: choosing it costs nothing and opening it opens a
 // window. A target in the pane and a button on the bar are not rows but
 // things to do, and one click does them, on release, so a drag that begins on
-// one runs nothing (decisions.md D36, D42, D50, D72).
+// one runs nothing (decisions.md D36, D50, D72, D73).
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
 // before they are. A drag selects text instead (selection.go).
@@ -70,7 +70,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if !m.dialog.hasRows() {
 		return m, nil
 	}
-	if msg.Button == tea.MouseButtonLeft && (m.over.kind == hoverBar || m.over.kind == hoverTarget) {
+	if msg.Button == tea.MouseButtonLeft && m.over.kind != hoverRow && m.over.kind != hoverNone {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
@@ -89,7 +89,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m.err = nil
 		if m.dialog == dialogNone {
-			m.focus = focusList
+			m.toList()
 		}
 		m.bodyList().Select(index)
 		last := m.last
@@ -118,8 +118,16 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 		return barActions[m.over.index].run(m)
 	case hoverTarget:
 		m.err = nil
-		m.focus, m.tcursor = focusPane, m.over.index
+		m = m.focusOn(focusTargets)
+		m.tcursor = m.over.index
 		return m, m.goRow(m.over.index)
+	case hoverAgent:
+		m.err = nil
+		m = m.focusOn(focusAgents)
+		m.acursor = m.over.index
+		return m, m.goAgentRow(m.over.index)
+	case hoverField:
+		return m.focusOn(focus(m.over.index)), nil
 	}
 	return m, nil
 }
@@ -147,8 +155,7 @@ func (m Model) rowAt(x, y int) (int, bool) {
 }
 
 // bodyLine is the line of the body a terminal row is on: below the action
-// bar, the line under it, the query line, the blank line and the rule, and
-// above the footer.
+// bar, the line under it, the query line and the rule, and above the footer.
 func (m Model) bodyLine(y int) (int, bool) {
 	mr, _ := m.margins()
 	top := mr + chromeHeight - 1

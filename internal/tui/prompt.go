@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/theme"
 )
@@ -17,16 +18,12 @@ const promptMark = "❯ "
 // newPrompt is the filter input. It owns the query text: the surface used to
 // edit a string by hand, which meant no cursor, no word deletion and nowhere
 // on screen that said "type here".
-func newPrompt(th theme.Theme) textinput.Model {
+func newPrompt(th theme.Theme, placeholder string) textinput.Model {
 	in := textinput.New()
 	in.Prompt = promptMark
 	styleField(&in, th)
-	in.Placeholder = projectPlaceholder
+	in.Placeholder = placeholder
 	in.CharLimit = 64
-	// Focused from the start: the surface filters as you type, so the query
-	// line is always where a keystroke lands. Init calls Focus again for the
-	// blink command; this call is what makes the input accept keys at all.
-	_ = in.Focus()
 	return in
 }
 
@@ -41,8 +38,9 @@ func styleField(in *textinput.Model, th theme.Theme) {
 
 // What the query line says when it is empty: which rows a keystroke filters.
 const (
-	projectPlaceholder = "filter"
+	projectPlaceholder = "filter projects"
 	targetPlaceholder  = "filter targets"
+	agentPlaceholder   = "filter agents"
 )
 
 // promptKeys are the keys the input gets. Everything else is the surface's:
@@ -71,27 +69,35 @@ func altRune(msg tea.KeyMsg) bool {
 // expected to have. ctrl+n and ctrl+p are not here: they move the list.
 var queryKeys = []string{"ctrl+w", "ctrl+u", "ctrl+a", "ctrl+e", "alt+backspace"}
 
-// edit feeds a key to the input and re-filters if the query changed. The
-// query line is one field whose scope follows the cursor: over the projects
-// while the cursor is on the list, over the pane's target rows while it is
-// there (decisions.md D43).
+// edit feeds a key to the field of the section the cursor is in, and
+// re-filters that section if its query changed.
 func (m Model) edit(msg tea.KeyMsg) (Model, tea.Cmd) {
-	before := m.input.Value()
-	in, cmd := m.input.Update(msg)
-	m.input = in
-	if in.Value() == before {
-		return m, cmd
-	}
-	if m.focus == focusPane {
-		m.setTargetFilter(in.Value())
-	} else {
-		m.setFilter(in.Value())
+	in := m.field()
+	before := in.Value()
+	next, cmd := in.Update(msg)
+	*in = next
+	if next.Value() != before {
+		m.query(m.focus, next.Value())
 	}
 	return m, cmd
 }
 
-// promptView is the query line: the mark, the text, and a cursor that says
-// where typing lands.
-func (m Model) promptView() string {
-	return " " + m.input.View()
+// fieldView is a section's query field. The field the cursor is in shows its
+// cursor; the others are dim, so there is one place that looks typed into.
+// A dim field is cut to the width the field has when it is typed into: a
+// longer line wraps in the wide pane and moves every row under it off the
+// line a click finds it on.
+func (m Model) fieldView(in textinput.Model, f focus) string {
+	if m.focus == f && m.dialog == dialogNone {
+		return in.View()
+	}
+	text := in.Value()
+	if text == "" {
+		text = in.Placeholder
+	}
+	line := promptMark + text
+	if in.Width > 0 {
+		line = ellipsis(line, lipgloss.Width(promptMark)+in.Width+1)
+	}
+	return m.theme.NameDim.Render(line)
 }

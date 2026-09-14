@@ -36,7 +36,7 @@ func newPathInput(th theme.Theme) textinput.Model {
 func (m Model) openNew() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.path.SetValue("")
-	m.leavePane()
+	m.toList()
 	m.dialog = dialogNew
 	return m, m.path.Focus()
 }

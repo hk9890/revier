@@ -153,7 +153,7 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 	}
 	_ = m.hlist.SetItems(items)
 	m.hlist.Select(0)
-	m.leavePane()
+	m.toList()
 	m.dialog = dialogHosts
 	return m, nil
 }
@@ -446,7 +446,7 @@ func (m *Model) remoteDetail() string {
 	if len(v.Agents) > 0 {
 		out += m.heading("Agents", w)
 		for _, a := range v.Agents {
-			out += m.detailAgent(a, w) + "\n"
+			out += m.detailAgent(agentRow{agent: a}, w, false, false) + "\n"
 		}
 	}
 	return out

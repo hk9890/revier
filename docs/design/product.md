@@ -108,9 +108,10 @@ revier session list    the saved sessions, newest first
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
-Enter on a project opens its home target (D42). Tab moves the cursor into the
-pane, onto its targets and attached instances, where typing filters them and
-Enter activates one; Tab or Esc brings the cursor back (D42, D43). alt+e opens
+The list and the pane's targets and agents are three sections, each with its
+own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
+a project opens its home target, on a target runs it, and on an agent makes its
+tab current and raises its window (D74). alt+e opens
 the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30).
 
 ## Scope

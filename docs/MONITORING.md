@@ -47,7 +47,7 @@ doc reads what it already did.
 | `session saved` | a save, with its counts and gaps |
 | `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
 | `state load`, `state save` | the TUI could not read or write the state file |
-| `action`, `clone`, `each project`, `agent new`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
+| `action`, `clone`, `each project`, `agent new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
 | `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |
 
 ## Queries

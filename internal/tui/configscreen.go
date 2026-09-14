@@ -75,7 +75,7 @@ func newChordInput(th theme.Theme) textinput.Model {
 // openConfig is the "config" button and alt+c.
 func (m Model) openConfig() (tea.Model, tea.Cmd) {
 	m.err = nil
-	m.leavePane()
+	m.toList()
 	m.crow = int(rowTheme)
 	m.refused = ""
 	m.aform = actionForm{}
@@ -274,7 +274,7 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.rlist.SetDelegate(projectDelegate{theme: th, hover: -1})
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.path, &m.lname, &m.chord} {
+	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.chord} {
 		styleField(in, th)
 	}
 	m.layout()

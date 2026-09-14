@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -40,13 +41,13 @@ func (m Model) paneWidth() int {
 
 // paneCols is the columns the pane renders in: its share beside the list,
 // or, on a terminal too narrow to split, the whole width while the cursor is
-// on it, where it stands in the list's place (decisions.md D42). Zero is a
+// on it, where it stands in the list's place (decisions.md D73). Zero is a
 // pane not on screen.
 func (m Model) paneCols() int {
 	if pane := m.paneWidth(); pane > 0 {
 		return pane
 	}
-	if m.focus == focusPane {
+	if m.focus != focusList {
 		w, _ := m.inner()
 		return w
 	}
@@ -57,10 +58,18 @@ func (m Model) paneCols() int {
 // takes from what it holds.
 const paneChrome = 2
 
+// paneRise is the rows the pane beside the list starts above the list's rows:
+// the query line and the rule, which stand in the list's column.
+const paneRise = 2
+
 func newDetail(th theme.Theme) viewport.Model {
 	v := viewport.New(0, 0)
+	// A border takes its own colour and not the style's foreground: without
+	// one it is drawn in the terminal's text colour, brighter than the rules
+	// it meets.
 	v.Style = th.Border.
 		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(th.Border.GetForeground()).
 		PaddingLeft(1)
 	return v
 }
@@ -69,14 +78,22 @@ func newDetail(th theme.Theme) viewport.Model {
 // every message, because the cursor moves on a keypress and the content
 // changes on a survey. The wheel scrolls the pane; a survey keeps that
 // scroll, and a different project starts at its top. The pane's own cursor
-// is kept on a row that exists, and on the screen.
+// is kept on a row that exists, and on the screen, and in a section that
+// exists: an agent that exits takes its section with it.
 func (m *Model) syncDetail() {
+	if s := m.sections(); !slices.Contains(s, m.focus) {
+		*m = m.focusOn(s[len(s)-1])
+	}
 	cols := m.paneCols()
 	if cols == 0 {
 		return
 	}
-	// A viewport's width is its outside, border and padding included.
+	// A viewport's width is its outside, border and padding included. Beside
+	// the list the pane also takes the query line and the rule.
 	_, h := m.inner()
+	if m.paneWidth() > 0 {
+		h += paneRise
+	}
 	m.detail.Width, m.detail.Height = cols, h
 	switch m.dialog {
 	case dialogHosts, dialogNew, dialogConfig:
@@ -91,14 +108,24 @@ func (m *Model) syncDetail() {
 		m.detail.SetContent("")
 		return
 	}
-	m.tcursor = min(max(m.tcursor, 0), max(len(m.targetRows())-1, 0))
-	m.detail.SetContent(m.detailContent(v))
-	if v.Project.Name != m.shown {
+	fresh := v.Project.Name != m.shown
+	if fresh {
 		m.shown = v.Project.Name
+		m.forgetPane()
+	}
+	m.tcursor = min(max(m.tcursor, 0), max(len(m.targetRows())-1, 0))
+	m.acursor = min(max(m.acursor, 0), max(len(m.agentRows())-1, 0))
+	m.detail.SetContent(m.detailContent(v))
+	if fresh {
 		m.detail.GotoTop()
 	}
-	if m.focus == focusPane && m.tcursor < len(m.tlines) {
+	switch {
+	case m.focus == focusTargets && m.tcursor < len(m.tlines):
 		m.followPane(m.tlines[m.tcursor])
+	case m.focus == focusAgents && m.acursor < len(m.alines):
+		// The last line first, so a row taller than the pane shows its start.
+		m.followPane(m.alines[m.acursor].end - 1)
+		m.followPane(m.alines[m.acursor].start)
 	}
 }
 
@@ -122,7 +149,7 @@ func (m *Model) followPane(line int) {
 // the height and neither waits under the other (decisions.md D39).
 func (m *Model) detailContent(v revier.ProjectView) string {
 	w := m.paneCols() - paneChrome
-	_, h := m.inner()
+	h := m.detail.Height
 	if m.paneCols() < widePaneWidth {
 		facts := m.facts(v, w)
 		return facts + m.snapshot(v, w, h-strings.Count(facts, "\n"))
@@ -207,23 +234,34 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
-	// The rows Tab moves the cursor onto. Where each lands is recorded, so
-	// the cursor can be kept on screen and a click can find its row.
+	// The rows Tab moves the cursor onto, each section under its own query.
+	// Where each lands is recorded, so the cursor can be kept on screen and a
+	// click can find its row.
+	lineNow := func() int { return strings.Count(b.String(), "\n") }
+	m.tinput.Width = w - lipgloss.Width(promptMark) - 1
+	m.ainput.Width = m.tinput.Width
 	b.WriteString(m.heading("Targets", w))
+	m.tfield = lineNow()
+	b.WriteString(m.fieldView(m.tinput, focusTargets) + "\n")
 	m.tlines = m.tlines[:0]
 	for i, row := range m.targetRows() {
-		m.tlines = append(m.tlines, strings.Count(b.String(), "\n"))
-		b.WriteString(m.detailRow(row, w, m.focus == focusPane && i == m.tcursor, m.over.is(hoverTarget, i)))
+		m.tlines = append(m.tlines, lineNow())
+		b.WriteString(m.detailRow(row, w, m.focus == focusTargets && i == m.tcursor, m.over.is(hoverTarget, i)))
 		b.WriteString("\n")
 	}
 
 	// Every agent, not the worst one the row collapses to: a project with two
 	// agents is exactly where the row is not enough.
+	m.afield, m.alines = -1, m.alines[:0]
 	if len(v.Agents) > 0 {
 		b.WriteString(m.heading("Agents", w))
-		for _, a := range v.Agents {
-			b.WriteString(m.detailAgent(a, w))
+		m.afield = lineNow()
+		b.WriteString(m.fieldView(m.ainput, focusAgents) + "\n")
+		for i, row := range m.agentRows() {
+			start := lineNow()
+			b.WriteString(m.detailAgent(row, w, m.focus == focusAgents && i == m.acursor, m.over.is(hoverAgent, i)))
 			b.WriteString("\n")
+			m.alines = append(m.alines, lineSpan{start, lineNow()})
 		}
 	}
 	return b.String()
@@ -312,17 +350,73 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 
 // detailAgent is one row of the Agents section, on the Targets section's grid:
 // the harness under the target names, the state glyph and words under theirs,
-// and the activity where their keys are.
-func (m Model) detailAgent(a revier.AgentView, w int) string {
+// and the activity where their keys are, wrapped under itself. A selected or
+// pointed-at row is lit as a target row is, on every line it takes.
+func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 	th := m.spun()
-	harness := a.State.Harness
-	if harness == "" {
-		harness = "agent"
+	style := func(s lipgloss.Style) lipgloss.Style {
+		switch {
+		case sel:
+			return th.OnSelection(s)
+		case over:
+			return th.OnHover(s)
+		}
+		return s
 	}
-	head := gridHead(strings.Repeat(" ", detailLeadWidth),
-		th.ProjectName.Render(harness),
-		statusStyle(th, a.State.Status).Render(statusLabel(th, a.State.Status)), lipgloss.NewStyle())
-	return hang(clipTo(head, w), a.State.Activity, w, th.Path)
+	bar := style(th.Path).Render(" ")
+	if sel {
+		bar = th.Cursor.Render(th.Glyphs.Cursor)
+	}
+	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))
+	a := row.agent
+	harness := harnessOf(a)
+	offset := len(harness) + 1 // the label is the harness, a space, the activity
+	head := clipTo(gridHead(lead,
+		highlight(harness, row.matches, style(th.ProjectName), style(th.Match)),
+		style(statusStyle(th, a.State.Status)).Render(statusLabel(th, a.State.Status)), style(lipgloss.NewStyle())), w)
+	parts := wrap(a.State.Activity, gridRest(w))
+	if len(parts) == 0 {
+		return fill(head, w, style)
+	}
+	indent := style(lipgloss.NewStyle()).Render(strings.Repeat(" ", lipgloss.Width(head)))
+	lines := make([]string, len(parts))
+	for i, at := range partOffsets(a.State.Activity, parts) {
+		matches := within(row.matches, offset+at, len(parts[i]))
+		text := highlight(parts[i], matches, style(th.Path), style(th.Match))
+		start := indent
+		if i == 0 {
+			start = head
+		}
+		lines[i] = fill(start+text, w, style)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// partOffsets is where each of the parts wrap cut text into starts in it, in
+// bytes, as the filter counts its matches. wrap drops the spaces it breaks
+// at, so each part is looked for from where the one before it ended.
+func partOffsets(text string, parts []string) []int {
+	out := make([]int, len(parts))
+	from := 0
+	for i, part := range parts {
+		if at := strings.Index(text[from:], part); at >= 0 {
+			from += at
+		}
+		out[i] = from
+		from = min(from+len(part), len(text))
+	}
+	return out
+}
+
+// within is the matches that fall in n bytes from start, counted from start.
+func within(matches []int, start, n int) []int {
+	var out []int
+	for _, i := range matches {
+		if i >= start && i < start+n {
+			out = append(out, i-start)
+		}
+	}
+	return out
 }
 
 // gridHead is the start of a row of the pane's grid, the part both sections

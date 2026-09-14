@@ -83,6 +83,8 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyEnter}
 	case "tab":
 		msg = tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		msg = tea.KeyMsg{Type: tea.KeyShiftTab}
 	case "esc":
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
 	case "down":
@@ -126,7 +128,7 @@ func lines(m tui.Model) []string {
 // The chrome lines, in the order View writes them.
 func barLine(m tui.Model) string  { return lines(m)[0] }
 func query(m tui.Model) string    { return lines(m)[2] }
-func ruleLine(m tui.Model) string { return lines(m)[4] }
+func ruleLine(m tui.Model) string { return lines(m)[3] }
 
 // footer is the last content line: the key legend, or the last failure.
 func footer(m tui.Model) string {
@@ -143,9 +145,9 @@ func rows(m tui.Model) []string {
 	return l[chromeLines:]
 }
 
-// The action bar, the line under it, the query line, a blank line and the
-// rule sit above the list.
-const chromeLines = 5
+// The action bar, the line under it, the query line and the rule sit above
+// the list.
+const chromeLines = 4
 
 // The project the human is waiting on sorts above every other, whatever its
 // config order.
@@ -286,7 +288,7 @@ func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 
 // Tab moves the cursor into the pane, onto the project's targets, and the
 // list stays on screen beside it; Esc brings the cursor back
-// (decisions.md D42).
+// (decisions.md D73).
 func TestTabMovesTheCursorIntoThePaneAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
@@ -345,37 +347,35 @@ func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
 	}
 }
 
-// The query line follows the cursor: with the cursor in the pane it is the
-// target query, the best match is selected, and leaving the pane drops it
-// and shows the project query again (decisions.md D43).
-func TestTypingInThePaneFiltersTheTargets(t *testing.T) {
+// Each section filters under its own field: with the cursor in Targets,
+// typing filters the targets and leaves the projects and their query alone,
+// and the target query stays while the cursor visits the other sections of
+// the same project (decisions.md D73).
+func TestTypingInTargetsFiltersTheTargets(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	m, _ = press(m, "1")
 	m, _ = press(m, "tab")
-	if q := query(m); !strings.Contains(q, "filter targets") {
-		t.Errorf("query line = %q, want the target query, empty", q)
+	if body := pane(m); !strings.Contains(body, "❯ filter targets") {
+		t.Errorf("pane has no target query:\n%s", body)
 	}
 	m, _ = press(m, "e")
 	m, _ = press(m, "d")
-	if body := pane(m); strings.Contains(body, "home") || !strings.Contains(body, "editor") {
+	if body := pane(m); strings.Contains(body, "home ") || !strings.Contains(body, "❯ ed") || !strings.Contains(body, "editor") {
 		t.Errorf("target query 'ed' should leave only the editor:\n%s", body)
 	}
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
 		t.Errorf("pane cursor = %q, want the match", row)
 	}
-	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "project-00") {
-		t.Errorf("the target query filtered the projects:\n%s", body)
-	}
-	m, _ = press(m, "tab")
 	if q := query(m); !strings.Contains(q, "❯ 1") {
-		t.Errorf("query line = %q, want the project query back", q)
+		t.Errorf("query line = %q, want the project query kept", q)
 	}
+	m, _ = press(m, "shift+tab")
 	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q after tab, want the cursor back on the list", row)
+		t.Errorf("pane cursor = %q after shift+tab, want the cursor back on the list", row)
 	}
-	if body := pane(m); !strings.Contains(body, "home") {
-		t.Errorf("the target query outlived the pane:\n%s", body)
+	if body := pane(m); !strings.Contains(body, "❯ ed") {
+		t.Errorf("the target query was dropped on leaving the section:\n%s", body)
 	}
 }
 

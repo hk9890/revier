@@ -15,14 +15,15 @@ import (
 // There is no "q to quit": on the list every printable rune is a
 // filter character, and a project called `queue` has to be reachable.
 type keyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Enter   key.Binding
-	Targets key.Binding
-	Back    key.Binding
-	Quit    key.Binding
-	Edit    key.Binding
-	Delete  key.Binding
+	Up     key.Binding
+	Down   key.Binding
+	Enter  key.Binding
+	Next   key.Binding
+	Prev   key.Binding
+	Back   key.Binding
+	Quit   key.Binding
+	Edit   key.Binding
+	Delete key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -34,9 +35,10 @@ func newKeyMap(actions []config.Action) keyMap {
 		Down:  key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
 		Enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		// Tab and not right: left and right move the cursor in the query.
-		Targets: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "targets")),
-		Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
-		Quit:    key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
+		Next: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next section")),
+		Prev: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous section")),
+		Back: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		// Alt and a letter, because every other free key is spoken for: a
 		// bare letter filters, del and ctrl+e edit the query, and the ctrl
 		// chords are where target keys and configured actions live. The
@@ -65,7 +67,7 @@ func actionChord(act config.Action) core.Chord {
 // claims reports whether a press is the surface's own or an action's, which
 // the surface matches before any target key.
 func (k keyMap) claims(c core.Chord) bool {
-	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
+	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
 		for _, name := range b.Keys() {
 			if own, err := core.ParseChord(name); err == nil && own == c {
 				return true
@@ -82,27 +84,24 @@ func (k keyMap) claims(c core.Chord) bool {
 	return false
 }
 
-// helpFor is the footer for a focus. The same two keys mean different things
-// on each - enter opens a project, or runs one of its targets - so the label
-// comes from the focus and not from the binding.
+// helpFor is the footer for a focus. Enter means something different in each
+// section - a project opens, a target runs, an agent comes to the front - so
+// the label comes from the focus and not from the binding.
 func (k keyMap) helpFor(f focus) []key.Binding {
-	var out []key.Binding
-	if f == focusPane {
-		out = []key.Binding{
-			helpKey("enter", "go"),
-			helpKey("tab", "projects"),
-			helpKey("type", "filter"),
-			helpKey("esc", "back"),
-		}
-	} else {
-		out = []key.Binding{
-			helpKey("enter", "open"),
-			k.Targets,
-			helpKey("type", "filter"),
-			helpKey("esc", "clear/quit"),
-		}
+	enter, esc := "open", "clear/quit"
+	switch f {
+	case focusTargets:
+		enter, esc = "go", "clear/back"
+	case focusAgents:
+		enter, esc = "go to agent", "clear/back"
 	}
-	out = append(out, k.Quit)
+	out := []key.Binding{
+		helpKey("enter", enter),
+		helpKey("tab", "next section"),
+		helpKey("type", "filter"),
+		helpKey("esc", esc),
+		k.Quit,
+	}
 	return append(out, k.actions...)
 }
 

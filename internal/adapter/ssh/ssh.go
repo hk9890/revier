@@ -133,6 +133,13 @@ func (r *Remote) NewShell(ctx context.Context, address string) error {
 	return err
 }
 
+// FocusAgent runs `revier agent focus` on the remote, for the agent the
+// address names there.
+func (r *Remote) FocusAgent(ctx context.Context, address string) error {
+	_, _, err := r.run(ctx, "revier", "agent", "focus", address)
+	return err
+}
+
 // Wait runs `revier agent wait` on the remote. ctx's deadline goes with it
 // as the wait's own timeout: ending the ssh alone would leave the wait
 // polling on the host, since nothing signals a command there when the

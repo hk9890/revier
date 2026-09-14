@@ -122,6 +122,20 @@ func TestNewAgentAndNewShellRunTheCommandsOnTheHost(t *testing.T) {
 	}
 }
 
+// An agent is focused by the revier on the host, for the address as the host
+// knows it.
+func TestFocusAgentRunsTheCommandOnTheHost(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, "", nil)
+	if err := r.FocusAgent(context.Background(), "demo:7"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"revier", "agent", "focus", "demo:7"}
+	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
+		t.Errorf("ran %v, want %v", *calls, want)
+	}
+}
+
 func TestWaitReadsTheStatusTheRemotePrinted(t *testing.T) {
 	r := ssh.New("buildbox")
 	calls := record(r, "attention\n", nil)

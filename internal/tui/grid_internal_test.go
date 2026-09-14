@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -39,9 +40,9 @@ func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
 	attached := m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: "Pull requests"}}, w, false, false)
 
 	for _, harness := range []string{"claude", "gemini-cli", "cursor-agent-with-a-long-name"} {
-		agent := m.detailAgent(revier.AgentView{State: revier.AgentState{
+		agent := m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{
 			Harness: harness, Status: revier.StatusAttention, Activity: "needs a decision",
-		}}, w)
+		}}}, w, false, false)
 		name := harness[:min(len(harness), detailNameWidth-1)]
 		if a, b := column(t, target, "home"), column(t, agent, name); a != b {
 			t.Errorf("%s: target name at %d, harness at %d", harness, a, b)
@@ -67,7 +68,7 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 		rows := []string{
 			m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: title}}, w, false, false),
 			m.detailRow(targetRow{target: revier.TargetView{Name: "a-long-target-name", Key: "ctrl+shift+alt+u"}}, w, false, false),
-			m.detailAgent(revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}, w),
+			m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}}, w, false, false),
 		}
 		for _, row := range rows {
 			for _, line := range strings.Split(row, "\n") {
@@ -76,5 +77,27 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The letters a query matched are lit where they are, after a character
+// wider than a byte too: an activity line carries glyphs and dashes.
+func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
+	upper := lipgloss.NewStyle().Transform(strings.ToUpper)
+	label := "✳ fix remote"
+	ranks := list.DefaultFilter("fix", []string{label})
+	if len(ranks) != 1 {
+		t.Fatalf("filter ranks = %v, want one match", ranks)
+	}
+	if got := highlight(label, ranks[0].MatchedIndexes, lipgloss.NewStyle(), upper); got != "✳ FIX remote" {
+		t.Errorf("highlight = %q, want the letters of fix lit", got)
+	}
+
+	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m.theme.Match = upper
+	row := agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}}
+	row.matches = list.DefaultFilter("then", []string{row.label()})[0].MatchedIndexes
+	if got := ansi.Strip(m.detailAgent(row, 60, false, false)); !strings.Contains(got, "THEN words") {
+		t.Errorf("agent row = %q, want the letters of then lit", got)
 	}
 }

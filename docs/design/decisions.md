@@ -172,16 +172,6 @@ onto it is local, so focus and bindings see an ordinary instance.
 A file on the host defines a project; a file here refers to one. One shape for
 both cost two workarounds.
 
-### D42 — Tab moves the cursor into the pane; there is no target level
-
-Replaces Tab opening a target list. That list repeated the pane and hid the
-projects. Enter on a project opens its home.
-
-### D43 — the query line follows the cursor
-
-In the pane it filters targets. One field avoids a second line that is almost
-always empty.
-
 ### D44 — clearing the query puts the cursor back where it was
 
 A query reads as a temporary view, and clearing it as its undo.
@@ -211,10 +201,11 @@ is always a second way, never the only one.
 
 Hover says what a click would do, and it never selects.
 
-### D51 — no header and no border; the rule carries the counts
+### D51 — no header and no border; the rule carries the count
 
 The header named the program just started, and the border repeated the
-terminal's edges.
+terminal's edges. The agent counts beside the count went when the query moved
+onto the rule (D73): each row already shows its state.
 
 ### D53 — config is a screen, and a change applies as it is made
 
@@ -348,3 +339,22 @@ selection when a refresh rewrites a line under it; the surface must keep
 refreshing. So revier draws the box over the screen as the drag found it, and
 copies with OSC 52. A button or target runs on release, so a drag from one runs
 nothing.
+
+### D73 — projects, targets and agents are sections, each with its own query
+
+Replaces Tab moving into a pane of targets, and one query line that followed
+the cursor. A query far from its rows did not say what it filtered, and the
+agents could be read but not reached. Tab walks projects, targets and agents,
+and shift+tab back, passing over a section with no rows. Each query sits over
+its own rows and is kept while its project is. The pane starts level with the
+project query, so that query stands in the list's column and not over both. Enter opens a project, runs a
+target, and goes to an agent. A pane with no target level stays: Enter on a
+project opens its home.
+
+### D74 — an agent is reached by making its tab current, on its host for a link
+
+`FocusPanel` already switches tabs for a tab target, so going to an agent is
+that and a raise, and needs no new runtime capability. A link's agent runs in
+the host's workspace, which only that revier can switch, so
+`Remote.FocusAgent` asks it, by the panel id its survey reported, and the pane
+onto the host is raised here.
