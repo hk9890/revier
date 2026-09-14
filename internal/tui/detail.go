@@ -268,8 +268,9 @@ func (m Model) heading(title string, w int) string {
 }
 
 // detailRow is one row of the Targets section: a target - whether it is up,
-// its name, its key in the spelling the footer uses, and its state - or an
-// attached instance, which has a title and no key. A stopped target says
+// its name, its state, and its key in the spelling the footer uses - or an
+// attached instance, which has a title and no key. The columns are the
+// Agents section's too, so a state reads under a state. A stopped target says
 // "stopped", where it said "-", which read as a value that failed to load.
 // The row under the pane's cursor carries the list's bar and selection
 // background across its width, so the two cursors read as one; the row under
@@ -311,8 +312,8 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 		}
 		out += style(markStyle).Render(mark+" ") +
 			pad(highlight(clipTo(string(t.Name), detailNameWidth-1), row.matches, style(name), style(th.Match)), detailNameWidth) +
-			style(th.Accent).Render(pad(clipTo(keyLabel(t.Key), detailKeyWidth-1), detailKeyWidth)) +
-			style(stateStyle).Render(ellipsis(state, w-detailNameWidth-detailKeyWidth-2))
+			style(stateStyle).Render(pad(state, detailStateWidth)) +
+			style(th.Accent).Render(ellipsis(keyLabel(t.Key), w-detailLeadWidth-detailNameWidth-detailStateWidth))
 	}
 	return fill(out, w, style)
 }
@@ -323,20 +324,22 @@ func (m Model) detailAgent(a revier.AgentView, w int) string {
 	if harness == "" {
 		harness = "agent"
 	}
-	// Indented past the targets' bar and mark columns, so the harness sits
-	// under the target names; the state glyph is in the label after it.
-	head := "    " + th.ProjectName.Render(pad(harness, detailNameWidth)) +
-		statusStyle(th, a.State.Status).Render(pad(statusLabel(th, a.State.Status), detailStateWidth))
+	// On the targets' grid: the state glyph in their mark column, the harness
+	// under their names, the state word under theirs.
+	status := statusStyle(th, a.State.Status)
+	glyph, word, _ := strings.Cut(statusLabel(th, a.State.Status), " ")
+	head := "  " + status.Render(glyph+" ") + th.ProjectName.Render(pad(harness, detailNameWidth)) +
+		status.Render(pad(word, detailStateWidth))
 	return hang(head, a.State.Activity, w, th.Path)
 }
 
-// The pane's columns. Narrower than the list's, because the pane is. An
-// agent's state column fits its widest label, "◆ needs you", and no more, so
-// the activity after it has the room: it is the part of that line worth
-// reading.
+// The pane's columns. Narrower than the list's, because the pane is. The
+// lead is the cursor bar and the mark before a name. The state column fits
+// the widest state, "no host here", and no more, so the key or activity after
+// it has the room.
 const (
 	detailLabelWidth = 9
+	detailLeadWidth  = 4
 	detailNameWidth  = 10
-	detailKeyWidth   = 16
 	detailStateWidth = 13
 )
