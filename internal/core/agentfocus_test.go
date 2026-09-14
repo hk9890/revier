@@ -20,12 +20,13 @@ func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
 	return report.Views[0].Agents
 }
 
-// An agent on this machine is reached by its tab: the tab becomes current and
-// the OS window holding it is raised.
+// An agent on this machine is reached by its tab: its instance is focused, the
+// tab becomes current and the OS window holding it is raised. On tmux the
+// instance's focus is what switches a terminal showing another session.
 func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
-	rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
+	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
 	wm := hosttest.New("wm")
 	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{titleProbe{}}}
@@ -33,6 +34,9 @@ func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 
 	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[1], nil); err != nil {
 		t.Fatalf("GoAgent: %v", err)
+	}
+	if len(rt.Focuses) != 1 || rt.Focuses[0] != workspace {
+		t.Errorf("runtime focuses = %v, want the workspace %v", rt.Focuses, workspace)
 	}
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "3" {
 		t.Errorf("panel focuses = %v, want panel 3", rt.PanelFocuses)

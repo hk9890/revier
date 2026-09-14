@@ -5,11 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -78,8 +79,9 @@ func cmdShellNew(args []string) error {
 func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 	there := func(r revier.Remote, address string) error { return r.NewShell(ctx, address) }
 	here := func(w core.Workspace) error {
+		start := time.Now()
 		err := a.core.NewShell(ctx, w, dir)
-		slog.Info("shell new", "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir, "err", err)
+		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
 		return err
 	}
 	return a.newTab(ctx, "shell new", project, panel, dir, homeTarget, there, here)

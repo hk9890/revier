@@ -634,6 +634,9 @@ func (h *Host) focusedSession(ctx context.Context) (string, error) {
 	}
 	out, err := h.run(ctx, "show-options", "-s", "-v", "-q", focusOption)
 	if err != nil {
+		if noServer(err) {
+			return "", nil
+		}
 		return "", err
 	}
 	return strings.TrimSpace(out), nil

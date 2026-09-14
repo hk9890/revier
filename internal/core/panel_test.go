@@ -54,6 +54,11 @@ func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != rt.Tabs[0].Panel {
 		t.Errorf("panel focuses = %v, want the new tab", rt.PanelFocuses)
 	}
+	// On tmux, focusing the workspace is what switches a terminal showing
+	// another session to the tab.
+	if len(rt.Focuses) != 1 || rt.Focuses[0] != rt.Tabs[0].Ref {
+		t.Errorf("runtime focuses = %v, want the workspace %v", rt.Focuses, rt.Tabs[0].Ref)
+	}
 	if len(wm.Focuses) != 1 || wm.Focuses[0] != osw {
 		t.Errorf("window focuses = %v, want the workspace raised", wm.Focuses)
 	}
@@ -97,6 +102,22 @@ func TestATabOpensItsTargetFirst(t *testing.T) {
 	}
 	if len(rt.Tabs) != 1 {
 		t.Errorf("tabs = %d, want the tab opened in the new workspace", len(rt.Tabs))
+	}
+}
+
+// A workspace opened for a tab whose tab then fails is still reported, so the
+// caller pins it and the next press does not open another.
+func TestATabThatFailsInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.OpenTabErr = errors.New("kitty went away")
+	c := &core.Core{Runtime: rt}
+
+	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	if err == nil {
+		t.Fatal("Go succeeded, want the tab's failure")
+	}
+	if len(rt.Opened) != 1 || res.Target != "home" || res.Ref.IsZero() {
+		t.Errorf("result = %+v, opened %d; want the opened workspace reported as home", res, len(rt.Opened))
 	}
 }
 

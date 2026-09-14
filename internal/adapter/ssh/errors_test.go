@@ -97,6 +97,7 @@ func TestClassifyTellsAnOlderRevierToBeUpdated(t *testing.T) {
 	}{
 		{[]string{"revier", "shell", "new", "-p", "far"}, usage + `revier: unknown command "shell"`, "no `shell new`"},
 		{[]string{"revier", "agent", "new", "-p", "far"}, usage + `revier: unknown agent command "new"`, "no `agent new`"},
+		{[]string{"revier", "agent", "focus", "far:1"}, usage + `revier: unknown agent command "focus"`, "no `agent focus` -"},
 	} {
 		got := ssh.Classify("box", tc.args, tc.stderr, exitStatus(1)).Error()
 		if !strings.Contains(got, tc.want) || !strings.Contains(got, "update revier on box") || strings.Contains(got, "usage") {

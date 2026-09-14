@@ -39,10 +39,13 @@ func (c *Core) GoAgent(ctx context.Context, p Project, a revier.AgentView, bound
 	return Result{}, c.FocusAgent(ctx, a.Ref, a.Panel)
 }
 
-// FocusAgent makes the panel current in the instance that holds it and raises
-// that instance's window. A runtime that cannot focus a panel focuses the
-// instance, which is as near the agent as it can bring the user. An instance
-// or a panel gone since it was reported is ErrAgentGone.
+// FocusAgent focuses the instance that holds the panel, makes the panel
+// current in it and raises that instance's window. The instance comes first:
+// a panel current in a tmux session is seen only by a terminal that shows the
+// session, and focusing the session is what switches one to it. A runtime that
+// cannot focus a panel stops at the instance, which is as near the agent as it
+// can bring the user. An instance or a panel gone since it was reported is
+// ErrAgentGone.
 func (c *Core) FocusAgent(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
 	snap, err := c.snapshot(ctx)
 	if err != nil {
@@ -57,12 +60,13 @@ func (c *Core) FocusAgent(ctx context.Context, ref revier.TargetRef, panel revie
 	if err != nil {
 		return err
 	}
+	if err := c.Focus(ctx, ref); err != nil {
+		return err
+	}
 	if opener, ok := c.Runtime.(revier.PanelOpener); ok && ref.Host == c.Runtime.Name() {
 		if err := opener.FocusPanel(ctx, ref, panel); err != nil {
 			return fmt.Errorf("%s: focus %s: %w", c.Runtime.Name(), name, err)
 		}
-	} else if err := c.Focus(ctx, ref); err != nil {
-		return err
 	}
 	return c.raise(ctx, osw, name)
 }
