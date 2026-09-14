@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -60,46 +61,87 @@ func (s selection) view() string {
 	return strings.Join(lines, "\n")
 }
 
-// drag follows the left button past the cell it was pressed on. The first
-// move off that cell begins the selection.
+// dragFrom is how far, in cells either way, the pointer moves from the press
+// before a drag begins. A hand that shifts one cell during a click is still
+// clicking, and a selection there would overwrite the clipboard with two
+// characters and run nothing.
+const dragFrom = 2
+
+// press is where the left button went down and what it went down on.
+type press struct {
+	at   pointerCell
+	over hovered
+}
+
+// held is a mouse event while the left button is down. Only the left button
+// moving or coming up moves or ends a drag; a wheel or another button during
+// a selection would change the screen the selection stands over, so it is
+// dropped. Motion with no button held says the release went to another
+// window, so the press is forgotten and nothing is copied. done is false for
+// an event that is not the drag's, which the caller handles as usual.
+func (m Model) held(msg tea.MouseMsg) (Model, bool) {
+	switch {
+	case msg.Action == tea.MouseActionMotion && msg.Button == tea.MouseButtonLeft:
+		return m.drag(msg), true
+	case msg.Action == tea.MouseActionMotion && msg.Button == tea.MouseButtonNone:
+		m.press, m.sel = nil, selection{}
+	case msg.Action == tea.MouseActionRelease && msg.Button != tea.MouseButtonLeft && msg.Button != tea.MouseButtonNone:
+		return m, true
+	case msg.Action == tea.MouseActionPress && m.sel.active:
+		return m, true
+	}
+	return m, false
+}
+
+// drag follows the left button. A selection begins once the pointer is
+// dragFrom cells from the press.
 func (m Model) drag(msg tea.MouseMsg) Model {
 	at := pointerCell{x: msg.X, y: msg.Y}
 	if !m.sel.active {
-		if m.press == nil || *m.press == at {
+		from := m.press.at
+		if max(abs(at.x-from.x), abs(at.y-from.y)) < dragFrom {
 			return m
 		}
-		m.sel = selection{active: true, from: *m.press, screen: m.View()}
+		m.sel = selection{active: true, from: from, screen: m.View()}
 	}
 	m.sel.to = at
 	return m
 }
 
-// release ends a press. After a drag it copies the box; after a press that
-// stayed on its cell, it runs the button or target it landed on, so a drag
-// that begins on one runs nothing.
-func (m Model) release(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	press := m.press
+func abs(n int) int {
+	return max(n, -n)
+}
+
+// release ends a press. After a drag it copies the box, unless the box holds
+// only blank cells: an empty copy clears the clipboard. After a press with no
+// drag, it runs the button or target it landed on, so a drag that begins on
+// one runs nothing.
+func (m Model) release() (tea.Model, tea.Cmd) {
+	p := m.press
 	m.press = nil
 	if m.sel.active {
 		text := m.sel.text()
 		m.sel = selection{}
-		m.copied = len([]rune(text))
+		if strings.TrimSpace(text) == "" {
+			return m, nil
+		}
+		m.copied = len([]rune(strings.ReplaceAll(text, "\n", "")))
 		return m, copyText(text)
 	}
-	if press == nil || *press != (pointerCell{x: msg.X, y: msg.Y}) {
+	if p == nil {
 		return m, nil
 	}
-	return m.clickAction()
+	return m.clickAction(*p)
 }
 
-// selectingKey is a key pressed during a drag. Esc drops the selection and
-// copies nothing; ctrl+c still quits. Every other key waits, because it would
-// change a screen the selection stands over.
+// selectingKey is a key pressed during a drag. Back drops the selection and
+// copies nothing, and quit still quits. Every other key is dropped, because it
+// would change a screen the selection stands over.
 func (m Model) selectingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
+	switch {
+	case key.Matches(msg, m.keys.Back):
 		m.sel, m.press = selection{}, nil
-	case "ctrl+c":
+	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 	}
 	return m, nil

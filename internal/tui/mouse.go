@@ -39,17 +39,22 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	m.cell = &pointerCell{x: msg.X, y: msg.Y}
 	m.over = m.hoverAt(msg.X, msg.Y)
+	if m.press != nil {
+		next, done := m.held(msg)
+		if done {
+			return next, nil
+		}
+		m = next
+	}
 	switch {
 	case msg.Action == tea.MouseActionRelease:
-		return m.release(msg)
-	case msg.Action == tea.MouseActionMotion && m.press != nil:
-		return m.drag(msg), nil
+		return m.release()
 	case msg.Action != tea.MouseActionPress:
 		return m, nil
 	}
 	m.copied = 0
 	if msg.Button == tea.MouseButtonLeft {
-		m.press = m.cell
+		m.press = &press{at: *m.cell, over: m.over}
 	}
 	// The help screen has no rows, and more lines than a short terminal
 	// holds: the wheel scrolls it, and a click does nothing.
@@ -100,9 +105,11 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clickAction runs the button or pane target a click was released on.
-func (m Model) clickAction() (tea.Model, tea.Cmd) {
-	if !m.dialog.hasRows() {
+// clickAction runs the button or pane target a click was released on, when
+// it is still the one the press landed on: a survey between the two can move
+// another target under the pointer.
+func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
+	if !m.dialog.hasRows() || m.over != p.over {
 		return m, nil
 	}
 	switch m.over.kind {

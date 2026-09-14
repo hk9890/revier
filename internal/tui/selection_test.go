@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/tui"
 )
@@ -66,7 +68,8 @@ func TestAReleaseCopiesTheBoxAndSaysSo(t *testing.T) {
 
 	m = dragged(m, 12, top+1, 4, top) // corners either way round
 	m, _ = mouseAt(m, 4, top, tea.MouseActionRelease)
-	if got, want := footer(m), fmt.Sprintf("Copied %d characters.", len([]rune(text))); !strings.Contains(got, want) {
+	chars := len([]rune(strings.ReplaceAll(text, "\n", "")))
+	if got, want := footer(m), fmt.Sprintf("Copied %d characters.", chars); !strings.Contains(got, want) {
 		t.Errorf("footer = %q after copying %q, want %q", got, text, want)
 	}
 	m, _ = press(m, "down")
@@ -75,8 +78,15 @@ func TestAReleaseCopiesTheBoxAndSaysSo(t *testing.T) {
 	}
 }
 
-// The box is drawn over the frozen screen without moving anything beside it.
-func TestTheBoxLeavesEveryLineItsWidth(t *testing.T) {
+// The box is drawn over the frozen screen without moving anything beside it,
+// and a line's colours resume after the box.
+func TestTheBoxLeavesEveryLineItsWidthAndColour(t *testing.T) {
+	// The surface renders without colour where no terminal is attached. No
+	// test runs in parallel with this one.
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	top := rowTop(m)
@@ -87,12 +97,96 @@ func TestTheBoxLeavesEveryLineItsWidth(t *testing.T) {
 		t.Fatalf("the frozen screen has %d lines, want %d", len(after), len(before))
 	}
 	for i := range before {
-		if a, b := ansi.StringWidth(after[i]), ansi.StringWidth(before[i]); a != b {
-			t.Errorf("line %d is %d cells wide with the box, want %d", i, a, b)
+		if a, b := ansi.Strip(after[i]), ansi.Strip(before[i]); a != b {
+			t.Errorf("line %d reads %q with the box, want %q", i, a, b)
 		}
 	}
-	if !strings.Contains(after[top], "\x1b[0;7m") {
-		t.Errorf("line %d = %q, want the box in reverse video", top, after[top])
+	line := after[top]
+	start := strings.Index(line, "\x1b[0;7m")
+	if start < 0 {
+		t.Fatalf("line %d = %q, want the box in reverse video", top, line)
+	}
+	_, rest, _ := strings.Cut(line[start:], "\x1b[0m")
+	if !strings.Contains(rest, "\x1b[") {
+		t.Errorf("line %d after the box = %q, want its colours kept", top, rest)
+	}
+}
+
+// A hand that shifts a cell during a click is still clicking: the button runs
+// and nothing is copied.
+func TestAClickThatMovesACellStillRuns(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	x, y := barCell(t, m)
+
+	m = dragged(m, x, y, x+1, y)
+	m, _ = mouseAt(m, x+1, y, tea.MouseActionRelease)
+	if strings.Contains(footer(m), "Copied") {
+		t.Errorf("footer = %q after a click, want nothing copied", footer(m))
+	}
+	if head := barLine(m); !strings.Contains(head, "Add a project") {
+		t.Errorf("top line = %q after a click on the new button, want the new-project screen", head)
+	}
+}
+
+// A release that went to another window, as after a double click opens one,
+// leaves no press behind: the pointer coming back with no button held selects
+// nothing.
+func TestAPointerBackWithNoButtonSelectsNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	top := rowTop(m)
+
+	m, _ = mouseAt(m, 4, top, tea.MouseActionPress)
+	next, _ := m.Update(tea.MouseMsg{X: 30, Y: top + 2, Button: tea.MouseButtonNone, Action: tea.MouseActionMotion})
+	m = next.(tui.Model)
+	if strings.Contains(m.View(), "\x1b[0;7m") {
+		t.Error("the pointer moving with no button held drew a box")
+	}
+	m, _ = mouseAt(m, 30, top+2, tea.MouseActionMotion)
+	if _, cmd := mouseAt(m, 30, top+2, tea.MouseActionRelease); cmd != nil {
+		t.Error("a release with no press behind it copied")
+	}
+}
+
+// A box over blank cells copies nothing: an empty copy would clear the
+// clipboard.
+func TestABlankBoxCopiesNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	top := rowTop(m)
+
+	m = dragged(m, 0, top, 1, top+3) // the margin
+	m, cmd := mouseAt(m, 1, top+3, tea.MouseActionRelease)
+	if cmd != nil {
+		t.Error("a blank box was copied")
+	}
+	if strings.Contains(footer(m), "Copied") {
+		t.Errorf("footer = %q, want nothing copied", footer(m))
+	}
+}
+
+// Only the left button ends a drag: another button's release or a wheel
+// during it leaves the selection standing.
+func TestOtherButtonsLeaveADragStanding(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	top := rowTop(m)
+
+	m = dragged(m, 4, top, 12, top+1)
+	frozen := m.View()
+	for _, msg := range []tea.MouseMsg{
+		{X: 12, Y: top + 1, Button: tea.MouseButtonRight, Action: tea.MouseActionRelease},
+		{X: 12, Y: top + 1, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress},
+	} {
+		next, cmd := m.Update(msg)
+		m = next.(tui.Model)
+		if cmd != nil || m.View() != frozen {
+			t.Errorf("%v during a drag changed it", msg)
+		}
+	}
+	if _, cmd := mouseAt(m, 12, top+1, tea.MouseActionRelease); cmd == nil {
+		t.Error("the left release after them copied nothing")
 	}
 }
 

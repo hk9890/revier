@@ -327,7 +327,11 @@ func (m Model) footer() string {
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
 	if m.copied > 0 {
-		return m.theme.NameDim.Render(fmt.Sprintf(" Copied %d characters.", m.copied))
+		unit := "characters"
+		if m.copied == 1 {
+			unit = "character"
+		}
+		return m.theme.NameDim.Render(fmt.Sprintf(" Copied %d %s.", m.copied, unit))
 	}
 	if m.dialog == dialogConfig {
 		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
