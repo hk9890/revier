@@ -66,6 +66,9 @@ func classify(ctx context.Context, host string, args []string, stderr string, er
 	if isNotFound(low, err) {
 		return reason(host, "no revier on the PATH ssh gives - put mise or asdf shims in ~/.zshenv")
 	}
+	if isOlder(low) {
+		return reason(host, "the revier there has no `"+command(args)+"` - update revier on HOST")
+	}
 	if errors.Is(err, exec.ErrNotFound) {
 		return reason(host, "no ssh on this machine")
 	}
@@ -114,6 +117,25 @@ func isNotFound(low string, err error) bool {
 		strings.Contains(low, "revier: not found") ||
 		strings.Contains(low, "'revier' is not recognized") ||
 		strings.Contains(low, "unknown command: revier")
+}
+
+// isOlder reports whether the remote revier ran and did not know the command:
+// its words for a command a newer revier added, printed after its whole usage.
+func isOlder(low string) bool {
+	return strings.Contains(low, `unknown command "`) || strings.Contains(low, `unknown agent command "`)
+}
+
+// command is the revier command args run, without its flags and arguments:
+// "shell new" of `revier shell new -p far`.
+func command(args []string) string {
+	var words []string
+	for _, a := range args[1:] {
+		if strings.HasPrefix(a, "-") {
+			break
+		}
+		words = append(words, a)
+	}
+	return strings.Join(words, " ")
 }
 
 func reason(host, say string) error {

@@ -134,9 +134,10 @@ func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
 }
 
 // An agent or a shell asked for a remote project opens on the host, whose
-// workspace holds it: by -p, with the target it names; or by the panel of
-// the ssh pane a key was pressed in, where the host picks its own target and
-// a local --dir means nothing. Nothing opens here.
+// workspace holds it: by -p, with a target only the host has; or by the panel
+// of the ssh pane a key was pressed in, where the host picks its own target
+// and a --dir, a path on this machine, is neither sent nor checked. Nothing
+// opens here.
 func TestTabsOfARemoteProjectOpenOnTheHost(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	rt := hosttest.NewRuntime("tmux")
@@ -151,7 +152,8 @@ func TestTabsOfARemoteProjectOpenOnTheHost(t *testing.T) {
 	if err := a.newAgent(ctx, "", "%7", t.TempDir(), ""); err != nil {
 		t.Fatalf("agent new --panel: %v", err)
 	}
-	if err := a.newShell(ctx, "", "%7", t.TempDir()); err != nil {
+	// A --dir that is no directory here is not the host's concern.
+	if err := a.newShell(ctx, "", "%7", "/srv/only-on-the-host"); err != nil {
 		t.Fatalf("shell new --panel: %v", err)
 	}
 	want := []hosttest.RemoteTab{

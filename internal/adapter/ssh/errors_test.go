@@ -90,6 +90,25 @@ func TestClassifyDoesNotReadAnotherMissingCommandAsRevier(t *testing.T) {
 	}
 }
 
+// A revier older than the command it was sent prints its whole usage and then
+// its refusal. The reader needs to know to update it, in one line.
+func TestClassifyTellsAnOlderRevierToBeUpdated(t *testing.T) {
+	usage := "revier - a project-grouped control surface\n\nusage:\n  revier list\n"
+	for _, tc := range []struct {
+		args   []string
+		stderr string
+		want   string
+	}{
+		{[]string{"revier", "shell", "new", "-p", "far"}, usage + `revier: unknown command "shell"`, "no `shell new`"},
+		{[]string{"revier", "agent", "new", "-p", "far"}, usage + `revier: unknown agent command "new"`, "no `agent new`"},
+	} {
+		got := ssh.Classify("box", tc.args, tc.stderr, exitErr(t, "1")).Error()
+		if !strings.Contains(got, tc.want) || !strings.Contains(got, "update revier on box") || strings.Contains(got, "usage") {
+			t.Errorf("classify = %q, want %s and the update named, without the usage", got, tc.want)
+		}
+	}
+}
+
 // A failure nothing here knows is passed through whole: the command that was
 // run, and what it said, on one line.
 func TestClassifyPassesAnUnknownFailureThrough(t *testing.T) {

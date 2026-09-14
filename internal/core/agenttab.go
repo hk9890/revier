@@ -168,6 +168,60 @@ type Workspace struct {
 	snap    snapshot
 }
 
+// TabPlace is where a tab asked for opens: in Workspace on this machine, or,
+// when Remote is set, in the workspace Address names on that host
+// (decisions.md D71).
+type TabPlace struct {
+	Workspace Workspace
+	Remote    revier.Remote
+	Address   string
+}
+
+// TabIn is where a tab for a project's target opens. A link's home is the
+// pane onto the host's workspace, and a target the link does not declare is
+// one the host has, so both go to the host, the home as the project alone;
+// a target the link declares here is a local window and opens here. An empty
+// target is the one pick chooses, or the home on a link.
+func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, bound Bindings, pick func(Project) (revier.TargetName, error)) (TabPlace, error) {
+	if p.Remote != nil {
+		_, declared := p.index(target)
+		if home, _ := p.Home(); target == "" || target == home.Name || !declared {
+			return c.remoteTab(p, target)
+		}
+	}
+	if target == "" {
+		var err error
+		if target, err = pick(p); err != nil {
+			return TabPlace{}, err
+		}
+	}
+	w, err := c.AgentWorkspace(ctx, p, target, bound)
+	return TabPlace{Workspace: w}, err
+}
+
+// TabAt is where a tab opens for the key pressed in a panel: the workspace
+// PanelOwner finds, or the host when that workspace is a link's home.
+func (c *Core) TabAt(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (TabPlace, error) {
+	w, err := c.PanelOwner(ctx, projects, bound, panel)
+	if err != nil {
+		return TabPlace{}, err
+	}
+	if home, _ := w.Project.Home(); w.Project.Remote != nil && w.Target == home.Name {
+		return c.remoteTab(w.Project, "")
+	}
+	return TabPlace{Workspace: w}, nil
+}
+
+// remoteTab is the host's place for a tab of a link's target; the home is the
+// project alone, since which of its targets holds the tab is the host's.
+func (c *Core) remoteTab(p Project, target revier.TargetName) (TabPlace, error) {
+	if home, _ := p.Home(); target == home.Name {
+		target = ""
+	}
+	r, address, err := c.RemoteAt(p, string(target))
+	return TabPlace{Workspace: Workspace{Project: p}, Remote: r, Address: address}, err
+}
+
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`.
 func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Workspace, error) {
@@ -202,7 +256,8 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // was not pressed in.
 //
 // One instance can back two targets. The target is the first of them that
-// declares an agent panel, because only that one has a tab to give.
+// declares an agent panel, because only that one has an agent tab to give; a
+// shell tab opened through it takes that target's shell panel too.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (Workspace, error) {
 	if c.Runtime == nil {
 		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)

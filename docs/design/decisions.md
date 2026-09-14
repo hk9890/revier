@@ -323,8 +323,9 @@ operations.
 ### D71 — an agent or a shell asked for a remote project opens on its host
 
 The keys that open an agent or a shell beside a workspace name the window they
-were pressed in, and a remote project's window is the pane onto the host. A
-tab opened here would run on this machine, outside the workspace the host's
-revier surveys. So `agent new` and `shell new` forward to the host as
-`Remote.NewAgent` and `Remote.NewShell`, as `agent prompt` does, and the host
-picks the target and the directory; a `--dir` here is a path on this machine.
+were pressed in, and a link's home is the pane onto the host. A tab opened here
+would run outside the workspace the host's revier surveys, so `agent new` and
+`shell new` forward to the host as `Remote.NewAgent` and `Remote.NewShell`, as
+`agent prompt` does. The home goes as the project alone, and a target only the
+host has goes by name; a target the link declares here is a local window and
+opens here. `--dir` is a path on this machine and is not sent.

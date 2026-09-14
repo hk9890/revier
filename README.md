@@ -148,10 +148,12 @@ map ctrl+shift+z launch --type=background --copy-env --cwd=current sh -lc 'exec 
 ```
 
 `revier shell new` opens a shell the same way: the target's shell panel alone,
-or the runtime's shell where the target declares none:
+or the runtime's shell where the target declares none. It refuses a window
+that is no project's workspace, so a key that should open a shell everywhere
+falls back to kitty's own tab:
 
 ```
-map ctrl+shift+t launch --type=background --copy-env --cwd=current sh -lc 'exec revier shell new --panel "$1" --dir .' sh @active-kitty-window-id
+map ctrl+shift+t launch --type=background --copy-env --cwd=current sh -lc 'revier shell new --panel "$1" --dir . || kitten @ launch --type=tab --cwd=current' sh @active-kitty-window-id
 ```
 
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a

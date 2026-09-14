@@ -28,6 +28,21 @@ func (c *Core) RemoteOf(p Project) (revier.Remote, error) {
 	return c.remote(p.Remote.Host)
 }
 
+// RemoteAt returns the remote a project lives on and the address that names
+// its sel - a target or a panel, or nothing - as the host knows it: the
+// project's name there, then sel. It is nil for a project on this machine.
+func (c *Core) RemoteAt(p Project, sel string) (revier.Remote, string, error) {
+	r, err := c.RemoteOf(p)
+	if err != nil || r == nil {
+		return nil, "", err
+	}
+	address := string(p.Remote.Project)
+	if sel != "" {
+		address += ":" + sel
+	}
+	return r, address, nil
+}
+
 func (c *Core) remote(host string) (revier.Remote, error) {
 	c.remotesMu.Lock()
 	defer c.remotesMu.Unlock()
