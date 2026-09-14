@@ -110,6 +110,29 @@ func (r *Remote) Prompt(ctx context.Context, address, text string) error {
 	return nil
 }
 
+// NewAgent runs `revier agent new` on the remote, for the project the address
+// names there. Its warning - a conversation the host could not resume - is
+// passed on to this stderr.
+func (r *Remote) NewAgent(ctx context.Context, address string, resume revier.SessionID) error {
+	args := []string{"revier", "agent", "new", "-p", address}
+	if resume != "" {
+		args = append(args, "--resume", string(resume))
+	}
+	_, warnings, err := r.run(ctx, args...)
+	if err != nil {
+		return err
+	}
+	_, _ = os.Stderr.Write(warnings)
+	return nil
+}
+
+// NewShell runs `revier shell new` on the remote, for the project the address
+// names there.
+func (r *Remote) NewShell(ctx context.Context, address string) error {
+	_, _, err := r.run(ctx, "revier", "shell", "new", "-p", address)
+	return err
+}
+
 // Wait runs `revier agent wait` on the remote. ctx's deadline goes with it
 // as the wait's own timeout: ending the ssh alone would leave the wait
 // polling on the host, since nothing signals a command there when the

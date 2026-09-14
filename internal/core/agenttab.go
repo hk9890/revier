@@ -21,8 +21,9 @@ var (
 	// ErrNoPanel means no open target of any project holds the panel.
 	ErrNoPanel = errors.New("no open target holds panel")
 
-	// ErrNoAgentTabs means the runtime cannot open a tab to add an agent in.
-	ErrNoAgentTabs = errors.New("runtime has no tabs to open an agent in")
+	// ErrNoTabsToOpen means the runtime cannot open a tab to add an agent or a
+	// shell in.
+	ErrNoTabsToOpen = errors.New("runtime has no tabs to open an agent or a shell in")
 )
 
 // agentTab is the tab an agent opens in: a copy of the first panel the
@@ -167,6 +168,60 @@ type Workspace struct {
 	snap    snapshot
 }
 
+// TabPlace is where a tab asked for opens: in Workspace on this machine, or,
+// when Remote is set, in the workspace Address names on that host
+// (decisions.md D71).
+type TabPlace struct {
+	Workspace Workspace
+	Remote    revier.Remote
+	Address   string
+}
+
+// TabIn is where a tab for a project's target opens. A link's home is the
+// pane onto the host's workspace, and a target the link does not declare is
+// one the host has, so both go to the host, the home as the project alone;
+// a target the link declares here is a local window and opens here. An empty
+// target is the one pick chooses, or the home on a link.
+func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, bound Bindings, pick func(Project) (revier.TargetName, error)) (TabPlace, error) {
+	if p.Remote != nil {
+		_, declared := p.index(target)
+		if home, _ := p.Home(); target == "" || target == home.Name || !declared {
+			return c.remoteTab(p, target)
+		}
+	}
+	if target == "" {
+		var err error
+		if target, err = pick(p); err != nil {
+			return TabPlace{}, err
+		}
+	}
+	w, err := c.AgentWorkspace(ctx, p, target, bound)
+	return TabPlace{Workspace: w}, err
+}
+
+// TabAt is where a tab opens for the key pressed in a panel: the workspace
+// PanelOwner finds, or the host when that workspace is a link's home.
+func (c *Core) TabAt(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (TabPlace, error) {
+	w, err := c.PanelOwner(ctx, projects, bound, panel)
+	if err != nil {
+		return TabPlace{}, err
+	}
+	if home, _ := w.Project.Home(); w.Project.Remote != nil && w.Target == home.Name {
+		return c.remoteTab(w.Project, "")
+	}
+	return TabPlace{Workspace: w}, nil
+}
+
+// remoteTab is the host's place for a tab of a link's target; the home is the
+// project alone, since which of its targets holds the tab is the host's.
+func (c *Core) remoteTab(p Project, target revier.TargetName) (TabPlace, error) {
+	if home, _ := p.Home(); target == home.Name {
+		target = ""
+	}
+	r, address, err := c.RemoteAt(p, string(target))
+	return TabPlace{Workspace: Workspace{Project: p}, Remote: r, Address: address}, err
+}
+
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`.
 func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Workspace, error) {
@@ -201,7 +256,8 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // was not pressed in.
 //
 // One instance can back two targets. The target is the first of them that
-// declares an agent panel, because only that one has a tab to give.
+// declares an agent panel, because only that one has an agent tab to give; a
+// shell tab opened through it takes that target's shell panel too.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (Workspace, error) {
 	if c.Runtime == nil {
 		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
@@ -278,33 +334,81 @@ func holdsPanel(inst revier.Instance, panel revier.PanelID) bool {
 // opens, as Go refuses it: a focus with no raise is a GNOME "is ready" notice
 // (decisions.md D63).
 func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcome, error) {
-	i, ok := w.Project.index(w.Target)
-	if !ok {
-		return AgentNotAdded, fmt.Errorf("%w: %s", ErrNoTarget, w.Target)
-	}
-	host, real, _, err := c.resolveAt(w.Project, i)
+	t, err := c.tabRuntime(w)
 	if err != nil {
 		return AgentNotAdded, err
 	}
-	opener, ok := host.(revier.PanelOpener)
-	if !ok {
-		return AgentNotAdded, fmt.Errorf("%s: %w", host.Name(), ErrNoAgentTabs)
-	}
-	tab, outcome := c.agentTab(real, r)
+	tab, outcome := c.agentTab(t.real, r)
 	if outcome == AgentDropped {
 		return AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
 	}
+	opened, err := c.openTab(ctx, w, t, tab, "agent tab")
+	if !opened {
+		return AgentNotAdded, err
+	}
+	return outcome, err
+}
+
+// NewShell opens a shell tab in an open workspace, makes it current, and
+// raises the OS window around it: a copy of the first shell panel the target
+// declares, or the runtime's own shell where it declares none, started in dir
+// or else where the panel starts.
+func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
+	t, err := c.tabRuntime(w)
+	if err != nil {
+		return err
+	}
+	shell, ok := declared(t.real.Panels, revier.PanelShell)
+	if !ok {
+		shell = revier.PanelSpec{Kind: revier.PanelShell, Dir: t.real.Dir}
+	}
+	if dir != "" {
+		shell.Dir = dir
+	}
+	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, "shell tab")
+	return err
+}
+
+// tabRuntime is the workspace's target as a tab opens in it: the runtime that
+// holds it, which must open tabs, and its rendered realization.
+type tabRuntime struct {
+	host   revier.Host
+	opener revier.PanelOpener
+	real   revier.Realization
+}
+
+func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
+	i, ok := w.Project.index(w.Target)
+	if !ok {
+		return tabRuntime{}, fmt.Errorf("%w: %s", ErrNoTarget, w.Target)
+	}
+	host, real, _, err := c.resolveAt(w.Project, i)
+	if err != nil {
+		return tabRuntime{}, err
+	}
+	opener, ok := host.(revier.PanelOpener)
+	if !ok {
+		return tabRuntime{}, fmt.Errorf("%s: %w", host.Name(), ErrNoTabsToOpen)
+	}
+	return tabRuntime{host: host, opener: opener, real: real}, nil
+}
+
+// openTab refuses an OS window it cannot raise, then opens the tab in the
+// workspace, focuses its first panel and raises the OS window. opened reports
+// whether the tab is running, so an error after it is told from one before.
+func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, what string) (opened bool, err error) {
+	host, opener := t.host, t.opener
 	inst, _ := byRef(w.snap, w.Ref)
 	osw, err := c.raisable(w.snap, inst, w.Target)
 	if err != nil {
-		return AgentNotAdded, err
+		return false, err
 	}
 	panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
 	if err != nil {
-		return AgentNotAdded, fmt.Errorf("%s: agent tab: %w", host.Name(), err)
+		return false, fmt.Errorf("%s: %s: %w", host.Name(), what, err)
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, panel); err != nil {
-		return outcome, fmt.Errorf("%s: focus the agent tab: %w", host.Name(), err)
+		return true, fmt.Errorf("%s: focus the %s: %w", host.Name(), what, err)
 	}
-	return outcome, c.raise(ctx, osw, w.Target)
+	return true, c.raise(ctx, osw, w.Target)
 }

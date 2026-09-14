@@ -25,6 +25,30 @@ type FakeRemote struct {
 	// RunArgv is what RunCommand answers with; Runs records every ask.
 	RunArgv []string
 	Runs    []Run
+	// Tabs records every NewAgent and NewShell, in order.
+	Tabs []RemoteTab
+}
+
+// RemoteTab is one tab asked of the remote: an agent, with the conversation
+// it resumes, or a shell.
+type RemoteTab struct {
+	Kind    revier.PanelKind
+	Address string
+	Resume  revier.SessionID
+}
+
+func (f *FakeRemote) NewAgent(_ context.Context, address string, resume revier.SessionID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Tabs = append(f.Tabs, RemoteTab{Kind: revier.PanelAgent, Address: address, Resume: resume})
+	return f.Err
+}
+
+func (f *FakeRemote) NewShell(_ context.Context, address string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Tabs = append(f.Tabs, RemoteTab{Kind: revier.PanelShell, Address: address})
+	return f.Err
 }
 
 // Run is one action asked for on one project.

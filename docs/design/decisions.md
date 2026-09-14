@@ -330,3 +330,13 @@ because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
 of several terminals is meant, so `Focus` switches only the terminal of the
 pane it runs in, or the one terminal attached, and records the focus in
 `@revier-focus` for `Focused` to report when neither decides.
+
+### D71 — an agent or a shell asked for a remote project opens on its host
+
+The keys that open an agent or a shell beside a workspace name the window they
+were pressed in, and a link's home is the pane onto the host. A tab opened here
+would run outside the workspace the host's revier surveys, so `agent new` and
+`shell new` forward to the host as `Remote.NewAgent` and `Remote.NewShell`, as
+`agent prompt` does. The home goes as the project alone, and a target only the
+host has goes by name; a target the link declares here is a local window and
+opens here. `--dir` is a path on this machine and is not sent.
