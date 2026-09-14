@@ -21,7 +21,7 @@ usage:
   revier agent wait <agent> --until <status> [--timeout <seconds>]
   revier agent prompt <agent> [--] <text>
   revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]
-  revier agent focus <agent>
+  revier agent focus <agent> [--ref <instance>]
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
@@ -31,6 +31,8 @@ usage:
              @active-kitty-window-id is the window a key was pressed in
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project
+  --ref      the instance holding <project>:<panel>, as the survey reports
+             it: a panel id is unique only within one kitty process
 
 new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace.
@@ -186,9 +188,17 @@ func cmdAgentPrompt(args []string) error {
 
 // cmdAgentFocus brings one agent to the front: on the host of a remote
 // project, through that revier, which is how the TUI reaches an agent there.
+// With --ref the address names a panel of that instance, so a panel id two
+// kitty processes share still names one agent.
 func cmdAgentFocus(args []string) error {
-	if len(args) != 1 {
-		return errors.New("usage: revier agent focus <agent>")
+	fs := flag.NewFlagSet("agent focus", flag.ContinueOnError)
+	instance := fs.String("ref", "", "the instance holding the panel")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return errors.New("usage: revier agent focus <agent> [--ref <instance>]")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
@@ -196,19 +206,31 @@ func cmdAgentFocus(args []string) error {
 	if err != nil {
 		return err
 	}
-	r, there, err := a.remoteFor(args[0])
+	address := pos[0]
+	r, there, err := a.remoteFor(address)
 	if err != nil {
 		return err
+	}
+	var ref revier.TargetRef
+	if *instance != "" {
+		ref = revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}
 	}
 	if r != nil {
-		return r.FocusAgent(ctx, there)
+		return r.FocusAgent(ctx, there, ref)
 	}
-	ag, err := a.agent(ctx, args[0])
-	if err != nil {
-		return err
+	var panel revier.PanelID
+	if ref.IsZero() {
+		ag, err := a.agent(ctx, address)
+		if err != nil {
+			return err
+		}
+		ref, panel = ag.Ref, ag.Panel.ID
+	} else {
+		_, sel, _ := strings.Cut(address, ":")
+		panel = revier.PanelID(sel)
 	}
-	err = a.core.FocusAgent(ctx, ag)
-	slog.Info("agent focus", "address", args[0], "ref", ag.Ref, "panel", ag.Panel.ID, "err", err)
+	err = a.core.FocusAgent(ctx, ref, panel)
+	slog.Info("agent focus", "address", address, "ref", ref, "panel", panel, "err", err)
 	return err
 }
 

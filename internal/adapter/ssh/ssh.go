@@ -134,9 +134,13 @@ func (r *Remote) NewShell(ctx context.Context, address string) error {
 }
 
 // FocusAgent runs `revier agent focus` on the remote, for the agent the
-// address names there.
-func (r *Remote) FocusAgent(ctx context.Context, address string) error {
-	_, _, err := r.run(ctx, "revier", "agent", "focus", address)
+// address names there, in the instance ref names when the remote reported one.
+func (r *Remote) FocusAgent(ctx context.Context, address string, ref revier.TargetRef) error {
+	args := []string{"revier", "agent", "focus", address}
+	if !ref.IsZero() {
+		args = append(args, "--ref", ref.ID)
+	}
+	_, _, err := r.run(ctx, args...)
 	return err
 }
 

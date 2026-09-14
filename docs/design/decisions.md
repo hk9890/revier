@@ -358,3 +358,12 @@ that and a raise, and needs no new runtime capability. A link's agent runs in
 the host's workspace, which only that revier can switch, so
 `Remote.FocusAgent` asks it, by the panel id its survey reported, and the pane
 onto the host is raised here.
+
+### D75 — an agent is named by its instance and its panel
+
+A panel id is unique only within the process that numbers it, and two kitty
+processes of one project can each hold a panel 1, so an agent found again by
+its id alone was ambiguous. The survey already reads each agent from its
+instance, so `AgentView` carries that ref, and going to an agent uses the pair
+rather than a second lookup. A link sends the host's ref back to the host,
+which is the only side it means anything to.

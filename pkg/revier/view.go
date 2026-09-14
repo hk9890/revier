@@ -44,6 +44,9 @@ type TargetView struct {
 }
 
 type AgentView struct {
-	Panel PanelID    `json:"panel"`
+	Panel PanelID `json:"panel"`
+	// Ref is the instance holding the panel. A panel id is unique only within
+	// the process that numbers it, so the two together name one agent.
+	Ref   TargetRef  `json:"ref,omitzero"`
 	State AgentState `json:"state"`
 }
