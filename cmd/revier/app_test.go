@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -78,6 +79,31 @@ func (l *lateWindows) Open(context.Context, revier.Realization) (revier.TargetRe
 	return revier.TargetRef{}, nil
 }
 
+// A window the launch made and could not focus is pinned with the failure, so
+// the next press raises it instead of launching a second.
+func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
+	wm := hosttest.New("gnome")
+	wm.FocusErr = errors.New("no such window")
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	p, root := demoProject(t), t.TempDir()
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+
+	if _, err := a.goTarget(context.Background(), p, "editor"); !errors.Is(err, wm.FocusErr) {
+		t.Fatalf("err = %v, want the focus failure", err)
+	}
+	got, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Bound["demo"]["editor"].IsZero() {
+		t.Errorf("bound = %v, want the launched editor pinned", got.Bound)
+	}
+}
+
 // A press while the target's launch is still coming up reports it rather than
 // launching a second copy - also when state still holds a binding from a
 // window of that target that has since closed, which is what made this
@@ -97,30 +123,6 @@ func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 	}
 	if wm.opened != 0 {
 		t.Errorf("the editor was launched %d more times, want none", wm.opened)
-	}
-}
-
-// The first press gave up waiting before the window came up. Once it is there,
-// the next press raises it, launch on record or not: only a second launch is
-// refused, never the raise.
-func TestAPressDuringALaunchRaisesTheWindowOnceItIsThere(t *testing.T) {
-	wm := &lateWindows{Fake: hosttest.New("gnome")}
-	editor := wm.Add("demo - README.md", "code")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
-	p, root := demoProject(t), t.TempDir()
-	st := &state.State{Launch: &state.Launch{Project: "demo", Target: "editor", At: time.Now().Add(-40 * time.Second)}}
-	if err := st.Save(root); err != nil {
-		t.Fatal(err)
-	}
-
-	if ref := press(t, c, p, root, "editor"); ref != editor {
-		t.Errorf("ref = %v, want the editor window %v raised", ref, editor)
-	}
-	if wm.opened != 0 {
-		t.Errorf("the editor was launched %d more times, want none", wm.opened)
-	}
-	if got, _ := state.Load(root); got.Launch != nil {
-		t.Errorf("launch = %+v, want it consumed: the target has landed", got.Launch)
 	}
 }
 

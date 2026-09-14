@@ -31,6 +31,11 @@ type Fake struct {
 	InstancesErr error
 	// OpenErr makes Open fail, for the run half of run-or-raise.
 	OpenErr error
+	// FocusErr makes Focus fail and FocusedErr makes Focused fail, for the
+	// raise half. PlaceErr makes Place fail.
+	FocusErr   error
+	FocusedErr error
+	PlaceErr   error
 	// Detached makes Open launch without a ref, as a window host does: the
 	// window does not exist yet when the process starts, so there is nothing
 	// to name.
@@ -279,6 +284,9 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Focuses = append(f.Focuses, ref)
+	if f.FocusErr != nil {
+		return f.FocusErr
+	}
 	f.focused = ref
 	return nil
 }
@@ -288,6 +296,9 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.PlaceErr != nil {
+		return f.PlaceErr
+	}
 	if f.Placements == nil {
 		f.Placements = map[string][]string{}
 	}
@@ -298,6 +309,9 @@ func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string)
 func (f *Fake) Focused(context.Context) (revier.TargetRef, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.FocusedErr != nil {
+		return revier.TargetRef{}, f.FocusedErr
+	}
 	return f.focused, nil
 }
 

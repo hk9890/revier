@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -93,6 +94,36 @@ func Load(root string) (*State, error) {
 	return &s, nil
 }
 
+// Update applies a change to the state on disk under a lock and saves it when
+// apply reports a change. Every process that writes state - the TUI, and each
+// keypress's CLI process - reads, changes and saves it, so without the lock a
+// launch one records between another's read and save is overwritten, and the
+// next press opens a duplicate window. apply runs while the lock is held, so it
+// does no I/O.
+func Update(root string, apply func(s *State) bool) (*State, error) {
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, fmt.Errorf("create state dir: %w", err)
+	}
+	lock, err := os.OpenFile(filepath.Join(root, "state.lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open state lock: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return nil, fmt.Errorf("lock state: %w", err)
+	}
+	s, err := Load(root)
+	if err != nil {
+		return nil, err
+	}
+	if apply(s) {
+		if err := s.Save(root); err != nil {
+			return s, err
+		}
+	}
+	return s, nil
+}
+
 // Save writes the state atomically, so a crash mid-write cannot leave a
 // truncated file that the next run has to discard.
 func (s *State) Save(root string) error {
@@ -116,6 +147,42 @@ func (s *State) Save(root string) error {
 		return fmt.Errorf("close temp state: %w", err)
 	}
 	return os.Rename(tmp.Name(), path(root))
+}
+
+// Pending reports whether l, the launch on record if any, is of the project's
+// target and younger than within: a press that finds one must not launch the
+// target again.
+func (l *Launch) Pending(p revier.ProjectName, t revier.TargetName, within time.Duration) bool {
+	return l != nil && l.Project == p && l.Target == t && time.Since(l.At) < within
+}
+
+// Launched records a launch whose window has not appeared, and makes its
+// project the current one. An action's launch has no target.
+func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
+	s.Current = p
+	s.Launch = &Launch{Project: p, Target: t, At: at}
+}
+
+// Landed records the instance a target landed on and makes its project the
+// current one. Every binding of a target consumes its launch.
+func (s *State) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+	s.Current = p
+	s.Bind(p, t, ref)
+	if s.Launch != nil && s.Launch.Project == p && s.Launch.Target == t {
+		s.Launch = nil
+	}
+}
+
+// Claim settles the pending launch with the window that appeared for it: bound
+// to the launched target, or attached to the project when an action launched
+// it.
+func (s *State) Claim(t revier.TargetName, ref revier.TargetRef) {
+	if t != "" {
+		s.Bind(s.Launch.Project, t, ref)
+	} else {
+		s.Attach(s.Launch.Project, ref)
+	}
+	s.Launch = nil
 }
 
 // Attach binds an instance to a project, ignoring a duplicate.

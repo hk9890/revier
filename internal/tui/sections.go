@@ -2,13 +2,13 @@ package tui
 
 import (
 	"context"
-	"log/slog"
 	"slices"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -152,26 +152,18 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 		return nil
 	}
 	c, bound, agent := m.core, m.bound[p.Name], rows[i].agent
-	// For a link GoAgent raises the pane onto the host, and a pane still
-	// coming up from an earlier press is not launched again (decisions.md
-	// D21), as goTarget does not launch it again.
-	home, hasHome := p.Home()
-	pending := p.Remote != nil && hasHome && m.launchPending(p.Name, home.Name)
+	var homePending bool
+	if home, ok := p.Home(); ok {
+		homePending = m.pending.Pending(p.Name, home.Name, core.BindWindow)
+	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), bindWait)
+		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
-		if pending {
-			up, err := c.Running(ctx, p, home.Name, bound)
-			if err != nil || !up {
-				slog.Info("go agent: the pane onto the host is still coming up, not launched again", "project", p.Name, "err", err)
-				return actedMsg{err: err}
-			}
-		}
-		res, err := c.GoAgent(ctx, p, agent, bound)
-		if err != nil || res.Target == "" {
+		res, err := c.ActivateAgent(ctx, p, agent, bound, homePending)
+		if res.Target == "" || res.ComingUp {
 			return actedMsg{err: err}
 		}
-		return landed(p, res)
+		return landed(p, res, err)
 	}
 }
 

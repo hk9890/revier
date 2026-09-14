@@ -343,14 +343,18 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 
 // Result is what Go did. Target is the target the key landed on: the one
 // asked for, the project's home when the press toggled back, or the target a
-// tab is inside, and the one a caller pins Ref to. Ref is where the key landed. Launched reports that the
-// run half ran; with a zero Ref the host could not name the window it
-// started, and Before is the window listing from before the launch, which
-// Bind diffs against. Agents is what the launch did with each recorded agent.
+// tab is inside, and the one a caller pins Ref to. Ref is where the key
+// landed, and it survives a failure to focus an instance the launch made.
+// Launched reports that the run half ran; with a zero Ref the host could not
+// name the window it started, and Before is the window listing from before
+// the launch, which Bind diffs against. Agents is what the launch did with
+// each recorded agent. ComingUp reports an Activate that did nothing because
+// the target's earlier launch has not produced its window yet.
 type Result struct {
 	Target   revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
+	ComingUp bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
 	// AgentErr is why an agent tab failed to open in a workspace that did
@@ -431,11 +435,13 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
 		// not. Go always leaves the target focused.
-		if err := host.Focus(ctx, ref); err != nil {
-			// The launch ran: its agents are reported with the failure.
-			return Result{Target: name, Launched: true, Agents: res.Agents, AgentErr: res.AgentErr}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
-		}
 		res.Ref = ref
+		if err := host.Focus(ctx, ref); err != nil {
+			// The launch ran and the instance exists: its ref and agents are
+			// reported with the failure, so the caller pins it and the next
+			// press raises it instead of opening another.
+			return res, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+		}
 		c.place(ctx, real, ref)
 		return res, nil
 	}
