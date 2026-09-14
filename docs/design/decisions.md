@@ -326,6 +326,7 @@ and the only thing a tab could be, and two terminals attached to two workspaces
 shared the session's current window and switched each other. A session per
 instance gives tmux the shape of a kitty OS window: `OpenTab` adds a window,
 and `attach-session` reaches one workspace. The name lives in `@revier-name`,
-because tmux 3.4 rewrites `:` and `.` in a session name. With no client
-attached tmux has no current session, so `Focus` records one in
-`@revier-focus`.
+because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
+of several terminals is meant, so `Focus` switches only the terminal of the
+pane it runs in, or the one terminal attached, and records the focus in
+`@revier-focus` for `Focused` to report when neither decides.

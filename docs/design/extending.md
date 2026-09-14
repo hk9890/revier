@@ -82,8 +82,9 @@ both hosts are available.
 Set `inside` on a runtime realization to open the target as a tab of another
 target's instance, not as an instance of its own (decisions.md D64). The tab
 needs a `launch`, and no `match` or `name`: revier marks the tab it opens and
-finds it again by that mark. It needs a runtime with tabs, which is kitty
-today; on any other runtime the key is refused with the reason.
+finds it again by that mark. It needs a runtime with tabs: kitty, where it is
+a tab of the OS window, or tmux, where it is a window of the session (D70). On
+any other runtime the key is refused with the reason.
 
 ```toml
 [[target]]

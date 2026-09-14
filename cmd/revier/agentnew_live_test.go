@@ -7,6 +7,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,21 +18,23 @@ import (
 func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")
-	_ = os.Remove(agent + ".started")
 	dir := t.TempDir()
 
 	if err := run([]string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
 		t.Fatalf("agent new: %v", err)
 	}
+	// The declared agent writes its own line whenever it gets to run, before
+	// or after this one, so the new agent is its line among the lines.
+	want := dir + " --resume abc-123"
 	deadline := time.Now().Add(5 * time.Second)
-	var started string
-	for started == "" && time.Now().Before(deadline) {
+	var started []string
+	for !slices.Contains(started, want) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 		read, _ := os.ReadFile(agent + ".started")
-		started = strings.TrimSpace(string(read))
+		started = strings.Split(strings.TrimSpace(string(read)), "\n")
 	}
-	if want := dir + " --resume abc-123"; started != want {
-		t.Errorf("the agent started as %q, want %q", started, want)
+	if !slices.Contains(started, want) {
+		t.Errorf("agents started as %q, want one started as %q", started, want)
 	}
 	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
 	if len(windows) != 2 || windows[1] != "2 1" {

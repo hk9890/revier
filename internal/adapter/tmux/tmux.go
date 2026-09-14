@@ -105,7 +105,7 @@ func (h *Host) Probe(ctx context.Context) error {
 // Two calls, both bulk: one for session names and one for panes. The cost is
 // constant, not per project, which is the property the hot path actually needs.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
-	sessions, err := h.sessions(ctx)
+	sessions, named, err := h.sessions(ctx)
 	if err != nil || len(sessions) == 0 {
 		return nil, err
 	}
@@ -125,31 +125,38 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		return nil, err
 	}
 
+	var lines [][]string
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		// A malformed line is skipped, never fatal. Panes belonging to other
+		// tools share this server, and one odd line must not blank every
+		// project revier knows about.
+		if f := strings.SplitN(line, sep, 6); len(f) == 6 {
+			lines = append(lines, f)
+		}
+	}
+	// list-panes -a lists a window's panes once for every session the window
+	// is linked into - a session group, link-window - and a pane listed twice
+	// is one agent, not two. It belongs to the session revier opened, else to
+	// the oldest: a view grouped onto a workspace is listed first whenever its
+	// name sorts first, and must not take the workspace's panes.
+	owner := map[string]string{}
+	for _, f := range lines {
+		session, pane := f[0], f[1]
+		if cur, ok := owner[pane]; !ok || owns(named, session, cur) {
+			owner[pane] = session
+		}
+	}
+
 	bySession := map[string]*revier.Instance{}
 	for i := range sessions {
 		bySession[sessionOf(sessions[i].Ref.ID)] = &sessions[i]
 	}
-	// list-panes -a lists a window's panes once for every session the window
-	// is linked into - a session group, link-window - and a pane listed twice
-	// is one agent, not two. It stays with the first session that lists it.
-	seen := map[string]bool{}
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
-		}
-		f := strings.SplitN(line, sep, 6)
-		if len(f) != 6 {
-			// A malformed line is skipped, never fatal. Panes belonging to
-			// other tools share this server, and one odd line must not blank
-			// every project revier knows about.
-			continue
-		}
+	for _, f := range lines {
 		sessionID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5]
 		inst, ok := bySession[sessionID]
-		if !ok || seen[paneID] {
+		if !ok || owner[paneID] != sessionID {
 			continue
 		}
-		seen[paneID] = true
 		pid, _ := strconv.Atoi(panePID)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(paneID),
@@ -163,28 +170,43 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	return sessions, nil
 }
 
-// sessions lists every session as an instance with no panels yet. The title is
-// free text, so it is the last field of its own query.
-func (h *Host) sessions(ctx context.Context) ([]revier.Instance, error) {
-	out, err := h.run(ctx, "list-sessions", "-F", "#{pid}"+sep+"#{session_id}"+sep+titleFormat)
+// owns reports whether session a, rather than b, owns a pane both list: the
+// one revier named, and between two alike the older, by its lower id.
+func owns(named map[string]bool, a, b string) bool {
+	if named[a] != named[b] {
+		return named[a]
+	}
+	na, _ := strconv.Atoi(strings.TrimPrefix(a, "$"))
+	nb, _ := strconv.Atoi(strings.TrimPrefix(b, "$"))
+	return na < nb
+}
+
+// sessions lists every session as an instance with no panels yet, and which
+// sessions revier named. The title is free text, so it is the last field of
+// its own query.
+func (h *Host) sessions(ctx context.Context) ([]revier.Instance, map[string]bool, error) {
+	format := "#{pid}" + sep + "#{session_id}" + sep + "#{?#{" + nameOption + "},1,0}" + sep + titleFormat
+	out, err := h.run(ctx, "list-sessions", "-F", format)
 	if err != nil {
 		if noServer(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	var instances []revier.Instance
+	named := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		f := strings.SplitN(line, sep, 3)
-		if len(f) != 3 {
+		f := strings.SplitN(line, sep, 4)
+		if len(f) != 4 {
 			continue
 		}
+		named[f[1]] = f[2] == "1"
 		instances = append(instances, revier.Instance{
-			Ref:   revier.TargetRef{Host: h.Name(), ID: refID(f[0], f[1]), Title: f[2]},
-			Title: f[2],
+			Ref:   revier.TargetRef{Host: h.Name(), ID: refID(f[0], f[1]), Title: f[3]},
+			Title: f[3],
 		})
 	}
-	return instances, nil
+	return instances, named, nil
 }
 
 // refID is an instance id: the session id, behind the pid of the server that
@@ -251,24 +273,48 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	panels := panelsOf(r)
 
-	args := []string{"new-session", "-d", "-P", "-F", "#{pid}" + sep + "#{session_id}" + sep + "#{window_id}" + sep + "#{pane_id}", "-s", r.Name}
-	out, err := h.run(ctx, append(args, start(panels[0])...)...)
+	out, err := h.newSession(ctx, r.Name, panels[0])
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
 	if len(f) != 4 {
+		if len(f) > 1 && strings.HasPrefix(f[1], "$") {
+			_, _ = h.run(ctx, "kill-session", "-t", f[1])
+		}
 		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
 	serverPID, session, window, pane := f[0], f[1], f[2], f[3]
-	ref := revier.TargetRef{Host: h.Name(), ID: refID(serverPID, session), Title: r.Name}
-	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
+	if err := h.name(ctx, session, window, pane, r.Name, panels); err != nil {
+		// Best effort: the error that failed the session is the one worth
+		// reporting. Left running, a session with no name or no shell would be
+		// matched, or would hold its name against the next Open.
+		_, _ = h.run(ctx, "kill-session", "-t", session)
 		return revier.TargetRef{}, err
 	}
-	if err := h.fill(ctx, window, pane, panels); err != nil {
-		return revier.TargetRef{}, err
+	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, session), Title: r.Name}, nil
+}
+
+// newSession starts a detached session running the panel, named after the
+// realization. The session name is only what a terminal's status line shows -
+// @revier-name is the identity - so a name another session already has, which
+// tmux 3.4 makes of "a:b" and "a.b" alike, is left to tmux to choose.
+func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSpec) (string, error) {
+	format := "#{pid}" + sep + "#{session_id}" + sep + "#{window_id}" + sep + "#{pane_id}"
+	args := []string{"new-session", "-d", "-P", "-F", format}
+	out, err := h.run(ctx, append(append(args, "-s", literal(name)), start(first)...)...)
+	if err != nil && strings.Contains(err.Error(), "duplicate session") {
+		return h.run(ctx, append(args, start(first)...)...)
 	}
-	return ref, nil
+	return out, err
+}
+
+// name leaves the realization's name on a new session and fills its window.
+func (h *Host) name(ctx context.Context, session, window, pane, name string, panels []revier.PanelSpec) error {
+	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, name); err != nil {
+		return err
+	}
+	return h.fill(ctx, window, pane, panels)
 }
 
 // panelsOf is what a realization runs: its panels, or r.Launch in r.Dir as the
@@ -334,10 +380,14 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 2)
+	window := f[0]
 	if len(f) != 2 {
+		if strings.HasPrefix(window, "@") {
+			_, _ = h.run(ctx, "kill-window", "-t", window)
+		}
 		return "", fmt.Errorf("tmux new-window: unexpected %q", out)
 	}
-	window, pane := f[0], f[1]
+	pane := f[1]
 	if err := h.tab(ctx, window, pane, panels, vars); err != nil {
 		// Best effort: the error that failed the tab is the one worth reporting.
 		_, _ = h.run(ctx, "kill-window", "-t", window)
@@ -361,15 +411,22 @@ func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.Pan
 }
 
 // FocusPanel makes the pane current in its window and its window current in
-// the session. Which session a terminal shows is Focus's.
+// the instance's session. The window is named inside that session: a pane
+// alone names a window of whichever session tmux resolves it to, which in a
+// session group need not be this one. Which session a terminal shows is
+// Focus's.
 func (h *Host) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
 	if err := h.own(ref); err != nil {
 		return err
 	}
-	if _, err := h.run(ctx, "select-window", "-t", panel.String()); err != nil {
+	out, err := h.run(ctx, "display-message", "-p", "-t", panel.String(), "#{window_id}")
+	if err != nil {
 		return err
 	}
-	_, err := h.run(ctx, "select-pane", "-t", panel.String())
+	if _, err := h.run(ctx, "select-window", "-t", sessionOf(ref.ID)+":"+strings.TrimSpace(out)); err != nil {
+		return err
+	}
+	_, err = h.run(ctx, "select-pane", "-t", panel.String())
 	return err
 }
 
@@ -441,11 +498,16 @@ func (h *Host) title(ctx context.Context, pane, title string) error {
 	return err
 }
 
-// Focus makes the session the focused one. A terminal attached to this server
-// that runs this command - a key pressed in a pane - is switched onto it; a
-// terminal the command does not run in is not moved, since which of several
-// it should be is not tmux's to know. The server option records the focus
-// for Focused either way.
+// Focus makes the session the focused one, recorded in the server option, and
+// switches the terminal that shows it:
+//
+//   - run in a pane of this server - a key pressed there - the terminal
+//     attached to that pane's session, and none when nobody is attached to it;
+//   - run from outside, the one terminal attached to the server, and none
+//     when there are several, since which of them is not tmux's to know.
+//
+// A terminal is named with -c: without it tmux picks one by its own rules,
+// which moves a terminal the command has nothing to do with.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	if err := h.own(ref); err != nil {
 		return err
@@ -454,31 +516,90 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	if _, err := h.run(ctx, "set-option", "-s", focusOption, session); err != nil {
 		return err
 	}
-	inside, err := h.inside(ctx)
-	if err != nil || !inside {
+	client, err := h.terminal(ctx)
+	if err != nil || client == "" {
 		return err
 	}
-	_, err = h.run(ctx, "switch-client", "-t", session)
+	_, err = h.run(ctx, "switch-client", "-c", client, "-t", session)
 	return err
 }
 
-// inside reports whether this process runs in a pane of this host's server:
-// $TMUX names the socket of the server the pane belongs to.
-func (h *Host) inside(ctx context.Context) (bool, error) {
-	socket, _, _ := strings.Cut(os.Getenv("TMUX"), ",")
-	if socket == "" {
-		return false, nil
-	}
-	out, err := h.run(ctx, "display-message", "-p", "#{socket_path}")
-	if err != nil {
-		return false, err
-	}
-	return strings.TrimSpace(out) == socket, nil
+// client is one terminal attached to the server, and the session it shows.
+type client struct {
+	name, session string
+	activity      int
 }
 
-// Focused reports the session of the client that was active last. With no
-// client attached it is the session Focus recorded, and with neither it is a
-// zero ref.
+// clients lists the terminals attached to the server, the most recently
+// active first. client_name is a tty path, free text, so it comes last.
+func (h *Host) clients(ctx context.Context) ([]client, error) {
+	out, err := h.run(ctx, "list-clients", "-F", "#{client_activity}"+sep+"#{session_id}"+sep+"#{client_name}")
+	if err != nil {
+		if noServer(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var clients []client
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		f := strings.SplitN(line, sep, 3)
+		if len(f) != 3 {
+			continue
+		}
+		activity, _ := strconv.Atoi(f[0])
+		clients = append(clients, client{name: f[2], session: f[1], activity: activity})
+	}
+	sort.SliceStable(clients, func(i, j int) bool { return clients[i].activity > clients[j].activity })
+	return clients, nil
+}
+
+// terminal is the client Focus switches, as Focus describes, or "" for none.
+func (h *Host) terminal(ctx context.Context) (string, error) {
+	clients, err := h.clients(ctx)
+	if err != nil || len(clients) == 0 {
+		return "", err
+	}
+	pane, err := h.callerPane(ctx)
+	if err != nil {
+		return "", err
+	}
+	if pane == "" {
+		if len(clients) == 1 {
+			return clients[0].name, nil
+		}
+		return "", nil
+	}
+	out, err := h.run(ctx, "display-message", "-p", "-t", pane, "#{session_id}")
+	if err != nil {
+		return "", err
+	}
+	for _, c := range clients {
+		if c.session == strings.TrimSpace(out) {
+			return c.name, nil
+		}
+	}
+	return "", nil
+}
+
+// callerPane is the pane this process runs in when that pane is on this
+// host's server, and "" otherwise: $TMUX names the socket of the server the
+// pane belongs to, and $TMUX_PANE the pane.
+func (h *Host) callerPane(ctx context.Context) (string, error) {
+	socket, _, _ := strings.Cut(os.Getenv("TMUX"), ",")
+	pane := os.Getenv("TMUX_PANE")
+	if socket == "" || pane == "" {
+		return "", nil
+	}
+	out, err := h.run(ctx, "display-message", "-p", "#{socket_path}")
+	if err != nil || strings.TrimSpace(out) != socket {
+		return "", err
+	}
+	return pane, nil
+}
+
+// Focused reports the session the one attached terminal shows. With none, or
+// with several, it is the session Focus recorded, and with no record a zero
+// ref.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	session, err := h.focusedSession(ctx)
 	if err != nil || session == "" {
@@ -504,26 +625,14 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 }
 
 func (h *Host) focusedSession(ctx context.Context) (string, error) {
-	out, err := h.run(ctx, "list-clients", "-F", "#{client_activity}"+sep+"#{session_id}")
+	clients, err := h.clients(ctx)
 	if err != nil {
-		if noServer(err) {
-			return "", nil
-		}
 		return "", err
 	}
-	var session string
-	latest := -1
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		activity, id, ok := strings.Cut(line, sep)
-		n, err := strconv.Atoi(activity)
-		if ok && err == nil && n > latest {
-			latest, session = n, id
-		}
+	if len(clients) == 1 {
+		return clients[0].session, nil
 	}
-	if session != "" {
-		return session, nil
-	}
-	out, err = h.run(ctx, "show-options", "-s", "-v", "-q", focusOption)
+	out, err := h.run(ctx, "show-options", "-s", "-v", "-q", focusOption)
 	if err != nil {
 		return "", err
 	}
