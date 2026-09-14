@@ -66,7 +66,8 @@ const statusJSON = `[
 // a spinner on an idle session and a rest glyph on a busy one both read as the
 // listing says. A pane Claude does not list is unknown, not idle.
 func TestInspectReadsTheListing(t *testing.T) {
-	p := &claude.Probe{Agents: agents(statusJSON, nil), SessionsDir: t.TempDir()}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents(statusJSON, nil))
 	cases := []struct {
 		name  string
 		panel revier.Panel
@@ -96,7 +97,8 @@ func TestInspectReadsTheListing(t *testing.T) {
 }
 
 func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
-	p := &claude.Probe{Agents: agents(statusJSON, nil), SessionsDir: t.TempDir()}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents(statusJSON, nil))
 	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101, Title: "⠧ Investigating setup"})
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +111,8 @@ func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
 // A listing that cannot be had is the probe's error; the core turns it into
 // unknown for the panel.
 func TestInspectReportsWhatItCannotRead(t *testing.T) {
-	p := &claude.Probe{Agents: agents("", errors.New("exec: claude: not found")), SessionsDir: t.TempDir()}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents("", errors.New("exec: claude: not found")))
 	if _, err := p.Inspect(context.Background(), revier.Panel{PID: 101}); err == nil {
 		t.Error("Inspect returned no error")
 	}
@@ -163,7 +166,9 @@ func TestInspectRunsTheListingOnlyWhenASessionChanged(t *testing.T) {
 	touch(t, file, start)
 	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
 	clk := &clock{t: start}
-	p := &claude.Probe{Agents: src.agents, SessionsDir: dir, Now: clk.now}
+	p := &claude.Probe{SessionsDir: dir}
+	p.SetAgents(src.agents)
+	p.SetNow(clk.now)
 
 	if got := inspect(t, p, 101); got != revier.StatusIdle || src.runs != 1 {
 		t.Fatalf("first read: %v after %d runs, want idle after 1", got, src.runs)
@@ -213,7 +218,9 @@ func TestInspectDoesNotKeepARunItsCallerCancelled(t *testing.T) {
 		}
 		return []byte(`[{"pid": 101, "status": "idle"}]`), nil
 	}
-	p := &claude.Probe{Agents: run, SessionsDir: filepath.Join(t.TempDir(), "absent"), Now: (&clock{t: start}).now}
+	p := &claude.Probe{SessionsDir: filepath.Join(t.TempDir(), "absent")}
+	p.SetAgents(run)
+	p.SetNow((&clock{t: start}).now)
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -230,7 +237,9 @@ func TestInspectRunsTheListingAtLeastEveryMaxAge(t *testing.T) {
 	start := time.Unix(1_800_000_000, 0)
 	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
 	clk := &clock{t: start}
-	p := &claude.Probe{Agents: src.agents, SessionsDir: filepath.Join(t.TempDir(), "absent"), Now: clk.now}
+	p := &claude.Probe{SessionsDir: filepath.Join(t.TempDir(), "absent")}
+	p.SetAgents(src.agents)
+	p.SetNow(clk.now)
 
 	inspect(t, p, 101)
 	src.out = `[{"pid": 101, "status": "waiting"}]`
@@ -253,7 +262,9 @@ func TestInspectWatchesClaudeConfigDir(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	start := time.Unix(1_800_000_000, 0)
 	src := &counted{out: `[{"pid": 101, "status": "idle"}]`}
-	p := &claude.Probe{Agents: src.agents, Now: (&clock{t: start}).now}
+	p := &claude.Probe{}
+	p.SetAgents(src.agents)
+	p.SetNow((&clock{t: start}).now)
 
 	inspect(t, p, 101)
 	touch(t, filepath.Join(home, "sessions", "101.json"), start)
@@ -320,7 +331,8 @@ func agents(out string, err error) func(context.Context) ([]byte, error) {
 // back in the panels' order, each with the directory Claude lists it in, and
 // zero where nothing matched.
 func TestSessions(t *testing.T) {
-	p := &claude.Probe{Agents: agents(agentsJSON, nil)}
+	p := &claude.Probe{}
+	p.SetAgents(agents(agentsJSON, nil))
 	panels := []revier.Panel{
 		{ID: "1", PID: 610851},
 		{ID: "2", PID: 999999}, // a pid Claude does not list: claude typed into a shell
@@ -345,7 +357,8 @@ func TestSessions(t *testing.T) {
 // A background session has no pid. It must not become the conversation of a
 // panel that reports none.
 func TestSessionsIgnoresBackgroundSessions(t *testing.T) {
-	p := &claude.Probe{Agents: agents(agentsJSON, nil)}
+	p := &claude.Probe{}
+	p.SetAgents(agents(agentsJSON, nil))
 	got, err := p.Sessions(context.Background(), []revier.Panel{{ID: "1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -363,7 +376,8 @@ func TestSessionsReportsWhatItCannotRead(t *testing.T) {
 		"not json":           agents("Usage: claude agents [options]", nil),
 	} {
 		t.Run(name, func(t *testing.T) {
-			p := &claude.Probe{Agents: run}
+			p := &claude.Probe{}
+			p.SetAgents(run)
 			if _, err := p.Sessions(context.Background(), []revier.Panel{{PID: 583601}}); err == nil {
 				t.Error("Sessions returned no error")
 			}

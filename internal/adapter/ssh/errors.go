@@ -92,7 +92,7 @@ func match(reasons []struct{ match, say string }, low string) (string, bool) {
 
 // status is what the command exited with, or -1 where it did not run at all.
 func status(err error) int {
-	var exit *exec.ExitError
+	var exit interface{ ExitCode() int }
 	if errors.As(err, &exit) {
 		return exit.ExitCode()
 	}

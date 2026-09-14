@@ -23,9 +23,11 @@ depends on. Put it in `internal/` unless an adapter must name it.
 
 ## Adapters hold no policy
 
-Matching, template rendering, choosing between realizations, and toggle-back all
-live in `internal/core`. An adapter that decides any of them lets two adapters
-disagree about what a match means.
+Template rendering, choosing the realization and the instance a target
+resolves to, and toggle-back all live in `internal/core`. The `Match`
+predicate itself (`Match.Compile`) is a pure port type in `pkg/revier`. An
+adapter that decides any of them lets two adapters disagree about what a match
+means.
 
 Concretely, an adapter never: compiles a `Match`, reads `Target`, `Project`, or
 `Prefer`, or expands a `{{ }}` template. A `Realization` arrives rendered.

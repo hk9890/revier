@@ -18,8 +18,6 @@ package tui
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"os/exec"
@@ -876,25 +874,7 @@ const bindWait = 30 * time.Second
 
 // action runs the configured action bound to the key, if any, against the
 // selected project. The terminal is handed to the command while it runs, and
-// the argv is rendered by the same rules `revier run` uses.
-// actionArgv is what runs for an action on a project: the action rendered
-// against the project, or, for a project on another machine, the ssh that
-// runs the action there (decisions.md D40).
-func (m Model) actionArgv(p core.Project, act config.Action) ([]string, error) {
-	r, err := m.core.RemoteOf(p)
-	if err != nil {
-		return nil, err
-	}
-	if r != nil {
-		return r.RunCommand(p.Remote.Project, act.Name), nil
-	}
-	argv, err := core.RenderArgv(p.Project, act.Run)
-	if err == nil && len(argv) == 0 {
-		err = errors.New("it runs nothing")
-	}
-	return argv, err
-}
-
+// the command is resolved by the same rules `revier run` uses.
 func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	c, ok := pressed(msg)
 	if !ok {
@@ -912,16 +892,13 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if !ok {
 			return nil, true
 		}
-		argv, err := m.actionArgv(p, act)
+		argv, dir, err := m.core.ActionCommand(p, act.Name, act.Run)
 		if err != nil {
-			err = fmt.Errorf("action %q: %w", act.Name, err)
 			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
 			return func() tea.Msg { return actedMsg{err: err} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
-		if p.Remote == nil {
-			cmd.Dir = p.Path // a remote project's path is on its host, where the action runs
-		}
+		cmd.Dir = dir
 		project := p.Name
 		start := time.Now()
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {

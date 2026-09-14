@@ -2,9 +2,9 @@ package ssh
 
 import "context"
 
-// SetRun replaces the ssh call, so a test reads what would have been run and
+// SetRunner replaces the ssh call, so a test reads what would have been run and
 // answers as the remote would.
-func (r *Remote) SetRun(run func(ctx context.Context, args ...string) (stdout, stderr []byte, err error)) {
+func (r *Remote) SetRunner(run func(ctx context.Context, args ...string) (stdout, stderr []byte, err error)) {
 	r.run = run
 }
 

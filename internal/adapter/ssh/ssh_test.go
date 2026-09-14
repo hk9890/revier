@@ -17,7 +17,7 @@ import (
 // out, or fails with err.
 func record(r *ssh.Remote, out string, err error) *[][]string {
 	var calls [][]string
-	r.SetRun(func(_ context.Context, args ...string) ([]byte, []byte, error) {
+	r.SetRunner(func(_ context.Context, args ...string) ([]byte, []byte, error) {
 		calls = append(calls, args)
 		return []byte(out), nil, err
 	})

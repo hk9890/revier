@@ -73,8 +73,8 @@ func (r Run) Count(s Status) int {
 	return n
 }
 
-// Root is the directory that holds every run.
-func Root(stateRoot string) string { return filepath.Join(stateRoot, "runs") }
+// Dir is the directory that holds every run.
+func Dir(stateRoot string) string { return filepath.Join(stateRoot, "runs") }
 
 const summaryFile = "summary.json"
 
@@ -83,8 +83,8 @@ const summaryFile = "summary.json"
 // process id, so two runs started in the same second do not collide.
 func Start(stateRoot string, argv []string, filter string, now time.Time) (*Run, error) {
 	id := fmt.Sprintf("%s-%d", now.Format("2006-01-02T15-04-05"), os.Getpid())
-	r := &Run{ID: id, Argv: argv, Filter: filter, Started: now, Results: []Result{}, Dir: filepath.Join(Root(stateRoot), id)}
-	if err := os.MkdirAll(Root(stateRoot), 0o755); err != nil {
+	r := &Run{ID: id, Argv: argv, Filter: filter, Started: now, Results: []Result{}, Dir: filepath.Join(Dir(stateRoot), id)}
+	if err := os.MkdirAll(Dir(stateRoot), 0o755); err != nil {
 		return nil, fmt.Errorf("create run directory: %w", err)
 	}
 	if err := os.Mkdir(r.Dir, 0o755); err != nil {
@@ -133,8 +133,8 @@ var ErrNoRun = errors.New("no such run")
 func Load(stateRoot, id string) (Run, error) {
 	// An id is a directory name. One that is a path would read a summary from
 	// somewhere else.
-	dir := filepath.Join(Root(stateRoot), id)
-	if filepath.Dir(dir) != filepath.Clean(Root(stateRoot)) {
+	dir := filepath.Join(Dir(stateRoot), id)
+	if filepath.Dir(dir) != filepath.Clean(Dir(stateRoot)) {
 		return Run{}, fmt.Errorf("%w: %q", ErrNoRun, id)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, summaryFile))
@@ -154,7 +154,7 @@ func Load(stateRoot, id string) (Run, error) {
 
 // List returns every run, newest first. No runs yet is an empty list.
 func List(stateRoot string) ([]Run, error) {
-	entries, err := os.ReadDir(Root(stateRoot))
+	entries, err := os.ReadDir(Dir(stateRoot))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -170,7 +170,7 @@ func List(stateRoot string) ([]Run, error) {
 		if err != nil {
 			// A directory with an unreadable summary is still a run someone
 			// may want to look inside; listing it by name says where it is.
-			r = Run{ID: e.Name(), Dir: filepath.Join(Root(stateRoot), e.Name())}
+			r = Run{ID: e.Name(), Dir: filepath.Join(Dir(stateRoot), e.Name())}
 		}
 		runs = append(runs, r)
 	}

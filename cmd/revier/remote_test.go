@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -30,31 +31,29 @@ func remoteProject(t *testing.T) core.Project {
 	return p
 }
 
-// stdout runs f with os.Stdout captured.
+// stdout runs f with os.Stdout captured. The pipe is drained while f runs, so
+// output larger than the pipe buffer cannot block the command.
 func stdout(t *testing.T, f func() error) string {
 	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
+	done := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
 	saved := os.Stdout
 	os.Stdout = w
 	runErr := f()
 	os.Stdout = saved
 	_ = w.Close()
+	out := <-done
 	if runErr != nil {
-		t.Fatalf("command: %v", runErr)
+		t.Fatalf("%v\n%s", runErr, out)
 	}
-	var b strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.Read(buf)
-		b.Write(buf[:n])
-		if err != nil {
-			break
-		}
-	}
-	return b.String()
+	return out
 }
 
 // `revier list a b` is those projects alone, in the order asked, which is

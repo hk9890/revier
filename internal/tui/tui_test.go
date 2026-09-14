@@ -98,7 +98,8 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	case "backspace":
 		msg = tea.KeyMsg{Type: tea.KeyBackspace}
 	default:
-		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+		letter, alt := strings.CutPrefix(key, "alt+")
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter), Alt: alt}
 	}
 	next, cmd := m.Update(msg)
 	return next.(tui.Model), cmd

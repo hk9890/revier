@@ -16,11 +16,15 @@ A findability map: where things live, and how to search for them.
 | `internal/logging/` | The daily log file every process appends to, and the helpers that time an operation. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
-| `internal/hosttest/` | The fake host and fake probe that layer L2 runs against. |
+| `internal/hosttest/` | The fake host, probe, key binder and remote that layer L2 runs against. |
+| `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
+| `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
+| `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
-| `scripts/migrate-sessions/` | One-shot converter, `.session` files to project TOML. Not part of the product (`docs/design/decisions.md` D5). |
+| `contrib/gnome/` | The shipped GNOME desktop-key scripts: `revier-go` runs a target, `revier-popup` opens the TUI. |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
+
 ## The three ports
 
 `Host` (`pkg/revier/host.go`) provides instances of targets. `Runtime` and

@@ -111,26 +111,8 @@ Detection signals the adapters use:
 
 ## Package layout
 
-```
-cmd/revier/            main; CLI, and the one file that wires adapters
-pkg/revier/            the ports and the shared types
-internal/core/         match, run-or-raise, toggle-back, resolution
-internal/config/       TOML load, template rendering, validation
-internal/state/        per-session attachments, which do not belong in config
-internal/checkout/     the clone of a missing project directory (D30)
-internal/sshconfig/    the hosts the ssh configuration names (D45)
-internal/adapter/
-    kitty/
-    tmux/
-    gnome/
-    sway/
-    claude/
-    opencode/
-    execprobe/
-    ssh/
-internal/tui/          the one TUI surface
-docs/design/
-```
+Where each package sits is the Layout table in
+[../OVERVIEW.md](../OVERVIEW.md#layout).
 
 `pkg/revier` is public because an out-of-tree adapter must import the
 interfaces. Everything else is `internal/` so the public surface stays small and

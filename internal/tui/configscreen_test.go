@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +23,7 @@ func configRoot(t *testing.T, text string) string {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -32,7 +31,7 @@ func configRoot(t *testing.T, text string) string {
 
 func configText(t *testing.T, root string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, "config.toml"))
+	data, err := os.ReadFile(config.File(root))
 	if err != nil {
 		t.Fatal(err)
 	}

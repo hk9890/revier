@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -144,18 +143,8 @@ func TestListSavesItsPrune(t *testing.T) {
 	}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: loaded, stateRoot: root, core: c}
 
-	stdout := os.Stdout
-	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = devnull // the listing itself is not what is under test
-	err = cmdList(context.Background(), a, []string{"--json"})
-	os.Stdout = stdout
-	_ = devnull.Close()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
+	// The listing itself is not what is under test.
+	stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	got, err := state.Load(root)
 	if err != nil {
 		t.Fatal(err)
@@ -176,20 +165,9 @@ func TestListJSONCarriesAttachments(t *testing.T) {
 	st.Attach("demo", stray)
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout := os.Stdout
-	os.Stdout = w
-	err = cmdList(context.Background(), a, []string{"--json"})
-	os.Stdout = stdout
-	_ = w.Close()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
+	out := stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	var views []revier.ProjectView
-	if err := json.NewDecoder(r).Decode(&views); err != nil {
+	if err := json.Unmarshal([]byte(out), &views); err != nil {
 		t.Fatal(err)
 	}
 	var attached []revier.TargetView

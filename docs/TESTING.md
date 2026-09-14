@@ -50,8 +50,8 @@ L5 needs `sway` and `foot`; CI installs both.
 
 ## Conventions
 
-- Tests sit next to the code. Live tests are `live_test.go`, behind
-  `//go:build live`.
+- Tests sit next to the code. A live test file ends in `live_test.go` and
+  carries `//go:build live`.
 - A live test starts its substrate on a socket named after itself and kills it
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must

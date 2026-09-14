@@ -50,7 +50,7 @@ func agentProject() revier.Project {
 	}
 }
 
-func resumable() *hosttest.ResumableProbe { return hosttest.NewResumableProbe("claude", "claude") }
+func resumable() *hosttest.FakeResumableProbe { return hosttest.NewResumableProbe("claude", "claude") }
 
 // agent is a live panel the fake probe claims, holding a conversation when id
 // is not empty, in dir when dir is not empty.

@@ -106,8 +106,8 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 }
 
 // projectTOML is a new project: a workspace with an agent beside a shell, and
-// an editor. It is the shape scripts/migrate-sessions gives every converted
-// project, so a new project looks like the ninety that came before it.
+// an editor: the shape of the ninety projects converted from the shell
+// .session files, so a new project looks like the ones before it.
 //
 // Neither target carries a key. A key means the same target in every project,
 // and one written here would either repeat the user's own choice or conflict
