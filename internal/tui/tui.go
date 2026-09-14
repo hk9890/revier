@@ -1,8 +1,8 @@
 // Package tui is the one surface: every project with its agent state, sorted
 // so the ones needing attention come first, and beside it a pane with the
-// project's targets and attached instances, which Tab moves the cursor into.
-// Enter activates. It is the picker and the monitor at once
-// (docs/design/decisions.md D8, D42).
+// project's targets, attached instances and agents, which Tab moves the
+// cursor through. Enter activates. It is the picker and the monitor at once
+// (docs/design/decisions.md D8, D73).
 //
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action
@@ -42,14 +42,16 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// focus is where the cursor is: on the project list, or on the target rows
-// of the pane beside it. The pane is the same content either way; focus
-// decides what up, down and Enter act on.
+// focus is the section the cursor is in: the project list, or the target or
+// agent rows of the pane beside it. The pane is the same content either way;
+// focus decides what typing filters and what up, down and Enter act on
+// (sections.go).
 type focus int
 
 const (
 	focusList focus = iota
-	focusPane
+	focusTargets
+	focusAgents
 )
 
 // dialog is a screen standing over the surface: the link dialog's three steps
@@ -111,8 +113,15 @@ type Model struct {
 	surveyErr error
 	focus     focus
 	tcursor   int                // the target row the pane's cursor is on
-	tfilter   string             // the query over the target rows, while the cursor is on the pane
+	tfilter   string             // the query over the target rows
+	tinput    textinput.Model    // the target query, with its own cursor
 	tlines    []int              // the pane line each target row is on, for the cursor and a click
+	tfield    int                // the pane line the target query is on
+	acursor   int                // the agent row the pane's cursor is on
+	afilter   string             // the query over the agent rows
+	ainput    textinput.Model    // the agent query, with its own cursor
+	alines    []lineSpan         // the pane lines each agent row takes, for the cursor and a click
+	afield    int                // the pane line the agent query is on, -1 with no Agents section
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	dialog    dialog             // the link dialog, while it is up
@@ -175,7 +184,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		plist: newProjectList(th),
 		hlist: newHostList(th), rlist: newRemoteList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th),
+		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th, projectPlaceholder),
+		tinput: newPrompt(th, targetPlaceholder), ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		path: newPathInput(th), lname: newLinkNameInput(th),
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
@@ -185,6 +195,10 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	if st, err := state.Load(stateRoot); err == nil {
 		m.keep(st)
 	}
+	// The project field has the cursor from the start: the surface filters as
+	// you type, so it is where a keystroke lands. Init focuses it again for
+	// the blink command; this is what makes it accept keys at all.
+	_ = m.input.Focus()
 	// config.Load has decoded them already, so this cannot fail.
 	m.targets, _ = config.DecodeTargets(cfg.Targets)
 	m.layout()
@@ -409,10 +423,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.mouse(msg)
 	}
-	// A blink is the input's own timer message; nothing else reads it.
-	in, cmd := m.input.Update(msg)
-	m.input = in
-	return m, cmd
+	// A blink is a field's own timer message; the field it is not for
+	// ignores it.
+	var cmds [3]tea.Cmd
+	m.input, cmds[0] = m.input.Update(msg)
+	m.tinput, cmds[1] = m.tinput.Update(msg)
+	m.ainput, cmds[2] = m.ainput.Update(msg)
+	return m, tea.Batch(cmds[:]...)
 }
 
 // claimByPolling diffs the window listing against the previous survey's and
@@ -583,36 +600,26 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		switch {
-		case m.focus == focusPane:
-			m.leavePane()
-		case m.filter != "":
-			m.setFilter("")
+		case m.field().Value() != "":
+			m.query(m.focus, "")
+		case m.focus != focusList:
+			m.toList()
 		default:
 			return m, tea.Quit
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Up):
-		if m.focus == focusPane {
-			m.tcursor--
-		} else {
-			m.plist.CursorUp()
-		}
+		m.moveCursor(-1)
 		return m, nil
 	case key.Matches(msg, m.keys.Down):
-		if m.focus == focusPane {
-			m.tcursor++
-		} else {
-			m.plist.CursorDown()
-		}
+		m.moveCursor(1)
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
 		return m.enter()
-	case key.Matches(msg, m.keys.Targets):
-		if m.focus == focusPane {
-			m.leavePane()
-			return m, nil
-		}
-		return m.drill()
+	case key.Matches(msg, m.keys.Next):
+		return m.step(1)
+	case key.Matches(msg, m.keys.Prev):
+		return m.step(-1)
 	case key.Matches(msg, m.keys.Edit):
 		return m.editFile()
 	case key.Matches(msg, m.keys.Delete):
@@ -671,9 +678,25 @@ func (r targetRow) label() string {
 	return string(r.target.Name)
 }
 
+// moveCursor moves the cursor of the section it is in by rows.
+func (m *Model) moveCursor(by int) {
+	switch m.focus {
+	case focusTargets:
+		m.tcursor += by
+	case focusAgents:
+		m.acursor += by
+	case focusList:
+		if by < 0 {
+			m.plist.CursorUp()
+		} else {
+			m.plist.CursorDown()
+		}
+	}
+}
+
 // targetRows is the pane's Targets section: every target, then every
 // attached instance, or, while a target query is typed, the rows it matches
-// ranked as the list ranks projects (decisions.md D43).
+// ranked as the list ranks projects.
 func (m Model) targetRows() []targetRow {
 	v, ok := m.selected()
 	if !ok {
@@ -707,13 +730,16 @@ func (m Model) targetRows() []targetRow {
 // to get to it, so the targets are the detour and get the other key. A
 // project with no home target has nothing to open, so Enter moves the cursor
 // to its targets instead. In the pane, Enter runs the target under the
-// cursor.
+// cursor, or brings the agent under it to the front.
 //
 // A project whose directory is not on this machine is cloned first, when its
 // file says from where, as `revier open` does.
 func (m Model) enter() (tea.Model, tea.Cmd) {
-	if m.focus == focusPane {
+	switch m.focus {
+	case focusTargets:
 		return m, m.goRow(m.tcursor)
+	case focusAgents:
+		return m, m.goAgentRow(m.acursor)
 	}
 	v, ok := m.selected()
 	if !ok {
@@ -744,7 +770,7 @@ func (m Model) enter() (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(p, home.Name)
 	}
-	return m.drill()
+	return m.focusOn(focusTargets), nil
 }
 
 // goRow activates one row of the pane: an attached instance is focused
@@ -772,38 +798,6 @@ func (m Model) goRow(i int) tea.Cmd {
 		return nil
 	}
 	return m.goTarget(p, row.target.Name)
-}
-
-// drill moves the cursor into the pane, onto the first target of the project
-// under the cursor. The pane starts at its top, where the targets are, and
-// the query line becomes the target query, empty.
-func (m Model) drill() (tea.Model, tea.Cmd) {
-	if _, ok := m.selected(); !ok {
-		return m, nil
-	}
-	m.focus = focusPane
-	m.tcursor = 0
-	m.detail.GotoTop()
-	m.input.SetValue("")
-	m.input.Placeholder = targetPlaceholder
-	return m, nil
-}
-
-// leavePane brings the cursor back to the list. The target query is the
-// pane's alone, so it is dropped, and the query line shows the project
-// query again, as it was.
-func (m *Model) leavePane() {
-	m.focus = focusList
-	m.tfilter = ""
-	m.input.SetValue(m.filter)
-	m.input.Placeholder = projectPlaceholder
-}
-
-// setTargetFilter is every change to the target query. The first match is
-// selected, as the list selects it on a project query.
-func (m *Model) setTargetFilter(f string) {
-	m.tfilter = f
-	m.tcursor = 0
 }
 
 // goTarget is one activation: run-or-raise the target, and settle where it

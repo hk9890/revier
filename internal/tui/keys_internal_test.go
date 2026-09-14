@@ -17,7 +17,7 @@ import (
 func TestConfigSurfaceKeysAreTheSurfaceKeys(t *testing.T) {
 	k := newKeyMap(nil)
 	var names []string
-	for _, b := range []key.Binding{k.Up, k.Down, k.Enter, k.Targets, k.Back, k.Quit, k.Edit, k.Delete} {
+	for _, b := range []key.Binding{k.Up, k.Down, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete} {
 		names = append(names, b.Keys()...)
 	}
 	for _, a := range barActions {

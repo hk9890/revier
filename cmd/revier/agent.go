@@ -21,6 +21,7 @@ usage:
   revier agent wait <agent> --until <status> [--timeout <seconds>]
   revier agent prompt <agent> [--] <text>
   revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]
+  revier agent focus <agent>
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
@@ -35,6 +36,8 @@ new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace.
 Without -p or --panel the project is the one --dir is in, else the one this
 directory resolves to.
+
+focus makes the agent's tab current and raises the window that holds it.
 
 wait prints the status it ended on. prompt types one line and submits it,
 and returns once an idle agent has started on it, so
@@ -67,6 +70,8 @@ func cmdAgent(args []string) error {
 		return cmdAgentPrompt(args)
 	case "new":
 		return cmdAgentNew(args)
+	case "focus":
+		return cmdAgentFocus(args)
 	default:
 		fmt.Fprint(os.Stderr, agentUsage)
 		return fmt.Errorf("unknown agent command %q", sub)
@@ -177,6 +182,34 @@ func cmdAgentPrompt(args []string) error {
 		fmt.Fprintf(os.Stderr, "revier: warning: %s was still idle after the prompt was delivered; check the panel before waiting on it\n", pos[0])
 	}
 	return nil
+}
+
+// cmdAgentFocus brings one agent to the front: on the host of a remote
+// project, through that revier, which is how the TUI reaches an agent there.
+func cmdAgentFocus(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: revier agent focus <agent>")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	a, err := newApp(ctx)
+	if err != nil {
+		return err
+	}
+	r, there, err := a.remoteFor(args[0])
+	if err != nil {
+		return err
+	}
+	if r != nil {
+		return r.FocusAgent(ctx, there)
+	}
+	ag, err := a.agent(ctx, args[0])
+	if err != nil {
+		return err
+	}
+	err = a.core.FocusAgent(ctx, ag)
+	slog.Info("agent focus", "address", args[0], "ref", ag.Ref, "panel", ag.Panel.ID, "err", err)
+	return err
 }
 
 // cmdAgentNew adds an agent tab to an open workspace. It is what the kitty

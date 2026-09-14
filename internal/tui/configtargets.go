@@ -193,7 +193,7 @@ func (m Model) targetFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.tform = targetForm{}
 		return m, nil
-	case key.Matches(msg, m.keys.Targets, m.keys.Down):
+	case key.Matches(msg, m.keys.Next, m.keys.Down):
 		return m.moveTargetCursor(+1)
 	case msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
 		return m.moveTargetCursor(-1)
@@ -341,7 +341,7 @@ func (m Model) panelFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.tform.panel = panelForm{}
 		return m, nil
-	case key.Matches(msg, m.keys.Targets, m.keys.Down), msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, m.keys.Next, m.keys.Down), msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
 		step := 1
 		if msg.Type == tea.KeyShiftTab || key.Matches(msg, m.keys.Up) {
 			step = -1

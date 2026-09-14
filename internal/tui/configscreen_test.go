@@ -73,7 +73,7 @@ func TestAltCOpensTheConfigScreen(t *testing.T) {
 		}
 	}
 	m, _ = press(m, "esc")
-	if r := ruleLine(m); !strings.Contains(r, "working") {
+	if r := ruleLine(m); !strings.Contains(r, "2/2") {
 		t.Errorf("rule = %q after esc, want the surface back", r)
 	}
 }

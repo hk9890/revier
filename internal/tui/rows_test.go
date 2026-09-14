@@ -152,15 +152,6 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	}
 }
 
-// The header's count agrees in number with what it counts.
-func TestTheRuleCountsTheOneBlocker(t *testing.T) {
-	_, _, c, projects := world(t, 3)
-	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	if head := ruleLine(m); !strings.Contains(head, "1 blocker") {
-		t.Errorf("rule = %q, want \"1 blocker\"", head)
-	}
-}
-
 // The pane appears only once the list keeps room for its rows beside it: at
 // ninety-six columns the list takes the whole width.
 func TestThePaneWaitsUntilTheListHasItsRoom(t *testing.T) {
@@ -304,14 +295,15 @@ func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
 	if body := pane(tall); !strings.Contains(body, "f39") || strings.Contains(body, "...") {
 		t.Errorf("tall pane stops short of its rows:\n%s", body)
 	}
-	// Sixteen rows of pane; the facts take nine, the heading two.
+	// Nineteen rows of pane, from the query line down; the facts and the
+	// target query take ten, the heading two.
 	short := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)
 	body := pane(short)
 	if !strings.Contains(body, "f00") || strings.Contains(body, "f39") || !strings.HasSuffix(strings.TrimSpace(body), "...") {
 		t.Errorf("short pane does not end in an ellipsis inside its rows:\n%s", body)
 	}
-	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 16 {
-		t.Errorf("short pane is %d rows, want at most 16", n)
+	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 19 {
+		t.Errorf("short pane is %d rows, want at most 19", n)
 	}
 }
 

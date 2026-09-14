@@ -13,6 +13,8 @@ const (
 	hoverBar              // a button on the action bar
 	hoverRow              // a row of the list
 	hoverTarget           // a target row in the pane
+	hoverAgent            // an agent row in the pane
+	hoverField            // a section's query field; index is its focus
 )
 
 type hovered struct {
@@ -34,10 +36,10 @@ func (m Model) hoverAt(x, y int) hovered {
 		return hovered{kind: hoverBar, index: i}
 	}
 	if m.overPane(x) {
-		if i, ok := m.targetAt(y); ok {
-			return hovered{kind: hoverTarget, index: i}
-		}
-		return hovered{}
+		return m.paneAt(y)
+	}
+	if mr, _ := m.margins(); m.dialog == dialogNone && y == mr+queryRow {
+		return hovered{kind: hoverField, index: int(focusList)}
 	}
 	if i, ok := m.rowAt(x, y); ok {
 		return hovered{kind: hoverRow, index: i}
@@ -45,19 +47,44 @@ func (m Model) hoverAt(x, y int) hovered {
 	return hovered{}
 }
 
-// targetAt is the pane's target row on a terminal row, if one is there.
-func (m Model) targetAt(y int) (int, bool) {
-	if m.dialog != dialogNone {
+// paneLine is the line of the pane's view a terminal row is on. Beside the
+// list the pane starts on the query line; in the list's place, where the list
+// starts.
+func (m Model) paneLine(y int) (int, bool) {
+	if m.paneWidth() == 0 {
+		return m.bodyLine(y)
+	}
+	mr, _ := m.margins()
+	top := mr + queryRow
+	if y < top || y >= top+m.detail.Height {
 		return 0, false
 	}
-	line, ok := m.bodyLine(y)
-	if !ok {
-		return 0, false
+	return y - top, true
+}
+
+// paneAt is what of the pane is on a terminal row: a section's query field, a
+// target row or an agent row, if one is there.
+func (m Model) paneAt(y int) hovered {
+	line, ok := m.paneLine(y)
+	if _, selected := m.selected(); m.dialog != dialogNone || !ok || !selected {
+		return hovered{}
+	}
+	line += m.detail.YOffset
+	switch line {
+	case m.tfield:
+		return hovered{kind: hoverField, index: int(focusTargets)}
+	case m.afield:
+		return hovered{kind: hoverField, index: int(focusAgents)}
 	}
 	for i, at := range m.tlines {
-		if at == line+m.detail.YOffset {
-			return i, true
+		if at == line {
+			return hovered{kind: hoverTarget, index: i}
 		}
 	}
-	return 0, false
+	for i, span := range m.alines {
+		if line >= span.start && line < span.end {
+			return hovered{kind: hoverAgent, index: i}
+		}
+	}
+	return hovered{}
 }

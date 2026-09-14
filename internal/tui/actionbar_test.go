@@ -85,7 +85,7 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 		t.Fatalf("top line = %q after alt+n, want the new-project screen", head)
 	}
 	m, _ = press(m, "esc")
-	if r := ruleLine(m); !strings.Contains(r, "working") {
+	if r := ruleLine(m); !strings.Contains(r, "2/2") {
 		t.Errorf("rule = %q after esc, want the surface back", r)
 	}
 }
@@ -164,7 +164,7 @@ func TestAnAltChordTypesNothing(t *testing.T) {
 	if head := barLine(m); !strings.Contains(head, "Add a project") {
 		t.Fatalf("top line = %q, want the new-project screen still up", head)
 	}
-	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "/tmp/w\n") {
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ /tmp/w ") {
 		t.Errorf("screen = %q, want the path as typed and no letter of an alt chord", body)
 	}
 }
@@ -212,7 +212,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	}
 
 	m, _ = press(m, "esc")
-	if r := ruleLine(m); !strings.Contains(r, "working") {
+	if r := ruleLine(m); !strings.Contains(r, "2/2") {
 		t.Errorf("rule = %q after esc, want the surface back", r)
 	}
 }
@@ -327,7 +327,7 @@ func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
 // rowTop is the terminal row the first row of the list is on.
 func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
-	return mr + 5
+	return mr + 4
 }
 
 // The new-project screen stands over the list: a double click where the rows

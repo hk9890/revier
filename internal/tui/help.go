@@ -35,7 +35,7 @@ type helpSection struct {
 // first, so the surface the screen stands over is the one it is left on.
 func (m Model) openHelp() (tea.Model, tea.Cmd) {
 	m.err = nil
-	m.leavePane()
+	m.toList()
 	m.dialog = dialogHelp
 	m.body.SetYOffset(0)
 	return m, nil
@@ -71,15 +71,23 @@ func (m Model) helpSections() []helpSection {
 			{key: "↑ / ctrl+p", desc: "up"},
 			{key: "↓ / ctrl+n", desc: "down"},
 			{key: "enter", desc: "open the project"},
-			{key: k.Targets.Help().Key, desc: "move to its targets"},
 			{key: "type", desc: "filter the projects"},
 			{key: "esc", desc: "clear the filter, or quit"},
 			{key: k.Quit.Help().Key, desc: "quit"},
 		}},
-		{title: "Targets pane", entries: []helpEntry{
+		{title: "Sections", entries: []helpEntry{
+			{key: k.Next.Help().Key, desc: "next: projects, targets, agents"},
+			{key: k.Prev.Help().Key, desc: "previous"},
+		}},
+		{title: "Targets", entries: []helpEntry{
 			{key: "enter", desc: "go to the target"},
-			{key: "tab / esc", desc: "back to the projects"},
 			{key: "type", desc: "filter the targets"},
+			{key: "esc", desc: "clear the filter, or back to the projects"},
+		}},
+		{title: "Agents", entries: []helpEntry{
+			{key: "enter", desc: "go to the agent's tab"},
+			{key: "type", desc: "filter the agents"},
+			{key: "esc", desc: "clear the filter, or back to the projects"},
 		}},
 		{title: "Selected project", entries: []helpEntry{
 			{key: k.Edit.Help().Key, desc: "edit its project file"},

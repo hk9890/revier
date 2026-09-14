@@ -9,12 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The chrome above and below the list: the action bar, a line under it, the
-// query line, a blank line, the rule, and the footer. The margin around all of
+// query line, the rule, and the footer. The margin around all of
 // it costs two more rows and four more columns.
 //
 // There is no border. It drew a box around a surface that already fills the
@@ -22,7 +20,8 @@ import (
 // for saying again where they are. The two rules inside do the separating a
 // box was doing (decisions.md D51).
 const (
-	chromeHeight = 6
+	chromeHeight = 5
+	queryRow     = 2 // the terminal row of the query line, below the margin
 	marginRows   = 1
 	marginCols   = 2
 )
@@ -85,23 +84,29 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.thinRule(w))
 	b.WriteString("\n")
-	// A blank line under the query: the field stands on its own, and the
-	// rule reads as the head of the list rather than the query's underline.
-	b.WriteString(clipTo(m.subtitle(), w))
-	b.WriteString("\n\n")
-	b.WriteString(m.rule(w))
-	b.WriteString("\n")
 
-	// The pane beside the list, or in its place on a terminal too narrow
-	// for both (decisions.md D42).
-	body := m.body.View()
+	// The query sits on the rule over the rows it filters, as each of the
+	// pane's sections has its own over its rows. Beside the list the pane
+	// starts level with the query, so the query and the rule stand in the
+	// list's column and read as the list's, not the whole screen's
+	// (decisions.md D73). A terminal too narrow for both shows the pane in
+	// the list's place, under a query as wide as the screen.
+	// Beside the pane the rule stops a column short of its border, as every
+	// row does, rather than running into it.
+	list, rule := m.listWidth(), m.listWidth()-1
+	if m.paneWidth() == 0 {
+		list, rule = w, w
+	}
+	head := clipTo(m.subtitle(), list) + "\n" + m.rule(rule)
 	switch {
 	case m.paneWidth() > 0:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, body, m.detail.View())
+		left := lipgloss.NewStyle().Width(list).Render(head) + "\n" + m.body.View()
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, m.detail.View()))
 	case m.paneCols() > 0:
-		body = m.detail.View()
+		b.WriteString(head + "\n" + m.detail.View())
+	default:
+		b.WriteString(head + "\n" + m.body.View())
 	}
-	b.WriteString(body)
 	b.WriteString("\n")
 	b.WriteString(clipTo(m.footer(), w))
 
@@ -138,11 +143,16 @@ func (m Model) top() string {
 
 // thinRule closes the top line off. It starts where every other line starts,
 // so it and the rule under the query are one pair rather than two edges.
+// Beside a pane it meets the pane's border, which starts under it.
 func (m Model) thinRule(width int) string {
 	if width < 2 {
 		return ""
 	}
-	return " " + m.theme.Border.Render(strings.Repeat("\u2500", width-1))
+	line := []rune(strings.Repeat("\u2500", width-1))
+	if at := m.listWidth() - 1; m.paneWidth() > 0 && at >= 0 && at < len(line) {
+		line[at] = '\u252c'
+	}
+	return " " + m.theme.Border.Render(string(line))
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or
@@ -168,27 +178,14 @@ func (m Model) subtitle() string {
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
 	}
-	return m.promptView()
+	return " " + m.fieldView(m.input, focusList)
 }
 
-// rule separates the chrome from the list and carries every number on the
-// screen: how many rows survive the filter out of how many there are, the way
-// the picker says it, and beside that how much of the list is doing
-// something. The two counts had a line of their own and did not earn it -
-// they are three words that never move - so they sit on the line that was
-// already mostly empty.
+// rule separates the query from the rows it filters, and says how many of
+// them survive it out of how many there are, the way the picker says it.
 func (m Model) rule(width int) string {
-	head := pad0(m.ruleHead())
-	// A list too narrow for all of it keeps the ratio and drops the counts:
-	// the ratio is the number that changes as you type.
-	if lipgloss.Width(head) > width {
-		head = pad0(m.ruleCount())
-	}
-	head = clipTo(head, width)
-	line := width - lipgloss.Width(head)
-	if line < 0 {
-		line = 0
-	}
+	head := clipTo(pad0(m.ruleCount()), width)
+	line := max(width-lipgloss.Width(head), 0)
 	return head + m.theme.Border.Render(strings.Repeat("─", line))
 }
 
@@ -217,57 +214,6 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render("surveying")
 	}
 	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
-}
-
-// ruleHead is what the rule says before its line: the count, and on the
-// surface how much of the list is doing something.
-//
-// A count that is zero is grey. "0 need you" in bold red read as an alarm on
-// every screen where nothing was wrong.
-func (m Model) ruleHead() string {
-	th := m.theme
-	if m.dialog != dialogNone || !m.ready() {
-		return m.ruleCount()
-	}
-	blockers, working, idle := m.agentCounts()
-	// Each count carries the glyph its rows carry, so the rule is also the
-	// key to the list.
-	count := func(glyph string, n int, text string, s lipgloss.Style) string {
-		if n == 0 {
-			s = th.Count
-		}
-		return s.Render(fmt.Sprintf("%s %d %s", glyph, n, text))
-	}
-	blocked := "blockers"
-	if blockers == 1 {
-		blocked = "blocker"
-	}
-	sep := th.Path.Render(" · ")
-	return m.ruleCount() +
-		sep + count(th.Glyphs.NeedsYou, blockers, blocked, th.Attention) +
-		sep + count(th.Glyphs.Working, working, "working", th.Running) +
-		sep + count(th.Glyphs.Idle, idle, "idle", th.Idle)
-}
-
-// agentCounts is the list by what its agents are doing: a project counts
-// once, under its worst agent, which is the state its row shows. A project
-// with no agent - a workspace that is only a shell - counts in none of them.
-func (m Model) agentCounts() (blockers, working, idle int) {
-	for _, v := range m.views {
-		worst, ok := core.Worst(v.Agents)
-		if !ok {
-			continue
-		}
-		switch worst.Status {
-		case revier.StatusAttention:
-			blockers++
-		case revier.StatusRunning:
-			working++
-		case revier.StatusIdle:
-			idle++
-		}
-	}
-	return blockers, working, idle
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints

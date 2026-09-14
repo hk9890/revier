@@ -73,6 +73,8 @@ revier agent prompt <project>[:<target>] <text>
 revier agent new [-p <project> | --panel <id>] [--resume <id>] [--dir <path>]
                               add an agent tab to an open workspace: the
                               project's agent panel and its shell
+revier agent focus <project>[:<target>]
+                              switch to the agent's tab and raise its window
 revier shell new [-p <project> | --panel <id>] [--dir <path>]
                               add a shell tab to an open workspace
 revier session save [--name label]
@@ -85,11 +87,14 @@ revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
 ```
 
-In the TUI, projects whose agent is waiting for you sort first. Type to filter
-by name, and Enter opens the project's home. Tab moves the cursor into the pane
-beside the list, onto the project's targets and attached instances: typing
-there filters them, Enter runs-or-raises the one under the cursor, and Tab or
-Esc brings the cursor back. alt+e opens the selected project's file in
+In the TUI, projects whose agent is waiting for you sort first. The list, and
+the pane's targets and agents beside it, are three sections, each with its own
+filter field over its rows. Tab moves the cursor to the next section and
+shift+tab to the one before. Typing filters the section the cursor is in, and
+Enter acts on its row: a project opens its home, a target runs-or-raises, and
+an agent's tab comes to the front, on its host for a project on another
+machine. Esc clears the section's filter, then brings the cursor back to the
+projects. alt+e opens the selected project's file in
 `$EDITOR`; alt+d deletes it, after asking. A configured action key runs the
 action against the selected project.
 
@@ -101,12 +106,13 @@ theme, the glyphs, the trigger key and the runtime host, and adds, changes and
 deletes shared targets and actions, each written to `config.toml` and applied
 as it changes, comments kept, and **help** (alt+h)
 lists every key: the surface's own, the target keys, the configured actions
-and the desktop keys. The rule over the list counts the projects by what
-their agents are doing: blockers, working, idle.
+and the desktop keys. The rule over the list says how many projects the
+filter leaves.
 
 With the mouse, whatever the pointer is over lights up. A click on a project
-selects it and a double click opens it; one click on a target or a top-line
-button runs it. A drag selects a box of the screen, holds the screen still
+selects it and a double click opens it; one click on a target, an agent or a
+top-line button runs it, and a click on a filter field moves the cursor
+there. A drag selects a box of the screen, holds the screen still
 while it lasts, and copies the box's text to the clipboard on release; Esc
 drops it.
 

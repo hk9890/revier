@@ -39,9 +39,9 @@ func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
 	attached := m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: "Pull requests"}}, w, false, false)
 
 	for _, harness := range []string{"claude", "gemini-cli", "cursor-agent-with-a-long-name"} {
-		agent := m.detailAgent(revier.AgentView{State: revier.AgentState{
+		agent := m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{
 			Harness: harness, Status: revier.StatusAttention, Activity: "needs a decision",
-		}}, w)
+		}}}, w, false, false)
 		name := harness[:min(len(harness), detailNameWidth-1)]
 		if a, b := column(t, target, "home"), column(t, agent, name); a != b {
 			t.Errorf("%s: target name at %d, harness at %d", harness, a, b)
@@ -67,7 +67,7 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 		rows := []string{
 			m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: title}}, w, false, false),
 			m.detailRow(targetRow{target: revier.TargetView{Name: "a-long-target-name", Key: "ctrl+shift+alt+u"}}, w, false, false),
-			m.detailAgent(revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}, w),
+			m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}}, w, false, false),
 		}
 		for _, row := range rows {
 			for _, line := range strings.Split(row, "\n") {
