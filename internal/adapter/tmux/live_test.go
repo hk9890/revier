@@ -307,7 +307,9 @@ func attach(t *testing.T, h *tmux.Host, session string) string {
 	}
 	before := clientNames(t, h)
 	cmd := exec.Command("script", "-qfc", "tmux -L "+h.Socket+" attach-session -t "+session, "/dev/null")
-	cmd.Env = append(os.Environ(), "TMUX=")
+	// A CI runner has no TERM, and tmux will not attach a terminal it cannot
+	// clear.
+	cmd.Env = append(os.Environ(), "TMUX=", "TERM=xterm")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
