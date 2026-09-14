@@ -18,8 +18,6 @@ package tui
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"os/exec"
@@ -434,63 +432,70 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // claimByPolling diffs the window listing against the previous survey's and
 // settles the last launch with a window that appeared since: bound to its
-// target, or attached to the project when an action launched. State is
-// re-read because the launch was written by another process. The same pass
-// drops attachments and bindings whose instances are gone, of those the
-// survey started from: one written while it listed is the next survey's.
+// target, or attached to the project when an action launched. The launch may
+// have been written by another process, so the claim is made on the state on
+// disk. The same pass drops attachments and bindings whose instances are
+// gone, of those the survey started from: one written while it listed is the
+// next survey's.
 func (m *Model) claimByPolling(report core.Report, before *state.State) {
-	st, err := loadState(m.stateRoot)
-	if err != nil {
-		return
-	}
-	changed := st.Prune(report.Hosts, report.Instances, before)
-	if l, ok := m.launch(st); ok && m.surveyed {
+	m.updateState(func(st *state.State) bool {
+		changed := st.Prune(report.Hosts, report.Instances, before)
+		l, ok := m.launch(st)
+		if !ok || !m.surveyed {
+			return changed
+		}
 		now := time.Now()
 		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
-			settle(st, claimed, "poll")
-			changed = true
-		} else if !l.Pending(now) {
-			slog.Info("claim: launch expired with no window claimed", "project", l.Project.Name, "target", l.Target, "launched_at", l.At)
-			st.Launch, changed = nil, true // expired
+			claim(st, l, claimed, "poll")
+			return true
 		}
-	}
-	if changed {
-		saveState(st, m.stateRoot)
-	}
-	m.keep(st)
+		if !l.Pending(now) {
+			slog.Info("claim: launch expired with no window claimed", "project", l.Project.Name, "target", l.Target, "launched_at", l.At)
+			st.Launch = nil
+			return true
+		}
+		return changed
+	})
 }
 
 // claimByEvent is the same decision for a window a watching host reported.
 func (m *Model) claimByEvent(inst revier.Instance) {
-	st, err := loadState(m.stateRoot)
-	if err != nil {
-		return
-	}
-	l, ok := m.launch(st)
-	if !ok {
-		return
-	}
-	claimed, ok := m.core.ClaimEvent(inst, l, time.Now(), m.projects)
-	if !ok {
-		return
-	}
-	settle(st, claimed, "event")
-	saveState(st, m.stateRoot)
-	m.keep(st)
+	m.updateState(func(st *state.State) bool {
+		l, ok := m.launch(st)
+		if !ok {
+			return false
+		}
+		claimed, ok := m.core.ClaimEvent(inst, l, time.Now(), m.projects)
+		if ok {
+			claim(st, l, claimed, "event")
+		}
+		return ok
+	})
 }
 
-// loadState and saveState are every read and write of state on the surface. A
-// state file that cannot be read or written costs the next keypress a
-// fallback, not the surface, so it is logged and not shown; the surface does
-// both every refresh, so a failure that lasts is one line (logging.Repeat).
+func claim(st *state.State, l core.Launch, c core.Claimed, by string) {
+	slog.Info("claim", "project", l.Project.Name, "target", c.Target, "ref", c.Ref, "by", by)
+	st.Claim(c.Target, c.Ref)
+}
+
+// loadState reads state for a survey to start from. A state file that cannot
+// be read or written costs the next keypress a fallback, not the surface, so
+// it is logged and not shown; the surface does both every refresh, so a
+// failure that lasts is one line (logging.Repeat).
 func loadState(root string) (*state.State, error) {
 	st, err := state.Load(root)
 	logging.Repeat("state load", "state load", err, "root", root)
 	return st, err
 }
 
-func saveState(st *state.State, root string) {
-	logging.Repeat("state save", "state save", st.Save(root), "root", root)
+// updateState is every write of state on the surface: the change is made to
+// the state on disk under its lock, and the surface keeps the result.
+func (m *Model) updateState(apply func(st *state.State) bool) {
+	st, err := state.Update(m.stateRoot, apply)
+	logging.Repeat("state update", "state update", err, "root", m.stateRoot)
+	if st != nil {
+		m.keep(st)
+	}
 }
 
 // keep holds the parts of state the surface reads between refreshes.
@@ -510,43 +515,23 @@ func (m Model) launch(st *state.State) (core.Launch, bool) {
 	return core.Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}, true
 }
 
-// settle writes a claim into state and consumes the launch.
-func settle(st *state.State, c core.Claimed, by string) {
-	slog.Info("claim", "project", st.Launch.Project, "target", c.Target, "ref", c.Ref, "by", by)
-	if c.Target != "" {
-		st.Bind(st.Launch.Project, c.Target, c.Ref)
-	} else {
-		st.Attach(st.Launch.Project, c.Ref)
-	}
-	st.Launch = nil
-}
-
 // apply writes what an activation learned: a launch still coming up, or the
-// ref a target landed on.
+// ref a target landed on. Either makes its project the current one, as a CLI
+// command makes it: a desktop key pressed next on a window no rule names
+// falls back to it.
 func (m *Model) apply(msg actedMsg) {
 	if msg.launch == nil && msg.bind == nil {
 		return
 	}
-	st, err := loadState(m.stateRoot)
-	if err != nil {
-		return
-	}
-	// The project acted on becomes the current one, as a CLI command makes
-	// it: a desktop key pressed next on a window no rule names falls back to
-	// it.
-	if msg.launch != nil {
-		st.Launch = msg.launch
-		st.Current = msg.launch.Project
-	}
-	if b := msg.bind; b != nil {
-		st.Current = b.project
-		st.Bind(b.project, b.target, b.ref)
-		if st.Launch != nil && st.Launch.Project == b.project && st.Launch.Target == b.target {
-			st.Launch = nil
+	m.updateState(func(st *state.State) bool {
+		if l := msg.launch; l != nil {
+			st.Launched(l.Project, l.Target, l.At)
 		}
-	}
-	saveState(st, m.stateRoot)
-	m.keep(st)
+		if b := msg.bind; b != nil {
+			st.Landed(b.project, b.target, b.ref)
+		}
+		return true
+	})
 }
 
 // sorted puts projects needing attention first, then the running ones, and
@@ -800,101 +785,58 @@ func (m Model) goRow(i int) tea.Cmd {
 	return m.goTarget(p, row.target.Name)
 }
 
-// goTarget is one activation: run-or-raise the target, and settle where it
-// landed. Enter on a row of the pane and a target key on the list are
-// the same operation, so they are the same command.
-//
-// A target still coming up from an earlier press, here or from a desktop key,
-// is not launched again: the first press is waiting for its window
-// (decisions.md D21). A window that has appeared by then is raised like any
-// other.
+// goTarget is one activation: core.Activate, and settle where it landed.
+// Enter on a row of the pane and a target key on the list are the same
+// operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 	c := m.core
 	bound := m.bound[p.Name]
-	pending := m.launchPending(p.Name, name)
+	pending := m.pending.Pending(p.Name, name, core.BindWindow)
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), bindWait)
+		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
-		if pending {
-			up, err := c.Running(ctx, p, name, bound)
-			if err != nil {
-				slog.Error("go: is the pending launch up", "project", p.Name, "target", name, "err", err)
-				return actedMsg{err: err}
-			}
-			if !up {
-				slog.Info("go: launch still coming up, not launched again", "project", p.Name, "target", name)
-				return actedMsg{}
-			}
-		}
-		res, err := c.Go(ctx, p, name, bound)
-		if err != nil {
-			return actedMsg{err: err}
-		}
-		return landed(p, res)
+		res, err := c.Activate(ctx, p, name, bound, pending, nil)
+		return landed(p, res, err)
 	}
 }
 
-// landed is what a Go that ran leaves to settle: a launch whose window is
-// still coming up, or the ref the target landed on.
-func landed(p core.Project, res core.Result) tea.Msg {
-	if res.Launched && res.Ref.IsZero() {
+// landed is what an activation leaves to settle: a launch whose window is
+// still coming up, or the ref the target landed on, which is pinned also when
+// it comes with an error.
+func landed(p core.Project, res core.Result, err error) tea.Msg {
+	if res.Launched && res.Ref.IsZero() && err == nil {
 		return launchedMsg{
 			project: p,
 			launch:  state.Launch{Project: p.Name, Target: res.Target, At: time.Now()},
 			before:  res.Before,
 		}
 	}
-	return actedMsg{bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
-}
-
-// launchPending reports whether a launch of the target is on record and still
-// inside the time its window may take to appear.
-func (m Model) launchPending(p revier.ProjectName, name revier.TargetName) bool {
-	l := m.pending
-	return l != nil && l.Project == p && l.Target == name && time.Since(l.At) < core.BindWindow
+	if res.Ref.IsZero() {
+		return actedMsg{err: err}
+	}
+	return actedMsg{err: err, bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
 }
 
 // bindLaunch waits for the window a detached launch produces and binds it. If
 // it takes longer than the wait, the launch record lets a later refresh bind
-// it.
+// it. The wait runs in a command, off the update loop, so the surface stays
+// live.
 func (m Model) bindLaunch(msg launchedMsg) tea.Cmd {
 	c, l := m.core, msg.launch
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*bindWait)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
-		inst, ok, err := c.Bind(ctx, msg.project, l.Target, msg.before, bindWait)
-		if err != nil || !ok {
+		inst, ok, err := c.Bind(ctx, msg.project, l.Target, msg.before, core.BindWait)
+		if !ok {
 			return actedMsg{err: err}
 		}
-		return actedMsg{bind: &binding{project: l.Project, target: l.Target, ref: inst.Ref}}
+		return actedMsg{err: err, bind: &binding{project: l.Project, target: l.Target, ref: inst.Ref}}
 	}
 }
-
-// bindWait is how long an activation waits for a launched window. The wait
-// runs in a command, off the update loop, so the surface stays live.
-const bindWait = 30 * time.Second
 
 // action runs the configured action bound to the key, if any, against the
 // selected project. The terminal is handed to the command while it runs, and
-// the argv is rendered by the same rules `revier run` uses.
-// actionArgv is what runs for an action on a project: the action rendered
-// against the project, or, for a project on another machine, the ssh that
-// runs the action there (decisions.md D40).
-func (m Model) actionArgv(p core.Project, act config.Action) ([]string, error) {
-	r, err := m.core.RemoteOf(p)
-	if err != nil {
-		return nil, err
-	}
-	if r != nil {
-		return r.RunCommand(p.Remote.Project, act.Name), nil
-	}
-	argv, err := core.RenderArgv(p.Project, act.Run)
-	if err == nil && len(argv) == 0 {
-		err = errors.New("it runs nothing")
-	}
-	return argv, err
-}
-
+// the command is resolved by the same rules `revier run` uses.
 func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	c, ok := pressed(msg)
 	if !ok {
@@ -912,16 +854,13 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if !ok {
 			return nil, true
 		}
-		argv, err := m.actionArgv(p, act)
+		argv, dir, err := m.core.ActionCommand(p, act.Name, act.Run)
 		if err != nil {
-			err = fmt.Errorf("action %q: %w", act.Name, err)
 			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
 			return func() tea.Msg { return actedMsg{err: err} }, true
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
-		if p.Remote == nil {
-			cmd.Dir = p.Path // a remote project's path is on its host, where the action runs
-		}
+		cmd.Dir = dir
 		project := p.Name
 		start := time.Now()
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {

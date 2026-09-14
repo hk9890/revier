@@ -55,11 +55,6 @@ func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[str
 	return projects, dir
 }
 
-func alt(m tui.Model, r rune) (tui.Model, tea.Cmd) {
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true})
-	return next.(tui.Model), cmd
-}
-
 func fileWorld(t *testing.T, names ...string) (*hosttest.FakeRuntime, tui.Model, string) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
@@ -73,7 +68,7 @@ func fileWorld(t *testing.T, names ...string) (*hosttest.FakeRuntime, tui.Model,
 func TestDeleteAsksAndThenRemovesTheFile(t *testing.T) {
 	_, m, dir := fileWorld(t, "alpha", "beta")
 
-	m, _ = alt(m, 'd')
+	m, _ = press(m, "alt+d")
 	if f := footer(m); !strings.Contains(f, "delete alpha?") || !strings.Contains(f, "alpha.toml") {
 		t.Fatalf("footer = %q, want the question naming the file", f)
 	}
@@ -103,7 +98,7 @@ func TestDeleteAsksAndThenRemovesTheFile(t *testing.T) {
 func TestDeleteDeclinedKeepsTheFileAndDoesNothingElse(t *testing.T) {
 	rt, m, dir := fileWorld(t, "alpha")
 
-	m, _ = alt(m, 'd')
+	m, _ = press(m, "alt+d")
 	m, cmd := press(m, "enter")
 	if cmd != nil {
 		cmd()
@@ -127,7 +122,7 @@ func TestDeleteRefusesARunningProject(t *testing.T) {
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
 	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
 
-	m, _ = alt(m, 'd')
+	m, _ = press(m, "alt+d")
 	if f := footer(m); !strings.Contains(f, "running") {
 		t.Fatalf("footer = %q, want the refusal", f)
 	}
@@ -151,7 +146,7 @@ func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
 	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"alpha": {ref}})
 	m := resize(refreshed(t, c, projects, root, nil), 120, 20)
 
-	m, _ = alt(m, 'd')
+	m, _ = press(m, "alt+d")
 	if f := footer(m); !strings.Contains(f, "attached window") {
 		t.Fatalf("footer = %q, want the refusal", f)
 	}
@@ -166,7 +161,7 @@ func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
 func TestEditWithoutEditorSaysSo(t *testing.T) {
 	t.Setenv("EDITOR", "")
 	_, m, _ := fileWorld(t, "alpha")
-	m, cmd := alt(m, 'e')
+	m, cmd := press(m, "alt+e")
 	if cmd != nil {
 		t.Error("want no command without an editor")
 	}
@@ -179,7 +174,7 @@ func TestEditWithoutEditorSaysSo(t *testing.T) {
 func TestEditRunsTheEditorAndLeavesTheFilterAlone(t *testing.T) {
 	t.Setenv("EDITOR", "true")
 	_, m, _ := fileWorld(t, "alpha")
-	m, cmd := alt(m, 'e')
+	m, cmd := press(m, "alt+e")
 	if cmd == nil {
 		t.Fatal("want the editor command")
 	}
@@ -260,7 +255,7 @@ func TestTheWheelHoldsStillWhileADeleteIsAsked(t *testing.T) {
 	_, m, _ := fileWorld(t, "alpha", "beta")
 	before := selectedRow(t, m)
 
-	m, _ = alt(m, 'd')
+	m, _ = press(m, "alt+d")
 	m = wheel(m, 5, tea.MouseButtonWheelDown)
 	if row := selectedRow(t, m); row != before {
 		t.Errorf("selected %q while the delete was asked, want %q", row, before)

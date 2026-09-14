@@ -1,5 +1,6 @@
 /bin/
 /dist/
+/revier
 coverage.out
 *.test
 .idea/

@@ -113,13 +113,7 @@ func (h *Host) Probe(ctx context.Context) error {
 }
 
 func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
-	var out, errb bytes.Buffer
-	c := exec.CommandContext(ctx, h.bin(), args...)
-	c.Stdout, c.Stderr = &out, &errb
-	if err := c.Run(); err != nil {
-		return nil, fmt.Errorf("wctl %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
-	}
-	return out.Bytes(), nil
+	return execRun(ctx, h.bin(), args...)
 }
 
 // Instances lists every window in one call. The active workspace comes from

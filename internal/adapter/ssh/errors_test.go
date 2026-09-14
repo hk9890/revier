@@ -1,28 +1,24 @@
 package ssh_test
 
 import (
-	"os/exec"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
 )
 
-// exitErr is what exec.CommandContext returns for a command that failed with
-// a status: the same error, of the same type, that a failed ssh gives.
-func exitErr(t *testing.T, code string) error {
-	t.Helper()
-	err := exec.Command("sh", "-c", "exit "+code).Run()
-	if err == nil {
-		t.Fatalf("sh -c 'exit %s' succeeded", code)
-	}
-	return err
-}
+// exitStatus stands for the *exec.ExitError a failed ssh returns: an error
+// that carries the status the command exited with.
+type exitStatus int
+
+func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitStatus) ExitCode() int { return int(e) }
 
 // What ssh says is not what the reader needs to know. Each of its usual
 // failures is one line naming the cause and what to do about it.
 func TestClassifyNamesTheCauseAndTheRemedy(t *testing.T) {
-	status255 := exitErr(t, "255")
+	status255 := exitStatus(255)
 	for _, tc := range []struct {
 		name, stderr, want string
 		err                error
@@ -33,8 +29,8 @@ func TestClassifyNamesTheCauseAndTheRemedy(t *testing.T) {
 		{"timeout", "ssh: connect to host x port 22: Connection timed out", "no answer on port 22", status255},
 		{"timeout on macos", "ssh: connect to host x port 22: Operation timed out", "no answer on port 22", status255},
 		{"refused", "ssh: connect to host x port 22: Connection refused", "nothing is listening", status255},
-		{"git host", "Invalid command: revier list --json\n  You appear to be using ssh to clone a git:// URL.", "git host", exitErr(t, "1")},
-		{"git host that says so", "You've successfully authenticated, but GitHub does not provide shell access.", "git host", exitErr(t, "1")},
+		{"git host", "Invalid command: revier list --json\n  You appear to be using ssh to clone a git:// URL.", "git host", exitStatus(1)},
+		{"git host that says so", "You've successfully authenticated, but GitHub does not provide shell access.", "git host", exitStatus(1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ssh.Classify("router", []string{"revier", "list", "--json"}, tc.stderr, tc.err).Error()
@@ -55,12 +51,12 @@ func TestClassifySeesTheShellCannotFindRevier(t *testing.T) {
 		name, stderr string
 		err          error
 	}{
-		{"by status", "", exitErr(t, "127")},
-		{"zsh", "zsh:1: command not found: revier", exitErr(t, "127")},
-		{"bash", "bash: line 1: revier: command not found", exitErr(t, "127")},
-		{"powershell", "The term 'revier' is not recognized as a name of a cmdlet.", exitErr(t, "1")},
-		{"dash", "sh: 1: revier: not found", exitErr(t, "127")},
-		{"fish", "fish: Unknown command: revier", exitErr(t, "127")},
+		{"by status", "", exitStatus(127)},
+		{"zsh", "zsh:1: command not found: revier", exitStatus(127)},
+		{"bash", "bash: line 1: revier: command not found", exitStatus(127)},
+		{"powershell", "The term 'revier' is not recognized as a name of a cmdlet.", exitStatus(1)},
+		{"dash", "sh: 1: revier: not found", exitStatus(127)},
+		{"fish", "fish: Unknown command: revier", exitStatus(127)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ssh.Classify("box", nil, tc.stderr, tc.err).Error()
@@ -78,8 +74,8 @@ func TestClassifyDoesNotReadAnotherMissingCommandAsRevier(t *testing.T) {
 		name, stderr string
 		err          error
 	}{
-		{"exit 1", "probe: sh: mise: command not found", exitErr(t, "1")},
-		{"exit 127", "sh: 1: mise: not found", exitErr(t, "127")},
+		{"exit 1", "probe: sh: mise: command not found", exitStatus(1)},
+		{"exit 127", "sh: 1: mise: not found", exitStatus(127)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ssh.Classify("box", []string{"revier", "list"}, tc.stderr, tc.err).Error()
@@ -102,7 +98,7 @@ func TestClassifyTellsAnOlderRevierToBeUpdated(t *testing.T) {
 		{[]string{"revier", "shell", "new", "-p", "far"}, usage + `revier: unknown command "shell"`, "no `shell new`"},
 		{[]string{"revier", "agent", "new", "-p", "far"}, usage + `revier: unknown agent command "new"`, "no `agent new`"},
 	} {
-		got := ssh.Classify("box", tc.args, tc.stderr, exitErr(t, "1")).Error()
+		got := ssh.Classify("box", tc.args, tc.stderr, exitStatus(1)).Error()
 		if !strings.Contains(got, tc.want) || !strings.Contains(got, "update revier on box") || strings.Contains(got, "usage") {
 			t.Errorf("classify = %q, want %s and the update named, without the usage", got, tc.want)
 		}
@@ -112,7 +108,7 @@ func TestClassifyTellsAnOlderRevierToBeUpdated(t *testing.T) {
 // A failure nothing here knows is passed through whole: the command that was
 // run, and what it said, on one line.
 func TestClassifyPassesAnUnknownFailureThrough(t *testing.T) {
-	got := ssh.Classify("box", []string{"revier", "list"}, "config error: bad toml\nline 3", exitErr(t, "2")).Error()
+	got := ssh.Classify("box", []string{"revier", "list"}, "config error: bad toml\nline 3", exitStatus(2)).Error()
 	want := "box: revier list: config error: bad toml; line 3"
 	if got != want {
 		t.Errorf("classify = %q, want %q", got, want)
@@ -122,7 +118,7 @@ func TestClassifyPassesAnUnknownFailureThrough(t *testing.T) {
 // ssh's own failures are the ones it exits 255 with. A remote revier that
 // says "permission denied" about a file of its own is not a refused key.
 func TestClassifyDoesNotReadTheRemotesWordsAsSshsOwn(t *testing.T) {
-	got := ssh.Classify("box", []string{"revier", "list"}, "open /etc/revier: permission denied", exitErr(t, "1")).Error()
+	got := ssh.Classify("box", []string{"revier", "list"}, "open /etc/revier: permission denied", exitStatus(1)).Error()
 	if strings.Contains(got, "key auth") {
 		t.Errorf("classify = %q, want the remote's own words passed through", got)
 	}

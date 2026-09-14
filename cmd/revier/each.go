@@ -316,7 +316,7 @@ func cmdEachLog(w io.Writer, args []string) error {
 			return err
 		}
 		if len(runs) == 0 {
-			_, _ = fmt.Fprintf(w, "no runs yet under %s\n", runlog.Root(stateRoot))
+			_, _ = fmt.Fprintf(w, "no runs yet under %s\n", runlog.Dir(stateRoot))
 			return nil
 		}
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)

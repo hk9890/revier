@@ -31,6 +31,11 @@ type Fake struct {
 	InstancesErr error
 	// OpenErr makes Open fail, for the run half of run-or-raise.
 	OpenErr error
+	// FocusErr makes Focus fail and FocusedErr makes Focused fail, for the
+	// raise half. PlaceErr makes Place fail.
+	FocusErr   error
+	FocusedErr error
+	PlaceErr   error
 	// Detached makes Open launch without a ref, as a window host does: the
 	// window does not exist yet when the process starts, so there is nothing
 	// to name.
@@ -279,6 +284,9 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Focuses = append(f.Focuses, ref)
+	if f.FocusErr != nil {
+		return f.FocusErr
+	}
 	f.focused = ref
 	return nil
 }
@@ -288,6 +296,9 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.PlaceErr != nil {
+		return f.PlaceErr
+	}
 	if f.Placements == nil {
 		f.Placements = map[string][]string{}
 	}
@@ -298,6 +309,9 @@ func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string)
 func (f *Fake) Focused(context.Context) (revier.TargetRef, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.FocusedErr != nil {
+		return revier.TargetRef{}, f.FocusedErr
+	}
 	return f.focused, nil
 }
 
@@ -316,19 +330,19 @@ func literal(pattern string) string {
 	return s
 }
 
-// Watcher is a Fake that also implements revier.WindowWatcher: a test pushes
+// FakeWatcher is a Fake that also implements revier.WindowWatcher: a test pushes
 // events into Events and the TUI's watcher path receives them.
-type Watcher struct {
+type FakeWatcher struct {
 	*Fake
 	Events chan revier.WindowEvent
 }
 
 // NewWatcher returns a watching fake with a buffered event channel.
-func NewWatcher(name string) *Watcher {
-	return &Watcher{Fake: New(name), Events: make(chan revier.WindowEvent, 8)}
+func NewWatcher(name string) *FakeWatcher {
+	return &FakeWatcher{Fake: New(name), Events: make(chan revier.WindowEvent, 8)}
 }
 
-func (w *Watcher) Watch(context.Context) (<-chan revier.WindowEvent, error) { return w.Events, nil }
+func (w *FakeWatcher) Watch(context.Context) (<-chan revier.WindowEvent, error) { return w.Events, nil }
 
 // FakeProbe is an AgentProbe that reports a fixed state for every panel whose
 // title carries a marker. It exists so core tests can assert on the survey's
@@ -353,11 +367,11 @@ func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, e
 	return p.State, nil
 }
 
-// ResumableProbe is a FakeProbe that can also name the conversation a panel
+// FakeResumableProbe is a FakeProbe that can also name the conversation a panel
 // holds, so a core test can exercise the resume half without Claude Code. The
 // id is the panel's Vars["session"] and the directory its Vars["dir"], a
 // stand-in for the listing the real probe matches panels against.
-type ResumableProbe struct {
+type FakeResumableProbe struct {
 	*FakeProbe
 	// Flag is the argument name folded into a resumed command, standing in
 	// for the harness's own spelling of --resume.
@@ -371,14 +385,14 @@ type ResumableProbe struct {
 }
 
 // NewResumableProbe returns a probe that claims every panel of the harness.
-func NewResumableProbe(harness, marker string) *ResumableProbe {
-	return &ResumableProbe{
+func NewResumableProbe(harness, marker string) *FakeResumableProbe {
+	return &FakeResumableProbe{
 		FakeProbe: &FakeProbe{Harness: harness, Marker: marker},
 		Flag:      "--resume",
 	}
 }
 
-func (p *ResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
+func (p *FakeResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
 	p.Calls++
 	if p.SessionErr != nil {
 		return nil, p.SessionErr
@@ -390,7 +404,7 @@ func (p *ResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]r
 	return out, nil
 }
 
-func (p *ResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
+func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
 	cmd := append([]string{}, spec.Command...)
 	return append(cmd, p.Flag, string(id))
 }

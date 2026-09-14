@@ -195,7 +195,7 @@ func run(args []string) error {
 	}
 
 	// A keypress command gets long enough for a detached launch's wait
-	// (bindWait) on top of the host calls around it.
+	// (core.BindWait) on top of the host calls around it.
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
@@ -232,7 +232,7 @@ func run(args []string) error {
 }
 
 // commandTimeout bounds a command that has no bound of its own.
-const commandTimeout = bindWait + 30*time.Second
+const commandTimeout = core.BindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {
@@ -527,65 +527,43 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	argv, err := a.actionArgv(p, pos[0])
+	name := pos[0]
+	var run []string
+	known := p.Remote != nil // a remote project's actions are its host's to know
+	for _, act := range a.cfg.Actions {
+		if act.Name == name {
+			run, known = act.Run, true
+			break
+		}
+	}
+	if !known {
+		// A key bound to nothing must say so, not do nothing.
+		return fmt.Errorf("no action named %q", name)
+	}
+	argv, dir, err := a.core.ActionCommand(p, name, run)
 	if err != nil {
 		return err
 	}
 	a.launchedAction(p.Name)
-	return runAction(p, argv)
-}
-
-// actionArgv is what runs for the named action: the action rendered against
-// the project, or, for a project on another machine, the ssh that runs the
-// action there (decisions.md D40).
-func (a *app) actionArgv(p core.Project, name string) ([]string, error) {
-	r, err := a.core.RemoteOf(p)
-	if err != nil {
-		return nil, err
-	}
-	if r != nil {
-		return r.RunCommand(p.Remote.Project, name), nil
-	}
-	return a.action(p, name)
-}
-
-// action renders the named action's argv against the project. An unknown name
-// is an error naming it: a key bound to nothing must say so, not do nothing.
-func (a *app) action(p core.Project, name string) ([]string, error) {
-	for _, act := range a.cfg.Actions {
-		if act.Name != name {
-			continue
-		}
-		argv, err := core.RenderArgv(p.Project, act.Run)
-		if err != nil {
-			return nil, fmt.Errorf("action %q: %w", name, err)
-		}
-		if len(argv) == 0 {
-			return nil, fmt.Errorf("action %q has an empty run argv", name)
-		}
-		return argv, nil
-	}
-	return nil, fmt.Errorf("no action named %q", name)
+	return runAction(p.Name, argv, dir)
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
 // passes on as its own.
 var errActionFailed = errors.New("the action failed")
 
-// runAction executes an argv in the project directory with the terminal
-// attached, and returns the command's own error so its exit status survives.
+// runAction executes an argv in dir with the terminal attached, and returns
+// the command's own error so its exit status survives.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
 // inject into. No context either: the command's 30s deadline is for host
 // calls, and an action - an editor, a long pull - runs as long as it runs.
-func runAction(p core.Project, argv []string) error {
+func runAction(project revier.ProjectName, argv []string, dir string) error {
 	c := exec.Command(argv[0], argv[1:]...)
-	if p.Remote == nil {
-		c.Dir = p.Path // a remote project's path is on its host, where the action runs
-	}
+	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	start := time.Now()
 	err := c.Run()
-	logging.Op("action", start, err, "project", p.Name, "argv", argv)
+	logging.Op("action", start, err, "project", project, "argv", argv)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}

@@ -17,6 +17,7 @@
 package claude
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,13 +49,13 @@ const MaxAge = 10 * time.Second
 // Probe reads Claude Code panels. The zero value is ready to use; it holds the
 // last listing, so it is shared by pointer.
 type Probe struct {
-	// Now is injected so tests can pin Since and the listing's age. Nil means
-	// time.Now.
-	Now func() time.Time
+	// clock is replaced by tests to pin Since and the listing's age. Nil
+	// means time.Now.
+	clock func() time.Time
 
-	// Agents returns what `claude agents --json` prints. It is injected so a
-	// test can answer without Claude Code installed. Nil runs the command.
-	Agents func(ctx context.Context) ([]byte, error)
+	// agents returns what `claude agents --json` prints. Tests replace it to
+	// answer without Claude Code installed. Nil runs the command.
+	agents func(ctx context.Context) ([]byte, error)
 
 	// SessionsDir is where Claude Code keeps a file per live session. Empty
 	// means $CLAUDE_CONFIG_DIR/sessions, or ~/.claude/sessions without it.
@@ -179,15 +180,15 @@ func (p *Probe) sessionsDir() string {
 }
 
 func (p *Probe) now() time.Time {
-	if p.Now != nil {
-		return p.Now()
+	if p.clock != nil {
+		return p.clock()
 	}
 	return time.Now()
 }
 
 // list runs the command once and indexes its answer by pid.
 func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
-	run := p.Agents
+	run := p.agents
 	if run == nil {
 		run = claudeAgents
 	}
@@ -257,9 +258,11 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
 	cmd.WaitDelay = waitDelay
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("claude agents --json: %w", err)
+		return nil, fmt.Errorf("claude agents --json: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return out, nil
 }

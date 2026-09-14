@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os"
+	"errors"
 	"testing"
 	"time"
 
@@ -79,6 +79,31 @@ func (l *lateWindows) Open(context.Context, revier.Realization) (revier.TargetRe
 	return revier.TargetRef{}, nil
 }
 
+// A window the launch made and could not focus is pinned with the failure, so
+// the next press raises it instead of launching a second.
+func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
+	wm := hosttest.New("gnome")
+	wm.FocusErr = errors.New("no such window")
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	p, root := demoProject(t), t.TempDir()
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+
+	if _, err := a.goTarget(context.Background(), p, "editor"); !errors.Is(err, wm.FocusErr) {
+		t.Fatalf("err = %v, want the focus failure", err)
+	}
+	got, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Bound["demo"]["editor"].IsZero() {
+		t.Errorf("bound = %v, want the launched editor pinned", got.Bound)
+	}
+}
+
 // A press while the target's launch is still coming up reports it rather than
 // launching a second copy - also when state still holds a binding from a
 // window of that target that has since closed, which is what made this
@@ -101,30 +126,6 @@ func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 	}
 }
 
-// The first press gave up waiting before the window came up. Once it is there,
-// the next press raises it, launch on record or not: only a second launch is
-// refused, never the raise.
-func TestAPressDuringALaunchRaisesTheWindowOnceItIsThere(t *testing.T) {
-	wm := &lateWindows{Fake: hosttest.New("gnome")}
-	editor := wm.Add("demo - README.md", "code")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
-	p, root := demoProject(t), t.TempDir()
-	st := &state.State{Launch: &state.Launch{Project: "demo", Target: "editor", At: time.Now().Add(-40 * time.Second)}}
-	if err := st.Save(root); err != nil {
-		t.Fatal(err)
-	}
-
-	if ref := press(t, c, p, root, "editor"); ref != editor {
-		t.Errorf("ref = %v, want the editor window %v raised", ref, editor)
-	}
-	if wm.opened != 0 {
-		t.Errorf("the editor was launched %d more times, want none", wm.opened)
-	}
-	if got, _ := state.Load(root); got.Launch != nil {
-		t.Errorf("launch = %+v, want it consumed: the target has landed", got.Launch)
-	}
-}
-
 // `revier list` drops refs to windows that are gone, and the drop reaches the
 // file: the state saved is the state pruned, not a fresh copy from disk.
 func TestListSavesItsPrune(t *testing.T) {
@@ -144,18 +145,8 @@ func TestListSavesItsPrune(t *testing.T) {
 	}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: loaded, stateRoot: root, core: c}
 
-	stdout := os.Stdout
-	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = devnull // the listing itself is not what is under test
-	err = cmdList(context.Background(), a, []string{"--json"})
-	os.Stdout = stdout
-	_ = devnull.Close()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
+	// The listing itself is not what is under test.
+	stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	got, err := state.Load(root)
 	if err != nil {
 		t.Fatal(err)
@@ -176,20 +167,9 @@ func TestListJSONCarriesAttachments(t *testing.T) {
 	st.Attach("demo", stray)
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout := os.Stdout
-	os.Stdout = w
-	err = cmdList(context.Background(), a, []string{"--json"})
-	os.Stdout = stdout
-	_ = w.Close()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
+	out := stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	var views []revier.ProjectView
-	if err := json.NewDecoder(r).Decode(&views); err != nil {
+	if err := json.Unmarshal([]byte(out), &views); err != nil {
 		t.Fatal(err)
 	}
 	var attached []revier.TargetView

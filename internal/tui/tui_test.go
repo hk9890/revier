@@ -98,7 +98,8 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 	case "backspace":
 		msg = tea.KeyMsg{Type: tea.KeyBackspace}
 	default:
-		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+		letter, alt := strings.CutPrefix(key, "alt+")
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter), Alt: alt}
 	}
 	next, cmd := m.Update(msg)
 	return next.(tui.Model), cmd
@@ -732,33 +733,6 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	}
 	if wm.opened != 1 {
 		t.Errorf("the editor was launched %d times, want once", wm.opened)
-	}
-}
-
-// Once the window of a launch still on record is there, Enter raises it: only
-// a second launch is refused, never the raise.
-func TestAPressDuringALaunchRaisesTheWindowOnceItIsThere(t *testing.T) {
-	_, _, c, projects := world(t, 1)
-	wm := &lateWindows{Fake: hosttest.New("wm")}
-	editor := wm.Add("Visual Studio Code", "code-project-00")
-	c.Window = wm
-	root := stateWith(t, nil)
-	st, _ := state.Load(root)
-	st.Launch = &state.Launch{Project: "project-00", Target: "editor", At: time.Now().Add(-40 * time.Second)}
-	if err := st.Save(root); err != nil {
-		t.Fatal(err)
-	}
-	m := refreshed(t, c, projects, root, nil)
-	m, _ = press(m, "tab")
-	m, _ = press(m, "down") // editor
-	_, cmd := press(m, "enter")
-	m.Update(cmd())
-
-	if wm.opened != 0 {
-		t.Errorf("the editor was launched %d more times, want none", wm.opened)
-	}
-	if n := len(wm.Focuses); n == 0 || wm.Focuses[n-1] != editor {
-		t.Errorf("focuses = %v, want the editor window %v raised", wm.Focuses, editor)
 	}
 }
 

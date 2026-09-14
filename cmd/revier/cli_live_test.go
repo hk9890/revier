@@ -11,6 +11,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -111,36 +112,12 @@ func scratch(t *testing.T) string {
 // capture runs the command and returns everything it printed.
 func capture(t *testing.T, args ...string) string {
 	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-
-	done := make(chan string, 1)
-	go func() {
-		var b strings.Builder
-		buf := make([]byte, 4096)
-		for {
-			n, err := r.Read(buf)
-			b.Write(buf[:n])
-			if err != nil {
-				break
-			}
+	return stdout(t, func() error {
+		if err := run(args); err != nil {
+			return fmt.Errorf("revier %s: %w", strings.Join(args, " "), err)
 		}
-		done <- b.String()
-	}()
-
-	runErr := run(args)
-	_ = w.Close()
-	os.Stdout = old
-	out := <-done
-
-	if runErr != nil {
-		t.Fatalf("revier %s: %v\n%s", strings.Join(args, " "), runErr, out)
-	}
-	return out
+		return nil
+	})
 }
 
 func TestListWithNoProjectsRunning(t *testing.T) {

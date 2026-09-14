@@ -148,19 +148,14 @@ func TestAnAltChordTypesNothing(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	alt := func(m tui.Model, r rune) tui.Model {
-		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: true})
-		return next.(tui.Model)
-	}
-
-	m = alt(m, 'x')
+	m, _ = press(m, "alt+x")
 	if q := query(m); strings.Contains(q, "x") {
 		t.Errorf("query = %q after alt+x, want nothing typed", q)
 	}
-	m = alt(m, 'n')
+	m, _ = press(m, "alt+n")
 	m = typeInto(m, "/tmp/w")
-	m = alt(m, 'c')
-	m = alt(m, 'x')
+	m, _ = press(m, "alt+c")
+	m, _ = press(m, "alt+x")
 	if head := barLine(m); !strings.Contains(head, "Add a project") {
 		t.Fatalf("top line = %q, want the new-project screen still up", head)
 	}

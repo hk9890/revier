@@ -152,40 +152,28 @@ func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
 	})
 }
 
-// update applies a change to state and saves it. It re-reads the file first:
-// the TUI writes claims to it while a command runs, and a launch can take
-// seconds waiting for a socket, so saving the state loaded at startup would
-// overwrite them.
+// update applies a change to the state on disk. The TUI writes claims to it
+// while a command runs, and a launch can take seconds waiting for a socket, so
+// the change goes to what is on disk now, not to the state loaded at startup.
 func (a *app) update(apply func(s *state.State)) {
-	st, err := state.Load(a.stateRoot)
+	st, err := state.Update(a.stateRoot, func(s *state.State) bool {
+		apply(s)
+		return true
+	})
 	if err != nil {
-		slog.Warn("state load, applying to the state read at start", "err", err)
-		st = a.state
-	}
-	apply(st)
-	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
-		slog.Warn("state save", "err", err)
+		slog.Warn("state update", "err", err)
 		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
+		return
 	}
+	a.state = st
 }
 
-// bindWait is how long a keypress process waits for the window a detached
-// launch produces before giving up and leaving the rest to the TUI. Long,
-// because an editor's cold start takes this long and the wait is invisible:
-// the process lingers, the user sees the window come up.
-const bindWait = 30 * time.Second
-
-// goTarget is the whole run-or-raise for one target: Go with the project's
-// bindings, then, for a detached launch, the wait that binds the window and
-// raises it. Every ref it lands on is pinned in state, so the next press finds
+// goTarget is the whole run-or-raise for one target: core.Activate with the
+// project's bindings, then, for a detached launch, the wait that binds the
+// window. Every ref it lands on is pinned in state, so the next press finds
 // the target by id whatever the application has done to its title since.
-//
-// A second press during the wait must not launch again: the pending launch
-// is recorded before waiting, and a press that finds one still inside
-// core.BindWindow reports it rather than opening a second window. A window
-// that has appeared by then is raised like any other.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
 	ref, _, err := a.goTargetResuming(ctx, p, name, nil)
 	return ref, err
@@ -197,54 +185,34 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 // after the launch failed. A zero ref with no error is a target launched and
 // not yet up.
 func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, core.Result, error) {
-	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
-		// Every binding of a target consumes its launch, so a launch still on
-		// record has not landed, whatever an older binding says.
-		up, err := a.core.Running(ctx, p, name, a.state.Bound[p.Name])
-		if err != nil {
-			return revier.TargetRef{}, core.Result{}, err
-		}
-		if !up {
-			slog.Info("go: launch still coming up, not launched again", "project", p.Name, "target", name, "launched_at", l.At)
-			return revier.TargetRef{}, core.Result{}, nil // still coming up; the first press is waiting for it
-		}
-	}
-	res, err := a.core.GoResuming(ctx, p, name, a.state.Bound[p.Name], resumes)
-	if err != nil {
-		return revier.TargetRef{}, core.Result{}, err
-	}
+	pending := a.state.Launch.Pending(p.Name, name, core.BindWindow)
+	res, err := a.core.Activate(ctx, p, name, a.state.Bound[p.Name], pending, resumes)
 	landed, ref := res.Target, res.Ref
-	if res.Launched && ref.IsZero() {
-		at := time.Now()
-		a.commit(p.Name, func(s *state.State) {
-			s.Launch = &state.Launch{Project: p.Name, Target: landed, At: at}
-		})
-		inst, ok, err := a.core.Bind(ctx, p, landed, res.Before, bindWait)
-		if err != nil {
-			return revier.TargetRef{}, res, err // the launch ran, and its agents came to res.Agents
-		}
+	if res.Launched && ref.IsZero() && err == nil {
+		// Recorded before the wait, so a second press during it does not
+		// launch again.
+		a.update(func(s *state.State) { s.Launched(p.Name, landed, time.Now()) })
+		var inst revier.Instance
+		var ok bool
+		inst, ok, err = a.core.Bind(ctx, p, landed, res.Before, core.BindWait)
 		if !ok {
-			return revier.TargetRef{}, res, nil // the TUI binds it if it appears later
+			// With no error, the TUI binds the window if it appears later. With
+			// one, the launch ran, and its agents came to res.Agents.
+			return revier.TargetRef{}, res, err
 		}
 		ref = inst.Ref
 	}
-	a.commit(p.Name, func(s *state.State) {
-		s.Bind(p.Name, landed, ref)
-		if s.Launch != nil && s.Launch.Project == p.Name && s.Launch.Target == landed {
-			s.Launch = nil
-		}
-	})
-	return ref, res, nil
+	if !ref.IsZero() {
+		a.update(func(s *state.State) { s.Landed(p.Name, landed, ref) })
+	}
+	return ref, res, err
 }
 
 // launchedAction records that an action ran, so a window that appears within
 // core.ClaimWindow and matches no declared target is attached to the project:
 // the link opened from the terminal that claim-on-appear exists for.
 func (a *app) launchedAction(p revier.ProjectName) {
-	at := time.Now()
-	a.commit(p, func(s *state.State) {
-		s.Launch = &state.Launch{Project: p, At: at}
-	})
+	a.update(func(s *state.State) { s.Launched(p, "", time.Now()) })
 }
 
 // configRootForMessage is the config root, for a message that has nowhere to
