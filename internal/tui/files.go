@@ -10,14 +10,12 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -245,13 +243,13 @@ func (c *cloneCmd) Run() error {
 	if c.out != nil {
 		out = io.MultiWriter(c.out, &kept)
 	}
-	start := time.Now()
-	_, err := checkout.Ensure(c.project, out)
-	if last := lastLine(kept.String()); err != nil && last != "" {
-		err = fmt.Errorf("%w: %s", err, last)
+	if _, err := checkout.Ensure(c.project, out); err != nil {
+		if last := lastLine(kept.String()); last != "" {
+			return fmt.Errorf("%w: %s", err, last)
+		}
+		return err
 	}
-	logging.Op("clone", start, err, "project", c.project.Name, "git_url", c.project.GitURL, "path", c.project.Path)
-	return err
+	return nil
 }
 
 // lastLine is the last non-empty line of git's output. Progress redraws a

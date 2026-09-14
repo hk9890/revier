@@ -93,7 +93,7 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		slog.Warn("resolve: working directory", "err", err.Error())
+		slog.Warn("resolve: working directory", "err", err)
 	} else if p, ok := a.projectForPath(cwd); ok {
 		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
 		return p, nil
@@ -103,7 +103,7 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 	// beats the one revier last acted on.
 	p, ok, err := a.core.ProjectOfFocused(ctx, a.projects)
 	if err != nil {
-		slog.Warn("resolve: focused window", "err", err.Error())
+		slog.Warn("resolve: focused window", "err", err)
 	} else if ok {
 		slog.Info("resolve", "project", p.Name, "by", "focused window")
 		return p, nil
@@ -159,14 +159,14 @@ func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
 func (a *app) update(apply func(s *state.State)) {
 	st, err := state.Load(a.stateRoot)
 	if err != nil {
-		slog.Warn("state load, applying to the state read at start", "err", err.Error())
+		slog.Warn("state load, applying to the state read at start", "err", err)
 		st = a.state
 	}
 	apply(st)
 	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
-		slog.Warn("state save", "err", err.Error())
+		slog.Warn("state save", "err", err)
 		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
 	}
 }
@@ -193,8 +193,9 @@ func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetNa
 
 // goTargetResuming is goTarget with the agent panels of a launch started on
 // the conversations a saved session recorded for them. It also returns what
-// the launch did with each recorded agent, in the Result. A zero ref with no error is a target launched and not
-// yet up.
+// the launch did with each recorded agent, in the Result, also when the wait
+// after the launch failed. A zero ref with no error is a target launched and
+// not yet up.
 func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, core.Result, error) {
 	if l := a.state.Launch; l != nil && l.Project == p.Name && l.Target == name && time.Since(l.At) < core.BindWindow {
 		// Every binding of a target consumes its launch, so a launch still on
@@ -220,7 +221,7 @@ func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.
 		})
 		inst, ok, err := a.core.Bind(ctx, p, landed, res.Before, bindWait)
 		if err != nil {
-			return revier.TargetRef{}, core.Result{}, err
+			return revier.TargetRef{}, res, err // the launch ran, and its agents came to res.Agents
 		}
 		if !ok {
 			return revier.TargetRef{}, res, nil // the TUI binds it if it appears later

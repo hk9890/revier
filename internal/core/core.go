@@ -373,23 +373,15 @@ func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound 
 // already up is raised as it stands, because the agent in it is already the
 // one the recording named.
 //
-// Every call is one line of the log: a toggle back writes two, the press and
-// the Go home it became.
+// Every call is one line of the log, and a Go that calls Go writes one more:
+// a toggle back for the Go home, a tab for the Go of its workspace.
 func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
-			"launched", res.Launched, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", errText(res.AgentErr))
+			"launched", res.Launched, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
 	}()
 	return c.goResuming(ctx, p, name, bound, resumes)
-}
-
-// errText is an error's message for a log attribute, empty for none.
-func errText(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }
 
 func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
@@ -440,7 +432,8 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// accident of the host - the window opens behind on the ones that do
 		// not. Go always leaves the target focused.
 		if err := host.Focus(ctx, ref); err != nil {
-			return Result{}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+			// The launch ran: its agents are reported with the failure.
+			return Result{Target: name, Launched: true, Agents: res.Agents, AgentErr: res.AgentErr}, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
 		res.Ref = ref
 		c.place(ctx, real, ref)
@@ -633,7 +626,7 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 		target = w
 	}
 	if err := placer.Place(ctx, target, strings.Fields(real.Place)); err != nil {
-		slog.Warn("place", "ref", target, "place", real.Place, "err", err.Error())
+		slog.Warn("place", "ref", target, "place", real.Place, "err", err)
 	}
 }
 
@@ -653,7 +646,7 @@ func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.Ta
 		}
 		if !time.Now().Before(deadline) {
 			if err != nil {
-				slog.Warn("place: listing the hosts", "err", err.Error())
+				slog.Warn("place: listing the hosts", "err", err)
 			}
 			return revier.TargetRef{}, false
 		}
@@ -756,7 +749,7 @@ func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instanc
 	}
 	cur, err := auth.Focused(ctx)
 	if err != nil {
-		slog.Warn("toggle-back: focused, taken as not focused", "host", auth.Name(), "err", err.Error())
+		slog.Warn("toggle-back: focused, taken as not focused", "host", auth.Name(), "err", err)
 		return false
 	}
 	return cur.Host == want.Host && cur.ID == want.ID
@@ -1003,7 +996,7 @@ func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.Agent
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {
 		if probe, ok := c.agentProbe(panel); ok {
-			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, panel)})
+			out = append(out, revier.AgentView{Panel: panel.ID, State: c.read(ctx, probe, inst.Ref, panel)})
 		}
 	}
 	return out
@@ -1021,9 +1014,13 @@ func (c *Core) probeFor(panel revier.Panel) (revier.AgentProbe, bool) {
 
 // read runs a probe over a panel. A probe that fails reports unknown rather
 // than failing the survey: one broken harness must not blank the dashboard.
-func (c *Core) read(ctx context.Context, probe revier.AgentProbe, panel revier.Panel) revier.AgentState {
+//
+// A failure is logged once per panel until it changes. A panel id is unique
+// only within its instance - a kitty window id within one kitty process - so
+// the instance names the panel too.
+func (c *Core) read(ctx context.Context, probe revier.AgentProbe, ref revier.TargetRef, panel revier.Panel) revier.AgentState {
 	state, err := probe.Inspect(ctx, panel)
-	logging.Repeat("probe "+probe.Name()+" "+string(panel.ID), "probe", err, "probe", probe.Name(), "panel", panel.ID)
+	logging.Repeat("probe\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "probe", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
 	if err != nil {
 		return revier.AgentState{Harness: probe.Name(), Status: revier.StatusUnknown}
 	}

@@ -41,6 +41,7 @@ func TestAWriteAfterMidnightGoesToTheNextDaysFile(t *testing.T) {
 	if _, err := d.open(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = d.f.Close() })
 	if _, err := d.Write([]byte("before\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +69,12 @@ func TestOpenReportsCreatedOnlyForANewDaysFile(t *testing.T) {
 	dir := t.TempDir()
 	now := func() time.Time { return time.Date(2026, 9, 14, 9, 0, 0, 0, time.Local) }
 	for i, want := range []bool{true, false} {
-		created, err := (&daily{dir: dir, now: now}).open()
+		d := &daily{dir: dir, now: now}
+		created, err := d.open()
 		if err != nil {
 			t.Fatal(err)
 		}
+		_ = d.f.Close()
 		if created != want {
 			t.Errorf("open %d: created = %v, want %v", i, created, want)
 		}

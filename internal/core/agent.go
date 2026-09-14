@@ -119,7 +119,7 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
 			if probe, ok := c.agentProbe(panel); ok {
-				found = append(found, Agent{Ref: h.inst.Ref, Panel: panel, State: c.read(ctx, probe, panel)})
+				found = append(found, Agent{Ref: h.inst.Ref, Panel: panel, State: c.read(ctx, probe, h.inst.Ref, panel)})
 				targets = append(targets, h.target)
 				ids[panel.ID]++
 			}
@@ -171,7 +171,7 @@ func (c *Core) panel(ctx context.Context, scope []held, project revier.ProjectNa
 	if !ok {
 		return Agent{}, fmt.Errorf("%s:%s is %w: %s", project, id, ErrNotAgent, notAgentReason(hit))
 	}
-	return Agent{Ref: hits[0].inst.Ref, Panel: hit, State: c.read(ctx, probe, hit)}, nil
+	return Agent{Ref: hits[0].inst.Ref, Panel: hit, State: c.read(ctx, probe, hits[0].inst.Ref, hit)}, nil
 }
 
 func notAgentReason(panel revier.Panel) string {
@@ -340,7 +340,7 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 				continue
 			}
 			if probe, ok := c.agentProbe(panel); ok {
-				return c.read(ctx, probe, panel), nil
+				return c.read(ctx, probe, inst.Ref, panel), nil
 			}
 		}
 	}

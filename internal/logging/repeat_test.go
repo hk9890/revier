@@ -10,14 +10,13 @@ import (
 	"time"
 )
 
-// capture points the default logger at a buffer for one test.
-func capture(t *testing.T) *bytes.Buffer {
-	t.Helper()
+// capture is a repeats that logs into the buffer, and leaves the default
+// logger alone.
+func capture(now func() time.Time) (*repeats, *bytes.Buffer) {
 	var buf bytes.Buffer
-	was := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
-	t.Cleanup(func() { slog.SetDefault(was) })
-	return &buf
+	l := slog.New(slog.NewJSONHandler(&buf, nil))
+	r := &repeats{log: func() *slog.Logger { return l }, now: now, failing: map[string]string{}, slow: map[string]time.Time{}}
+	return r, &buf
 }
 
 func lines(t *testing.T, buf *bytes.Buffer) []map[string]any {
@@ -37,8 +36,7 @@ func lines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 }
 
 func TestARepeatedFailureIsLoggedOnceAndItsRecoveryOnce(t *testing.T) {
-	buf := capture(t)
-	r := &repeats{now: time.Now, failing: map[string]string{}, slow: map[string]time.Time{}}
+	r, buf := capture(time.Now)
 	down, other := errors.New("host down"), errors.New("auth refused")
 	for _, err := range []error{down, down, down, other, nil, nil} {
 		r.repeat("remote a", "remote survey", err, nil)
@@ -63,9 +61,8 @@ func TestARepeatedFailureIsLoggedOnceAndItsRecoveryOnce(t *testing.T) {
 }
 
 func TestASlowPollIsLoggedAtMostOncePerInterval(t *testing.T) {
-	buf := capture(t)
 	now := time.Date(2026, 9, 14, 9, 0, 0, 0, time.Local)
-	r := &repeats{now: func() time.Time { return now }, failing: map[string]string{}, slow: map[string]time.Time{}}
+	r, buf := capture(func() time.Time { return now })
 	for range 30 {
 		r.poll("survey", "survey", 2*SlowPoll, nil, nil)
 		r.poll("survey", "survey", SlowPoll/2, nil, nil)

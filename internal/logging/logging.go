@@ -5,9 +5,12 @@
 //
 // It is the log/slog default logger and nothing else. A package that logs calls
 // slog directly; a process that never called Setup writes nothing here.
+// cmd/revier installs a discarding logger when Setup fails, so slog's own
+// default never prints to stderr.
 package logging
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -33,17 +36,16 @@ const (
 // Dir is where the files are.
 func Dir(stateRoot string) string { return filepath.Join(stateRoot, "logs") }
 
-// Setup makes the daily file the default slog logger for this process. A log
-// that cannot be opened is not a reason to fail a keypress: the caller reports
-// the error and carries on, and the default logger then discards.
-func Setup(stateRoot, command string) error {
+// Setup makes the daily file the default slog logger for this process, writing
+// records at level and above. A log that cannot be opened is not a reason to
+// fail a keypress: the caller reports the error and carries on.
+func Setup(stateRoot, command string, level slog.Level) error {
 	w := &daily{dir: Dir(stateRoot), now: time.Now}
 	created, err := w.open()
 	if err != nil {
-		slog.SetDefault(slog.New(slog.DiscardHandler))
 		return err
 	}
-	h := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})
+	h := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(h).With("pid", os.Getpid(), "cmd", command))
 	if created {
 		w.prune()
@@ -56,7 +58,7 @@ func Setup(stateRoot, command string) error {
 func Op(op string, start time.Time, err error, attrs ...any) {
 	attrs = append(attrs, "duration_ms", time.Since(start).Milliseconds())
 	if err != nil {
-		slog.Error(op, append(attrs, "err", err.Error())...)
+		slog.Error(op, append(attrs, "err", err)...)
 		return
 	}
 	slog.Info(op, attrs...)
@@ -80,11 +82,12 @@ func Repeat(key, op string, err error, attrs ...any) {
 	recurring.repeat(key, op, err, attrs)
 }
 
-var recurring = &repeats{now: time.Now, failing: map[string]string{}, slow: map[string]time.Time{}}
+var recurring = &repeats{log: slog.Default, now: time.Now, failing: map[string]string{}, slow: map[string]time.Time{}}
 
 // repeats is what this process last logged about each recurring key.
 type repeats struct {
 	mu      sync.Mutex
+	log     func() *slog.Logger
 	now     func() time.Time
 	failing map[string]string    // the error last logged, by key
 	slow    map[string]time.Time // when a slow poll was last logged, by key
@@ -104,7 +107,7 @@ func (r *repeats) poll(key, op string, took time.Duration, err error, attrs []an
 	}
 	r.mu.Unlock()
 	if due {
-		slog.Info(op, append(attrs, "slow", true)...)
+		r.log().Info(op, append(attrs, "slow", true)...)
 	}
 }
 
@@ -120,9 +123,9 @@ func (r *repeats) repeat(key, op string, err error, attrs []any) {
 	r.mu.Unlock()
 	switch {
 	case err == nil && was:
-		slog.Info(op+": recovered", append(attrs, "was", last)...)
+		r.log().Info(op+": recovered", append(attrs, "was", last)...)
 	case err != nil && (!was || last != err.Error()):
-		slog.Warn(op, append(attrs, "err", err.Error())...)
+		r.log().Warn(op, append(attrs, "err", err)...)
 	}
 }
 
@@ -186,7 +189,7 @@ func (d *daily) openLocked() (bool, error) {
 // keypress costs no directory listing.
 func (d *daily) prune() {
 	if err := prune(d.dir, d.now()); err != nil {
-		slog.Warn("log prune", "dir", d.dir, "err", err.Error())
+		slog.Warn("log prune", "dir", d.dir, "err", err)
 	}
 }
 
@@ -208,7 +211,8 @@ func prune(dir string, now time.Time) error {
 		if err != nil || !day.Before(oldest) {
 			continue
 		}
-		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+		// Two processes can start the same new day and prune together.
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}

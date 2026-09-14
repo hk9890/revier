@@ -67,16 +67,17 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	targets, conversations, attached := stored.Targets(), stored.Conversations(), attachments(report)
 	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path,
-		"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
-		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", attachments(report))
+		"projects", len(stored.Projects), "targets", targets, "conversations", conversations,
+		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", attached)
 	for _, err := range gaps.Failed {
-		slog.Warn("session save: probe could not be asked", "err", err.Error())
+		slog.Warn("session save: probe could not be asked", "err", err)
 	}
 	fmt.Printf("%s: %s, %s\n", stored.ID,
-		count(len(stored.Projects), "project"), count(stored.Targets(), "target"))
-	if n := stored.Conversations(); n > 0 {
-		fmt.Printf("  %s recorded\n", count(n, "agent conversation"))
+		count(len(stored.Projects), "project"), count(targets, "target"))
+	if conversations > 0 {
+		fmt.Printf("  %s recorded\n", count(conversations, "agent conversation"))
 	}
 	// Said now, while the agents still run, so the gap can be closed before
 	// the reboot rather than found after it.
@@ -93,8 +94,8 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	// Named up front, not discovered during a restore after the reboot. An
 	// attachment is a live id with no launch argv anywhere in the model, so
 	// there is nothing that could bring one back.
-	if n := attachments(report); n > 0 {
-		fmt.Printf("  %s not recorded; they have no name to be reopened by\n", count(n, "attached instance"))
+	if attached > 0 {
+		fmt.Printf("  %s not recorded; they have no name to be reopened by\n", count(attached, "attached instance"))
 	}
 	fmt.Printf("  %s\n", path)
 	return nil
@@ -230,8 +231,8 @@ func cmdSessionList(a *app, args []string) error {
 
 // logResumes writes one line per recorded agent of a step: the conversation
 // and directory it was recorded with, and what the launch did with it. The
-// outcomes are in the order of the step's resumes; a launch that failed
-// before it laid them out has none, and every agent is logged without one.
+// outcomes are in the order of the step's resumes; a press that failed before
+// it launched has none, and every agent is logged with outcome none.
 func logResumes(step core.RestoreStep, outcomes []core.AgentOutcome, dry bool) {
 	for i, r := range step.Resumes {
 		outcome := "none"

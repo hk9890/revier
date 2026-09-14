@@ -109,16 +109,25 @@ func main() {
 
 // openLog starts the day's log for this process. A log that cannot be opened
 // costs the record, not the command.
+//
+// `list` records only what went wrong. A surface with a linked project runs
+// `revier list` on that host every refresh (decisions.md D40), one process a
+// second, so its successes would bury the host's own log.
 func openLog(args []string) {
 	cmd := "tui"
 	if len(args) > 0 {
 		cmd = args[0]
 	}
+	level := slog.LevelInfo
+	if cmd == "list" {
+		level = slog.LevelWarn
+	}
 	root, err := state.Root()
 	if err == nil {
-		err = logging.Setup(root, cmd)
+		err = logging.Setup(root, cmd, level)
 	}
 	if err != nil {
+		slog.SetDefault(slog.New(slog.DiscardHandler))
 		fmt.Fprintf(os.Stderr, "revier: warning: no log: %v\n", err)
 	}
 }
@@ -302,7 +311,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// cannot be read is nil, and a nil state lets nothing be pruned.
 	before, err := state.Load(a.stateRoot)
 	if err != nil {
-		slog.Warn("state load, nothing pruned", "err", err.Error())
+		slog.Warn("state load, nothing pruned", "err", err)
 	}
 	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
 	if err != nil {
@@ -419,13 +428,11 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	// A remote project's checkout is its host's to clone: the pane opened
 	// here runs `revier open` there, and that one clones (decisions.md D40).
 	if p.Remote == nil {
-		start := time.Now()
 		cloned, err := checkout.Ensure(p.Project, os.Stderr)
 		if err != nil {
 			return err
 		}
 		if cloned {
-			logging.Op("clone", start, nil, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
 			// The clone ran without a deadline. The host calls still need
 			// one, and the one set at startup may have been spent waiting
 			// for git.
