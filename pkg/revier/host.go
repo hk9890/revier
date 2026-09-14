@@ -65,7 +65,7 @@ type Capabilities struct {
 	OSWindows bool
 }
 
-// Instance is one live thing a host holds: a kitty OS window, a tmux pane, a
+// Instance is one live thing a host holds: a kitty OS window, a tmux session, a
 // Meld window. Panels is populated by runtime hosts only.
 type Instance struct {
 	Ref    TargetRef `json:"ref"`
@@ -176,7 +176,7 @@ const (
 // Attacher is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can put the calling terminal onto
 // one of its instances, which is how `revier open --attach` ends: a tmux
-// window is attached to, and the ssh pane that reaches a remote project is
+// session is attached to, and the ssh pane that reaches a remote project is
 // that attach (decisions.md D40). A runtime whose instances are OS windows of
 // their own has nothing to attach to, and does not implement it.
 //
