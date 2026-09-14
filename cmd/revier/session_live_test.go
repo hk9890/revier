@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -112,17 +113,17 @@ func tmuxRun(t *testing.T, args ...string) string {
 	return string(out)
 }
 
-// windowNames lists the windows on the test's server. A server that is not
-// running has no windows, which is an answer and not a failure: it is what the
-// reboot leaves behind.
-func windowNames(t *testing.T) string {
+// workspaces lists the names revier gave the sessions on the test's server. A
+// server that is not running has none, which is an answer and not a failure:
+// it is what the reboot leaves behind.
+func workspaces(t *testing.T) string {
 	t.Helper()
-	out, err := exec.Command("tmux", "list-windows", "-a", "-F", "#{window_name}").CombinedOutput()
+	out, err := exec.Command("tmux", "list-sessions", "-F", "#{@revier-name}").CombinedOutput()
 	if err != nil && strings.Contains(string(out), "no server running") {
 		return ""
 	}
 	if err != nil {
-		t.Fatalf("tmux list-windows: %v: %s", err, out)
+		t.Fatalf("tmux list-sessions: %v: %s", err, out)
 	}
 	return string(out)
 }
@@ -151,7 +152,7 @@ func markConversation(t *testing.T, id string) {
 func agentPanes(t *testing.T) []string {
 	t.Helper()
 	var pids []string
-	out := tmuxRun(t, "list-panes", "-t", "work", "-F", "#{pane_pid} #{pane_current_command}")
+	out := tmuxRun(t, "list-panes", "-s", "-t", "work", "-F", "#{pane_pid} #{pane_current_command}")
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if pid, cmd, ok := strings.Cut(line, " "); ok && cmd == "claude" {
 			pids = append(pids, pid)
@@ -227,10 +228,10 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 	}
 
 	// Both targets are back, by their own names.
-	windows := windowNames(t)
+	names := workspaces(t)
 	for _, want := range []string{"work", "work-notes"} {
-		if !strings.Contains(windows, want) {
-			t.Errorf("window %q did not come back:\n%s", want, windows)
+		if !strings.Contains(names, want) {
+			t.Errorf("workspace %q did not come back:\n%s", want, names)
 		}
 	}
 	// And the agent came back on the conversation it held, rather than empty.
@@ -243,12 +244,11 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 	}
 }
 
-// Every agent is recorded, with its conversation and directory. On tmux, which
-// has no tabs to open an agent past the layout in (decisions.md D65), the
-// declared agent comes back on its conversation in the directory it worked in,
-// and the restore names the agents opened beside it as not restored rather
-// than splitting them into a window they were not declared in.
-func TestSessionRestoreOnTmuxBringsBackTheDeclaredAgentAndNamesTheRest(t *testing.T) {
+// Every agent is recorded, with its conversation and directory, and every one
+// comes back on its conversation in the directory it worked in: the declared
+// agent in the workspace's layout, and each agent opened beside it in a tab of
+// its own, a window of the workspace's session (decisions.md D65).
+func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")
 	worktree, other := t.TempDir(), t.TempDir()
@@ -279,21 +279,27 @@ func TestSessionRestoreOnTmuxBringsBackTheDeclaredAgentAndNamesTheRest(t *testin
 	_ = os.Remove(agent + ".started")
 
 	restore := capture(t, "session", "restore")
-	if !strings.Contains(restore, "opened, 1 agent resumed, 2 agents not restored") {
-		t.Errorf("restore printed %q, want the declared agent resumed and the other two named", restore)
+	if !strings.Contains(restore, "opened, 3 agents resumed") {
+		t.Errorf("restore printed %q, want all three agents resumed", restore)
 	}
 	deadline = time.Now().Add(5 * time.Second)
-	var started string
-	for started == "" && time.Now().Before(deadline) {
+	var started []string
+	for len(started) < 3 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 		read, _ := os.ReadFile(agent + ".started")
-		started = strings.TrimSpace(string(read))
+		started = strings.Fields(strings.ReplaceAll(strings.TrimSpace(string(read)), " --resume ", "="))
 	}
-	if want := worktree + " --resume declared"; started != want {
+	slices.Sort(started)
+	want := []string{other + "=by-hand-1", other + "=by-hand-2", worktree + "=declared"}
+	slices.Sort(want)
+	if !slices.Equal(started, want) {
 		t.Errorf("agents started as %q, want %q", started, want)
 	}
-	if n := len(agentPanes(t)); n != 1 {
-		t.Errorf("the workspace came back with %d agents, want the declared one", n)
+	if n := len(agentPanes(t)); n != 3 {
+		t.Errorf("the workspace came back with %d agents, want 3", n)
+	}
+	if windows := strings.Count(tmuxRun(t, "list-windows", "-t", "work"), "\n"); windows != 3 {
+		t.Errorf("the workspace has %d windows, want its layout and a tab for each of the two", windows)
 	}
 }
 
@@ -343,8 +349,8 @@ func TestSessionRestoreIsIdempotent(t *testing.T) {
 	if strings.Count(out, "running") != 2 {
 		t.Errorf("restore printed %q, want both targets reported as already up", out)
 	}
-	if n := strings.Count(windowNames(t), "work"); n != 2 {
-		t.Errorf("there are now %d work windows, want the original 2", n)
+	if n := strings.Count(workspaces(t), "work"); n != 2 {
+		t.Errorf("there are now %d work workspaces, want the original 2", n)
 	}
 }
 
@@ -369,8 +375,8 @@ func TestSessionRestoreDryRun(t *testing.T) {
 	if strings.Contains(out, "opened 2") {
 		t.Errorf("dry run printed %q, want no summary of work it did not do", out)
 	}
-	if windows := windowNames(t); strings.Contains(windows, "work") {
-		t.Errorf("the dry run opened something:\n%s", windows)
+	if names := workspaces(t); strings.Contains(names, "work") {
+		t.Errorf("the dry run opened something:\n%s", names)
 	}
 }
 

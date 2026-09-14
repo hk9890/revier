@@ -133,8 +133,120 @@ func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt.Add("session:revier", "")
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
-	if !errors.Is(err, core.ErrNoAgentTabs) || !strings.Contains(err.Error(), "rt") {
-		t.Errorf("err = %v, want ErrNoAgentTabs naming the runtime", err)
+	if !errors.Is(err, core.ErrNoTabsToOpen) || !strings.Contains(err.Error(), "rt") {
+		t.Errorf("err = %v, want ErrNoTabsToOpen naming the runtime", err)
+	}
+}
+
+// The shell key's tab: the target's declared shell alone, in the directory
+// asked for, made current in the open workspace.
+func TestNewShellOpensTheDeclaredShellInTheOpenWorkspace(t *testing.T) {
+	c, rt, p, ref := openWorkspace(t)
+	w, err := c.AgentWorkspace(context.Background(), p, "home", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	dir := t.TempDir()
+
+	if err := c.NewShell(context.Background(), w, dir); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != ref {
+		t.Fatalf("Tabs = %+v, want one tab in %+v", rt.Tabs, ref)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: dir}})
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{rt.Tabs[0].Panel}) {
+		t.Errorf("panel focuses = %v, want the new shell %s", rt.PanelFocuses, rt.Tabs[0].Panel)
+	}
+}
+
+// A target that declares no shell still gets one: the runtime's own, in the
+// target's directory.
+func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt}
+	rt.Add("notes:revier", "")
+	p := prepared(t, agentProject())
+	w, err := c.AgentWorkspace(context.Background(), p, "notes", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+
+	if err := c.NewShell(context.Background(), w, ""); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+	if len(rt.Tabs) != 1 {
+		t.Fatalf("Tabs = %+v, want one tab", rt.Tabs)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Dir: "/home/hans/dev/github/revier"}})
+}
+
+func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: noTabs{rt}}
+	rt.Add("session:revier", "")
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	if err := c.NewShell(context.Background(), w, ""); !errors.Is(err, core.ErrNoTabsToOpen) {
+		t.Errorf("err = %v, want ErrNoTabsToOpen", err)
+	}
+}
+
+// linkProject is a link to far on buildbox: its home the pane onto the host's
+// workspace, and logs a window of its own on this machine.
+func linkProject(t *testing.T) core.Project {
+	t.Helper()
+	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Launch: []string{"ssh"}, Match: revier.Match{Title: "^far$"}}},
+		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
+			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
+	}})
+}
+
+// A tab for a link opens on the host when it is for the pane onto the host's
+// workspace - the home, or no target named - or for a target only the host
+// has, which goes with its name; the home goes as the project alone, the host
+// picking its own target. A target the link declares here is a local window,
+// and its tab opens here.
+func TestTabInSendsALinksHomeToTheHostAndKeepsItsLocalTargets(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox")
+	rt := hosttest.NewRuntime("rt")
+	logs := rt.Add("far-logs", "")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
+	pick := func(core.Project) (revier.TargetName, error) { return "home", nil }
+
+	for target, want := range map[revier.TargetName]string{"": "far-there", "home": "far-there", "work": "far-there:work"} {
+		place, err := c.TabIn(context.Background(), p, target, nil, pick)
+		if err != nil || place.Remote != remote || place.Address != want {
+			t.Errorf("TabIn %q = %+v, %v; want buildbox at %q", target, place, err, want)
+		}
+	}
+	place, err := c.TabIn(context.Background(), p, "logs", nil, pick)
+	if err != nil || place.Remote != nil || place.Workspace.Ref != logs {
+		t.Errorf("TabIn logs = %+v, %v; want the local window %+v", place, err, logs)
+	}
+}
+
+// The key pressed in the pane onto the host's workspace opens its tab there;
+// pressed in a link's local window, here.
+func TestTabAtSendsOnlyALinksHomePaneToTheHost(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox")
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("far", "", revier.Panel{ID: "1"})
+	logs := rt.Add("far-logs", "", revier.Panel{ID: "2"})
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	projects := []core.Project{linkProject(t)}
+
+	place, err := c.TabAt(context.Background(), projects, nil, "1")
+	if err != nil || place.Remote != remote || place.Address != "far-there" {
+		t.Errorf("TabAt home pane = %+v, %v; want buildbox at far-there", place, err)
+	}
+	place, err = c.TabAt(context.Background(), projects, nil, "2")
+	if err != nil || place.Remote != nil || place.Workspace.Ref != logs {
+		t.Errorf("TabAt logs = %+v, %v; want the local window %+v", place, err, logs)
 	}
 }
 

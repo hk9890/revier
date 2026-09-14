@@ -56,7 +56,10 @@ usage:
                                 type one line into an agent and submit it
   revier agent new [-p name | --panel id] [--resume id] [--dir path]
                                 add an agent tab, with its shell, to an open
-                                workspace (kitty)
+                                workspace; on a remote project, there
+  revier shell new [-p name | --panel id] [--dir path]
+                                add a shell tab to an open workspace; on a
+                                remote project, there
   revier session save [--name label]
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]
@@ -185,6 +188,10 @@ func run(args []string) error {
 		// Its own app: how long an agent command may take is one of its
 		// flags, and the hosts are probed and listed inside that bound.
 		return cmdAgent(args)
+	case "shell":
+		// Its own app, as agent new has: the hosts are probed and listed
+		// inside the command's own bound.
+		return cmdShell(args)
 	}
 
 	// A keypress command gets long enough for a detached launch's wait

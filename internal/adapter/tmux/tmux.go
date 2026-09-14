@@ -2,19 +2,23 @@
 //
 // It exists first among the runtime adapters because it is the one that can be
 // driven with no display at all: `tmux -L <socket>` starts a private server,
-// and select-window and the #{window_active} format both work with no client
-// attached. That makes it the substrate the live test layer runs against, and
-// the reason most of revier can be verified without touching a desktop
-// session. See docs/TESTING.md.
+// and every query here works with no client attached. That makes it the
+// substrate the live test layer runs against, and the reason most of revier
+// can be verified without touching a desktop session. See docs/TESTING.md.
 //
-// An instance is a tmux window; its panes are the panels a probe reads.
+// An instance is a tmux session, the way a kitty instance is an OS window: its
+// windows are the tabs, and the panes of every window are the panels a probe
+// reads. A session of its own per instance is what lets two terminals attach
+// two workspaces of one server without switching each other.
 package tmux
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -30,32 +34,37 @@ import (
 //
 // Free text can still contain this character, so every query below places its
 // one free-text field LAST and splits with a fixed field count, letting that
-// field absorb any separators it contains. That is why window names and pane
+// field absorb any separators it contains. That is why session names and pane
 // titles are fetched by two separate calls rather than one: a single line
 // cannot have two free-text fields at the end.
 const sep = "|"
+
+// nameOption is the session option that holds the name Open gave the
+// session. The session name cannot carry it: tmux 3.4 turns ':' and '.' in a
+// session name into '_', so "session:demo" would not be found by the match
+// it was opened for. A session revier did not open has no such option and is
+// known by its session name.
+const nameOption = "@revier-name"
+
+// titleFormat is the format of a session's name as an instance title.
+const titleFormat = "#{?#{" + nameOption + "}," + "#{" + nameOption + "},#{session_name}}"
+
+// focusOption is the server option Focus leaves the focused session in. With
+// no client attached tmux has no current session of its own - it answers with
+// the newest one - so on a server nobody is attached to, this is the answer
+// Focused gives.
+const focusOption = "@revier-focus"
 
 // Host is a tmux Runtime. Socket selects a private tmux server; an empty
 // Socket uses the user's default server.
 type Host struct {
 	Socket string
-
-	// Session is the tmux session new instances are created in. Empty uses
-	// "revier".
-	Session string
 }
 
 func (h *Host) Name() string { return "tmux" }
 
 func (h *Host) Capabilities() revier.Capabilities {
 	return revier.Capabilities{Layout: true, Persistent: true}
-}
-
-func (h *Host) session() string {
-	if h.Session != "" {
-		return h.Session
-	}
-	return "revier"
 }
 
 // cmd runs tmux with -u. Without it tmux decides from LANG and LC_* whether
@@ -90,23 +99,21 @@ func (h *Host) Probe(ctx context.Context) error {
 	return nil
 }
 
-// Instances lists every window on the server, panes included.
+// Instances lists every session on the server, with the panes of all its
+// windows.
 //
-// Two calls, both bulk: one for window names and one for panes. The cost is
+// Two calls, both bulk: one for session names and one for panes. The cost is
 // constant, not per project, which is the property the hot path actually needs.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
-	names, err := h.windowNames(ctx)
-	if err != nil {
+	sessions, named, err := h.sessions(ctx)
+	if err != nil || len(sessions) == 0 {
 		return nil, err
-	}
-	if names == nil {
-		return nil, nil
 	}
 
 	// pane_title is free text and comes last, so SplitN gives it whatever it
 	// contains.
 	format := strings.Join([]string{
-		"#{pid}", "#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
+		"#{session_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
 		"#{@" + varsOption + "}", "#{pane_title}",
 	}, sep)
 
@@ -118,38 +125,37 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		return nil, err
 	}
 
-	order := []string{}
-	byWindow := map[string]*revier.Instance{}
+	var lines [][]string
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		// A malformed line is skipped, never fatal. Panes belonging to other
+		// tools share this server, and one odd line must not blank every
+		// project revier knows about.
+		if f := strings.SplitN(line, sep, 6); len(f) == 6 {
+			lines = append(lines, f)
+		}
+	}
 	// list-panes -a lists a window's panes once for every session the window
 	// is linked into - a session group, link-window - and a pane listed twice
-	// is one agent, not two.
-	seen := map[string]bool{}
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
+	// is one agent, not two. It belongs to the session revier opened, else to
+	// the oldest: a view grouped onto a workspace is listed first whenever its
+	// name sorts first, and must not take the workspace's panes.
+	owner := map[string]string{}
+	for _, f := range lines {
+		session, pane := f[0], f[1]
+		if cur, ok := owner[pane]; !ok || owns(named, session, cur) {
+			owner[pane] = session
 		}
-		f := strings.SplitN(line, sep, 7)
-		if len(f) != 7 {
-			// A malformed line is skipped, never fatal. Panes belonging to
-			// other tools share this server, and one odd line must not blank
-			// every project revier knows about.
-			continue
-		}
-		serverPID, winID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
-		if seen[paneID] {
-			continue
-		}
-		seen[paneID] = true
+	}
 
-		inst, ok := byWindow[winID]
-		if !ok {
-			name := names[winID]
-			inst = &revier.Instance{
-				Ref:   revier.TargetRef{Host: h.Name(), ID: refID(serverPID, winID), Title: name},
-				Title: name,
-			}
-			byWindow[winID] = inst
-			order = append(order, winID)
+	bySession := map[string]*revier.Instance{}
+	for i := range sessions {
+		bySession[sessionOf(sessions[i].Ref.ID)] = &sessions[i]
+	}
+	for _, f := range lines {
+		sessionID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5]
+		inst, ok := bySession[sessionID]
+		if !ok || owner[paneID] != sessionID {
+			continue
 		}
 		pid, _ := strconv.Atoi(panePID)
 		inst.Panels = append(inst.Panels, revier.Panel{
@@ -161,50 +167,58 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			Command: []string{paneCmd},
 		})
 	}
-
-	instances := make([]revier.Instance, 0, len(order))
-	for _, id := range order {
-		instances = append(instances, *byWindow[id])
-	}
-	return instances, nil
+	return sessions, nil
 }
 
-// windowNames maps window id to window name. window_name is free text, so it
-// is the last field of its own query.
-func (h *Host) windowNames(ctx context.Context) (map[string]string, error) {
-	out, err := h.run(ctx, "list-windows", "-a", "-F", "#{window_id}"+sep+"#{window_name}")
+// owns reports whether session a, rather than b, owns a pane both list: the
+// one revier named, and between two alike the older, by its lower id.
+func owns(named map[string]bool, a, b string) bool {
+	if named[a] != named[b] {
+		return named[a]
+	}
+	na, _ := strconv.Atoi(strings.TrimPrefix(a, "$"))
+	nb, _ := strconv.Atoi(strings.TrimPrefix(b, "$"))
+	return na < nb
+}
+
+// sessions lists every session as an instance with no panels yet, and which
+// sessions revier named. The title is free text, so it is the last field of
+// its own query.
+func (h *Host) sessions(ctx context.Context) ([]revier.Instance, map[string]bool, error) {
+	format := "#{pid}" + sep + "#{session_id}" + sep + "#{?#{" + nameOption + "},1,0}" + sep + titleFormat
+	out, err := h.run(ctx, "list-sessions", "-F", format)
 	if err != nil {
 		if noServer(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	names := map[string]string{}
+	var instances []revier.Instance
+	named := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
+		f := strings.SplitN(line, sep, 4)
+		if len(f) != 4 {
 			continue
 		}
-		f := strings.SplitN(line, sep, 2)
-		if len(f) != 2 {
-			continue
-		}
-		names[f[0]] = f[1]
+		named[f[1]] = f[2] == "1"
+		instances = append(instances, revier.Instance{
+			Ref:   revier.TargetRef{Host: h.Name(), ID: refID(f[0], f[1]), Title: f[3]},
+			Title: f[3],
+		})
 	}
-	return names, nil
+	return instances, named, nil
 }
 
-// refID is an instance id: the window id, behind the pid of the server that
-// assigned it. tmux numbers windows per server from @0, so after a restart a
-// bare window id names an unrelated window, and a binding kept in state would
-// raise it. The core trusts a runtime binding without re-checking it
+// refID is an instance id: the session id, behind the pid of the server that
+// assigned it. tmux numbers sessions per server from $0, so after a restart a
+// bare session id names an unrelated session, and a binding kept in state
+// would raise it. The core trusts a runtime binding without re-checking it
 // (decisions.md D25), so the id has to stay unique across servers.
-func refID(serverPID, window string) string { return serverPID + "/" + window }
+func refID(serverPID, session string) string { return serverPID + "/" + session }
 
-// windowOf is the tmux window id an instance id carries.
-func windowOf(id string) string { return id[strings.LastIndex(id, "/")+1:] }
+// sessionOf is the tmux session id an instance id carries.
+func sessionOf(id string) string { return id[strings.LastIndex(id, "/")+1:] }
 
-// kindOf classifies a pane by its foreground command. The agent kind is what
-// the survey probes; everything else is a shell or a tool.
 // varsOption is the pane option a program leaves its panel variables in:
 // `tmux set -p @revier 'NAME=value OTHER=value'`.
 //
@@ -237,6 +251,8 @@ func parseVars(s string) map[string]string {
 	return out
 }
 
+// kindOf classifies a pane by its foreground command. The agent kind is what
+// the survey probes; everything else is a shell or a tool.
 func kindOf(cmd string) revier.PanelKind {
 	switch cmd {
 	case "claude", "claude-code", "opencode", "aider":
@@ -247,72 +263,198 @@ func kindOf(cmd string) revier.PanelKind {
 	return revier.PanelTool
 }
 
-// Open creates a window named r.Name, starting the server and the session when
-// neither exists yet. With panels, the first panel is the window's pane and
-// every later one is split into it, side by side; without, the window runs
-// r.Launch alone.
+// Open creates a session for the realization, starting the server when none
+// runs yet, and leaves r.Name on it where Instances reads the title. With
+// panels, the first panel is the session's first pane and every later one is
+// split into it, side by side; without, the session runs r.Launch alone.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
-		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the window")
+		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
 	}
-	panels := r.Panels
-	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
-	}
+	panels := panelsOf(r)
 
-	format := "#{pid}" + sep + "#{window_id}" + sep + "#{pane_id}"
-	args := []string{"new-window", "-P", "-F", format, "-n", literal(r.Name)}
-	if !h.hasSession(ctx) {
-		args = []string{"new-session", "-d", "-P", "-F", format, "-s", h.session(), "-n", literal(r.Name)}
-	} else {
-		args = append(args, "-t", h.session()+":")
-	}
-	if dir := panels[0].Dir; dir != "" {
-		args = append(args, "-c", literal(dir))
-	}
-	args = append(args, command(panels[0].Command)...)
-
-	out, err := h.run(ctx, args...)
+	out, err := h.newSession(ctx, r.Name, panels[0])
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	f := strings.SplitN(strings.TrimSpace(out), sep, 3)
-	if len(f) != 3 {
-		return revier.TargetRef{}, fmt.Errorf("tmux new-window: unexpected %q", out)
+	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
+	if len(f) != 4 {
+		if len(f) > 1 && strings.HasPrefix(f[1], "$") {
+			_, _ = h.run(ctx, "kill-session", "-t", f[1])
+		}
+		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
-	serverPID, window, pane := f[0], f[1], f[2]
-	if err := h.title(ctx, pane, panels[0].Title); err != nil {
+	serverPID, session, window, pane := f[0], f[1], f[2], f[3]
+	if err := h.name(ctx, session, window, pane, r.Name, panels); err != nil {
+		// Best effort: the error that failed the session is the one worth
+		// reporting. Left running, a session with no name or no shell would be
+		// matched, or would hold its name against the next Open.
+		_, _ = h.run(ctx, "kill-session", "-t", session)
 		return revier.TargetRef{}, err
 	}
+	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, session), Title: r.Name}, nil
+}
 
+// newSession starts a detached session running the panel, named after the
+// realization. The session name is only what a terminal's status line shows -
+// @revier-name is the identity - so a name another session already has, which
+// tmux 3.4 makes of "a:b" and "a.b" alike, is left to tmux to choose.
+func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSpec) (string, error) {
+	format := "#{pid}" + sep + "#{session_id}" + sep + "#{window_id}" + sep + "#{pane_id}"
+	args := []string{"new-session", "-d", "-P", "-F", format}
+	out, err := h.run(ctx, append(append(args, "-s", literal(name)), start(first)...)...)
+	if err != nil && strings.Contains(err.Error(), "duplicate session") {
+		return h.run(ctx, append(args, start(first)...)...)
+	}
+	return out, err
+}
+
+// name leaves the realization's name on a new session and fills its window.
+func (h *Host) name(ctx context.Context, session, window, pane, name string, panels []revier.PanelSpec) error {
+	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, name); err != nil {
+		return err
+	}
+	return h.fill(ctx, window, pane, panels)
+}
+
+// panelsOf is what a realization runs: its panels, or r.Launch in r.Dir as the
+// one panel.
+func panelsOf(r revier.Realization) []revier.PanelSpec {
+	if len(r.Panels) == 0 {
+		return []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
+	}
+	return r.Panels
+}
+
+// start is the part of a new-session, new-window or split-window that starts
+// a panel: its directory and its command.
+func start(p revier.PanelSpec) []string {
+	var args []string
+	if p.Dir != "" {
+		args = append(args, "-c", literal(p.Dir))
+	}
+	return append(args, command(p.Command)...)
+}
+
+// fill titles the window's first pane and splits every later panel into the
+// window beside it.
+func (h *Host) fill(ctx context.Context, window, first string, panels []revier.PanelSpec) error {
+	if err := h.title(ctx, first, panels[0].Title); err != nil {
+		return err
+	}
 	for _, p := range panels[1:] {
-		args := []string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}
-		if p.Dir != "" {
-			args = append(args, "-c", literal(p.Dir))
-		}
-		args = append(args, command(p.Command)...)
+		args := append([]string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}, start(p)...)
 		out, err := h.run(ctx, args...)
 		if err != nil {
-			return revier.TargetRef{}, err
+			return err
 		}
 		if err := h.title(ctx, strings.TrimSpace(out), p.Title); err != nil {
-			return revier.TargetRef{}, err
+			return err
 		}
 	}
 	if len(panels) > 1 {
 		if _, err := h.run(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
-			return revier.TargetRef{}, err
+			return err
 		}
 	}
-	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, window), Title: r.Name}, nil
+	return nil
 }
 
-// literal escapes s for an argument tmux expands as a format, which -n, -c
-// and -T all are. Unescaped, a project called "C#" names its window "C" and
-// is never found again, and a directory holding a '#' starts the pane in
-// $HOME. "##" is tmux's '#', except that tmux keeps a run of '#' directly
-// before '[' as written, so that run is passed through unchanged. Checked on
-// tmux 3.4 and 3.7.
+// OpenTab opens a window after the last one of the session: r.Launch alone,
+// or r.Panels with every later one split into the first. It goes last, not
+// into the lowest free index, so the panels keep their order in the listing a
+// save records agents by. The vars go into the first pane's @revier option,
+// which Instances reports back as the panel's Vars. The window opens without
+// becoming current; the core focuses the panel it wants.
+//
+// A tab that fails is killed whole: the core names its agent as not added,
+// and it must not be running without its shell.
+func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
+	if err := h.own(ref); err != nil {
+		return "", err
+	}
+	panels := panelsOf(r)
+	args := []string{"new-window", "-d", "-a", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-t", sessionOf(ref.ID) + ":{end}"}
+	out, err := h.run(ctx, append(args, start(panels[0])...)...)
+	if err != nil {
+		return "", err
+	}
+	f := strings.SplitN(strings.TrimSpace(out), sep, 2)
+	window := f[0]
+	if len(f) != 2 {
+		if strings.HasPrefix(window, "@") {
+			_, _ = h.run(ctx, "kill-window", "-t", window)
+		}
+		return "", fmt.Errorf("tmux new-window: unexpected %q", out)
+	}
+	pane := f[1]
+	if err := h.tab(ctx, window, pane, panels, vars); err != nil {
+		// Best effort: the error that failed the tab is the one worth reporting.
+		_, _ = h.run(ctx, "kill-window", "-t", window)
+		return "", err
+	}
+	return revier.PanelID(pane), nil
+}
+
+func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.PanelSpec, vars map[string]string) error {
+	if len(vars) > 0 {
+		pairs := make([]string, 0, len(vars))
+		for name, value := range vars {
+			pairs = append(pairs, name+"="+value)
+		}
+		sort.Strings(pairs)
+		if _, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " ")); err != nil {
+			return err
+		}
+	}
+	return h.fill(ctx, window, pane, panels)
+}
+
+// FocusPanel makes the pane current in its window and its window current in
+// the instance's session. The window is named inside that session: a pane
+// alone names a window of whichever session tmux resolves it to, which in a
+// session group need not be this one. Which session a terminal shows is
+// Focus's.
+func (h *Host) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	if err := h.own(ref); err != nil {
+		return err
+	}
+	out, err := h.run(ctx, "display-message", "-p", "-t", panel.String(), "#{window_id}")
+	if err != nil {
+		return err
+	}
+	if _, err := h.run(ctx, "select-window", "-t", sessionOf(ref.ID)+":"+strings.TrimSpace(out)); err != nil {
+		return err
+	}
+	_, err = h.run(ctx, "select-pane", "-t", panel.String())
+	return err
+}
+
+// FocusedPanel reports the current pane of the session's current window.
+func (h *Host) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
+	if err := h.own(ref); err != nil {
+		return "", err
+	}
+	out, err := h.run(ctx, "display-message", "-p", "-t", sessionOf(ref.ID)+":", "#{pane_id}")
+	if err != nil {
+		return "", err
+	}
+	return revier.PanelID(strings.TrimSpace(out)), nil
+}
+
+// own refuses a ref this host did not produce.
+func (h *Host) own(ref revier.TargetRef) error {
+	if ref.Host != h.Name() || ref.ID == "" {
+		return fmt.Errorf("tmux: %s/%s is not a tmux session", ref.Host, ref.ID)
+	}
+	return nil
+}
+
+// literal escapes s for an argument tmux expands as a format, which -c and -T
+// both are. Unescaped, a pane titled "C#" is titled "C", and a directory
+// holding a '#' starts the pane in $HOME. "##" is tmux's '#', except that tmux
+// keeps a run of '#' directly before '[' as written, so that run is passed
+// through unchanged. Checked on tmux 3.4 and 3.7.
 func literal(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
@@ -356,49 +498,116 @@ func (h *Host) title(ctx context.Context, pane, title string) error {
 	return err
 }
 
-func (h *Host) hasSession(ctx context.Context) bool {
-	_, err := h.run(ctx, "has-session", "-t", h.session())
-	return err == nil
-}
-
-// Focus selects the window. select-window works with no client attached, which
-// is what makes the live test layer possible without a terminal.
+// Focus makes the session the focused one, recorded in the server option, and
+// switches the terminal that shows it:
+//
+//   - run in a pane of this server - a key pressed there - the terminal
+//     attached to that pane's session, and none when nobody is attached to it;
+//   - run from outside, the one terminal attached to the server, and none
+//     when there are several, since which of them is not tmux's to know.
+//
+// A terminal is named with -c: without it tmux picks one by its own rules,
+// which moves a terminal the command has nothing to do with.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
-	_, err := h.run(ctx, "select-window", "-t", windowOf(ref.ID))
+	if err := h.own(ref); err != nil {
+		return err
+	}
+	session := sessionOf(ref.ID)
+	if _, err := h.run(ctx, "set-option", "-s", focusOption, session); err != nil {
+		return err
+	}
+	client, err := h.terminal(ctx)
+	if err != nil || client == "" {
+		return err
+	}
+	_, err = h.run(ctx, "switch-client", "-c", client, "-t", session)
 	return err
 }
 
-// AttachCommand is the argv that puts the calling terminal onto the window.
-// The window is the target: tmux attaches the session that holds it and
-// makes it current, and instances are listed across the whole server, so a
-// window matched in another session is reached the same way. It goes to the
-// server this host speaks to, so a private socket is carried along. The
-// caller execs it; nothing here takes over a terminal.
-func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
-	if ref.Host != h.Name() || ref.ID == "" {
-		return nil, fmt.Errorf("tmux: %s/%s is not a tmux window", ref.Host, ref.ID)
-	}
-	argv := []string{"tmux", "-u"}
-	if h.Socket != "" {
-		argv = append(argv, "-L", h.Socket)
-	}
-	return append(argv, "attach-session", "-t", windowOf(ref.ID)), nil
+// client is one terminal attached to the server, and the session it shows.
+type client struct {
+	name, session string
+	activity      int
 }
 
-// SendText types text into a pane. -l sends it as characters, so no word of
-// it is read as a key name, and "--" keeps a leading dash from reading as a
-// flag. A pane id is unique across the server, so the instance is not needed.
-func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.PanelID, text string) error {
-	_, err := h.run(ctx, "send-keys", "-t", panel.String(), "-l", "--", text)
-	return err
-}
-
-// Focused reports the session's current window.
-func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
-	out, err := h.run(ctx, "display-message", "-p", "-t", h.session()+":",
-		"#{pid}"+sep+"#{window_id}"+sep+"#{window_name}")
+// clients lists the terminals attached to the server, the most recently
+// active first. client_name is a tty path, free text, so it comes last.
+func (h *Host) clients(ctx context.Context) ([]client, error) {
+	out, err := h.run(ctx, "list-clients", "-F", "#{client_activity}"+sep+"#{session_id}"+sep+"#{client_name}")
 	if err != nil {
 		if noServer(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var clients []client
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		f := strings.SplitN(line, sep, 3)
+		if len(f) != 3 {
+			continue
+		}
+		activity, _ := strconv.Atoi(f[0])
+		clients = append(clients, client{name: f[2], session: f[1], activity: activity})
+	}
+	sort.SliceStable(clients, func(i, j int) bool { return clients[i].activity > clients[j].activity })
+	return clients, nil
+}
+
+// terminal is the client Focus switches, as Focus describes, or "" for none.
+func (h *Host) terminal(ctx context.Context) (string, error) {
+	clients, err := h.clients(ctx)
+	if err != nil || len(clients) == 0 {
+		return "", err
+	}
+	pane, err := h.callerPane(ctx)
+	if err != nil {
+		return "", err
+	}
+	if pane == "" {
+		if len(clients) == 1 {
+			return clients[0].name, nil
+		}
+		return "", nil
+	}
+	out, err := h.run(ctx, "display-message", "-p", "-t", pane, "#{session_id}")
+	if err != nil {
+		return "", err
+	}
+	for _, c := range clients {
+		if c.session == strings.TrimSpace(out) {
+			return c.name, nil
+		}
+	}
+	return "", nil
+}
+
+// callerPane is the pane this process runs in when that pane is on this
+// host's server, and "" otherwise: $TMUX names the socket of the server the
+// pane belongs to, and $TMUX_PANE the pane.
+func (h *Host) callerPane(ctx context.Context) (string, error) {
+	socket, _, _ := strings.Cut(os.Getenv("TMUX"), ",")
+	pane := os.Getenv("TMUX_PANE")
+	if socket == "" || pane == "" {
+		return "", nil
+	}
+	out, err := h.run(ctx, "display-message", "-p", "#{socket_path}")
+	if err != nil || strings.TrimSpace(out) != socket {
+		return "", err
+	}
+	return pane, nil
+}
+
+// Focused reports the session the one attached terminal shows. With none, or
+// with several, it is the session Focus recorded, and with no record a zero
+// ref.
+func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
+	session, err := h.focusedSession(ctx)
+	if err != nil || session == "" {
+		return revier.TargetRef{}, err
+	}
+	out, err := h.run(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}"+sep+titleFormat)
+	if err != nil {
+		if noServer(err) || strings.Contains(err.Error(), "can't find session") {
 			return revier.TargetRef{}, nil
 		}
 		return revier.TargetRef{}, err
@@ -407,7 +616,49 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	if len(f) != 3 {
 		return revier.TargetRef{}, fmt.Errorf("tmux display-message: unexpected %q", out)
 	}
+	// A session that has closed since the focus was recorded is answered
+	// with empty fields on tmux 3.7, not with an error.
+	if f[1] != session {
+		return revier.TargetRef{}, nil
+	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(f[0], f[1]), Title: f[2]}, nil
+}
+
+func (h *Host) focusedSession(ctx context.Context) (string, error) {
+	clients, err := h.clients(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(clients) == 1 {
+		return clients[0].session, nil
+	}
+	out, err := h.run(ctx, "show-options", "-s", "-v", "-q", focusOption)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// AttachCommand is the argv that puts the calling terminal onto the session.
+// It goes to the server this host speaks to, so a private socket is carried
+// along. The caller execs it; nothing here takes over a terminal.
+func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
+	if err := h.own(ref); err != nil {
+		return nil, err
+	}
+	argv := []string{"tmux", "-u"}
+	if h.Socket != "" {
+		argv = append(argv, "-L", h.Socket)
+	}
+	return append(argv, "attach-session", "-t", sessionOf(ref.ID)), nil
+}
+
+// SendText types text into a pane. -l sends it as characters, so no word of
+// it is read as a key name, and "--" keeps a leading dash from reading as a
+// flag. A pane id is unique across the server, so the instance is not needed.
+func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.PanelID, text string) error {
+	_, err := h.run(ctx, "send-keys", "-t", panel.String(), "-l", "--", text)
+	return err
 }
 
 // noServer reports the "no server running" family of tmux errors, which mean

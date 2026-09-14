@@ -26,7 +26,7 @@ type click struct {
 // row of a file manager is: choosing it costs nothing and opening it opens a
 // window. A target in the pane and a button on the bar are not rows but
 // things to do, and one click does them, on release, so a drag that begins on
-// one runs nothing (decisions.md D36, D42, D50, D70).
+// one runs nothing (decisions.md D36, D42, D50, D72).
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
 // before they are. A drag selects text instead (selection.go).

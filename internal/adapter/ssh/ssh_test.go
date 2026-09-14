@@ -92,6 +92,36 @@ func TestPromptForwardsTheAddressAndTheText(t *testing.T) {
 	}
 }
 
+// A tab is opened by the revier on the host, for the address as the host
+// knows it; a resume goes with an agent only when there is one.
+func TestNewAgentAndNewShellRunTheCommandsOnTheHost(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, "", nil)
+	ctx := context.Background()
+	if err := r.NewAgent(ctx, "demo:home", "abc-123"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.NewAgent(ctx, "demo", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.NewShell(ctx, "demo"); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"revier", "agent", "new", "-p", "demo:home", "--resume", "abc-123"},
+		{"revier", "agent", "new", "-p", "demo"},
+		{"revier", "shell", "new", "-p", "demo"},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("ran %v, want %v", *calls, want)
+	}
+	for i := range want {
+		if !slices.Equal((*calls)[i], want[i]) {
+			t.Errorf("call %d ran %v, want %v", i, (*calls)[i], want[i])
+		}
+	}
+}
+
 func TestWaitReadsTheStatusTheRemotePrinted(t *testing.T) {
 	r := ssh.New("buildbox")
 	calls := record(r, "attention\n", nil)

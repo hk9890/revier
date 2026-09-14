@@ -60,7 +60,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	host := &tmux.Host{Socket: socket, Session: "revier-drive"}
+	host := &tmux.Host{Socket: socket}
 	c := &core.Core{Runtime: host}
 	project, err := core.PrepareProject(demoProject())
 	fatal(err)
