@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,21 +88,29 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 		if !ok {
 			return core.Project{}, fmt.Errorf("no project named %q", explicit)
 		}
+		slog.Info("resolve", "project", p.Name, "by", "flag")
 		return p, nil
 	}
-	if cwd, err := os.Getwd(); err == nil {
-		if p, ok := a.projectForPath(cwd); ok {
-			return p, nil
-		}
+	cwd, err := os.Getwd()
+	if err != nil {
+		slog.Warn("resolve: working directory", "err", err.Error())
+	} else if p, ok := a.projectForPath(cwd); ok {
+		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
+		return p, nil
 	}
 	// The focused window, before the remembered project: a desktop binding
 	// has no useful working directory, and the project the user is looking at
 	// beats the one revier last acted on.
-	if p, ok, err := a.core.ProjectOfFocused(ctx, a.projects); err == nil && ok {
+	p, ok, err := a.core.ProjectOfFocused(ctx, a.projects)
+	if err != nil {
+		slog.Warn("resolve: focused window", "err", err.Error())
+	} else if ok {
+		slog.Info("resolve", "project", p.Name, "by", "focused window")
 		return p, nil
 	}
 	if a.state.Current != "" {
 		if p, ok := a.project(a.state.Current); ok {
+			slog.Info("resolve", "project", p.Name, "by", "last project")
 			return p, nil
 		}
 	}
@@ -150,12 +159,14 @@ func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
 func (a *app) update(apply func(s *state.State)) {
 	st, err := state.Load(a.stateRoot)
 	if err != nil {
+		slog.Warn("state load, applying to the state read at start", "err", err.Error())
 		st = a.state
 	}
 	apply(st)
 	if err := st.Save(a.stateRoot); err != nil {
 		// State is a convenience. Losing it costs the next keybinding a
 		// fallback, not correctness, so it must not fail the command.
+		slog.Warn("state save", "err", err.Error())
 		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
 	}
 }
@@ -193,6 +204,7 @@ func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.
 			return revier.TargetRef{}, core.Result{}, err
 		}
 		if !up {
+			slog.Info("go: launch still coming up, not launched again", "project", p.Name, "target", name, "launched_at", l.At)
 			return revier.TargetRef{}, core.Result{}, nil // still coming up; the first press is waiting for it
 		}
 	}

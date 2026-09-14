@@ -78,6 +78,22 @@ const (
 	AgentInTab
 )
 
+var agentNames = map[AgentOutcome]string{
+	AgentResumed:     "resumed",
+	AgentEmpty:       "empty",
+	AgentUnresumable: "unresumable",
+	AgentDirGone:     "directory gone",
+	AgentDropped:     "dropped",
+	AgentNotAdded:    "not added",
+	AgentInTab:       "in tab",
+}
+
+func (o AgentOutcome) String() string { return agentNames[o] }
+
+// MarshalText names the outcome in the log, where a slice of them would
+// otherwise be the base64 of their bytes.
+func (o AgentOutcome) MarshalText() ([]byte, error) { return []byte(o.String()), nil }
+
 // RestoreStep is one recorded target and what restoring it means here.
 type RestoreStep struct {
 	Project revier.ProjectName

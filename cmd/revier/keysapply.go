@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -45,6 +46,13 @@ func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error 
 	}
 	if !dryRun {
 		plan = a.core.ApplyKeys(ctx, plan, *force)
+		for _, s := range plan.Steps {
+			if s.Err != "" {
+				slog.Error("keys "+sub, "step", s)
+			} else if s.Done {
+				slog.Info("keys "+sub, "step", s)
+			}
+		}
 	}
 
 	if *asJSON {

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,6 +134,7 @@ func cmdEach(w io.Writer, args []string) error {
 			res = runIn(r, p.Project, argv)
 		}
 		r.Results = append(r.Results, res)
+		logEachResult(res)
 		word, detail := resultLine(res, r.Dir)
 		printStatus(w, word, detail)
 		if err := r.Save(); err != nil {
@@ -204,6 +206,17 @@ func runIn(r *runlog.Run, p core.Project, argv []string) runlog.Result {
 		res.Error = err.Error()
 	}
 	return res
+}
+
+// logEachResult is one project's line of a run. The run's own record holds its
+// output; the log holds only how it ended, beside every other operation.
+func logEachResult(res runlog.Result) {
+	attrs := []any{"project", res.Project, "status", res.Status, "exit", res.Exit, "seconds", res.Seconds, "skip", res.Skip}
+	if res.Status == runlog.StatusFailed {
+		slog.Error("each project", append(attrs, "err", res.Error, "output", res.Output)...)
+		return
+	}
+	slog.Info("each project", attrs...)
 }
 
 func skipped(p core.Pick) runlog.Result {

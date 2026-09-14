@@ -309,3 +309,13 @@ the unnamed window would take its title.
 
 Recorded under the workspace, it was restored twice. A tab target's argv is not
 known to be the agent, so a resume could run `taskmgr-ui --resume <id>`.
+
+### D69 — the log is slog's default logger, one JSON file per day under the state root
+
+The standard library carries levels, fields and JSON, so no logging dependency
+is added. Every process appends to one daily file, because a keypress is its own
+process; `O_APPEND` keeps concurrent lines whole, which a size-rotating library
+does not promise. Logging is not a port: it names no tool, so the core logs
+directly. A poll that recurs logs a failure once until it changes or recovers,
+and a slow run once a minute, so a host down for an hour does not bury the
+operations.

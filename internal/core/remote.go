@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -94,7 +96,9 @@ func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[
 	for i, p := range links {
 		names[i] = p.Remote.Project
 	}
+	start := time.Now()
 	views, err := c.survey(ctx, host, names)
+	logging.Poll("remote survey "+host, "remote survey", start, err, "host", host, "projects", len(names))
 	if err != nil {
 		for _, p := range links {
 			out[p.Name] = remoteAnswer{err: err}

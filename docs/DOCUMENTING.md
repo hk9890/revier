@@ -31,7 +31,6 @@ and return nothing:
 
 | File | Create when |
 |---|---|
-| `docs/MONITORING.md` | revier writes a log or leaves evidence of a past run |
 | `docs/REVIEWING.md` | this repository has a review rule the `code-review` skill cannot know |
 | `CONTRIBUTING.md` | someone other than the author builds from source |
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,6 +217,7 @@ func cmdAgentNew(args []string) error {
 		return err
 	}
 	outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+	slog.Info("agent new", "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", *resume, "dir", *dir, "outcome", outcome.String())
 	if err != nil {
 		return err
 	}
