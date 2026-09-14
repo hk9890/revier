@@ -26,6 +26,15 @@ type Remote interface {
 	// early with ctx's error.
 	Wait(ctx context.Context, address, until string) (Status, error)
 
+	// NewAgent opens an agent tab in the open workspace a project address
+	// names, on the conversation resume names when it is set: `revier agent
+	// new` there. The terminal attached to that workspace shows the tab.
+	NewAgent(ctx context.Context, address string, resume SessionID) error
+
+	// NewShell opens a shell tab in the open workspace a project address
+	// names: `revier shell new` there.
+	NewShell(ctx context.Context, address string) error
+
 	// RunCommand is the argv that runs `revier run <action> -p <project>`
 	// on the remote, for the caller to run here with the terminal: an
 	// action takes the terminal it is given, so it is not run and read back

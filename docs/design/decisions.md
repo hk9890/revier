@@ -319,3 +319,12 @@ does not promise. Logging is not a port: it names no tool, so the core logs
 directly. A poll that recurs logs a failure once until it changes or recovers,
 and a slow run once a minute, so a host down for an hour does not bury the
 operations.
+
+### D71 — an agent or a shell asked for a remote project opens on its host
+
+The keys that open an agent or a shell beside a workspace name the window they
+were pressed in, and a remote project's window is the pane onto the host. A
+tab opened here would run on this machine, outside the workspace the host's
+revier surveys. So `agent new` and `shell new` forward to the host as
+`Remote.NewAgent` and `Remote.NewShell`, as `agent prompt` does, and the host
+picks the target and the directory; a `--dir` here is a path on this machine.

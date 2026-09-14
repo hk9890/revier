@@ -147,6 +147,13 @@ the window id belongs to, since every kitty counts its windows from 1:
 map ctrl+shift+z launch --type=background --copy-env --cwd=current sh -lc 'exec revier agent new --panel "$1" --dir .' sh @active-kitty-window-id
 ```
 
+`revier shell new` opens a shell the same way: the target's shell panel alone,
+or the runtime's shell where the target declares none:
+
+```
+map ctrl+shift+t launch --type=background --copy-env --cwd=current sh -lc 'exec revier shell new --panel "$1" --dir .' sh @active-kitty-window-id
+```
+
 Projects are TOML files under `~/.config/revier/projects/`; the format, with a
 worked example, is [docs/design/extending.md](docs/design/extending.md).
 Targets most projects share, such as an editor, are declared once as
@@ -177,7 +184,10 @@ under its `~/.config/revier/projects/`. The list then shows the link as
 `far@buildbox` with what the agent there is doing, read from the revier
 there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
 wait far ...` and `revier run <action> -p far` run on the host, so an action
-is one the host's `config.toml` defines. A host that does not answer shows as
+is one the host's `config.toml` defines. `revier agent new` and `revier shell
+new` open their tab in the workspace on the host, which the pane shows, so the
+two keys above work in the pane as they do in a local workspace; `--dir` is not
+sent. A host that does not answer shows as
 unreachable. ssh runs in batch mode, so the host has to accept a key;
 `ControlMaster` in `~/.ssh/config` keeps the refresh fast.
 

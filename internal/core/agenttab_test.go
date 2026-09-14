@@ -133,8 +133,61 @@ func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt.Add("session:revier", "")
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
-	if !errors.Is(err, core.ErrNoAgentTabs) || !strings.Contains(err.Error(), "rt") {
-		t.Errorf("err = %v, want ErrNoAgentTabs naming the runtime", err)
+	if !errors.Is(err, core.ErrNoTabsToOpen) || !strings.Contains(err.Error(), "rt") {
+		t.Errorf("err = %v, want ErrNoTabsToOpen naming the runtime", err)
+	}
+}
+
+// The shell key's tab: the target's declared shell alone, in the directory
+// asked for, made current in the open workspace.
+func TestNewShellOpensTheDeclaredShellInTheOpenWorkspace(t *testing.T) {
+	c, rt, p, ref := openWorkspace(t)
+	w, err := c.AgentWorkspace(context.Background(), p, "home", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	dir := t.TempDir()
+
+	if err := c.NewShell(context.Background(), w, dir); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != ref {
+		t.Fatalf("Tabs = %+v, want one tab in %+v", rt.Tabs, ref)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: dir}})
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{rt.Tabs[0].Panel}) {
+		t.Errorf("panel focuses = %v, want the new shell %s", rt.PanelFocuses, rt.Tabs[0].Panel)
+	}
+}
+
+// A target that declares no shell still gets one: the runtime's own, in the
+// target's directory.
+func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt}
+	rt.Add("notes:revier", "")
+	p := prepared(t, agentProject())
+	w, err := c.AgentWorkspace(context.Background(), p, "notes", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+
+	if err := c.NewShell(context.Background(), w, ""); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Dir: "/home/hans/dev/github/revier"}})
+}
+
+func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: noTabs{rt}}
+	rt.Add("session:revier", "")
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	if err := c.NewShell(context.Background(), w, ""); !errors.Is(err, core.ErrNoTabsToOpen) {
+		t.Errorf("err = %v, want ErrNoTabsToOpen", err)
 	}
 }
 

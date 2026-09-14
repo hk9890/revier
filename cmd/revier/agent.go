@@ -195,15 +195,8 @@ func cmdAgentNew(args []string) error {
 	if len(pos) != 0 || (*project != "" && *panel != "") {
 		return errors.New("usage: revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]")
 	}
-	if *dir != "" {
-		abs, err := filepath.Abs(*dir)
-		if err != nil {
-			return err
-		}
-		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			return fmt.Errorf("--dir %s: not a directory", *dir)
-		}
-		*dir = abs
+	if *dir, err = absDir(*dir); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
@@ -212,30 +205,68 @@ func cmdAgentNew(args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := a.agentWorkspace(ctx, *project, *panel, *dir)
+	return a.newAgent(ctx, *project, *panel, *dir, revier.SessionID(*resume))
+}
+
+// newAgent opens the agent tab in the workspace tabWorkspace finds, or asks
+// the host of a remote project to open it there.
+func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
+	w, err := a.tabWorkspace(ctx, project, panel, dir, a.core.AgentTarget)
 	if err != nil {
 		return err
 	}
-	outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
-	slog.Info("agent new", "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", *resume, "dir", *dir, "outcome", outcome.String())
+	r, there, err := a.remoteWorkspace(w)
 	if err != nil {
 		return err
 	}
-	if *resume != "" && outcome != core.AgentResumed {
-		fmt.Fprintf(os.Stderr, "revier: warning: no probe here can resume %s; the agent started empty\n", *resume)
+	if r != nil {
+		err := r.NewAgent(ctx, there, resume)
+		slog.Info("agent new", "project", w.Project.Name, "host", r.Name(), "address", there, "session", resume, "err", err)
+		return err
+	}
+	outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: resume, Dir: dir})
+	slog.Info("agent new", "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
+	if err != nil {
+		return err
+	}
+	if resume != "" && outcome != core.AgentResumed {
+		fmt.Fprintf(os.Stderr, "revier: warning: no probe here can resume %s; the agent started empty\n", resume)
 	}
 	return nil
 }
 
-// agentWorkspace is the project, target and open instance `revier agent new`
-// opens its tab in: the owner of --panel; or the project -p names, else the
-// one --dir is in, else the one resolved as for any command, with the target
-// after -p's colon or the one declaring an agent.
-func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (core.Workspace, error) {
-	if panel != "" {
-		return a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
+// absDir is --dir as an absolute path to a directory, or empty when not given.
+func absDir(dir string) (string, error) {
+	if dir == "" {
+		return "", nil
 	}
-	name, target, _ := strings.Cut(project, ":")
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("--dir %s: not a directory", dir)
+	}
+	return abs, nil
+}
+
+// tabWorkspace is the project, target and open instance `revier agent new` and
+// `revier shell new` open their tab in: the owner of --panel; or the project -p
+// names, else the one --dir is in, else the one resolved as for any command,
+// with the target after -p's colon or the one target picks.
+//
+// A remote project's workspace is on its host, so it comes back with no
+// instance, and with the target only when -p named one: which of the host's
+// targets holds the tab is the host's to decide.
+func (a *app) tabWorkspace(ctx context.Context, project, panel, dir string, target func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
+	if panel != "" {
+		w, err := a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
+		if err == nil && w.Project.Remote != nil {
+			return core.Workspace{Project: w.Project}, nil
+		}
+		return w, err
+	}
+	name, sel, _ := strings.Cut(project, ":")
 	p, inDir := a.projectForPath(dir)
 	if name != "" || dir == "" || !inDir {
 		var err error
@@ -243,14 +274,31 @@ func (a *app) agentWorkspace(ctx context.Context, project, panel, dir string) (c
 			return core.Workspace{}, err
 		}
 	}
-	t := revier.TargetName(target)
+	t := revier.TargetName(sel)
+	if p.Remote != nil {
+		return core.Workspace{Project: p, Target: t}, nil
+	}
 	if t == "" {
 		var err error
-		if t, err = a.core.AgentTarget(p); err != nil {
+		if t, err = target(p); err != nil {
 			return core.Workspace{}, err
 		}
 	}
 	return a.core.AgentWorkspace(ctx, p, t, a.state.Bound[p.Name])
+}
+
+// remoteWorkspace returns the remote that holds the workspace, and the project
+// address as the host knows it; nil when the workspace is on this machine.
+func (a *app) remoteWorkspace(w core.Workspace) (revier.Remote, string, error) {
+	r, err := a.core.RemoteOf(w.Project)
+	if err != nil || r == nil {
+		return nil, "", err
+	}
+	there := string(w.Project.Remote.Project)
+	if w.Target != "" {
+		there += ":" + string(w.Target)
+	}
+	return r, there, nil
 }
 
 // remoteFor returns the remote that drives the agent an address names, and

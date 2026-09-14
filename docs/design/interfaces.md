@@ -222,6 +222,11 @@ type Remote interface {
     Prompt(ctx context.Context, address, text string) error
     Wait(ctx context.Context, address, until string) (Status, error)
 
+    // NewAgent and NewShell are `revier agent new` and `revier shell new`
+    // there: a tab in the open workspace, which the attached pane shows.
+    NewAgent(ctx context.Context, address string, resume SessionID) error
+    NewShell(ctx context.Context, address string) error
+
     // RunCommand is the argv that runs `revier run <action> -p <project>`
     // there, for the caller to run here with the terminal. The action is
     // the remote's configuration's to define.
