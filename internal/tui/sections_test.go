@@ -131,6 +131,20 @@ func TestTabPassesOverAProjectWithoutAgents(t *testing.T) {
 	}
 }
 
+// Agents that exit take their section with them, and a cursor that was in it
+// goes to the section before, rather than staying where nothing is drawn.
+func TestTheCursorLeavesAnAgentsSectionThatIsGone(t *testing.T) {
+	rt, m := agentWorld(t)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "tab")
+	rt.Retitle("1", "zsh")
+	rt.Retitle("2", "zsh")
+	m = survey(m)
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q, want the target once the agents are gone:\n%s", row, m.View())
+	}
+}
+
 // Typing in Agents filters the agents by what they are doing, and Enter
 // brings the one under the cursor to the front.
 func TestTypingInAgentsFiltersThemAndEnterGoesToTheAgent(t *testing.T) {

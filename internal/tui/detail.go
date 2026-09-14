@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -77,8 +78,12 @@ func newDetail(th theme.Theme) viewport.Model {
 // every message, because the cursor moves on a keypress and the content
 // changes on a survey. The wheel scrolls the pane; a survey keeps that
 // scroll, and a different project starts at its top. The pane's own cursor
-// is kept on a row that exists, and on the screen.
+// is kept on a row that exists, and on the screen, and in a section that
+// exists: an agent that exits takes its section with it.
 func (m *Model) syncDetail() {
+	if s := m.sections(); !slices.Contains(s, m.focus) {
+		*m = m.focusOn(s[len(s)-1])
+	}
 	cols := m.paneCols()
 	if cols == 0 {
 		return
@@ -118,6 +123,8 @@ func (m *Model) syncDetail() {
 	case m.focus == focusTargets && m.tcursor < len(m.tlines):
 		m.followPane(m.tlines[m.tcursor])
 	case m.focus == focusAgents && m.acursor < len(m.alines):
+		// The last line first, so a row taller than the pane shows its start.
+		m.followPane(m.alines[m.acursor].end - 1)
 		m.followPane(m.alines[m.acursor].start)
 	}
 }
@@ -363,7 +370,7 @@ func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))
 	a := row.agent
 	harness := harnessOf(a)
-	offset := len([]rune(harness)) + 1 // the label is the harness, a space, the activity
+	offset := len(harness) + 1 // the label is the harness, a space, the activity
 	head := clipTo(gridHead(lead,
 		highlight(harness, row.matches, style(th.ProjectName), style(th.Match)),
 		style(statusStyle(th, a.State.Status)).Render(statusLabel(th, a.State.Status)), style(lipgloss.NewStyle())), w)
@@ -373,8 +380,8 @@ func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 	}
 	indent := style(lipgloss.NewStyle()).Render(strings.Repeat(" ", lipgloss.Width(head)))
 	lines := make([]string, len(parts))
-	for i, at := range runeOffsets(a.State.Activity, parts) {
-		matches := within(row.matches, offset+at, len([]rune(parts[i])))
+	for i, at := range partOffsets(a.State.Activity, parts) {
+		matches := within(row.matches, offset+at, len(parts[i]))
 		text := highlight(parts[i], matches, style(th.Path), style(th.Match))
 		start := indent
 		if i == 0 {
@@ -385,28 +392,23 @@ func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 	return strings.Join(lines, "\n")
 }
 
-// runeOffsets is where each of the parts wrap cut text into starts in it, in
-// runes. wrap drops the spaces it breaks at, so each part is looked for from
-// where the one before it ended.
-func runeOffsets(text string, parts []string) []int {
-	runes := []rune(text)
+// partOffsets is where each of the parts wrap cut text into starts in it, in
+// bytes, as the filter counts its matches. wrap drops the spaces it breaks
+// at, so each part is looked for from where the one before it ended.
+func partOffsets(text string, parts []string) []int {
 	out := make([]int, len(parts))
 	from := 0
 	for i, part := range parts {
-		p := []rune(part)
-		for at := from; at+len(p) <= len(runes); at++ {
-			if string(runes[at:at+len(p)]) == part {
-				from = at
-				break
-			}
+		if at := strings.Index(text[from:], part); at >= 0 {
+			from += at
 		}
 		out[i] = from
-		from += len(p)
+		from = min(from+len(part), len(text))
 	}
 	return out
 }
 
-// within is the matches that fall in n runes from start, counted from start.
+// within is the matches that fall in n bytes from start, counted from start.
 func within(matches []int, start, n int) []int {
 	var out []int
 	for _, i := range matches {

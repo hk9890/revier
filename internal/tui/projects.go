@@ -215,7 +215,9 @@ func (d projectDelegate) projectColumn(m list.Model) int {
 
 // highlight renders the letters the filter matched in their own style, as fzf
 // does: with a fuzzy filter the letters are the only way to see why a row is
-// on the list. matches are rune positions, from the list component.
+// on the list. matches are byte positions: the fuzzy filter under the list
+// component counts in bytes, so a rune count lights the wrong letters after
+// the first one wider than a byte.
 func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 	if len(matches) == 0 {
 		return plain.Render(text)
@@ -225,7 +227,7 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 		hit[i] = true
 	}
 	var b strings.Builder
-	for i, r := range []rune(text) {
+	for i, r := range text {
 		if hit[i] {
 			b.WriteString(match.Render(string(r)))
 		} else {

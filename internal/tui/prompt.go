@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/theme"
 )
@@ -83,6 +84,9 @@ func (m Model) edit(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 // fieldView is a section's query field. The field the cursor is in shows its
 // cursor; the others are dim, so there is one place that looks typed into.
+// A dim field is cut to the width the field has when it is typed into: a
+// longer line wraps in the wide pane and moves every row under it off the
+// line a click finds it on.
 func (m Model) fieldView(in textinput.Model, f focus) string {
 	if m.focus == f && m.dialog == dialogNone {
 		return in.View()
@@ -91,5 +95,9 @@ func (m Model) fieldView(in textinput.Model, f focus) string {
 	if text == "" {
 		text = in.Placeholder
 	}
-	return m.theme.NameDim.Render(promptMark + text)
+	line := promptMark + text
+	if in.Width > 0 {
+		line = ellipsis(line, lipgloss.Width(promptMark)+in.Width+1)
+	}
+	return m.theme.NameDim.Render(line)
 }

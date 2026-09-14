@@ -830,15 +830,21 @@ func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 		if err != nil {
 			return actedMsg{err: err}
 		}
-		if res.Launched && res.Ref.IsZero() {
-			return launchedMsg{
-				project: p,
-				launch:  state.Launch{Project: p.Name, Target: res.Target, At: time.Now()},
-				before:  res.Before,
-			}
-		}
-		return actedMsg{bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
+		return landed(p, res)
 	}
+}
+
+// landed is what a Go that ran leaves to settle: a launch whose window is
+// still coming up, or the ref the target landed on.
+func landed(p core.Project, res core.Result) tea.Msg {
+	if res.Launched && res.Ref.IsZero() {
+		return launchedMsg{
+			project: p,
+			launch:  state.Launch{Project: p.Name, Target: res.Target, At: time.Now()},
+			before:  res.Before,
+		}
+	}
+	return actedMsg{bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
 }
 
 // launchPending reports whether a launch of the target is on record and still

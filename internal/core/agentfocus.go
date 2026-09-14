@@ -46,12 +46,7 @@ func (c *Core) FocusAgent(ctx context.Context, a Agent) error {
 	if err != nil {
 		return err
 	}
-	var inst revier.Instance
-	for _, in := range snap[a.Ref.Host] {
-		if key(in.Ref) == key(a.Ref) {
-			inst = in
-		}
-	}
+	inst, _ := byRef(snap, a.Ref)
 	name := revier.TargetName("agent " + a.Panel.ID.String())
 	osw, err := c.raisable(snap, inst, name)
 	if err != nil {

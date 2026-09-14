@@ -61,7 +61,13 @@ func (m Model) inner() (w, h int) {
 // a WindowSizeMsg still renders.
 func (m *Model) layout() {
 	w, h := m.inner()
-	m.input.Width = w - lipgloss.Width(promptMark) - 2
+	// The query stands in the list's column beside a pane, and scrolls
+	// within it rather than running past the pane's border to be cut.
+	query := w
+	if m.paneWidth() > 0 {
+		query = m.listWidth()
+	}
+	m.input.Width = query - lipgloss.Width(promptMark) - 2
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h

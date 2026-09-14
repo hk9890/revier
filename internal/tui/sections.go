@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"log/slog"
 	"slices"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -138,8 +139,8 @@ func (m Model) agentRows() []agentRow {
 }
 
 // goAgentRow brings the agent of one row of the Agents section to the front.
-// For a link the pane onto its host is raised as well, and bound where it
-// landed, as a Go binds it.
+// For a link the pane onto its host is raised as well, or launched, and
+// settled as a Go settles it.
 func (m Model) goAgentRow(i int) tea.Cmd {
 	rows := m.agentRows()
 	v, ok := m.selected()
@@ -151,14 +152,26 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 		return nil
 	}
 	c, bound, panel := m.core, m.bound[p.Name], rows[i].agent.Panel
+	// For a link GoAgent raises the pane onto the host, and a pane still
+	// coming up from an earlier press is not launched again (decisions.md
+	// D21), as goTarget does not launch it again.
+	home, hasHome := p.Home()
+	pending := p.Remote != nil && hasHome && m.launchPending(p.Name, home.Name)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), bindWait)
 		defer cancel()
+		if pending {
+			up, err := c.Running(ctx, p, home.Name, bound)
+			if err != nil || !up {
+				slog.Info("go agent: the pane onto the host is still coming up, not launched again", "project", p.Name, "err", err)
+				return actedMsg{err: err}
+			}
+		}
 		res, err := c.GoAgent(ctx, p, panel, bound)
-		if err != nil || res.Ref.IsZero() {
+		if err != nil || res.Target == "" {
 			return actedMsg{err: err}
 		}
-		return actedMsg{bind: &binding{project: p.Name, target: res.Target, ref: res.Ref}}
+		return landed(p, res)
 	}
 }
 

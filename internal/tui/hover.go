@@ -35,11 +35,13 @@ func (m Model) hoverAt(x, y int) hovered {
 	if i := m.barAt(x, y); i >= 0 {
 		return hovered{kind: hoverBar, index: i}
 	}
+	// The project query is over the list's column, or, where the pane stands
+	// in the list's place, over the whole width the pane then covers.
+	if mr, _ := m.margins(); m.dialog == dialogNone && y == mr+queryRow && (m.paneWidth() == 0 || !m.overPane(x)) {
+		return hovered{kind: hoverField, index: int(focusList)}
+	}
 	if m.overPane(x) {
 		return m.paneAt(y)
-	}
-	if mr, _ := m.margins(); m.dialog == dialogNone && y == mr+queryRow {
-		return hovered{kind: hoverField, index: int(focusList)}
 	}
 	if i, ok := m.rowAt(x, y); ok {
 		return hovered{kind: hoverRow, index: i}

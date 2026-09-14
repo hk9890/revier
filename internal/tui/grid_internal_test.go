@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -76,5 +77,27 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The letters a query matched are lit where they are, after a character
+// wider than a byte too: an activity line carries glyphs and dashes.
+func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
+	upper := lipgloss.NewStyle().Transform(strings.ToUpper)
+	label := "✳ fix remote"
+	ranks := list.DefaultFilter("fix", []string{label})
+	if len(ranks) != 1 {
+		t.Fatalf("filter ranks = %v, want one match", ranks)
+	}
+	if got := highlight(label, ranks[0].MatchedIndexes, lipgloss.NewStyle(), upper); got != "✳ FIX remote" {
+		t.Errorf("highlight = %q, want the letters of fix lit", got)
+	}
+
+	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m.theme.Match = upper
+	row := agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}}
+	row.matches = list.DefaultFilter("then", []string{row.label()})[0].MatchedIndexes
+	if got := ansi.Strip(m.detailAgent(row, 60, false, false)); !strings.Contains(got, "THEN words") {
+		t.Errorf("agent row = %q, want the letters of then lit", got)
 	}
 }
