@@ -37,7 +37,7 @@ type Target struct {
 
 // Realization is how one host provides a target.
 type Realization struct {
-    // Name is the identity a host gives a new instance: a tmux window name, a
+    // Name is the identity a host gives a new instance: a tmux session name, a
     // kitty OS window title, the --class a browser is launched with. It is how
     // a host that assigns its own identity satisfies the Open invariant.
     Name string
@@ -96,7 +96,7 @@ type Host interface {
     Focused(ctx context.Context) (TargetRef, error)
 }
 
-// Instance is one live thing a host holds: a kitty OS window, a tmux pane, a
+// Instance is one live thing a host holds: a kitty OS window, a tmux session, a
 // Meld window. Panels is populated by runtime hosts only.
 type Instance struct {
     Ref    TargetRef
@@ -110,7 +110,7 @@ type Instance struct {
 // the core can route Focus back without tracking it separately.
 type TargetRef struct {
     Host  string
-    ID    string // host-scoped: kitty socket/OS window id, tmux server pid/window id, WM window id
+    ID    string // host-scoped: kitty socket/OS window id, tmux server pid/session id, WM window id
     Title string
 }
 ```

@@ -104,7 +104,7 @@ const (
 
 // Realization is how one host provides a target.
 type Realization struct {
-	// Name is the identity a host gives a new instance: a tmux window name, a
+	// Name is the identity a host gives a new instance: a tmux session name, a
 	// kitty OS window title, the --class a browser is launched with. Open must
 	// produce an instance that this realization's Match then finds, and Name is
 	// how a host that assigns its own identity satisfies that invariant.

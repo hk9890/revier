@@ -31,7 +31,7 @@ func server(t *testing.T) *tmux.Host {
 		t.Skip("tmux not installed; L4 needs it")
 	}
 	socket := "revier-test-" + t.Name()
-	h := &tmux.Host{Socket: socket, Session: "revier-test"}
+	h := &tmux.Host{Socket: socket}
 	t.Cleanup(func() { killServer(t, socket) })
 	return h
 }
@@ -187,16 +187,171 @@ func TestALinkedWindowListsItsPanesOnce(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	socket := "revier-test-" + t.Name()
-	if out, err := exec.Command("tmux", "-L", socket, "new-session", "-d", "-t", "revier-test", "-s", "second").CombinedOutput(); err != nil {
+	if out, err := exec.Command("tmux", "-L", h.Socket, "new-session", "-d", "-t", "home", "-s", "second").CombinedOutput(); err != nil {
 		t.Fatalf("new-session -t: %v\n%s", err, out)
 	}
 	instances, err := h.Instances(c)
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
 	}
-	if len(instances) != 1 || len(instances[0].Panels) != 1 {
-		t.Fatalf("instances = %+v, want one window with one pane", instances)
+	panes := 0
+	for _, inst := range instances {
+		panes += len(inst.Panels)
+	}
+	if panes != 1 {
+		t.Fatalf("instances = %+v, want the one pane listed once", instances)
+	}
+}
+
+// Two workspaces are two sessions, so a terminal attached to one does not
+// follow a switch made in the other: each instance is attached by its own
+// session id, and each session keeps its own current window.
+func TestTwoWorkspacesAreTwoSessions(t *testing.T) {
+	h, c := server(t), ctx(t)
+	a, err := h.Open(c, revier.Realization{Name: "session:a", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open a: %v", err)
+	}
+	b, err := h.Open(c, revier.Realization{Name: "session:b", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open b: %v", err)
+	}
+	attachA, _ := h.AttachCommand(a)
+	attachB, _ := h.AttachCommand(b)
+	if attachA[len(attachA)-1] == attachB[len(attachB)-1] {
+		t.Fatalf("both workspaces attach %s", attachA[len(attachA)-1])
+	}
+	tab, err := h.OpenTab(c, a, revier.Realization{Launch: []string{"sh", "-c", "sleep 30"}}, nil)
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	if err := h.FocusPanel(c, a, tab); err != nil {
+		t.Fatalf("FocusPanel: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 2 {
+		t.Fatalf("instances = %+v, want one per workspace", instances)
+	}
+	current, err := h.FocusedPanel(c, b)
+	if err != nil {
+		t.Fatalf("FocusedPanel b: %v", err)
+	}
+	for _, inst := range instances {
+		if inst.Ref.ID == b.ID && (len(inst.Panels) != 1 || current != inst.Panels[0].ID) {
+			t.Errorf("b = %+v with %s current, want its one pane current after a switch in a", inst, current)
+		}
+	}
+}
+
+// A tab is a window of the instance's session, after every window it holds
+// even when an earlier one was closed: a save records agents in listing order.
+// Its panels are split beside the first, the vars land on the first, and the
+// panel returned is the first.
+func TestOpenTabAppendsAWindowToTheSession(t *testing.T) {
+	h, c := server(t), ctx(t)
+	dir := t.TempDir()
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	gap, err := h.OpenTab(c, ref, revier.Realization{Launch: []string{"sh", "-c", "sleep 30"}}, nil)
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	if _, err := h.OpenTab(c, ref, revier.Realization{Launch: []string{"sh", "-c", "sleep 30"}}, nil); err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	if out, err := exec.Command("tmux", "-L", h.Socket, "kill-window", "-t", gap.String()).CombinedOutput(); err != nil {
+		t.Fatalf("kill-window: %v\n%s", err, out)
+	}
+
+	first, err := h.OpenTab(c, ref, revier.Realization{Panels: []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "agent", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
+		{Kind: revier.PanelShell, Title: "shell", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
+	}}, map[string]string{"REVIER_TARGET": "notes"})
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 {
+		t.Fatalf("instances = %+v, want the tab inside the one session", instances)
+	}
+	panels := instances[0].Panels
+	if len(panels) != 4 {
+		t.Fatalf("panels = %+v, want the first window, the second tab, and the new tab's two panes", panels)
+	}
+	agent, shell := panels[2], panels[3]
+	if agent.ID != first || agent.Title != "agent" || shell.Title != "shell" {
+		t.Errorf("last two panels = %+v, %+v, want the new tab's agent (%s) then its shell", agent, shell, first)
+	}
+	if agent.Vars["REVIER_TARGET"] != "notes" || shell.Vars != nil {
+		t.Errorf("vars = %v and %v, want them on the first panel only", agent.Vars, shell.Vars)
+	}
+	if got := paneValue(t, h, shell.ID, "#{window_id}"); got != paneValue(t, h, agent.ID, "#{window_id}") {
+		t.Errorf("the shell is in window %s, want it split into the agent's", got)
+	}
+	if got := paneValue(t, h, shell.ID, "#{pane_current_path}"); got != dir {
+		t.Errorf("shell cwd = %q, want %q", got, dir)
+	}
+}
+
+// A tab opens without becoming current, and FocusPanel makes it current in
+// its session: the window and the pane inside it.
+func TestFocusPanelSwitchesTabAndPane(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	home, err := h.FocusedPanel(c, ref)
+	if err != nil {
+		t.Fatalf("FocusedPanel: %v", err)
+	}
+	tab, err := h.OpenTab(c, ref, revier.Realization{Panels: []revier.PanelSpec{
+		{Command: []string{"sh", "-c", "sleep 30"}},
+		{Command: []string{"sh", "-c", "sleep 30"}},
+	}}, nil)
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	if cur, _ := h.FocusedPanel(c, ref); cur != home {
+		t.Fatalf("current = %s after OpenTab, want %s kept", cur, home)
+	}
+	for _, want := range []revier.PanelID{tab, home} {
+		if err := h.FocusPanel(c, ref, want); err != nil {
+			t.Fatalf("FocusPanel %s: %v", want, err)
+		}
+		if cur, err := h.FocusedPanel(c, ref); err != nil || cur != want {
+			t.Fatalf("FocusedPanel = %s, %v, want %s", cur, err, want)
+		}
+	}
+}
+
+// A focus left on a session that has since closed is no focus.
+func TestFocusedIsZeroOnceTheFocusedSessionCloses(t *testing.T) {
+	h, c := server(t), ctx(t)
+	gone, err := h.Open(c, revier.Realization{Name: "gone", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := h.Open(c, revier.Realization{Name: "kept", Launch: []string{"sh", "-c", "sleep 30"}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := h.Focus(c, gone); err != nil {
+		t.Fatalf("Focus: %v", err)
+	}
+	if out, err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "gone").CombinedOutput(); err != nil {
+		t.Fatalf("kill-session: %v\n%s", err, out)
+	}
+	got, err := h.Focused(c)
+	if err != nil || !got.IsZero() {
+		t.Errorf("Focused = %+v, %v, want a zero ref", got, err)
 	}
 }
 
