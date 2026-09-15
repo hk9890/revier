@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -231,6 +232,23 @@ func (s Session) Targets() int {
 		n += len(p.Targets)
 	}
 	return n
+}
+
+// SameAs reports whether two sessions hold the same projects, targets and
+// agents: what a restore of either would open. The id, the name, the moment
+// and the project ended on are not what is open, and the order of the
+// projects is the survey's; the order of the agents is their identity.
+func (s Session) SameAs(o Session) bool {
+	byName := func(ps []Project) []Project {
+		out := slices.Clone(ps)
+		slices.SortStableFunc(out, func(a, b Project) int { return strings.Compare(string(a.Name), string(b.Name)) })
+		return out
+	}
+	return slices.EqualFunc(byName(s.Projects), byName(o.Projects), func(a, b Project) bool {
+		return a.Name == b.Name && slices.EqualFunc(a.Targets, b.Targets, func(x, y Target) bool {
+			return x.Name == y.Name && slices.Equal(x.Agents, y.Agents)
+		})
+	})
 }
 
 func exists(path string) bool {

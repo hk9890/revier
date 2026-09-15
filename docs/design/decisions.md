@@ -392,3 +392,15 @@ switched each off and wrote a second entry beside it, and uninstall never
 removed them. An entry named `revier-<target>` is revier's, so install rewrites
 it in place and uninstall deletes it. A shortcut elsewhere that runs exactly
 revier's command stays revier's too.
+
+### D78 — a shutdown saves the session first, and refuses a busy agent unless forced
+
+`revier shutdown` and the TUI's shutdown wizard close every project, or one
+project whole, or only its agents, or only what holds no agent. A shutdown is
+the moment before a restart, so it saves the session when it differs from the
+newest one; a second shutdown of the same desktop adds no file. An agent that
+works or waits for an answer would lose its turn, so the CLI refuses before
+the save and `--force` goes on; the TUI's confirm names the busy agents
+instead. `Closer` and `PanelCloser` are optional and polite: a window an
+application keeps open is named as still open, never killed. A project
+shutdown leaves an instance another project also holds.

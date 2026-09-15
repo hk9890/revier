@@ -225,6 +225,29 @@ func TestPlaceBuildsTheCommand(t *testing.T) {
 	}
 }
 
+// Close asks wctl to close the window by its id, which is the polite close a
+// close button makes.
+func TestCloseBuildsTheCommand(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "argv")
+	stub := filepath.Join(dir, "wctl")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + log + "\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (&gnome.Host{Bin: stub}).Close(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	got, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "close 4181121382\n"; string(got) != want {
+		t.Errorf("argv = %q, want %q", got, want)
+	}
+}
+
 // The popup's size is decided from this width before its launch, so a reply
 // without one must fail rather than read as a zero-wide screen.
 func TestWorkareaWidthReadsTheReply(t *testing.T) {

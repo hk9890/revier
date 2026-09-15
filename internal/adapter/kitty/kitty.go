@@ -836,6 +836,47 @@ func (h *Host) SendText(ctx context.Context, ref revier.TargetRef, panel revier.
 	return err
 }
 
+// Close closes every kitty window of the OS window, across its tabs, in one
+// call; kitty closes an OS window whose last window closed. kitten has no
+// command that names an OS window, so its windows are read from ls first.
+func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
+	socket, id, err := parseRef(ref.ID)
+	if err != nil {
+		return err
+	}
+	windows, err := h.ls(ctx, socket)
+	if err != nil {
+		return err
+	}
+	var match []string
+	for _, w := range windows {
+		if w.ID != id {
+			continue
+		}
+		for _, t := range w.Tabs {
+			for _, win := range t.Windows {
+				match = append(match, "id:"+strconv.Itoa(win.ID))
+			}
+		}
+	}
+	if len(match) == 0 {
+		return fmt.Errorf("kitty: os window %s not found", ref.ID)
+	}
+	_, err = h.kitten(ctx, socket, "close-window", "--match", strings.Join(match, " or "))
+	return err
+}
+
+// ClosePanel closes one kitty window, on the socket of the process the
+// instance lives in.
+func (h *Host) ClosePanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	socket, _, err := parseRef(ref.ID)
+	if err != nil {
+		return err
+	}
+	_, err = h.kitten(ctx, socket, "close-window", "--match", "id:"+panel.String())
+	return err
+}
+
 // activeWindow is the window of the active tab that has the tab's focus, or
 // the first window at all when kitty marks none.
 func activeWindow(w osWindow) (int, bool) {

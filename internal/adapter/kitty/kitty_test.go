@@ -821,6 +821,35 @@ func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
 	}
 }
 
+// An OS window closes as every kitty window in it, across its tabs, in one
+// call on its own process's socket.
+func TestCloseClosesEveryWindowOfTheOSWindow(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if err := h.Close(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	calls := rec.all()
+	last := calls[len(calls)-1]
+	if got := strings.Join(last.args, " "); last.socket != "unix:@kitty-4000" || got != "close-window --match id:2 or id:3 or id:4" {
+		t.Errorf("last call = %q on %s, want windows 2, 3 and 4 closed", got, last.socket)
+	}
+	if err := h.Close(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/7"}); err == nil {
+		t.Error("Close of an OS window ls does not list succeeded")
+	}
+}
+
+// A panel closes as its one kitty window.
+func TestClosePanelClosesOneWindow(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if err := h.ClosePanel(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, "3"); err != nil {
+		t.Fatalf("ClosePanel: %v", err)
+	}
+	calls := rec.all()
+	if got := strings.Join(calls[len(calls)-1].args, " "); got != "close-window --match id:3" {
+		t.Errorf("last call = %q, want window 3 closed", got)
+	}
+}
+
 // Every foreground process is walked up to its window's root. A parent the
 // walks share is read once per listing, not once per walk.
 func TestInstancesReadsEachParentOncePerListing(t *testing.T) {

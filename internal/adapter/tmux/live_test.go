@@ -466,6 +466,54 @@ func TestFocusFromAPaneSwitchesThatPanesTerminal(t *testing.T) {
 // even when an earlier one was closed: a save records agents in listing order.
 // Its panels are split beside the first, the vars land on the first, and the
 // panel returned is the first.
+// ClosePanel ends one pane and leaves the session; Close ends the session.
+func TestCloseEndsAPaneThenTheSession(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Panels: []revier.PanelSpec{
+		{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+		{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}},
+	}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	other, err := h.Open(c, revier.Realization{Name: "other", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	panelsOf := func() []revier.Panel {
+		instances, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		for _, inst := range instances {
+			if inst.Ref.ID == ref.ID {
+				return inst.Panels
+			}
+		}
+		t.Fatalf("instances = %+v, want %s among them", instances, ref.ID)
+		return nil
+	}
+	panels := panelsOf()
+	if len(panels) != 2 {
+		t.Fatalf("panels = %+v, want two", panels)
+	}
+
+	if err := h.ClosePanel(c, ref, panels[1].ID); err != nil {
+		t.Fatalf("ClosePanel: %v", err)
+	}
+	if left := panelsOf(); len(left) != 1 || left[0].ID != panels[0].ID {
+		t.Fatalf("after ClosePanel = %+v, want the session with its first pane", left)
+	}
+
+	if err := h.Close(c, ref); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	instances, _ := h.Instances(c)
+	if len(instances) != 1 || instances[0].Ref.ID != other.ID {
+		t.Errorf("after Close = %+v, want the other session alone", instances)
+	}
+}
+
 func TestOpenTabAppendsAWindowToTheSession(t *testing.T) {
 	h, c := server(t), ctx(t)
 	dir := t.TempDir()

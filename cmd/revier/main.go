@@ -69,6 +69,12 @@ usage:
                                 open what a saved session recorded; the newest
                                 without an argument
   revier session list [--json]  the saved sessions, newest first
+  revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [--dry-run]
+                                save the session when it changed, then close every
+                                open target and agent, or one project's; --agents
+                                closes only the agents, --targets only what holds
+                                no agent; refuses while an agent is busy unless
+                                --force
   revier each -- <cmd>          run one command in every project's directory
   revier each log [run]         past runs of it, or one run's results
   revier version
@@ -234,6 +240,8 @@ func run(args []string) error {
 		return cmdSession(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
+	case "shutdown":
+		return cmdShutdown(ctx, a, args)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", cmd)

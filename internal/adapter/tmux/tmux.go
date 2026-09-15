@@ -664,6 +664,22 @@ func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.Pa
 	return err
 }
 
+// Close kills the session and every pane in it.
+func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
+	if err := h.own(ref); err != nil {
+		return err
+	}
+	_, err := h.run(ctx, "kill-session", "-t", sessionOf(ref.ID))
+	return err
+}
+
+// ClosePanel kills one pane. A pane id is unique across the server, so the
+// instance is not needed; a window left with no pane goes with it.
+func (h *Host) ClosePanel(ctx context.Context, _ revier.TargetRef, panel revier.PanelID) error {
+	_, err := h.run(ctx, "kill-pane", "-t", panel.String())
+	return err
+}
+
 // noServer reports the "no server running" family of tmux errors, which mean
 // "nothing is open" rather than "something went wrong".
 func noServer(err error) bool {

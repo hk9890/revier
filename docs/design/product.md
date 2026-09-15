@@ -105,6 +105,7 @@ revier each -- <cmd>   run one command in every project's directory (D32)
 revier session save    record the projects that are open now (D46)
 revier session restore open what a saved session recorded
 revier session list    the saved sessions, newest first
+revier shutdown        save the session when it changed, then close (D78)
 ```
 
 The TUI is one surface: a list of projects, sorted so the ones needing
@@ -116,7 +117,9 @@ tab current and raises its window (D74). alt+e opens
 the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30).
 The sessions screen is the three `revier session` commands on the surface: the
 saved sessions, a pane with the restore plan for the one under the cursor, Enter
-to restore it and a save button on its top line (D46, D49).
+to restore it and a save button on its top line (D46, D49). The shutdown wizard
+is `revier shutdown` on the surface: every project or one, then what of it, then
+the plan to confirm, and the result shown with the surface still up (D78).
 
 ## Scope
 

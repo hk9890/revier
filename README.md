@@ -83,6 +83,9 @@ revier session restore [id|name] [--dry-run]
                               open what a saved session recorded; the newest
                               without an argument
 revier session list [--json]  the saved sessions, newest first
+revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [--dry-run]
+                              save the session when it changed, then close what
+                              is open; refuses while an agent is busy
 revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
 ```
@@ -102,7 +105,8 @@ The top line holds what is not about one project, each with its key: **new**
 (alt+n) adds a project from a directory on this machine, **remote** (alt+r)
 links a project on another machine from the hosts `~/.ssh/config` names and the
 projects the revier on the chosen host has, **sessions** (alt+s) saves and
-restores the set of open projects, **config** (alt+c) sets the
+restores the set of open projects, **shutdown** (alt+q) closes every project
+or one after a confirm, **config** (alt+c) sets the
 theme, the glyphs, the trigger key and the runtime host, and adds, changes and
 deletes shared targets and actions, each written to `config.toml` and applied
 as it changes, comments kept, and **help** (alt+h)
@@ -135,6 +139,16 @@ they have no name to be reopened by. Sessions live in
 the sessions screen (alt+s) shows the same list; its pane says what a restore
 of the selected session would open now, Enter restores it, and alt+s on the
 screen saves the open projects under an optional name.
+
+`revier shutdown` closes every open target and attached window, and the agents
+in them. `revier shutdown <project>` closes one project; `--agents` closes only
+its agents and keeps the workspaces, `--targets` closes only what holds no
+agent. Each shutdown first saves the session when it changed since the newest
+save, unless `--no-session-save`. While an agent is working or waiting for an
+answer, it saves and closes nothing and names the agent; `--force` shuts down
+anyway. A window whose application asks about unsaved work stays open and is
+named. In the TUI, alt+q asks every project or one, then what of it, and shows
+the plan before anything closes.
 
 An agent comes back on the conversation it held if its probe can name one.
 Claude Code can, with nothing to install: the save asks `claude agents --json`

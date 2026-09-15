@@ -73,6 +73,14 @@ type Fake struct {
 	// its prompt the way a real one does.
 	OnSend func(panel revier.PanelID, text string)
 
+	// Closed records every ref passed to Close, and ClosedPanels every panel
+	// passed to ClosePanel, in order. CloseErr makes both fail. Refuses holds
+	// the instance ids a Close leaves listed.
+	Closed       []revier.TargetRef
+	ClosedPanels []revier.PanelID
+	CloseErr     error
+	Refuses      map[string]bool
+
 	caps revier.Capabilities
 }
 
@@ -173,6 +181,47 @@ func (f *FakeRuntime) FocusedPanel(_ context.Context, ref revier.TargetRef) (rev
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.current[ref.ID], nil
+}
+
+// Close removes the instance and records the call. Fake implements
+// revier.Closer; CloseErr makes it fail, and Refuses keeps the instance listed
+// as an application that asks about unsaved work does.
+func (f *Fake) Close(_ context.Context, ref revier.TargetRef) error {
+	f.mu.Lock()
+	f.Closed = append(f.Closed, ref)
+	err, refuses := f.CloseErr, f.Refuses[ref.ID]
+	f.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if !refuses {
+		f.Remove(ref)
+	}
+	return nil
+}
+
+// ClosePanel removes the panel from its instance and records the call.
+// FakeRuntime implements revier.PanelCloser.
+func (f *FakeRuntime) ClosePanel(_ context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ClosedPanels = append(f.ClosedPanels, panel)
+	if f.CloseErr != nil {
+		return f.CloseErr
+	}
+	for i := range f.instances {
+		if f.instances[i].Ref.ID != ref.ID {
+			continue
+		}
+		var live []revier.Panel
+		for _, p := range f.instances[i].Panels {
+			if p.ID != panel {
+				live = append(live, p)
+			}
+		}
+		f.instances[i].Panels = live
+	}
+	return nil
 }
 
 // Retitle changes a panel's title wherever it is listed, as the program in it

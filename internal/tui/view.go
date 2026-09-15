@@ -145,6 +145,8 @@ func (m Model) top() string {
 		name = "Keyboard shortcuts"
 	case dialogSessionName:
 		name = "Save the projects open now"
+	case dialogShutdown:
+		name = "Shutdown"
 	default:
 		return m.bar()
 	}
@@ -191,6 +193,8 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render("saved in "+contractHome(session.Dir(m.stateRoot))+", newest first")
 	case dialogSessionName:
 		return " " + m.sname.View()
+	case dialogShutdown:
+		return " " + m.theme.Meta.Render(m.shutdownTitle())
 	}
 	return " " + m.fieldView(m.input, focusList)
 }
@@ -224,7 +228,7 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
 	case m.dialog == dialogSessions:
 		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp, m.dialog == dialogSessionName:
+	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -292,6 +296,9 @@ func (m Model) footer() string {
 	}
 	if m.restoring != "" || m.saving {
 		return m.progressLine()
+	}
+	if m.shut.running {
+		return m.theme.Meta.Render(" saving the session when it changed, and closing…")
 	}
 	if m.copied > 0 {
 		unit := "characters"

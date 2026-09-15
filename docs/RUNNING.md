@@ -123,6 +123,16 @@ tmux list-windows -t home                        # the layout, then one window p
 Run a real `claude` in the pane instead to check against Claude Code itself:
 answer its trust prompt for the directory with "Yes", since the default exits.
 
+To drive a shutdown, open the workspace again and close it on the private
+server only:
+
+```bash
+./bin/revier shutdown --dry-run                  # what it would close
+st busy; ./bin/revier shutdown                   # refused, names the agent
+./bin/revier shutdown --force                    # saves when changed, then closes
+tmux list-sessions                               # no server running
+```
+
 Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
 a restore acts on; it holds names, conversations and directories, never a host
 or an argv.

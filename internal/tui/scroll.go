@@ -34,6 +34,10 @@ func (m *Model) syncBody() {
 		m.body.SetContent(m.sessionNameScreen())
 		m.body.SetYOffset(0)
 		return
+	case dialogShutdown:
+		m.body.SetContent(m.shutdownScreen())
+		m.body.SetYOffset(0)
+		return
 	case dialogConfig:
 		m.body.Width = m.listWidth()
 		text, at := m.configScreen()

@@ -169,6 +169,27 @@ type PanelFinder interface {
 	FindPanel(instances []Instance, panel PanelID) (TargetRef, error)
 }
 
+// Closer is an optional capability of a Host, detected by type assertion. A
+// host that implements it can close an instance it holds, which is how
+// `revier shutdown` ends a workspace or a window (decisions.md D78). A host
+// that does not leaves its instances open, and the shutdown names them.
+//
+// A close is the polite one the tool offers: an application may keep its
+// window open to ask about unsaved work. Whether it is gone is read from the
+// next listing, not from Close.
+type Closer interface {
+	Close(ctx context.Context, ref TargetRef) error
+}
+
+// PanelCloser is an optional capability of a Runtime, detected by type
+// assertion. ClosePanel closes one panel of an instance and leaves the rest,
+// which is how a shutdown of the agents alone ends an agent without its
+// workspace. ref names the instance, because a panel id can be one runtime
+// process's.
+type PanelCloser interface {
+	ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
+}
+
 type WindowEvent struct {
 	Kind     WindowEventKind
 	Instance Instance
