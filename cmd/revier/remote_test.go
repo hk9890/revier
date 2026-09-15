@@ -168,6 +168,30 @@ func TestTabsOfARemoteProjectOpenOnTheHost(t *testing.T) {
 	}
 }
 
+// The kitty key passes the panel's directory as --dir, and kitty gives "/" for
+// a panel whose shell sits in a deleted worktree. A --dir outside the project
+// of --panel opens the tab where no --dir would; one inside it is kept.
+func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("home", "", revier.Panel{ID: "3", Kind: revier.PanelTool})
+	demo := demoProject(t)
+	a := &app{cfg: &config.Config{}, projects: []core.Project{demo}, state: &state.State{}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}
+	ctx := context.Background()
+
+	for _, dir := range []string{"", "/", demo.Path} {
+		if err := a.newShell(ctx, "", "3", dir); err != nil {
+			t.Fatalf("shell new --panel 3 --dir %q: %v", dir, err)
+		}
+	}
+	var dirs []string
+	for _, tab := range rt.Tabs {
+		dirs = append(dirs, tab.Real.Dir)
+	}
+	if want := []string{dirs[0], dirs[0], demo.Path}; !slices.Equal(dirs, want) {
+		t.Errorf("tab dirs = %q, want %q", dirs, want)
+	}
+}
+
 // A runtime that cannot attach a terminal says so, naming what would: a
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {
