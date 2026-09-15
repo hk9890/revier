@@ -62,7 +62,7 @@ func TestBindWritesTheEntryThenListsIt(t *testing.T) {
 	err := w.Bind(context.Background(), revier.Binding{
 		ID:      "revier-home",
 		Chord:   "<Shift><Control>u",
-		Command: `sh -lc "revier-go home"`,
+		Command: `sh -lc "revier go home --picker"`,
 		Label:   "revier: home",
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestBindWritesTheEntryThenListsIt(t *testing.T) {
 
 	ran(t, rec, `dconf write `+base+`revier-home/name 'revier: home'`)
 	ran(t, rec, `dconf write `+base+`revier-home/binding '<Shift><Control>u'`)
-	ran(t, rec, `dconf write `+base+`revier-home/command 'sh -lc "revier-go home"'`)
+	ran(t, rec, `dconf write `+base+`revier-home/command 'sh -lc "revier go home --picker"'`)
 	// The entry is written before its path joins the list. A path in the list
 	// whose entry is not there yet is a shortcut with no command.
 	ran(t, rec, `gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings `+

@@ -45,7 +45,10 @@ usage:
   revier new [name]             write a project file for this directory
   revier link [host [project]]  the ssh hosts; a host's projects; or a link to one,
                                 written here under --name or the project's own
-  revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
+  revier go <target> [-p name] [--picker]
+                                run-or-raise a target; pressing it again returns home;
+                                --picker opens the popup when no project resolves
+  revier popup                  the TUI in a kitty window of its own, or the one open
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
@@ -75,8 +78,8 @@ flags:
 `
 
 // exitNoProject is returned when no project could be resolved. It is a
-// normal outcome, not a failure: contrib/gnome/revier-go turns it into the
-// picker.
+// normal outcome, not a failure: a script can tell it apart, and `go
+// --picker`, which a desktop key runs, opens the popup instead.
 const exitNoProject = 3
 
 // exitKeysIncomplete is returned when `revier keys install` ran and the
@@ -147,7 +150,7 @@ func outcome(err error) (status int, say bool) {
 	case errors.Is(err, errActionFailed) && errors.As(err, &exit):
 		return exit.ExitCode(), false
 	// A window that belongs to no project is a normal outcome with its own
-	// status, so a desktop binding can offer the picker instead.
+	// status, so a script can tell it from a failure.
 	case errors.Is(err, errNoProject):
 		return exitNoProject, true
 	// The keys command has already said, key by key, what did not happen. A
@@ -213,6 +216,12 @@ func run(args []string) error {
 		return cmdOpen(ctx, a, args)
 	case "go":
 		return cmdGo(ctx, a, args)
+	case "popup":
+		// Refused before the launch: `revier popup --help` must not open a window.
+		if len(args) != 0 {
+			return fmt.Errorf("usage: revier popup")
+		}
+		return cmdPopup(ctx, a)
 	case "run":
 		return cmdRun(ctx, a, args)
 	case "attach":
@@ -494,14 +503,18 @@ func (a *app) attach(ref revier.TargetRef) error {
 func cmdGo(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("go", flag.ContinueOnError)
 	project := projectFlag(fs)
+	picker := fs.Bool("picker", false, "open the popup when no project resolves")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: revier go <target> [-p project]")
+		return fmt.Errorf("usage: revier go <target> [-p project] [--picker]")
 	}
 	p, err := a.resolveProject(ctx, *project)
+	if errors.Is(err, errNoProject) && *picker {
+		return cmdPopup(ctx, a)
+	}
 	if err != nil {
 		return err
 	}

@@ -18,25 +18,25 @@ Early, but usable. Linux only.
 
 Working: project files, run-or-raise with toggle-back, the project resolved
 from the focused window, agent state for Claude Code 2.1.212 or newer (opencode is recognised
-but reports no state), external probes, kitty and tmux runtime hosts, GNOME and
-sway window hosts, claim-on-appear for windows opened after a launch, the TUI,
-every command below, and the GNOME keybindings under `contrib/`.
+but reports no state), external probes, kitty and tmux runtime hosts, the GNOME window host,
+claim-on-appear for windows opened after a launch, the TUI, the popup, every
+command below, and the GNOME keybindings.
 
 To follow the design, read [docs/design/](docs/design/README.md) — it specifies
 the system and logs the decisions behind it.
 
 ## Install
 
-With [mise](https://mise.jdx.dev), which reads the releases page and puts all
-three files on your PATH:
+With [mise](https://mise.jdx.dev), which reads the releases page and puts
+`revier` on your PATH:
 
 ```bash
 mise use -g github:hk9890/revier
 ```
 
 Or download an archive from the
-[releases page](https://github.com/hk9890/revier/releases) and put its three
-files, `revier`, `revier-popup` and `revier-go`, on your PATH. Archives are
+[releases page](https://github.com/hk9890/revier/releases) and put `revier`
+on your PATH. Archives are
 named `revier_<version>_linux_<arch>.tar.gz`, with `x64` or `arm64` as the
 architecture:
 
@@ -206,18 +206,25 @@ unreachable. ssh runs in batch mode, so the host has to accept a key;
 ## Keybindings
 
 revier is one process per keypress: a desktop binding runs `revier go
-<target>` and exits. `contrib/gnome/` holds the GNOME bindings that replace
-the shell implementation's `os-*` shortcuts, on the same keys:
+<target> --picker` and exits. These GNOME bindings replace the shell
+implementation's `os-*` shortcuts, on the same keys:
 
 | Key | Runs |
 |---|---|
-| `Alt+Space` | `revier-popup`: the TUI in a kitty window of class `revier-popup`, or the one already open |
-| `Ctrl+Shift+U` | `revier-go home` |
-| `Ctrl+Shift+O` | `revier-go editor` |
-| `Ctrl+Shift+I` | `revier-go web` |
+| `Alt+Space` | `revier popup`: the TUI in a kitty window of class `revier-popup`, or the one already open |
+| `Ctrl+Shift+U` | `revier go home --picker` |
+| `Ctrl+Shift+O` | `revier go editor --picker` |
+| `Ctrl+Shift+I` | `revier go web --picker` |
 
-`revier-go` runs the target and opens the picker when no project resolves,
-because a key pressed on a window no project claims should still do something.
+`--picker` opens the popup when no project resolves, because a key pressed on a
+window no project claims should still do something. Without it, `revier go`
+exits with status 3 there, for scripts.
+
+The popup needs kitty, and GNOME with the
+[Window Control extension](https://github.com/carlo9890/gnome-window-control)
+and its `wctl`; `revier popup` names whichever is missing. A new popup is
+centred at 70% of the screen, or fills the screen when that is too narrow for
+the detail pane. A popup already open is raised where you left it.
 
 To claim the keys, run `revier keys install --dry-run` to see what would
 change, then `revier keys install`.
@@ -237,9 +244,6 @@ The key that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space`
 by default; the rest are the `key` each target declares.
 `revier keys status` says who holds each of them and only reads.
 
-Placement of the popup is a compositor rule, not revier's: on GNOME, a
-`wctl place` line in `revier-popup` after the launch.
-
 ## How it works
 
 Every operation is the same one: **run-or-raise a named target, and remember
@@ -257,9 +261,7 @@ mise install
 mise run build     # ./bin/revier
 ```
 
-A build from source is `bin/revier` alone; the two desktop scripts are
-`contrib/gnome/revier-popup` and `contrib/gnome/revier-go`. Installing revier
-is [Install](#install) above.
+Installing revier is [Install](#install) above.
 
 Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),
 [TESTING.md](docs/TESTING.md), [RUNNING.md](docs/RUNNING.md).

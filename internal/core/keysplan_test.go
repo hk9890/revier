@@ -89,7 +89,7 @@ func TestInstallWithoutForceStillTakesTheFreeKeys(t *testing.T) {
 		t.Fatalf("the free key was not taken: %+v", web)
 	}
 	held := w.Held("<Shift><Control>i")
-	if len(held) != 1 || held[0].Command != `sh -lc "revier-go web"` {
+	if len(held) != 1 || held[0].Command != `sh -lc "revier go web --picker"` {
 		t.Errorf("ctrl+shift+i is held by %+v, want revier's own shortcut", held)
 	}
 	if done.Installed() != 1 {
@@ -111,7 +111,7 @@ func TestForceTakesTheKeyAndDestroysNothing(t *testing.T) {
 	}
 
 	held := w.Held("<Shift><Control>u")
-	if len(held) != 1 || held[0].Command != `sh -lc "revier-go home"` {
+	if len(held) != 1 || held[0].Command != `sh -lc "revier go home --picker"` {
 		t.Fatalf("ctrl+shift+u is held by %+v, want revier's own shortcut alone", held)
 	}
 	// The evicted shortcut is still there, switched off, with its command
@@ -201,7 +201,7 @@ func TestInstallingTwiceChangesNothingTheSecondTime(t *testing.T) {
 // and without a second entry.
 func TestAnOldCommandIsRewrittenInPlace(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Shift><Control>o", `sh -lc "revier-go edit"`, "revier-editor"),
+		hosttest.Custom("<Shift><Control>o", `sh -lc "revier go edit --picker"`, "revier-editor"),
 	)
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
 
@@ -215,7 +215,7 @@ func TestAnOldCommandIsRewrittenInPlace(t *testing.T) {
 	if len(held) != 1 {
 		t.Fatalf("ctrl+shift+o is held by %d shortcuts, want 1: %+v", len(held), held)
 	}
-	if held[0].Command != `sh -lc "revier-go editor"` {
+	if held[0].Command != `sh -lc "revier go editor --picker"` {
 		t.Errorf("command = %q, want the current one", held[0].Command)
 	}
 }
@@ -224,8 +224,8 @@ func TestAnOldCommandIsRewrittenInPlace(t *testing.T) {
 // asks for any more, and touches nothing else.
 func TestUninstallRemovesOnlyRevierOwnShortcuts(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
-		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go diff"`, "revier-diff"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier-picker"),
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier go diff --picker"`, "revier-diff"),
 		hosttest.Custom("<Shift><Control>o", sessionEditor, "to-editor-window"),
 	)
 	c := &core.Core{KeyBinder: w}
@@ -253,8 +253,8 @@ func TestUninstallRemovesOnlyRevierOwnShortcuts(t *testing.T) {
 // A user's own shortcut that runs revier among other things is theirs. Read as
 // revier's, install rewrote it without --force and uninstall deleted it.
 func TestAShortcutThatMerelyRunsRevierIsNotRevierOwn(t *testing.T) {
-	wrapper := `sh -lc "revier-go editor && notify-send editor"`
-	popup := `sh -c "revier-popup; logger picked"`
+	wrapper := `sh -lc "revier go editor --picker && notify-send editor"`
+	popup := `sh -c "revier popup; logger picked"`
 	w := hosttest.NewWriter("gnome",
 		hosttest.Custom("<Shift><Control>o", wrapper, "my-editor"),
 		hosttest.Custom("<Super>p", popup, "my-picker"),
@@ -291,7 +291,7 @@ func TestAShortcutThatMerelyRunsRevierIsNotRevierOwn(t *testing.T) {
 // and both steps would still report done.
 func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier-home"),
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier-home"),
 	)
 	moved := prepared(t, revier.Project{
 		Name: "setup", Path: "/home/hans/setup",
@@ -315,8 +315,8 @@ func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
 	}
 
 	for chord, command := range map[string]string{
-		"<Shift><Control>j": `sh -lc "revier-go home"`,
-		"<Shift><Control>u": `sh -lc "revier-go web"`,
+		"<Shift><Control>j": `sh -lc "revier go home --picker"`,
+		"<Shift><Control>u": `sh -lc "revier go web --picker"`,
 	} {
 		held := w.Held(chord)
 		if len(held) != 1 || held[0].Command != command {
@@ -325,20 +325,34 @@ func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
 	}
 }
 
-// An entry is named after its target, and somebody else's entry can carry
-// that name. Writing to it would replace their shortcut with revier's.
-func TestSomebodyElsesEntryIsNeverWrittenTo(t *testing.T) {
+// An entry revier names is revier's whatever it runs. An older revier's keys
+// ran scripts that are gone; read as somebody else's, --force switched them
+// off and wrote a second entry beside each (decisions.md D77).
+func TestAnOlderReviersEntriesAreRewrittenInPlace(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Super>w", "firefox", "revier-picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
+		hosttest.Custom("<Shift><Control>o", `sh -lc "revier-go editor"`, "revier-editor"),
 	)
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
+	for _, chord := range []core.Chord{"alt+space", "ctrl+shift+o"} {
+		if s := step(t, plan, chord); s.Action.Blocked() || s.Own != core.KeyUpdate {
+			t.Errorf("%s: action %q, own %q; want revier's own entry updated without --force", chord, s.Action, s.Own)
+		}
+	}
 	c.ApplyKeys(context.Background(), plan, false)
 
-	if held := w.Held("<Super>w"); len(held) != 1 || held[0].Command != "firefox" {
-		t.Errorf("super+w is held by %+v, want the user's own shortcut", held)
+	for chord, command := range map[string]string{
+		"<Alt>space":        `sh -lc "revier popup"`,
+		"<Shift><Control>o": `sh -lc "revier go editor --picker"`,
+	} {
+		if held := w.Held(chord); len(held) != 1 || held[0].Command != command {
+			t.Errorf("%s is held by %+v, want %s alone", chord, held, command)
+		}
 	}
-	if held := w.Held("<Alt>space"); len(held) != 1 || held[0].Command != `sh -lc "revier-popup"` {
-		t.Errorf("alt+space is held by %+v, want revier's picker", held)
+	for _, b := range w.Bindings {
+		if strings.Contains(b.Command, "revier-") {
+			t.Errorf("%+v is left behind, want every old entry rewritten", b)
+		}
 	}
 }
 
@@ -512,7 +526,7 @@ func TestTwoDefaultsOnOneChordCarryBothUndoLines(t *testing.T) {
 // --force like any other key revier was not given.
 func TestAStaleShortcutUnderADesktopDefaultNeedsForce(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Shift><Control>o", `sh -lc "revier-go edit"`, "revier-editor"),
+		hosttest.Custom("<Shift><Control>o", `sh -lc "revier go edit --picker"`, "revier-editor"),
 		hosttest.Builtin("<Shift><Control>o", "org.gnome.desktop.wm.keybindings", "toggle-maximized"),
 	)
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
@@ -535,7 +549,7 @@ func TestAStaleShortcutUnderADesktopDefaultNeedsForce(t *testing.T) {
 	_, again := planInstall(t, w, keyProject(t, "revier"))
 	c.ApplyKeys(context.Background(), again, true)
 	held := w.Held("<Shift><Control>o")
-	if len(held) != 1 || held[0].Command != `sh -lc "revier-go editor"` {
+	if len(held) != 1 || held[0].Command != `sh -lc "revier go editor --picker"` {
 		t.Errorf("ctrl+shift+o is held by %+v, want revier's own shortcut alone", held)
 	}
 }
@@ -554,7 +568,7 @@ func TestUninstallDoesNotRefuseAConfigurationDisagreement(t *testing.T) {
 		},
 	})
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier-picker"),
 	)
 	c := &core.Core{KeyBinder: w}
 	projects := []core.Project{keyProject(t, "revier"), other}
@@ -574,8 +588,8 @@ func TestUninstallDoesNotRefuseAConfigurationDisagreement(t *testing.T) {
 // twice.
 func TestTwoOrphansOnOneChordAreOneStep(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go diff"`, "revier-diff"),
-		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go review"`, "revier-review"),
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier go diff --picker"`, "revier-diff"),
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier go review --picker"`, "revier-review"),
 	)
 	c := &core.Core{KeyBinder: w}
 	plan, err := c.PlanUninstallKeys(context.Background(), []core.Project{keyProject(t, "revier")}, "alt+space")
@@ -603,7 +617,7 @@ func TestTwoOrphansOnOneChordAreOneStep(t *testing.T) {
 // run that reported "ok" would be reporting a key that does not work.
 func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier-picker"),
 		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
 	)
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
@@ -630,7 +644,7 @@ func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
 // says revier's own is already right rather than about to be created.
 func TestAnotherShortcutBesideRevierOwnIsTheOnlyThingInTheWay(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
 		hosttest.Custom("<Alt>space", sessionSelector, "start-session-selector"),
 	)
 	c, plan := planInstall(t, w, keyProject(t, "revier"))

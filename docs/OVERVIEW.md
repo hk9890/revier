@@ -8,7 +8,7 @@ A findability map: where things live, and how to search for them.
 |---|---|
 | `pkg/revier/` | The ports and every type that crosses them. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` and `tmux` (runtime), `gnome` and `sway` (window), `claude`, `opencode`, and `execprobe` (probes), `ssh` (remote). |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` and `tmux` (runtime), `gnome` (window), `claude`, `opencode`, and `execprobe` (probes), `ssh` (remote). |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root. |
@@ -22,7 +22,6 @@ A findability map: where things live, and how to search for them.
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
-| `contrib/gnome/` | The shipped GNOME desktop-key scripts: `revier-go` runs a target, `revier-popup` opens the TUI. |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 
 ## The three ports

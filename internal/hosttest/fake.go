@@ -54,6 +54,10 @@ type Fake struct {
 	// host that cannot place windows leaves this nil, which is the
 	// degradation a test also has to cover.
 	Placements map[string][]string
+	// Workarea is the width WorkareaWidth reports, and WorkareaErr makes it
+	// fail.
+	Workarea    int
+	WorkareaErr error
 
 	// Sent records every text a FakeRuntime was asked to type, in order.
 	Sent []Sent
@@ -304,6 +308,13 @@ func (f *Fake) Place(_ context.Context, ref revier.TargetRef, geometry []string)
 	}
 	f.Placements[ref.ID] = geometry
 	return nil
+}
+
+// WorkareaWidth reports Workarea. Fake implements revier.WorkareaReader.
+func (f *Fake) WorkareaWidth(context.Context) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.Workarea, f.WorkareaErr
 }
 
 func (f *Fake) Focused(context.Context) (revier.TargetRef, error) {

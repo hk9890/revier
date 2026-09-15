@@ -12,7 +12,7 @@ func report() core.KeyReport {
 	return core.KeyReport{
 		Desktop: "gnome",
 		Rows: []core.KeyRow{
-			{Chord: "alt+space", Target: core.PickerTarget, Status: core.KeyActive, HeldBy: "revier: picker", Command: `sh -lc "revier-popup"`},
+			{Chord: "alt+space", Target: core.PickerTarget, Status: core.KeyActive, HeldBy: "revier: picker", Command: `sh -lc "revier popup"`},
 			{Chord: "ctrl+shift+o", Target: "editor", Status: core.KeyTaken, HeldBy: "to-editor-window"},
 			{Chord: "ctrl+shift+u", Target: "home", Status: core.KeyFree},
 		},
@@ -96,12 +96,12 @@ func TestTwoTargetsOnOneKeyAreExplainedTheOtherWayRound(t *testing.T) {
 func TestOrphansGetTheirOwnBlock(t *testing.T) {
 	r := report()
 	r.Orphaned = []core.KeyRow{
-		{Chord: "ctrl+shift+y", Status: core.KeyActive, HeldBy: "revier: diff", Command: `sh -lc "revier-go diff"`},
+		{Chord: "ctrl+shift+y", Status: core.KeyActive, HeldBy: "revier: diff", Command: `sh -lc "revier go diff --picker"`},
 	}
 	out := printed(r)
 	// The name is what finds the entry in the desktop's settings, and the
 	// command is what says what it still does. Both are needed to remove it.
-	for _, want := range []string{"ORPHANED", "ctrl+shift+y", "revier: diff", `sh -lc "revier-go diff"`} {
+	for _, want := range []string{"ORPHANED", "ctrl+shift+y", "revier: diff", `sh -lc "revier go diff --picker"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output does not carry %q:\n%s", want, out)
 		}

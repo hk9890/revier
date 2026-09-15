@@ -20,5 +20,5 @@ name='to-web-window'
 
 [revier-diff]
 binding='<Shift><Control>y'
-command='sh -lc "revier-go diff"'
+command='sh -lc "revier go diff --picker"'
 name='revier: diff'

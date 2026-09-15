@@ -4,8 +4,8 @@
 by hand against a release tag. The run builds, vets and tests before
 publishing, so a green run is the provenance for that commit.
 
-A release carries 2 archives (linux x64 and arm64, each holding `revier`,
-`revier-popup` and `revier-go`), a per-archive SPDX SBOM (syft), a checksums
+A release carries 2 archives (linux x64 and arm64, each holding `revier`
+alone), a per-archive SPDX SBOM (syft), a checksums
 file signed keyless with cosign (`.sig` + `.pem`), and SLSA build provenance
 from `actions/attest-build-provenance`. Archive names —
 `revier_0.1.0_linux_x64.tar.gz` — let installers such as `mise` auto-detect

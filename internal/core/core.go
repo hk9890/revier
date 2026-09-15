@@ -556,6 +556,50 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	if !ok || c.Window == nil || p.Targets[i].Window == nil {
 		return revier.Instance{}, false, nil
 	}
+	w, found, err := c.awaitNew(ctx, before, wait, BindPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
+		var candidates []revier.Instance
+		for _, w := range fresh {
+			if p.compiled[i].window.Matches(w) {
+				return w, true, false
+			}
+			if c.classOK(p, i, w) {
+				candidates = append(candidates, w)
+			}
+		}
+		if len(candidates) > 1 {
+			slog.Warn("bind: more than one new window of the class, none bound", "project", p.Name, "target", name, "candidates", len(candidates))
+			return revier.Instance{}, false, true
+		}
+		if len(candidates) == 1 {
+			return candidates[0], true, false
+		}
+		return revier.Instance{}, false, false
+	})
+	if errors.Is(err, errNoNewWindow) {
+		slog.Warn("bind: no window appeared in the wait, left to the TUI", "project", p.Name, "target", name, "wait", wait.String())
+		return revier.Instance{}, false, nil
+	}
+	if err != nil || !found {
+		return revier.Instance{}, false, err
+	}
+	if err := c.Window.Focus(ctx, w.Ref); err != nil {
+		return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
+	}
+	c.place(ctx, *p.Targets[i].Window, w.Ref)
+	return w, true, nil
+}
+
+// errNoNewWindow is awaitNew running out of time.
+var errNoNewWindow = errors.New("no new window appeared")
+
+// awaitNew asks the window host every poll, for at most wait, for the windows
+// not listed in before, and hands them to pick. pick returns the window it
+// settles on and found, or stop to end the wait without one. Bind and Popup
+// both wait for the window a detached launch produces, and share this so the
+// two waits cannot drift apart.
+func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, poll time.Duration,
+	pick func(fresh []revier.Instance) (w revier.Instance, found, stop bool),
+) (revier.Instance, bool, error) {
 	seen := map[string]bool{}
 	for _, inst := range before {
 		seen[key(inst.Ref)] = true
@@ -566,39 +610,22 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 		if err != nil {
 			return revier.Instance{}, false, err
 		}
-		var candidates []revier.Instance
+		fresh := make([]revier.Instance, 0, len(windows))
 		for _, w := range windows {
-			if seen[key(w.Ref)] {
-				continue
-			}
-			if p.compiled[i].window.Matches(w) {
-				candidates = []revier.Instance{w}
-				break
-			}
-			if c.classOK(p, i, w) {
-				candidates = append(candidates, w)
+			if !seen[key(w.Ref)] {
+				fresh = append(fresh, w)
 			}
 		}
-		if len(candidates) == 1 {
-			w := candidates[0]
-			if err := c.Window.Focus(ctx, w.Ref); err != nil {
-				return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
-			}
-			c.place(ctx, *p.Targets[i].Window, w.Ref)
-			return w, true, nil
-		}
-		if len(candidates) > 1 {
-			slog.Warn("bind: more than one new window of the class, none bound", "project", p.Name, "target", name, "candidates", len(candidates))
-			return revier.Instance{}, false, nil
+		if w, found, stop := pick(fresh); found || stop {
+			return w, found, nil
 		}
 		if !time.Now().Before(deadline) {
-			slog.Warn("bind: no window appeared in the wait, left to the TUI", "project", p.Name, "target", name, "wait", wait.String())
-			return revier.Instance{}, false, nil
+			return revier.Instance{}, false, errNoNewWindow
 		}
 		select {
 		case <-ctx.Done():
 			return revier.Instance{}, false, ctx.Err()
-		case <-time.After(BindPoll):
+		case <-time.After(poll):
 		}
 	}
 }

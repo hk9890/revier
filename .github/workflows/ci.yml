@@ -39,15 +39,10 @@ jobs:
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
       # ubuntu-latest ships tmux, which is all L4 needs: every test starts a
-      # private server on its own socket and kills it in cleanup. L5 starts
-      # sway on the headless wlroots backend, one compositor per test, and
-      # opens windows with foot, a terminal that renders without a GPU.
-      - name: install sway and foot for L5
-        run: sudo apt-get update -q && sudo apt-get install -y -q sway foot
-
-      - name: L4 live tmux, L5 live sway
+      # private server on its own socket and kills it in cleanup.
+      - name: L4 live tmux
         run: |
-          tmux -V; sway --version
+          tmux -V
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...
 
       - name: build

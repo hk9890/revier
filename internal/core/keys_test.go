@@ -94,8 +94,8 @@ func TestEveryWantedChordIsReportedTaken(t *testing.T) {
 // what `keys install` will write is visible before it writes it.
 func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
-		hosttest.Custom("<Shift><Control>o", `sh -lc "revier-go edit"`, "revier: editor"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
+		hosttest.Custom("<Shift><Control>o", `sh -lc "revier go edit --picker"`, "revier: editor"),
 	), keyProject(t, "revier"))
 
 	if got := row(t, report, "alt+space").Status; got != core.KeyActive {
@@ -107,7 +107,7 @@ func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 	if stale.Status != core.KeyStale {
 		t.Errorf("ctrl+shift+o = %q, want stale", stale.Status)
 	}
-	if stale.Command != `sh -lc "revier-go editor"` {
+	if stale.Command != `sh -lc "revier go editor --picker"` {
 		t.Errorf("command = %q, want what revier would install", stale.Command)
 	}
 }
@@ -115,7 +115,7 @@ func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 // An entry in the desktop's store but switched off fires on no press and
 // appears nowhere in the settings UI. It is reported for exactly that reason.
 func TestSwitchedOffEntryIsInertAndNotFree(t *testing.T) {
-	off := hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker")
+	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker")
 	off.Enabled = false
 	report := keysOf(t, hosttest.NewKeys("gnome", off), keyProject(t, "revier"))
 
@@ -127,7 +127,7 @@ func TestSwitchedOffEntryIsInertAndNotFree(t *testing.T) {
 // A shortcut that fires beats one that does not, whoever owns it: what fires
 // is what the user experiences on a press.
 func TestASwitchedOnShortcutWinsOverASwitchedOffOne(t *testing.T) {
-	off := hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker")
+	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker")
 	off.Enabled = false
 	report := keysOf(t, hosttest.NewKeys("gnome",
 		off,
@@ -163,7 +163,7 @@ func TestADesktopDefaultIsNeitherFreeNorTaken(t *testing.T) {
 // would say the key is done while the default still runs.
 func TestADesktopDefaultBesideRevierOwnShortcutIsNotActive(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
 		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
 	), keyProject(t, "revier"))
 
@@ -267,7 +267,7 @@ func TestTwoTargetsOnOneChordAreBothMarked(t *testing.T) {
 		},
 	})
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier: workspace"),
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier: workspace"),
 	), keyProject(t, "revier"), other)
 
 	var onTheChord []core.KeyRow
@@ -290,8 +290,8 @@ func TestTwoTargetsOnOneChordAreBothMarked(t *testing.T) {
 // firing, on a chord nothing asks for any more.
 func TestAChordRevierHoldsAndNoLongerWantsIsAnOrphan(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Shift><Control>y", `sh -lc "revier-go diff"`, "revier: diff"),
-		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier: workspace"),
+		hosttest.Custom("<Shift><Control>y", `sh -lc "revier go diff --picker"`, "revier: diff"),
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier: workspace"),
 		hosttest.Custom("<Super>k", `sh -lc "somebody-else"`, "not-revier"),
 	), keyProject(t, "revier"))
 
@@ -302,7 +302,7 @@ func TestAChordRevierHoldsAndNoLongerWantsIsAnOrphan(t *testing.T) {
 	if orphan.Chord != "ctrl+shift+y" {
 		t.Errorf("orphan = %q, want ctrl+shift+y", orphan.Chord)
 	}
-	if orphan.Command != `sh -lc "revier-go diff"` {
+	if orphan.Command != `sh -lc "revier go diff --picker"` {
 		t.Errorf("orphan command = %q, want what is installed there now", orphan.Command)
 	}
 	if orphan.Status != core.KeyActive {
@@ -339,7 +339,7 @@ func TestAFailedReadIsReported(t *testing.T) {
 // runs on the same press - the one state this command exists to catch.
 func TestASecondSwitchedOnHolderIsNotHidden(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Shift><Control>u", `sh -lc "revier-go home"`, "revier: workspace"),
+		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier: workspace"),
 		hosttest.Custom("<Shift><Control>u", `sh -lc "$HOME/setup/scripts/sessions/os-to-session.sh"`, "to-session-terminal"),
 	), keyProject(t, "revier"))
 
@@ -368,7 +368,7 @@ func TestATargetOnTheTriggerChordIsMarked(t *testing.T) {
 		},
 	})
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
 	), keyProject(t, "revier"), clash)
 
 	var onTheChord []core.KeyRow

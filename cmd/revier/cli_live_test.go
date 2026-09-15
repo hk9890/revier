@@ -274,8 +274,8 @@ func TestRunUnknownActionIsAnError(t *testing.T) {
 
 // A window that belongs to no project is a normal outcome, not a failure: it
 // carries its own exit status so a desktop binding can offer the picker
-// instead (contrib/gnome/revier-go). No window host probes here, so nothing
-// can be resolved from focus, which is the case under test.
+// instead (`go --picker`). No window host probes here, so nothing can be
+// resolved from focus, which is the case under test.
 func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
 	// The working directory is this package, which no project claims; state
 	// is fresh, and no window host probes here.
@@ -289,5 +289,35 @@ func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
 	}
 	if exitNoProject == 1 {
 		t.Error("the no-project status must differ from a generic failure")
+	}
+}
+
+// With --picker, no project is the popup's to answer, not an exit status. The
+// window host is disabled here, so the popup refuses, names what it needs, and
+// launches nothing. A kitty stub is on PATH, so the refusal comes from the
+// window host and not from a machine without kitty.
+func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
+	scratch(t)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "kitty"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	err := run([]string{"go", "home", "--picker"})
+	if err == nil || errors.Is(err, errNoProject) {
+		t.Fatalf("err = %v, want the popup's refusal and not the no-project outcome", err)
+	}
+	if !strings.Contains(err.Error(), "popup:") || strings.Contains(err.Error(), "kitty is not on PATH") {
+		t.Errorf("err = %v, want the popup's refusal for want of a window host", err)
+	}
+}
+
+// An argument is refused before anything is launched, so `revier popup --help`
+// does not open a window.
+func TestPopupRefusesArguments(t *testing.T) {
+	scratch(t)
+	if err := run([]string{"popup", "--help"}); err == nil || !strings.Contains(err.Error(), "usage: revier popup") {
+		t.Errorf("err = %v, want the usage", err)
 	}
 }

@@ -185,7 +185,7 @@ command without it addresses their real sessions.
 ## Verify an adapter against its real tool
 
 ```bash
-mise run test:live      # L4 tmux and the CLI end-to-end, L5 sway; all headless
+mise run test:live      # L4 tmux and the CLI end-to-end; headless
 ```
 
 Each test starts a server on a socket named after itself and kills it in

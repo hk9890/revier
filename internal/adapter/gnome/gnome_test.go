@@ -225,6 +225,40 @@ func TestPlaceBuildsTheCommand(t *testing.T) {
 	}
 }
 
+// The popup's size is decided from this width before its launch, so a reply
+// without one must fail rather than read as a zero-wide screen.
+func TestWorkareaWidthReadsTheReply(t *testing.T) {
+	cases := []struct {
+		name, reply string
+		want        int
+		fail        bool
+	}{
+		{name: "wctl 0.11.0", reply: `{"monitor_index":0,"x":0,"y":32,"width":5120,"height":1408}`, want: 5120},
+		{name: "no width", reply: `{"monitor_index":0}`, fail: true},
+		{name: "not json", reply: `Window Control extension is not running`, fail: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			stub := filepath.Join(dir, "wctl")
+			script := "#!/bin/sh\n[ \"$*\" = 'workarea --json' ] || exit 9\nprintf '%s' '" + tc.reply + "'\n"
+			if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			got, err := (&gnome.Host{Bin: stub}).WorkareaWidth(context.Background())
+			if tc.fail {
+				if err == nil {
+					t.Fatalf("width = %d, want an error", got)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("width = %d, %v; want %d", got, err, tc.want)
+			}
+		})
+	}
+}
+
 // A launched application outlives the keypress that started it. The context
 // bounds the host calls around a launch and never the application: a TUI
 // activation ends it the moment the new window is bound. The application also
