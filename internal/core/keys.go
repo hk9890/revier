@@ -76,18 +76,19 @@ type KeyReport struct {
 // The commands revier binds to a desktop key. A login shell, so the desktop
 // finds revier on the same PATH a terminal has.
 const (
-	pickerCommand   = `sh -lc "revier-popup"`
-	goCommandPrefix = `sh -lc "revier-go `
+	pickerCommand   = `sh -lc "revier popup"`
+	goCommandPrefix = `sh -lc "revier go `
+	goCommandSuffix = ` --picker"`
 )
 
 func targetCommand(name revier.TargetName) string {
-	return goCommandPrefix + string(name) + `"`
+	return goCommandPrefix + string(name) + goCommandSuffix
 }
 
 // keyTargetName is the shape of every target name. The name is written into
 // the shell command a desktop key runs, and read back out of it to tell
 // revier's shortcuts from anybody else's, so it is one plain word that no
-// shell reads as syntax and revier-go does not read as a flag. It holds for a
+// shell reads as syntax and revier go does not read as a flag. It holds for a
 // target with no key too: a key added later must not find its name refused.
 var keyTargetName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
@@ -112,16 +113,25 @@ func ValidateKeyTarget(name revier.TargetName) error {
 	return nil
 }
 
-// ownedCommand reports whether a shortcut runs exactly a command revier
-// writes: the picker's, or one target's. Ownership is read from the command
-// and not from where the desktop filed the shortcut, because a user who bound
-// `sh -lc "revier-go editor"` by hand owns the same key revier does, and
-// reporting that as somebody else's would be a lie.
-//
-// It is exact because ownership is what uninstall deletes and what install
-// rewrites without --force. A user's own shortcut that merely runs revier -
-// `revier-go editor && notify-send done` - is theirs, and is treated as
-// anybody else's.
+// owned reports whether a shortcut is revier's: uninstall deletes it, and
+// install rewrites it without --force. It is revier's when it sits in an entry
+// revier names (bindingID), whatever it runs now, so an install from an older
+// revier - one that ran another command - is rewritten in place and not left
+// beside the new one (decisions.md D77). It is revier's too when it runs
+// exactly a command revier writes, wherever the desktop filed it, because a
+// user who bound `sh -lc "revier go editor --picker"` by hand owns the same key
+// revier does.
+func owned(b revier.Binding) bool {
+	if b.Source != revier.BindingCustom {
+		return false
+	}
+	return strings.HasPrefix(b.ID, bindingIDPrefix) || ownedCommand(b.Command)
+}
+
+// ownedCommand reports whether a command is exactly one revier writes: the
+// picker's, or one target's. A user's own shortcut that merely runs revier -
+// `revier go editor && notify-send done` in an entry of their own - is theirs,
+// and is treated as anybody else's.
 func ownedCommand(cmd string) bool {
 	if cmd == pickerCommand {
 		return true
@@ -130,7 +140,7 @@ func ownedCommand(cmd string) bool {
 	if !ok {
 		return false
 	}
-	name, ok = strings.CutSuffix(name, `"`)
+	name, ok = strings.CutSuffix(name, goCommandSuffix)
 	return ok && keyTargetName.MatchString(name)
 }
 
@@ -291,14 +301,14 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 		decides := live[0]
 		labels := make([]string, 0, len(live))
 		for _, b := range live {
-			if !ownedCommand(b.Command) && ownedCommand(decides.Command) {
+			if !owned(b) && owned(decides) {
 				decides = b
 			}
 			labels = append(labels, b.Label)
 		}
 		builtins := builtinNames(holders)
 		switch {
-		case !ownedCommand(decides.Command):
+		case !owned(decides):
 			want.Status = KeyTaken
 		case decides.Command != want.Command:
 			want.Status = KeyStale
@@ -315,7 +325,7 @@ func classify(want KeyRow, holders []revier.Binding) KeyRow {
 		return want
 	}
 	for _, b := range holders {
-		if b.Source == revier.BindingCustom && ownedCommand(b.Command) {
+		if owned(b) {
 			want.Status, want.HeldBy = KeyInert, b.Label
 			return want
 		}
@@ -351,7 +361,7 @@ func orphans(bindings []revier.Binding, wanted []KeyRow) []KeyRow {
 	}
 	var out []KeyRow
 	for _, b := range bindings {
-		if b.Source != revier.BindingCustom || !ownedCommand(b.Command) {
+		if !owned(b) {
 			continue
 		}
 		ch, err := ParseChord(b.Chord)

@@ -239,6 +239,29 @@ func (h *Host) Place(ctx context.Context, ref revier.TargetRef, geometry []strin
 	return err
 }
 
+// WorkareaWidth reports the width of the primary monitor's usable area, the
+// rectangle wctl resolves a placement's percentages against.
+func (h *Host) WorkareaWidth(ctx context.Context) (int, error) {
+	raw, err := h.run(ctx, "workarea", "--json")
+	if err != nil {
+		return 0, err
+	}
+	return decodeWorkareaWidth(raw)
+}
+
+func decodeWorkareaWidth(raw []byte) (int, error) {
+	var area struct {
+		Width int `json:"width"`
+	}
+	if err := json.Unmarshal(raw, &area); err != nil {
+		return 0, fmt.Errorf("wctl workarea --json: %w", err)
+	}
+	if area.Width <= 0 {
+		return 0, fmt.Errorf("wctl workarea --json: no width in %s", bytes.TrimSpace(raw))
+	}
+	return area.Width, nil
+}
+
 // Focused reports the focused window.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	raw, err := h.run(ctx, "focused", "--json")

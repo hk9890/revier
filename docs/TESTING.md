@@ -6,10 +6,10 @@ without it.
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
-mise run test:live         # L4 + L5   real substrates, still headless
+mise run test:live         # L4        real tmux, still headless
 mise run test:all          # everything runnable without a screen
 mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
-mise run quality:full      # + L4/L5                            (pre-handoff)
+mise run quality:full      # + L4                               (pre-handoff)
 ```
 
 `make test`, `make test-integration`, `make vet`, `make fmt` are the fallback.
@@ -24,9 +24,8 @@ Only L6 ever reaches one.
 |---|---|---|---|
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
-| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `swaymsg -t get_tree`, `wctl list --json` |
+| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json` |
 | L4 | real tmux, private socket | `live` | the tmux host, and the core against a real substrate |
-| L5 | real sway, `WLR_BACKENDS=headless` | `live` | a real window host with no screen |
 | L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
@@ -35,8 +34,6 @@ resolution, toggle-back, and the degradation rules need no tool at all.
 
 L2 does not replace L4. The fake has no opinion about focus, so `Go` not
 focusing after `Open` passed L2 and failed L4.
-
-L5 needs `sway` and `foot`; CI installs both.
 
 ## What every host test must cover
 
@@ -55,8 +52,8 @@ L5 needs `sway` and `foot`; CI installs both.
 - A live test starts its substrate on a socket named after itself and kills it
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must
-  stay green on a machine without sway.
-- Leave tmux and sway unpinned in `.mise.toml`: the live layer runs against
+  stay green on a machine without tmux.
+- Leave tmux unpinned in `.mise.toml`: the live layer runs against
   whatever is installed, which is how CI caught the 3.4-versus-3.7 difference.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm

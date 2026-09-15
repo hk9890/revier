@@ -78,8 +78,8 @@ func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 // has no working directory and no focused workspace to read, so without a
 // remembered project "go back to the terminal" could not be answered.
 // errNoProject is the normal outcome of a keypress on a window that belongs
-// to no project. It has its own exit status so a desktop binding can fall
-// back to the picker (contrib/gnome/revier-go).
+// to no project. It has its own exit status, and `go --picker` opens the
+// popup instead.
 var errNoProject = errors.New("no project for this directory, for the focused window, and none remembered")
 
 func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project, error) {

@@ -225,8 +225,8 @@ For a new terminal, a new multiplexer, or a new compositor.
    recorded output of the tool's query command, not against the live tool.
 
 `Instances` is the one to get right. It runs on every TUI refresh, so it must be
-a single bulk query — `kitten @ ls`, `tmux list-panes -a -F`, `swaymsg -t
-get_tree` — never one call per project.
+a single bulk query — `kitten @ ls`, `tmux list-panes -a -F`, `wctl list
+--json` — never one call per project.
 
 An adapter holds no policy. Matching, template rendering, resolution between
 realizations, and toggle-back all live in the core, so two adapters can never

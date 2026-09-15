@@ -38,7 +38,7 @@ diff viewer *is* depends on which host can provide it:
 
 | Host | The same target, realized |
 |---|---|
-| Compositor (GNOME, sway, Hyprland) | a Meld window, found by WM class, raised by the compositor |
+| Compositor (GNOME) | a Meld window, found by WM class, raised by the compositor |
 | Runtime (kitty, tmux) | `nvim -d` in a pane, found by title, focused by the terminal |
 
 The key, the name, and the promise are identical. Only the resolution differs.
@@ -73,12 +73,11 @@ The third mechanism exists because the interesting case is the unreliable one.
 Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
 window. Claim-on-appear settles an action's launch, and it runs in the TUI, the
-one long-lived process. Its latency depends on the window host. A host that
-reports window events (sway) claims within a second of the window appearing.
-GNOME reports none through `wctl`, so there the TUI diffs successive surveys and
-the claim lands within two refresh intervals, about two seconds. In both cases
-the claim happens only while the TUI is open, only within five seconds of the
-action, only for a window no declared target matches, and only when one such
+one long-lived process. GNOME reports no window events through `wctl`, so the
+TUI diffs successive surveys and the claim lands within two refresh intervals,
+about two seconds. A window host that reports events would claim within a
+second. The claim happens only while the TUI is open, only within five seconds
+of the action, only for a window no declared target matches, and only when one such
 window appeared.
 
 A keyed target's launch is settled the same way but by the launching process
@@ -95,7 +94,9 @@ an application restart.
 revier                 the TUI: every project, its agent state, its targets
 revier open [name]     run-or-raise the home target, without UI
 revier new [name]      write a project file for the current directory
-revier go <target>     run-or-raise a named target in the current project
+revier go <target>     run-or-raise a named target in the current project;
+                       --picker opens the popup when no project resolves
+revier popup           run-or-raise the TUI in a kitty window revier places (D76)
 revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
 revier list [--json]   machine-readable inventory
@@ -124,6 +125,8 @@ the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30)
 - Attached instances through the project-scoped picker
 - Agent state for Claude Code, shown per project
 - kitty runtime, GNOME window control, Claude probe
+- The popup the desktop key opens: the TUI in kitty on GNOME, sized to show
+  the detail pane (D76)
 - `--json` output
 - Projects on another machine, surveyed by the revier installed there (D40)
 
@@ -132,7 +135,6 @@ the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30)
 | Left out | Why |
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
-| Popup window geometry | The compositor places windows. The rule that opens revier as a popup is user configuration. |
 | The contents of a pane across a reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
 | Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. |
 

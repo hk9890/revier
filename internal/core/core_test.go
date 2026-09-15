@@ -1133,8 +1133,7 @@ type noPlacer struct{ *hosttest.Fake }
 
 func (noPlacer) Place() {}
 
-// A window host that cannot place windows ignores the declaration. sway is
-// such a host today, and a machine with no extension installed is another.
+// A window host that cannot place windows ignores the declaration.
 func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
 	raw := project()
 	raw.Targets[1].Window.Place = "right top 75% 100%"

@@ -15,8 +15,8 @@ builds:
       - -X github.com/hk9890/revier/internal/build.Version={{ .Version }}
       - -X github.com/hk9890/revier/internal/build.Commit={{ .ShortCommit }}
       - -X github.com/hk9890/revier/internal/build.Date={{ .Date }}
-    # Linux only: every window host revier ships (GNOME, sway) is a Linux
-    # desktop, and the desktop keys under contrib/ are GNOME's.
+    # Linux only: the window host revier ships (GNOME) and its desktop keys
+    # are a Linux desktop's.
     goos:
       - linux
     goarch:
@@ -29,13 +29,11 @@ archives:
       - revier
     formats:
       - tar.gz
-    # The two desktop scripts ship beside the binary: `revier keys install`
-    # binds keys to them by name, so an install without them has dead keys.
+    # The binary alone: the desktop keys run `revier popup` and `revier go`.
+    # A pattern that matches nothing replaces GoReleaser's default of adding
+    # README, LICENSE and CHANGELOG.
     files:
-      - src: contrib/gnome/revier-popup
-        strip_parent: true
-      - src: contrib/gnome/revier-go
-        strip_parent: true
+      - none*
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ if eq .Arch "amd64" }}x64{{ else }}{{ .Arch }}{{ end }}
 

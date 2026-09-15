@@ -17,9 +17,9 @@ import (
 // dconf dump is INI: a [group] per entry, then key=value lines whose values
 // are GVariant literals.
 //
-//	[revier-popup]
+//	[revier-picker]
 //	binding='<Alt>space'
-//	command='sh -lc "revier-popup"'
+//	command='sh -lc "revier popup"'
 //	name='revier: picker'
 func decodeCustom(dump, list []byte) []revier.Binding {
 	enabled := map[string]bool{}

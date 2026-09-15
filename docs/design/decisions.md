@@ -369,3 +369,23 @@ its id alone was ambiguous. The survey already reads each agent from its
 instance, so `AgentView` carries that ref, and going to an agent uses the pair
 rather than a second lookup. A link sends the host's ref back to the host,
 which is the only side it means anything to.
+
+### D76 — the popup and the fallback to it are revier's, in kitty on GNOME
+
+Replaces the two shipped scripts, `revier-popup` and `revier-go`. revier
+shipped them, bound keys to them, and changed them, so they were product code
+in shell with no test. `revier popup` run-or-raises a kitty window of class
+`revier-popup` and places it under D24: centred at 70% of the workarea, or
+filling it when 70% is narrower than the detail pane's 100 columns, decided
+before the launch so the window never resizes. `go --picker` falls back to it,
+and plain `go` keeps its exit status for scripts. sway is removed: the popup
+and the keys are GNOME's.
+
+### D77 — a shortcut in an entry revier names is revier's, whatever it runs
+
+Ownership was read from the command alone. The keys an older revier wrote ran
+commands that are gone, so an install read them as somebody else's: `--force`
+switched each off and wrote a second entry beside it, and uninstall never
+removed them. An entry named `revier-<target>` is revier's, so install rewrites
+it in place and uninstall deletes it. A shortcut elsewhere that runs exactly
+revier's command stays revier's too.

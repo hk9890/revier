@@ -114,7 +114,9 @@ func (p KeyPlan) Installed() int {
 // bindingID is the name revier gives a shortcut it owns. It is stable across
 // runs and unlike anything a desktop allocates for itself - GNOME numbers its
 // own entries - so the two never claim the same storage.
-func bindingID(target string) string { return "revier-" + target }
+func bindingID(target string) string { return bindingIDPrefix + target }
+
+const bindingIDPrefix = "revier-"
 
 // bindingLabel is what the desktop's settings window shows.
 func bindingLabel(target string) string { return "revier: " + target }
@@ -157,7 +159,7 @@ func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger 
 func entryPerStep(steps []KeyStep, bindings []revier.Binding) {
 	taken := map[string]bool{}
 	for _, b := range bindings {
-		if b.Source == revier.BindingCustom && !ownedCommand(b.Command) {
+		if b.Source == revier.BindingCustom && !owned(b) {
 			taken[b.ID] = true
 		}
 	}
@@ -351,7 +353,7 @@ func ownAction(own revier.Binding, want string) KeyAction {
 func removeStep(chord Chord, target string, holders []revier.Binding) KeyStep {
 	step := KeyStep{Chord: chord, Target: target, Action: KeyAbsent}
 	for _, b := range holders {
-		if b.Source == revier.BindingCustom && ownedCommand(b.Command) {
+		if owned(b) {
 			step.Drop = append(step.Drop, b)
 		}
 	}
@@ -367,7 +369,7 @@ func removeStep(chord Chord, target string, holders []revier.Binding) KeyStep {
 func otherHolders(holders []revier.Binding) []revier.Binding {
 	var out []revier.Binding
 	for _, b := range holders {
-		if b.Source == revier.BindingCustom && ownedCommand(b.Command) {
+		if owned(b) {
 			continue
 		}
 		if b.Source == revier.BindingCustom && !b.Enabled {
@@ -423,7 +425,7 @@ func holderNames(evict []revier.Binding) string {
 // ownHolder is revier's own shortcut on the chord, if the desktop holds one.
 func ownHolder(holders []revier.Binding) (revier.Binding, bool) {
 	for _, b := range holders {
-		if b.Source == revier.BindingCustom && ownedCommand(b.Command) {
+		if owned(b) {
 			return b, true
 		}
 	}

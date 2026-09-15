@@ -160,6 +160,20 @@ const (
     WindowClosed
     WindowFocused
 )
+
+// WindowPlacer is an optional capability. A host that implements it positions
+// a window revier launched (D24); geometry is four tokens in the host's own
+// vocabulary. One that does not ignores every declared placement.
+type WindowPlacer interface {
+    Place(ctx context.Context, ref TargetRef, geometry []string) error
+}
+
+// WorkareaReader is an optional capability. A host that implements it reports
+// the usable width of the primary monitor, from which the popup's size is
+// decided before its launch (D76).
+type WorkareaReader interface {
+    WorkareaWidth(ctx context.Context) (int, error)
+}
 ```
 
 ## PanelOpener

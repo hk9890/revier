@@ -1,4 +1,4 @@
-# tmux and sway are deliberately NOT pinned here. They are the substrates the
+# tmux is deliberately NOT pinned here. It is the substrate the
 # live test layer drives, and the point of that layer is to run against whatever
 # version is installed: pinning tmux would have hidden the format-output
 # difference between 3.4 and 3.7 that CI caught and a pinned local build never
@@ -76,7 +76,7 @@ run = "gotestsum --format pkgname-and-test-fails -- -race -tags=integration ./..
 CGO_ENABLED = "1"
 
 [tasks."test:live"]
-description = "L4 tmux + L5 sway, both headless. Skips any substrate not installed."
+description = "L4 tmux, headless. Skips when tmux is not installed."
 run = "gotestsum --format pkgname-and-test-fails -- -race -tags=live -timeout=120s ./..."
 [tasks."test:live".env]
 CGO_ENABLED = "1"

@@ -22,7 +22,7 @@ type Host interface {
 	//
 	// This is the hot path. The TUI calls it on every refresh, so an
 	// implementation issues one bulk query - `kitten @ ls`, `tmux list-panes
-	// -a -F`, `swaymsg -t get_tree` - never one call per project.
+	// -a -F`, `wctl list --json` - never one call per project.
 	Instances(ctx context.Context) ([]Instance, error)
 
 	// Open creates an instance from an already-rendered realization.
@@ -104,6 +104,15 @@ type WindowWatcher interface {
 // vocabulary of pixels and workarea-relative words.
 type WindowPlacer interface {
 	Place(ctx context.Context, ref TargetRef, geometry []string) error
+}
+
+// WorkareaReader is an optional capability, detected by type assertion. A
+// host that implements it reports the width in pixels of the usable area of
+// the primary monitor, which is how the popup decides before its launch
+// whether a centred window is wide enough for the detail pane
+// (decisions.md D76).
+type WorkareaReader interface {
+	WorkareaWidth(ctx context.Context) (int, error)
 }
 
 // PanelWriter is an optional capability of a Runtime, detected by type

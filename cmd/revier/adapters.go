@@ -11,7 +11,6 @@ import (
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
 	"github.com/hk9890/revier/internal/adapter/ssh"
-	"github.com/hk9890/revier/internal/adapter/sway"
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -31,7 +30,6 @@ func runtimeAdapters() map[string]revier.Runtime {
 func windowAdapters() map[string]revier.WindowController {
 	return map[string]revier.WindowController{
 		"gnome": &gnome.Host{},
-		"sway":  &sway.Host{},
 	}
 }
 
@@ -48,7 +46,7 @@ func probes(cfg *config.Config) []revier.AgentProbe {
 // preference order used when config names none.
 var (
 	defaultRuntimeOrder = []string{"kitty", "tmux"}
-	defaultWindowOrder  = []string{"gnome", "sway"}
+	defaultWindowOrder  = []string{"gnome"}
 )
 
 // hostNone disables a host class. Listing it is how a machine that HAS a usable
@@ -134,8 +132,7 @@ func selectWindow(ctx context.Context, want []string, adapters map[string]revier
 
 // keyBinders are the desktops whose keyboard shortcuts revier can read. This
 // is a shorter list than windowAdapters on purpose: reading a compositor's
-// window list and reading a desktop's shortcut store are different jobs, and
-// sway keeps its bindings in a config file that revier does not parse.
+// window list and reading a desktop's shortcut store are different jobs.
 func keyBinders() map[string]revier.KeyBinder {
 	return map[string]revier.KeyBinder{"gnome": &gnome.Keys{}}
 }

@@ -24,7 +24,7 @@ behind one of three interfaces, defined in [interfaces.md](interfaces.md).
     Runtime │ WindowController          claude
     ────────┼────────────────           opencode*
     kitty   │ gnome                     aider*
-    tmux*   │ sway*
+    tmux*   │
     wezterm*│ hyprland*
 
   * not in the first version
@@ -106,7 +106,6 @@ Detection signals the adapters use:
 | tmux | `$TMUX`, `tmux` on PATH |
 | wezterm | `$WEZTERM_PANE` |
 | gnome | `$XDG_CURRENT_DESKTOP` contains GNOME, `wctl` on PATH |
-| sway | `$SWAYSOCK` |
 | hyprland | `$HYPRLAND_INSTANCE_SIGNATURE` |
 
 ## Package layout
