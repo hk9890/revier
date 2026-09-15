@@ -106,18 +106,20 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", false)
 	for _, step := range c.RestorePlan(s, r) {
 		res := RestoreResult{RestoreStep: step}
-		if step.Action == RestoreLaunch {
-			// The plan was built from a survey of these projects, so a
-			// project it knew cannot be missing here. Reported rather than
-			// asserted.
-			if p, ok := projectNamed(projects, step.Project); ok {
-				res = c.restoreLaunch(ctx, p, step, l)
-			} else {
-				slog.Warn("restore step: planned project not loaded", "project", step.Project, "target", step.Target)
-				res.Action = RestoreNoProject
-			}
+		p, loaded := projectNamed(projects, step.Project)
+		// The plan was built from a survey of these projects, so a project it
+		// knew cannot be missing here. Reported rather than asserted.
+		if step.Action == RestoreLaunch && !loaded {
+			slog.Warn("restore step: planned project not loaded", "project", step.Project, "target", step.Target)
+			res.Action = RestoreNoProject
 		}
-		LogRestore(res)
+		// Logged before the launch, so a step that hangs on its window is
+		// the last one the log names.
+		logStep(res.RestoreStep, false)
+		if res.Action == RestoreLaunch {
+			res = c.restoreLaunch(ctx, p, step, l)
+			logAgents(res)
+		}
 		out = append(out, res)
 	}
 	if p, ok := projectNamed(projects, s.Current); ok {
@@ -132,8 +134,12 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 	return out, back
 }
 
-// restoreLaunch is one step of a restore, walked by ActivateWaiting.
+// restoreLaunch is one step of a restore, walked by ActivateWaiting. It has
+// the deadline a keypress and the bind after it have, so a host that never
+// answers costs the restore one step and not the rest of the walk.
 func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l Ledger) RestoreResult {
+	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
+	defer cancel()
 	ref, res, err := c.ActivateWaiting(ctx, p, step.Target, step.Resumes, l)
 	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
 }
@@ -164,12 +170,25 @@ func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.Targe
 	return ref, res, err
 }
 
-// LogRestore writes one line for a step, and one per recorded agent of it: the
-// conversation and directory it was recorded with, and what the launch did
-// with it. A step that failed before it launched has no outcomes, and each of
-// its agents is logged with outcome none.
+// LogRestore writes one line for a step, and, for a launch, one per recorded
+// agent of it: the conversation and directory it was recorded with, and what
+// the launch did with it. A launch that failed before it launched has no
+// outcomes, and each of its agents is logged with outcome none.
 func LogRestore(r RestoreResult) {
-	slog.Info("restore step", "project", r.Project, "target", r.Target, "action", r.Action.String(), "dry_run", r.dry)
+	logStep(r.RestoreStep, r.dry)
+	logAgents(r)
+}
+
+func logStep(step RestoreStep, dry bool) {
+	slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String(), "dry_run", dry)
+}
+
+// logAgents is LogRestore's agent lines. A step stepped over launches nothing,
+// so its agents have no outcome worth a line.
+func logAgents(r RestoreResult) {
+	if r.Action != RestoreLaunch {
+		return
+	}
 	for i, a := range r.Resumes {
 		outcome := "none"
 		if i < len(r.Agents) {

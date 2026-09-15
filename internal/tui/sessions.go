@@ -204,6 +204,12 @@ func (m Model) openSessionName() (tea.Model, tea.Cmd) {
 		m.err = errors.New("a save is still running")
 		return m, nil
 	}
+	// A save during a restore records a desktop half restored, and it would
+	// be the newest session, the one a plain restore opens.
+	if m.restoring != "" {
+		m.err = fmt.Errorf("the restore of %s is still running; save once it is done", m.restoring)
+		return m, nil
+	}
 	m.sname.SetValue("")
 	m.dialog = dialogSessionName
 	return m, m.sname.Focus()
@@ -273,7 +279,14 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 // and its pane says what the save could not record.
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	m.saving = false
-	if msg.err != nil {
+	switch {
+	case errors.Is(msg.err, errNothingOpen):
+		// A normal outcome, as the CLI prints it, and not a failure.
+		slog.Info("session save: nothing open")
+		m.err = msg.err
+		return m, nil
+	case msg.err != nil:
+		slog.Error("session save", "err", msg.err)
 		m.err = msg.err
 		return m, nil
 	}
@@ -297,7 +310,9 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 	}
 	m.restoring = it.session.ID
 	c, projects, root, s := m.core, m.projects, m.stateRoot, it.session
-	return m, func() tea.Msg {
+	written := make(chan struct{}, 1)
+	walk := func() tea.Msg {
+		defer close(written)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		st := loadedState(root)
 		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
@@ -305,10 +320,42 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 		if err != nil {
 			return restoredMsg{id: s.ID, err: err}
 		}
-		// No deadline over the whole walk: each launch bounds its own wait.
-		out, back := c.Restore(context.Background(), s, report, projects, stateLedger{root: root})
+		// No deadline over the whole walk: each step bounds its own.
+		out, back := c.Restore(context.Background(), s, report, projects, stateLedger{root: root, written: written})
 		return restoredMsg{id: s.ID, restored: out, back: back}
 	}
+	return m, tea.Batch(walk, waitLedger(written))
+}
+
+// ledgerMsg says a restore wrote a launch or a landing to state, on the
+// channel it came on, so the next wait reads the same restore's writes. ok is
+// false once the restore has ended.
+type ledgerMsg struct {
+	written <-chan struct{}
+	ok      bool
+}
+
+// waitLedger delivers the next write of a restore to the update loop, which
+// takes state from disk into the surface at once: a press on a target the
+// restore is launching must find the launch before the next survey does, or
+// it launches a second copy (decisions.md D21).
+func waitLedger(written <-chan struct{}) tea.Cmd {
+	return func() tea.Msg {
+		_, ok := <-written
+		return ledgerMsg{written: written, ok: ok}
+	}
+}
+
+// ledgerWritten takes a restore's write into the surface, and waits for the
+// next.
+func (m Model) ledgerWritten(msg ledgerMsg) (tea.Model, tea.Cmd) {
+	if !msg.ok {
+		return m, nil
+	}
+	if st, err := loadState(m.stateRoot); err == nil && st != nil {
+		m.keep(st)
+	}
+	return m, waitLedger(msg.written)
 }
 
 // restored takes a restore's answer. What each target came to is the pane's;
@@ -322,7 +369,7 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	}
 	m.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back}
 	if _, _, failed := msg.restored.Counts(); failed > 0 {
-		m.err = fmt.Errorf("%s: %d targets did not open", msg.id, failed)
+		m.err = fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
 	} else if msg.back != nil {
 		m.err = msg.back
 	}
@@ -340,8 +387,12 @@ func loadedState(root string) *state.State {
 
 // stateLedger is state on disk as a restore reads and writes it. It is read
 // and written under the state's lock at every step, because the surface
-// claims windows into the same file while the restore runs.
-type stateLedger struct{ root string }
+// claims windows into the same file while the restore runs. Each write is
+// said on written, so the surface takes it in on its update loop.
+type stateLedger struct {
+	root    string
+	written chan<- struct{}
+}
 
 func (l stateLedger) Bound(p revier.ProjectName) core.Bindings {
 	return loadedState(l.root).Bound[p]
@@ -366,6 +417,12 @@ func (l stateLedger) update(apply func(st *state.State)) {
 	})
 	if err != nil {
 		slog.Warn("restore: state update", "err", err, "root", l.root)
+	}
+	// The surface reads the whole state again, so a write still waiting to be
+	// read already stands for this one.
+	select {
+	case l.written <- struct{}{}:
+	default:
 	}
 }
 
@@ -474,15 +531,15 @@ func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
 			b.WriteString(th.ProjectName.Bold(true).Render(clipTo(string(r.Project), w)) + "\n")
 		}
 		tv, _ := m.targetView(r.Project, r.Target)
-		mark, state, stateStyle := th.Glyphs.Stopped+" stopped", "", th.Count
+		mark, markStyle := th.Glyphs.Stopped+" stopped", th.Count
 		switch {
 		case !tv.Ref.IsZero():
-			mark, stateStyle = th.Glyphs.Running+" running", th.Running
+			mark, markStyle = th.Glyphs.Running+" running", th.Running
 		case r.Action == core.RestoreNoHost:
 			mark = "no host here"
 		}
 		op, reason := targetOp(th, r)
-		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), stateStyle.Render(mark+state),
+		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), markStyle.Render(mark),
 			reason, th.PathMissing, w) + "\n")
 		live := m.liveAgents(r.Project, tv.Ref)
 		for i, a := range r.Resumes {
@@ -504,6 +561,11 @@ func (m Model) planAgent(th theme.Theme, r core.RestoreResult, i int, a core.Res
 		s := live[i].State
 		return planRow(th, op, th.ProjectName.Render(harness),
 			statusStyle(th, s.Status).Render(statusLabel(th, s.Status)), s.Activity, th.Path, w)
+	}
+	// A restore keeps a running target as it is, so an agent that no longer
+	// runs in it is not started.
+	if r.Action == core.RestoreRunning {
+		op, reason = skipOp(th, planTense(r)("skip", "skipped")), "not running, and its target is kept as it is"
 	}
 	text, style := reason, th.PathMissing
 	if text == "" {
@@ -580,6 +642,10 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 		return startOp(th, tense("start", "started")), "without its conversation: it ran in a tab"
 	case core.AgentDropped:
 		return skipOp(th, tense("skip", "skipped")), "no agent panel to start it in"
+	case core.AgentNotAdded:
+		if r.AgentErr != nil {
+			return skipOp(th, tense("skip", "skipped")), "its tab did not open: " + r.AgentErr.Error()
+		}
 	}
 	return skipOp(th, tense("skip", "skipped")), r.Agents[i].String()
 }

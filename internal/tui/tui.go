@@ -356,7 +356,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // failed survey is shown from m.surveyErr and logged by core.Survey.
 func loggedAlready(msg tea.Msg) bool {
 	switch msg.(type) {
-	case actedMsg, restoredMsg:
+	case actedMsg, restoredMsg, savedMsg:
 		return true
 	}
 	return false
@@ -418,6 +418,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.saved(msg)
 	case restoredMsg:
 		return m.restored(msg)
+	case ledgerMsg:
+		return m.ledgerWritten(msg)
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:

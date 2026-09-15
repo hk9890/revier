@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/core"
@@ -192,7 +193,16 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	if again, _ := press(m, "enter"); !strings.Contains(footer(again), "still running") {
 		t.Errorf("footer = %q, want a second restore refused while one runs", footer(again))
 	}
-	m = run(m, cmd)
+	// The restore is a batch: the walk, and the wait that takes its writes
+	// into the surface. The walk runs first, as its writes come before the
+	// wait can read them.
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("enter returned %T, want the walk and the wait on its writes", cmd())
+	}
+	for _, each := range batch {
+		m = run(m, each)
+	}
 
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
 		t.Errorf("Opened = %+v, want project-00's workspace alone", rt.Opened)
