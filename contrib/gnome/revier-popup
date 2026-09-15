@@ -3,11 +3,13 @@
 #
 # The window is a kitty with its own class, so a compositor rule can place it:
 # revier does not position its own window (docs/design/decisions.md D24). On
-# GNOME, the gnome-window-control extension's `wctl place` is that rule; add
-# one after the launch if you want a fixed position.
+# GNOME, wctl center places a new window after launch; a raise skips it.
 set -eu
 
 if command -v wctl >/dev/null 2>&1 && wctl activate -c revier-popup >/dev/null 2>&1; then
 	exit 0
 fi
-exec kitty --class revier-popup --title revier -e revier
+kitty --class revier-popup --title revier -e revier &
+if command -v wctl >/dev/null 2>&1; then
+	wctl center "$(wctl wait -p $!)"
+fi
