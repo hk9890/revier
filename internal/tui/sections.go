@@ -92,6 +92,25 @@ func (m *Model) forgetPane() {
 	m.query(focusAgents, "")
 }
 
+// endPaneSearch drops the pane's queries over the same project, so each
+// cursor stays on its row rather than going back to the first.
+func (m *Model) endPaneSearch() {
+	if m.tfilter != "" {
+		rows, i := m.targetRows(), m.tcursor
+		m.query(focusTargets, "")
+		if i < len(rows) {
+			m.tcursor = slices.IndexFunc(m.targetRows(), rows[i].same)
+		}
+	}
+	if m.afilter != "" {
+		rows, i := m.agentRows(), m.acursor
+		m.query(focusAgents, "")
+		if i < len(rows) {
+			m.acursor = slices.IndexFunc(m.agentRows(), rows[i].same)
+		}
+	}
+}
+
 // agentRow is one row of the pane's Agents section. matches are the byte
 // positions of its label the query matched, for the highlight.
 type agentRow struct {
@@ -103,6 +122,11 @@ type agentRow struct {
 // doing, which is where a conversation's name shows.
 func (r agentRow) label() string {
 	return harnessOf(r.agent) + " " + r.agent.State.Activity
+}
+
+// same reports whether two rows are one agent, whatever the query matched.
+func (r agentRow) same(o agentRow) bool {
+	return r.agent.Ref == o.agent.Ref && r.agent.Panel == o.agent.Panel
 }
 
 func harnessOf(a revier.AgentView) string {
