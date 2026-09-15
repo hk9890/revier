@@ -170,42 +170,28 @@ func (a *app) update(apply func(s *state.State)) {
 	a.state = st
 }
 
-// goTarget is the whole run-or-raise for one target: core.Activate with the
-// project's bindings, then, for a detached launch, the wait that binds the
-// window. Every ref it lands on is pinned in state, so the next press finds
-// the target by id whatever the application has done to its title since.
+// goTarget is the whole run-or-raise for one target, as core.ActivateWaiting
+// walks it, with the app's state as its ledger.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
-	ref, _, err := a.goTargetResuming(ctx, p, name, nil)
+	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil, ledger{a})
 	return ref, err
 }
 
-// goTargetResuming is goTarget with the agent panels of a launch started on
-// the conversations a saved session recorded for them. It also returns what
-// the launch did with each recorded agent, in the Result, also when the wait
-// after the launch failed. A zero ref with no error is a target launched and
-// not yet up.
-func (a *app) goTargetResuming(ctx context.Context, p core.Project, name revier.TargetName, resumes []core.Resume) (revier.TargetRef, core.Result, error) {
-	pending := a.state.Launch.Pending(p.Name, name, core.BindWindow)
-	res, err := a.core.Activate(ctx, p, name, a.state.Bound[p.Name], pending, resumes)
-	landed, ref := res.Target, res.Ref
-	if res.Launched && ref.IsZero() && err == nil {
-		// Recorded before the wait, so a second press during it does not
-		// launch again.
-		a.update(func(s *state.State) { s.Launched(p.Name, landed, time.Now()) })
-		var inst revier.Instance
-		var ok bool
-		inst, ok, err = a.core.Bind(ctx, p, landed, res.Before, core.BindWait)
-		if !ok {
-			// With no error, the TUI binds the window if it appears later. With
-			// one, the launch ran, and its agents came to res.Agents.
-			return revier.TargetRef{}, res, err
-		}
-		ref = inst.Ref
-	}
-	if !ref.IsZero() {
-		a.update(func(s *state.State) { s.Landed(p.Name, landed, ref) })
-	}
-	return ref, res, err
+// ledger is the app's state as an activation reads and writes it.
+type ledger struct{ a *app }
+
+func (l ledger) Bound(p revier.ProjectName) core.Bindings { return l.a.state.Bound[p] }
+
+func (l ledger) Pending(p revier.ProjectName, t revier.TargetName) bool {
+	return l.a.state.Launch.Pending(p, t, core.BindWindow)
+}
+
+func (l ledger) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
+	l.a.update(func(s *state.State) { s.Launched(p, t, at) })
+}
+
+func (l ledger) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+	l.a.update(func(s *state.State) { s.Landed(p, t, ref) })
 }
 
 // launchedAction records that an action ran, so a window that appears within

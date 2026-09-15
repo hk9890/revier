@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -67,44 +66,27 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	targets, conversations, attached := stored.Targets(), stored.Conversations(), attachments(report)
+	targets, conversations := stored.Targets(), stored.Conversations()
 	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path,
 		"projects", len(stored.Projects), "targets", targets, "conversations", conversations,
-		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", attached)
+		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
 	for _, err := range gaps.Failed {
 		slog.Warn("session save: probe could not be asked", "err", err)
 	}
 	fmt.Printf("%s: %s, %s\n", stored.ID,
-		count(len(stored.Projects), "project"), count(targets, "target"))
+		core.Count(len(stored.Projects), "project"), core.Count(targets, "target"))
 	if conversations > 0 {
-		fmt.Printf("  %s recorded\n", count(conversations, "agent conversation"))
+		fmt.Printf("  %s recorded\n", core.Count(conversations, "agent conversation"))
 	}
-	// Said now, while the agents still run, so the gap can be closed before
-	// the reboot rather than found after it.
-	if gaps.Unnamed > 0 {
-		fmt.Printf("  %s without a conversation id, to be restored empty\n", count(gaps.Unnamed, "agent"))
-	}
-	if len(gaps.InTab) > 0 {
-		fmt.Printf("  %s in a tab target, to be restored without its conversation: %s\n",
-			count(len(gaps.InTab), "agent"), strings.Join(gaps.InTab, ", "))
-	}
-	for _, err := range gaps.Failed {
-		fmt.Printf("    could not ask %v\n", err)
-	}
-	// Named up front, not discovered during a restore after the reboot. An
-	// attachment is a live id with no launch argv anywhere in the model, so
-	// there is nothing that could bring one back.
-	if attached > 0 {
-		fmt.Printf("  %s not recorded; they have no name to be reopened by\n", count(attached, "attached instance"))
+	for _, note := range gaps.Notes() {
+		fmt.Printf("  %s\n", note)
 	}
 	fmt.Printf("  %s\n", path)
 	return nil
 }
 
-// cmdSessionRestore opens what a saved session recorded. It walks the plan in
-// file order and never in parallel: a launch is bound to the window that
-// appears after it, so two at once are two windows neither can be attributed
-// to.
+// cmdSessionRestore opens what a saved session recorded, as core.Restore
+// walks it, and prints a line per recorded target.
 func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("session restore", flag.ContinueOnError)
 	dry := fs.Bool("dry-run", false, "print what it would open, and open nothing")
@@ -132,65 +114,22 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	opened, pending, failed := 0, 0, 0
-	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", *dry)
-	for _, step := range a.core.RestorePlan(s, report) {
-		if step.Action != core.RestoreLaunch {
-			slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String())
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, step.Action)
-			continue
+	if *dry {
+		slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", true)
+		preview := a.core.RestorePreview(s, report, a.projects)
+		for _, r := range preview {
+			core.LogRestore(r)
 		}
-		p, ok := a.project(step.Project)
-		if !ok {
-			// The plan was built from this survey, so a project it knew
-			// cannot be missing here. Reported rather than asserted.
-			slog.Warn("restore step: planned project not loaded", "project", step.Project, "target", step.Target)
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, core.RestoreNoProject)
-			continue
-		}
-		slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String(), "dry_run", *dry)
-		if *dry {
-			outcomes := a.core.Resumes(p, step.Target, step.Resumes)
-			logResumes(step, outcomes, true)
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("would open", outcomes, nil))
-			continue
-		}
-		// One project's failure is not the restore's: nineteen workspaces
-		// still come back, and the one that did not is named.
-		ref, res, err := a.goTargetResuming(ctx, p, step.Target, step.Resumes)
-		logResumes(step, res.Agents, false)
-		if err != nil {
-			failed++
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%v\n", step.Project, step.Target, err)
-			continue
-		}
-		// A window that has not shown yet is not a target that came back.
-		if ref.IsZero() {
-			pending++
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("launched, not up yet", res.Agents, res.AgentErr))
-			continue
-		}
-		opened++
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", step.Project, step.Target, resumeNote("opened", res.Agents, res.AgentErr))
+		return printRestored(preview)
 	}
-	if err := w.Flush(); err != nil {
+	restored, back := a.core.Restore(ctx, s, report, a.projects, ledger{a})
+	if err := printRestored(restored); err != nil {
 		return err
 	}
-
-	if *dry {
-		return nil
+	if back != nil {
+		fmt.Println(back)
 	}
-	// End on the project the save was left on, so a restored desktop lands
-	// where the saved one was. It is run-or-raise like everything else.
-	if p, ok := a.project(s.Current); ok {
-		if home, has := p.Home(); has {
-			if _, err := a.goTarget(ctx, p, home.Name); err != nil {
-				fmt.Printf("could not return to %s: %v\n", s.Current, err)
-			}
-		}
-	}
-	slog.Info("session restored", "id", s.ID, "opened", opened, "pending", pending, "failed", failed)
+	opened, pending, failed := restored.Counts()
 	if pending > 0 {
 		fmt.Printf("%s: opened %d, %d not up yet\n", s.ID, opened, pending)
 	} else {
@@ -200,6 +139,14 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return fmt.Errorf("%d targets did not open", failed)
 	}
 	return nil
+}
+
+func printRestored(rs core.Restored) error {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, r := range rs {
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Target, r.Note())
+	}
+	return w.Flush()
 }
 
 func cmdSessionList(a *app, args []string) error {
@@ -227,73 +174,4 @@ func cmdSessionList(a *app, args []string) error {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), s.Conversations())
 	}
 	return w.Flush()
-}
-
-// logResumes writes one line per recorded agent of a step: the conversation
-// and directory it was recorded with, and what the launch did with it. The
-// outcomes are in the order of the step's resumes; a press that failed before
-// it launched has none, and every agent is logged with outcome none.
-func logResumes(step core.RestoreStep, outcomes []core.AgentOutcome, dry bool) {
-	for i, r := range step.Resumes {
-		outcome := "none"
-		if i < len(outcomes) {
-			outcome = outcomes[i].String()
-		}
-		slog.Info("restore agent", "project", step.Project, "target", step.Target, "dry_run", dry,
-			"harness", r.Harness, "session", r.Session, "dir", r.Dir, "outcome", outcome)
-	}
-}
-
-// resumeNote says what opening a target did, or would do, to the agents it
-// recorded: how many start on their conversation, how many start empty because
-// the directory they worked in is gone or their conversation cannot be resumed
-// here, and how many cannot be started at all, with tabErr for the ones whose
-// tab failed to open. An agent recorded with no conversation starts empty as
-// it always would, and is not worth a word.
-func resumeNote(verb string, agents []core.AgentOutcome, tabErr error) string {
-	n := map[core.AgentOutcome]int{}
-	for _, o := range agents {
-		n[o]++
-	}
-	note := verb
-	if n[core.AgentResumed] > 0 {
-		note += fmt.Sprintf(", %s resumed", count(n[core.AgentResumed], "agent"))
-	}
-	if n[core.AgentDirGone] > 0 {
-		note += fmt.Sprintf(", %s empty: directory gone", count(n[core.AgentDirGone], "agent"))
-	}
-	if n[core.AgentUnresumable] > 0 {
-		note += fmt.Sprintf(", %s empty: no probe here resumes its harness in its panel", count(n[core.AgentUnresumable], "agent"))
-	}
-	if n[core.AgentDropped] > 0 {
-		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", count(n[core.AgentDropped], "agent"))
-	}
-	if n[core.AgentInTab] > 0 {
-		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", count(n[core.AgentInTab], "agent"))
-	}
-	if n[core.AgentNotAdded] > 0 {
-		note += fmt.Sprintf(", %s not restored: %v", count(n[core.AgentNotAdded], "agent"), tabErr)
-	}
-	return note
-}
-
-// count writes a number and its noun, pluralised. A summary that reads
-// "1 projects" is a summary nobody proofread.
-func count(n int, noun string) string {
-	if n == 1 {
-		return fmt.Sprintf("1 %s", noun)
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
-}
-
-func attachments(r core.Report) int {
-	n := 0
-	for _, v := range r.Views {
-		for _, tv := range v.Targets {
-			if tv.Attached {
-				n++
-			}
-		}
-	}
-	return n
 }

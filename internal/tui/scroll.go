@@ -30,6 +30,10 @@ func (m *Model) syncBody() {
 		m.body.SetContent(m.linkNameScreen())
 		m.body.SetYOffset(0)
 		return
+	case dialogSessionName:
+		m.body.SetContent(m.sessionNameScreen())
+		m.body.SetYOffset(0)
+		return
 	case dialogConfig:
 		m.body.Width = m.listWidth()
 		text, at := m.configScreen()
@@ -77,14 +81,17 @@ func (m *Model) bodyList() *list.Model {
 		return &m.hlist
 	case dialogRemote:
 		return &m.rlist
+	case dialogSessions:
+		return &m.slist
 	}
 	return &m.plist
 }
 
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
-	if m.dialog == dialogHosts {
-		return 1 // a host is its name alone
+	switch m.dialog {
+	case dialogHosts, dialogSessions:
+		return 1 // a host is its name alone, a session one line of counts
 	}
 	return projectDelegate{}.Height()
 }

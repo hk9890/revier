@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/session"
 )
 
 // The chrome above and below the list: the action bar, a line under it, the
@@ -141,6 +143,8 @@ func (m Model) top() string {
 		name = "Configuration"
 	case dialogHelp:
 		name = "Keyboard shortcuts"
+	case dialogSessionName:
+		name = "Save the projects open now"
 	default:
 		return m.bar()
 	}
@@ -183,6 +187,10 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
+	case dialogSessions:
+		return " " + m.theme.Meta.Render("saved in "+contractHome(session.Dir(m.stateRoot))+", newest first")
+	case dialogSessionName:
+		return " " + m.sname.View()
 	}
 	return " " + m.fieldView(m.input, focusList)
 }
@@ -214,7 +222,9 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
 	case m.dialog == dialogRemote:
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
-	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp:
+	case m.dialog == dialogSessions:
+		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
+	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp, m.dialog == dialogSessionName:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -243,6 +253,8 @@ func (m Model) empty() string {
 		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
 	}
 	switch {
+	case m.dialog == dialogSessions:
+		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
 	case m.dialog != dialogNone || !m.ready():
 		return ""
 	case len(m.projects) == 0:
@@ -277,6 +289,9 @@ func (m Model) footer() string {
 		// One line, whatever the error: a joined error is one per line, and a
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
+	}
+	if m.restoring != "" || m.saving {
+		return m.progressLine()
 	}
 	if m.copied > 0 {
 		unit := "characters"

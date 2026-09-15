@@ -115,7 +115,7 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	switch m.over.kind {
 	case hoverBar:
 		m.err = nil
-		return barActions[m.over.index].run(m)
+		return m.buttons()[m.over.index].run(m)
 	case hoverTarget:
 		m.err = nil
 		m = m.focusOn(focusTargets)

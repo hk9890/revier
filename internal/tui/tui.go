@@ -54,7 +54,7 @@ const (
 
 // dialog is a screen standing over the surface: the link dialog's three steps
 // - which host, which of its projects (decisions.md D45), and the link's name - the
-// new-project field, or the config screen. dialogNone is the surface itself, which is where it is
+// new-project field, the sessions screen and its name step, or the config screen. dialogNone is the surface itself, which is where it is
 // nearly always.
 type dialog int
 
@@ -66,6 +66,8 @@ const (
 	dialogNew
 	dialogConfig
 	dialogHelp
+	dialogSessions
+	dialogSessionName
 )
 
 // hasRows reports a screen whose body is list rows: what a click selects and
@@ -73,7 +75,7 @@ const (
 // with text of its own, and a press must not reach a row nobody can see.
 func (d dialog) hasRows() bool {
 	switch d {
-	case dialogNone, dialogHosts, dialogRemote:
+	case dialogNone, dialogHosts, dialogRemote, dialogSessions:
 		return true
 	}
 	return false
@@ -125,6 +127,9 @@ type Model struct {
 	dialog    dialog             // the link dialog, while it is up
 	host      string             // the host the dialog's second step shows
 	asking    string             // the host an ask is out to, while it is
+	saving    bool               // whether a session save is out
+	restoring string             // the session a restore is walking, while it is
+	outcome   sessionOutcome     // what the last save or restore came to
 	width     int
 	height    int
 
@@ -133,6 +138,7 @@ type Model struct {
 	plist  list.Model
 	hlist  list.Model // the hosts, the link dialog's first step
 	rlist  list.Model // a host's projects, its second
+	slist  list.Model // the saved sessions
 	filter string     // the query, held here so a refresh can re-apply it
 	keys   keyMap
 	help   help.Model
@@ -144,6 +150,7 @@ type Model struct {
 	input  textinput.Model                  // the filter query, with its own cursor
 	path   textinput.Model                  // the directory field of the new-project screen
 	lname  textinput.Model                  // the name field of the link dialog's last step
+	sname  textinput.Model                  // the name field of a session being saved
 	over   hovered                          // what the pointer is on
 	cell   *pointerCell                     // where the pointer last was, nil before it moved
 	body   viewport.Model                   // the scrolling window over the list
@@ -180,11 +187,11 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions, shared: cfg.Targets,
 		refresh: refresh, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		hlist: newHostList(th), rlist: newRemoteList(th),
+		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th, projectPlaceholder),
 		tinput: newPrompt(th, targetPlaceholder), ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		path: newPathInput(th), lname: newLinkNameInput(th),
+		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 	}
@@ -348,8 +355,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // a form refused, a file that did not load, a clone - is logged by Update. A
 // failed survey is shown from m.surveyErr and logged by core.Survey.
 func loggedAlready(msg tea.Msg) bool {
-	_, ok := msg.(actedMsg)
-	return ok
+	switch msg.(type) {
+	case actedMsg, restoredMsg:
+		return true
+	}
+	return false
 }
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -404,6 +414,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case askedMsg:
 		return m.asked(msg)
+	case savedMsg:
+		return m.saved(msg)
+	case restoredMsg:
+		return m.restored(msg)
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
@@ -575,6 +589,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.configKey(msg)
 	case dialogHelp:
 		return m.helpScreenKey(msg)
+	case dialogSessions:
+		return m.sessionsKey(msg)
+	case dialogSessionName:
+		return m.sessionNameKey(msg)
 	}
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)

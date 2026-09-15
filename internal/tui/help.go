@@ -94,6 +94,11 @@ func (m Model) helpSections() []helpSection {
 			{key: k.Delete.Help().Key, desc: "delete its project file"},
 		}},
 		{title: "Top bar", entries: barHelpEntries()},
+		{title: "Sessions", entries: []helpEntry{
+			{key: "enter", desc: "restore the session: open what it recorded and is not running"},
+			{key: sessionsBarKey, desc: "save the projects open now, under an optional name"},
+			{key: "esc", desc: "back to the projects"},
+		}},
 		{title: "Query editing", entries: []helpEntry{
 			{key: "ctrl+a", desc: "start of the line"},
 			{key: "ctrl+e", desc: "end of the line"},
@@ -116,10 +121,11 @@ func (m Model) helpSections() []helpSection {
 
 func barHelpEntries() []helpEntry {
 	descs := map[string]string{
-		"new":    "add a project on this machine",
-		"remote": "link a project on another machine",
-		"config": "change the configuration",
-		"help":   "show this screen",
+		"new":      "add a project on this machine",
+		"remote":   "link a project on another machine",
+		"sessions": "save and restore the set of open projects",
+		"config":   "change the configuration",
+		"help":     "show this screen",
 	}
 	out := make([]helpEntry, 0, len(barActions))
 	for _, a := range barActions {

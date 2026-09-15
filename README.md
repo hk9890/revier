@@ -101,7 +101,8 @@ action against the selected project.
 The top line holds what is not about one project, each with its key: **new**
 (alt+n) adds a project from a directory on this machine, **remote** (alt+r)
 links a project on another machine from the hosts `~/.ssh/config` names and the
-projects the revier on the chosen host has, **config** (alt+c) sets the
+projects the revier on the chosen host has, **sessions** (alt+s) saves and
+restores the set of open projects, **config** (alt+c) sets the
 theme, the glyphs, the trigger key and the runtime host, and adds, changes and
 deletes shared targets and actions, each written to `config.toml` and applied
 as it changes, comments kept, and **help** (alt+h)
@@ -130,7 +131,10 @@ records names, not windows: the argv comes from the project file as it reads
 at restore, a target already up is left alone, and anything that has since
 been deleted is named and stepped over. Attached instances are not recorded —
 they have no name to be reopened by. Sessions live in
-`~/.local/state/revier/sessions/`, one readable TOML file each.
+`~/.local/state/revier/sessions/`, one readable TOML file each. In the TUI,
+the sessions screen (alt+s) shows the same list; its pane says what a restore
+of the selected session would open now, Enter restores it, and alt+s on the
+screen saves the open projects under an optional name.
 
 An agent comes back on the conversation it held if its probe can name one.
 Claude Code can, with nothing to install: the save asks `claude agents --json`

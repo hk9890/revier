@@ -119,6 +119,10 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 		return []key.Binding{helpKey("enter", "add the project"), helpKey("esc", "back"), k.Quit}
 	case dialogHelp:
 		return []key.Binding{helpKey("↑↓", "scroll"), helpKey("esc", "back"), k.Quit}
+	case dialogSessions:
+		return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey("esc", "back"), k.Quit}
+	case dialogSessionName:
+		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "back"), k.Quit}
 	}
 	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
 }

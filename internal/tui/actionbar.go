@@ -28,6 +28,7 @@ type barAction struct {
 var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openNew},
 	{label: "remote", key: "alt+r", run: Model.openHosts},
+	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
 	{label: "config", key: "alt+c", run: Model.openConfig},
 	{label: "help", key: helpBarKey, run: Model.openHelp},
 }
@@ -53,12 +54,36 @@ const barLine = 0
 // inside a button is a space too.
 const barSeparator = " · "
 
+// buttons are the bar's buttons on the screen in view: the surface's, or the
+// sessions screen's own. Every other screen has none.
+func (m Model) buttons() []barAction {
+	switch {
+	case m.confirm != "":
+		return nil
+	case m.dialog == dialogNone:
+		return barActions
+	case m.dialog == dialogSessions:
+		return sessionActions
+	}
+	return nil
+}
+
+// barLead is what stands on the bar before the buttons: the name of the
+// screen, where a screen has buttons of its own.
+func (m Model) barLead() string {
+	if m.dialog == dialogSessions {
+		return " " + m.theme.Header.Render("Sessions") + "  "
+	}
+	return ""
+}
+
 func (m Model) barCells() []barCell {
-	out := make([]barCell, 0, len(barActions))
+	buttons := m.buttons()
+	out := make([]barCell, 0, len(buttons))
 	// A button's own leading space is the line's gutter, so the first label
 	// starts in the column every other line starts in.
-	x := 0
-	for _, a := range barActions {
+	x := lipgloss.Width(m.barLead())
+	for _, a := range buttons {
 		text := " " + a.label + " " + a.key + " "
 		w := lipgloss.Width(text)
 		out = append(out, barCell{action: a, text: text, x0: x, x1: x + w})
@@ -72,11 +97,9 @@ func (m Model) barCells() []barCell {
 // blanks the line rather than removing it: the rows below must not jump by
 // one while an answer is waited for.
 func (m Model) bar() string {
-	if m.dialog != dialogNone || m.confirm != "" {
-		return ""
-	}
 	th := m.theme
 	var b strings.Builder
+	b.WriteString(m.barLead())
 	for i, c := range m.barCells() {
 		if i > 0 {
 			b.WriteString(th.Path.Render(barSeparator))
@@ -92,7 +115,7 @@ func (m Model) bar() string {
 
 // barAt is the button under a terminal cell, or -1 where there is none.
 func (m Model) barAt(x, y int) int {
-	if m.dialog != dialogNone || m.confirm != "" {
+	if len(m.buttons()) == 0 {
 		return -1
 	}
 	mr, mc := m.margins()
