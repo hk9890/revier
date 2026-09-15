@@ -174,7 +174,7 @@ func (c *Config) TriggerKey() (core.Chord, error) {
 var SurfaceKeys = []core.Chord{
 	"ctrl+p", "ctrl+n", "ctrl+c",
 	"alt+e", "alt+d",
-	"alt+n", "alt+r", "alt+c", "alt+h",
+	"alt+n", "alt+r", "alt+s", "alt+c", "alt+h",
 }
 
 // validateActions refuses an action the TUI can never run. An action's key is

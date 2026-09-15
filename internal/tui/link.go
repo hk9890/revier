@@ -181,8 +181,11 @@ func (m Model) dialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // dialogEnter takes the step the cursor is on: a host is asked for its
 // projects, a project of that host is linked.
 func (m Model) dialogEnter() (tea.Model, tea.Cmd) {
-	if m.dialog == dialogHosts {
+	switch m.dialog {
+	case dialogHosts:
 		return m.askHost()
+	case dialogSessions:
+		return m.restoreSession()
 	}
 	return m.link()
 }

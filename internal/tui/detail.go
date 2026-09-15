@@ -102,6 +102,9 @@ func (m *Model) syncDetail() {
 	case dialogRemote, dialogLinkName:
 		m.detail.SetContent(m.remoteDetail())
 		return
+	case dialogSessions, dialogSessionName:
+		m.detail.SetContent(m.sessionDetail())
+		return
 	}
 	v, ok := m.selected()
 	if !ok {

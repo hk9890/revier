@@ -73,6 +73,13 @@ type Glyphs struct {
 	Idle     string // it is at rest, waiting for the next prompt
 	Unknown  string // its probe could not tell
 
+	// What a session restore does with a target or an agent: start it, keep
+	// the one already open, or skip it. Each stands beside the operation in
+	// words.
+	Start string
+	Keep  string
+	Skip  string
+
 	// Folder and NoFolder are an icon column in front of the name: whether
 	// the project's directory is on this machine. A set draws both or
 	// neither. A set without them says it only in words, on the path line,
@@ -102,6 +109,7 @@ var glyphSets = map[string]Glyphs{
 	"unicode": {
 		Running: "\u25cf", Stopped: "\u25cb", Cursor: "\u258c",
 		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
+		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715",
 	},
 	"nerd": {
 		Running:  "\uf111", // nf-fa-circle
@@ -111,6 +119,9 @@ var glyphSets = map[string]Glyphs{
 		Working:  "\u280b", // braille, the first spinner frame
 		Idle:     "\uf04c", // nf-fa-pause
 		Unknown:  "\uf128", // nf-fa-question
+		Start:    "\uf04b", // nf-fa-play
+		Keep:     "\uf00c", // nf-fa-check
+		Skip:     "\uf05e", // nf-fa-ban
 		Folder:   "\uf07b", // nf-fa-folder
 		NoFolder: "\uf114", // nf-fa-folder_o
 		Remote:   "\uf233", // nf-fa-server
@@ -118,6 +129,7 @@ var glyphSets = map[string]Glyphs{
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
+		Start: "+", Keep: "=", Skip: "x",
 	},
 }
 

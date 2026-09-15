@@ -182,7 +182,10 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := c.Session(context.Background(), report, "")
+	s, gaps := c.Session(context.Background(), report, "")
+	if gaps.Attached != 1 {
+		t.Errorf("gaps.Attached = %d, want the one attachment counted as left out", gaps.Attached)
+	}
 	for _, tv := range s.Projects[0].Targets {
 		if tv.Name == "" {
 			t.Errorf("an attachment was recorded: %+v", tv)

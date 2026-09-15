@@ -114,6 +114,9 @@ own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
 a project opens its home target, on a target runs it, and on an agent makes its
 tab current and raises its window (D74). alt+e opens
 the project's file in `$EDITOR`, and alt+d deletes it after a confirmation (D30).
+The sessions screen is the three `revier session` commands on the surface: the
+saved sessions, a pane with the restore plan for the one under the cursor, Enter
+to restore it and a save button on its top line (D46, D49).
 
 ## Scope
 

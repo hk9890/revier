@@ -114,7 +114,7 @@ type RestoreStep struct {
 //
 // Attached instances are left out and cannot be otherwise: an attachment is a
 // live id with no launch argv anywhere in the model, so there is nothing to
-// record that would bring one back. The caller reports how many were dropped.
+// record that would bring one back. The gaps count how many were left out.
 //
 // What the save could not record is returned beside it, so a save can say so
 // while the agents are still running. A resume that cannot happen is
@@ -134,7 +134,11 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 		for _, tv := range v.Targets {
 			// An attached instance has no name and no key, and so no way
 			// back. A target with no live ref was not open.
-			if tv.Attached || tv.Name == "" || tv.Ref.IsZero() {
+			if tv.Attached {
+				gaps.Attached++
+				continue
+			}
+			if tv.Name == "" || tv.Ref.IsZero() {
 				continue
 			}
 			inst, listed := byRef[key(tv.Ref)]
@@ -213,11 +217,13 @@ func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Pane
 // agents recorded without a conversation. Failed holds why a probe could not
 // answer at all - claude not on PATH - so those agents are not mistaken for
 // the ones no listing could match. InTab addresses the agents that run in a
-// tab target, which a restore opens without their conversation.
+// tab target, which a restore opens without their conversation. Attached is
+// the instances attached by hand, which a save leaves out.
 type SessionGaps struct {
-	Unnamed int
-	Failed  []error
-	InTab   []string
+	Unnamed  int
+	Failed   []error
+	InTab    []string
+	Attached int
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being
@@ -289,7 +295,9 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 	for _, p := range s.Projects {
 		v, known := views[p.Name]
 		for _, t := range p.Targets {
-			step := RestoreStep{Project: p.Name, Target: t.Name}
+			// Every step carries its recorded agents, so a step stepped
+			// over can still say which conversations it held.
+			step := RestoreStep{Project: p.Name, Target: t.Name, Resumes: resumesOf(t)}
 			switch {
 			case !known:
 				step.Action = RestoreNoProject
@@ -304,7 +312,6 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 					step.Action = RestoreRunning
 				default:
 					step.Action = RestoreLaunch
-					step.Resumes = resumesOf(t)
 				}
 			}
 			plan = append(plan, step)
