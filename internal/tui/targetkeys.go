@@ -126,7 +126,8 @@ func (m Model) targetKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 	}
 	for _, t := range p.Targets {
 		if t.Name == name {
-			return m, m.goTarget(p, name), true
+			next, cmd := opened(m, m.goTarget(p, name))
+			return next, cmd, true
 		}
 	}
 	m.err = fmt.Errorf("%s has no %s target", p.Name, name)

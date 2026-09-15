@@ -346,7 +346,10 @@ Replaces Tab moving into a pane of targets, and one query line that followed
 the cursor. A query far from its rows did not say what it filtered, and the
 agents could be read but not reached. Tab walks projects, targets and agents,
 and shift+tab back, passing over a section with no rows. Each query sits over
-its own rows and is kept while its project is. The pane starts level with the
+its own rows and is kept while its project is, until a press opens something:
+the query was the way there, so a popup raised again held the last search
+instead of a new one. Then every query ends, each cursor stays on the row it
+found, and a launch that fails later says so in the footer. The pane starts level with the
 project query, so that query stands in the list's column and not over both. Enter opens a project, runs a
 target, and goes to an agent. A pane with no target level stays: Enter on a
 project opens its home.

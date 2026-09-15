@@ -600,13 +600,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveCursor(1)
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
-		next, cmd := m.enter()
-		if cmd == nil {
-			return next, nil
-		}
-		acted := next.(Model)
-		acted.endSearch()
-		return acted, cmd
+		return m.enter()
 	case key.Matches(msg, m.keys.Next):
 		return m.step(1)
 	case key.Matches(msg, m.keys.Prev):
@@ -620,7 +614,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 	if cmd, ok := m.action(msg); ok {
-		return m, cmd
+		return opened(m, cmd)
 	}
 	// A target key names a target of the highlighted project wherever the
 	// cursor is; it does not read the pane's cursor.
@@ -667,6 +661,12 @@ func (r targetRow) label() string {
 		return r.attached.Title
 	}
 	return string(r.target.Name)
+}
+
+// same reports whether two rows are one target or one attached instance,
+// whatever the query matched.
+func (r targetRow) same(o targetRow) bool {
+	return r.target.Name == o.target.Name && r.attached == o.attached
 }
 
 // moveCursor moves the cursor of the section it is in by rows.
@@ -716,7 +716,24 @@ func (m Model) targetRows() []targetRow {
 	return out
 }
 
-// enter on the list opens the project: its home target, the same
+// enter acts on the row under the cursor, by key or by double click.
+func (m Model) enter() (Model, tea.Cmd) {
+	return opened(m.act())
+}
+
+// opened ends the search once a press has something to run: Enter, a double
+// click, a click on a pane row, a target key or an action. The query was the
+// way to what now opens, so the surface comes back with empty fields
+// (decisions.md D73). The search ends also when the run fails later; the
+// failure is said in the footer.
+func opened(m Model, cmd tea.Cmd) (Model, tea.Cmd) {
+	if cmd != nil {
+		m.endSearch()
+	}
+	return m, cmd
+}
+
+// act on the list opens the project: its home target, the same
 // run-or-raise `revier go home` does. Searching for a project is almost always
 // to get to it, so the targets are the detour and get the other key. A
 // project with no home target has nothing to open, so Enter moves the cursor
@@ -725,7 +742,7 @@ func (m Model) targetRows() []targetRow {
 //
 // A project whose directory is not on this machine is cloned first, when its
 // file says from where, as `revier open` does.
-func (m Model) enter() (tea.Model, tea.Cmd) {
+func (m Model) act() (Model, tea.Cmd) {
 	switch m.focus {
 	case focusTargets:
 		return m, m.goRow(m.tcursor)

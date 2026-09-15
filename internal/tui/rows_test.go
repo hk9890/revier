@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/theme"
@@ -86,6 +88,177 @@ func TestEnterClearsTheQueryAndKeepsTheSelection(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
 		t.Errorf("selected %q after enter, want project-07, the project the search found", row)
+	}
+}
+
+// Enter in the pane ends the target search too, and the cursor stays on the
+// target it ran, with a query typed or without one.
+func TestEnterInThePaneKeepsTheCursorOnTheTargetItRan(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down") // editor, the second target
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a target returned no command")
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after enter, want the editor it ran", row)
+	}
+
+	m, _ = press(m, "e")
+	m, _ = press(m, "d")
+	m, cmd = press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a matched target returned no command")
+	}
+	if body := pane(m); !strings.Contains(body, "home") || !strings.Contains(body, "filter targets") {
+		t.Errorf("enter did not end the target query:\n%s", body)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after enter, want the editor the query found", row)
+	}
+}
+
+// A double click opens a row as Enter does, so it ends the search as Enter
+// does.
+func TestADoubleClickClearsTheQuery(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	for i := range projects {
+		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
+	}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "0")
+	m, _ = press(m, "0")
+	m = clickAt(m, 5, 5) // project-00, the only match
+	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = next.(tui.Model)
+	if cmd == nil {
+		t.Fatal("a double click on a row returned no command")
+	}
+	if rule := ruleLine(m); !strings.Contains(rule, " 3/3 ") {
+		t.Errorf("rule = %q, want the query cleared", rule)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+		t.Errorf("selected %q after the double click, want project-00", row)
+	}
+}
+
+// A target key opens what it names, so it ends the search as Enter does.
+func TestATargetKeyClearsTheQuery(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor
+	if cmd == nil {
+		t.Fatal("ctrl+shift+o ran nothing")
+	}
+	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
+}
+
+// A click on a pane target runs it, so it ends the search, and the pane
+// cursor stays on the row clicked.
+func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := typed(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
+	x, y := paneCell(t, m, "editor")
+	m, cmd := clickCell(m, x, y)
+	if cmd == nil {
+		t.Fatalf("the click ran nothing:\n%s", m.View())
+	}
+	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want it on the row clicked", row)
+	}
+}
+
+// An action runs a command for the project, so it ends the search too.
+func TestAnActionClearsTheQuery(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
+	m := typed(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
+	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	if cmd == nil {
+		t.Fatal("ctrl+y ran no action")
+	}
+	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
+}
+
+// Enter that has nothing to run leaves the search as it is: a project with
+// no home target moves the cursor to its targets, and a project whose
+// directory is missing with nothing to clone from is refused.
+func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	homeless, err := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := typed(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
+	m, cmd := press(m, "enter")
+	if cmd != nil {
+		t.Fatal("enter on a project without home ran something")
+	}
+	if q := query(m); !strings.Contains(q, "home") {
+		t.Errorf("query = %q after enter on a project without home, want it kept", q)
+	}
+
+	_, _, c, projects := world(t, 3) // /p/project-NN is not on this machine
+	m = typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m, cmd = press(m, "enter")
+	if cmd != nil {
+		t.Fatal("enter on a missing checkout with nothing to clone from ran something")
+	}
+	if f := footer(m); !strings.Contains(f, "does not exist") {
+		t.Errorf("footer = %q, want the refusal said", f)
+	}
+	if q := query(m); !strings.Contains(q, "00") {
+		t.Errorf("query = %q after a refused enter, want it kept", q)
+	}
+}
+
+// A launch that fails after the search ended says why in the footer, where
+// the user is left looking: no window came up to take the focus away.
+func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
+	rt, _, c, projects := world(t, 3)
+	for i := range projects {
+		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
+	}
+	rt.OpenErr = errors.New("kitty is not running")
+	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a project returned no command")
+	}
+	next, _ := m.Update(cmd())
+	m = next.(tui.Model)
+	if f := footer(m); !strings.Contains(f, "kitty is not running") {
+		t.Errorf("footer = %q, want the launch failure said", f)
+	}
+	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
+}
+
+// typed types a query into the surface, a key at a time.
+func typed(m tui.Model, q string) tui.Model {
+	for _, r := range q {
+		m, _ = press(m, string(r))
+	}
+	return m
+}
+
+// assertSearchEnded checks that the typed query is gone, every project is listed
+// again, and the cursor stayed on the project the search found.
+func assertSearchEnded(t *testing.T, m tui.Model, typed, count, selected string) {
+	t.Helper()
+	if rule := ruleLine(m); !strings.Contains(rule, count) {
+		t.Errorf("rule = %q, want the query cleared", rule)
+	}
+	// The pane may sit on the same line, right of its border.
+	if q, _, _ := strings.Cut(query(m), "│"); strings.Contains(q, typed) {
+		t.Errorf("query = %q, want the field empty", q)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, selected) {
+		t.Errorf("selected %q, want %s, the project the search found", row, selected)
 	}
 }
 

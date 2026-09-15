@@ -120,12 +120,12 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m = m.focusOn(focusTargets)
 		m.tcursor = m.over.index
-		return m, m.goRow(m.over.index)
+		return opened(m, m.goRow(m.over.index))
 	case hoverAgent:
 		m.err = nil
 		m = m.focusOn(focusAgents)
 		m.acursor = m.over.index
-		return m, m.goAgentRow(m.over.index)
+		return opened(m, m.goAgentRow(m.over.index))
 	case hoverField:
 		return m.focusOn(focus(m.over.index)), nil
 	}
