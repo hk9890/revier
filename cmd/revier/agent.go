@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -272,7 +273,7 @@ func cmdAgentNew(args []string) error {
 // newAgent opens the agent tab where newTab puts it.
 func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
 	there := func(r revier.Remote, address string) error { return r.NewAgent(ctx, address, resume) }
-	here := func(w core.Workspace) error {
+	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
 		outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: resume, Dir: dir})
 		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
@@ -293,7 +294,11 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 // is in, else the one resolved as for any command, with the target after -p's
 // colon or the one pick chooses. --dir is a path on this machine, so it has
 // to be a directory only where the tab opens here.
-func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), there func(revier.Remote, string) error, here func(core.Workspace) error) error {
+//
+// A --dir outside the project that holds --panel is dropped, and the tab opens
+// where the project's own tab would. That --dir is the kitty key's: kitty's
+// --cwd=current gives "/" for a panel whose shell sits in a deleted worktree.
+func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), there func(revier.Remote, string) error, here func(core.Workspace, string) error) error {
 	place, err := a.tabPlace(ctx, project, panel, dir, pick)
 	if err != nil {
 		return err
@@ -304,12 +309,18 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 		logging.Op(what, start, err, "project", place.Workspace.Project.Name, "host", place.Remote.Name(), "address", place.Address)
 		return err
 	}
+	if panel != "" && dir != "" {
+		if p, ok := a.projectForPath(dir); !ok || p.Name != place.Workspace.Project.Name {
+			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", place.Workspace.Project.Name, "dir", dir)
+			dir = ""
+		}
+	}
 	if dir != "" {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			return fmt.Errorf("--dir %s: not a directory", dir)
 		}
 	}
-	return here(place.Workspace)
+	return here(place.Workspace, dir)
 }
 
 func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.TabPlace, error) {

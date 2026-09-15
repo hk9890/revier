@@ -78,7 +78,7 @@ func cmdShellNew(args []string) error {
 // newShell opens the shell tab where newTab puts it.
 func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 	there := func(r revier.Remote, address string) error { return r.NewShell(ctx, address) }
-	here := func(w core.Workspace) error {
+	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
 		err := a.core.NewShell(ctx, w, dir)
 		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
