@@ -92,7 +92,7 @@ func (m *Model) forgetPane() {
 	m.query(focusAgents, "")
 }
 
-// agentRow is one row of the pane's Agents section. matches are the rune
+// agentRow is one row of the pane's Agents section. matches are the byte
 // positions of its label the query matched, for the highlight.
 type agentRow struct {
 	agent   revier.AgentView

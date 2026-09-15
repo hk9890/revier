@@ -138,15 +138,29 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// instance's target: a caller binds the two, and a tab bound to it would
 	// keep raising the instance after inside is removed from the file.
 	res := Result{Target: t.Runtime.Inside, Ref: in.Ref}
+	// An instance this press opened is reported with a failure after it, as
+	// Go reports one it could not focus, so the caller still pins it.
+	var failed Result
+	if opened {
+		failed = Result{Target: res.Target, Ref: res.Ref}
+	}
 	if !open {
 		res.Agents = inTab(resumes)
 		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
-			return Result{}, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
+			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
 		res.Launched = true
 	}
+	// An instance this press opened was focused by its Go. One that was there
+	// is focused before its tab: on tmux, focusing the session is what brings
+	// a terminal showing another session to the tab.
+	if !opened {
+		if err := c.Focus(ctx, in.Ref); err != nil {
+			return Result{}, err
+		}
+	}
 	if err := opener.FocusPanel(ctx, in.Ref, tab); err != nil {
-		return Result{}, fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
+		return failed, fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
 	}
 	if err := c.raise(ctx, osw, t.Name); err != nil {
 		return Result{}, err

@@ -353,8 +353,10 @@ project opens its home.
 
 ### D74 — an agent is reached by making its tab current, on its host for a link
 
-`FocusPanel` already switches tabs for a tab target, so going to an agent is
-that and a raise, and needs no new runtime capability. A link's agent runs in
+`Focus` on the instance and `FocusPanel` already reach a tab target, so going
+to an agent is those two and a raise, and needs no new runtime capability. The
+instance comes first: on tmux its focus is what switches a terminal showing
+another session. A link's agent runs in
 the host's workspace, which only that revier can switch, so
 `Remote.FocusAgent` asks it, by the panel id its survey reported, and the pane
 onto the host is raised here.

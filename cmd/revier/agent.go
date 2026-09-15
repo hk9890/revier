@@ -5,13 +5,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -211,26 +211,30 @@ func cmdAgentFocus(args []string) error {
 	if err != nil {
 		return err
 	}
-	var ref revier.TargetRef
-	if *instance != "" {
-		ref = revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}
-	}
+	start := time.Now()
 	if r != nil {
-		return r.FocusAgent(ctx, there, ref)
+		// The host knows the instance by its own runtime: only the id goes.
+		err := r.FocusAgent(ctx, there, revier.TargetRef{ID: *instance})
+		logging.Op("agent focus", start, err, "address", address, "host", r.Name(), "ref", *instance)
+		return err
 	}
+	var ref revier.TargetRef
 	var panel revier.PanelID
-	if ref.IsZero() {
+	switch {
+	case *instance == "":
 		ag, err := a.agent(ctx, address)
 		if err != nil {
 			return err
 		}
 		ref, panel = ag.Ref, ag.Panel.ID
-	} else {
+	case a.core.Runtime == nil:
+		return fmt.Errorf("%w: no runtime holds panels", core.ErrNoHost)
+	default:
 		_, sel, _ := strings.Cut(address, ":")
-		panel = revier.PanelID(sel)
+		ref, panel = revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}, revier.PanelID(sel)
 	}
 	err = a.core.FocusAgent(ctx, ref, panel)
-	slog.Info("agent focus", "address", address, "ref", ref, "panel", panel, "err", err)
+	logging.Op("agent focus", start, err, "address", address, "ref", ref, "panel", panel)
 	return err
 }
 
@@ -269,8 +273,9 @@ func cmdAgentNew(args []string) error {
 func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
 	there := func(r revier.Remote, address string) error { return r.NewAgent(ctx, address, resume) }
 	here := func(w core.Workspace) error {
+		start := time.Now()
 		outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: resume, Dir: dir})
-		slog.Info("agent new", "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
+		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
 		if err != nil {
 			return err
 		}
@@ -294,8 +299,9 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 		return err
 	}
 	if place.Remote != nil {
+		start := time.Now()
 		err := there(place.Remote, place.Address)
-		slog.Info(what, "project", place.Workspace.Project.Name, "host", place.Remote.Name(), "address", place.Address, "err", err)
+		logging.Op(what, start, err, "project", place.Workspace.Project.Name, "host", place.Remote.Name(), "address", place.Address)
 		return err
 	}
 	if dir != "" {

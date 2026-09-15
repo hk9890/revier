@@ -82,6 +82,18 @@ func TestInstancesOnAnEmptyServer(t *testing.T) {
 	}
 }
 
+// With no server nothing is focused, which is not an error: every keypress
+// asks, and a machine with no tmux session open is an ordinary one.
+func TestFocusedWithNoServer(t *testing.T) {
+	got, err := server(t).Focused(ctx(t))
+	if err != nil {
+		t.Fatalf("Focused: %v", err)
+	}
+	if !got.IsZero() {
+		t.Errorf("Focused = %+v, want a zero ref", got)
+	}
+}
+
 // The invariant every host owes the core: what Open creates, Match finds.
 func TestOpenThenMatchFindsIt(t *testing.T) {
 	h, c := server(t), ctx(t)

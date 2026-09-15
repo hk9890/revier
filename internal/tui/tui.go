@@ -646,7 +646,7 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
-// attached instance, which has a ref and no name. matches are the rune
+// attached instance, which has a ref and no name. matches are the byte
 // positions of its label the query matched, for the highlight.
 type targetRow struct {
 	target   revier.TargetView
