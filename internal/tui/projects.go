@@ -410,6 +410,15 @@ func (m *Model) selectName(name revier.ProjectName) {
 	m.plist.Select(0)
 }
 
+// endSearch drops every query once Enter has acted on what it found, so the
+// surface opens again with an empty field. Unlike Esc it is not an undo: the
+// cursor stays on the project the search led to.
+func (m *Model) endSearch() {
+	m.before, _ = m.selectedName()
+	m.setFilter("")
+	m.forgetPane()
+}
+
 // setFilter is every change to the filter text. The list filters
 // synchronously through SetFilterText, so the count in the header and the
 // selection are right on the same pass as the keystroke.
