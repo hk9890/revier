@@ -62,6 +62,33 @@ func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 	}
 }
 
+// Enter ends the search it acted on: the surface opens again with an empty
+// query, and the cursor stays on the project the search found rather than
+// going back as Esc puts it.
+func TestEnterClearsTheQueryAndKeepsTheSelection(t *testing.T) {
+	_, _, c, projects := world(t, 12)
+	for i := range projects {
+		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
+	}
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	for _, r := range "project-07" {
+		m, _ = press(m, string(r))
+	}
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a project returned no command")
+	}
+	if rule := ruleLine(m); !strings.Contains(rule, " 12/12 ") {
+		t.Errorf("rule = %q, want the query cleared", rule)
+	}
+	if q := query(m); strings.Contains(q, "project-07") {
+		t.Errorf("query = %q, want the field empty", q)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-07") {
+		t.Errorf("selected %q after enter, want project-07, the project the search found", row)
+	}
+}
+
 // A project whose directory is not here says so on its row, and whether it
 // can be cloned. One whose directory is here says nothing.
 func TestAMissingCheckoutSaysWhetherItCanBeCloned(t *testing.T) {

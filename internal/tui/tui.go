@@ -600,7 +600,13 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveCursor(1)
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
-		return m.enter()
+		next, cmd := m.enter()
+		if cmd == nil {
+			return next, nil
+		}
+		acted := next.(Model)
+		acted.endSearch()
+		return acted, cmd
 	case key.Matches(msg, m.keys.Next):
 		return m.step(1)
 	case key.Matches(msg, m.keys.Prev):
