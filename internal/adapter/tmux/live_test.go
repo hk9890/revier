@@ -462,10 +462,6 @@ func TestFocusFromAPaneSwitchesThatPanesTerminal(t *testing.T) {
 	}
 }
 
-// A tab is a window of the instance's session, after every window it holds
-// even when an earlier one was closed: a save records agents in listing order.
-// Its panels are split beside the first, the vars land on the first, and the
-// panel returned is the first.
 // ClosePanel ends one pane and leaves the session; Close ends the session.
 func TestCloseEndsAPaneThenTheSession(t *testing.T) {
 	h, c := server(t), ctx(t)
@@ -512,8 +508,29 @@ func TestCloseEndsAPaneThenTheSession(t *testing.T) {
 	if len(instances) != 1 || instances[0].Ref.ID != other.ID {
 		t.Errorf("after Close = %+v, want the other session alone", instances)
 	}
+
+	// The same ref against a server that restarted names another session:
+	// the id is refused rather than killing whatever holds it now.
+	stale := revier.TargetRef{Host: "tmux", ID: refIDOf(t, "1", other.ID)}
+	if err := h.Close(c, stale); err == nil {
+		t.Error("Close of a ref from another server succeeded")
+	}
+	if instances, _ = h.Instances(c); len(instances) != 1 {
+		t.Errorf("after the refused Close = %+v, want the other session still there", instances)
+	}
 }
 
+// refIDOf is an instance id for a session on another server: the pid of the
+// ref, replaced.
+func refIDOf(t *testing.T, serverPID, id string) string {
+	t.Helper()
+	return serverPID + id[strings.LastIndex(id, "/"):]
+}
+
+// A tab is a window of the instance's session, after every window it holds
+// even when an earlier one was closed: a save records agents in listing order.
+// Its panels are split beside the first, the vars land on the first, and the
+// panel returned is the first.
 func TestOpenTabAppendsAWindowToTheSession(t *testing.T) {
 	h, c := server(t), ctx(t)
 	dir := t.TempDir()

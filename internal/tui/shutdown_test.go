@@ -82,6 +82,32 @@ func TestProjectShutdownOfOnlyTargetsKeepsTheAgent(t *testing.T) {
 	}
 }
 
+// A plan that answers after the choice changed is not the plan confirmed: a
+// full shutdown's survey that arrives on a project's confirm step is dropped.
+func TestAStalePlanIsNotShownForAnotherChoice(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	m, _ = press(m, "alt+q")
+	m, full := press(m, "enter")
+	m, _ = press(m, "esc")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	m, targets := press(m, "enter")
+
+	m = run(m, full)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "surveying") {
+		t.Errorf("rows = %q, want the project's plan still awaited", body)
+	}
+	m = run(m, targets)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Nothing to close") {
+		t.Errorf("rows = %q, want the project's targets plan, which closes nothing", body)
+	}
+}
+
 // Esc walks the wizard back one step at a time, and off it from the first.
 func TestEscWalksTheShutdownWizardBack(t *testing.T) {
 	_, _, c, projects := world(t, 2)

@@ -91,7 +91,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	closed := a.core.Shutdown(ctx, plan, core.CloseWait)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range closed {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, stepName(r.CloseStep), r.Note())
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Name(), r.Note())
 	}
 	if err := w.Flush(); err != nil {
 		return err
@@ -117,7 +117,7 @@ func printClosePlan(plan []core.CloseStep) error {
 		case len(s.Agents) > 0:
 			note = "close, and " + core.Count(len(s.Agents), "agent") + " in it"
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", s.Project, stepName(s), note)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", s.Project, s.Name(), note)
 	}
 	return w.Flush()
 }
@@ -129,16 +129,4 @@ func busyNote(agents []revier.AgentView) string {
 		busy = append(busy, a.State.Harness+" "+a.State.Status.String())
 	}
 	return "busy: " + strings.Join(busy, ", ")
-}
-
-// stepName is how a step is named on a line: its target, an agent by its
-// panel, or an attached window by its title.
-func stepName(s core.CloseStep) string {
-	switch {
-	case s.Target != "":
-		return string(s.Target)
-	case s.Panel != "":
-		return "agent " + s.Panel.String()
-	}
-	return "attached " + s.Ref.Title
 }

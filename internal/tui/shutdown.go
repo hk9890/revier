@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -54,11 +55,15 @@ type shutdown struct {
 	closed  core.Closed
 }
 
-// plannedMsg is the survey and plan the confirm step shows.
+// plannedMsg is the survey and plan the confirm step shows, for the choice
+// it was asked for.
 type plannedMsg struct {
-	report core.Report
-	plan   []core.CloseStep
-	err    error
+	whole   bool
+	project revier.ProjectName
+	scope   core.ShutdownScope
+	report  core.Report
+	plan    []core.CloseStep
+	err     error
 }
 
 // shutdownMsg is a shutdown's answer.
@@ -82,6 +87,16 @@ var scopeRows = []struct {
 // openShutdown is the "shutdown" button and alt+q.
 func (m Model) openShutdown() (tea.Model, tea.Cmd) {
 	m.err = nil
+	if m.saving {
+		m.err = errors.New("a save is still running; shut down once it is done")
+		return m, nil
+	}
+	// The save before the close would record a desktop half restored, and the
+	// restore would open again what the shutdown closes.
+	if m.restoring != "" {
+		m.err = fmt.Errorf("the restore of %s is still running; shut down once it is done", m.restoring)
+		return m, nil
+	}
 	m.toList()
 	m.dialog = dialogShutdown
 	m.shut = shutdown{}
@@ -189,8 +204,11 @@ func (m Model) shutEnter() (tea.Model, tea.Cmd) {
 		}
 		s.step, s.row = shutProject, 0
 	case shutProject:
+		// A survey since the last press may have closed a project and shortened
+		// the rows under the cursor.
 		names := m.openProjects()
-		if len(names) == 0 {
+		if s.row >= len(names) {
+			s.row = max(len(names)-1, 0)
 			return m, nil
 		}
 		s.project, s.step, s.row = names[s.row], shutScope, 0
@@ -216,23 +234,27 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.step, s.row, s.planned, s.plan = shutConfirm, 0, false, nil
 	c, projects, root := m.core, m.projects, m.stateRoot
-	only, scope := s.project, s.scope
+	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		st := loadedState(root)
 		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
 		if err != nil {
-			return plannedMsg{err: err}
+			asked.err = err
+			return asked
 		}
-		return plannedMsg{report: report, plan: c.ShutdownPlan(report, only, scope)}
+		asked.report, asked.plan = report, c.ShutdownPlan(report, asked.project, asked.scope)
+		return asked
 	}
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
-// confirm step is dropped.
+// confirm step, or for a choice made before the one it shows, is dropped.
 func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
-	if m.dialog != dialogShutdown || m.shut.step != shutConfirm || m.shut.planned {
+	s := m.shut
+	if m.dialog != dialogShutdown || s.step != shutConfirm || s.planned ||
+		msg.whole != s.whole || msg.project != s.project || msg.scope != s.scope {
 		return m, nil
 	}
 	if msg.err != nil {
@@ -388,7 +410,7 @@ func (m Model) shutdownDetail() string {
 			if r.Err != nil || r.Open || r.Action == core.CloseUnsupported {
 				op, rest = skipOp(th, "open"), r.Note()
 			}
-			b.WriteString(planRow(th, op, th.ProjectName.Render(closeName(r.CloseStep)), "", rest, th.PathMissing, w) + "\n")
+			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")
 		}
 	case s.step == shutConfirm && s.planned:
 		b.WriteString(th.Header.Render("Shutdown plan") + "\n")
@@ -402,7 +424,7 @@ func (m Model) shutdownDetail() string {
 			if step.Action == core.CloseUnsupported {
 				op, rest = keepOp(th, "keep"), "its host cannot close it"
 			}
-			b.WriteString(planRow(th, op, th.ProjectName.Render(closeName(step)), "", rest, th.PathMissing, w) + "\n")
+			b.WriteString(planRow(th, op, th.ProjectName.Render(step.Name()), "", rest, th.PathMissing, w) + "\n")
 			for _, a := range step.Agents {
 				state := statusStyle(th, a.State.Status).Render(statusLabel(th, a.State.Status))
 				b.WriteString(planRow(th, "", th.ProjectName.Render(a.State.Harness), state, a.State.Activity, th.Path, w) + "\n")
@@ -425,18 +447,4 @@ func (m Model) shutProjectLine(b *strings.Builder, last, project revier.ProjectN
 		b.WriteString(m.theme.ProjectName.Bold(true).Render(clipTo(string(project), w)) + "\n")
 	}
 	return project
-}
-
-// closeName is how a step is named in the pane: its target, an agent by its
-// harness, or an attached window by its title.
-func closeName(s core.CloseStep) string {
-	switch {
-	case s.Target != "":
-		return string(s.Target)
-	case s.Panel != "" && len(s.Agents) > 0:
-		return s.Agents[0].State.Harness
-	case s.Panel != "":
-		return "panel " + s.Panel.String()
-	}
-	return s.Ref.Title
 }

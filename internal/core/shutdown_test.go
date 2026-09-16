@@ -212,6 +212,33 @@ func TestShutdownGoesOnPastAFailedClose(t *testing.T) {
 	}
 }
 
+// A close that fails on something already gone is closed: the listing, not
+// Close, says whether it went.
+func TestShutdownCountsAFailedCloseOfWhatIsGoneAsClosed(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	rt.Remove(plan[1].Ref)
+	rt.CloseErr = errors.New("no such window")
+
+	out := c.Shutdown(context.Background(), plan, 0)
+	if closed, _, failed := out.Counts(); closed != 2 || failed != 1 || out[0].Err == nil {
+		t.Errorf("counts = %d closed, %d failed, home err %v; want home failed, notes and editor closed", closed, failed, out[0].Err)
+	}
+}
+
+// A plan made before its host went is not closed through that host: the TUI
+// can switch the runtime between the plan and the confirm.
+func TestShutdownLeavesOpenWhatAHostThatWentPlanned(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	out := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0)
+	if closed, open, _ := out.Counts(); closed != 1 || open != 2 || len(wm.Closed) != 1 {
+		t.Errorf("counts = %d closed, %d open, window host closed %v; want the editor closed and both workspaces left", closed, open, wm.Closed)
+	}
+}
+
 // A tab lives in its workspace. A full shutdown closes the workspace once;
 // closing only the targets closes the tab alone when the workspace holds an
 // agent.

@@ -733,12 +733,21 @@ func (c *Core) bridged(inst revier.Instance) bool {
 // for an attached instance, which has no target to resolve: the ref is all
 // revier knows about it.
 func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
+	h, ok := c.hostNamed(ref.Host)
+	if !ok {
+		return fmt.Errorf("%w: no host named %q", ErrNoHost, ref.Host)
+	}
+	return h.Focus(ctx, ref)
+}
+
+// hostNamed is the configured host of that name: the one that produced a ref.
+func (c *Core) hostNamed(name string) (revier.Host, bool) {
 	for _, h := range c.hosts() {
-		if h.Name() == ref.Host {
-			return h.Focus(ctx, ref)
+		if h.Name() == name {
+			return h, true
 		}
 	}
-	return fmt.Errorf("%w: no host named %q", ErrNoHost, ref.Host)
+	return nil, false
 }
 
 // focusAuthority is the host whose Focused answer describes where the user

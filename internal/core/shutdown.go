@@ -29,14 +29,6 @@ const (
 	ShutdownTargets
 )
 
-var scopeNames = map[ShutdownScope]string{
-	ShutdownAll:     "all",
-	ShutdownAgents:  "agents",
-	ShutdownTargets: "targets",
-}
-
-func (s ShutdownScope) String() string { return scopeNames[s] }
-
 // CloseAction is how a shutdown closes one step.
 type CloseAction uint8
 
@@ -60,6 +52,21 @@ type CloseStep struct {
 	Panel   revier.PanelID
 	Action  CloseAction
 	Agents  []revier.AgentView
+}
+
+// Name is how a step is named to the user: its target, the harness of the
+// agent it ends, the panel when no probe named one, or an attached window's
+// title.
+func (s CloseStep) Name() string {
+	switch {
+	case s.Target != "":
+		return string(s.Target)
+	case len(s.Agents) > 0:
+		return s.Agents[0].State.Harness
+	case s.Panel != "":
+		return "panel " + s.Panel.String()
+	}
+	return s.Ref.Title
 }
 
 // Busy reports an agent of the step that is working or waiting for an answer:
@@ -199,13 +206,12 @@ func (c *Core) closeStep(s CloseStep) CloseStep {
 }
 
 func (c *Core) closer(ref revier.TargetRef) (revier.Closer, bool) {
-	for _, h := range c.hosts() {
-		if h.Name() == ref.Host {
-			closer, ok := h.(revier.Closer)
-			return closer, ok
-		}
+	h, ok := c.hostNamed(ref.Host)
+	if !ok {
+		return nil, false
 	}
-	return nil, false
+	closer, ok := h.(revier.Closer)
+	return closer, ok
 }
 
 func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
@@ -219,13 +225,18 @@ func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
 // CloseLast moves the steps that would end the calling process to the end of
 // the plan, so a shutdown run from a terminal of a workspace closes everything
 // else before its own terminal. self reports a panel the process runs under.
+// A window host lists a window with no panels, so its process stands for it.
 func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.Panel) bool) []CloseStep {
 	byRef := make(map[string]revier.Instance, len(instances))
 	for _, inst := range instances {
 		byRef[key(inst.Ref)] = inst
 	}
 	ends := func(s CloseStep) bool {
-		for _, p := range byRef[key(s.Ref)].Panels {
+		inst := byRef[key(s.Ref)]
+		if s.Panel == "" && len(inst.Panels) == 0 {
+			return self(revier.Panel{PID: inst.PID})
+		}
+		for _, p := range inst.Panels {
 			if (s.Panel == "" || p.ID == s.Panel) && self(p) {
 				return true
 			}
@@ -331,8 +342,10 @@ const CloseWait = 3 * time.Second
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration) Closed {
 	out := make(Closed, 0, len(plan))
 	for _, s := range plan {
-		res := CloseResult{CloseStep: s}
-		switch s.Action {
+		// The plan may come from a core whose hosts have changed since, as the
+		// TUI's does after a runtime switch: a host that is gone cannot close.
+		res := CloseResult{CloseStep: c.closeStep(s)}
+		switch res.Action {
 		case CloseInstance:
 			closer, _ := c.closer(s.Ref)
 			res.Err = closer.Close(ctx, s.Ref)
@@ -341,7 +354,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			res.Err = closer.ClosePanel(ctx, s.Ref, s.Panel)
 		}
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel,
-			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", s.Action == CloseUnsupported, "err", res.Err)
+			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported, "err", res.Err)
 		out = append(out, res)
 	}
 	c.awaitClosed(ctx, out, wait)
@@ -352,19 +365,31 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 
 // awaitClosed marks every closed step that is still listed once wait has
 // passed. A listing that fails ends the wait: what it could not see is taken
-// as gone, since the close itself answered without an error.
+// as gone, since the close itself answered without an error. A close that
+// failed on something the listing no longer holds is closed all the same:
+// whether it is gone is the listing's word, not Close's (revier.Closer).
 func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
 	deadline := time.Now().Add(wait)
 	for {
 		snap, err := c.snapshot(ctx)
 		if err != nil {
 			slog.Warn("shutdown: listing after the close", "err", err)
+			for i := range out {
+				out[i].Open = false
+			}
 			return
 		}
 		pending := false
 		for i := range out {
 			r := &out[i]
-			r.Open = r.Err == nil && r.Action != CloseUnsupported && listed(snap, r.Ref, r.Panel)
+			if r.Action == CloseUnsupported {
+				continue
+			}
+			still := listed(snap, r.Ref, r.Panel)
+			if r.Err != nil && !still {
+				r.Err = nil
+			}
+			r.Open = r.Err == nil && still
 			pending = pending || r.Open
 		}
 		if !pending || time.Now().After(deadline) {

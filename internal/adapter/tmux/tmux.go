@@ -664,12 +664,24 @@ func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.Pa
 	return err
 }
 
-// Close kills the session and every pane in it.
+// Close kills the session and every pane in it. The server that assigned the
+// id has to be the server answering now: tmux numbers sessions per server
+// from $0, so after a restart the same id names an unrelated session, and a
+// kill is not an operation to make on the wrong one.
 func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	if err := h.own(ref); err != nil {
 		return err
 	}
-	_, err := h.run(ctx, "kill-session", "-t", sessionOf(ref.ID))
+	session := sessionOf(ref.ID)
+	out, err := h.run(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}")
+	if err != nil {
+		return err
+	}
+	f := strings.SplitN(strings.TrimRight(out, "\n"), sep, 2)
+	if len(f) != 2 || refID(f[0], f[1]) != ref.ID {
+		return fmt.Errorf("tmux: session %s is gone; %q answers for it now", ref.ID, strings.TrimRight(out, "\n"))
+	}
+	_, err = h.run(ctx, "kill-session", "-t", session)
 	return err
 }
 
