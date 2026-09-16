@@ -20,8 +20,8 @@ const PopupClass = "revier-popup"
 var ErrNoPopupHost = errors.New("no window host that can place the popup")
 
 const (
-	// popupPercent is the width and the height of a centred popup, as a
-	// percentage of the workarea.
+	// popupPercent is the width of a centred popup, as a percentage of the
+	// workarea. The height is always 100%.
 	popupPercent = 70
 	// popupMinWidth is the narrowest centred popup that still shows the
 	// detail pane: its 100 columns at about 10 px a cell, and the terminal's
@@ -97,5 +97,5 @@ func popupGeometry(workareaWidth int) string {
 	if workareaWidth*popupPercent/100 < popupMinWidth {
 		return "left top 100% 100%"
 	}
-	return fmt.Sprintf("center center %d%% %d%%", popupPercent, popupPercent)
+	return fmt.Sprintf("center top %d%% 100%%", popupPercent)
 }
