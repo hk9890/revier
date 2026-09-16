@@ -99,6 +99,11 @@ func (m Model) helpSections() []helpSection {
 			{key: sessionsBarKey, desc: "save the projects open now, under an optional name"},
 			{key: "esc", desc: "back to the projects"},
 		}},
+		{title: "Shutdown", entries: []helpEntry{
+			{key: "↑ / ↓", desc: "choose: every project or one, then what of it"},
+			{key: "enter", desc: "next step; on the plan, shut down"},
+			{key: "esc", desc: "one step back"},
+		}},
 		{title: "Query editing", entries: []helpEntry{
 			{key: "ctrl+a", desc: "start of the line"},
 			{key: "ctrl+e", desc: "end of the line"},
@@ -124,6 +129,7 @@ func barHelpEntries() []helpEntry {
 		"new":      "add a project on this machine",
 		"remote":   "link a project on another machine",
 		"sessions": "save and restore the set of open projects",
+		"shutdown": "save the session when it changed, and close every project or one",
 		"config":   "change the configuration",
 		"help":     "show this screen",
 	}

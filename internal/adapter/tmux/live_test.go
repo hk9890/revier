@@ -462,6 +462,71 @@ func TestFocusFromAPaneSwitchesThatPanesTerminal(t *testing.T) {
 	}
 }
 
+// ClosePanel ends one pane and leaves the session; Close ends the session.
+func TestCloseEndsAPaneThenTheSession(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Panels: []revier.PanelSpec{
+		{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+		{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}},
+	}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	other, err := h.Open(c, revier.Realization{Name: "other", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	panelsOf := func() []revier.Panel {
+		instances, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		for _, inst := range instances {
+			if inst.Ref.ID == ref.ID {
+				return inst.Panels
+			}
+		}
+		t.Fatalf("instances = %+v, want %s among them", instances, ref.ID)
+		return nil
+	}
+	panels := panelsOf()
+	if len(panels) != 2 {
+		t.Fatalf("panels = %+v, want two", panels)
+	}
+
+	if err := h.ClosePanel(c, ref, panels[1].ID); err != nil {
+		t.Fatalf("ClosePanel: %v", err)
+	}
+	if left := panelsOf(); len(left) != 1 || left[0].ID != panels[0].ID {
+		t.Fatalf("after ClosePanel = %+v, want the session with its first pane", left)
+	}
+
+	if err := h.Close(c, ref); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	instances, _ := h.Instances(c)
+	if len(instances) != 1 || instances[0].Ref.ID != other.ID {
+		t.Errorf("after Close = %+v, want the other session alone", instances)
+	}
+
+	// The same ref against a server that restarted names another session:
+	// the id is refused rather than killing whatever holds it now.
+	stale := revier.TargetRef{Host: "tmux", ID: refIDOf(t, "1", other.ID)}
+	if err := h.Close(c, stale); err == nil {
+		t.Error("Close of a ref from another server succeeded")
+	}
+	if instances, _ = h.Instances(c); len(instances) != 1 {
+		t.Errorf("after the refused Close = %+v, want the other session still there", instances)
+	}
+}
+
+// refIDOf is an instance id for a session on another server: the pid of the
+// ref, replaced.
+func refIDOf(t *testing.T, serverPID, id string) string {
+	t.Helper()
+	return serverPID + id[strings.LastIndex(id, "/"):]
+}
+
 // A tab is a window of the instance's session, after every window it holds
 // even when an earlier one was closed: a save records agents in listing order.
 // Its panels are split beside the first, the vars land on the first, and the

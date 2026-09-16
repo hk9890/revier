@@ -105,6 +105,9 @@ func (m *Model) syncDetail() {
 	case dialogSessions, dialogSessionName:
 		m.detail.SetContent(m.sessionDetail())
 		return
+	case dialogShutdown:
+		m.detail.SetContent(m.shutdownDetail())
+		return
 	}
 	v, ok := m.selected()
 	if !ok {

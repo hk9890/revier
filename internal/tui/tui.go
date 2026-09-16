@@ -68,6 +68,7 @@ const (
 	dialogHelp
 	dialogSessions
 	dialogSessionName
+	dialogShutdown
 )
 
 // hasRows reports a screen whose body is list rows: what a click selects and
@@ -130,6 +131,7 @@ type Model struct {
 	saving    bool               // whether a session save is out
 	restoring string             // the session a restore is walking, while it is
 	outcome   sessionOutcome     // what the last save or restore came to
+	shut      shutdown           // the shutdown wizard, while it is up
 	width     int
 	height    int
 
@@ -356,7 +358,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // failed survey is shown from m.surveyErr and logged by core.Survey.
 func loggedAlready(msg tea.Msg) bool {
 	switch msg.(type) {
-	case actedMsg, restoredMsg, savedMsg:
+	case actedMsg, restoredMsg, savedMsg, shutdownMsg:
 		return true
 	}
 	return false
@@ -418,6 +420,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.saved(msg)
 	case restoredMsg:
 		return m.restored(msg)
+	case plannedMsg:
+		return m.planned(msg)
+	case shutdownMsg:
+		return m.shutDown(msg)
 	case ledgerMsg:
 		return m.ledgerWritten(msg)
 	case runtimeMsg:
@@ -595,6 +601,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.sessionsKey(msg)
 	case dialogSessionName:
 		return m.sessionNameKey(msg)
+	case dialogShutdown:
+		return m.shutdownKey(msg)
 	}
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)

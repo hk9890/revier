@@ -18,6 +18,19 @@ tag.
   that is too narrow for the detail pane.** A popup already open is raised
   where you left it. The popup needs kitty and the GNOME Window Control
   extension, and `revier popup` names whichever is missing.
+- **`revier shutdown` closes what is open, and saves the session first.** It
+  closes every project, or one named project, and `--agents` closes only the
+  agents while `--targets` closes only what holds no agent. The session is
+  saved when it differs from the newest saved one, unless
+  `--no-session-save`, so a restore brings back what the shutdown closed.
+  While an agent works or waits for an answer it saves and closes nothing and
+  names that agent; `--force` shuts down anyway. A window whose application
+  asks about unsaved work stays open and is named. In the TUI, alt+q asks
+  every project or one, then what of it, and shows the plan before anything
+  closes.
+- **Action required if an action uses Alt+Q: give it another key.** alt+q now
+  opens the TUI's shutdown wizard, so a `[[action]]` with `key = "alt+q"` is
+  refused at startup with "one of revier's own keys".
 - **Action required on sway: sway is no longer supported.** A `config.toml`
   that names `sway` in `[hosts] window` fails every command with `unknown
   window host "sway"`; remove it from the list.

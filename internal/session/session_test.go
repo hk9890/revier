@@ -246,3 +246,34 @@ session = "first"
 		t.Errorf("Conversations = %d, want both counted", got.Conversations())
 	}
 }
+
+// Two saves of one desktop are the same session whenever they were made and
+// whatever they were called; the survey's project order does not count, and
+// the agents' order does, because a restore lays them out by it.
+func TestSameAsComparesWhatIsOpen(t *testing.T) {
+	a := sample(1, "before")
+	b := sample(2, "")
+	b.Current = ""
+	if !a.SameAs(b) {
+		t.Error("two saves of one desktop differ")
+	}
+
+	other := session.Project{Name: "other", Targets: []session.Target{{Name: "home"}}}
+	a.Projects = append(a.Projects, other)
+	b.Projects = append([]session.Project{other}, b.Projects...)
+	if !a.SameAs(b) {
+		t.Error("the project order made two sessions differ")
+	}
+
+	swapped := sample(1, "")
+	agents := swapped.Projects[0].Targets[0].Agents
+	agents[0], agents[1] = agents[1], agents[0]
+	if sample(1, "").SameAs(swapped) {
+		t.Error("the agents in another order are the same session")
+	}
+	moved := sample(1, "")
+	moved.Projects[0].Targets[0].Agents[0].Session = "other-id"
+	if sample(1, "").SameAs(moved) {
+		t.Error("another conversation is the same session")
+	}
+}
