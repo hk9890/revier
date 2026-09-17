@@ -24,24 +24,57 @@ func linkTOML(name revier.ProjectName, host string, project revier.ProjectName) 
 
 // link fills in what a link file leaves to be derived (decisions.md D41).
 // The project's name on the host is the link's own name unless the file
-// says otherwise. The home target, unless the file declares one, is the
-// pane that reaches the workspace: an ssh onto the host that runs `revier
-// open` there and ends attached to it. A link may declare further targets,
-// which are ordinary local ones - an editor over ssh, a page.
+// says otherwise. The home target is the pane that reaches the workspace: an
+// ssh onto the host that runs `revier open` there and ends attached to it.
+// A link may declare further targets, which run here and reach the host
+// themselves - an editor over ssh, a page (decisions.md D82).
+//
+// A home target the link already has - its own, or the remote part of the
+// shared one - keeps every field it sets, and the derived pane fills the
+// rest of its runtime realization. That is how a shared home contributes a
+// placement without repeating the ssh launch it knows nothing about. A home
+// that says it is a window is left alone: the link has named the tool that
+// reaches the workspace, and a second realization beside it would decide the
+// question the other way on a machine with no window host.
 func link(p *revier.Project) {
 	if p.Remote.Project == "" {
 		p.Remote.Project = p.Name
 	}
-	if _, ok := p.Home(); ok {
+	title := "session:" + string(p.Name)
+	pane := revier.Realization{
+		Name:   title,
+		Launch: []string{"ssh", "-t", p.Remote.Host, "revier", "open", string(p.Remote.Project), "--attach"},
+		Match:  revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"},
+	}
+	for i, t := range p.Targets {
+		if !t.Home {
+			continue
+		}
+		if t.Runtime == nil {
+			if t.Window == nil {
+				p.Targets[i].Runtime = &pane
+			}
+			return
+		}
+		fillPane(p.Targets[i].Runtime, pane)
 		return
 	}
-	title := "session:" + string(p.Name)
 	p.Targets = append([]revier.Target{{
-		Name: "home", Home: true,
-		Runtime: &revier.Realization{
-			Name:   title,
-			Launch: []string{"ssh", "-t", p.Remote.Host, "revier", "open", string(p.Remote.Project), "--attach"},
-			Match:  revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"},
-		},
+		Name: "home", Home: true, Runtime: &pane,
 	}}, p.Targets...)
+}
+
+// fillPane writes the derived pane into the fields the link left empty. A
+// realization that declares panels is already launched by them, and a launch
+// beside them is refused, so the pane's is not one of the fields it left out.
+func fillPane(r *revier.Realization, pane revier.Realization) {
+	if r.Name == "" {
+		r.Name = pane.Name
+	}
+	if len(r.Launch) == 0 && len(r.Panels) == 0 {
+		r.Launch = pane.Launch
+	}
+	if r.Match.IsZero() {
+		r.Match = pane.Match
+	}
 }

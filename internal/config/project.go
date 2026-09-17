@@ -60,30 +60,37 @@ func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
 		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
 	}
 	out := ProjectText{Path: own.Path, GitURL: own.GitURL, Vars: own.Vars}
+	merged, err := decodeProject(data, shared)
+	if err != nil {
+		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
+	}
+	sharedTargets, err := targetsFor(shared, own.Remote != nil)
+	if err != nil {
+		return ProjectText{}, err
+	}
 	if own.Remote != nil {
-		p := own
+		p := merged
 		p.Name = nameOf(file)
 		remote := *own.Remote
 		p.Remote = &remote
 		link(&p)
 		out.Remote = p.Remote
-		_, declared := own.Home()
-		for i, t := range p.Targets {
-			source := FromProject
-			if i == 0 && !declared {
-				source = Derived
+		for _, t := range p.Targets {
+			pt := ProjectTarget{Target: t, Source: FromProject}
+			if s := findTarget(sharedTargets, t.Name); s >= 0 {
+				pt.Shared = &sharedTargets[s]
+				pt.Source = FromShared
+				if findTarget(own.Targets, t.Name) >= 0 {
+					pt.Source = Overridden
+				}
+			} else if findTarget(own.Targets, t.Name) < 0 {
+				// The pane onto the host, which neither the file nor
+				// config.toml declares.
+				pt.Source = Derived
 			}
-			out.Targets = append(out.Targets, ProjectTarget{Target: t, Source: source})
+			out.Targets = append(out.Targets, pt)
 		}
 		return out, nil
-	}
-	merged, err := decodeProject(data, shared)
-	if err != nil {
-		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
-	}
-	sharedTargets, err := DecodeTargets(shared)
-	if err != nil {
-		return ProjectText{}, err
 	}
 	for _, t := range merged.Targets {
 		pt := ProjectTarget{Target: t, Source: FromProject}
@@ -118,12 +125,9 @@ func SetProjectValue(file string, shared []map[string]any, key, value string) (c
 func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetName, e TargetEdit) (core.Project, error) {
 	t := e.Target
 	return editProject(file, shared, func(lines []string, f projectFile) ([]string, error) {
-		sharedTargets, err := DecodeTargets(shared)
+		sharedTargets, err := targetsFor(shared, f.link)
 		if err != nil {
 			return nil, err
-		}
-		if f.link {
-			sharedTargets = nil
 		}
 		if was != t.Name {
 			if findTarget(sharedTargets, was) >= 0 {
@@ -156,13 +160,13 @@ func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetNa
 			}
 			i = len(f.targets)
 			lines = appendTarget(lines, t.Name)
-			return applyTarget(lines, i, revier.Target{Name: t.Name}, map[string]any{}, TargetEdit{Target: own, PanelFrom: newPanels(panelCount(own))})
+			return applyTarget(lines, i, revier.Target{Name: t.Name}, map[string]any{}, f.base(), TargetEdit{Target: own, PanelFrom: newPanels(panelCount(own))})
 		}
 		if bare {
 			e := targetEntries(lines)[i]
 			return dropLines(lines, e.start, e.end), nil
 		}
-		return applyTarget(lines, i, f.targets[i], f.raw[i], TargetEdit{Target: own, PanelFrom: from})
+		return applyTarget(lines, i, f.targets[i], f.rawOf(i), f.base(), TargetEdit{Target: own, PanelFrom: from})
 	}, func(p revier.Project) error {
 		if i := findTarget(p.Targets, t.Name); i < 0 || !sameTargets(p.Targets[i:i+1], []revier.Target{t}) {
 			return errors.New("the target did not come out as written; change it by hand")
@@ -191,6 +195,26 @@ type projectFile struct {
 	targets []revier.Target
 	raw     []map[string]any
 	link    bool
+}
+
+// base is the table a target's realizations sit under in this file: a link
+// writes them under [target.remote] (decisions.md D82).
+func (f projectFile) base() string {
+	if f.link {
+		return "target.remote"
+	}
+	return "target"
+}
+
+// rawOf is the i-th entry's realizations as TOML decoded them, under the
+// table of this file's kind.
+func (f projectFile) rawOf(i int) map[string]any {
+	raw := f.raw[i]
+	if !f.link {
+		return raw
+	}
+	remote, _ := raw["remote"].(map[string]any)
+	return remote
 }
 
 // editProject runs one change to a project file, and writes it only if the

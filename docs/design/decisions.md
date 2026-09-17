@@ -433,3 +433,16 @@ Replaces opening the project file in `$EDITOR`, for the reason D53 gave for
 `config.toml`'s, and writes only the values that differ from it, so
 `config.toml` is never written from a project. A shared value cannot be emptied
 from a project, because an absent key is the shared value.
+
+### D82 — a target carries a realization per kind of project, and a link gets the remote one
+
+Extends D59, which left a link outside the shared targets. The editor of a
+project on another machine is VS Code over ssh where the local one is IntelliJ
+on a path here, so the two cannot be one realization; two targets instead
+would split the name and the key that must stay one. A target holds
+`[target.window]` and `[target.runtime]` for a local project and
+`[target.remote.*]` for a link, and a shared target with no remote part is
+local-only. A project file writes the part of its own kind, and the other
+part - a realization nothing would read - is refused at load. The derived ssh
+pane fills what a link's home target leaves out, so a placement costs no
+repetition of the launch.

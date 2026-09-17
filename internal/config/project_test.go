@@ -89,7 +89,7 @@ func TestReadProjectMarksALinksDerivedHome(t *testing.T) {
 		t.Errorf("remote = %+v, want the host and the derived name there", p.Remote)
 	}
 	if len(p.Targets) != 1 || p.Targets[0].Source != config.Derived || !p.Targets[0].Target.Home {
-		t.Errorf("targets = %+v, want only the derived home: a link has no shared targets", p.Targets)
+		t.Errorf("targets = %+v, want only the derived home: no shared target here has a remote part", p.Targets)
 	}
 }
 
@@ -225,5 +225,57 @@ func TestSetProjectValue(t *testing.T) {
 	}
 	if got := read(t, file); got != overriding {
 		t.Errorf("file =\n%s\nwant it as it started", got)
+	}
+}
+
+// A link's project screen shows the shared targets it has through their
+// remote part, and an edit of one is written under [target.remote]
+// (decisions.md D82).
+func TestProjectScreenWritesALinksOverrideUnderRemote(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", sharedConfig+`
+[[target]]
+name = "remote-editor"
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}", "{{.Path}}"]
+  match = { class = "^Code$" }
+`)
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := write(t, dir, "far.toml", link)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	shared := cfg.Targets
+
+	text, err := config.ReadProject(file, shared)
+	if err != nil {
+		t.Fatalf("ReadProject: %v", err)
+	}
+	var editor config.ProjectTarget
+	for _, pt := range text.Targets {
+		if pt.Target.Name == "remote-editor" {
+			editor = pt
+		}
+	}
+	if editor.Source != config.FromShared || editor.Shared == nil {
+		t.Fatalf("editor = %+v, want the shared target's remote part", editor)
+	}
+
+	want := editor.Target
+	want.Window.Match.Title = "^far \\[SSH: buildbox\\]"
+	loaded, err := config.SaveProjectTarget(file, shared, "remote-editor", config.TargetEdit{Target: want})
+	if err != nil {
+		t.Fatalf("SaveProjectTarget: %v", err)
+	}
+	if got := read(t, file); !strings.Contains(got, "[target.remote.window]") {
+		t.Errorf("file =\n%s\nwant the override under [target.remote.window]", got)
+	}
+	got, _ := loaded.Target("remote-editor")
+	if got.Window.Match.Title != "^far \\[SSH: buildbox\\]" || got.Window.Launch[0] != "code" {
+		t.Errorf("editor = %+v, want the title overridden and the shared launch kept", got.Window)
 	}
 }

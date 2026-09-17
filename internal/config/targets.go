@@ -47,6 +47,13 @@ type TargetsWritten struct {
 	Projects []core.Project
 }
 
+// targetsFor is the shared targets a project of one kind has, as typed
+// targets: the realization of its kind taken from the part that holds it,
+// and a target with no part of that kind left out (decisions.md D82).
+func targetsFor(shared []map[string]any, isLink bool) ([]revier.Target, error) {
+	return DecodeTargets(partsFor(shared, nil, isLink))
+}
+
 // DecodeTargets is shared targets as typed targets.
 func DecodeTargets(shared []map[string]any) ([]revier.Target, error) {
 	out := make([]revier.Target, len(shared))
@@ -64,7 +71,7 @@ func AddTarget(root string, was []map[string]any, t revier.Target) (TargetsWritt
 	return editTargets(root, was, func(lines []string, have []revier.Target, raw []map[string]any) ([]string, []revier.Target, error) {
 		lines = appendTarget(lines, t.Name)
 		old := revier.Target{Name: t.Name}
-		lines, err := applyTarget(lines, len(have), old, map[string]any{}, TargetEdit{Target: t, PanelFrom: newPanels(panelCount(t))})
+		lines, err := applyTarget(lines, len(have), old, map[string]any{}, "target", TargetEdit{Target: t, PanelFrom: newPanels(panelCount(t))})
 		return lines, append(slices.Clone(have), t), err
 	})
 }
@@ -75,7 +82,7 @@ func ReplaceTarget(root string, i int, was []map[string]any, e TargetEdit) (Targ
 		if i >= len(have) {
 			return nil, nil, ErrTargetsChanged
 		}
-		lines, err := applyTarget(lines, i, have[i], raw[i], e)
+		lines, err := applyTarget(lines, i, have[i], raw[i], "target", e)
 		want := slices.Clone(have)
 		want[i] = e.Target
 		return lines, want, err
@@ -151,8 +158,9 @@ func sameTargets(a, b []revier.Target) bool {
 
 // applyTarget writes into entry i every value of e.Target that differs from
 // old. raw is the entry as TOML decoded it, for the keys of a match the
-// screen does not show.
-func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, e TargetEdit) ([]string, error) {
+// screen does not show; base is the table its realizations sit under,
+// "target" or, for a link, "target.remote" (decisions.md D82).
+func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, base string, e TargetEdit) ([]string, error) {
 	t := e.Target
 	var err error
 	for _, kv := range []struct {
@@ -175,7 +183,7 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, e
 		{"runtime", old.Runtime, t.Runtime},
 		{"window", old.Window, t.Window},
 	} {
-		path := "target." + r.kind
+		path := base + "." + r.kind
 		if r.new == nil {
 			if r.old != nil {
 				lines = dropTables(lines, i, path)
@@ -208,7 +216,7 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, e
 			}
 		}
 		if r.kind == "runtime" {
-			if lines, err = putPanels(lines, i, o.Panels, r.new.Panels, e.PanelFrom); err != nil {
+			if lines, err = putPanels(lines, i, base, o.Panels, r.new.Panels, e.PanelFrom); err != nil {
 				return nil, err
 			}
 		}
@@ -322,10 +330,10 @@ func inlineTable(t map[string]any) (string, error) {
 // putPanels writes a runtime realization's panels. A panel deleted on the
 // screen loses its entry, a kept one is changed value by value, and a new one
 // is added after the last.
-func putPanels(lines []string, i int, old, panels []revier.PanelSpec, from []int) ([]string, error) {
-	const path = "target.runtime.panels"
+func putPanels(lines []string, i int, base string, old, panels []revier.PanelSpec, from []int) ([]string, error) {
+	path := base + ".runtime.panels"
 	if len(arrayTables(lines, i, path)) != len(old) {
-		return nil, errors.New("the panels are not written as [[target.runtime.panels]] tables; change them by hand")
+		return nil, fmt.Errorf("the panels are not written as [[%s]] tables; change them by hand", path)
 	}
 	kept := map[int]bool{}
 	for _, f := range from {
