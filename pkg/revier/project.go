@@ -18,7 +18,9 @@ type (
 
 // Project is a directory and the set of targets bound to it.
 type Project struct {
-	Name ProjectName `toml:"name" json:"name"`
+	// Name is the project file's name without its extension. The file does
+	// not declare it (decisions.md D80).
+	Name ProjectName `toml:"-" json:"name"`
 	Path string      `toml:"path" json:"path"`
 
 	// GitURL is the repository the directory at Path is a clone of. It is

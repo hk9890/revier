@@ -62,21 +62,9 @@ func DecodeTargets(shared []map[string]any) ([]revier.Target, error) {
 // still hold the shared targets was.
 func AddTarget(root string, was []map[string]any, t revier.Target) (TargetsWritten, error) {
 	return editTargets(root, was, func(lines []string, have []revier.Target, raw []map[string]any) ([]string, []revier.Target, error) {
-		out := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-		if out != "" {
-			out += "\n\n"
-		}
-		name, err := literalOf(string(t.Name))
-		if err != nil {
-			return nil, nil, err
-		}
-		lines = strings.Split(out+"[[target]]\nname = "+name+"\n", "\n")
-		from := make([]int, panelCount(t))
-		for j := range from {
-			from[j] = -1
-		}
+		lines = appendTarget(lines, t.Name)
 		old := revier.Target{Name: t.Name}
-		lines, err = applyTarget(lines, len(have), old, map[string]any{}, TargetEdit{Target: t, PanelFrom: from})
+		lines, err := applyTarget(lines, len(have), old, map[string]any{}, TargetEdit{Target: t, PanelFrom: newPanels(panelCount(t))})
 		return lines, append(slices.Clone(have), t), err
 	})
 }
@@ -206,6 +194,7 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, e
 			{"launch", o.Launch, r.new.Launch},
 			{"dir", o.Dir, r.new.Dir},
 			{"place", o.Place, r.new.Place},
+			{"inside", string(o.Inside), string(r.new.Inside)},
 		} {
 			if lines, err = putValue(lines, i, path, kv.key, kv.old, kv.new); err != nil {
 				return nil, err

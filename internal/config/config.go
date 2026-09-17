@@ -228,22 +228,13 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 	sort.Strings(names)
 
 	projects := make([]core.Project, 0, len(names))
-	declared := map[revier.ProjectName]string{}
 	var errs []error
 	for _, name := range names {
-		path := filepath.Join(dir, name)
-		p, err := LoadProject(path, shared)
+		p, err := LoadProject(filepath.Join(dir, name), shared)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		// A project is found by name everywhere - a lookup, a key in state, a
-		// run log - so a second file under a taken name would act as the first.
-		if first, taken := declared[p.Name]; taken {
-			errs = append(errs, fmt.Errorf("%s: project %q is already declared in %s", path, p.Name, first))
-			continue
-		}
-		declared[p.Name] = path
 		projects = append(projects, p)
 	}
 	if len(errs) > 0 {
@@ -257,15 +248,21 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 // and never reaches a keystroke. shared are config.toml's shared targets,
 // merged in before anything is checked.
 func LoadProject(path string, shared []map[string]any) (core.Project, error) {
-	p, err := decodeProject(path, shared)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
-	if p.Name == "" {
-		// Fall back to the file stem so a project file need not repeat its own
-		// name, and so a renamed file cannot silently keep the old identity.
-		p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
+	return loadProject(path, data, shared)
+}
+
+// loadProject is LoadProject on the text the file at path has, or is about
+// to have.
+func loadProject(path string, data []byte, shared []map[string]any) (core.Project, error) {
+	p, err := decodeProject(data, shared)
+	if err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
+	p.Name = nameOf(path)
 	// A path is expanded once, here, so every consumer - templates, working
 	// directories, the cwd lookup - sees an absolute path and none of them
 	// hands a literal "~" to a program that does not expand it. A link's
@@ -292,6 +289,12 @@ func LoadProject(path string, shared []map[string]any) (core.Project, error) {
 	}
 	prepared.File = path
 	return prepared, nil
+}
+
+// nameOf is the name of the project a file holds: the file's name without
+// its extension (decisions.md D80).
+func nameOf(path string) revier.ProjectName {
+	return revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 }
 
 // Validate rejects a project whose structure would fail at the keystroke

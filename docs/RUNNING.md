@@ -33,7 +33,6 @@ export TMUX_TMPDIR=$(mktemp -d /tmp/rv.XXXX)   # short: tmux fails on a socket p
 unset TMUX                                     # inside tmux, $TMUX names the user's server
 printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
-name = "demo"
 path = "$S"
 [[target]]
 name = "home"

@@ -2,34 +2,24 @@ package tui
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/checkout"
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The surface holds prepared projects for its lifetime (decisions.md D17). The
-// two keys here are the exception: the file the surface itself handed to the
-// editor, or removed, is the one change it knows about, so it applies that one
-// without a restart.
-
-// editedMsg follows the editor exiting.
-type editedMsg struct {
-	project revier.ProjectName
-	file    string
-	err     error
-}
+// The surface holds prepared projects for its lifetime (decisions.md D17). A
+// project the surface itself changed - written on the project screen, or
+// removed - is the exception: that change is the one it knows about, so it
+// applies it without a restart.
 
 // clonedMsg follows the clone Enter started for a project whose directory is
 // missing; the home target opens once it succeeds.
@@ -48,44 +38,27 @@ func (m Model) highlighted() (core.Project, bool) {
 	return m.project(v.Project.Name)
 }
 
-// editFile hands the highlighted project's file to $EDITOR, with the terminal,
-// as `os edit` does. $EDITOR is run as it is, without a shell, the way the
-// shell tool runs it.
-func (m Model) editFile() (tea.Model, tea.Cmd) {
-	p, ok := m.highlighted()
-	if !ok || p.File == "" {
-		return m, nil
-	}
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		m.err = errors.New("$EDITOR is not set, so there is nothing to edit the project file with")
-		return m, nil
-	}
-	name, file := p.Name, p.File
-	return m, tea.ExecProcess(exec.Command(editor, file), func(err error) tea.Msg {
-		return editedMsg{project: name, file: file, err: err}
-	})
-}
-
-// reread applies an edited file. A file that no longer loads leaves the
-// project as it was: the error names what is wrong, and the next edit can fix
-// it, while a project dropped from the list could not be reached to edit.
-func (m *Model) reread(msg editedMsg) error {
-	p, err := config.LoadProject(msg.file, m.shared)
-	if err != nil {
-		return fmt.Errorf("%w; %s is shown as it was before the edit", err, msg.project)
-	}
-	// A new list, not a write into the old one: a survey still running reads
-	// the old one on another goroutine.
+// replaceProject puts p where the project called name was. A rename changes
+// the name, and the cursor stays on the project.
+func (m *Model) replaceProject(name revier.ProjectName, p core.Project) {
+	// New lists, not writes into the old ones: a survey still running reads
+	// the old list on another goroutine.
 	projects := slices.Clone(m.projects)
 	for i := range projects {
-		if projects[i].Name == msg.project {
+		if projects[i].Name == name {
 			projects[i] = p
 		}
 	}
-	m.projects = projects
+	views := slices.Clone(m.views)
+	for i := range views {
+		if views[i].Project.Name == name {
+			views[i].Project = p.Project
+		}
+	}
+	m.projects, m.views = projects, views
 	m.tkeys = targetKeys(m.projects, m.keys)
-	return msg.err
+	m.reload()
+	m.selectName(p.Name)
 }
 
 // askDelete starts the confirmation for removing the highlighted project's
@@ -97,7 +70,7 @@ func (m Model) askDelete() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if err := m.refuseRunning(v); err != nil {
+	if err := m.refuseRunning(v, "deleting"); err != nil {
 		m.err = err
 		return m, nil
 	}
@@ -119,7 +92,7 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// answer, and the project may have started since.
 	for _, v := range m.views {
 		if v.Project.Name == name {
-			if err := m.refuseRunning(v); err != nil {
+			if err := m.refuseRunning(v, "deleting"); err != nil {
 				m.err = err
 				return m, nil
 			}
@@ -141,25 +114,25 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// refuseRunning refuses a project with a target running or a window attached
-// to it. An attachment on the window host is alive: every refresh prunes the
-// ones that host no longer lists. One on another host - a surface started
-// where that host does not probe - cannot be reached from here, so it does
-// not hold the delete up.
-func (m Model) refuseRunning(v revier.ProjectView) error {
+// refuseRunning refuses deleting or renaming a project with a target running
+// or a window attached to it. An attachment on the window host is alive:
+// every refresh prunes the ones that host no longer lists. One on another
+// host - a surface started where that host does not probe - cannot be
+// reached from here, so it does not hold the change up.
+func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 	running := v.Running
 	for _, t := range v.Targets {
 		running = running || !t.Ref.IsZero()
 	}
 	if running {
-		return fmt.Errorf("%s is running; close its targets before deleting it", v.Project.Name)
+		return fmt.Errorf("%s is running; close its targets before %s it", v.Project.Name, doing)
 	}
 	if m.core.Window == nil {
 		return nil
 	}
 	for _, ref := range m.attached[v.Project.Name] {
 		if ref.Host == m.core.Window.Name() {
-			return fmt.Errorf("%s has an attached window open; close it before deleting the project", v.Project.Name)
+			return fmt.Errorf("%s has an attached window open; close it before %s the project", v.Project.Name, doing)
 		}
 	}
 	return nil

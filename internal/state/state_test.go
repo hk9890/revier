@@ -66,6 +66,27 @@ func TestAttachIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestRenameMovesEverythingRecordedUnderTheProject(t *testing.T) {
+	s := &state.State{}
+	ref := revier.TargetRef{Host: "gnome", ID: "7"}
+	s.Attach("old", ref)
+	s.Attach("other", ref)
+	s.Landed("old", "editor", ref)
+	s.Launched("old", "home", time.Now())
+
+	s.Rename("old", "new")
+
+	if s.Current != "new" || s.Launch.Project != "new" {
+		t.Errorf("current %q, launch %q, want new", s.Current, s.Launch.Project)
+	}
+	if _, ok := s.Attached["old"]; ok || len(s.Attached["new"]) != 1 || len(s.Attached["other"]) != 1 {
+		t.Errorf("attached = %v, want old's moved to new and other's kept", s.Attached)
+	}
+	if _, ok := s.Bound["old"]; ok || s.Bound["new"]["editor"] != ref {
+		t.Errorf("bound = %v, want old's moved to new", s.Bound)
+	}
+}
+
 // Window ids do not survive an application restart, so a stale attachment must
 // be dropped rather than pointing at whatever now holds that id.
 func TestPruneDropsDeadRefs(t *testing.T) {
