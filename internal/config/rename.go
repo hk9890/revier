@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -23,6 +25,13 @@ func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (
 	if err != nil {
 		return core.Project{}, err
 	}
+	declared, err := decodeProject(data, nil)
+	if err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", old, err)
+	}
+	if target, value, found := writesName(declared.Targets, from); found {
+		return core.Project{}, fmt.Errorf("target %q writes the name out as %q; make it {{.Name}} there first, or the target would look for %q after the rename", target, value, from)
+	}
 	text, err := keepRemoteProject(string(data), from)
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", old, err)
@@ -37,6 +46,37 @@ func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (
 	}
 	slog.Info("project renamed", "from", from, "to", to)
 	return p, nil
+}
+
+// writesName finds a target value that carries the project's name as text
+// rather than as {{.Name}}: `revier new` writes one into a match pattern for
+// a name a regexp would read, such as the dot in "example.com", and a file
+// written by hand may hold others. A rename leaves such a value looking for
+// the old name, so Open would stop producing what Match finds
+// (docs/CODING.md), and the rename is refused instead.
+func writesName(targets []revier.Target, name revier.ProjectName) (revier.TargetName, string, bool) {
+	forms := []string{string(name), regexp.QuoteMeta(string(name))}
+	for _, t := range targets {
+		for _, r := range []*revier.Realization{t.Runtime, t.Window} {
+			if r == nil {
+				continue
+			}
+			values := []string{r.Name, r.Dir, r.Place, r.Match.Title, r.Match.Class}
+			values = append(values, r.Launch...)
+			for _, p := range r.Panels {
+				values = append(values, p.Title)
+				values = append(values, p.Command...)
+			}
+			for _, v := range values {
+				for _, form := range forms {
+					if strings.Contains(v, form) {
+						return t.Name, v, true
+					}
+				}
+			}
+		}
+	}
+	return "", "", false
 }
 
 // keepRemoteProject writes a link's name on the host where the file leaves it

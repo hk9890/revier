@@ -63,9 +63,7 @@ func (m Model) WithRuntimes(choices []string, pick RuntimeSelector) Model {
 }
 
 func newChordInput(th theme.Theme) textinput.Model {
-	in := textinput.New()
-	styleField(&in, th)
-	in.Prompt = ""
+	in := newFieldInput(th)
 	in.Placeholder = config.DefaultTriggerKey
 	in.CharLimit = 64
 	return in

@@ -129,8 +129,11 @@ func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetNa
 			if findTarget(sharedTargets, was) >= 0 {
 				return nil, fmt.Errorf("target %q is config.toml's, and keeps its name here", was)
 			}
-			if findTarget(sharedTargets, t.Name) >= 0 || findTarget(f.targets, t.Name) >= 0 {
+			if findTarget(f.targets, t.Name) >= 0 {
 				return nil, fmt.Errorf("the project has a target named %q already", t.Name)
+			}
+			if findTarget(sharedTargets, t.Name) >= 0 {
+				return nil, fmt.Errorf("config.toml declares a target named %q; change that one to override it here", t.Name)
 			}
 		}
 		own, from := t, e.PanelFrom
@@ -281,6 +284,9 @@ func realizationOverride(kind string, r, shared *revier.Realization) (*revier.Re
 		}
 	}
 	if o.Match.PID, err = differs(kind+" match pid", r.Match.PID, shared.Match.PID); err != nil {
+		return nil, err
+	}
+	if o.Inside, err = differs(kind+" inside", r.Inside, shared.Inside); err != nil {
 		return nil, err
 	}
 	if o.Launch, err = listOverride(kind+" command", r.Launch, shared.Launch); err != nil {

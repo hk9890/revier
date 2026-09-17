@@ -427,9 +427,9 @@ func settingLine(th theme.Theme, sel bool, label, value, note string, w int) str
 // button: it opens the project screen, and carries the key that does too.
 func (m Model) nameButton(name revier.ProjectName, w int) string {
 	th := m.theme
-	label, keys := th.OnHover(th.Header), th.OnHover(th.Help)
+	label, keys := th.Header, th.Help
 	if m.over.kind == hoverName {
-		label, keys = th.OnSelection(th.Header), th.OnSelection(th.Help)
+		label, keys = th.OnHover(label), th.OnHover(keys)
 	}
 	return clipTo(label.Render(" "+string(name)+" ")+keys.Render(m.keys.Edit.Help().Key+" "), w)
 }

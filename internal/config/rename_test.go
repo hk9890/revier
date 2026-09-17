@@ -64,6 +64,21 @@ func TestRenameLeavesALinkThatNamesTheHostsProject(t *testing.T) {
 	}
 }
 
+// `revier new` writes the name into a match pattern where a regexp would
+// read it, such as the dot in "example.com". The pattern would look for the
+// old name after the rename, so the rename is refused and names it.
+func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
+	body := strings.Replace(valid, "^session:{{.Name}}$", `^session:example\\.com$`, 1)
+	root := renameRoot(t, "example.com", body)
+	_, err := config.Rename(root, "example.com", "web", nil)
+	if err == nil || !strings.Contains(err.Error(), "writes the name out") || !strings.Contains(err.Error(), "home") {
+		t.Errorf("err = %v, want the refusal naming the target", err)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "example.com")); err != nil {
+		t.Errorf("old file: %v, want it kept", err)
+	}
+}
+
 // A refused rename leaves both files as they were.
 func TestRenameRefusesATakenOrInvalidName(t *testing.T) {
 	root := renameRoot(t, "revier", valid)

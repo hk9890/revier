@@ -460,7 +460,7 @@ func (m *Model) setTargets(w config.TargetsWritten) {
 	m.tkeys = targetKeys(m.projects, m.keys)
 }
 
-// describeTarget is a shared target's row note: where it opens.
+// describeTarget is a target's row note, on either screen: where it opens.
 func describeTarget(t revier.Target) string {
 	var parts []string
 	if r := t.Runtime; r != nil {

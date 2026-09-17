@@ -421,7 +421,10 @@ A `name` key could disagree with the file name, and no file ever used it that
 way; it only doubled every rename. A file that still has one is refused at load
 rather than read either way. A rename moves the file, writes a link's name on
 the host when the link derived it, and moves the state entries. It is refused
-while the project runs, because templates and the link pane match the name.
+while the project runs, because templates and the link pane match the name, and
+refused when a target writes the name out instead of `{{.Name}}` - which
+`revier new` does for a name a regexp would read - since that pattern would go
+on looking for the old name.
 
 ### D81 — a project is edited on its own screen, and never in `$EDITOR`
 
