@@ -137,6 +137,9 @@ func (m Model) mkdirKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.nstep = newRoot
 	case key.Matches(msg, m.keys.Enter):
 		m.err = nil
+		if url := m.typed(); isCloneURL(url) {
+			return m.cloneInto(m.ndir, url)
+		}
 		if err := os.MkdirAll(m.ndir, 0o755); err != nil {
 			m.err = err
 			return m, nil
@@ -144,6 +147,17 @@ func (m Model) mkdirKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.addFolder(m.ndir)
 	}
 	return m, nil
+}
+
+// cloneInto writes the project for url at dir, which is not there yet, and
+// clones it; git creates the folder.
+func (m Model) cloneInto(dir, url string) (tea.Model, tea.Cmd) {
+	p, ok := m.addProject(dir, url, false)
+	if !ok {
+		return m, nil
+	}
+	home, _ := p.Home()
+	return m, m.clone(p, home.Name)
 }
 
 func (m Model) typed() string { return strings.TrimSpace(m.path.Value()) }
@@ -219,32 +233,21 @@ func (m Model) submitField() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// submitRoot is Enter on a folder: the name goes in it, and a clone URL is
-// cloned there.
+// submitRoot is Enter on a folder: the name or the clone goes in it.
 func (m Model) submitRoot() (tea.Model, tea.Cmd) {
 	m.err = nil
-	dir := m.rootTarget(m.nrow)
-	url := m.typed()
-	if !isCloneURL(url) {
-		return m.addOrAsk(dir)
-	}
-	if _, err := os.Stat(dir); err == nil {
-		m.err = fmt.Errorf("%s is already there: add it by its full path", contractHome(dir))
-		return m, nil
-	}
-	p, ok := m.addProject(dir, url, false)
-	if !ok {
-		return m, nil
-	}
-	home, _ := p.Home()
-	return m, m.clone(p, home.Name)
+	return m.addOrAsk(m.rootTarget(m.nrow))
 }
 
-// addOrAsk adds dir when it is a folder, and asks to create it when it is
-// not there.
+// addOrAsk adds dir when it is a folder, and asks to create it, or to clone
+// into it, when it is not there.
 func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
 	if err := m.nameFree(config.NameFor(dir)); err != nil {
 		m.err = err
+		return m, nil
+	}
+	if p, ok := m.projectAt(dir); ok {
+		m.err = fmt.Errorf("%s is already project %q", contractHome(dir), p.Name)
 		return m, nil
 	}
 	info, err := os.Stat(dir)
@@ -265,10 +268,16 @@ func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
 
 // addFolder writes the project for a folder that is there. Its origin is
 // recorded, as `revier new` records it, so the project can be cloned on the
-// next machine.
+// next machine. A clone URL that is not that origin is not recorded, and the
+// footer says so.
 func (m *Model) addFolder(dir string) {
-	if _, ok := m.addProject(dir, checkout.Origin(dir), true); ok {
-		checkout.Trust(dir, io.Discard)
+	origin := checkout.Origin(dir)
+	if _, ok := m.addProject(dir, origin, true); !ok {
+		return
+	}
+	checkout.Trust(dir, io.Discard)
+	if url := m.typed(); isCloneURL(url) && url != origin {
+		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", contractHome(dir), url)
 	}
 }
 
@@ -277,6 +286,16 @@ func (m Model) nameFree(name revier.ProjectName) error {
 		return fmt.Errorf("project %q already exists: %s", name, contractHome(p.File))
 	}
 	return nil
+}
+
+// projectAt is the local project whose folder is dir.
+func (m Model) projectAt(dir string) (core.Project, bool) {
+	for _, p := range m.projects {
+		if p.Remote == nil && filepath.Clean(config.ExpandHome(p.Path)) == dir {
+			return p, true
+		}
+	}
+	return core.Project{}, false
 }
 
 // addProject writes the project file for dir and makes it the selected row.
@@ -420,10 +439,10 @@ func repoName(url string) string {
 func (m Model) newHelp() []key.Binding {
 	back := helpKey("esc", "back")
 	switch {
+	case m.nstep == newMkdir && isCloneURL(m.typed()):
+		return []key.Binding{helpKey("enter", "clone"), back, m.keys.Quit}
 	case m.nstep == newMkdir:
 		return []key.Binding{helpKey("enter", "create the folder"), back, m.keys.Quit}
-	case m.nstep == newRoot && isCloneURL(m.typed()):
-		return []key.Binding{helpKey("enter", "clone"), helpKey("↑↓", "choose"), back, m.keys.Quit}
 	case m.nstep == newRoot:
 		return []key.Binding{helpKey("enter", "add the project"), helpKey("↑↓", "choose"), back, m.keys.Quit}
 	case isFullPath(m.typed()):
@@ -447,10 +466,14 @@ func (m Model) newScreen() (text string, at int) {
 	switch {
 	case m.nstep == newMkdir:
 		rows = nil
+		verb := "Enter creates it and writes"
+		if isCloneURL(typed) {
+			verb = "Enter clones " + typed + " into it and writes"
+		}
 		lines = []string{
 			say(th.Attention, "This folder is not there:"),
 			say(th.Path, contractHome(m.ndir)),
-			say(th.NameDim, "Enter creates it and writes"),
+			say(th.NameDim, verb),
 			m.newFileLine(say, config.NameFor(m.ndir)),
 		}
 	case m.nstep == newRoot:

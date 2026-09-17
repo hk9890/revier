@@ -12,8 +12,10 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // barCell is a terminal cell inside the first button of the action bar: the
@@ -281,8 +283,9 @@ func TestTabCompletesADirectory(t *testing.T) {
 	}
 }
 
-// A clone URL writes the project into the chosen folder under the
-// repository's name, records the URL, and starts the clone.
+// A clone URL asks before it clones into the chosen folder under the
+// repository's name, then writes the project with the URL and starts the
+// clone.
 func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
@@ -298,6 +301,10 @@ func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 	}
 	m, _ = press(m, "down")
 	m, cmd := press(m, "enter")
+	if body := strings.Join(lines(m), "\n"); cmd != nil || !strings.Contains(body, "is not there") {
+		t.Fatalf("screen = %q, want the clone asked about first", body)
+	}
+	m, cmd = press(m, "enter")
 
 	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
 	if err != nil {
@@ -316,9 +323,9 @@ func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 	}
 }
 
-// A clone URL whose directory is already there is refused: that directory is
-// added by its path.
-func TestACloneURLRefusesAnExistingDirectory(t *testing.T) {
+// A clone URL whose folder is already there adds that folder, clones
+// nothing, and says the URL, which is not the folder's origin, is ignored.
+func TestACloneURLAddsAnExistingFolder(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	home := t.TempDir()
@@ -335,14 +342,48 @@ func TestACloneURLRefusesAnExistingDirectory(t *testing.T) {
 	m, _ = press(m, "down")
 	m, cmd := press(m, "enter")
 
-	if f := footer(m); !strings.Contains(f, "already there") {
-		t.Errorf("footer = %q, want the directory refused", f)
+	if f := footer(m); !strings.Contains(f, "the URL is ignored") {
+		t.Errorf("footer = %q, want the URL said to be ignored", f)
 	}
 	if cmd != nil {
 		t.Error("a clone started into an existing directory")
 	}
-	if _, err := os.Stat(filepath.Join(root, "projects", "widget.toml")); err == nil {
-		t.Error("wrote a project file for a refused clone")
+	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
+	if err != nil {
+		t.Fatalf("no project file written: %v", err)
+	}
+	if strings.Contains(string(file), "git_url") {
+		t.Errorf("project file = %q, want no git_url the folder does not have", file)
+	}
+
+	// The same folder again is a project already, and nothing is written.
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, filepath.Join(home, "widget"))
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, "already") {
+		t.Errorf("footer = %q, want the folder refused as a project already", f)
+	}
+}
+
+// A folder that is a project already under another name is refused.
+func TestAFolderThatIsAProjectIsRefused(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	_, _, c, _ := world(t, 1)
+	projects, err := core.Prepare([]revier.Project{{Name: "other", Path: "/p/widget"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "/p/widget/")
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, `already project "other"`) {
+		t.Errorf("footer = %q, want the folder refused", f)
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, "projects")); err == nil && len(entries) > 0 {
+		t.Errorf("wrote %v for a folder that is a project already", entries)
 	}
 }
 
