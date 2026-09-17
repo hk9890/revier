@@ -153,6 +153,8 @@ type Model struct {
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
 	path   textinput.Model                  // the directory field of the new-project screen
+	nrows  []string                         // what the new-project screen lists under the field
+	nrow   int                              // the chosen one of nrows, -1 for none
 	lname  textinput.Model                  // the name field of the link dialog's last step
 	rinput textinput.Model                  // the query over the link dialog's second step
 	sname  textinput.Model                  // the name field of a session being saved
@@ -435,6 +437,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
+			return m, nil
+		}
+		if msg.home == "" {
 			return m, nil
 		}
 		return m, m.goTarget(msg.project, msg.home)

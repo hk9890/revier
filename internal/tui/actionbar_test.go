@@ -183,6 +183,120 @@ func TestTheNewProjectScreenRefusesAMissingDirectory(t *testing.T) {
 	}
 }
 
+// An empty field lists the folders the projects live in, the fullest first,
+// and the home directory; Tab takes the one chosen.
+func TestTheNewProjectScreenListsTheProjectFolders(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	body := strings.Join(lines(m), "\n")
+	if p, home := strings.Index(body, "    /p "), strings.Index(body, "    ~ "); p < 0 || home < p {
+		t.Fatalf("screen = %q, want /p, where both projects live, over ~", body)
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "tab")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ /p/ ") {
+		t.Errorf("screen = %q, want tab to take /p", body)
+	}
+}
+
+// Tab completes the part the subdirectories share, then the one chosen. A
+// hidden directory is not offered until a dot is typed.
+func TestTabCompletesADirectory(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	base := t.TempDir()
+	for _, d := range []string{"alpha", "alps", "beta", ".hidden"} {
+		if err := os.Mkdir(filepath.Join(base, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, base+"/")
+	body := strings.Join(lines(m), "\n")
+	if !strings.Contains(body, base+"/beta") || strings.Contains(body, ".hidden") {
+		t.Errorf("screen = %q, want the subdirectories without the hidden one", body)
+	}
+	m = typeInto(m, "a")
+	m, _ = press(m, "tab")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ "+base+"/alp ") {
+		t.Fatalf("screen = %q, want the shared part completed", body)
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "tab")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ "+base+"/alpha/ ") {
+		t.Errorf("screen = %q, want the chosen directory taken", body)
+	}
+}
+
+// A clone URL writes the project into the chosen folder under the
+// repository's name, records the URL, and starts the clone.
+func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "git@github.com:owner/widget.git")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "/p/widget") || !strings.Contains(body, "~/widget") {
+		t.Fatalf("screen = %q, want each folder with the clone's directory in it", body)
+	}
+	m, _ = press(m, "down")
+	m, cmd := press(m, "enter")
+
+	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
+	if err != nil {
+		t.Fatalf("no project file written: %v\n%s", err, footer(m))
+	}
+	for _, want := range []string{`path = "~/widget"`, `git_url = "git@github.com:owner/widget.git"`} {
+		if !strings.Contains(string(file), want) {
+			t.Errorf("project file = %q, want %s", file, want)
+		}
+	}
+	if cmd == nil {
+		t.Error("no clone started")
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
+		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// A clone URL whose directory is already there is refused: that directory is
+// added by its path.
+func TestACloneURLRefusesAnExistingDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "https://github.com/owner/widget")
+	m, _ = press(m, "down")
+	m, cmd := press(m, "enter")
+
+	if f := footer(m); !strings.Contains(f, "already there") {
+		t.Errorf("footer = %q, want the directory refused", f)
+	}
+	if cmd != nil {
+		t.Error("a clone started into an existing directory")
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "widget.toml")); err == nil {
+		t.Error("wrote a project file for a refused clone")
+	}
+}
+
 // alt+h lists every key: the surface's own, the target keys, the configured
 // actions and the desktop key that opens revier. Esc goes back to the list.
 func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
