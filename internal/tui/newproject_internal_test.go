@@ -18,6 +18,23 @@ func TestIsCloneURL(t *testing.T) {
 	}
 }
 
+// ä and ö share their first byte in UTF-8, so a byte-wise prefix of the two
+// ends inside a character.
+func TestCommonPrefixKeepsWholeCharacters(t *testing.T) {
+	if got := commonPrefix([]string{"/p/äa", "/p/öb"}); got != "/p/" {
+		t.Errorf("commonPrefix = %q, want /p/", got)
+	}
+}
+
+func TestSameRepoIgnoresTheGitSuffixAndATrailingSlash(t *testing.T) {
+	want := sameRepo("https://github.com/o/widget")
+	for _, u := range []string{"https://github.com/o/widget.git", "https://github.com/o/widget/"} {
+		if got := sameRepo(u); got != want {
+			t.Errorf("sameRepo(%q) = %q, want %q", u, got, want)
+		}
+	}
+}
+
 func TestRepoName(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://github.com/owner/repo":  "repo",

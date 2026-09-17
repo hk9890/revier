@@ -18,6 +18,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os/exec"
@@ -442,6 +443,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.home == "" {
+			m.err = fmt.Errorf("cloned %s; project %q has no home target to open", contractHome(msg.project.Path), msg.project.Name)
 			return m, nil
 		}
 		return m, m.goTarget(msg.project, msg.home)

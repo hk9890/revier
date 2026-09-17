@@ -41,6 +41,7 @@ func TestUnsafeGitURLIsRejectedAtLoad(t *testing.T) {
 		{"command substitution", "git@example.com:$(reboot).git", "shell metacharacter"},
 		{"separator", "https://example.com/a.git;rm", "shell metacharacter"},
 		{"credentials", "https://user:s3cret@example.com/a.git", "credentials"},
+		{"credentials over http", "http://user:s3cret@example.com/a.git", "credentials"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := revier.Project{Path: "/p", GitURL: tc.url, Targets: []revier.Target{{

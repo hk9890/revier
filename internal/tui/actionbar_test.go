@@ -97,6 +97,7 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
 	dir := filepath.Join(t.TempDir(), "widget")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -113,6 +114,61 @@ func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
 		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// noTools empties PATH, so the screen starts neither git nor mise: this
+// layer starts no process, and mise's trust list is left as it was.
+func noTools(t *testing.T) {
+	t.Helper()
+	t.Setenv("PATH", t.TempDir())
+}
+
+// Enter on a row chosen under the field adds that row's folder, not the
+// folder the field names.
+func TestEnterAddsTheChosenDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
+	base := filepath.Join(t.TempDir(), "base")
+	if err := os.MkdirAll(filepath.Join(base, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, base+"/")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+
+	if _, err := os.Stat(filepath.Join(root, "projects", "widget.toml")); err != nil {
+		t.Fatalf("no project file for the chosen folder: %v\n%s", err, footer(m))
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "base.toml")); err == nil {
+		t.Error("wrote the project for the folder the field names")
+	}
+}
+
+// The home directory is refused, as `revier new` refuses it: it would own
+// every folder no other project claims.
+func TestTheHomeDirectoryIsRefused(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("HOME", t.TempDir())
+	noTools(t)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "~/")
+	m, _ = press(m, "enter")
+
+	if f := footer(m); !strings.Contains(f, "home directory") {
+		t.Errorf("footer = %q, want the home directory refused", f)
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, "projects")); err == nil && len(entries) > 0 {
+		t.Errorf("wrote %v for the home directory", entries)
 	}
 }
 
@@ -171,6 +227,7 @@ func TestAnAltChordTypesNothing(t *testing.T) {
 func TestAMissingFullPathIsCreatedAfterAsking(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
 	dir := filepath.Join(t.TempDir(), "fresh")
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
@@ -204,6 +261,7 @@ func TestAMissingFullPathIsCreatedAfterAsking(t *testing.T) {
 func TestANameIsAddedInTheChosenFolder(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {
@@ -328,6 +386,7 @@ func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 func TestACloneURLAddsAnExistingFolder(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {

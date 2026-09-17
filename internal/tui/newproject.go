@@ -2,6 +2,7 @@ package tui
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -140,13 +142,28 @@ func (m Model) mkdirKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if url := m.typed(); isCloneURL(url) {
 			return m.cloneInto(m.ndir, url)
 		}
-		if err := os.MkdirAll(m.ndir, 0o755); err != nil {
-			m.err = err
-			return m, nil
-		}
-		m.addFolder(m.ndir)
+		m.mkdirProject(m.ndir)
 	}
 	return m, nil
+}
+
+// mkdirProject writes the project for dir, then creates dir. The file comes
+// first, so a file that cannot be written leaves no folder behind.
+func (m *Model) mkdirProject(dir string) {
+	p, ok := m.addProject(dir, "", false)
+	if !ok {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		m.err = fmt.Errorf("project %q is written, but its folder is not: %w", p.Name, err)
+		return
+	}
+	for i := range m.views {
+		if m.views[i].Project.Name == p.Name {
+			m.views[i].PathExists = true
+		}
+	}
+	m.reload()
 }
 
 // cloneInto writes the project for url at dir, which is not there yet, and
@@ -161,6 +178,15 @@ func (m Model) cloneInto(dir, url string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) typed() string { return strings.TrimSpace(m.path.Value()) }
+
+// fieldPath is the full path Enter adds: the row chosen under the field, or
+// the field itself.
+func (m Model) fieldPath() string {
+	if m.nrow >= 0 {
+		return m.nrows[m.nrow]
+	}
+	return m.typed()
+}
 
 // syncNewRows lists the subdirectories that complete a full path. A name
 // lists nothing until Enter asks where it goes.
@@ -205,6 +231,7 @@ func (m Model) submitField() (tea.Model, tea.Cmd) {
 		m.err = fmt.Errorf("give a full path, a name, or a clone URL")
 		return m, nil
 	case isFullPath(typed):
+		typed = m.fieldPath()
 		dir := config.ExpandHome(typed)
 		if !filepath.IsAbs(dir) {
 			m.err = fmt.Errorf("%s is not a full path", typed)
@@ -242,6 +269,10 @@ func (m Model) submitRoot() (tea.Model, tea.Cmd) {
 // addOrAsk adds dir when it is a folder, and asks to create it, or to clone
 // into it, when it is not there.
 func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == dir {
+		m.err = errors.New("the home directory cannot be a project: it would own every folder no other project claims")
+		return m, nil
+	}
 	if err := m.nameFree(config.NameFor(dir)); err != nil {
 		m.err = err
 		return m, nil
@@ -276,9 +307,15 @@ func (m *Model) addFolder(dir string) {
 		return
 	}
 	checkout.Trust(dir, io.Discard)
-	if url := m.typed(); isCloneURL(url) && url != origin {
+	if url := m.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(origin) {
 		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", contractHome(dir), url)
 	}
+}
+
+// sameRepo is url without what two spellings of one repository differ by: a
+// trailing separator and the .git suffix.
+func sameRepo(url string) string {
+	return strings.TrimSuffix(strings.TrimRight(url, "/"), ".git")
 }
 
 func (m Model) nameFree(name revier.ProjectName) error {
@@ -352,6 +389,9 @@ func projectRoots(projects []core.Project) []string {
 			continue
 		}
 		parent := filepath.Dir(config.ExpandHome(p.Path))
+		if !filepath.IsAbs(parent) {
+			continue
+		}
 		if parent == home {
 			parent = "~"
 		}
@@ -390,7 +430,12 @@ func subdirs(typed string) []string {
 		}
 		// os.DirEntry does not follow a link; a linked directory is one to
 		// complete into all the same.
-		if info, err := os.Stat(filepath.Join(read, name)); err != nil || !info.IsDir() {
+		isDir := e.IsDir()
+		if e.Type()&os.ModeSymlink != 0 {
+			info, err := os.Stat(filepath.Join(read, name))
+			isDir = err == nil && info.IsDir()
+		}
+		if !isDir {
 			continue
 		}
 		out = append(out, dir+name)
@@ -402,7 +447,8 @@ func commonPrefix(rows []string) string {
 	prefix := rows[0]
 	for _, r := range rows[1:] {
 		for !strings.HasPrefix(r, prefix) {
-			prefix = prefix[:len(prefix)-1]
+			_, size := utf8.DecodeLastRuneInString(prefix)
+			prefix = prefix[:len(prefix)-size]
 		}
 	}
 	return prefix
@@ -498,7 +544,7 @@ func (m Model) newScreen() (text string, at int) {
 			say(th.Meta, "A folder that is not there is created after asking."),
 		}
 	case isFullPath(typed):
-		name := config.NameFor(config.ExpandHome(typed))
+		name := config.NameFor(config.ExpandHome(m.fieldPath()))
 		lines = []string{say(th.NameDim, "Enter writes"), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
 	default:
 		verb := "Enter chooses the folder for " + m.newName()
