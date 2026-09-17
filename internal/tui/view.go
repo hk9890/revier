@@ -176,7 +176,7 @@ func (m Model) subtitle() string {
 	case dialogHosts:
 		return ""
 	case dialogRemote:
-		return " " + m.theme.Meta.Render("the projects on "+m.host)
+		return " " + m.rinput.View()
 	case dialogLinkName:
 		return m.linkNameView()
 	case dialogNew:
@@ -224,6 +224,8 @@ func (m Model) ruleCount() string {
 	switch {
 	case m.dialog == dialogHosts:
 		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
+	case m.dialog == dialogRemote && m.rfilter != "":
+		return th.NameDim.Render(fmt.Sprintf("%d/%d projects", len(m.rlist.VisibleItems()), len(m.rlist.Items())))
 	case m.dialog == dialogRemote:
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
 	case m.dialog == dialogSessions:
@@ -259,6 +261,8 @@ func (m Model) empty() string {
 	switch {
 	case m.dialog == dialogSessions:
 		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
+	case m.dialog == dialogRemote && m.rfilter != "":
+		return say(th.NameDim, fmt.Sprintf("No project on %s matches %q.", m.host, m.rfilter))
 	case m.dialog != dialogNone || !m.ready():
 		return ""
 	case len(m.projects) == 0:

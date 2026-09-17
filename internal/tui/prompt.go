@@ -44,7 +44,8 @@ const (
 )
 
 // promptKeys are the keys the input gets. Everything else is the surface's:
-// up and down move the list, enter activates, esc goes back. Without this
+// up, down, home, end and the page keys move the list, enter activates, esc
+// goes back. Without this
 // split the input would swallow the keys that drive the list.
 func (m Model) promptKey(msg tea.KeyMsg) bool {
 	if altRune(msg) {
@@ -52,7 +53,7 @@ func (m Model) promptKey(msg tea.KeyMsg) bool {
 	}
 	switch msg.Type {
 	case tea.KeyRunes, tea.KeySpace, tea.KeyBackspace, tea.KeyDelete,
-		tea.KeyLeft, tea.KeyRight, tea.KeyHome, tea.KeyEnd:
+		tea.KeyLeft, tea.KeyRight:
 		return true
 	}
 	return slices.Contains(queryKeys, msg.String())
