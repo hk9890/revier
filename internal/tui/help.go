@@ -70,6 +70,8 @@ func (m Model) helpSections() []helpSection {
 		{title: "Projects", entries: []helpEntry{
 			{key: "↑ / ctrl+p", desc: "up"},
 			{key: "↓ / ctrl+n", desc: "down"},
+			{key: "home / end", desc: "first / last row"},
+			{key: "pgup / pgdown", desc: "a page up / down"},
 			{key: "enter", desc: "open the project"},
 			{key: "type", desc: "filter the projects"},
 			{key: "esc", desc: "clear the filter, or quit"},

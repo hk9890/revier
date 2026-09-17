@@ -164,6 +164,83 @@ func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 	}
 }
 
+// What is typed on a host's projects filters them, and Enter links the one
+// the filter left under the cursor. Esc clears the query, with the cursor
+// back where it was, before it goes back to the hosts (decisions.md D44).
+func TestTypingFiltersTheHostsProjects(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "alpha", "beta", "gamma")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = press(m, "down")
+
+	m = typed(m, "gam")
+	if q := query(m); !strings.Contains(q, "gam") {
+		t.Errorf("field = %q, want the query", q)
+	}
+	if r := ruleLine(m); !strings.Contains(r, "1/3 projects") {
+		t.Errorf("rule = %q, want the filtered count", r)
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "gamma") || strings.Contains(body, "alpha") || strings.Contains(body, "beta") {
+		t.Errorf("rows = %q, want gamma alone", rows(m))
+	}
+
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if q := query(m); !strings.Contains(q, "rs-buildbox-gamma") {
+		t.Fatalf("field = %q, want gamma offered", q)
+	}
+	m, _ = press(m, "esc")
+	if r := ruleLine(m); !strings.Contains(r, "1/3 projects") {
+		t.Errorf("rule = %q, want the query kept under the name step", r)
+	}
+
+	m, _ = press(m, "esc")
+	if h := barLine(m); !strings.Contains(h, "buildbox") || strings.Contains(h, "Link") {
+		t.Errorf("header = %q, want the host's projects still up", h)
+	}
+	if r := ruleLine(m); !strings.Contains(r, "3 projects") || strings.Contains(r, "/") {
+		t.Errorf("rule = %q, want every project again", r)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "beta") {
+		t.Errorf("selected %q, want the cursor back on beta", row)
+	}
+
+	m, _ = press(m, "esc")
+	if r := rows(m); len(r) < 1 || !strings.Contains(r[0], "buildbox") {
+		t.Errorf("rows = %q, want the hosts again", r)
+	}
+}
+
+// A link written from a query leaves no query behind: the next time the
+// dialog opens, the first Esc on the hosts closes it.
+func TestEscClosesTheHostsAfterALinkWrittenFromAQuery(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "alpha", "beta")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = typed(m, "bet")
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	m = step(m, altR)
+	if h := barLine(m); !strings.Contains(h, "Link") {
+		t.Fatalf("header = %q, want the hosts up", h)
+	}
+	m, _ = press(m, "esc")
+	if h := barLine(m); strings.Contains(h, "Link") {
+		t.Errorf("header = %q, want the dialog closed by the first esc", h)
+	}
+}
+
+// A query matching none of the host's projects says so.
+func TestAQueryMatchingNoneOfTheHostsProjectsSaysSo(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "alpha")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = typed(m, "zz")
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, `No project on buildbox matches "zz"`) {
+		t.Errorf("rows = %q, want the empty match said", rows(m))
+	}
+}
+
 // A project whose checkout is missing on the host shows the missing-folder
 // glyph, and its row says nothing else about it: the table's right column is
 // agent state only.

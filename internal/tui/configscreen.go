@@ -274,7 +274,7 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.rlist.SetDelegate(projectDelegate{theme: th, hover: -1})
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.chord} {
+	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.rinput, &m.chord} {
 		styleField(in, th)
 	}
 	m.layout()

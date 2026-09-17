@@ -15,15 +15,19 @@ import (
 // There is no "q to quit": on the list every printable rune is a
 // filter character, and a project called `queue` has to be reachable.
 type keyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Enter  key.Binding
-	Next   key.Binding
-	Prev   key.Binding
-	Back   key.Binding
-	Quit   key.Binding
-	Edit   key.Binding
-	Delete key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Home     key.Binding
+	End      key.Binding
+	PageUp   key.Binding
+	PageDown key.Binding
+	Enter    key.Binding
+	Next     key.Binding
+	Prev     key.Binding
+	Back     key.Binding
+	Quit     key.Binding
+	Edit     key.Binding
+	Delete   key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -31,9 +35,15 @@ type keyMap struct {
 
 func newKeyMap(actions []config.Action) keyMap {
 	k := keyMap{
-		Up:    key.NewBinding(key.WithKeys("up", "ctrl+p"), key.WithHelp("↑", "up")),
-		Down:  key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
-		Enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		Up:   key.NewBinding(key.WithKeys("up", "ctrl+p"), key.WithHelp("↑", "up")),
+		Down: key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
+		// Home and end move the cursor to the first and last row, not in the
+		// query: ctrl+a and ctrl+e do that there.
+		Home:     key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first")),
+		End:      key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last")),
+		PageUp:   key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
+		PageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdown", "page down")),
+		Enter:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		// Tab and not right: left and right move the cursor in the query.
 		Next: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next section")),
 		Prev: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous section")),
@@ -67,7 +77,7 @@ func actionChord(act config.Action) core.Chord {
 // claims reports whether a press is the surface's own or an action's, which
 // the surface matches before any target key.
 func (k keyMap) claims(c core.Chord) bool {
-	for _, b := range append([]key.Binding{k.Up, k.Down, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
+	for _, b := range append(k.own(), k.actions...) {
 		for _, name := range b.Keys() {
 			if own, err := core.ParseChord(name); err == nil && own == c {
 				return true
@@ -82,6 +92,11 @@ func (k keyMap) claims(c core.Chord) bool {
 		}
 	}
 	return false
+}
+
+// own is every binding of the surface's own, the action bar's aside.
+func (k keyMap) own() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each
@@ -114,7 +129,7 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	case dialogHosts:
 		enter = "list its projects"
 	case dialogRemote:
-		enter = "name the link"
+		return []key.Binding{helpKey("enter", "name the link"), helpKey("type", "filter"), helpKey("esc", "clear/back"), k.Quit}
 	case dialogNew:
 		return []key.Binding{helpKey("enter", "add the project"), helpKey("esc", "back"), k.Quit}
 	case dialogHelp:

@@ -77,12 +77,13 @@ type askedMsg struct {
 }
 
 func newHostList(th theme.Theme) list.Model { return plainList(hostDelegate{theme: th}) }
-func newRemoteList(th theme.Theme) list.Model {
-	return plainList(projectDelegate{theme: th, hover: -1})
-}
 
-// plainList is a list with nothing of its own on screen and no filter: the
-// dialog's rows are few and each of them is a choice.
+// newRemoteList is a host's projects, drawn and filtered as the projects here
+// are: a host can have as many.
+func newRemoteList(th theme.Theme) list.Model { return newProjectList(th) }
+
+// plainList is a list with nothing of its own on screen and no filter: its
+// rows are few and each of them is a choice.
 func plainList(d list.ItemDelegate) list.Model {
 	l := list.New(nil, d, 0, 0)
 	l.SetShowTitle(false)
@@ -151,29 +152,79 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 	}
 	_ = m.hlist.SetItems(items)
 	m.hlist.Select(0)
+	// A link written last time left its query behind; Esc here would clear
+	// it instead of closing the dialog.
+	m.setRemoteFilter("")
 	m.toList()
 	m.dialog = dialogHosts
 	return m, nil
 }
 
 // dialogKey is every press while the dialog is up. It takes a step at a
-// time: up and down walk the rows, Enter takes the step, Esc goes back one,
-// and none of the surface's own keys act under it.
+// time: the movement keys walk the rows, Enter takes the step, Esc goes back
+// one, and none of the surface's own keys act under it. On a host's projects
+// what is typed filters them, and Esc clears the query before it goes back,
+// as on the surface (decisions.md D44).
 func (m Model) dialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
+	if by, ok := m.keys.move(msg, func(int) int { return m.listPage() }); ok {
+		moveRow(m.dialogList(), by)
+		return m, nil
+	}
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
+		if m.rfilter != "" {
+			m.setRemoteFilter("")
+			return m, nil
+		}
 		m.stepBack()
-	case key.Matches(msg, m.keys.Up):
-		m.dialogList().CursorUp()
-	case key.Matches(msg, m.keys.Down):
-		m.dialogList().CursorDown()
 	case key.Matches(msg, m.keys.Enter):
 		return m.dialogEnter()
+	case m.dialog == dialogRemote && m.promptKey(msg):
+		next, cmd := m.rinput.Update(msg)
+		m.rinput = next
+		if next.Value() != m.rfilter {
+			m.setRemoteFilter(next.Value())
+		}
+		return m, cmd
 	}
 	return m, nil
+}
+
+// setRemoteFilter is every change to the query over a host's projects. As on
+// the surface, clearing it puts the cursor back on the project it was on when
+// the query began.
+func (m *Model) setRemoteFilter(q string) {
+	if m.rfilter == "" && q != "" {
+		m.rbefore = m.remoteSelected()
+	}
+	m.rfilter = q
+	if m.rinput.Value() != q {
+		m.rinput.SetValue(q)
+	}
+	if q != "" {
+		m.rlist.SetFilterText(q)
+		return
+	}
+	m.rlist.ResetFilter()
+	for i, item := range m.rlist.Items() {
+		if it, ok := item.(remoteItem); ok && it.view.Project.Name == m.rbefore {
+			m.rlist.Select(i)
+			return
+		}
+	}
+	m.rlist.Select(0)
+}
+
+// remoteSelected is the host's project under the cursor, if any.
+func (m Model) remoteSelected() revier.ProjectName {
+	it, ok := m.rlist.SelectedItem().(remoteItem)
+	if !ok {
+		return ""
+	}
+	return it.view.Project.Name
 }
 
 // dialogEnter takes the step the cursor is on: a host is asked for its
@@ -195,6 +246,7 @@ func (m Model) dialogEnter() (tea.Model, tea.Cmd) {
 func (m *Model) stepBack() {
 	m.asking = ""
 	if m.dialog == dialogRemote {
+		m.rinput.Blur()
 		m.dialog = dialogHosts
 		return
 	}
@@ -243,13 +295,15 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 		items = append(items, remoteItem{view: v, linked: m.linkedAs(msg.host, v.Project.Name)})
 	}
 	m.host = msg.host
+	m.setRemoteFilter("")
 	_ = m.rlist.SetItems(items)
 	m.rlist.Select(0)
+	m.rinput.Placeholder = "filter the projects on " + msg.host
 	m.dialog = dialogRemote
 	if len(items) == 0 {
 		m.err = fmt.Errorf("%s has no projects; `revier new` there writes one", msg.host)
 	}
-	return m, nil
+	return m, m.rinput.Focus()
 }
 
 // linkedAs is the name of the link here to a project on a host, if any.
@@ -278,6 +332,7 @@ func (m Model) link() (tea.Model, tea.Cmd) {
 	m.lname.CursorEnd()
 	m.proposed = true
 	m.dialog = dialogLinkName
+	m.rinput.Blur()
 	return m, m.lname.Focus()
 }
 
@@ -299,7 +354,7 @@ func (m Model) linkNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.dialog = dialogRemote
 		m.lname.Blur()
-		return m, nil
+		return m, m.rinput.Focus()
 	case key.Matches(msg, m.keys.Enter):
 		return m.writeLink()
 	}

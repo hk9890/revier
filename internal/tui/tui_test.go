@@ -97,6 +97,14 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyRight}
 	case "backspace":
 		msg = tea.KeyMsg{Type: tea.KeyBackspace}
+	case "home":
+		msg = tea.KeyMsg{Type: tea.KeyHome}
+	case "end":
+		msg = tea.KeyMsg{Type: tea.KeyEnd}
+	case "pgup":
+		msg = tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		msg = tea.KeyMsg{Type: tea.KeyPgDown}
 	default:
 		letter, alt := strings.CutPrefix(key, "alt+")
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter), Alt: alt}
@@ -319,6 +327,63 @@ func TestTabMovesTheCursorIntoThePaneAndEscReturns(t *testing.T) {
 	}
 	if f := footer(m); !strings.Contains(f, "enter open") {
 		t.Errorf("footer = %q, want enter to say open again", f)
+	}
+}
+
+// Home and End move the list's cursor to the first and the last row, and
+// the page keys move it by the rows on the screen, stopping at either end.
+func TestHomeEndAndThePageKeysMoveTheListCursor(t *testing.T) {
+	_, _, c, projects := world(t, 30)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	// project-29 needs the human, so it sorts first.
+	m, _ = press(m, "end")
+	if row := selectedRow(t, m); !strings.Contains(row, "project-28") {
+		t.Errorf("selected %q after end, want the last row", row)
+	}
+	m, _ = press(m, "pgdown")
+	if row := selectedRow(t, m); !strings.Contains(row, "project-28") {
+		t.Errorf("selected %q after pgdown at the last row, want it to stay", row)
+	}
+	m, _ = press(m, "home")
+	if row := selectedRow(t, m); !strings.Contains(row, "project-29") {
+		t.Errorf("selected %q after home, want the first row", row)
+	}
+	m, _ = press(m, "pgdown")
+	row := selectedRow(t, m)
+	if strings.Contains(row, "project-29") || strings.Contains(row, "project-00") {
+		t.Errorf("selected %q after pgdown, want the cursor a page down", row)
+	}
+	m, _ = press(m, "pgup")
+	if row := selectedRow(t, m); !strings.Contains(row, "project-29") {
+		t.Errorf("selected %q after pgup, want the first row again", row)
+	}
+	if q := query(m); !strings.Contains(q, "filter projects") {
+		t.Errorf("query = %q, want it empty", q)
+	}
+}
+
+// The same keys move the cursor over the pane's rows.
+func TestHomeEndAndThePageKeysMoveThePaneCursor(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "tab")
+
+	m, _ = press(m, "end")
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after end, want the last target", row)
+	}
+	m, _ = press(m, "home")
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q after home, want the first target", row)
+	}
+	m, _ = press(m, "pgdown")
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q after pgdown, want the last target", row)
+	}
+	m, _ = press(m, "pgup")
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q after pgup, want the first target", row)
 	}
 }
 

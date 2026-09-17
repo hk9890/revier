@@ -119,8 +119,8 @@ func (m *Model) syncDetail() {
 		m.shown = v.Project.Name
 		m.forgetPane()
 	}
-	m.tcursor = min(max(m.tcursor, 0), max(len(m.targetRows())-1, 0))
-	m.acursor = min(max(m.acursor, 0), max(len(m.agentRows())-1, 0))
+	m.tcursor = clampRow(m.tcursor, len(m.targetRows()))
+	m.acursor = clampRow(m.acursor, len(m.agentRows()))
 	m.detail.SetContent(m.detailContent(v))
 	if fresh {
 		m.detail.GotoTop()

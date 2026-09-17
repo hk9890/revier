@@ -168,11 +168,12 @@ func (c *Config) TriggerKey() (core.Chord, error) {
 }
 
 // SurfaceKeys are the chords the TUI answers to itself, ahead of any action:
-// moving, quitting, editing and deleting a project file, and the action bar's
-// buttons. Only the ctrl and alt chords are here, because an action can have
-// no other key.
+// moving, opening, stepping through sections, going back, quitting, editing
+// and deleting a project file, and the action bar's buttons. Typed text is
+// not here: an action is refused that key already.
 var SurfaceKeys = []core.Chord{
-	"ctrl+p", "ctrl+n", "ctrl+c",
+	"up", "down", "ctrl+p", "ctrl+n", "home", "end", "pgup", "pgdown",
+	"enter", "tab", "shift+tab", "esc", "ctrl+c",
 	"alt+e", "alt+d",
 	"alt+n", "alt+r", "alt+s", "alt+q", "alt+c", "alt+h",
 }
