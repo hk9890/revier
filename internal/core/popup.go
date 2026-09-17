@@ -20,13 +20,11 @@ const PopupClass = "revier-popup"
 var ErrNoPopupHost = errors.New("no window host that can place the popup")
 
 const (
-	// popupPercent is the width of a centred popup, as a percentage of the
-	// workarea. The height is always 100%.
-	popupPercent = 70
-	// popupMinWidth is the narrowest centred popup that still shows the
-	// detail pane: its 100 columns at about 10 px a cell, and the terminal's
-	// padding. A workarea too narrow for it gets a popup that fills it.
-	popupMinWidth = 1100
+	// popupWidth is the width of a centred popup, in the workarea's logical
+	// pixels. It is fixed, so that on a wide screen the popup stays one spot
+	// to read, and it holds the detail pane's 100 columns. A workarea
+	// narrower than it gets a popup that fills it. The height is always 100%.
+	popupWidth = 1800
 	// popupPoll is how often the popup's launch asks for its window. Faster
 	// than BindPoll, because the wait is between a keypress and a window that
 	// moves into place as soon as it is found.
@@ -91,11 +89,11 @@ func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, erro
 	return ref, nil
 }
 
-// popupGeometry centres the popup when its share of the workarea is wide
-// enough for the detail pane, and fills the workarea when it is not.
+// popupGeometry centres the popup at popupWidth when the workarea holds it,
+// and fills the workarea when it does not.
 func popupGeometry(workareaWidth int) string {
-	if workareaWidth*popupPercent/100 < popupMinWidth {
+	if workareaWidth < popupWidth {
 		return "left top 100% 100%"
 	}
-	return fmt.Sprintf("center top %d%% 100%%", popupPercent)
+	return fmt.Sprintf("center top %d 100%%", popupWidth)
 }
