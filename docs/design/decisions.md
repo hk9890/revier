@@ -414,3 +414,11 @@ noise, and a project with several agents showed only one. The right column now
 holds one count per state, closest to needing you first. The activity, the
 open targets and a missing checkout are the pane's; the folder glyph still
 marks a missing checkout on the row.
+
+### D80 — the file name is the project's name, and a rename moves the file
+
+A `name` key could disagree with the file name, and no file ever used it that
+way; it only doubled every rename. A file that still has one is refused at load
+rather than read either way. A rename moves the file, writes a link's name on
+the host when the link derived it, and moves the state entries. It is refused
+while the project runs, because templates and the link pane match the name.

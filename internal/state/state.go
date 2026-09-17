@@ -198,6 +198,24 @@ func (s *State) Attach(p revier.ProjectName, ref revier.TargetRef) {
 	s.Attached[p] = append(s.Attached[p], ref)
 }
 
+// Rename moves everything recorded under a project to its new name.
+func (s *State) Rename(from, to revier.ProjectName) {
+	if s.Current == from {
+		s.Current = to
+	}
+	if refs, ok := s.Attached[from]; ok {
+		delete(s.Attached, from)
+		s.Attached[to] = refs
+	}
+	if targets, ok := s.Bound[from]; ok {
+		delete(s.Bound, from)
+		s.Bound[to] = targets
+	}
+	if s.Launch != nil && s.Launch.Project == from {
+		s.Launch.Project = to
+	}
+}
+
 // Bind records where a target last landed.
 func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
 	if s.Bound == nil {

@@ -8,10 +8,10 @@ Three levels, in the order most people need them. Interface signatures are in
 No code. Covers new projects, the targets bound to them, and how each target is
 realized.
 
-A project, in `~/.config/revier/projects/<name>.toml`:
+A project, in `~/.config/revier/projects/revier.toml`. The file name is the
+project's name (D80):
 
 ```toml
-name = "revier"
 path = "~/dev/github/revier"
 # Optional. Opening the project clones it here when path is missing.
 git_url = "git@github.com:hk9890/revier.git"

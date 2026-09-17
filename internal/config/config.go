@@ -228,22 +228,13 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 	sort.Strings(names)
 
 	projects := make([]core.Project, 0, len(names))
-	declared := map[revier.ProjectName]string{}
 	var errs []error
 	for _, name := range names {
-		path := filepath.Join(dir, name)
-		p, err := LoadProject(path, shared)
+		p, err := LoadProject(filepath.Join(dir, name), shared)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		// A project is found by name everywhere - a lookup, a key in state, a
-		// run log - so a second file under a taken name would act as the first.
-		if first, taken := declared[p.Name]; taken {
-			errs = append(errs, fmt.Errorf("%s: project %q is already declared in %s", path, p.Name, first))
-			continue
-		}
-		declared[p.Name] = path
 		projects = append(projects, p)
 	}
 	if len(errs) > 0 {
@@ -261,11 +252,7 @@ func LoadProject(path string, shared []map[string]any) (core.Project, error) {
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", path, err)
 	}
-	if p.Name == "" {
-		// Fall back to the file stem so a project file need not repeat its own
-		// name, and so a renamed file cannot silently keep the old identity.
-		p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
-	}
+	p.Name = revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 	// A path is expanded once, here, so every consumer - templates, working
 	// directories, the cwd lookup - sees an absolute path and none of them
 	// hands a literal "~" to a program that does not expand it. A link's

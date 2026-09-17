@@ -13,7 +13,6 @@ import (
 )
 
 const valid = `
-name = "revier"
 path = "/home/hans/dev/github/revier"
 
 [vars]
@@ -73,34 +72,19 @@ func TestLoadProject(t *testing.T) {
 	}
 }
 
-// A file with no name takes the stem, so a project file need not repeat its
-// own identity and a rename cannot leave a stale one behind.
-func TestLoadProjectNameDefaultsToFileStem(t *testing.T) {
+// A file that still names itself is refused, with and without shared targets:
+// a name that disagreed with the file name would otherwise be dropped unseen.
+func TestLoadProjectRefusesNameKey(t *testing.T) {
 	dir := t.TempDir()
-	body := strings.Replace(valid, `name = "revier"`, "", 1)
-	p, err := config.LoadProject(write(t, dir, "other.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
-	if p.Name != "other" {
-		t.Errorf("name = %q, want other", p.Name)
-	}
-}
-
-// A copied project file keeps its name line. Two files under one name would be
-// one project to every lookup and to state, so the delete of the second row
-// would remove the first file; the load refuses them and names both.
-func TestLoadProjectsRefusesTwoFilesWithOneName(t *testing.T) {
-	dir := t.TempDir()
-	first := write(t, dir, "revier.toml", valid)
-	second := write(t, dir, "revier-copy.toml", valid)
-
-	_, err := config.LoadProjects(dir, nil)
-	if err == nil {
-		t.Fatal("two files declaring project revier loaded")
-	}
-	if !strings.Contains(err.Error(), first) || !strings.Contains(err.Error(), second) {
-		t.Errorf("err = %v, want both files named", err)
+	path := write(t, dir, "other.toml", `name = "revier"`+valid)
+	shared := []map[string]any{{"name": "web", "window": map[string]any{
+		"launch": []any{"x"}, "match": map[string]any{"class": "^x$"},
+	}}}
+	for _, s := range [][]map[string]any{nil, shared} {
+		_, err := config.LoadProject(path, s)
+		if err == nil || !strings.Contains(err.Error(), "file name is the project's name") {
+			t.Errorf("shared %v: err = %v, want the name key refused", s, err)
+		}
 	}
 }
 
