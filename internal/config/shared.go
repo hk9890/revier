@@ -44,6 +44,15 @@ func validateShared(shared []map[string]any) error {
 		if err := recode(t, &typed); err != nil {
 			errs = append(errs, fmt.Errorf("target %q: %w", name, err))
 		}
+		if remote, ok := t["remote"].(map[string]any); ok {
+			var parts struct {
+				Window  *revier.Realization `toml:"window"`
+				Runtime *revier.Realization `toml:"runtime"`
+			}
+			if err := recode(remote, &parts); err != nil {
+				errs = append(errs, fmt.Errorf("target %q remote: %w", name, err))
+			}
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -63,19 +72,23 @@ func decodeProject(path string, shared []map[string]any) (revier.Project, error)
 		_, err := toml.Decode(string(data), &p)
 		return p, err
 	}
-	if len(shared) == 0 {
-		return own()
-	}
 	var raw map[string]any
 	if _, err := toml.Decode(string(data), &raw); err != nil {
 		return revier.Project{}, err
 	}
-	// A link's home is the ssh pane onto the host, and the project file
-	// there already has the host's shared targets.
-	if _, link := raw["remote"]; link {
+	_, isLink := raw["remote"]
+	ownTargets := tablesOf(raw["target"])
+	if err := validateParts(ownTargets, isLink); err != nil {
+		return revier.Project{}, err
+	}
+	if len(shared) == 0 && !isLink {
 		return own()
 	}
-	raw["target"] = mergeTargets(shared, tablesOf(raw["target"]))
+	targets := ownTargets
+	if len(shared) > 0 {
+		targets = mergeTargets(shared, ownTargets)
+	}
+	raw["target"] = partsFor(targets, isLink)
 	var merged revier.Project
 	if err := recode(raw, &merged); err != nil {
 		if p, ownErr := own(); ownErr != nil {
@@ -84,6 +97,66 @@ func decodeProject(path string, shared []map[string]any) (revier.Project, error)
 		return revier.Project{}, fmt.Errorf("with the shared targets of config.toml: %w", err)
 	}
 	return merged, nil
+}
+
+// A target carries a realization for a local project under [target.window]
+// and [target.runtime], and one for a link under [target.remote.window] and
+// [target.remote.runtime] (decisions.md D80). Both parts together are only
+// ever written in config.toml, where one target serves every project: a
+// project file is one kind or the other, and writes the part of its kind.
+//
+// partsFor is the targets of one project with the part of its kind taken as
+// the realization. A target with no part of that kind is not a target of
+// that project at all: a shared target with no remote part is local-only,
+// and a link does not get it.
+func partsFor(targets []map[string]any, isLink bool) []map[string]any {
+	out := make([]map[string]any, 0, len(targets))
+	for _, t := range targets {
+		remote, hasRemote := t["remote"].(map[string]any)
+		if !isLink {
+			if hasRemote {
+				t = maps.Clone(t)
+				delete(t, "remote")
+			}
+			out = append(out, t)
+			continue
+		}
+		if !hasRemote {
+			continue
+		}
+		flat := maps.Clone(t)
+		delete(flat, "remote")
+		delete(flat, "window")
+		delete(flat, "runtime")
+		maps.Copy(flat, remote)
+		out = append(out, flat)
+	}
+	return out
+}
+
+// validateParts refuses a project file that writes the part of the other
+// kind: a realization nothing would ever read is a target that silently does
+// nothing, which is exactly what loading catches.
+func validateParts(targets []map[string]any, isLink bool) error {
+	var errs []error
+	for i, t := range targets {
+		name, _ := t["name"].(string)
+		if name == "" {
+			name = fmt.Sprintf("%d", i+1)
+		}
+		if isLink {
+			for _, k := range []string{"window", "runtime"} {
+				if _, ok := t[k]; ok {
+					errs = append(errs, fmt.Errorf("target %q: a link declares its realization under [target.remote.%s], because it reaches a project on another machine", name, k))
+				}
+			}
+			continue
+		}
+		if _, ok := t["remote"]; ok {
+			errs = append(errs, fmt.Errorf("target %q: [target.remote] is for a link, and this project is local; declare [target.window] or [target.runtime]", name))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // mergeTargets is the shared targets, each merged with the project's own of

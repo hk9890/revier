@@ -130,8 +130,7 @@ name = "pulls"
 ```
 
 A table merges key by key, at any depth. Any other value - a string, a list
-such as `panels` or `launch` - replaces the shared one whole. A link has no
-shared targets.
+such as `panels` or `launch` - replaces the shared one whole.
 
 A link, in the same directory, is a project on another machine
 (decisions.md D41). It has a `[remote]` table and no directory here:
@@ -144,15 +143,39 @@ project = "far"     # its name there; defaults to this file's name
 # Optional: the path on the host, for templates in targets declared here.
 path = "~/dev/far"
 
-# Optional: further targets, local windows onto the project. The home
-# target, the ssh pane onto the workspace there, is derived unless one is
-# declared.
+# Optional: further targets, windows here that reach the project there. The
+# home target, the ssh pane onto the workspace, is derived; a declared one
+# takes the pane for every field it leaves out - a placement alone is enough.
+[[target]]
+name = "editor"
+key  = "ctrl-shift-o"
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
+  match = { title = "far \\[SSH: buildbox\\]" }
+```
+
+A target reaches a local project and a link with different tools, so it
+carries a realization for each: `[target.window]` and `[target.runtime]` are
+the local project's, `[target.remote.window]` and `[target.remote.runtime]`
+the link's (decisions.md D80). A project file writes the part of its own kind
+and is refused if it writes the other, which is why the editor above is under
+`[target.remote.window]`.
+
+Both parts together are written in `config.toml`, where one target serves
+every project. A shared target with no remote part is a local target, and no
+link has it:
+
+```toml
+# config.toml
 [[target]]
 name = "editor"
 key  = "ctrl-shift-o"
   [target.window]
-  launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
-  match = { title = "far \\[SSH: buildbox\\]" }
+  launch = ["idea", "{{.Path}}"]
+  match  = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}", "{{.Path}}"]
+  match  = { class = "^Code$", title = "\\[SSH: {{.Remote.Host}}\\]" }
 ```
 
 Actions are for commands that produce no instance to return to — a script, a

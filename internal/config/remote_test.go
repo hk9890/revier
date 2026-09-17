@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -56,15 +57,16 @@ func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 	}
 }
 
-// A link may declare targets of its own, local windows onto the project; a
-// declared home is kept and nothing is derived beside it. The host's path,
-// when written, is kept as written for templates: it is not a path here.
+// A link may declare targets of its own, windows here that reach the project
+// there; it writes them under [target.remote]. A declared home keeps what it
+// says and the pane fills the rest. The host's path, when written, is kept as
+// written for templates: it is not a path here.
 func TestALinkKeepsItsOwnTargetsAndTheHostsPath(t *testing.T) {
 	body := "path = \"~/dev/far\"\n" + link + `
 [[target]]
 name = "editor"
 key = "ctrl-o"
-  [target.window]
+  [target.remote.window]
   launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
   match = { title = "far \\[SSH: buildbox\\]" }
 `
@@ -90,7 +92,7 @@ key = "ctrl-o"
 [[target]]
 name = "shell"
 home = true
-  [target.runtime]
+  [target.remote.runtime]
   name = "far"
   launch = ["ssh", "buildbox"]
   match = { title = "^far$" }
@@ -101,6 +103,141 @@ home = true
 	}
 	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
 		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
+	}
+	if home, _ := p.Home(); !slices.Equal(home.Runtime.Launch, []string{"ssh", "buildbox"}) {
+		t.Errorf("launch = %q, want the one the link declared", home.Runtime.Launch)
+	}
+}
+
+// A home the link does not launch itself still reaches the workspace: the
+// pane fills every field it left empty, so a placement alone is enough.
+func TestALinkHomeTakesThePaneForWhatItLeavesOut(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.runtime]
+  place = "right top 75% 100%"
+`
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	home, ok := p.Home()
+	if !ok || home.Runtime == nil {
+		t.Fatalf("home = %+v, want the derived pane under the declared target", home)
+	}
+	if home.Runtime.Place != "right top 75% 100%" {
+		t.Errorf("place = %q, want the one the link declared", home.Runtime.Place)
+	}
+	want := []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}
+	if !slices.Equal(home.Runtime.Launch, want) || home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("home runtime = %+v, want the derived pane's launch and match", home.Runtime)
+	}
+}
+
+// A shared target reaches a link through its remote part alone. One with no
+// remote part is a local target, and no link has it (decisions.md D80).
+func TestSharedTargetsReachALinkThroughTheirRemotePart(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[[target]]
+name = "home"
+home = true
+key = "ctrl-u"
+  [target.runtime]
+  name = "session:{{.Name}}"
+  launch = ["kitty"]
+  match = { title = "^session:{{.Name}}$" }
+  place = "left top 50% 100%"
+  [target.remote.runtime]
+  place = "right top 75% 100%"
+
+[[target]]
+name = "editor"
+key = "ctrl-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"]
+  match = { class = "^jetbrains-idea" }
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}", "{{.Path}}"]
+  match = { class = "^Code$", title = "\\[SSH: {{.Remote.Host}}\\]" }
+
+[[target]]
+name = "tickets"
+  [target.runtime]
+  inside = "home"
+  launch = ["tickets"]
+`)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "projects"), "far.toml", "path = \"/srv/far\"\n"+link)
+	write(t, filepath.Join(root, "projects"), "near.toml", "path = \"/srv/near\"\n")
+	_, loaded, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	p, local := loaded[0], loaded[1]
+	if p.Name != "far" {
+		p, local = local, p
+	}
+	if _, ok := p.Target("tickets"); ok {
+		t.Error("a shared target with no remote part is local; a link does not get it")
+	}
+	editor, ok := p.Target("editor")
+	if !ok || editor.Window == nil || editor.Key != "ctrl-o" {
+		t.Fatalf("editor = %+v, want the remote realization under the shared name and key", editor)
+	}
+	want := []string{"code", "--remote", "ssh-remote+buildbox", "/srv/far"}
+	if !slices.Equal(editor.Window.Launch, want) {
+		t.Errorf("launch = %q, want %q", editor.Window.Launch, want)
+	}
+	if editor.Runtime != nil {
+		t.Errorf("runtime = %+v, want the local part left behind", editor.Runtime)
+	}
+	home, _ := p.Home()
+	if home.Runtime.Place != "right top 75% 100%" {
+		t.Errorf("place = %q, want the remote part's", home.Runtime.Place)
+	}
+	if home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("match = %q, want the derived pane's, not the local part's", home.Runtime.Match.Title)
+	}
+
+	near, _ := local.Target("editor")
+	if near.Window.Launch[0] != "idea" {
+		t.Errorf("launch = %q, want the local part for a local project", near.Window.Launch)
+	}
+	if _, ok := local.Target("tickets"); !ok {
+		t.Error("a local project keeps a target with no remote part")
+	}
+}
+
+// The part of the other kind would never be read, so the file that writes it
+// does not load.
+func TestAProjectFileWritesOnlyThePartOfItsKind(t *testing.T) {
+	remoteOnLocal := "path = \"/srv/near\"\n" + `
+[[target]]
+name = "editor"
+  [target.remote.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+`
+	if _, err := config.LoadProject(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil); err == nil ||
+		!strings.Contains(err.Error(), "[target.remote]") {
+		t.Errorf("err = %v, want [target.remote] refused on a local project", err)
+	}
+
+	localOnLink := link + `
+[[target]]
+name = "editor"
+  [target.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+`
+	if _, err := config.LoadProject(write(t, t.TempDir(), "far.toml", localOnLink), nil); err == nil ||
+		!strings.Contains(err.Error(), "[target.remote.window]") {
+		t.Errorf("err = %v, want a link's realization asked for under [target.remote.window]", err)
 	}
 }
 
