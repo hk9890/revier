@@ -66,8 +66,15 @@ func CreateLink(root string, name revier.ProjectName, host string, project revie
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)
 	}
-	// A link has no shared targets (decisions.md D59).
-	return write(root, name, linkTOML(name, host, project), nil)
+	// A link gets the shared targets through their remote part (decisions.md
+	// D80), so it is loaded back with them: the project handed to the caller
+	// is the one the next start reads, and a shared target that would refuse
+	// the link is caught here rather than after the file is written.
+	shared, err := sharedTargets(root)
+	if err != nil {
+		return core.Project{}, err
+	}
+	return write(root, name, linkTOML(name, host, project), shared)
 }
 
 // write puts body under the project's file name and loads it back. An

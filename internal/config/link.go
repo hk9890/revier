@@ -31,8 +31,11 @@ func linkTOML(name revier.ProjectName, host string, project revier.ProjectName) 
 //
 // A home target the link already has - its own, or the remote part of the
 // shared one - keeps every field it sets, and the derived pane fills the
-// rest. That is how a shared home contributes a placement without repeating
-// the ssh launch it knows nothing about.
+// rest of its runtime realization. That is how a shared home contributes a
+// placement without repeating the ssh launch it knows nothing about. A home
+// that says it is a window is left alone: the link has named the tool that
+// reaches the workspace, and a second realization beside it would decide the
+// question the other way on a machine with no window host.
 func link(p *revier.Project) {
 	if p.Remote.Project == "" {
 		p.Remote.Project = p.Name
@@ -48,7 +51,9 @@ func link(p *revier.Project) {
 			continue
 		}
 		if t.Runtime == nil {
-			p.Targets[i].Runtime = &pane
+			if t.Window == nil {
+				p.Targets[i].Runtime = &pane
+			}
 			return
 		}
 		fillPane(p.Targets[i].Runtime, pane)
@@ -59,12 +64,14 @@ func link(p *revier.Project) {
 	}}, p.Targets...)
 }
 
-// fillPane writes the derived pane into the fields the link left empty.
+// fillPane writes the derived pane into the fields the link left empty. A
+// realization that declares panels is already launched by them, and a launch
+// beside them is refused, so the pane's is not one of the fields it left out.
 func fillPane(r *revier.Realization, pane revier.Realization) {
 	if r.Name == "" {
 		r.Name = pane.Name
 	}
-	if len(r.Launch) == 0 {
+	if len(r.Launch) == 0 && len(r.Panels) == 0 {
 		r.Launch = pane.Launch
 	}
 	if r.Match.IsZero() {

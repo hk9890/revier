@@ -52,16 +52,31 @@ func validateShared(shared []map[string]any) error {
 			if err := recode(remote, &parts); err != nil {
 				errs = append(errs, fmt.Errorf("target %q remote: %w", name, err))
 			}
+			errs = append(errs, validateRemoteKeys(name, remote)...)
 		}
 	}
 	return errors.Join(errs...)
 }
 
+// validateRemoteKeys refuses a key under [target.remote] that is not one of
+// the two realizations. partsFor lifts the remote table onto the target for a
+// link, so a key beside them would silently change that target's name, key or
+// home for every link and for no local project.
+func validateRemoteKeys(name string, remote map[string]any) []error {
+	var errs []error
+	for k := range remote {
+		if k != "window" && k != "runtime" {
+			errs = append(errs, fmt.Errorf("target %q: [target.remote] holds a window and a runtime realization; %q belongs on the target itself", name, k))
+		}
+	}
+	return errs
+}
+
 // decodeProject reads a project file with the shared targets merged in. The
 // file is read once and parsed once as tables; the typed decode of the file
-// alone runs only where it is the answer - no shared targets, or a link - or
-// where the merge failed, so an error in the file is still reported against
-// its own lines.
+// alone runs only where it is the answer - a local project with no shared
+// targets - or where the merge failed, so an error in the file is still
+// reported against its own lines.
 func decodeProject(path string, shared []map[string]any) (revier.Project, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -84,11 +99,12 @@ func decodeProject(path string, shared []map[string]any) (revier.Project, error)
 	if len(shared) == 0 && !isLink {
 		return own()
 	}
-	targets := ownTargets
-	if len(shared) > 0 {
-		targets = mergeTargets(shared, ownTargets)
+	declared := map[string]bool{}
+	for _, t := range ownTargets {
+		name, _ := t["name"].(string)
+		declared[name] = true
 	}
-	raw["target"] = partsFor(targets, isLink)
+	raw["target"] = partsFor(mergeTargets(shared, ownTargets), declared, isLink)
 	var merged revier.Project
 	if err := recode(raw, &merged); err != nil {
 		if p, ownErr := own(); ownErr != nil {
@@ -106,29 +122,29 @@ func decodeProject(path string, shared []map[string]any) (revier.Project, error)
 // project file is one kind or the other, and writes the part of its kind.
 //
 // partsFor is the targets of one project with the part of its kind taken as
-// the realization. A target with no part of that kind is not a target of
-// that project at all: a shared target with no remote part is local-only,
-// and a link does not get it.
-func partsFor(targets []map[string]any, isLink bool) []map[string]any {
+// the realization. A shared target with no part of that kind is not a target
+// of that project at all - one with no remote part is local-only and no link
+// has it, one with no local part is a link's and no local project has it.
+// declared names the targets the project file writes itself: those stay
+// whatever they hold, so a target of its own with no realization is refused
+// by Validate against its own file rather than disappearing.
+func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) []map[string]any {
 	out := make([]map[string]any, 0, len(targets))
 	for _, t := range targets {
-		remote, hasRemote := t["remote"].(map[string]any)
-		if !isLink {
-			if hasRemote {
-				t = maps.Clone(t)
-				delete(t, "remote")
-			}
-			out = append(out, t)
-			continue
-		}
-		if !hasRemote {
-			continue
-		}
 		flat := maps.Clone(t)
+		remote, _ := flat["remote"].(map[string]any)
 		delete(flat, "remote")
-		delete(flat, "window")
-		delete(flat, "runtime")
-		maps.Copy(flat, remote)
+		if isLink {
+			delete(flat, "window")
+			delete(flat, "runtime")
+			maps.Copy(flat, remote)
+		}
+		name, _ := flat["name"].(string)
+		_, window := flat["window"]
+		_, runtime := flat["runtime"]
+		if !window && !runtime && !declared[name] {
+			continue
+		}
 		out = append(out, flat)
 	}
 	return out
@@ -149,6 +165,9 @@ func validateParts(targets []map[string]any, isLink bool) error {
 				if _, ok := t[k]; ok {
 					errs = append(errs, fmt.Errorf("target %q: a link declares its realization under [target.remote.%s], because it reaches a project on another machine", name, k))
 				}
+			}
+			if remote, ok := t["remote"].(map[string]any); ok {
+				errs = append(errs, validateRemoteKeys(name, remote)...)
 			}
 			continue
 		}

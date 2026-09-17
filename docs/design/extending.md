@@ -98,7 +98,8 @@ key  = "ctrl-shift-t"
 
 Targets most projects have in common are declared once, in
 `~/.config/revier/config.toml`, in the same form (decisions.md D59). Every
-project gets them, and its file then holds only what is its own:
+project with a realization of its kind in them gets them, and its file then
+holds only what is its own:
 
 ```toml
 # config.toml

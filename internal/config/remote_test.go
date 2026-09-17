@@ -241,6 +241,165 @@ name = "editor"
 	}
 }
 
+// The drop rule runs both ways: a shared target with only a remote part is a
+// link's, and a local project is not left holding a target with nothing to
+// open.
+func TestASharedTargetWithNoLocalPartIsNotALocalProjectsTarget(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[[target]]
+name = "shell"
+  [target.remote.runtime]
+  name = "far"
+  launch = ["ssh", "buildbox"]
+  match = { title = "^far$" }
+`)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "projects"), "near.toml", `
+path = "/srv/near"
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:near"
+  launch = ["kitty"]
+  match = { title = "^session:near$" }
+`)
+	_, loaded, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := loaded[0].Target("shell"); ok {
+		t.Error("a shared target with no local part is a link's; a local project does not get it")
+	}
+}
+
+// A target the link declares itself is refused when it names no realization,
+// the way a local project's is. Dropped instead, its key would answer to
+// nothing and no message would say why.
+func TestALinkTargetWithNoRealizationIsRefused(t *testing.T) {
+	body := link + `
+[[target]]
+name = "editor"
+key = "ctrl-o"
+`
+	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if err == nil || !strings.Contains(err.Error(), "declares no realization") {
+		t.Errorf("err = %v, want the link's own editor refused for declaring no realization", err)
+	}
+}
+
+// A home the link opens as a window has named the tool that reaches the
+// workspace, so the ssh pane is not put beside it: with no window host here
+// the pane would answer instead of the window the link asked for.
+func TestALinkHomeThatIsAWindowKeepsThePaneOut(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+buildbox"]
+  match = { class = "^Code$" }
+`
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if home, _ := p.Home(); home.Runtime != nil {
+		t.Errorf("home runtime = %+v, want the declared window alone", home.Runtime)
+	}
+}
+
+// A home that declares panels is launched by them, so the pane does not add
+// a launch that the same load would then refuse beside them.
+func TestALinkHomeWithPanelsKeepsThePanesLaunchOut(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.runtime]
+    [[target.remote.runtime.panels]]
+    kind = "shell"
+    title = "shell"
+`
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	home, _ := p.Home()
+	if len(home.Runtime.Launch) != 0 || len(home.Runtime.Panels) != 1 {
+		t.Errorf("home runtime = %+v, want the panels alone", home.Runtime)
+	}
+	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("home runtime = %+v, want the pane's name and match filled in", home.Runtime)
+	}
+}
+
+// [target.remote] holds a realization each and nothing else: a key beside
+// them is lifted onto the target for a link alone, and would change what the
+// name and the key mean there.
+func TestARemoteTableHoldsOnlyRealizations(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[[target]]
+name = "editor"
+  [target.window]
+  launch = ["idea"]
+  match = { class = "^idea$" }
+  [target.remote]
+  name = "renamed"
+`)
+	if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), "[target.remote] holds") {
+		t.Errorf("err = %v, want \"name\" under [target.remote] refused", err)
+	}
+
+	body := link + `
+[[target]]
+name = "editor"
+  [target.remote]
+  home = true
+    [target.remote.window]
+    launch = ["code"]
+    match = { class = "^Code$" }
+`
+	if _, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil); err == nil ||
+		!strings.Contains(err.Error(), "[target.remote] holds") {
+		t.Errorf("err = %v, want \"home\" under [target.remote] refused in a link file too", err)
+	}
+}
+
+// `revier link` loads the new link with the shared targets, so the project it
+// hands back is the one the next start reads, and a shared target that would
+// refuse the link is caught before the file stays.
+func TestCreateLinkGivesTheLinkItsSharedRemoteTargets(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[[target]]
+name = "editor"
+key = "ctrl-o"
+  [target.window]
+  launch = ["idea"]
+  match = { class = "^idea$" }
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}"]
+  match = { class = "^Code$" }
+`)
+	p, err := config.CreateLink(root, "far", "buildbox", "")
+	if err != nil {
+		t.Fatalf("CreateLink: %v", err)
+	}
+	editor, ok := p.Target("editor")
+	if !ok || editor.Key != "ctrl-o" {
+		t.Fatalf("targets = %+v, want the shared editor under its key", p.Targets)
+	}
+	want := []string{"code", "--remote", "ssh-remote+buildbox"}
+	if !slices.Equal(editor.Window.Launch, want) {
+		t.Errorf("launch = %q, want %q", editor.Window.Launch, want)
+	}
+}
+
 // `revier link` writes the smallest file that says where the project is,
 // and loads it back: the name on the host only when it differs.
 func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {

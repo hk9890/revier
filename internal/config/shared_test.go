@@ -156,8 +156,9 @@ func TestAnOverrideDoesNotReachAnotherProject(t *testing.T) {
 	}
 }
 
-// A link has no shared targets: its home is the ssh pane onto the host.
-func TestALinkHasNoSharedTargets(t *testing.T) {
+// A shared target with no remote part is local-only, so a link is left with
+// the ssh pane onto the host alone (decisions.md D80).
+func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"far": "[remote]\nhost = \"buildbox\"\n"})[0]
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
 		t.Fatalf("targets = %v, want the derived home alone", got)
