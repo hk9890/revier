@@ -210,6 +210,26 @@ func TestTypingFiltersTheHostsProjects(t *testing.T) {
 	}
 }
 
+// A link written from a query leaves no query behind: the next time the
+// dialog opens, the first Esc on the hosts closes it.
+func TestEscClosesTheHostsAfterALinkWrittenFromAQuery(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "alpha", "beta")
+	m = step(m, altR)
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = typed(m, "bet")
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	m = step(m, altR)
+	if h := barLine(m); !strings.Contains(h, "Link") {
+		t.Fatalf("header = %q, want the hosts up", h)
+	}
+	m, _ = press(m, "esc")
+	if h := barLine(m); strings.Contains(h, "Link") {
+		t.Errorf("header = %q, want the dialog closed by the first esc", h)
+	}
+}
+
 // A query matching none of the host's projects says so.
 func TestAQueryMatchingNoneOfTheHostsProjectsSaysSo(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "alpha")

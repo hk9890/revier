@@ -77,7 +77,7 @@ func actionChord(act config.Action) core.Chord {
 // claims reports whether a press is the surface's own or an action's, which
 // the surface matches before any target key.
 func (k keyMap) claims(c core.Chord) bool {
-	for _, b := range append([]key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}, k.actions...) {
+	for _, b := range append(k.own(), k.actions...) {
 		for _, name := range b.Keys() {
 			if own, err := core.ParseChord(name); err == nil && own == c {
 				return true
@@ -92,6 +92,11 @@ func (k keyMap) claims(c core.Chord) bool {
 		}
 	}
 	return false
+}
+
+// own is every binding of the surface's own, the action bar's aside.
+func (k keyMap) own() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each

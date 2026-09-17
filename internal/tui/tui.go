@@ -612,7 +612,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dialogKey(msg)
 	}
 	m.err = nil
-	if by, ok := m.keys.move(msg, m.page()); ok {
+	if by, ok := m.keys.move(msg, m.page); ok {
 		m.moveCursor(by)
 		return m, nil
 	}
@@ -703,18 +703,19 @@ func (r targetRow) same(o targetRow) bool {
 // at: what home and end move by.
 const allRows = 1 << 30
 
-// move is how many rows a movement key moves a cursor, over a section that
-// shows page rows at a time.
-func (k keyMap) move(msg tea.KeyMsg, page int) (int, bool) {
+// move is how many rows a movement key moves a cursor. page is how many rows
+// of the section are on the screen from the cursor's, down for 1 and up for
+// -1, and is asked only for a page key.
+func (k keyMap) move(msg tea.KeyMsg, page func(dir int) int) (int, bool) {
 	switch {
 	case key.Matches(msg, k.Up):
 		return -1, true
 	case key.Matches(msg, k.Down):
 		return 1, true
 	case key.Matches(msg, k.PageUp):
-		return -page, true
+		return -page(-1), true
 	case key.Matches(msg, k.PageDown):
-		return page, true
+		return page(1), true
 	case key.Matches(msg, k.Home):
 		return -allRows, true
 	case key.Matches(msg, k.End):
@@ -747,13 +748,13 @@ func clampRow(i, n int) int {
 }
 
 // page is how many rows of the section the cursor is in are on the screen
-// at once: what page up and page down move by.
-func (m Model) page() int {
+// at once, down for 1 and up for -1: what page up and page down move by.
+func (m Model) page(dir int) int {
 	switch m.focus {
 	case focusTargets:
 		return max(m.detail.Height, 1) // a target is one line
 	case focusAgents:
-		return m.agentsOnPage()
+		return m.agentsOnPage(dir)
 	}
 	return m.listPage()
 }
@@ -763,12 +764,13 @@ func (m Model) listPage() int {
 	return max(m.body.Height/m.itemHeight(), 1)
 }
 
-// agentsOnPage is how many agent rows after the cursor fit on the pane. An
-// agent's row is as tall as its activity needs, so rows are not lines.
-func (m Model) agentsOnPage() int {
+// agentsOnPage is how many agent rows past the cursor fit on the pane, below
+// it for 1 and above it for -1. An agent's row is as tall as its activity
+// needs, so rows are not lines.
+func (m Model) agentsOnPage(dir int) int {
 	n, room := 0, m.detail.Height
-	for _, span := range m.alines[min(m.acursor+1, len(m.alines)):] {
-		room -= span.end - span.start
+	for i := m.acursor + dir; i >= 0 && i < len(m.alines); i += dir {
+		room -= m.alines[i].end - m.alines[i].start
 		if room < 0 {
 			break
 		}

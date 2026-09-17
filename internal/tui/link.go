@@ -152,6 +152,9 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 	}
 	_ = m.hlist.SetItems(items)
 	m.hlist.Select(0)
+	// A link written last time left its query behind; Esc here would clear
+	// it instead of closing the dialog.
+	m.setRemoteFilter("")
 	m.toList()
 	m.dialog = dialogHosts
 	return m, nil
@@ -164,7 +167,7 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 // as on the surface (decisions.md D44).
 func (m Model) dialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
-	if by, ok := m.keys.move(msg, m.listPage()); ok {
+	if by, ok := m.keys.move(msg, func(int) int { return m.listPage() }); ok {
 		moveRow(m.dialogList(), by)
 		return m, nil
 	}

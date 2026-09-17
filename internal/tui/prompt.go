@@ -45,8 +45,8 @@ const (
 
 // promptKeys are the keys the input gets. Everything else is the surface's:
 // up, down, home, end and the page keys move the list, enter activates, esc
-// goes back. Without this
-// split the input would swallow the keys that drive the list.
+// goes back. Without this split the input would swallow the keys that drive
+// the list.
 func (m Model) promptKey(msg tea.KeyMsg) bool {
 	if altRune(msg) {
 		return false

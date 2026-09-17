@@ -70,6 +70,7 @@ func (m *Model) layout() {
 		query = m.listWidth()
 	}
 	m.input.Width = query - lipgloss.Width(promptMark) - 2
+	m.rinput.Width = m.input.Width
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
