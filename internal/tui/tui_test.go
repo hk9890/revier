@@ -165,7 +165,7 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	first := rows(m)[0]
-	if !strings.Contains(first, "project-03") || !strings.Contains(first, theme.Default().Glyphs.NeedsYou+"1") {
+	if !strings.Contains(first, "project-03") || !strings.Contains(first, theme.Default().Glyphs.NeedsYou+" 1") {
 		t.Fatalf("first row = %q, want project-03 needing you", first)
 	}
 	// Rows are two lines: the name, then the path under it.
@@ -868,7 +868,7 @@ func TestTheFirstSurveyUsesTheBindingsInState(t *testing.T) {
 
 	for _, row := range rows(m) {
 		if strings.Contains(row, "project-00") {
-			if !strings.Contains(row, theme.Default().Glyphs.NeedsYou+"1") {
+			if !strings.Contains(row, theme.Default().Glyphs.NeedsYou+" 1") {
 				t.Errorf("row = %q, want the bound workspace's agent on the first survey", row)
 			}
 			return
@@ -1395,7 +1395,7 @@ func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 	}
 	// The count stays: the state is what the row is for, and the path keeps
 	// its column.
-	if !strings.Contains(r[0], theme.Default().Glyphs.Working+"1") {
+	if !strings.Contains(r[0], theme.Default().Glyphs.Working+" 1") {
 		t.Errorf("first row = %q, want the count kept", r[0])
 	}
 }
@@ -1411,11 +1411,11 @@ func TestTheRowCountsItsAgentsByState(t *testing.T) {
 	}{
 		{
 			statuses: []revier.Status{revier.StatusUnknown, revier.StatusIdle, revier.StatusRunning, revier.StatusAttention, revier.StatusIdle},
-			want:     []string{g.NeedsYou + "1", g.Working + "1", g.Idle + "2", g.Unknown + "1"},
+			want:     []string{g.NeedsYou + " 1", g.Working + " 1", g.Idle + " 2", g.Unknown + " 1"},
 		},
 		{
 			statuses: []revier.Status{revier.StatusIdle, revier.StatusAttention, revier.StatusIdle},
-			want:     []string{g.NeedsYou + "1", g.Idle + "2"},
+			want:     []string{g.NeedsYou + " 1", g.Idle + " 2"},
 			absent:   []string{g.Working, g.Unknown},
 		},
 	} {
@@ -1436,6 +1436,25 @@ func TestTheRowCountsItsAgentsByState(t *testing.T) {
 	}
 }
 
+// Each state keeps its own slot, so a state's count sits in one column on
+// every row, whether or not the states before it have agents.
+func TestAStateCountKeepsItsColumn(t *testing.T) {
+	g := theme.Default().Glyphs
+	col := func(statuses []revier.Status) int {
+		row := rows(countedWorld(t, statuses))[0]
+		i := strings.Index(row, g.Working+" 1")
+		if i < 0 {
+			t.Fatalf("row = %q, want the working count", row)
+		}
+		return lipgloss.Width(row[:i])
+	}
+	alone := col([]revier.Status{revier.StatusRunning})
+	behind := col([]revier.Status{revier.StatusAttention, revier.StatusRunning})
+	if alone != behind {
+		t.Errorf("working count at column %d alone and %d behind a needs-you count, want one column", alone, behind)
+	}
+}
+
 // A row too narrow for every count keeps the worst state's count before it
 // falls back to the glyph alone.
 func TestANarrowRowKeepsTheWorstCount(t *testing.T) {
@@ -1444,12 +1463,12 @@ func TestANarrowRowKeepsTheWorstCount(t *testing.T) {
 	for _, tc := range []struct {
 		width int
 		all   bool
-	}{{24, true}, {23, false}} {
+	}{{29, true}, {28, false}} {
 		row := rows(resize(m, tc.width, 20))[0]
-		if !strings.Contains(row, g.NeedsYou+"1") {
+		if !strings.Contains(row, g.NeedsYou+" 1") {
 			t.Errorf("%d columns: row = %q, want the needs-you count", tc.width, row)
 		}
-		if got := strings.Contains(row, g.Working+"1") && strings.Contains(row, g.Idle+"1"); got != tc.all {
+		if got := strings.Contains(row, g.Working+" 1") && strings.Contains(row, g.Idle+" 1"); got != tc.all {
 			t.Errorf("%d columns: row = %q, other counts shown = %v, want %v", tc.width, row, got, tc.all)
 		}
 	}

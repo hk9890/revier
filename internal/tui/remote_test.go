@@ -56,7 +56,7 @@ func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
 
-	if row := rows(m)[0]; !strings.Contains(row, theme.Default().Glyphs.NeedsYou+"1") {
+	if row := rows(m)[0]; !strings.Contains(row, theme.Default().Glyphs.NeedsYou+" 1") {
 		t.Errorf("row = %q, want the host's attention", row)
 	}
 	if body := pane(resize(m, 140, 30)); !strings.Contains(body, "buildbox") {
