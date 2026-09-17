@@ -22,21 +22,34 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The new-project screen: one field, which takes a directory or a clone URL.
-// The name is the directory's base name, as `revier new` derives it, so there
-// is nothing else to ask. It writes the same file that command writes, and the
-// project is a row the moment it lands.
+// The new-project screen. The field takes one of three things:
 //
-// Under the field is a list. An empty field lists the folders the projects
-// already live in; a directory lists the subdirectories that complete it; a
-// clone URL lists those folders again, as where the clone goes.
+//   - a full path, starting with / or ~, which Tab completes: Enter adds that
+//     folder;
+//   - a name: Enter asks which of the folders the projects live in it goes
+//     in, and adds it there;
+//   - a git clone URL: as a name, with the repository's name, and the
+//     project is cloned into its folder.
+//
+// A folder that is not there is created after asking; a clone creates its
+// own. The project name is the folder's base name, as `revier new` derives
+// it. It writes the same file that command writes, and the project is a row
+// the moment it lands.
+
+type newStep int
+
+const (
+	newField newStep = iota // typing
+	newRoot                 // choosing the folder a name goes in
+	newMkdir                // asking to create a folder that is not there
+)
 
 // newPathInput is the directory field.
 func newPathInput(th theme.Theme) textinput.Model {
 	in := textinput.New()
 	in.Prompt = promptMark
 	styleField(&in, th)
-	in.Placeholder = "~/dev/example, or a git clone URL"
+	in.Placeholder = "~/dev/example, a name, or a git clone URL"
 	in.CharLimit = 512
 	return in
 }
@@ -46,29 +59,32 @@ func newPathInput(th theme.Theme) textinput.Model {
 func (m Model) openNew() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.path.SetValue("")
+	m.nstep = newField
 	m.syncNewRows()
 	m.toList()
 	m.dialog = dialogNew
 	return m, m.path.Focus()
 }
 
-// newKey is every press on the new-project screen. Enter writes the project,
-// Tab completes, up and down choose a row, Esc goes back, and everything else
-// is the field's: it is the one place on the surface where a printable rune is
-// text rather than a filter.
+// newKey is every press on the new-project screen. Esc goes back a step, and
+// from the field closes the screen.
 func (m Model) newKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Quit):
+	if key.Matches(msg, m.keys.Quit) {
 		return m, tea.Quit
+	}
+	switch m.nstep {
+	case newRoot:
+		return m.rootKey(msg)
+	case newMkdir:
+		return m.mkdirKey(msg)
+	}
+	switch {
 	case key.Matches(msg, m.keys.Back):
 		m.dialog = dialogNone
 		m.path.Blur()
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
-		if url := strings.TrimSpace(m.path.Value()); isCloneURL(url) {
-			return m.cloneProject(url)
-		}
-		return m.createProject()
+		return m.submitField()
 	case key.Matches(msg, m.keys.Next):
 		return m.completePath(), nil
 	case key.Matches(msg, m.keys.Down):
@@ -90,31 +106,63 @@ func (m Model) newKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// syncNewRows lists what the field's value offers. A clone URL always has a
-// folder chosen, as Enter clones into it; a directory has none until one is
-// picked, so Tab completes the common part first.
-func (m *Model) syncNewRows() {
-	typed := strings.TrimSpace(m.path.Value())
-	m.nrow = -1
+// rootKey is the step that chooses the folder a name or a clone goes in.
+func (m Model) rootKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case typed == "":
-		m.nrows = projectRoots(m.projects)
-	case isCloneURL(typed):
-		m.nrows = projectRoots(m.projects)
-		m.nrow = 0
-	default:
+	case key.Matches(msg, m.keys.Back):
+		m.err = nil
+		m.nstep = newField
+		m.syncNewRows()
+		return m, m.path.Focus()
+	case key.Matches(msg, m.keys.Enter):
+		return m.submitRoot()
+	case key.Matches(msg, m.keys.Down):
+		m.nrow = min(m.nrow+1, len(m.nrows)-1)
+	case key.Matches(msg, m.keys.Up):
+		m.nrow = max(m.nrow-1, 0)
+	}
+	return m, nil
+}
+
+// mkdirKey is the question whether to create the folder. Esc goes back to
+// where the folder was given.
+func (m Model) mkdirKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.err = nil
+		if isFullPath(m.typed()) {
+			m.nstep = newField
+			return m, m.path.Focus()
+		}
+		m.nstep = newRoot
+	case key.Matches(msg, m.keys.Enter):
+		m.err = nil
+		if err := os.MkdirAll(m.ndir, 0o755); err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.addFolder(m.ndir)
+	}
+	return m, nil
+}
+
+func (m Model) typed() string { return strings.TrimSpace(m.path.Value()) }
+
+// syncNewRows lists the subdirectories that complete a full path. A name
+// lists nothing until Enter asks where it goes.
+func (m *Model) syncNewRows() {
+	m.nrow = -1
+	m.nrows = nil
+	if typed := m.typed(); isFullPath(typed) {
 		m.nrows = subdirs(typed)
 	}
 }
 
-// completePath is Tab: the chosen row, the only row, or the part every row
-// shares. A row is a directory, so it goes in with the separator that lists
-// what is inside it.
+// completePath is Tab on a full path: the chosen row, the only row, or the
+// part every row shares. A row is a directory, so it goes in with the
+// separator that lists what is inside it.
 func (m Model) completePath() Model {
-	typed := strings.TrimSpace(m.path.Value())
-	if isCloneURL(typed) {
-		return m
-	}
+	typed := m.typed()
 	next := typed
 	switch {
 	case m.nrow >= 0:
@@ -124,7 +172,7 @@ func (m Model) completePath() Model {
 	case len(m.nrows) > 1:
 		next = commonPrefix(m.nrows)
 	}
-	if next == typed || len(next) < len(typed) {
+	if len(next) <= len(typed) {
 		return m
 	}
 	m.path.SetValue(next)
@@ -133,54 +181,55 @@ func (m Model) completePath() Model {
 	return m
 }
 
-// createProject writes the project file for the directory in the field. A
-// directory that is not there is refused: that is what a clone URL is for.
-// The origin is recorded, as `revier new` records it, so the project can be
-// cloned on the next machine.
-func (m Model) createProject() (tea.Model, tea.Cmd) {
+// submitField is Enter in the field: a full path is added, or asked about;
+// a name or a clone URL goes on to choose its folder.
+func (m Model) submitField() (tea.Model, tea.Cmd) {
 	m.err = nil
-	dir := strings.TrimSpace(m.path.Value())
-	if dir == "" {
-		m.err = fmt.Errorf("give the directory of the project to add, or a clone URL")
+	typed := m.typed()
+	switch {
+	case typed == "":
+		m.err = fmt.Errorf("give a full path, a name, or a clone URL")
 		return m, nil
-	}
-	dir = config.ExpandHome(dir)
-	if !filepath.IsAbs(dir) {
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			m.err = err
+	case isFullPath(typed):
+		dir := config.ExpandHome(typed)
+		if !filepath.IsAbs(dir) {
+			m.err = fmt.Errorf("%s is not a full path", typed)
 			return m, nil
 		}
-		dir = abs
+		return m.addOrAsk(filepath.Clean(dir))
+	case isCloneURL(typed):
+		if err := config.ValidateGitURL(typed); err != nil {
+			m.err = fmt.Errorf("clone URL: %w", err)
+			return m, nil
+		}
 	}
-	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		m.err = fmt.Errorf("%s is not a directory here", contractHome(dir))
+	name := m.newName()
+	if err := config.ValidateName(revier.ProjectName(name)); err != nil {
+		m.err = err
 		return m, nil
 	}
-	if _, ok := m.addProject(dir, checkout.Origin(dir), true); ok {
-		checkout.Trust(dir, io.Discard)
+	if err := m.nameFree(config.NameFor(name)); err != nil {
+		m.err = err
+		return m, nil
 	}
+	m.nstep = newRoot
+	m.nrows = projectRoots(m.projects)
+	m.nrow = 0
+	m.path.Blur()
 	return m, nil
 }
 
-// cloneProject writes the project for a clone URL, into the chosen folder
-// under the repository's own name, and clones it as Enter on a project with a
-// missing directory does. A clone that fails leaves the project behind, and
-// Enter on its row tries again.
-func (m Model) cloneProject(url string) (tea.Model, tea.Cmd) {
+// submitRoot is Enter on a folder: the name goes in it, and a clone URL is
+// cloned there.
+func (m Model) submitRoot() (tea.Model, tea.Cmd) {
 	m.err = nil
-	if err := config.ValidateGitURL(url); err != nil {
-		m.err = fmt.Errorf("clone URL: %w", err)
-		return m, nil
+	dir := m.rootTarget(m.nrow)
+	url := m.typed()
+	if !isCloneURL(url) {
+		return m.addOrAsk(dir)
 	}
-	name := repoName(url)
-	if err := config.ValidateName(revier.ProjectName(name)); err != nil {
-		m.err = fmt.Errorf("clone URL %s: %w", url, err)
-		return m, nil
-	}
-	dir := filepath.Join(config.ExpandHome(m.nrows[m.nrow]), name)
 	if _, err := os.Stat(dir); err == nil {
-		m.err = fmt.Errorf("%s is already there: add it by its directory", contractHome(dir))
+		m.err = fmt.Errorf("%s is already there: add it by its full path", contractHome(dir))
 		return m, nil
 	}
 	p, ok := m.addProject(dir, url, false)
@@ -191,12 +240,51 @@ func (m Model) cloneProject(url string) (tea.Model, tea.Cmd) {
 	return m, m.clone(p, home.Name)
 }
 
+// addOrAsk adds dir when it is a folder, and asks to create it when it is
+// not there.
+func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
+	if err := m.nameFree(config.NameFor(dir)); err != nil {
+		m.err = err
+		return m, nil
+	}
+	info, err := os.Stat(dir)
+	switch {
+	case os.IsNotExist(err):
+		m.ndir = dir
+		m.nstep = newMkdir
+		m.path.Blur()
+	case err != nil:
+		m.err = err
+	case !info.IsDir():
+		m.err = fmt.Errorf("%s is not a folder", contractHome(dir))
+	default:
+		m.addFolder(dir)
+	}
+	return m, nil
+}
+
+// addFolder writes the project for a folder that is there. Its origin is
+// recorded, as `revier new` records it, so the project can be cloned on the
+// next machine.
+func (m *Model) addFolder(dir string) {
+	if _, ok := m.addProject(dir, checkout.Origin(dir), true); ok {
+		checkout.Trust(dir, io.Discard)
+	}
+}
+
+func (m Model) nameFree(name revier.ProjectName) error {
+	if p, ok := m.project(name); ok {
+		return fmt.Errorf("project %q already exists: %s", name, contractHome(p.File))
+	}
+	return nil
+}
+
 // addProject writes the project file for dir and makes it the selected row.
 // It reports false, with the reason in m.err, when nothing was written.
 func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool) {
 	name := config.NameFor(dir)
-	if p, ok := m.project(name); ok {
-		m.err = fmt.Errorf("project %q already exists: %s", name, contractHome(p.File))
+	if err := m.nameFree(name); err != nil {
+		m.err = err
 		return core.Project{}, false
 	}
 	root, err := config.Root()
@@ -219,6 +307,19 @@ func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool)
 	m.reload()
 	m.selectName(p.Name)
 	return p, true
+}
+
+// newName is the folder name a name or a clone URL puts in the chosen folder.
+func (m Model) newName() string {
+	if typed := m.typed(); isCloneURL(typed) {
+		return repoName(typed)
+	}
+	return m.typed()
+}
+
+// rootTarget is the folder the name goes to in the i-th listed folder.
+func (m Model) rootTarget(i int) string {
+	return filepath.Join(config.ExpandHome(m.nrows[i]), m.newName())
 }
 
 // projectRoots is the folders the local projects live in, the one holding
@@ -258,9 +359,6 @@ func subdirs(typed string) []string {
 	cut := strings.LastIndex(typed, "/") + 1
 	dir, prefix := typed[:cut], typed[cut:]
 	read := config.ExpandHome(dir)
-	if read == "" {
-		read = "."
-	}
 	entries, err := os.ReadDir(read)
 	if err != nil {
 		return nil
@@ -291,12 +389,14 @@ func commonPrefix(rows []string) string {
 	return prefix
 }
 
+func isFullPath(s string) bool { return strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") }
+
 // scpURL is git's scp-like form, user@host:path, as in
 // git@github.com:owner/repo.git.
 var scpURL = regexp.MustCompile(`^[\w.-]+@[\w.-]+:\S`)
 
 // isCloneURL reports whether the field holds a URL to clone rather than a
-// directory.
+// name.
 func isCloneURL(s string) bool {
 	for _, scheme := range []string{"https://", "http://", "ssh://", "git://"} {
 		if strings.HasPrefix(s, scheme) {
@@ -316,42 +416,74 @@ func repoName(url string) string {
 	return s
 }
 
+// newHelp is the footer of the step the screen is at.
+func (m Model) newHelp() []key.Binding {
+	back := helpKey("esc", "back")
+	switch {
+	case m.nstep == newMkdir:
+		return []key.Binding{helpKey("enter", "create the folder"), back, m.keys.Quit}
+	case m.nstep == newRoot && isCloneURL(m.typed()):
+		return []key.Binding{helpKey("enter", "clone"), helpKey("↑↓", "choose"), back, m.keys.Quit}
+	case m.nstep == newRoot:
+		return []key.Binding{helpKey("enter", "add the project"), helpKey("↑↓", "choose"), back, m.keys.Quit}
+	case isFullPath(m.typed()):
+		return []key.Binding{helpKey("enter", "add the project"), helpKey("tab", "complete"), helpKey("↑↓", "choose"), back, m.keys.Quit}
+	}
+	return []key.Binding{helpKey("enter", "choose its folder"), back, m.keys.Quit}
+}
+
 // newScreen is what stands in the list's place while the screen is up: what
-// the field is for, what pressing Enter will write, and the rows the field
-// offers. at is the line of the chosen row, for the body to keep in view.
+// the step is for, what Enter will write, and the rows to choose from. at is
+// the line of the chosen row, for the body to keep in view.
 func (m Model) newScreen() (text string, at int) {
 	th := m.theme
 	w := m.listWidth()
 	say := func(s lipgloss.Style, text string) string {
 		return s.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
 	}
-	typed := strings.TrimSpace(m.path.Value())
+	typed := m.typed()
 	rows := m.nrows
 	var lines []string
 	switch {
+	case m.nstep == newMkdir:
+		rows = nil
+		lines = []string{
+			say(th.Attention, "This folder is not there:"),
+			say(th.Path, contractHome(m.ndir)),
+			say(th.NameDim, "Enter creates it and writes"),
+			m.newFileLine(say, config.NameFor(m.ndir)),
+		}
+	case m.nstep == newRoot:
+		verb := "Enter puts " + typed + " in the folder chosen below, and writes"
+		if isCloneURL(typed) {
+			verb = "Enter clones " + typed + " into the folder chosen below, and writes"
+		}
+		name := config.NameFor(m.newName())
+		lines = []string{say(th.NameDim, verb), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
+		rows = make([]string, len(m.nrows))
+		for i := range m.nrows {
+			dir := m.rootTarget(i)
+			rows[i] = contractHome(dir)
+			if _, err := os.Stat(dir); err == nil {
+				rows[i] += "  (already there)"
+			}
+		}
 	case typed == "":
 		lines = []string{
-			say(th.NameDim, "A directory on this machine, or a git clone URL."),
-			say(th.Meta, "The project is named after the directory."),
+			say(th.NameDim, "A full path, starting with / or ~, adds that folder."),
+			say(th.NameDim, "A name or a git clone URL: Enter then asks which folder it goes in."),
+			say(th.Meta, "A folder that is not there is created after asking."),
 		}
-	case isCloneURL(typed):
-		name := revier.ProjectName(repoName(typed))
-		lines = []string{
-			say(th.NameDim, "Enter clones into the folder chosen below, and writes"),
-			m.newFileLine(say, name),
-			say(th.Meta, m.newTargets(name)),
-		}
-		rows = make([]string, len(m.nrows))
-		for i, r := range m.nrows {
-			rows[i] = filepath.Join(r, string(name))
-		}
-	default:
+	case isFullPath(typed):
 		name := config.NameFor(config.ExpandHome(typed))
-		lines = []string{
-			say(th.NameDim, "Enter writes"),
-			m.newFileLine(say, name),
-			say(th.Meta, m.newTargets(name)),
+		lines = []string{say(th.NameDim, "Enter writes"), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
+	default:
+		verb := "Enter chooses the folder for " + m.newName()
+		if isCloneURL(typed) {
+			verb = "Enter chooses the folder to clone " + m.newName() + " into"
 		}
+		name := config.NameFor(m.newName())
+		lines = []string{say(th.NameDim, verb), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
 	}
 	lines = append(lines, "")
 	return strings.Join(append(lines, choiceRows(th, rows, m.nrow, w)), "\n"), len(lines) + max(m.nrow, 0)

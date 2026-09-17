@@ -103,8 +103,9 @@ projects. alt+e opens the selected project's file in
 action against the selected project.
 
 The top line holds what is not about one project, each with its key: **new**
-(alt+n) adds a project from a directory on this machine, which Tab completes,
-or clones a git URL into one of the folders the projects live in and opens it,
+(alt+n) adds a project from a full path, which Tab completes, or from a name
+or a git clone URL put in one of the folders the projects live in; a missing
+folder is created after asking, and a clone URL is cloned and opened,
 **remote** (alt+r)
 links a project on another machine from the hosts `~/.ssh/config` names and the
 projects the revier on the chosen host has, **sessions** (alt+s) saves and
