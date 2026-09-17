@@ -103,7 +103,7 @@ projects. alt+e opens the selected project's file in
 action against the selected project.
 
 The top line holds what is not about one project, each with its key: **new**
-(alt+n) adds a project from a directory on this machine, **remote** (alt+r)
+(alt+n) adds a project on this machine, **remote** (alt+r)
 links a project on another machine from the hosts `~/.ssh/config` names and the
 projects the revier on the chosen host has, **sessions** (alt+s) saves and
 restores the set of open projects, **shutdown** (alt+q) closes every project
@@ -114,6 +114,18 @@ as it changes, comments kept, and **help** (alt+h)
 lists every key: the surface's own, the target keys, the configured actions
 and the desktop keys. The rule over the list says how many projects the
 filter leaves.
+
+**new** takes one of three things:
+
+- A full path, starting with `/` or `~`, which Tab completes. That folder
+  becomes the project.
+- A name. Enter lists the folders your projects already live in, the one
+  holding the most first, and the project goes in the one you choose.
+- A git clone URL. As a name, with the repository's name; the repository is
+  cloned there and the project opens. If the folder is already there, it is
+  added as it is, and the URL is ignored when it is not the folder's origin.
+
+A folder that is not there is created, or cloned into, after asking.
 
 With the mouse, whatever the pointer is over lights up. A click on a project
 selects it and a double click opens it; one click on a target, an agent or a

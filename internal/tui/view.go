@@ -315,6 +315,9 @@ func (m Model) footer() string {
 	if m.dialog == dialogConfig {
 		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
 	}
+	if m.dialog == dialogNew {
+		return " " + m.help.ShortHelpView(m.newHelp())
+	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))
 	}

@@ -369,21 +369,7 @@ func (m Model) shutdownScreen() string {
 		return say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
 			say(th.Meta, s.saved)
 	}
-	var b strings.Builder
-	for i, r := range rows {
-		sel := i == s.row
-		style := th.ProjectName
-		if sel {
-			style = th.OnSelection(style)
-		}
-		b.WriteString(fill(cursor(th, sel)+style.Render(clipTo(r, w-2)), w, func(st lipgloss.Style) lipgloss.Style {
-			if sel {
-				return th.OnSelection(st)
-			}
-			return st
-		}) + "\n")
-	}
-	return strings.TrimSuffix(b.String(), "\n")
+	return choiceRows(th, rows, s.row, w)
 }
 
 func busyAgents(steps []core.CloseStep) int {

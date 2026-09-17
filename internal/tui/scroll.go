@@ -23,8 +23,10 @@ func (m *Model) syncBody() {
 	// their own text.
 	switch m.dialog {
 	case dialogNew:
-		m.body.SetContent(m.newScreen())
+		text, at := m.newScreen()
+		m.body.SetContent(text)
 		m.body.SetYOffset(0)
+		m.follow(at, 1)
 		return
 	case dialogLinkName:
 		m.body.SetContent(m.linkNameScreen())

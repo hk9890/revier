@@ -486,7 +486,8 @@ func validateTab(p revier.Project, t revier.Target) []error {
 // in a file shared between machines. The rules are the shell tool's
 // (_session_is_safe_clone_url in ~/setup/scripts/sessions), so a URL one of
 // them recorded the other accepts: no whitespace, no control characters, no
-// shell metacharacters, and no credentials in an https URL.
+// shell metacharacters, and no credentials in an https URL. revier refuses
+// them in a plain http URL too, which the shell tool lets through.
 //
 // A URL with credentials is not echoed back: the message would print the
 // token the rule exists to keep out of the file.
@@ -495,7 +496,7 @@ func ValidateGitURL(u string) error {
 		return errors.New("empty")
 	}
 	if httpsUserinfo.MatchString(u) {
-		return errors.New("an https URL with credentials in it is refused; record it without the user part")
+		return errors.New("an http or https URL with credentials in it is refused; record it without the user part")
 	}
 	if err := oneWord(u); err != nil {
 		return err
@@ -529,9 +530,9 @@ func oneWord(s string) error {
 	return nil
 }
 
-// httpsUserinfo is an https authority with a user part in it:
+// httpsUserinfo is an http or https authority with a user part in it:
 // https://user:token@host/...
-var httpsUserinfo = regexp.MustCompile(`^https://[^/]+@`)
+var httpsUserinfo = regexp.MustCompile(`^https?://[^/]+@`)
 
 // ExpandHome resolves a leading "~" against the user's home directory, so a
 // path typed the way it is spoken reaches the file system.

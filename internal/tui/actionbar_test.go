@@ -12,8 +12,10 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // barCell is a terminal cell inside the first button of the action bar: the
@@ -95,6 +97,7 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
 	dir := filepath.Join(t.TempDir(), "widget")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -111,6 +114,61 @@ func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
 		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// noTools empties PATH, so the screen starts neither git nor mise: this
+// layer starts no process, and mise's trust list is left as it was.
+func noTools(t *testing.T) {
+	t.Helper()
+	t.Setenv("PATH", t.TempDir())
+}
+
+// Enter on a row chosen under the field adds that row's folder, not the
+// folder the field names.
+func TestEnterAddsTheChosenDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
+	base := filepath.Join(t.TempDir(), "base")
+	if err := os.MkdirAll(filepath.Join(base, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, base+"/")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+
+	if _, err := os.Stat(filepath.Join(root, "projects", "widget.toml")); err != nil {
+		t.Fatalf("no project file for the chosen folder: %v\n%s", err, footer(m))
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "base.toml")); err == nil {
+		t.Error("wrote the project for the folder the field names")
+	}
+}
+
+// The home directory is refused, as `revier new` refuses it: it would own
+// every folder no other project claims.
+func TestTheHomeDirectoryIsRefused(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("HOME", t.TempDir())
+	noTools(t)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "~/")
+	m, _ = press(m, "enter")
+
+	if f := footer(m); !strings.Contains(f, "home directory") {
+		t.Errorf("footer = %q, want the home directory refused", f)
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, "projects")); err == nil && len(entries) > 0 {
+		t.Errorf("wrote %v for the home directory", entries)
 	}
 }
 
@@ -164,22 +222,227 @@ func TestAnAltChordTypesNothing(t *testing.T) {
 	}
 }
 
-// A directory that is not there is refused, and nothing is written.
-func TestTheNewProjectScreenRefusesAMissingDirectory(t *testing.T) {
+// A full path that is not there is asked about: Esc writes nothing, and
+// Enter creates the folder and the project.
+func TestAMissingFullPathIsCreatedAfterAsking(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
+	dir := filepath.Join(t.TempDir(), "fresh")
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+n")
-	m = typeInto(m, filepath.Join(root, "nowhere"))
+	m = typeInto(m, dir)
+	m, _ = press(m, "enter")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "is not there") {
+		t.Fatalf("screen = %q, want the folder asked about", body)
+	}
+	m, _ = press(m, "esc")
+	if _, err := os.Stat(dir); err == nil {
+		t.Fatal("esc created the folder")
+	}
+	m, _ = press(m, "enter")
 	m, _ = press(m, "enter")
 
-	if f := footer(m); !strings.Contains(f, "not a directory here") {
-		t.Errorf("footer = %q, want the directory refused", f)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		t.Fatalf("no folder created: %v\n%s", err, footer(m))
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "fresh.toml")); err != nil {
+		t.Fatalf("no project file written: %v", err)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "fresh") {
+		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// A name goes on to the folders the projects live in, the fullest first and
+// the home directory among them; a folder that is there is added at once.
+func TestANameIsAddedInTheChosenFolder(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "widget")
+	m, _ = press(m, "enter")
+	body := strings.Join(lines(m), "\n")
+	if p, h := strings.Index(body, "/p/widget"), strings.Index(body, "~/widget  (already there)"); p < 0 || h < p {
+		t.Fatalf("screen = %q, want /p, where both projects live, over ~", body)
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+
+	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
+	if err != nil {
+		t.Fatalf("no project file written: %v\n%s", err, footer(m))
+	}
+	if !strings.Contains(string(file), `path = "~/widget"`) {
+		t.Errorf("project file = %q, want the folder in the home directory", file)
+	}
+}
+
+// A name whose folder is not there is asked about, and Esc goes back to the
+// folders.
+func TestANameInAMissingFolderIsAsked(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "widget")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "is not there") || !strings.Contains(body, "    /p/widget ") {
+		t.Fatalf("screen = %q, want the folder asked about", body)
+	}
+	m, _ = press(m, "esc")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "~/widget") {
+		t.Errorf("screen = %q, want the folders back", body)
+	}
+}
+
+// Tab completes the part the subdirectories share, then the one chosen. A
+// hidden directory is not offered until a dot is typed.
+func TestTabCompletesADirectory(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	base := t.TempDir()
+	for _, d := range []string{"alpha", "alps", "beta", ".hidden"} {
+		if err := os.Mkdir(filepath.Join(base, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, base+"/")
+	body := strings.Join(lines(m), "\n")
+	if !strings.Contains(body, base+"/beta") || strings.Contains(body, ".hidden") {
+		t.Errorf("screen = %q, want the subdirectories without the hidden one", body)
+	}
+	m = typeInto(m, "a")
+	m, _ = press(m, "tab")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ "+base+"/alp ") {
+		t.Fatalf("screen = %q, want the shared part completed", body)
+	}
+	m, _ = press(m, "down")
+	m, _ = press(m, "tab")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "❯ "+base+"/alpha/ ") {
+		t.Errorf("screen = %q, want the chosen directory taken", body)
+	}
+}
+
+// A clone URL asks before it clones into the chosen folder under the
+// repository's name, then writes the project with the URL and starts the
+// clone.
+func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "git@github.com:owner/widget.git")
+	m, _ = press(m, "enter")
+	if body := strings.Join(lines(m), "\n"); !strings.Contains(body, "/p/widget") || !strings.Contains(body, "~/widget") {
+		t.Fatalf("screen = %q, want each folder with the clone's directory in it", body)
+	}
+	m, _ = press(m, "down")
+	m, cmd := press(m, "enter")
+	if body := strings.Join(lines(m), "\n"); cmd != nil || !strings.Contains(body, "is not there") {
+		t.Fatalf("screen = %q, want the clone asked about first", body)
+	}
+	m, cmd = press(m, "enter")
+
+	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
+	if err != nil {
+		t.Fatalf("no project file written: %v\n%s", err, footer(m))
+	}
+	for _, want := range []string{`path = "~/widget"`, `git_url = "git@github.com:owner/widget.git"`} {
+		if !strings.Contains(string(file), want) {
+			t.Errorf("project file = %q, want %s", file, want)
+		}
+	}
+	if cmd == nil {
+		t.Error("no clone started")
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "widget") {
+		t.Errorf("selected %q after adding, want the new project", row)
+	}
+}
+
+// A clone URL whose folder is already there adds that folder, clones
+// nothing, and says the URL, which is not the folder's origin, is ignored.
+func TestACloneURLAddsAnExistingFolder(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	noTools(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "https://github.com/owner/widget")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "down")
+	m, cmd := press(m, "enter")
+
+	if f := footer(m); !strings.Contains(f, "the URL is ignored") {
+		t.Errorf("footer = %q, want the URL said to be ignored", f)
+	}
+	if cmd != nil {
+		t.Error("a clone started into an existing directory")
+	}
+	file, err := os.ReadFile(filepath.Join(root, "projects", "widget.toml"))
+	if err != nil {
+		t.Fatalf("no project file written: %v", err)
+	}
+	if strings.Contains(string(file), "git_url") {
+		t.Errorf("project file = %q, want no git_url the folder does not have", file)
+	}
+
+	// The same folder again is a project already, and nothing is written.
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, filepath.Join(home, "widget"))
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, "already") {
+		t.Errorf("footer = %q, want the folder refused as a project already", f)
+	}
+}
+
+// A folder that is a project already under another name is refused.
+func TestAFolderThatIsAProjectIsRefused(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	_, _, c, _ := world(t, 1)
+	projects, err := core.Prepare([]revier.Project{{Name: "other", Path: "/p/widget"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "/p/widget/")
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, `already project "other"`) {
+		t.Errorf("footer = %q, want the folder refused", f)
 	}
 	if entries, err := os.ReadDir(filepath.Join(root, "projects")); err == nil && len(entries) > 0 {
-		t.Errorf("wrote %v for a directory that is not there", entries)
+		t.Errorf("wrote %v for a folder that is a project already", entries)
 	}
 }
 
