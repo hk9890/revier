@@ -305,7 +305,7 @@ func TestANarrowRowKeepsTheCountAndNoActivity(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 60, 20)
 
 	first := rows(m)[0]
-	if !strings.Contains(first, theme.Default().Glyphs.Working+"1") || strings.Contains(first, "Reading") {
+	if !strings.Contains(first, theme.Default().Glyphs.Working+" 1") || strings.Contains(first, "Reading") {
 		t.Errorf("row = %q, want the count kept and no activity", first)
 	}
 	for i, line := range strings.Split(m.View(), "\n") {
@@ -342,7 +342,7 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	if !found || !strings.HasPrefix(left, g.Running+" ") {
 		t.Errorf("row = %q, want the open mark in front of the name", first)
 	}
-	if !strings.Contains(first, g.NeedsYou+"1") || strings.Contains(first, "needs you") {
+	if !strings.Contains(first, g.NeedsYou+" 1") || strings.Contains(first, "needs you") {
 		t.Errorf("row = %q, want the agent counted by its glyph, without words", first)
 	}
 	if body := pane(m); !strings.Contains(body, g.NeedsYou+" needs you") {
@@ -402,7 +402,7 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 		}
 		return lipgloss.Width(row[:i])
 	}
-	at := func(row string) int { return col(row, g.NeedsYou+"1") }
+	at := func(row string) int { return col(row, g.NeedsYou+" 1") }
 	if at(first) < 0 || at(first) != at(second) {
 		t.Errorf("counts at %d and %d, want them in one column:\n%s\n%s", at(first), at(second), first, second)
 	}
@@ -429,15 +429,15 @@ func TestTheAgentColumnGivesWayBeforeTheProjectColumn(t *testing.T) {
 		width               int
 		count, glyph, whole bool
 	}{
-		{40, true, true, true},    // room for everything
-		{39, false, true, true},   // the count goes
+		{41, true, true, true},    // room for everything
+		{40, false, true, true},   // the count goes
 		{38, false, false, true},  // the glyph goes, the name is whole
 		{35, false, false, false}, // only now is the name cut
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
 		first := rows(m)[0]
-		if got := strings.Contains(first, g.NeedsYou+"1"); got != tc.count {
+		if got := strings.Contains(first, g.NeedsYou+" 1"); got != tc.count {
 			t.Errorf("%d columns: count shown = %v, want %v: %q", tc.width, got, tc.count, first)
 		}
 		if got := strings.Contains(first, g.NeedsYou); got != tc.glyph {

@@ -173,14 +173,16 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	_, _ = fmt.Fprint(w, fill(first, width, style)+"\n"+fill(second, width, style))
 }
 
-// The table's measures: the gap between its columns, the most the agent
-// column takes, the most the project column asks for, and the most of it a
-// name takes. The agent column has what the counts of all four states need;
-// a link dialog row's "linked as" note is cut to it. The project column asks for
-// its widest name or path up to a width that holds most paths, and a name
-// longer than its cap is cut so its row alone pays for it.
+// The table's measures: the gap between its columns, the digits an agent
+// count is padded to, the most the agent column takes, the most the project
+// column asks for, and the most of it a name takes. The agent column has what
+// the counts of all four states need; a link dialog row's "linked as" note is
+// cut to it. The project column asks for its widest name or path up to a width
+// that holds most paths, and a name longer than its cap is cut so its row alone
+// pays for it.
 const (
 	gridGap         = 2
+	countWidth      = 2
 	maxAgentWidth   = 24
 	maxProjectWidth = 48
 	maxNameWidth    = 32
@@ -227,9 +229,11 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 }
 
 // agent is the project's agents counted by state, the state closest to
-// needing you first: each state that has an agent, as its glyph and the
-// count, in its colour. It is the table's second column, and the part that
-// answers "which of these needs me". What each agent is doing is the pane's.
+// needing you first: each state as its glyph and the count, in its colour.
+// Each state has a slot of its own, blank when it has no agent, so a state's
+// count sits in the same column on every row. It is the table's second
+// column, and the part that answers "which of these needs me". What each
+// agent is doing is the pane's.
 //
 // The column gives way in steps as room goes (decisions.md D39): first to the
 // worst state's count alone, then to its glyph alone, then to nothing. The
@@ -240,26 +244,42 @@ func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipglo
 	for _, a := range v.Agents {
 		counts[a.State.Status]++
 	}
-	var parts []string
-	var worst revier.Status
-	for _, s := range []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown} {
-		n := counts[s]
-		if n == 0 {
-			continue
-		}
-		if parts == nil {
-			worst = s
-		}
-		parts = append(parts, style(statusStyle(th, s)).Render(fmt.Sprintf("%s%d", statusGlyph(th, s), n)))
+	states := []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown}
+	glyphWidth := 0
+	for _, s := range states {
+		glyphWidth = max(glyphWidth, lipgloss.Width(statusGlyph(th, s)))
 	}
-	if parts == nil {
+	blank := func(n int) string { return style(th.Path).Render(strings.Repeat(" ", n)) }
+	// A slot is its state's glyph and count, padded to the slot's width. The
+	// last state with agents is not padded, so the counts take no more room
+	// than they show.
+	slots := make([]string, len(states))
+	worst, used := -1, 0
+	for i, s := range states {
+		if counts[s] > 0 {
+			slots[i] = fmt.Sprintf("%s %d", statusGlyph(th, s), counts[s])
+			if worst < 0 {
+				worst = i
+			}
+			used = i + 1
+		}
+	}
+	if worst < 0 {
 		return ""
 	}
-	glyph := style(statusStyle(th, worst)).Render(statusGlyph(th, worst))
+	var full []string
+	for i, s := range states[:used] {
+		text := slots[i]
+		if i < used-1 {
+			text += strings.Repeat(" ", max(glyphWidth+1+countWidth-lipgloss.Width(text), 0))
+		}
+		full = append(full, style(statusStyle(th, s)).Render(text))
+	}
+	worstStyle := style(statusStyle(th, states[worst]))
 	for _, out := range []string{
-		strings.Join(parts, style(th.Path).Render(strings.Repeat(" ", gridGap))),
-		parts[0],
-		glyph,
+		strings.Join(full, blank(gridGap)),
+		worstStyle.Render(slots[worst]),
+		worstStyle.Render(statusGlyph(th, states[worst])),
 	} {
 		if lipgloss.Width(out) <= room {
 			return out
