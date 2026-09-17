@@ -90,7 +90,8 @@ revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
 ```
 
-In the TUI, projects whose agent is waiting for you sort first. The list, and
+In the TUI, projects whose agent is waiting for you sort first. Each project
+row counts its agents by state: needs you, working, idle, unknown. The list, and
 the pane's targets and agents beside it, are three sections, each with its own
 filter field over its rows. Tab moves the cursor to the next section and
 shift+tab to the one before. Typing filters the section the cursor is in, and
@@ -241,8 +242,8 @@ exits with status 3 there, for scripts.
 The popup needs kitty, and GNOME with the
 [Window Control extension](https://github.com/carlo9890/gnome-window-control)
 and its `wctl`; `revier popup` names whichever is missing. A new popup is
-centred at 70% of the screen, or fills the screen when that is too narrow for
-the detail pane. A popup already open is raised where you left it.
+centred at full screen height and 1800 px wide, or fills the screen when the
+screen is narrower than that. A popup already open is raised where you left it.
 
 To claim the keys, run `revier keys install --dry-run` to see what would
 change, then `revier keys install`.

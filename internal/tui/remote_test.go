@@ -56,11 +56,8 @@ func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
 
-	if row := rows(m)[0]; !strings.Contains(row, "needs you") {
+	if row := rows(m)[0]; !strings.Contains(row, theme.Default().Glyphs.NeedsYou+"1") {
 		t.Errorf("row = %q, want the host's attention", row)
-	}
-	if path := rows(m)[1]; strings.Contains(path, "not on") {
-		t.Errorf("path line = %q: the host has the checkout", path)
 	}
 	if body := pane(resize(m, 140, 30)); !strings.Contains(body, "buildbox") {
 		t.Errorf("pane = %q, want the host named", body)
@@ -100,23 +97,20 @@ func TestAnActionOnARemoteProjectRunsOnTheHost(t *testing.T) {
 	}
 }
 
-// A host that did not answer is said on the row and, in full, in the pane.
-func TestAnUnreachableHostIsSaidOnTheRowAndInThePane(t *testing.T) {
+// A host that did not answer is said in the pane, in full.
+func TestAnUnreachableHostIsSaidInThePane(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	remote.Err = errors.New("buildbox: connection refused")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
 
-	if path := rows(m)[1]; !strings.Contains(path, "unreachable") {
-		t.Errorf("path line = %q, want the host marked unreachable", path)
-	}
 	body := pane(resize(m, 140, 30))
 	if !strings.Contains(body, "unreachable") || !strings.Contains(body, "connection refused") {
 		t.Errorf("pane = %q, want the status and the failure", body)
 	}
 }
 
-// A checkout missing on the host says so under the state, naming the host.
+// A checkout missing on the host is said in the pane, naming the host.
 func TestAMissingCheckoutOnTheHostNamesTheHost(t *testing.T) {
 	said := hostSays("alpha", revier.StatusIdle)
 	said.PathExists, said.Agents = false, nil
@@ -124,9 +118,6 @@ func TestAMissingCheckoutOnTheHostNamesTheHost(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
 
-	if path := rows(m)[1]; !strings.Contains(path, "not on buildbox") {
-		t.Errorf("path line = %q, want the host named", path)
-	}
 	if body := pane(resize(m, 140, 30)); !strings.Contains(body, "not on buildbox") {
 		t.Errorf("pane = %q, want the host named", body)
 	}

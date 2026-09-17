@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -29,23 +28,13 @@ func (i projectItem) rowView() revier.ProjectView { return i.view }
 func (i projectItem) rowPath() string             { return contractHome(i.view.Project.Path) }
 func (i projectItem) rowNote() string             { return "" }
 
-func (i projectItem) rowMachine() string {
-	if i.view.Project.Remote != nil {
-		return i.view.Project.Remote.Host
-	}
-	return ""
-}
-
 // tableRow is an item the project table draws: the projects here, and the
 // projects of a host in the link dialog. The two differ in whose home a path
-// is written against, in what the row says in place of what is open, and in
-// which machine a missing checkout is missing from.
+// is written against, and in the note a link dialog row has under the counts.
 type tableRow interface {
 	rowView() revier.ProjectView
 	rowPath() string
 	rowNote() string
-	// rowMachine is the host the checkout belongs on, or "" for this machine.
-	rowMachine() string
 }
 
 // newProjectList is the picker. Filtering is on but its own filter bar is
@@ -63,8 +52,8 @@ func newProjectList(th theme.Theme) list.Model {
 	return l
 }
 
-// projectDelegate renders one row: a state mark, the name, and the worst
-// agent state in the project with what it is doing.
+// projectDelegate renders one row: a state mark, the name, and the
+// project's agents counted by state.
 //
 // hover is the row the pointer is on, or -1. It is set on the delegate
 // rather than read from the model because the list component renders through
@@ -75,9 +64,8 @@ type projectDelegate struct {
 }
 
 // Height is two: the name line and the path under it. The path is what tells
-// two checkouts of the same name apart, and what shows that a project's
-// directory is not on this machine (os_list_json.py:476 renders the same two
-// lines).
+// two checkouts of the same name apart (os_list_json.py:476 renders the same
+// two lines).
 func (d projectDelegate) Height() int                         { return 2 }
 func (d projectDelegate) Spacing() int                        { return 0 }
 func (d projectDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
@@ -104,7 +92,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	v, path, rowNote := it.rowView(), it.rowPath(), it.rowNote()
 	width := m.Width()
 	// The mark says whether the project is open, and nothing else: what its
-	// agent is doing is the right-hand side's, in an icon and a word.
+	// agents are doing is the right-hand side's, as counts by state.
 	mark, markStyle, name := th.Glyphs.Stopped, th.NameDim, th.NameDim
 	if v.Running {
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
@@ -126,7 +114,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := bar + gap + style(markStyle).Render(mark) + gap
 	if th.Glyphs.Folder != "" {
 		// The column says where the checkout is: here, not here, or on a
-		// host. A host without the checkout is said in words under the state.
+		// host.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
 		switch {
 		case v.Project.Remote != nil:
@@ -138,16 +126,17 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	indent := lipgloss.Width(prefix)
 
-	// The row is a table of two columns on both its lines (decisions.md
-	// D39): the project - its name, and its path under it - and the agent -
-	// its state and activity, and under them what is open or why nothing can
-	// be. The agent column has a fixed width and sits at the right edge, with
-	// its text left-aligned inside it, so the states line up in one column
+	// The row is a table of two columns (decisions.md D39): the project - its
+	// name, and its path under it - and the agents, counted by state on the
+	// first line. The agent column says agent state and nothing else: what
+	// is open, and a checkout that is missing, are the pane's to say. The
+	// agent column has a fixed width and sits at the right edge, with its
+	// text left-aligned inside it, so the counts line up in one column
 	// whatever the names and paths beside them do. Nothing from the project
 	// column crosses into it: a path is cut in the middle to fit.
 	//
 	// The project column is what the list is for, so it gives way last: the
-	// agent column shrinks first, to its glyph, and then goes, and only then
+	// agent column shrinks first, to one glyph, and then goes, and only then
 	// is a name or a path cut.
 	projectCol := d.projectColumn(m)
 	agentCol := min(maxAgentWidth, width-indent-gridGap-projectCol)
@@ -167,9 +156,9 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		first = prefix + highlight(nameText, m.MatchesForItem(index), style(name), style(th.Match))
 	}
 
-	// A missing path stays grey: the note under the state says it, and a
-	// third of the rows in maroon from end to end read as a list of errors.
-	note := d.note(v, it.rowMachine(), agentCol, style)
+	// A missing path stays grey: a third of the rows in maroon from end to
+	// end read as a list of errors.
+	note := ""
 	if rowNote != "" {
 		note = style(th.Meta).Render(ellipsis(rowNote, agentCol))
 	}
@@ -186,13 +175,13 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 // The table's measures: the gap between its columns, the most the agent
 // column takes, the most the project column asks for, and the most of it a
-// name takes. The agent column has what a state and thirty-six of an
-// activity need; the project column asks for its widest name or path up to
-// a width that holds most paths, and a name longer than its cap is cut so
-// its row alone pays for it.
+// name takes. The agent column has what the counts of all four states need;
+// a link dialog row's "linked as" note is cut to it. The project column asks for
+// its widest name or path up to a width that holds most paths, and a name
+// longer than its cap is cut so its row alone pays for it.
 const (
 	gridGap         = 2
-	maxAgentWidth   = 48
+	maxAgentWidth   = 24
 	maxProjectWidth = 48
 	maxNameWidth    = 32
 )
@@ -237,92 +226,50 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 	return b.String()
 }
 
-// note is the agent column's second line: what is open, or why nothing can
-// be. A directory that is not here is said in words (decisions.md D30), and
-// what Enter does about it is the pane's to say. A stopped project with its
-// checkout in place has nothing to say, and neither does one with only its
-// home open: that is what the green mark says. machine is the host the
-// checkout belongs on, or "" for this machine.
-func (d projectDelegate) note(v revier.ProjectView, machine string, room int, style func(lipgloss.Style) lipgloss.Style) string {
-	th := d.theme
-	if v.Unreachable != "" {
-		// The failure itself is the pane's: here there is room for the fact.
-		note := v.Project.Remote.Host + " unreachable"
-		if lipgloss.Width(note) > room {
-			note = "unreachable"
-		}
-		if lipgloss.Width(note) > room {
-			return ""
-		}
-		return style(th.PathMissing).Render(note)
-	}
-	if !v.PathExists {
-		note := "not on this machine"
-		if machine != "" {
-			note = "not on " + machine
-		}
-		if v.Project.GitURL != "" {
-			note = "not cloned"
-		}
-		if lipgloss.Width(note) > room {
-			note = "not here"
-		}
-		if lipgloss.Width(note) > room {
-			return ""
-		}
-		return style(th.PathMissing).Render(note)
-	}
-	var open []string
-	for _, t := range v.Targets {
-		if !t.Ref.IsZero() {
-			open = append(open, string(t.Name))
-		}
-	}
-	if len(open) == 1 && !v.Home.IsZero() {
-		return ""
-	}
-	return style(th.NameDim).Render(ellipsis(strings.Join(open, " · "), room))
-}
-
-// agent is the worst agent state in the project and what it is doing: the
-// table's second column, and the part that answers "which of these needs
-// me". A project running several agents is why the detail pane lists them all.
+// agent is the project's agents counted by state, the state closest to
+// needing you first: each state that has an agent, as its glyph and the
+// count, in its colour. It is the table's second column, and the part that
+// answers "which of these needs me". What each agent is doing is the pane's.
 //
-// The column gives way in steps as room goes (decisions.md D39): first the
-// activity, which the pane shows whole; then the words, leaving the glyph,
-// which is why every set's glyphs are told apart on their own; then the
-// glyph. The sort and the header's counts still say who needs you.
+// The column gives way in steps as room goes (decisions.md D39): first to the
+// worst state's count alone, then to its glyph alone, then to nothing. The
+// sort and the header's counts still say who needs you.
 func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
-	worst, ok := core.Worst(v.Agents)
-	if !ok {
-		return ""
-	}
 	th := d.theme
-	state := statusLabel(th, worst.Status)
-	if lipgloss.Width(state) > room {
-		state = statusGlyph(th, worst.Status)
+	counts := map[revier.Status]int{}
+	for _, a := range v.Agents {
+		counts[a.State.Status]++
 	}
-	if lipgloss.Width(state) > room {
+	var parts []string
+	var worst revier.Status
+	for _, s := range []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown} {
+		n := counts[s]
+		if n == 0 {
+			continue
+		}
+		if parts == nil {
+			worst = s
+		}
+		parts = append(parts, style(statusStyle(th, s)).Render(fmt.Sprintf("%s%d", statusGlyph(th, s), n)))
+	}
+	if parts == nil {
 		return ""
 	}
-	out := style(statusStyle(th, worst.Status)).Render(state)
-	rest := min(room-lipgloss.Width(state)-1, maxActivityWidth)
-	if state != statusGlyph(th, worst.Status) && worst.Activity != "" && rest >= minActivityWidth {
-		out += style(th.NameDim).Render(" " + ellipsis(worst.Activity, rest))
+	glyph := style(statusStyle(th, worst)).Render(statusGlyph(th, worst))
+	for _, out := range []string{
+		strings.Join(parts, style(th.Path).Render(strings.Repeat(" ", gridGap))),
+		parts[0],
+		glyph,
+	} {
+		if lipgloss.Width(out) <= room {
+			return out
+		}
 	}
-	return out
+	return ""
 }
 
-// The activity's bounds on a row. Below the least, a cut says nothing and
-// the state stands alone; above the most, the rest is the pane's, and the
-// row would only be pushing the pane away.
-const (
-	minActivityWidth = 12
-	maxActivityWidth = 50
-)
-
-// statusGlyph is the state's glyph alone, for a column with no room for its
-// words.
+// statusGlyph is the state's glyph alone, for a row's counts, which have no
+// room for its words.
 func statusGlyph(th theme.Theme, s revier.Status) string {
 	glyph, _, _ := strings.Cut(statusLabel(th, s), " ")
 	return glyph

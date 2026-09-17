@@ -20,7 +20,7 @@ import (
 // the least the two need together, there is no pane.
 const (
 	minListWidth  = 56
-	maxListWidth  = 110
+	maxListWidth  = 80
 	minPaneWidth  = 44
 	widePaneWidth = 130
 	maxFactsWidth = 80
@@ -213,8 +213,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	if v.Project.GitURL != "" {
 		line("Git URL", v.Project.GitURL, th.Path)
 	}
-	// A host that did not answer is said in full: the row has room for the
-	// fact, and this is where the reason is read.
+	// A host that did not answer is said here, in full: the row says nothing
+	// about it, and this is where the reason is read.
 	if v.Unreachable != "" {
 		b.WriteString(hang("", v.Unreachable, w, th.PathMissing))
 		b.WriteString("\n")
@@ -256,8 +256,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
-	// Every agent, not the worst one the row collapses to: a project with two
-	// agents is exactly where the row is not enough.
+	// Every agent, and what it is doing: the row only counts them by state.
 	m.afield, m.alines = -1, m.alines[:0]
 	if len(v.Agents) > 0 {
 		b.WriteString(m.heading("Agents", w))

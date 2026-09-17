@@ -35,15 +35,17 @@ func TestPopupRaisesTheOneAlreadyOpen(t *testing.T) {
 }
 
 // With no popup open, the terminal is launched, and its window is placed and
-// raised. Height is always 100%. Width follows the workarea: 70% where that
-// holds the detail pane, 100% where it does not.
+// raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
+// workarea holds it, and 100% where it does not.
 func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	cases := []struct {
 		width int
 		want  []string
 	}{
-		{width: 5120, want: []string{"center", "top", "70%", "100%"}},
-		{width: 1920, want: []string{"center", "top", "70%", "100%"}},
+		{width: 5120, want: []string{"center", "top", "1800", "100%"}},
+		{width: 1920, want: []string{"center", "top", "1800", "100%"}},
+		{width: 1800, want: []string{"center", "top", "1800", "100%"}},
+		{width: 1799, want: []string{"left", "top", "100%", "100%"}},
 		{width: 1440, want: []string{"left", "top", "100%", "100%"}},
 	}
 	for _, tc := range cases {

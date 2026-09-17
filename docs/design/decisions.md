@@ -378,11 +378,12 @@ which is the only side it means anything to.
 Replaces the two shipped scripts, `revier-popup` and `revier-go`. revier
 shipped them, bound keys to them, and changed them, so they were product code
 in shell with no test. `revier popup` run-or-raises a kitty window of class
-`revier-popup` and places it under D24: centred at 70% of the workarea, or
-filling it when 70% is narrower than the detail pane's 100 columns, decided
-before the launch so the window never resizes. `go --picker` falls back to it,
-and plain `go` keeps its exit status for scripts. sway is removed: the popup
-and the keys are GNOME's.
+`revier-popup` and places it under D24: centred at the workarea's full height
+and a fixed 1800 px width, or filling it when the workarea is narrower, decided
+before the launch so the window never resizes. The width is fixed rather than a
+share of the workarea, so that on a wide screen everything stays in one spot.
+`go --picker` falls back to it, and plain `go` keeps its exit status for
+scripts. sway is removed: the popup and the keys are GNOME's.
 
 ### D77 — a shortcut in an entry revier names is revier's, whatever it runs
 
@@ -404,3 +405,12 @@ the save and `--force` goes on; the TUI's confirm names the busy agents
 instead. `Closer` and `PanelCloser` are optional and polite: a window an
 application keeps open is named as still open, never killed. A project
 shutdown leaves an instance another project also holds.
+
+### D79 — a project row counts its agents by state, and says nothing else on the right
+
+The row showed the worst state, its activity cut to fit, and under it the open
+targets or a missing checkout. In a narrow popup the cut activity read as
+noise, and a project with several agents showed only one. The right column now
+holds one count per state, closest to needing you first. The activity, the
+open targets and a missing checkout are the pane's; the folder glyph still
+marks a missing checkout on the row.

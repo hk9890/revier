@@ -924,9 +924,8 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// anyWorking reports an agent in a turn anywhere on the surface, the pane's
-// included: a project's row shows its worst agent, and a working one can sit
-// behind one that needs you.
+// anyWorking reports an agent in a turn anywhere on the surface: every row
+// that counts one draws the spinner, and so does the pane.
 func (m Model) anyWorking() bool {
 	for _, v := range m.views {
 		if working(v) {

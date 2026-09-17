@@ -39,14 +39,12 @@ func (i hostItem) FilterValue() string { return i.host }
 // project table, so the host's list reads as the one it is added to.
 type remoteItem struct {
 	view   revier.ProjectView
-	host   string
 	linked revier.ProjectName
 }
 
 func (i remoteItem) FilterValue() string         { return string(i.view.Project.Name) }
 func (i remoteItem) rowView() revier.ProjectView { return i.view }
 func (i remoteItem) rowPath() string             { return remoteHome(i.view.Project.Path) }
-func (i remoteItem) rowMachine() string          { return i.host }
 
 func (i remoteItem) rowNote() string {
 	if i.linked == "" {
@@ -242,7 +240,7 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	}
 	items := make([]list.Item, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, host: msg.host, linked: m.linkedAs(msg.host, v.Project.Name)})
+		items = append(items, remoteItem{view: v, linked: m.linkedAs(msg.host, v.Project.Name)})
 	}
 	m.host = msg.host
 	_ = m.rlist.SetItems(items)

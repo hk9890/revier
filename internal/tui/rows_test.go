@@ -262,53 +262,51 @@ func assertSearchEnded(t *testing.T, m tui.Model, typed, count, selected string)
 	}
 }
 
-// A project whose directory is not here says so on its row, and whether it
-// can be cloned. One whose directory is here says nothing.
-func TestAMissingCheckoutSaysWhetherItCanBeCloned(t *testing.T) {
+// A project whose directory is not here shows the missing-folder glyph, and
+// its row says nothing else about it: the table's right column is agent state
+// only, and whether it can be cloned is the pane's.
+func TestAMissingCheckoutShowsTheMissingFolder(t *testing.T) {
 	gone := map[string]string{"cloneable": "/nowhere/a", "stuck": "/nowhere/b"}
 	projects, _ := onDisk(t, []string{"cloneable", "present", "stuck"}, gone,
 		map[string]string{"cloneable": "/srv/git/a.git"})
 	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 80, 20)
+	g := theme.Default().Glyphs
 
 	r := rows(m)
-	for i, want := range []string{"not cloned", "", "not on this machine"} {
-		path := r[2*i+1]
-		if want == "" {
-			if strings.Contains(path, "not cloned") || strings.Contains(path, "not on this machine") {
-				t.Errorf("row %d = %q, want no tag for a checkout that is here", i, path)
-			}
-			continue
+	for i, missing := range []bool{true, false, true} {
+		if got := strings.Contains(r[2*i], g.NoFolder); got != missing {
+			t.Errorf("row %d = %q: missing-folder glyph = %v, want %v", i, r[2*i], got, missing)
 		}
-		if !strings.Contains(path, want) {
-			t.Errorf("row %d = %q, want %q", i, path, want)
+		if path := r[2*i+1]; strings.Contains(path, "not cloned") || strings.Contains(path, "not on this machine") {
+			t.Errorf("row %d = %q, want no note", i, path)
 		}
 	}
 }
 
-// On a row too narrow for both, the path is whole and the note under the
-// state goes: the project column gives way last.
+// On a narrow row the path of a missing checkout is whole: the project column
+// gives way last.
 func TestAMissingCheckoutKeepsItsPathOnANarrowRow(t *testing.T) {
 	long := "/nowhere/" + strings.Repeat("deeply-nested/", 2) + "cloneable"
 	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": long},
 		map[string]string{"cloneable": "/srv/git/a.git"})
-	// Room for the path, its indent and a gap, and nothing for the note.
+	// Room for the path, its indent and a gap.
 	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 58, 20)
 
 	path := rows(m)[1]
 	if !strings.Contains(path, long) || strings.Contains(path, "not") {
-		t.Errorf("path line = %q, want the path whole and the note gone", path)
+		t.Errorf("path line = %q, want the path whole and no note", path)
 	}
 }
 
-// A narrow row cuts the activity and keeps the state: the state is what the
-// row is there to show.
-func TestANarrowRowKeepsTheStateAndCutsTheActivity(t *testing.T) {
+// A narrow row keeps the count of its agents, and never the activity: the
+// state is what the row is there to show, and the activity is the pane's.
+func TestANarrowRowKeepsTheCountAndNoActivity(t *testing.T) {
 	c, projects := longWorld(t, "/p/long")
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 60, 20)
 
 	first := rows(m)[0]
-	if !strings.Contains(first, "working") || !strings.Contains(first, "…") {
-		t.Errorf("row = %q, want the state kept and the activity cut with an ellipsis", first)
+	if !strings.Contains(first, theme.Default().Glyphs.Working+"1") || strings.Contains(first, "Reading") {
+		t.Errorf("row = %q, want the count kept and no activity", first)
 	}
 	for i, line := range strings.Split(m.View(), "\n") {
 		if w := lipgloss.Width(line); w > 60 {
@@ -331,7 +329,7 @@ func TestALongPathKeepsItsStartAndItsEnd(t *testing.T) {
 }
 
 // Each column means one thing: the mark says the project is open, and the
-// agent's state is a glyph and words on the right, in the row and the pane.
+// agents are counted by state on the right. The pane says the state in words.
 func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	_, _, c, projects := world(t, 2) // project-01 is open and its agent needs you
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
@@ -344,8 +342,8 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	if !found || !strings.HasPrefix(left, g.Running+" ") {
 		t.Errorf("row = %q, want the open mark in front of the name", first)
 	}
-	if !strings.Contains(first, g.NeedsYou+" needs you") {
-		t.Errorf("row = %q, want the agent's glyph and words", first)
+	if !strings.Contains(first, g.NeedsYou+"1") || strings.Contains(first, "needs you") {
+		t.Errorf("row = %q, want the agent counted by its glyph, without words", first)
 	}
 	if body := pane(m); !strings.Contains(body, g.NeedsYou+" needs you") {
 		t.Errorf("pane = %q, want the agent's glyph and words", body)
@@ -374,8 +372,7 @@ func TestThePaneWaitsUntilTheListHasItsRoom(t *testing.T) {
 }
 
 // On a wide terminal the frame takes the width, and the rows are a grid: the
-// states line up in a column right after the widest name, so a wide list is
-// a long activity line and not a state a screen away from its name.
+// counts line up in one column.
 func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	rt, _, c, projects := world(t, 3) // project-02 needs you
 	rt.Add("session:project-00", "kitty", revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
@@ -405,47 +402,43 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 		}
 		return lipgloss.Width(row[:i])
 	}
-	at := func(row string) int { return col(row, g.NeedsYou+" needs you") }
+	at := func(row string) int { return col(row, g.NeedsYou+"1") }
 	if at(first) < 0 || at(first) != at(second) {
-		t.Errorf("states at %d and %d, want them in one column:\n%s\n%s", at(first), at(second), first, second)
+		t.Errorf("counts at %d and %d, want them in one column:\n%s\n%s", at(first), at(second), first, second)
 	}
 }
 
 // The list stops at its table's width, and the pane takes the rest: at
-// three hundred and eighty columns the list is a hundred and ten.
+// three hundred and eighty columns the list is eighty.
 func TestTheListStopsAtItsTableWidth(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 40)
 	_, mc := margins(m)
 	// The border sits after the margin and the list.
-	if border := paneBorder(t, m); border != mc+110 {
-		t.Errorf("pane border at column %d, want the list capped at 110 columns", border)
+	if border := paneBorder(t, m); border != mc+80 {
+		t.Errorf("pane border at column %d, want the list capped at 80 columns", border)
 	}
 }
 
 // The agent column gives way in steps as the list narrows, and the project
-// column only after it: the activity goes first, then the words, then the
-// glyph, and only then is the name cut.
+// column only after it: the count goes first, then the glyph, and only then
+// is the name cut.
 func TestTheAgentColumnGivesWayBeforeTheProjectColumn(t *testing.T) {
 	g := theme.Default().Glyphs
 	for _, tc := range []struct {
-		width                         int
-		activity, words, glyph, whole bool
+		width               int
+		count, glyph, whole bool
 	}{
-		{156, true, true, true, true},    // room for everything
-		{56, false, true, true, true},    // the activity goes
-		{40, false, false, true, true},   // the words go
-		{36, false, false, false, true},  // the glyph goes, the name is whole
-		{26, false, false, false, false}, // only now is the name cut
+		{40, true, true, true},    // room for everything
+		{39, false, true, true},   // the count goes
+		{38, false, false, true},  // the glyph goes, the name is whole
+		{35, false, false, false}, // only now is the name cut
 	} {
 		_, _, c, projects := longNamedWorld(t)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), tc.width, 20)
 		first := rows(m)[0]
-		if got := strings.Contains(first, "needs you needs a"); got != tc.activity {
-			t.Errorf("%d columns: activity shown = %v, want %v: %q", tc.width, got, tc.activity, first)
-		}
-		if got := strings.Contains(first, "needs you"); got != tc.words {
-			t.Errorf("%d columns: words shown = %v, want %v: %q", tc.width, got, tc.words, first)
+		if got := strings.Contains(first, g.NeedsYou+"1"); got != tc.count {
+			t.Errorf("%d columns: count shown = %v, want %v: %q", tc.width, got, tc.count, first)
 		}
 		if got := strings.Contains(first, g.NeedsYou); got != tc.glyph {
 			t.Errorf("%d columns: glyph shown = %v, want %v: %q", tc.width, got, tc.glyph, first)
@@ -601,9 +594,9 @@ func TestAStoppedTargetSaysStopped(t *testing.T) {
 	}
 }
 
-// The open targets show on a running row when there is more open than the
-// home the green mark already stands for.
-func TestARunningRowNamesItsOpenTargetsBeyondHome(t *testing.T) {
+// A running row does not name its open targets, whatever is open: the
+// table's right column is agent state only, and the targets are the pane's.
+func TestARunningRowDoesNotNameItsOpenTargets(t *testing.T) {
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
 	projects, err := core.Prepare([]revier.Project{{Name: "alpha", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -615,15 +608,16 @@ func TestARunningRowNamesItsOpenTargetsBeyondHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt.Add("session:alpha", "kitty")
-	// Wide enough for the temporary directory's name and the tag beside it.
-	m := resize(refreshed(t, &core.Core{Runtime: rt, Window: wm}, projects, stateWith(t, nil), nil), 96, 20)
-	if path := rows(m)[1]; strings.Contains(path, "home") {
-		t.Errorf("path line = %q, want nothing when only home is open", path)
-	}
-
 	wm.Add("editor", "code-alpha")
-	m = survey(m)
-	if path := rows(m)[1]; !strings.Contains(path, "home · editor") {
-		t.Errorf("path line = %q, want the open targets named", path)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, Window: wm}, projects, stateWith(t, nil), nil), 96, 20)
+	if path := rows(m)[1]; strings.Contains(path, "home") || strings.Contains(path, "editor") {
+		t.Errorf("path line = %q, want no targets named", path)
 	}
+	body := pane(resize(m, 140, 30))
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "editor") && strings.Contains(line, "running") {
+			return
+		}
+	}
+	t.Errorf("pane = %q, want the editor running, so the row had a target to leave out", body)
 }
