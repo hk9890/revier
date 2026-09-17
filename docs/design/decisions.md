@@ -415,7 +415,26 @@ holds one count per state, closest to needing you first. The activity, the
 open targets and a missing checkout are the pane's; the folder glyph still
 marks a missing checkout on the row.
 
-### D80 — a target carries a realization per kind of project, and a link gets the remote one
+### D80 — the file name is the project's name, and a rename moves the file
+
+A `name` key could disagree with the file name, and no file ever used it that
+way; it only doubled every rename. A file that still has one is refused at load
+rather than read either way. A rename moves the file, writes a link's name on
+the host when the link derived it, and moves the state entries. It is refused
+while the project runs, because templates and the link pane match the name, and
+refused when a target writes the name out instead of `{{.Name}}` - which
+`revier new` does for a name a regexp would read - since that pattern would go
+on looking for the old name.
+
+### D81 — a project is edited on its own screen, and never in `$EDITOR`
+
+Replaces opening the project file in `$EDITOR`, for the reason D53 gave for
+`config.toml`. The screen shows a shared target merged, marks each value that is
+`config.toml`'s, and writes only the values that differ from it, so
+`config.toml` is never written from a project. A shared value cannot be emptied
+from a project, because an absent key is the shared value.
+
+### D82 — a target carries a realization per kind of project, and a link gets the remote one
 
 Extends D59, which left a link outside the shared targets. The editor of a
 project on another machine is VS Code over ssh where the local one is IntelliJ

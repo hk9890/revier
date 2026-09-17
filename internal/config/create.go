@@ -108,7 +108,7 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 		_ = os.Remove(path)
 		return core.Project{}, err
 	}
-	slog.Info("project created", "project", name, "path", path)
+	slog.Info("project file written", "project", name, "path", path)
 	return p, nil
 }
 
@@ -128,7 +128,6 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, targets bool) stri
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 
 	p("# %s: written by `revier new`.\n", name)
-	p("name = %s\n", quote(string(name)))
 	p("path = %s\n", quote(contractHome(dir)))
 	if gitURL != "" {
 		p("git_url = %s\n", quote(gitURL))

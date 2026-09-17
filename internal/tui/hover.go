@@ -15,6 +15,7 @@ const (
 	hoverTarget           // a target row in the pane
 	hoverAgent            // an agent row in the pane
 	hoverField            // a section's query field; index is its focus
+	hoverName             // the project's name at the top of the pane
 )
 
 type hovered struct {
@@ -41,7 +42,7 @@ func (m Model) hoverAt(x, y int) hovered {
 		return hovered{kind: hoverField, index: int(focusList)}
 	}
 	if m.overPane(x) {
-		return m.paneAt(y)
+		return m.paneAt(x, y)
 	}
 	if i, ok := m.rowAt(x, y); ok {
 		return hovered{kind: hoverRow, index: i}
@@ -64,14 +65,20 @@ func (m Model) paneLine(y int) (int, bool) {
 	return y - top, true
 }
 
-// paneAt is what of the pane is on a terminal row: a section's query field, a
-// target row or an agent row, if one is there.
-func (m Model) paneAt(y int) hovered {
+// paneAt is what of the pane is on a terminal cell: the name button, a
+// section's query field, a target row or an agent row, if one is there.
+func (m Model) paneAt(x, y int) hovered {
 	line, ok := m.paneLine(y)
-	if _, selected := m.selected(); m.dialog != dialogNone || !ok || !selected {
+	v, selected := m.selected()
+	if m.dialog != dialogNone || !ok || !selected {
 		return hovered{}
 	}
 	line += m.detail.YOffset
+	// The pane's content starts past its border and padding.
+	_, mc := m.margins()
+	if cx := x - mc - m.listWidth() - paneChrome; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
+		return hovered{kind: hoverName}
+	}
 	switch line {
 	case m.tfield:
 		return hovered{kind: hoverField, index: int(focusTargets)}

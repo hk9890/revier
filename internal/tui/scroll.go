@@ -46,6 +46,12 @@ func (m *Model) syncBody() {
 		m.body.SetContent(text)
 		m.follow(at, 1)
 		return
+	case dialogProject:
+		m.body.Width = m.listWidth()
+		text, at := m.projectScreen()
+		m.body.SetContent(text)
+		m.follow(at, 1)
+		return
 	}
 	// The help screen scrolls itself: its offset is the reader's, and a
 	// survey arriving under it must not move it.

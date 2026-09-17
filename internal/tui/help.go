@@ -92,7 +92,7 @@ func (m Model) helpSections() []helpSection {
 			{key: "esc", desc: "clear the filter, or back to the projects"},
 		}},
 		{title: "Selected project", entries: []helpEntry{
-			{key: k.Edit.Help().Key, desc: "edit its project file"},
+			{key: k.Edit.Help().Key, desc: "open the project screen: its file's values and targets"},
 			{key: k.Delete.Help().Key, desc: "delete its project file"},
 		}},
 		{title: "Top bar", entries: barHelpEntries()},

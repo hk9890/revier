@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -64,9 +63,7 @@ func (m Model) WithRuntimes(choices []string, pick RuntimeSelector) Model {
 }
 
 func newChordInput(th theme.Theme) textinput.Model {
-	in := textinput.New()
-	styleField(&in, th)
-	in.Prompt = ""
+	in := newFieldInput(th)
 	in.Placeholder = config.DefaultTriggerKey
 	in.CharLimit = 64
 	return in
@@ -274,7 +271,7 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.rlist.SetDelegate(projectDelegate{theme: th, hover: -1})
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.rinput, &m.chord} {
+	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.rinput, &m.chord, &m.pedit} {
 		styleField(in, th)
 	}
 	m.layout()
@@ -328,17 +325,7 @@ func (m Model) configScreen() (string, int) {
 		if sel {
 			at = strings.Count(b.String(), "\n")
 		}
-		style := func(s lipgloss.Style) lipgloss.Style {
-			if sel {
-				return th.OnSelection(s)
-			}
-			return s
-		}
-		line := cursor(th, sel) + style(th.Meta).Render(pad(label, configLabelWidth)) + style(th.ProjectName).Render(value)
-		if note != "" {
-			line += style(th.Path).Render("  " + note)
-		}
-		b.WriteString(fill(clipTo(line, w), w, style) + "\n")
+		b.WriteString(settingLine(th, sel, label, value, note, w) + "\n")
 	}
 	info := func(label, value, note string) {
 		line := th.Path.Render("  ") + th.Meta.Render(pad(label, configLabelWidth)) + th.NameDim.Render(value) + th.Path.Render("  "+note)

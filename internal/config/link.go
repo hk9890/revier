@@ -27,7 +27,7 @@ func linkTOML(name revier.ProjectName, host string, project revier.ProjectName) 
 // says otherwise. The home target is the pane that reaches the workspace: an
 // ssh onto the host that runs `revier open` there and ends attached to it.
 // A link may declare further targets, which run here and reach the host
-// themselves - an editor over ssh, a page (decisions.md D80).
+// themselves - an editor over ssh, a page (decisions.md D82).
 //
 // A home target the link already has - its own, or the remote part of the
 // shared one - keeps every field it sets, and the derived pane fills the

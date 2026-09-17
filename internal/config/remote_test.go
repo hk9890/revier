@@ -137,7 +137,7 @@ home = true
 }
 
 // A shared target reaches a link through its remote part alone. One with no
-// remote part is a local target, and no link has it (decisions.md D80).
+// remote part is a local target, and no link has it (decisions.md D82).
 func TestSharedTargetsReachALinkThroughTheirRemotePart(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", `

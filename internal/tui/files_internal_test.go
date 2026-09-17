@@ -38,54 +38,24 @@ func editableModel(t *testing.T) (Model, string) {
 	return m, file
 }
 
-// What the editor wrote is what the next refresh surveys, without a restart.
-func TestAnEditedFileIsReadBack(t *testing.T) {
-	m, file := editableModel(t)
-	if err := os.WriteFile(file, []byte(strings.Replace(editable, "/p/alpha", "/p/moved", 1)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	next, _ := m.Update(editedMsg{project: "alpha", file: file})
-	m = next.(Model)
-	if m.err != nil {
-		t.Fatalf("err = %v", m.err)
-	}
-	if got := m.projects[0].Path; got != "/p/moved" {
-		t.Errorf("path = %q, want the edited one", got)
-	}
-}
-
 // A survey still running holds the project list it started with, on another
-// goroutine. The edit goes into a new list; written into that one, it would
-// race the survey reading it.
-func TestAnEditLeavesTheListARunningSurveyHolds(t *testing.T) {
+// goroutine. A written project goes into a new list; written into that one, it
+// would race the survey reading it.
+func TestAWrittenProjectLeavesTheListARunningSurveyHolds(t *testing.T) {
 	m, file := editableModel(t)
 	held := m.projects // what a running Survey command captured
 	if err := os.WriteFile(file, []byte(strings.Replace(editable, "/p/alpha", "/p/moved", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	next, _ := m.Update(editedMsg{project: "alpha", file: file})
-	m = next.(Model)
+	p, err := config.LoadProject(file, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.replaceProject("alpha", p)
 	if got := held[0].Path; got != "/p/alpha" {
 		t.Errorf("the running survey's list changed under it: path = %q", got)
 	}
 	if got := m.projects[0].Path; got != "/p/moved" {
-		t.Errorf("path = %q, want the edited one", got)
-	}
-}
-
-// A file the edit broke keeps the project as it was, and says why, so it
-// can still be reached to fix.
-func TestAnEditThatDoesNotLoadKeepsTheProject(t *testing.T) {
-	m, file := editableModel(t)
-	if err := os.WriteFile(file, []byte("path = \"/p/alpha\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	next, _ := m.Update(editedMsg{project: "alpha", file: file})
-	m = next.(Model)
-	if m.err == nil || !strings.Contains(m.err.Error(), "before the edit") {
-		t.Errorf("err = %v, want the load failure and that the old version stays", m.err)
-	}
-	if len(m.projects) != 1 || len(m.projects[0].Targets) != 1 {
-		t.Errorf("projects = %+v, want the version before the edit", m.projects)
+		t.Errorf("path = %q, want the written one", got)
 	}
 }

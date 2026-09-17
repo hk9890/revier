@@ -22,7 +22,9 @@ import (
 // runtime's panels as a list with a form of their own. alt+d deletes a
 // target after a y. A change is written as it is saved
 // (config.AddTarget, ReplaceTarget, RemoveTarget), and the projects are
-// loaded again with it, so the surface has the new targets at once.
+// loaded again with it, so the surface has the new targets at once. The
+// project screen opens the same form on a project's targets
+// (projectscreen.go).
 
 // The text fields of a target form.
 const (
@@ -68,16 +70,50 @@ type panelDraft struct {
 	from int
 }
 
-// targetForm is a shared target being added or changed.
+// targetForm is a target being added or changed: a shared one on the config
+// screen, or a project's on the project screen.
 type targetForm struct {
 	open   bool
-	index  int           // the target changed, or len(targets) for a new one
+	index  int           // the target changed, or one past the last for a new one
 	base   revier.Target // the target as read, for the values the form does not show
 	cursor int           // the row the cursor is on
 	home   bool
 	fields [targetFields]textinput.Model
 	panels []panelDraft
 	panel  panelForm
+
+	// On the project screen: the name the project file has the target
+	// under, empty for none, and the shared target it is or overrides.
+	was    revier.TargetName
+	shared *targetValues
+}
+
+// targetValues is a target as the form's rows show it.
+type targetValues struct {
+	home   bool
+	fields [targetFields]string
+	panels []revier.PanelSpec
+}
+
+func valuesOf(t revier.Target) targetValues {
+	v := targetValues{home: t.Home}
+	v.fields[tfName], v.fields[tfKey] = string(t.Name), t.Key
+	fill := func(r *revier.Realization, name, command, title, class, place int) {
+		if r == nil {
+			return
+		}
+		v.fields[name] = r.Name
+		v.fields[command] = joinCommand(r.Launch)
+		v.fields[title] = r.Match.Title
+		v.fields[class] = r.Match.Class
+		v.fields[place] = r.Place
+	}
+	fill(t.Runtime, tfRuntimeName, tfRuntimeCommand, tfRuntimeTitle, tfRuntimeClass, tfRuntimePlace)
+	fill(t.Window, tfWindowName, tfWindowCommand, tfWindowTitle, tfWindowClass, tfWindowPlace)
+	if t.Runtime != nil {
+		v.panels = t.Runtime.Panels
+	}
+	return v
 }
 
 // The fields of the panel form.
@@ -138,37 +174,35 @@ func (f targetForm) rows() []formRow {
 // openTargetForm opens the form for shared target i, or for a new one when i
 // is past the last.
 func (m Model) openTargetForm(i int) (tea.Model, tea.Cmd) {
-	f := targetForm{open: true, index: i}
+	var t *revier.Target
+	if i < len(m.targets) {
+		t = &m.targets[i]
+	}
+	m.err = nil
+	m.tform = m.newTargetForm(i, t)
+	return m, m.tform.fields[tfName].Focus()
+}
+
+// newTargetForm is the form at index for t, or for a new target when t is
+// nil.
+func (m Model) newTargetForm(index int, t *revier.Target) targetForm {
+	f := targetForm{open: true, index: index}
 	for j := range f.fields {
 		f.fields[j] = m.formInput("")
 	}
-	if i < len(m.targets) {
-		t := m.targets[i]
-		f.base = t
-		f.home = t.Home
-		f.fields[tfName].SetValue(string(t.Name))
-		f.fields[tfKey].SetValue(t.Key)
-		fill := func(r *revier.Realization, name, command, title, class, place int) {
-			if r == nil {
-				return
-			}
-			f.fields[name].SetValue(r.Name)
-			f.fields[command].SetValue(joinCommand(r.Launch))
-			f.fields[title].SetValue(r.Match.Title)
-			f.fields[class].SetValue(r.Match.Class)
-			f.fields[place].SetValue(r.Place)
-		}
-		fill(t.Runtime, tfRuntimeName, tfRuntimeCommand, tfRuntimeTitle, tfRuntimeClass, tfRuntimePlace)
-		fill(t.Window, tfWindowName, tfWindowCommand, tfWindowTitle, tfWindowClass, tfWindowPlace)
-		if t.Runtime != nil {
-			for j, p := range t.Runtime.Panels {
-				f.panels = append(f.panels, panelDraft{spec: p, from: j})
-			}
-		}
+	if t == nil {
+		return f
 	}
-	m.err = nil
-	m.tform = f
-	return m, m.tform.fields[tfName].Focus()
+	f.base = *t
+	v := valuesOf(*t)
+	f.home = v.home
+	for j, value := range v.fields {
+		f.fields[j].SetValue(value)
+	}
+	for j, p := range v.panels {
+		f.panels = append(f.panels, panelDraft{spec: p, from: j})
+	}
+	return f
 }
 
 func (m Model) formInput(placeholder string) textinput.Model {
@@ -209,6 +243,8 @@ func (m Model) targetFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case row.kind == rowHome && (msg.Type == tea.KeyLeft || msg.Type == tea.KeyRight || msg.Type == tea.KeySpace):
 		m.tform.home = !m.tform.home
 		return m, nil
+	case row.kind == rowField && row.field == tfName && m.tform.shared != nil:
+		// A shared target is found by its name; renamed, it would be another.
 	case row.kind == rowField && !altRune(msg):
 		in, cmd := m.tform.fields[row.field].Update(msg)
 		m.tform.fields[row.field] = in
@@ -236,6 +272,9 @@ func (m Model) saveTarget() (tea.Model, tea.Cmd) {
 	if err != nil {
 		m.err = err
 		return m, nil
+	}
+	if m.dialog == dialogProject {
+		return m.saveProjectTarget(t, from)
 	}
 	i := m.tform.index
 	for j, other := range m.targets {
@@ -421,7 +460,7 @@ func (m *Model) setTargets(w config.TargetsWritten) {
 	m.tkeys = targetKeys(m.projects, m.keys)
 }
 
-// describeTarget is a shared target's row note: where it opens.
+// describeTarget is a target's row note, on either screen: where it opens.
 func describeTarget(t revier.Target) string {
 	var parts []string
 	if r := t.Runtime; r != nil {
@@ -490,12 +529,56 @@ func (m Model) targetFormLines(w int) ([]string, int) {
 			value = style(th.ProjectName).Render("add a panel")
 		}
 		line := "  " + cursor(th, sel && !f.panel.open) + style(th.Meta).Render(pad(row.label, configLabelWidth)) + value
-		if row.note != "" && row.kind != rowPanel {
-			line += style(th.Path).Render("  " + row.note)
+		if note := f.note(row); note != "" {
+			line += style(th.Path).Render("  " + note)
 		}
 		out = append(out, fill(clipTo(line, w), w, style))
 	}
 	return out, at
+}
+
+// note is what a row says beside its value. Where the target is config.toml's,
+// that is config.toml's value: that it is the one in use, or what it would be
+// without the project's.
+func (f targetForm) note(row formRow) string {
+	if f.shared == nil {
+		if row.kind == rowPanel {
+			return ""
+		}
+		return row.note
+	}
+	var same bool
+	var value string
+	switch row.kind {
+	case rowField:
+		value = f.shared.fields[row.field]
+		same = strings.TrimSpace(f.fields[row.field].Value()) == value
+	case rowHome:
+		value, same = "no", f.home == f.shared.home
+		if f.shared.home {
+			value = "yes"
+		}
+	case rowAddPanel:
+		panels := make([]revier.PanelSpec, len(f.panels))
+		for j, p := range f.panels {
+			panels[j] = p.spec
+		}
+		same = slices.EqualFunc(panels, f.shared.panels, func(a, b revier.PanelSpec) bool {
+			return a.Kind == b.Kind && a.Title == b.Title && slices.Equal(a.Command, b.Command)
+		})
+		value = fmt.Sprintf("%d panels", len(f.shared.panels))
+	default:
+		return ""
+	}
+	switch {
+	case row.kind == rowField && row.field == tfName:
+		return "config.toml's; a shared target keeps its name"
+	case same:
+		return "from config.toml"
+	case value == "":
+		return "config.toml: none"
+	}
+	return "config.toml: " + value
 }
 
 // panelFormLines is the panel form, and the line the cursor is on.

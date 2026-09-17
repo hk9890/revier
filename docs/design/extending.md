@@ -8,10 +8,10 @@ Three levels, in the order most people need them. Interface signatures are in
 No code. Covers new projects, the targets bound to them, and how each target is
 realized.
 
-A project, in `~/.config/revier/projects/<name>.toml`:
+A project, in `~/.config/revier/projects/revier.toml`. The file name is the
+project's name (D80):
 
 ```toml
-name = "revier"
 path = "~/dev/github/revier"
 # Optional. Opening the project clones it here when path is missing.
 git_url = "git@github.com:hk9890/revier.git"
@@ -158,7 +158,7 @@ key  = "ctrl-shift-o"
 A target reaches a local project and a link with different tools, so it
 carries a realization for each: `[target.window]` and `[target.runtime]` are
 the local project's, `[target.remote.window]` and `[target.remote.runtime]`
-the link's (decisions.md D80). A project file writes the part of its own kind
+the link's (decisions.md D82). A project file writes the part of its own kind
 and is refused if it writes the other, which is why the editor above is under
 `[target.remote.window]`.
 

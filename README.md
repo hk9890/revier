@@ -98,8 +98,11 @@ shift+tab to the one before. Typing filters the section the cursor is in, and
 Enter acts on its row: a project opens its home, a target runs-or-raises, and
 an agent's tab comes to the front, on its host for a project on another
 machine. Esc clears the section's filter, then brings the cursor back to the
-projects. alt+e opens the selected project's file in
-`$EDITOR`; alt+d deletes it, after asking. A configured action key runs the
+projects. alt+e, or a click on the project's name at the top of the pane,
+opens the project screen: its name, path and git URL, and every target it has,
+the ones from `config.toml` included. A change there is written to the
+project's own file at once, and a new name renames the file. alt+d deletes the
+project, after asking. A configured action key runs the
 action against the selected project.
 
 The top line holds what is not about one project, each with its key: **new**

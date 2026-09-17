@@ -72,24 +72,28 @@ func validateRemoteKeys(name string, remote map[string]any) []error {
 	return errs
 }
 
-// decodeProject reads a project file with the shared targets merged in. The
-// file is read once and parsed once as tables; the typed decode of the file
-// alone runs only where it is the answer - a local project with no shared
-// targets - or where the merge failed, so an error in the file is still
-// reported against its own lines.
-func decodeProject(path string, shared []map[string]any) (revier.Project, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
+// errNameKey refuses a project file that names itself. The file name is the
+// project's name (decisions.md D80), and a key that could disagree with it
+// would be ignored without a word.
+var errNameKey = errors.New("name is not read: the file name is the project's name; delete the line")
+
+// decodeProject is the text of a project file with the shared targets merged
+// in. It is parsed once as tables; the typed decode of the file alone runs
+// only where it is the answer - a local project with no shared targets - or
+// where the merge failed, so an error in the file is still reported against
+// its own lines.
+func decodeProject(data []byte, shared []map[string]any) (revier.Project, error) {
+	var raw map[string]any
+	if _, err := toml.Decode(string(data), &raw); err != nil {
 		return revier.Project{}, err
+	}
+	if _, ok := raw["name"]; ok {
+		return revier.Project{}, errNameKey
 	}
 	own := func() (revier.Project, error) {
 		var p revier.Project
 		_, err := toml.Decode(string(data), &p)
 		return p, err
-	}
-	var raw map[string]any
-	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return revier.Project{}, err
 	}
 	_, isLink := raw["remote"]
 	ownTargets := tablesOf(raw["target"])
@@ -117,7 +121,7 @@ func decodeProject(path string, shared []map[string]any) (revier.Project, error)
 
 // A target carries a realization for a local project under [target.window]
 // and [target.runtime], and one for a link under [target.remote.window] and
-// [target.remote.runtime] (decisions.md D80). Both parts together are only
+// [target.remote.runtime] (decisions.md D82). Both parts together are only
 // ever written in config.toml, where one target serves every project: a
 // project file is one kind or the other, and writes the part of its kind.
 //

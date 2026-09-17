@@ -54,9 +54,10 @@ const (
 )
 
 // dialog is a screen standing over the surface: the link dialog's three steps
-// - which host, which of its projects (decisions.md D45), and the link's name - the
-// new-project field, the sessions screen and its name step, or the config screen. dialogNone is the surface itself, which is where it is
-// nearly always.
+// - which host, which of its projects (decisions.md D45), and the link's name -
+// the new-project field, the sessions screen and its name step, the config
+// screen, or the project screen. dialogNone is the surface itself, which is
+// where it is nearly always.
 type dialog int
 
 const (
@@ -70,6 +71,7 @@ const (
 	dialogSessions
 	dialogSessionName
 	dialogShutdown
+	dialogProject
 )
 
 // hasRows reports a screen whose body is list rows: what a click selects and
@@ -84,9 +86,10 @@ func (d dialog) hasRows() bool {
 }
 
 // hasPane reports a screen with the detail pane beside it. The help and
-// config screens are about no project, so they take the whole width.
+// config screens are about no project, and the project screen is the
+// project's own, so they take the whole width.
 func (d dialog) hasPane() bool {
-	return d != dialogHelp && d != dialogConfig
+	return d != dialogHelp && d != dialogConfig && d != dialogProject
 }
 
 // Model is the bubbletea model. Construct it with New.
@@ -185,6 +188,12 @@ type Model struct {
 	targets   []revier.Target // the shared targets, typed, as config.toml holds them
 	tform     targetForm      // the shared target being added or changed, while its form is up
 	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
+
+	// The project screen. Its target form is tform.
+	proj  revier.ProjectName // the project the screen edits
+	ptext config.ProjectText // its file as written
+	prow  int                // the row the screen's cursor is on
+	pedit textinput.Model    // a field's value, while it is typed
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -205,6 +214,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		rinput: newPrompt(th, ""),
 		body:   newBody(),
 		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
+		pedit: newFieldInput(th),
 	}
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
@@ -420,9 +430,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case launchedMsg:
 		m.apply(actedMsg{launch: &msg.launch})
 		return m, m.bindLaunch(msg)
-	case editedMsg:
-		m.err = m.reread(msg)
-		return m, nil
 	case askedMsg:
 		return m.asked(msg)
 	case savedMsg:
@@ -608,6 +615,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.linkNameKey(msg)
 	case dialogConfig:
 		return m.configKey(msg)
+	case dialogProject:
+		return m.projectKey(msg)
 	case dialogHelp:
 		return m.helpScreenKey(msg)
 	case dialogSessions:
@@ -645,7 +654,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Prev):
 		return m.step(-1)
 	case key.Matches(msg, m.keys.Edit):
-		return m.editFile()
+		return m.openProject()
 	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
 	}
