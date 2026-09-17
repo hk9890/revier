@@ -96,7 +96,7 @@ func (m *Model) syncDetail() {
 	}
 	m.detail.Width, m.detail.Height = cols, h
 	switch m.dialog {
-	case dialogHosts, dialogNew, dialogConfig:
+	case dialogHosts, dialogNew, dialogConfig, dialogProject:
 		m.detail.SetContent("")
 		return
 	case dialogRemote, dialogLinkName:
@@ -187,7 +187,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(th.Header.Render(clipTo(string(v.Project.Name), w)))
+	b.WriteString(m.nameButton(v.Project.Name, w))
 	b.WriteString("\n")
 
 	status, style := "stopped", th.NameDim

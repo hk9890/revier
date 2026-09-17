@@ -422,3 +422,11 @@ way; it only doubled every rename. A file that still has one is refused at load
 rather than read either way. A rename moves the file, writes a link's name on
 the host when the link derived it, and moves the state entries. It is refused
 while the project runs, because templates and the link pane match the name.
+
+### D81 — a project is edited on its own screen, and never in `$EDITOR`
+
+Replaces opening the project file in `$EDITOR`, for the reason D53 gave for
+`config.toml`. The screen shows a shared target merged, marks each value that is
+`config.toml`'s, and writes only the values that differ from it, so
+`config.toml` is never written from a project. A shared value cannot be emptied
+from a project, because an absent key is the shared value.

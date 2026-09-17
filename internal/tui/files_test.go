@@ -156,34 +156,6 @@ func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
 	}
 }
 
-// With no $EDITOR there is nothing to run, and the surface says so instead
-// of doing nothing.
-func TestEditWithoutEditorSaysSo(t *testing.T) {
-	t.Setenv("EDITOR", "")
-	_, m, _ := fileWorld(t, "alpha")
-	m, cmd := press(m, "alt+e")
-	if cmd != nil {
-		t.Error("want no command without an editor")
-	}
-	if f := footer(m); !strings.Contains(f, "$EDITOR") {
-		t.Errorf("footer = %q, want it to name $EDITOR", f)
-	}
-}
-
-// alt+e hands the terminal to the editor, and never reaches the filter.
-func TestEditRunsTheEditorAndLeavesTheFilterAlone(t *testing.T) {
-	t.Setenv("EDITOR", "true")
-	_, m, _ := fileWorld(t, "alpha")
-	m, cmd := press(m, "alt+e")
-	if cmd == nil {
-		t.Fatal("want the editor command")
-	}
-	// The placeholder shows only while the query is empty.
-	if q := query(m); !strings.Contains(q, "filter") {
-		t.Errorf("query line = %q, the key reached the filter", q)
-	}
-}
-
 // The pane shows where a project was cloned from.
 func TestDetailPaneShowsTheGitURL(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")

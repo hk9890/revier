@@ -1589,24 +1589,24 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 	// One column left of the border is still the list.
 	m = wheel(m, border-1, tea.MouseButtonWheelDown)
 	m = wheel(m, border-1, tea.MouseButtonWheelUp)
-	if top := strings.Split(pane(m), "\n")[0]; top != "first" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "first alt+e" {
 		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
 	}
 
 	m = wheel(m, border, tea.MouseButtonWheelDown)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
 		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "first") {
 		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
 	}
 	m = survey(m)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
 		t.Errorf("a refresh put the pane back at its top")
 	}
 
 	m, _ = press(m, "down")
-	if top := strings.Split(pane(m), "\n")[0]; top != "second" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "second alt+e" {
 		t.Errorf("pane top = %q after moving to the next project, want its name", top)
 	}
 }

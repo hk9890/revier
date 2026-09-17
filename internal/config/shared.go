@@ -53,16 +53,12 @@ func validateShared(shared []map[string]any) error {
 // would be ignored without a word.
 var errNameKey = errors.New("name is not read: the file name is the project's name; delete the line")
 
-// decodeProject reads a project file with the shared targets merged in. The
-// file is read once and parsed as tables; the typed decode of the file alone
-// runs only where it is the answer - no shared targets, or a link - or where
-// the merge failed, so an error in the file is still reported against its own
+// decodeProject is the text of a project file with the shared targets merged
+// in. It is parsed once as tables; the typed decode of the file alone runs
+// only where it is the answer - no shared targets, or a link - or where the
+// merge failed, so an error in the file is still reported against its own
 // lines.
-func decodeProject(path string, shared []map[string]any) (revier.Project, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return revier.Project{}, err
-	}
+func decodeProject(data []byte, shared []map[string]any) (revier.Project, error) {
 	var raw map[string]any
 	if _, err := toml.Decode(string(data), &raw); err != nil {
 		return revier.Project{}, err

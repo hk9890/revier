@@ -24,8 +24,8 @@ type click struct {
 //
 // A row of the list is chosen with one click and opened with a second, as a
 // row of a file manager is: choosing it costs nothing and opening it opens a
-// window. A target in the pane and a button on the bar are not rows but
-// things to do, and one click does them, on release, so a drag that begins on
+// window. A target in the pane, the project's name over it and a button on
+// the bar are not rows but things to do, and one click does them, on release, so a drag that begins on
 // one runs nothing (decisions.md D36, D50, D72, D73).
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
@@ -128,6 +128,8 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 		return opened(m, m.goAgentRow(m.over.index))
 	case hoverField:
 		return m.focusOn(focus(m.over.index)), nil
+	case hoverName:
+		return m.openProject()
 	}
 	return m, nil
 }

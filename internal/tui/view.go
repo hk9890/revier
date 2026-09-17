@@ -142,6 +142,8 @@ func (m Model) top() string {
 		name = "Add a project on this machine"
 	case dialogConfig:
 		name = "Configuration"
+	case dialogProject:
+		name = "Project " + string(m.proj)
 	case dialogHelp:
 		name = "Keyboard shortcuts"
 	case dialogSessionName:
@@ -188,6 +190,12 @@ func (m Model) subtitle() string {
 			where = contractHome(config.File(root))
 		}
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
+	case dialogProject:
+		file := ""
+		if p, ok := m.project(m.proj); ok {
+			file = contractHome(p.File)
+		}
+		return " " + m.theme.Meta.Render("written to "+file+" as it changes")
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
 	case dialogSessions:
@@ -231,7 +239,7 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
 	case m.dialog == dialogSessions:
 		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
+	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -287,6 +295,9 @@ func (m Model) footer() string {
 	if m.dialog == dialogConfig && m.dropping {
 		return m.dropPrompt()
 	}
+	if m.dialog == dialogProject && m.dropping {
+		return m.dropProjectPrompt()
+	}
 	if m.asking != "" {
 		return m.askingLine()
 	}
@@ -314,6 +325,9 @@ func (m Model) footer() string {
 	}
 	if m.dialog == dialogConfig {
 		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
+	}
+	if m.dialog == dialogProject {
+		return " " + m.help.ShortHelpView(m.projectHelp())
 	}
 	if m.dialog == dialogNew {
 		return " " + m.help.ShortHelpView(m.newHelp())
