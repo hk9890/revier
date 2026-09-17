@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -176,8 +175,8 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 // The table's measures: the gap between its columns, the most the agent
 // column takes, the most the project column asks for, and the most of it a
-// name takes. The agent column has what the counts of all four states need,
-// or the "linked as" note of a link dialog row; the project column asks for
+// name takes. The agent column has what the counts of all four states need;
+// a link dialog row's "linked as" note is cut to it. The project column asks for
 // its widest name or path up to a width that holds most paths, and a name
 // longer than its cap is cut so its row alone pays for it.
 const (
@@ -233,37 +232,44 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 // answers "which of these needs me". What each agent is doing is the pane's.
 //
 // The column gives way in steps as room goes (decisions.md D39): first to the
-// worst state's glyph alone, then to nothing. The sort and the header's
-// counts still say who needs you.
+// worst state's count alone, then to its glyph alone, then to nothing. The
+// sort and the header's counts still say who needs you.
 func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
-	worst, ok := core.Worst(v.Agents)
-	if !ok {
-		return ""
-	}
 	th := d.theme
 	counts := map[revier.Status]int{}
 	for _, a := range v.Agents {
 		counts[a.State.Status]++
 	}
 	var parts []string
+	var worst revier.Status
 	for _, s := range []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown} {
-		if n := counts[s]; n > 0 {
-			parts = append(parts, style(statusStyle(th, s)).Render(fmt.Sprintf("%s%d", statusGlyph(th, s), n)))
+		n := counts[s]
+		if n == 0 {
+			continue
 		}
+		if parts == nil {
+			worst = s
+		}
+		parts = append(parts, style(statusStyle(th, s)).Render(fmt.Sprintf("%s%d", statusGlyph(th, s), n)))
 	}
-	out := strings.Join(parts, style(th.Path).Render(strings.Repeat(" ", gridGap)))
-	if lipgloss.Width(out) <= room {
-		return out
-	}
-	glyph := statusGlyph(th, worst.Status)
-	if lipgloss.Width(glyph) > room {
+	if parts == nil {
 		return ""
 	}
-	return style(statusStyle(th, worst.Status)).Render(glyph)
+	glyph := style(statusStyle(th, worst)).Render(statusGlyph(th, worst))
+	for _, out := range []string{
+		strings.Join(parts, style(th.Path).Render(strings.Repeat(" ", gridGap))),
+		parts[0],
+		glyph,
+	} {
+		if lipgloss.Width(out) <= room {
+			return out
+		}
+	}
+	return ""
 }
 
-// statusGlyph is the state's glyph alone, for a column with no room for its
-// words.
+// statusGlyph is the state's glyph alone, for a row's counts, which have no
+// room for its words.
 func statusGlyph(th theme.Theme, s revier.Status) string {
 	glyph, _, _ := strings.Cut(statusLabel(th, s), " ")
 	return glyph

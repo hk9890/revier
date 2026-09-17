@@ -77,8 +77,7 @@ func Until(name string) ([]revier.Status, error) {
 
 // Worst is the one agent a project is summed up by, where a surface has room
 // for one: the agent in the state closest to needing the human, and of two in
-// that state the first. `revier list` shows it, and the TUI row falls back to
-// its glyph when the counts do not fit. The second return is false
+// that state the first. `revier list` shows it. The second return is false
 // for a project with no agent.
 func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 	if len(agents) == 0 {

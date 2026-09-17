@@ -1338,14 +1338,71 @@ func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 // A project's agents are counted by state, the state closest to needing you
 // first, and a state with no agent is not shown.
 func TestTheRowCountsItsAgentsByState(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	probe := func(marker string, status revier.Status) *hosttest.FakeProbe {
-		return &hosttest.FakeProbe{Harness: "claude", Marker: marker,
-			State: revier.AgentState{Harness: "claude", Status: status, Activity: marker + " task"}}
+	g := theme.Default().Glyphs
+	for _, tc := range []struct {
+		statuses []revier.Status
+		want     []string // in order
+		absent   []string
+	}{
+		{
+			statuses: []revier.Status{revier.StatusUnknown, revier.StatusIdle, revier.StatusRunning, revier.StatusAttention, revier.StatusIdle},
+			want:     []string{g.NeedsYou + "1", g.Working + "1", g.Idle + "2", g.Unknown + "1"},
+		},
+		{
+			statuses: []revier.Status{revier.StatusIdle, revier.StatusAttention, revier.StatusIdle},
+			want:     []string{g.NeedsYou + "1", g.Idle + "2"},
+			absent:   []string{g.Working, g.Unknown},
+		},
+	} {
+		row, _, _ := strings.Cut(rows(countedWorld(t, tc.statuses))[0], "│")
+		at := -1
+		for _, w := range tc.want {
+			i := strings.Index(row, w)
+			if i <= at {
+				t.Errorf("%v: row = %q, want %q after the counts before it", tc.statuses, row, w)
+			}
+			at = i
+		}
+		for _, a := range append(tc.absent, "task") {
+			if strings.Contains(row, a) {
+				t.Errorf("%v: row = %q, want no %q", tc.statuses, row, a)
+			}
+		}
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{
-		probe("one", revier.StatusIdle), probe("two", revier.StatusAttention), probe("three", revier.StatusIdle),
-	}}
+}
+
+// A row too narrow for every count keeps the worst state's count before it
+// falls back to the glyph alone.
+func TestANarrowRowKeepsTheWorstCount(t *testing.T) {
+	g := theme.Default().Glyphs
+	m := countedWorld(t, []revier.Status{revier.StatusIdle, revier.StatusAttention, revier.StatusRunning})
+	for _, tc := range []struct {
+		width int
+		all   bool
+	}{{24, true}, {23, false}} {
+		row := rows(resize(m, tc.width, 20))[0]
+		if !strings.Contains(row, g.NeedsYou+"1") {
+			t.Errorf("%d columns: row = %q, want the needs-you count", tc.width, row)
+		}
+		if got := strings.Contains(row, g.Working+"1") && strings.Contains(row, g.Idle+"1"); got != tc.all {
+			t.Errorf("%d columns: row = %q, other counts shown = %v, want %v", tc.width, row, got, tc.all)
+		}
+	}
+}
+
+// countedWorld is one running project with an agent in each of statuses,
+// surveyed on a terminal wide enough for the pane.
+func countedWorld(t *testing.T, statuses []revier.Status) tui.Model {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	var probes []revier.AgentProbe
+	var panels []revier.Panel
+	for i, s := range statuses {
+		marker := fmt.Sprintf("agent-%d", i)
+		probes = append(probes, &hosttest.FakeProbe{Harness: "claude", Marker: marker,
+			State: revier.AgentState{Harness: "claude", Status: s, Activity: marker + " task"}})
+		panels = append(panels, revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelAgent, Title: "claude " + marker})
+	}
 	projects, err := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
@@ -1353,18 +1410,9 @@ func TestTheRowCountsItsAgentsByState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rt.Add("session:duo", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude one"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude two"},
-		revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "claude three"})
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-	g := theme.Default().Glyphs
-
-	row, _, _ := strings.Cut(rows(m)[0], "│")
-	needs, idle := strings.Index(row, g.NeedsYou+"1"), strings.Index(row, g.Idle+"2")
-	if needs < 0 || idle < needs || strings.Contains(row, g.Working) || strings.Contains(row, "task") {
-		t.Errorf("row = %q, want one needing you, then two idle, and nothing else", row)
-	}
+	rt.Add("session:duo", "kitty", panels...)
+	c := &core.Core{Runtime: rt, Probes: probes}
+	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 }
 
 // An error of several lines - a project file with two mistakes - keeps the

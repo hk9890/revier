@@ -409,14 +409,14 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 }
 
 // The list stops at its table's width, and the pane takes the rest: at
-// three hundred and eighty columns the list is a hundred and ten.
+// three hundred and eighty columns the list is eighty.
 func TestTheListStopsAtItsTableWidth(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 40)
 	_, mc := margins(m)
 	// The border sits after the margin and the list.
-	if border := paneBorder(t, m); border != mc+110 {
-		t.Errorf("pane border at column %d, want the list capped at 110 columns", border)
+	if border := paneBorder(t, m); border != mc+80 {
+		t.Errorf("pane border at column %d, want the list capped at 80 columns", border)
 	}
 }
 
@@ -613,4 +613,11 @@ func TestARunningRowDoesNotNameItsOpenTargets(t *testing.T) {
 	if path := rows(m)[1]; strings.Contains(path, "home") || strings.Contains(path, "editor") {
 		t.Errorf("path line = %q, want no targets named", path)
 	}
+	body := pane(resize(m, 140, 30))
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "editor") && strings.Contains(line, "running") {
+			return
+		}
+	}
+	t.Errorf("pane = %q, want the editor running, so the row had a target to leave out", body)
 }

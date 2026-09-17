@@ -43,8 +43,8 @@ func (m Model) margins() (rows, cols int) {
 }
 
 // inner is the size available inside the margin. The surface takes the whole
-// terminal (decisions.md D39): the rows are a grid, so a wide row is a long
-// activity line and not a state a screen away from its name.
+// terminal (decisions.md D39): the rows are a grid, and the pane takes the
+// width the list does not.
 func (m Model) inner() (w, h int) {
 	mr, mc := m.margins()
 	w = m.width - 2*mc

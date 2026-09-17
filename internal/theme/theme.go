@@ -54,9 +54,9 @@ type Theme struct {
 // Glyphs is the marker set. Every glyph is one cell wide, whatever the set.
 //
 // Each column of a row means one thing. The mark says whether the project is
-// open; the agent glyph, beside the agent's state in words, says what its
-// agent is doing. A "!" in the mark column for an agent that wanted the user
-// read as punctuation, and said again what the words on the right said.
+// open; the agent glyphs, each with its count, say what its agents are doing.
+// A "!" in the mark column for an agent that wanted the user read as
+// punctuation, and said again what the right-hand side said.
 //
 // There is no glyph for where a project lives. Every project is on this
 // machine until sessions over a network exist, and a mark that is the same on
@@ -66,8 +66,9 @@ type Glyphs struct {
 	Stopped string // it is not
 	Cursor  string // the bar down the left of the selected row
 
-	// What an agent is doing. Each stands beside the state in words, so a
-	// glyph only has to be told apart from the others, not read on its own.
+	// What an agent is doing. The pane puts each beside the state in words;
+	// a row puts it in front of a count with no words, so there a glyph is
+	// read on its own.
 	NeedsYou string // it asked for the user and waits
 	Working  string // it is in a turn
 	Idle     string // it is at rest, waiting for the next prompt
@@ -82,8 +83,8 @@ type Glyphs struct {
 
 	// Folder and NoFolder are an icon column in front of the name: whether
 	// the project's directory is on this machine. A set draws both or
-	// neither. A set without them says it only in words, on the path line,
-	// and gives the name the room.
+	// neither. A set without them does not mark a missing directory on the
+	// row, and gives the name the room; the pane says it.
 	Folder   string
 	NoFolder string
 	// Remote takes the folder column for a project on another machine. A
