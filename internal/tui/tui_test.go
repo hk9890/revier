@@ -157,11 +157,8 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	first := rows(m)[0]
-	if !strings.Contains(first, "project-03") || !strings.Contains(first, "needs you") {
+	if !strings.Contains(first, "project-03") || !strings.Contains(first, theme.Default().Glyphs.NeedsYou+"1") {
 		t.Fatalf("first row = %q, want project-03 needing you", first)
-	}
-	if !strings.Contains(first, "needs a decision") {
-		t.Errorf("first row = %q, want the activity line", first)
 	}
 	// Rows are two lines: the name, then the path under it.
 	if path := rows(m)[1]; !strings.Contains(path, "/p/project-03") {
@@ -806,7 +803,7 @@ func TestTheFirstSurveyUsesTheBindingsInState(t *testing.T) {
 
 	for _, row := range rows(m) {
 		if strings.Contains(row, "project-00") {
-			if !strings.Contains(row, "needs a decision") {
+			if !strings.Contains(row, theme.Default().Glyphs.NeedsYou+"1") {
 				t.Errorf("row = %q, want the bound workspace's agent on the first survey", row)
 			}
 			return
@@ -1317,7 +1314,7 @@ func TestDetailPaneCutsTreeRows(t *testing.T) {
 }
 
 // On a terminal too narrow for a pane the list does not wrap either: a long
-// path and a long activity line leave every row two lines high.
+// path leaves every row two lines high.
 func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 	c, projects := longWorld(t, "/p/"+strings.Repeat("deeply-nested/", 10)+"checkout")
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 76, 20)
@@ -1331,22 +1328,24 @@ func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
 	}
-	// The activity goes to make room, and the state it describes does not:
-	// the state is what the row is for, and the path keeps its column.
-	if !strings.Contains(r[0], "working") || strings.Contains(r[0], "Reading") {
-		t.Errorf("first row = %q, want the state kept and the activity gone", r[0])
+	// The count stays: the state is what the row is for, and the path keeps
+	// its column.
+	if !strings.Contains(r[0], theme.Default().Glyphs.Working+"1") {
+		t.Errorf("first row = %q, want the count kept", r[0])
 	}
 }
 
-// A project with two agents in one state is summed up by the first, as
-// `revier list` sums it up.
-func TestTheRowNamesTheFirstOfTwoAgentsInTheWorstState(t *testing.T) {
+// A project's agents are counted by state, the state closest to needing you
+// first, and a state with no agent is not shown.
+func TestTheRowCountsItsAgentsByState(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	probe := func(marker, activity string) *hosttest.FakeProbe {
+	probe := func(marker string, status revier.Status) *hosttest.FakeProbe {
 		return &hosttest.FakeProbe{Harness: "claude", Marker: marker,
-			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: activity}}
+			State: revier.AgentState{Harness: "claude", Status: status, Activity: marker + " task"}}
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe("one", "first task"), probe("two", "second task")}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{
+		probe("one", revier.StatusIdle), probe("two", revier.StatusAttention), probe("three", revier.StatusIdle),
+	}}
 	projects, err := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
@@ -1356,11 +1355,15 @@ func TestTheRowNamesTheFirstOfTwoAgentsInTheWorstState(t *testing.T) {
 	}
 	rt.Add("session:duo", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude one"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude two"})
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude two"},
+		revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "claude three"})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	g := theme.Default().Glyphs
 
-	if row := rows(m)[0]; !strings.Contains(row, "first task") {
-		t.Errorf("row = %q, want the first agent's activity", row)
+	row, _, _ := strings.Cut(rows(m)[0], "│")
+	needs, idle := strings.Index(row, g.NeedsYou+"1"), strings.Index(row, g.Idle+"2")
+	if needs < 0 || idle < needs || strings.Contains(row, g.Working) || strings.Contains(row, "task") {
+		t.Errorf("row = %q, want one needing you, then two idle, and nothing else", row)
 	}
 }
 

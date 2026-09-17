@@ -405,3 +405,12 @@ the save and `--force` goes on; the TUI's confirm names the busy agents
 instead. `Closer` and `PanelCloser` are optional and polite: a window an
 application keeps open is named as still open, never killed. A project
 shutdown leaves an instance another project also holds.
+
+### D79 — a project row counts its agents by state, and says nothing else on the right
+
+The row showed the worst state, its activity cut to fit, and under it the open
+targets or a missing checkout. In a narrow popup the cut activity read as
+noise, and a project with several agents showed only one. The right column now
+holds one count per state, closest to needing you first. The activity, the
+open targets and a missing checkout are the pane's; the folder glyph still
+marks a missing checkout on the row.

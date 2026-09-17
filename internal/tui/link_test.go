@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -163,15 +164,17 @@ func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 	}
 }
 
-// A project whose checkout is missing on the host says it is missing there,
-// not here.
-func TestAHostsMissingCheckoutIsSaidAsMissingOnTheHost(t *testing.T) {
+// A project whose checkout is missing on the host shows the missing-folder
+// glyph, and its row says nothing else about it: the table's right column is
+// agent state only.
+func TestAHostsMissingCheckoutShowsTheMissingFolder(t *testing.T) {
 	m, remote, _ := linkWorld(t, nil)
 	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}}}
 	m = step(m, altR)
 	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if r := rows(m); len(r) < 2 || !strings.Contains(r[1], "not on buildbox") {
-		t.Errorf("rows = %q, want the checkout said missing on buildbox", r)
+	r := rows(m)
+	if len(r) < 2 || !strings.Contains(r[0], theme.Default().Glyphs.NoFolder) || strings.Contains(r[1], "not on") {
+		t.Errorf("rows = %q, want the missing-folder glyph and no note", r)
 	}
 }
 
