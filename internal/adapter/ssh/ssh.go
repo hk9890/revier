@@ -12,7 +12,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -40,6 +43,33 @@ func (r *Remote) Name() string { return r.host }
 // bounds a host that is down, where ssh would otherwise wait for the kernel
 // to give up.
 var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
+
+// shared are the flags that make every call to one host reuse one
+// connection. A survey runs on every refresh, and a handshake is a quarter
+// of a second where a call over the master is under ten milliseconds. The
+// master outlives the process that opened it by ControlPersist, so a popup
+// raised minutes later still surveys over it. The socket lives under the
+// runtime directory, which is the user's alone and is gone at logout; the
+// path must stay under the socket limit, so its name is a hash of the
+// destination. No flags when no directory can be made: every call then
+// connects on its own.
+func shared() []string {
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		dir = filepath.Join(os.TempDir(), "revier-"+strconv.Itoa(os.Getuid()))
+	} else {
+		dir = filepath.Join(dir, "revier")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil
+	}
+	return []string{"-o", "ControlMaster=auto", "-o", "ControlPath=" + filepath.Join(dir, "ssh-%C"), "-o", "ControlPersist=10m"}
+}
+
+// flags are options and shared together: what every call carries.
+func flags() []string {
+	return append(append([]string{}, options...), shared()...)
+}
 
 // login wraps a command line in the login shell of the user on the remote.
 // sshd runs a command in a shell that reads no profile, so a PATH set there -
@@ -72,7 +102,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	for i, a := range args {
 		words[i] = quote(a)
 	}
-	full := append(append([]string{}, options...), "--", r.host, quiet(strings.Join(words, " ")))
+	full := append(flags(), "--", r.host, quiet(strings.Join(words, " ")))
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, "ssh", full...)
 	c.Stdout, c.Stderr = &out, &errb
@@ -106,10 +136,16 @@ func quote(s string) string {
 //
 // The connection is probed, so a network that went away ends the ssh, and
 // with it the agent, within a minute rather than when the kernel gives up.
+// It goes over the shared master when one is up, so the panel shows as soon
+// as its terminal does.
 func PanelCommand(host string, project revier.ProjectName, kind string) []string {
 	const tag = "\x00"
 	there := "revier " + kind + " exec -p " + quote(string(project)) + " --tag " + tag
-	script := "exec ssh -t -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- " + quote(host) + ` "` + doubleQuoted(login(there)) + `"`
+	words := []string{"exec", "ssh", "-t", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"}
+	for _, f := range shared() {
+		words = append(words, quote(f))
+	}
+	script := strings.Join(words, " ") + " -- " + quote(host) + ` "` + doubleQuoted(login(there)) + `"`
 	return []string{"sh", "-c", strings.ReplaceAll(script, tag, `$(uname -n).$$ $*`), "sh"}
 }
 
@@ -123,7 +159,7 @@ func doubleQuoted(s string) string {
 // works as it would in a shell on the host.
 func (r *Remote) RunCommand(project revier.ProjectName, action string) []string {
 	remote := strings.Join([]string{"revier", "run", quote(action), "-p", quote(string(project))}, " ")
-	return append(append([]string{"ssh", "-t"}, options...), "--", r.host, login(remote))
+	return append(append([]string{"ssh", "-t"}, flags()...), "--", r.host, login(remote))
 }
 
 // Survey asks the remote revier for the named projects, in one call.

@@ -14,6 +14,11 @@ import (
 // finds the popup already open by it, and a compositor rule can name it.
 const PopupClass = "revier-popup"
 
+// PopupEnv is the variable the popup's terminal starts the surface with, so
+// the surface knows it is the popup and hides on Esc instead of exiting
+// (decisions.md D86). A surface started in any other terminal has none.
+const PopupEnv = "REVIER_POPUP"
+
 // ErrNoPopupHost means the window host cannot do what the popup needs: list
 // windows, launch one, and measure and place it. It is a normal outcome on a
 // machine without one, and the caller names the tools that are missing.
@@ -87,6 +92,28 @@ func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, erro
 	}
 	c.place(ctx, revier.Realization{Place: geometry}, ref)
 	return ref, nil
+}
+
+// HidePopup takes the open popup off the screen and keeps it, for the next
+// press to raise with everything it holds (decisions.md D86). It is
+// ErrNoPopupHost where the window host cannot hide, and an error when no
+// popup is open; the surface exits on either, as it did before.
+func (c *Core) HidePopup(ctx context.Context) error {
+	hider, ok := c.Window.(revier.Hider)
+	if !ok {
+		return ErrNoPopupHost
+	}
+	windows, err := c.Window.Instances(ctx)
+	if err != nil {
+		return err
+	}
+	for _, w := range windows {
+		if w.Class == PopupClass {
+			slog.Info("popup: hide", "ref", w.Ref)
+			return hider.Hide(ctx, w.Ref)
+		}
+	}
+	return fmt.Errorf("popup: no window of class %s to hide", PopupClass)
 }
 
 // popupGeometry centres the popup at popupWidth when the workarea holds it,

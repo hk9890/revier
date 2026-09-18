@@ -34,6 +34,39 @@ func TestPopupRaisesTheOneAlreadyOpen(t *testing.T) {
 	}
 }
 
+// Esc hides the open popup, so the next press raises it with everything it
+// holds. It stays listed, which is what the raise finds.
+func TestHidePopupHidesTheOpenPopup(t *testing.T) {
+	wm := hosttest.New("wm")
+	open := wm.Add("revier", core.PopupClass)
+	wm.Add("session:demo", "kitty")
+	c := &core.Core{Window: wm}
+
+	if err := c.HidePopup(context.Background()); err != nil {
+		t.Fatalf("HidePopup: %v", err)
+	}
+	if !slices.Equal(wm.Hidden, []revier.TargetRef{open}) {
+		t.Errorf("hidden = %v, want the popup alone", wm.Hidden)
+	}
+	ref, err := c.Popup(context.Background(), popupArgv)
+	if err != nil || ref != open || len(wm.Opened) != 0 {
+		t.Errorf("Popup after the hide: ref %v, err %v, opened %v; want the hidden popup raised", ref, err, wm.Opened)
+	}
+}
+
+// Without a window host that can hide, or with no popup open, the hide is
+// refused, and the surface exits the way it did before hiding existed.
+func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
+	if err := (&core.Core{}).HidePopup(context.Background()); !errors.Is(err, core.ErrNoPopupHost) {
+		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
+	}
+	wm := hosttest.New("wm")
+	wm.Add("session:demo", "kitty")
+	if err := (&core.Core{Window: wm}).HidePopup(context.Background()); err == nil || len(wm.Hidden) != 0 {
+		t.Errorf("no popup: err = %v, hidden = %v; want a refusal and nothing hidden", err, wm.Hidden)
+	}
+}
+
 // With no popup open, the terminal is launched, and its window is placed and
 // raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
 // workarea holds it, and 100% where it does not.

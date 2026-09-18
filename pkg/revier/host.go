@@ -181,6 +181,16 @@ type Closer interface {
 	Close(ctx context.Context, ref TargetRef) error
 }
 
+// Hider is an optional capability of a WindowController, detected by type
+// assertion. Hide takes a window off the screen without closing it, and
+// Focus brings it back as it was. It is how the popup leaves on Esc and is
+// raised again by the next press with its state and its surveys in hand,
+// instead of being started over (decisions.md D86). Where the host cannot
+// hide, the popup exits.
+type Hider interface {
+	Hide(ctx context.Context, ref TargetRef) error
+}
+
 // PanelCloser is an optional capability of a Runtime, detected by type
 // assertion. ClosePanel closes one panel of an instance and leaves the rest,
 // which is how a shutdown of the agents alone ends an agent without its
