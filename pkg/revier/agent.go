@@ -167,8 +167,8 @@ type SessionID string
 // worktrees, and resumed anywhere else it carries on in the wrong checkout.
 // Either is empty when the harness does not say.
 type Conversation struct {
-	ID  SessionID
-	Dir string
+	ID  SessionID `json:"id,omitempty"`
+	Dir string    `json:"dir,omitempty"`
 }
 
 // Resumable is an optional capability of an AgentProbe, detected by type

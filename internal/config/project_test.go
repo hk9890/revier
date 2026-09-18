@@ -187,7 +187,7 @@ func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 	if got, _ := loaded.Home(); got.Key != "ctrl-h" {
 		t.Errorf("home = %+v, want the declared one", got)
 	}
-	if got := read(t, file); !strings.Contains(got, "[[target]]") || !strings.Contains(got, `"ssh"`) {
+	if got := read(t, file); !strings.Contains(got, "[[target]]") || !strings.Contains(got, "exec ssh") {
 		t.Errorf("file =\n%s\nwant the home written whole", got)
 	}
 }

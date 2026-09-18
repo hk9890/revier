@@ -25,45 +25,8 @@ type FakeRemote struct {
 	// RunArgv is what RunCommand answers with; Runs records every ask.
 	RunArgv []string
 	Runs    []Run
-	// Tabs records every NewAgent and NewShell, in order.
-	Tabs []RemoteTab
-	// Focused records every FocusAgent, in order.
-	Focused []RemoteFocus
-}
-
-// RemoteTab is one tab asked of the remote: an agent, with the conversation
-// it resumes, or a shell.
-type RemoteTab struct {
-	Kind    revier.PanelKind
-	Address string
-	Resume  revier.SessionID
-}
-
-func (f *FakeRemote) NewAgent(_ context.Context, address string, resume revier.SessionID) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.Tabs = append(f.Tabs, RemoteTab{Kind: revier.PanelAgent, Address: address, Resume: resume})
-	return f.Err
-}
-
-func (f *FakeRemote) NewShell(_ context.Context, address string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.Tabs = append(f.Tabs, RemoteTab{Kind: revier.PanelShell, Address: address})
-	return f.Err
-}
-
-// RemoteFocus is one agent asked to be focused on the remote.
-type RemoteFocus struct {
-	Address string
-	Ref     revier.TargetRef
-}
-
-func (f *FakeRemote) FocusAgent(_ context.Context, address string, ref revier.TargetRef) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.Focused = append(f.Focused, RemoteFocus{Address: address, Ref: ref})
-	return f.Err
+	// Named is what Conversations answers with.
+	Named []revier.ProjectView
 }
 
 // Run is one action asked for on one project.
@@ -96,8 +59,11 @@ func (f *FakeRemote) Survey(_ context.Context, names []revier.ProjectName) ([]re
 	return append([]revier.ProjectView(nil), f.Views...), nil
 }
 
-func (f *FakeRemote) Prompt(context.Context, string, string) error { return f.Err }
-
-func (f *FakeRemote) Wait(context.Context, string, string) (revier.Status, error) {
-	return revier.StatusUnknown, f.Err
+func (f *FakeRemote) Conversations(context.Context, []revier.ProjectName) ([]revier.ProjectView, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	return append([]revier.ProjectView(nil), f.Named...), nil
 }

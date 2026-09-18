@@ -13,11 +13,12 @@ import (
 )
 
 // A remote project - one whose file names a host - is surveyed by the revier
-// on that host (decisions.md D40). Its runtime instances, its agents and its
-// checkout are on that machine, where the local hosts and probes cannot see
-// them, so this side asks the revier there and takes its answer. What stays
-// local is the window that reaches it: the home target's realization here is
-// an ssh pane onto the remote workspace, matched and raised like any other.
+// on that host (decisions.md D40). Its agents and its checkout are on that
+// machine, where the local hosts and probes cannot see them, so this side asks
+// the revier there and takes its answer. What stays local is the workspace
+// that shows it: the home target's realization here is panels that each run an
+// ssh onto the host, matched, raised and closed like any other
+// (decisions.md D83).
 
 // RemoteOf returns the remote a project lives on: nil for a project on this
 // machine, and an error for a host nothing is wired for.
@@ -26,21 +27,6 @@ func (c *Core) RemoteOf(p Project) (revier.Remote, error) {
 		return nil, nil
 	}
 	return c.remote(p.Remote.Host)
-}
-
-// RemoteAt returns the remote a project lives on and the address that names
-// its sel - a target or a panel, or nothing - as the host knows it: the
-// project's name there, then sel. It is nil for a project on this machine.
-func (c *Core) RemoteAt(p Project, sel string) (revier.Remote, string, error) {
-	r, err := c.RemoteOf(p)
-	if err != nil || r == nil {
-		return nil, "", err
-	}
-	address := string(p.Remote.Project)
-	if sel != "" {
-		address += ":" + sel
-	}
-	return r, address, nil
 }
 
 func (c *Core) remote(host string) (revier.Remote, error) {

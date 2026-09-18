@@ -11,6 +11,9 @@ func (r *Remote) SetRunner(run func(ctx context.Context, args ...string) (stdout
 // Quote exposes quote.
 func Quote(s string) string { return quote(s) }
 
+// Login exposes login.
+func Login(line string) string { return login(line) }
+
 // Options exposes the flags every call carries.
 func Options() []string { return options }
 

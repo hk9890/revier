@@ -237,9 +237,9 @@ type Attacher interface {
 
 ## Remote
 
-A revier on another machine (D40). It is asked what it knows and told what to
-type, and nothing else: it lists no instances, opens nothing and focuses
-nothing here.
+A revier on another machine (D40). It is asked what it knows, and nothing
+else: it lists no instances, opens nothing and focuses nothing here. The
+panels that show what runs there are this machine's runtime's (D83).
 
 ```go
 type Remote interface {
@@ -250,20 +250,9 @@ type Remote interface {
     // one call. A name the remote does not know is an error.
     Survey(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
-    // Prompt and Wait are `revier agent prompt` and `revier agent wait`
-    // there, with the remote's own refusals.
-    Prompt(ctx context.Context, address, text string) error
-    Wait(ctx context.Context, address, until string) (Status, error)
-
-    // NewAgent and NewShell are `revier agent new` and `revier shell new`
-    // there: a tab in the open workspace, which the attached pane shows.
-    NewAgent(ctx context.Context, address string, resume SessionID) error
-    NewShell(ctx context.Context, address string) error
-
-    // FocusAgent is `revier agent focus` there: the agent's tab made current
-    // in its workspace, which the attached pane shows. ref is the instance
-    // the remote reported the agent in (D75).
-    FocusAgent(ctx context.Context, address string, ref TargetRef) error
+    // Conversations is Survey with each agent's Conversation filled in, for
+    // a save. Naming them costs the remote a process a survey does not pay.
+    Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
     // RunCommand is the argv that runs `revier run <action> -p <project>`
     // there, for the caller to run here with the terminal. The action is

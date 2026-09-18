@@ -10,6 +10,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
@@ -175,5 +176,17 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+}
+
+// servedProcesses lists what `revier agent exec` started here for a terminal
+// on another machine (decisions.md D83). It is not selected: it holds what no
+// runtime does, beside whichever runtime was. It needs a /proc, and a machine
+// without one serves panels that no survey sees.
+func servedProcesses() revier.Host {
+	h := &proc.Host{}
+	if h.Probe(context.Background()) != nil {
+		return nil
+	}
+	return h
 }

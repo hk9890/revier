@@ -58,8 +58,8 @@ func TestActivateLaunchesWhenNothingIsPending(t *testing.T) {
 	}
 }
 
-// For a link the pane onto the host is what a press on an agent raises, so a
-// pane still coming up is not launched again and the host is not asked.
+// A link's workspace still coming up is not launched again by a press on one
+// of its agents.
 func TestActivateAgentWaitsForAPaneOntoTheHostStillComingUp(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	remote := hosttest.NewRemote("buildbox")
@@ -72,7 +72,7 @@ func TestActivateAgentWaitsForAPaneOntoTheHostStillComingUp(t *testing.T) {
 	if !res.ComingUp || res.Target != "home" {
 		t.Errorf("result = %+v, want home coming up", res)
 	}
-	if len(rt.Opened) != 0 || len(remote.Focused) != 0 {
-		t.Errorf("opened %d, host focused %v; want neither", len(rt.Opened), remote.Focused)
+	if len(rt.Opened) != 0 {
+		t.Errorf("opened %d, want none", len(rt.Opened))
 	}
 }

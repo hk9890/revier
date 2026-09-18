@@ -123,9 +123,9 @@ func TestAMissingCheckoutOnTheHostNamesTheHost(t *testing.T) {
 	}
 }
 
-// Enter on a remote project opens the pane here whatever the host said
-// about its checkout: cloning is the host's, done by the revier the pane
-// runs there.
+// Enter on a remote project opens its workspace here whatever the host said
+// about its checkout: cloning is the host's, done by the revier the agent
+// panel runs there.
 func TestEnterOnARemoteProjectOpensThePaneWithoutCloning(t *testing.T) {
 	said := hostSays("alpha", revier.StatusIdle)
 	said.PathExists, said.Agents = false, nil
@@ -139,7 +139,7 @@ func TestEnterOnARemoteProjectOpensThePaneWithoutCloning(t *testing.T) {
 		t.Fatal("want the launch command")
 	}
 	cmd()
-	if len(rt.Opened) != 1 || rt.Opened[0].Launch[0] != "ssh" {
-		t.Errorf("runtime Opened = %v, want the ssh pane", rt.Opened)
+	if len(rt.Opened) != 1 || len(rt.Opened[0].Panels) != 2 {
+		t.Errorf("runtime Opened = %v, want the agent and the shell over ssh", rt.Opened)
 	}
 }

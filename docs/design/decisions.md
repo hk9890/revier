@@ -164,8 +164,9 @@ the list was blank. The agent column gives way in steps before a name is cut.
 ### D40 — a remote project is surveyed and driven by the revier on its host
 
 Containers stay out. An ssh-wrapping runtime would reimplement every adapter;
-asking the remote revier for `list --json` costs one port, `Remote`. The pane
-onto it is local, so focus and bindings see an ordinary instance.
+asking the remote revier for `list --json` costs one port, `Remote`. The
+workspace that shows it is local, so focus and bindings see an ordinary
+instance (D83).
 
 ### D41 — a link is its own kind of file
 
@@ -322,16 +323,6 @@ of several terminals is meant, so `Focus` switches only the terminal of the
 pane it runs in, or the one terminal attached, and records the focus in
 `@revier-focus` for `Focused` to report when neither decides.
 
-### D71 — an agent or a shell asked for a remote project opens on its host
-
-The keys that open an agent or a shell beside a workspace name the window they
-were pressed in, and a link's home is the pane onto the host. A tab opened here
-would run outside the workspace the host's revier surveys, so `agent new` and
-`shell new` forward to the host as `Remote.NewAgent` and `Remote.NewShell`, as
-`agent prompt` does. The home goes as the project alone, and a target only the
-host has goes by name; a target the link declares here is a local window and
-opens here. `--dir` is a path on this machine and is not sent.
-
 ### D72 — a drag selects a box of the screen and copies it; revier draws it
 
 The terminal selects only with shift held, tells revier nothing, and clears the
@@ -354,15 +345,12 @@ project query, so that query stands in the list's column and not over both. Ente
 target, and goes to an agent. A pane with no target level stays: Enter on a
 project opens its home.
 
-### D74 — an agent is reached by making its tab current, on its host for a link
+### D74 — an agent is reached by making its tab current
 
 `Focus` on the instance and `FocusPanel` already reach a tab target, so going
 to an agent is those two and a raise, and needs no new runtime capability. The
 instance comes first: on tmux its focus is what switches a terminal showing
-another session. A link's agent runs in
-the host's workspace, which only that revier can switch, so
-`Remote.FocusAgent` asks it, by the panel id its survey reported, and the pane
-onto the host is raised here.
+another session.
 
 ### D75 — an agent is named by its instance and its panel
 
@@ -458,3 +446,21 @@ element that renders empty is refused at load, whatever left it empty: an
 argument is read by position, so none of them is optional, and an empty one
 reaches the program as the current directory or a missing operand and says so
 nowhere.
+
+### D84 — a link's workspace is panels here, each an ssh that becomes the host's panel
+
+Replaces D71, the link half of D74, and the one pane attached to a tmux
+workspace on the host. Tabs, scrollback, keys and focus in that pane were
+tmux's inside the terminal's, and every act on an agent was a round trip to
+the host. Each panel here now runs `revier agent exec` or `revier shell exec`
+there, so the runtime here opens, focuses, types into and closes it, and
+`Remote` keeps the questions only. An agent does not outlive its terminal;
+restore resumes it, as it does after a reboot here. The two machines name one
+agent by a tag, this machine's name and the pid of the panel's ssh, which the
+process carries in its environment: nothing is recorded, and a title, `/clear`
+or a resume cannot move it. The host lists such processes from `/proc` as a
+host of its own beside its runtime, because no runtime there holds them. What
+an agent starts inherits the tag, so the panel is the process nearest the one
+started. sshd runs a command in a shell that read no profile, where `claude`
+was not on the PATH and every agent read unknown, so each command runs in the
+login shell.

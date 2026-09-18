@@ -31,8 +31,8 @@ func (c *Core) Activate(ctx context.Context, p Project, name revier.TargetName, 
 }
 
 // ActivateAgent is Activate for an agent: GoAgent, unless the project is a
-// link whose pane onto the host is still coming up from an earlier press,
-// which homePending reports.
+// link whose workspace is still coming up from an earlier press, which
+// homePending reports.
 func (c *Core) ActivateAgent(ctx context.Context, p Project, a revier.AgentView, bound Bindings, homePending bool) (Result, error) {
 	if home, ok := p.Home(); ok && p.Remote != nil {
 		if coming, err := c.comingUp(ctx, p, home.Name, bound, homePending); err != nil || coming {

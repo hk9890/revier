@@ -224,23 +224,26 @@ host = "buildbox"
 project = "far"
 ```
 
-The pane that reaches the workspace is derived: `ssh -t buildbox revier open
-far --attach`. A link may add `[[target]]` entries of its own, such as an
-editor over ssh, which render that path and that repository. Neither names
-anything on this machine: the link has no directory here, and the checkout
-stays the host's to clone.
+The workspace is derived: an agent panel and a shell panel, each an ssh that
+runs `revier agent exec -p far` or `revier shell exec -p far` on the host, so
+the host's project file says which agent runs and where. A link may add
+`[[target]]` entries of its own, such as an editor over ssh, which render that
+path and that repository. Neither names anything on this machine: the link has
+no directory here, and the checkout stays the host's to clone.
 
-revier must be installed on the host, with tmux and the project's own file
-under its `~/.config/revier/projects/`. The list then shows the link as
-`far@buildbox` with what the agent there is doing, read from the revier
-there. Enter opens the pane. `revier agent prompt far ...`, `revier agent
-wait far ...` and `revier run <action> -p far` run on the host, so an action
-is one the host's `config.toml` defines. `revier agent new` and `revier shell
-new` open their tab in the workspace on the host, which the pane shows, so the
-two keys above work in the pane as they do in a local workspace; `--dir` is not
-sent. A host that does not answer shows as
+revier must be installed on the host, a Linux machine, with the project's own
+file under its `~/.config/revier/projects/`; it needs no tmux there. The list
+shows the link as `far@buildbox` with what each agent there is doing, read
+from the revier there. Enter opens the workspace. Its tabs are tabs of your
+terminal: `revier agent new`, `revier shell new`, `revier agent prompt`,
+`revier agent wait`, a shutdown and the two keys above work as they do in a
+local workspace, and `--dir`, a path on this machine, is dropped. An agent
+ends with its tab or its connection; a saved session resumes it on the host.
+An agent started on the host from another machine is counted, and cannot be
+reached from here. `revier run <action> -p far` runs on the host, so an action
+is one the host's `config.toml` defines. A host that does not answer shows as
 unreachable. ssh runs in batch mode, so the host has to accept a key;
-`ControlMaster` in `~/.ssh/config` keeps the refresh fast.
+`ControlMaster` in `~/.ssh/config` keeps the refresh and a new tab fast.
 
 ## Keybindings
 

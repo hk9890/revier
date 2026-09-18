@@ -55,6 +55,9 @@ type Agent struct {
 	Ref   revier.TargetRef
 	Panel revier.Panel
 	State revier.AgentState
+
+	// link is set for an agent of a link: its state is its host's to say.
+	link *Project
 }
 
 // untils are the statuses a wait can ask for. "stopped" is an agent doing no
@@ -99,6 +102,9 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 	snap, err := c.snapshot(ctx)
 	if err != nil {
 		return Agent{}, err
+	}
+	if p.Remote != nil {
+		return c.linkAgent(ctx, p, addr, snap)
 	}
 	where, only := string(p.Name), revier.TargetName("")
 	if _, ok := p.index(revier.TargetName(addr)); ok {
@@ -202,6 +208,10 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 				out = append(out, c.heldTab(snap, p, i, bound)...)
 			}
 			continue
+		}
+		if inst, ok := c.served(snap, p, i); ok && !seen[key(inst.Ref)] {
+			seen[key(inst.Ref)] = true
+			out = append(out, held{target: t.Name, inst: inst})
 		}
 		host, _, m, err := c.resolveAt(p, i)
 		if err != nil {
@@ -317,8 +327,11 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 
 // reread reads the agent's panel again, from one listing of its host.
 func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
+	if a.link != nil {
+		return c.rereadLink(ctx, a)
+	}
 	var host revier.Host
-	for _, h := range c.hosts() {
+	for _, h := range c.allHosts() {
 		if h.Name() == a.Ref.Host {
 			host = h
 		}

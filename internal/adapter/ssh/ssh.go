@@ -12,11 +12,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -44,6 +41,14 @@ func (r *Remote) Name() string { return r.host }
 // to give up.
 var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 
+// login wraps a command line in the login shell of the user on the remote.
+// sshd runs a command in a shell that reads no profile, so a PATH set there -
+// ~/.local/bin, where Claude Code installs - is missing: the remote revier
+// then found no `claude`, and every agent read as unknown.
+func login(line string) string {
+	return `exec "${SHELL:-sh}" -lc ` + quote(line)
+}
+
 // exec runs one command on the remote and returns what it wrote. The remote
 // shell joins the words ssh is given back into one line, so each is quoted
 // here to reach the remote revier as the one argument it was. A failure is
@@ -54,7 +59,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	for i, a := range args {
 		words[i] = quote(a)
 	}
-	full := append(append([]string{}, options...), "--", r.host, strings.Join(words, " "))
+	full := append(append([]string{}, options...), "--", r.host, login(strings.Join(words, " ")))
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, "ssh", full...)
 	c.Stdout, c.Stderr = &out, &errb
@@ -78,12 +83,21 @@ func quote(s string) string {
 // works as it would in a shell on the host.
 func (r *Remote) RunCommand(project revier.ProjectName, action string) []string {
 	remote := strings.Join([]string{"revier", "run", quote(action), "-p", quote(string(project))}, " ")
-	return append(append([]string{"ssh", "-t"}, options...), "--", r.host, remote)
+	return append(append([]string{"ssh", "-t"}, options...), "--", r.host, login(remote))
 }
 
 // Survey asks the remote revier for the named projects, in one call.
 func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
-	args := []string{"revier", "list", "--json"}
+	return r.list(ctx, names)
+}
+
+// Conversations is the survey with `--conversations`.
+func (r *Remote) Conversations(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
+	return r.list(ctx, names, "--conversations")
+}
+
+func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...string) ([]revier.ProjectView, error) {
+	args := append([]string{"revier", "list", "--json"}, flags...)
 	for _, n := range names {
 		args = append(args, string(n))
 	}
@@ -96,71 +110,4 @@ func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revi
 		return nil, fmt.Errorf("%s: revier list --json: %w", r.host, err)
 	}
 	return views, nil
-}
-
-// Prompt runs `revier agent prompt` on the remote. What it warns about on
-// success - an agent still idle after the text was delivered - is passed on
-// to this stderr, as it would be had the command run here.
-func (r *Remote) Prompt(ctx context.Context, address, text string) error {
-	_, warnings, err := r.run(ctx, "revier", "agent", "prompt", address, "--", text)
-	if err != nil {
-		return err
-	}
-	_, _ = os.Stderr.Write(warnings)
-	return nil
-}
-
-// NewAgent runs `revier agent new` on the remote, for the project the address
-// names there. Its warning - a conversation the host could not resume - is
-// passed on to this stderr.
-func (r *Remote) NewAgent(ctx context.Context, address string, resume revier.SessionID) error {
-	args := []string{"revier", "agent", "new", "-p", address}
-	if resume != "" {
-		args = append(args, "--resume", string(resume))
-	}
-	_, warnings, err := r.run(ctx, args...)
-	if err != nil {
-		return err
-	}
-	_, _ = os.Stderr.Write(warnings)
-	return nil
-}
-
-// NewShell runs `revier shell new` on the remote, for the project the address
-// names there.
-func (r *Remote) NewShell(ctx context.Context, address string) error {
-	_, _, err := r.run(ctx, "revier", "shell", "new", "-p", address)
-	return err
-}
-
-// FocusAgent runs `revier agent focus` on the remote, for the agent the
-// address names there, in the instance ref names when the remote reported one.
-func (r *Remote) FocusAgent(ctx context.Context, address string, ref revier.TargetRef) error {
-	args := []string{"revier", "agent", "focus", address}
-	if !ref.IsZero() {
-		args = append(args, "--ref", ref.ID)
-	}
-	_, _, err := r.run(ctx, args...)
-	return err
-}
-
-// Wait runs `revier agent wait` on the remote. ctx's deadline goes with it
-// as the wait's own timeout: ending the ssh alone would leave the wait
-// polling on the host, since nothing signals a command there when the
-// client goes away, and the remote's timeout names the status the agent
-// was in, which a killed ssh could not.
-func (r *Remote) Wait(ctx context.Context, address, until string) (revier.Status, error) {
-	args := []string{"revier", "agent", "wait", address, "--until", until}
-	if deadline, ok := ctx.Deadline(); ok {
-		args = append(args, "--timeout", strconv.FormatFloat(time.Until(deadline).Seconds(), 'f', 1, 64))
-	}
-	out, _, err := r.run(ctx, args...)
-	if err != nil {
-		return revier.StatusUnknown, err
-	}
-	s, err := revier.ParseStatus(strings.TrimSpace(string(out)))
-	if err != nil {
-		return revier.StatusUnknown, fmt.Errorf("%s: revier agent wait: %w", r.host, err)
-	}
-	return s, nil
 }

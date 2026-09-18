@@ -31,7 +31,7 @@ var (
 // the first declared shell panel beside it, in the same directory. A
 // realization with no agent panel has no tab to give, and the agent is
 // dropped.
-func (c *Core) agentTab(real revier.Realization, r Resume) (revier.Realization, AgentOutcome) {
+func (c *Core) agentTab(real revier.Realization, r Resume, link bool) (revier.Realization, AgentOutcome) {
 	agent, ok := declared(real.Panels, revier.PanelAgent)
 	if !ok {
 		return revier.Realization{}, AgentDropped
@@ -39,7 +39,7 @@ func (c *Core) agentTab(real revier.Realization, r Resume) (revier.Realization, 
 	if r.Harness == "" {
 		r.Harness = c.harnessOf(agent)
 	}
-	outcome := c.startAgent(&agent, r)
+	outcome := c.startAgent(&agent, r, link)
 	tab := revier.Realization{Dir: agent.Dir, Panels: []revier.PanelSpec{agent}}
 	if shell, ok := declared(real.Panels, revier.PanelShell); ok {
 		shell.Dir = agent.Dir
@@ -73,7 +73,7 @@ func declared(layout []revier.PanelSpec, kind revier.PanelKind) (revier.PanelSpe
 // what each agent comes to on host. A dropped agent has no tab: its target
 // declares no agent panel, or the runtime cannot open tabs. A launch opens
 // the tabs and a dry run reports the outcomes, so the two cannot disagree.
-func (c *Core) agentTabs(host revier.Host, real revier.Realization, resumes []Resume) ([]revier.Realization, []AgentOutcome) {
+func (c *Core) agentTabs(host revier.Host, real revier.Realization, resumes []Resume, link bool) ([]revier.Realization, []AgentOutcome) {
 	tabs := make([]revier.Realization, len(resumes))
 	outcomes := make([]AgentOutcome, len(resumes))
 	_, opens := host.(revier.PanelOpener)
@@ -82,7 +82,7 @@ func (c *Core) agentTabs(host revier.Host, real revier.Realization, resumes []Re
 			outcomes[n] = AgentDropped
 			continue
 		}
-		tabs[n], outcomes[n] = c.agentTab(real, r)
+		tabs[n], outcomes[n] = c.agentTab(real, r, link)
 	}
 	return tabs, outcomes
 }
@@ -94,8 +94,8 @@ func (c *Core) agentTabs(host revier.Host, real revier.Realization, resumes []Re
 // the error is returned beside the outcomes: the workspace is open, so it is
 // not the launch's failure. A failed OpenTab leaves no tab behind, so the
 // agent it names is not running anywhere.
-func (c *Core) addAgents(ctx context.Context, host revier.Host, real revier.Realization, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
-	tabs, outcomes := c.agentTabs(host, real, resumes)
+func (c *Core) addAgents(ctx context.Context, host revier.Host, real revier.Realization, ref revier.TargetRef, resumes []Resume, link bool) ([]AgentOutcome, error) {
+	tabs, outcomes := c.agentTabs(host, real, resumes, link)
 	opener, ok := host.(revier.PanelOpener)
 	if !ok {
 		return outcomes, nil
@@ -168,58 +168,16 @@ type Workspace struct {
 	snap    snapshot
 }
 
-// TabPlace is where a tab asked for opens: in Workspace on this machine, or,
-// when Remote is set, in the workspace Address names on that host
-// (decisions.md D71).
-type TabPlace struct {
-	Workspace Workspace
-	Remote    revier.Remote
-	Address   string
-}
-
-// TabIn is where a tab for a project's target opens. A link's home is the
-// pane onto the host's workspace, and a target the link does not declare is
-// one the host has, so both go to the host, the home as the project alone;
-// a target the link declares here is a local window and opens here. An empty
-// target is the one pick chooses, or the home on a link.
-func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, bound Bindings, pick func(Project) (revier.TargetName, error)) (TabPlace, error) {
-	if p.Remote != nil {
-		_, declared := p.index(target)
-		if home, _ := p.Home(); target == "" || target == home.Name || !declared {
-			return c.remoteTab(p, target)
-		}
-	}
+// TabIn is the open workspace a tab for a project's target opens in. An empty
+// target is the one pick chooses.
+func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, bound Bindings, pick func(Project) (revier.TargetName, error)) (Workspace, error) {
 	if target == "" {
 		var err error
 		if target, err = pick(p); err != nil {
-			return TabPlace{}, err
+			return Workspace{}, err
 		}
 	}
-	w, err := c.AgentWorkspace(ctx, p, target, bound)
-	return TabPlace{Workspace: w}, err
-}
-
-// TabAt is where a tab opens for the key pressed in a panel: the workspace
-// PanelOwner finds, or the host when that workspace is a link's home.
-func (c *Core) TabAt(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (TabPlace, error) {
-	w, err := c.PanelOwner(ctx, projects, bound, panel)
-	if err != nil {
-		return TabPlace{}, err
-	}
-	if home, _ := w.Project.Home(); w.Project.Remote != nil && w.Target == home.Name {
-		return c.remoteTab(w.Project, "")
-	}
-	return TabPlace{Workspace: w}, nil
-}
-
-// remoteTab is the host's place for a tab of a link's target; the home is the
-// project alone, since which of its targets holds the tab is the host's.
-func (c *Core) remoteTab(p Project, target revier.TargetName) (TabPlace, error) {
-	if home, _ := p.Home(); target == home.Name {
-		target = ""
-	}
-	r, address, err := c.RemoteAt(p, string(target))
-	return TabPlace{Workspace: Workspace{Project: p}, Remote: r, Address: address}, err
+	return c.AgentWorkspace(ctx, p, target, bound)
 }
 
 // AgentWorkspace is the open instance of a project's target, for `revier
@@ -338,7 +296,7 @@ func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcom
 	if err != nil {
 		return AgentNotAdded, err
 	}
-	tab, outcome := c.agentTab(t.real, r)
+	tab, outcome := c.agentTab(t.real, r, w.Project.Remote != nil)
 	if outcome == AgentDropped {
 		return AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
 	}

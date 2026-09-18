@@ -42,6 +42,18 @@ type Core struct {
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
 
+	// Served lists what `revier agent exec` started here for a terminal on
+	// another machine, where no runtime of this machine holds it
+	// (decisions.md D83). Its instances are matched by a target's runtime
+	// realization and probed beside the instance the runtime holds. It opens
+	// and focuses nothing, and no target resolves to it. Nil without one.
+	Served revier.Host
+
+	// Machine is this machine's name, as `uname -n` prints it: the first half
+	// of the tag a link's panel gives what it starts on a host. Empty reads
+	// it from the kernel.
+	Machine string
+
 	// Remotes are the revier installations on other machines, by host
 	// (decisions.md D40). NewRemote makes one for a host not yet here - a
 	// link written while the surface runs, or a host the link dialog asks
@@ -68,6 +80,8 @@ func (c *Core) WithRuntime(rt revier.Runtime) *Core {
 		Runtime:   rt,
 		Window:    c.Window,
 		Probes:    c.Probes,
+		Served:    c.Served,
+		Machine:   c.Machine,
 		Remotes:   maps.Clone(c.Remotes),
 		NewRemote: c.NewRemote,
 		KeyBinder: c.KeyBinder,
@@ -85,6 +99,25 @@ func (c *Core) hosts() []revier.Host {
 		out = append(out, c.Runtime)
 	}
 	return out
+}
+
+// allHosts is every host a snapshot lists: the configured ones, and the served
+// processes.
+func (c *Core) allHosts() []revier.Host {
+	out := c.hosts()
+	if c.Served != nil {
+		out = append(out, c.Served)
+	}
+	return out
+}
+
+// served is the instance of the served processes that the i-th target's
+// runtime realization matches.
+func (c *Core) served(snap snapshot, p Project, i int) (revier.Instance, bool) {
+	if c.Served == nil || p.Targets[i].Runtime == nil {
+		return revier.Instance{}, false
+	}
+	return find(snap, c.Served, p.compiled[i].runtime)
 }
 
 // Resolve reports which host and realization serve a target. It returns
@@ -149,7 +182,7 @@ type snapshot map[string][]revier.Instance
 
 func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 	s := make(snapshot)
-	for _, h := range c.hosts() {
+	for _, h := range c.allHosts() {
 		in, err := h.Instances(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%s: instances: %w", h.Name(), err)
@@ -414,7 +447,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		}
 		// The agent tabs are copies of the realization as declared, not of
 		// the launch the first agents were written into.
-		launch, agents, extra := c.resuming(real, resumes)
+		launch, agents, extra := c.resuming(real, resumes, p.Remote != nil)
 		ref, err := host.Open(ctx, launch)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
@@ -429,7 +462,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			res.Agents = agents
 			return res, nil
 		}
-		added, err := c.addAgents(ctx, host, real, ref, extra)
+		added, err := c.addAgents(ctx, host, real, ref, extra, p.Remote != nil)
 		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
@@ -843,17 +876,22 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 		return Report{}, err
 	}
 	answers := <-remote
+	tags := c.tags(snap)
 	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
 		v := c.view(ctx, snap, p, bound[p.Name], attached[p.Name])
 		if a, ok := answers[p.Name]; ok {
 			merge(&v, a)
+			c.localise(ctx, tags, v.Agents)
 		}
 		r.Views = append(r.Views, v)
 	}
 	for _, h := range c.hosts() {
 		r.Hosts = append(r.Hosts, h.Name())
 		r.Instances = append(r.Instances, snap[h.Name()]...)
+	}
+	if c.Served != nil {
+		r.Instances = append(r.Instances, snap[c.Served.Name()]...)
 	}
 	if c.Window != nil {
 		r.Windows = snap[c.Window.Name()]
@@ -997,6 +1035,13 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 		if p.isTab(i) {
 			v.Targets = append(v.Targets, c.tabView(snap, p, i, bound, tv))
 			continue
+		}
+		// What this machine serves to a terminal elsewhere is probed whether
+		// or not a host here can realize the target: a machine reached over
+		// ssh alone has no runtime.
+		if inst, ok := c.served(snap, p, i); ok && local && !seen[key(inst.Ref)] {
+			seen[key(inst.Ref)] = true
+			v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 		}
 		host, _, m, err := c.resolveAt(p, i)
 		if err == nil {

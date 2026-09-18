@@ -49,4 +49,7 @@ type AgentView struct {
 	// the process that numbers it, so the two together name one agent.
 	Ref   TargetRef  `json:"ref,omitzero"`
 	State AgentState `json:"state"`
+	// Conversation is set only in the answer to Remote.Conversations: what a
+	// save records for an agent whose process is on another machine.
+	Conversation *Conversation `json:"conversation,omitempty"`
 }

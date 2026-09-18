@@ -310,6 +310,7 @@ func cmdTUI(a *app) error {
 func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
+	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -351,6 +352,11 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 
 	if *asJSON {
+		// What a save on another machine records for its link to a project
+		// here (decisions.md D83).
+		if *conversations {
+			a.core.NameConversations(ctx, report)
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(views)
@@ -449,8 +455,9 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if !ok {
 		return fmt.Errorf("project %q has no home target", p.Name)
 	}
-	// A remote project's checkout is its host's to clone: the pane opened
-	// here runs `revier open` there, and that one clones (decisions.md D40).
+	// A remote project's checkout is its host's to clone: the agent panel
+	// opened here runs `revier agent exec` there, and that one clones
+	// (decisions.md D83).
 	if p.Remote == nil {
 		cloned, err := checkout.Ensure(p.Project, os.Stderr)
 		if err != nil {

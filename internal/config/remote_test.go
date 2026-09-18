@@ -2,7 +2,9 @@ package config_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -29,9 +31,18 @@ func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
 	if !ok || home.Runtime == nil {
 		t.Fatalf("home = %+v, want a derived runtime target", home)
 	}
-	want := []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}
-	if !slices.Equal(home.Runtime.Launch, want) {
-		t.Errorf("launch = %q, want %q", home.Runtime.Launch, want)
+	panels := home.Runtime.Panels
+	if len(panels) != 2 || panels[0].Kind != revier.PanelAgent || panels[1].Kind != revier.PanelShell {
+		t.Fatalf("panels = %+v, want an agent and a shell", panels)
+	}
+	if got, want := panels[0].Command, config.RemotePanel("buildbox", "far", "agent"); !slices.Equal(got, want) {
+		t.Errorf("agent = %q, want %q", got, want)
+	}
+	if got, want := panels[1].Command, config.RemotePanel("buildbox", "far", "shell"); !slices.Equal(got, want) {
+		t.Errorf("shell = %q, want %q", got, want)
+	}
+	if len(home.Runtime.Launch) != 0 {
+		t.Errorf("launch = %q, want none beside the panels", home.Runtime.Launch)
 	}
 	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
 		t.Errorf("name %q, match %q: the pane must be found again by its title", home.Runtime.Name, home.Runtime.Match.Title)
@@ -53,8 +64,8 @@ func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 		t.Errorf("name %q, on the host %q; want build here and far there", p.Name, p.Remote.Project)
 	}
 	home, _ := p.Home()
-	if i := slices.Index(home.Runtime.Launch, "far"); i < 0 {
-		t.Errorf("launch = %q, want the host's name opened there", home.Runtime.Launch)
+	if got, want := home.Runtime.Panels[0].Command, config.RemotePanel("buildbox", "far", "agent"); !slices.Equal(got, want) {
+		t.Errorf("agent = %q, want the project named as the host names it: %q", got, want)
 	}
 }
 
@@ -131,9 +142,8 @@ home = true
 	if home.Runtime.Place != "right top 75% 100%" {
 		t.Errorf("place = %q, want the one the link declared", home.Runtime.Place)
 	}
-	want := []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}
-	if !slices.Equal(home.Runtime.Launch, want) || home.Runtime.Match.Title != "^session:far$" {
-		t.Errorf("home runtime = %+v, want the derived pane's launch and match", home.Runtime)
+	if len(home.Runtime.Panels) != 2 || home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("home runtime = %+v, want the derived pane's panels and match", home.Runtime)
 	}
 }
 
@@ -493,5 +503,34 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body), nil); err != nil {
 			t.Errorf("%s: %v", host, err)
 		}
+	}
+}
+
+// The panel's command is a shell that becomes the ssh, so the pid it wrote
+// into the tag is the pid the runtime reports for the panel. What runs on the
+// host runs in the login shell there, and reaches it through three shells
+// with a name that needs quoting still one word.
+func TestARemotePanelTagsWhatItStartsWithItsOwnPid(t *testing.T) {
+	argv := config.RemotePanel("buildbox", "it's far", "agent")
+	if len(argv) != 4 || argv[0] != "sh" || argv[1] != "-c" || !strings.HasPrefix(argv[2], "exec ssh -t ") {
+		t.Fatalf("argv = %q, want sh -c 'exec ssh -t ...' sh", argv)
+	}
+	argv[2] = strings.Replace(argv[2], "exec ssh -t", "printf '%s\\n'", 1)
+	out, err := exec.Command(argv[0], append(argv[1:], "--resume", "abc-123")...).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	there := lines[len(lines)-1]
+	// What sshd hands the user's shell: run it, with a login shell that only
+	// prints its command line.
+	line, err := exec.Command("sh", "-c", "SHELL=echo; "+strings.TrimPrefix(there, "exec ")).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, _ := os.Hostname()
+	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
+	if !want.Match(line) {
+		t.Errorf("on the host it runs %q, want %s", line, want)
 	}
 }

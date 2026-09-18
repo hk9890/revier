@@ -23,6 +23,7 @@ usage:
   revier agent prompt <agent> [--] <text>
   revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]
   revier agent focus <agent> [--ref <instance>]
+  revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
@@ -41,6 +42,10 @@ Without -p or --panel the project is the one --dir is in, else the one this
 directory resolves to.
 
 focus makes the agent's tab current and raises the window that holds it.
+
+exec becomes the project's agent in this terminal. It is what the agent panel
+of a link runs on the project's machine over ssh; --tag is that panel's name
+for the agent, which a survey there reports it under.
 
 wait prints the status it ended on. prompt types one line and submits it,
 and returns once an idle agent has started on it, so
@@ -75,6 +80,8 @@ func cmdAgent(args []string) error {
 		return cmdAgentNew(args)
 	case "focus":
 		return cmdAgentFocus(args)
+	case "exec":
+		return cmdAgentExec(args)
 	default:
 		fmt.Fprint(os.Stderr, agentUsage)
 		return fmt.Errorf("unknown agent command %q", sub)
@@ -108,7 +115,7 @@ func cmdAgentWait(args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
 	defer cancel()
-	state, err := waitFor(ctx, pos[0], *until, statuses)
+	state, err := waitFor(ctx, pos[0], statuses)
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
@@ -120,24 +127,11 @@ func cmdAgentWait(args []string) error {
 }
 
 // waitFor finds the agent an address names and waits for one of the statuses.
-// The state is the last one read, zero when the agent was never found. An
-// agent of a remote project is waited on by the revier on its host, which
-// answers with the status it ended on.
-func waitFor(ctx context.Context, address, name string, until []revier.Status) (revier.AgentState, error) {
+// The state is the last one read, zero when the agent was never found.
+func waitFor(ctx context.Context, address string, until []revier.Status) (revier.AgentState, error) {
 	a, err := newApp(ctx)
 	if err != nil {
 		return revier.AgentState{}, err
-	}
-	r, there, err := a.remoteFor(address)
-	if err != nil {
-		return revier.AgentState{}, err
-	}
-	if r != nil {
-		status, err := r.Wait(ctx, there, name)
-		if err != nil {
-			return revier.AgentState{Status: status}, fmt.Errorf("%s: %w", address, err)
-		}
-		return revier.AgentState{Status: status}, nil
 	}
 	ag, err := a.agent(ctx, address)
 	if err != nil {
@@ -165,14 +159,6 @@ func cmdAgentPrompt(args []string) error {
 	if err != nil {
 		return err
 	}
-	r, there, err := a.remoteFor(pos[0])
-	if err != nil {
-		return err
-	}
-	if r != nil {
-		// The remote revier makes every refusal and prints its own warning.
-		return r.Prompt(ctx, there, pos[1])
-	}
 	ag, err := a.agent(ctx, pos[0])
 	if err != nil {
 		return err
@@ -187,8 +173,7 @@ func cmdAgentPrompt(args []string) error {
 	return nil
 }
 
-// cmdAgentFocus brings one agent to the front: on the host of a remote
-// project, through that revier, which is how the TUI reaches an agent there.
+// cmdAgentFocus brings one agent to the front.
 // With --ref the address names a panel of that instance, so a panel id two
 // kitty processes share still names one agent.
 func cmdAgentFocus(args []string) error {
@@ -208,17 +193,7 @@ func cmdAgentFocus(args []string) error {
 		return err
 	}
 	address := pos[0]
-	r, there, err := a.remoteFor(address)
-	if err != nil {
-		return err
-	}
 	start := time.Now()
-	if r != nil {
-		// The host knows the instance by its own runtime: only the id goes.
-		err := r.FocusAgent(ctx, there, revier.TargetRef{ID: *instance})
-		logging.Op("agent focus", start, err, "address", address, "host", r.Name(), "ref", *instance)
-		return err
-	}
 	var ref revier.TargetRef
 	var panel revier.PanelID
 	switch {
@@ -272,7 +247,6 @@ func cmdAgentNew(args []string) error {
 
 // newAgent opens the agent tab where newTab puts it.
 func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
-	there := func(r revier.Remote, address string) error { return r.NewAgent(ctx, address, resume) }
 	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
 		outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: resume, Dir: dir})
@@ -285,33 +259,29 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, there, here)
+	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, here)
 }
 
-// newTab opens a tab where the core places it: through there on the host of a
-// remote project, or through here in an open workspace on this machine. The
-// place is the owner of --panel; or the project -p names, else the one --dir
+// newTab opens a tab through here in the open workspace the core places it in.
+// The place is the owner of --panel; or the project -p names, else the one --dir
 // is in, else the one resolved as for any command, with the target after -p's
-// colon or the one pick chooses. --dir is a path on this machine, so it has
-// to be a directory only where the tab opens here.
+// colon or the one pick chooses. --dir is a path on this machine, so a link,
+// whose tab starts on its host, drops it.
 //
 // A --dir outside the project that holds --panel is dropped, and the tab opens
 // where the project's own tab would. That --dir is the kitty key's: kitty's
 // --cwd=current gives "/" for a panel whose shell sits in a deleted worktree.
-func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), there func(revier.Remote, string) error, here func(core.Workspace, string) error) error {
+func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	place, err := a.tabPlace(ctx, project, panel, dir, pick)
 	if err != nil {
 		return err
 	}
-	if place.Remote != nil {
-		start := time.Now()
-		err := there(place.Remote, place.Address)
-		logging.Op(what, start, err, "project", place.Workspace.Project.Name, "host", place.Remote.Name(), "address", place.Address)
-		return err
+	if place.Project.Remote != nil {
+		dir = ""
 	}
 	if panel != "" && dir != "" {
-		if p, ok := a.projectForPath(dir); !ok || p.Name != place.Workspace.Project.Name {
-			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", place.Workspace.Project.Name, "dir", dir)
+		if p, ok := a.projectForPath(dir); !ok || p.Name != place.Project.Name {
+			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", place.Project.Name, "dir", dir)
 			dir = ""
 		}
 	}
@@ -320,36 +290,22 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 			return fmt.Errorf("--dir %s: not a directory", dir)
 		}
 	}
-	return here(place.Workspace, dir)
+	return here(place, dir)
 }
 
-func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.TabPlace, error) {
+func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
 	if panel != "" {
-		return a.core.TabAt(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
+		return a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
 	}
 	name, sel, _ := strings.Cut(project, ":")
 	p, inDir := a.projectForPath(dir)
 	if name != "" || dir == "" || !inDir {
 		var err error
 		if p, err = a.resolveProject(ctx, name); err != nil {
-			return core.TabPlace{}, err
+			return core.Workspace{}, err
 		}
 	}
 	return a.core.TabIn(ctx, p, revier.TargetName(sel), a.state.Bound[p.Name], pick)
-}
-
-// remoteFor returns the remote that drives the agent an address names, and
-// the address as the host knows it; nil when the project is on this machine
-// (decisions.md D41).
-func (a *app) remoteFor(address string) (revier.Remote, string, error) {
-	name, sel, _ := strings.Cut(address, ":")
-	p, ok := a.project(revier.ProjectName(name))
-	if !ok {
-		return nil, "", fmt.Errorf("no project named %q", name)
-	}
-	// The project has its own name on the host; what follows the colon is
-	// the host's to resolve.
-	return a.core.RemoteAt(p, sel)
 }
 
 // agent finds the agent an address names: <project>, or <project>:<target>,

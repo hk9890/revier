@@ -194,59 +194,52 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	}
 }
 
-// linkProject is a link to far on buildbox: its home the pane onto the host's
-// workspace, and logs a window of its own on this machine.
+// linkProject is a link to far on buildbox: its home the agent and the shell
+// on the host, each through an ssh here, and logs a window of its own on this
+// machine.
 func linkProject(t *testing.T) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Launch: []string{"ssh"}, Match: revier.Match{Title: "^far$"}}},
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
+			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
+		}}},
 		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
 			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
 	}})
 }
 
-// A tab for a link opens on the host when it is for the pane onto the host's
-// workspace - the home, or no target named - or for a target only the host
-// has, which goes with its name; the home goes as the project alone, the host
-// picking its own target. A target the link declares here is a local window,
-// and its tab opens here.
-func TestTabInSendsALinksHomeToTheHostAndKeepsItsLocalTargets(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox")
+// An agent asked for a link opens here, as a tab of the link's workspace: the
+// ssh that runs the agent on the host, with the conversation to resume as its
+// arguments, since only the host can resume it.
+func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	logs := rt.Add("far-logs", "")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
-	p := linkProject(t)
-	pick := func(core.Project) (revier.TargetName, error) { return "home", nil }
-
-	for target, want := range map[revier.TargetName]string{"": "far-there", "home": "far-there", "work": "far-there:work"} {
-		place, err := c.TabIn(context.Background(), p, target, nil, pick)
-		if err != nil || place.Remote != remote || place.Address != want {
-			t.Errorf("TabIn %q = %+v, %v; want buildbox at %q", target, place, err, want)
-		}
+	ref := rt.Add("far", "")
+	c := &core.Core{Runtime: rt}
+	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home", nil)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
 	}
-	place, err := c.TabIn(context.Background(), p, "logs", nil, pick)
-	if err != nil || place.Remote != nil || place.Workspace.Ref != logs {
-		t.Errorf("TabIn logs = %+v, %v; want the local window %+v", place, err, logs)
+	outcome, err := c.NewAgent(context.Background(), w, core.Resume{Session: "abc-123", Dir: "/srv/far/wt", Harness: "claude"})
+	if err != nil || outcome != core.AgentResumed {
+		t.Fatalf("NewAgent = %v, %v; want resumed", outcome, err)
 	}
-}
-
-// The key pressed in the pane onto the host's workspace opens its tab there;
-// pressed in a link's local window, here.
-func TestTabAtSendsOnlyALinksHomePaneToTheHost(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox")
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("far", "", revier.Panel{ID: "1"})
-	logs := rt.Add("far-logs", "", revier.Panel{ID: "2"})
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
-	projects := []core.Project{linkProject(t)}
-
-	place, err := c.TabAt(context.Background(), projects, nil, "1")
-	if err != nil || place.Remote != remote || place.Address != "far-there" {
-		t.Errorf("TabAt home pane = %+v, %v; want buildbox at far-there", place, err)
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != ref {
+		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, ref)
 	}
-	place, err = c.TabAt(context.Background(), projects, nil, "2")
-	if err != nil || place.Remote != nil || place.Workspace.Ref != logs {
-		t.Errorf("TabAt logs = %+v, %v; want the local window %+v", place, err, logs)
+	got := rt.Tabs[0].Real.Panels[0]
+	want := []string{"sh", "-c", "exec ssh far", "sh", "--resume", "abc-123", "--dir", "/srv/far/wt"}
+	if !slices.Equal(got.Command, want) || got.Dir != "" {
+		t.Errorf("agent panel = %+v, want %q and no directory here", got, want)
+	}
+
+	// A word a shell would read is not sent: the agent starts empty.
+	outcome, err = c.NewAgent(context.Background(), w, core.Resume{Session: "abc; rm -rf /"})
+	if err != nil || outcome != core.AgentEmpty {
+		t.Errorf("NewAgent = %v, %v; want empty", outcome, err)
+	}
+	if got := rt.Tabs[1].Real.Panels[0].Command; !slices.Equal(got, want[:4]) {
+		t.Errorf("agent panel = %q, want %q", got, want[:4])
 	}
 }
 

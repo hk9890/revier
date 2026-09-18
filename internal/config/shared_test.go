@@ -163,8 +163,8 @@ func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
 		t.Fatalf("targets = %v, want the derived home alone", got)
 	}
-	if launch := target(t, p, "home").Runtime.Launch; len(launch) == 0 || launch[0] != "ssh" {
-		t.Errorf("home launch = %v, want the ssh pane", launch)
+	if panels := target(t, p, "home").Runtime.Panels; len(panels) != 2 {
+		t.Errorf("home panels = %v, want the derived agent and shell", panels)
 	}
 }
 
