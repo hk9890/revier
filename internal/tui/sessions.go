@@ -121,8 +121,6 @@ type restoredMsg struct {
 	err      error
 }
 
-var errNothingOpen = errors.New("nothing is open; no session saved")
-
 func newSessionList(th theme.Theme) list.Model { return plainList(sessionDelegate{theme: th}) }
 
 // newSessionNameInput is the field a session's name is typed in.
@@ -254,22 +252,9 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 		if err != nil {
 			return savedMsg{err: err}
 		}
-		s, gaps := c.Session(ctx, report, st.Current)
-		// An empty save would become the newest session, which a plain
-		// restore opens: the save made before a reboot would lose to it.
-		if len(s.Projects) == 0 {
-			return savedMsg{err: errNothingOpen}
-		}
-		s.At, s.Name = time.Now(), name
-		stored, path, err := session.Save(root, s)
+		stored, _, gaps, err := c.SaveSession(ctx, root, report, st.Current, name, time.Now())
 		if err != nil {
 			return savedMsg{err: err}
-		}
-		slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path,
-			"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
-			"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
-		for _, err := range gaps.Failed {
-			slog.Warn("session save: probe could not be asked", "err", err)
 		}
 		return savedMsg{stored: stored, gaps: gaps}
 	}
@@ -280,7 +265,7 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	m.saving = false
 	switch {
-	case errors.Is(msg.err, errNothingOpen):
+	case errors.Is(msg.err, core.ErrNothingOpen):
 		// A normal outcome, as the CLI prints it, and not a failure.
 		slog.Info("session save: nothing open")
 		m.err = msg.err

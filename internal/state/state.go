@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hk9890/revier/internal/fsutil"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -134,19 +135,10 @@ func (s *State) Save(root string) error {
 	if err != nil {
 		return fmt.Errorf("encode state: %w", err)
 	}
-	tmp, err := os.CreateTemp(root, "state-*.json")
-	if err != nil {
-		return fmt.Errorf("create temp state: %w", err)
+	if err := fsutil.WriteFile(path(root), b, 0o644); err != nil {
+		return fmt.Errorf("write state: %w", err)
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp state: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp state: %w", err)
-	}
-	return os.Rename(tmp.Name(), path(root))
+	return nil
 }
 
 // Pending reports whether l, the launch on record if any, is of the project's

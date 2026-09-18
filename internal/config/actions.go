@@ -109,6 +109,9 @@ func editActions(root string, change func(lines []string, entries []table, have 
 	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
+	if err := problemsAdded(cfg, got); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	if !slices.EqualFunc(got.Actions, want, sameAction) {
 		return fmt.Errorf("%s: the actions did not come out as written; change them by hand", path)
 	}

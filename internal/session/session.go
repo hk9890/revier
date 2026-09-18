@@ -26,6 +26,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/hk9890/revier/internal/fsutil"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -149,7 +150,9 @@ func write(path string, s Session) error {
 	if err := toml.NewEncoder(&b).Encode(s); err != nil {
 		return fmt.Errorf("encode session: %w", err)
 	}
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+	// Whole or not at all: Rename writes every stored session through here,
+	// and a session cut short by a crash is one List drops without a word.
+	if err := fsutil.WriteFile(path, []byte(b.String()), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil

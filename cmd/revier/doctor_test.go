@@ -63,7 +63,7 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 		"fix: the file is not valid TOML",
 		"template.toml",
 		"fix: fix the template",
-		"4 project(s), 3 with problems",
+		"4 project(s), 3 file(s) with problems",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("report should contain %q:\n%s", want, got)
@@ -87,7 +87,27 @@ func TestDoctorEndsCleanWhenEverythingLoads(t *testing.T) {
 	if err := cmdDoctor(&out, nil); err != nil {
 		t.Fatalf("cmdDoctor: %v", err)
 	}
-	if !strings.Contains(out.String(), "1 project(s), 0 with problems") {
+	if !strings.Contains(out.String(), "1 project(s), 0 file(s) with problems") {
 		t.Errorf("report = %q", out.String())
+	}
+}
+
+// A mistake in config.toml is reported under that file, as a project's is
+// under its own, and costs only what it names: the projects still load.
+func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
+	doctorRoot(t, map[string]string{"sound.toml": sound})
+	root := os.Getenv("REVIER_CONFIG_HOME")
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[[action]]\nkey = \"y\"\nname = \"sync\"\nrun = [\"true\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	for _, want := range []string{"config.toml", `action "sync"`, "typed text", "1 project(s), 1 file(s) with problems"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report should contain %q:\n%s", want, out.String())
+		}
 	}
 }

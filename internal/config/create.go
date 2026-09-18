@@ -45,6 +45,30 @@ func ProjectFile(root string, name revier.ProjectName) string {
 	return filepath.Join(root, "projects", string(name)+".toml")
 }
 
+// CanCreate is why a project named name cannot be made for dir, or nil. Two
+// directories are refused, and a name already taken. A directory that is
+// already a local project's path would become two projects fighting over
+// it; a link's path is on its host, so a directory here of the same name is
+// some other checkout. The home directory would own every directory under
+// it that no other project claims, so a keypress in any of them would
+// resolve to it instead of reporting no project.
+func CanCreate(projects []core.Project, name revier.ProjectName, dir string) error {
+	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == dir {
+		return errors.New("refusing to make the home directory a project; run this in the project's own directory")
+	}
+	for _, p := range projects {
+		if p.Remote == nil && filepath.Clean(p.Path) == dir {
+			return fmt.Errorf("%s is already project %q", dir, p.Name)
+		}
+		// A file of another name can declare this project name, and the load
+		// refuses two projects under one name.
+		if p.Name == name {
+			return fmt.Errorf("project %q already exists: %s", name, p.File)
+		}
+	}
+	return nil
+}
+
 // Create writes a project file for dir from the built-in template, and loads
 // it back. An existing file is never overwritten, and a file that does not
 // load is removed again, so Create leaves behind a project revier accepts or

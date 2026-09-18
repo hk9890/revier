@@ -24,16 +24,19 @@ import (
 // whole.
 
 // validateShared refuses a shared target that no project could use: one with
-// no name, a name given twice, or a value of the wrong type. Whether it is
-// complete - a realization, a match - is checked per project, after the
-// merge, because a project may supply what it leaves out.
-func validateShared(shared []map[string]any) error {
-	var errs []error
+// no name, a name given twice, or a value of the wrong type. One error per
+// target, parallel to shared and nil where the target is sound, so the
+// refused one reaches no project and the others reach every one. Whether a
+// target is complete - a realization, a match - is checked per project,
+// after the merge, because a project may supply what it leaves out.
+func validateShared(shared []map[string]any) []error {
+	out := make([]error, len(shared))
 	seen := map[string]bool{}
 	for i, t := range shared {
+		var errs []error
 		name, _ := t["name"].(string)
 		if name == "" {
-			errs = append(errs, fmt.Errorf("target %d has no name", i+1))
+			out[i] = fmt.Errorf("target %d has no name", i+1)
 			continue
 		}
 		if seen[name] {
@@ -54,8 +57,9 @@ func validateShared(shared []map[string]any) error {
 			}
 			errs = append(errs, validateRemoteKeys(name, remote)...)
 		}
+		out[i] = errors.Join(errs...)
 	}
-	return errors.Join(errs...)
+	return out
 }
 
 // validateRemoteKeys refuses a key under [target.remote] that is not one of
@@ -263,7 +267,8 @@ func recode(tables any, into any) error {
 	return err
 }
 
-// sharedTargets is the shared targets of the config.toml under root.
+// sharedTargets is the shared targets a project gets from the config.toml
+// under root.
 func sharedTargets(root string) ([]map[string]any, error) {
 	path := File(root)
 	data, err := os.ReadFile(path)
@@ -274,5 +279,5 @@ func sharedTargets(root string) ([]map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	return cfg.Targets, nil
+	return cfg.Shared(), nil
 }

@@ -77,7 +77,7 @@ func serve(project, tag string, what func(*core.Core, core.Project) (core.Served
 	if err != nil {
 		return err
 	}
-	warnProblems(projects)
+	warnProblems(cfg, projects)
 	i := slices.IndexFunc(projects, func(p core.Project) bool { return string(p.Name) == project })
 	if i < 0 {
 		return fmt.Errorf("no project named %q", project)

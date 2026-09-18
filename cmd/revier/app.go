@@ -36,7 +36,7 @@ func newApp(ctx context.Context) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	warnProblems(projects)
+	warnProblems(cfg, projects)
 	stateRoot, err := state.Root()
 	if err != nil {
 		return nil, err
@@ -68,11 +68,17 @@ func newApp(ctx context.Context) (*app, error) {
 // surface with a linked project runs it on that host every refresh
 // (decisions.md D40), and a configuration problem is the same on every one of
 // those runs. Its own output already marks the projects concerned.
-func warnProblems(projects []core.Project) {
+func warnProblems(cfg *config.Config, projects []core.Project) {
 	if invoked == "list" {
 		return
 	}
 	files := 0
+	if len(cfg.Problems) > 0 {
+		files++
+		for _, err := range cfg.Problems {
+			slog.Warn("config problem", "file", "config.toml", "err", err)
+		}
+	}
 	for _, p := range projects {
 		probs := config.Problems(p)
 		if len(probs) == 0 {
@@ -84,7 +90,7 @@ func warnProblems(projects []core.Project) {
 		}
 	}
 	if files > 0 {
-		fmt.Fprintf(os.Stderr, "revier: warning: %d project file(s) have problems; run `revier doctor`\n", files)
+		fmt.Fprintf(os.Stderr, "revier: warning: %d configuration file(s) have problems; run `revier doctor`\n", files)
 	}
 }
 

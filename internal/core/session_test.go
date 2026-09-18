@@ -5,9 +5,11 @@ package core_test
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -607,5 +609,33 @@ func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 				t.Errorf("agent command = %v, want the project as written", panels[1].Command)
 			}
 		})
+	}
+}
+
+// A save with nothing open is refused with a normal outcome, not written: an
+// empty session would become the newest, the one a plain restore opens. With
+// something open, the save is written and stamped as asked.
+func TestSaveSessionRefusesAnEmptySave(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	projects := []core.Project{prepared(t, agentProject())}
+	root := t.TempDir()
+	if _, _, _, err := c.SaveSession(context.Background(), root, survey(t, c, projects, nil), "", "before", time.Now()); !errors.Is(err, core.ErrNothingOpen) {
+		t.Errorf("save = %v, want ErrNothingOpen", err)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %+v, want none written", all)
+	}
+
+	c, _, _, projects = openDesktop(t, revier.StatusIdle)
+	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
+	stored, path, _, err := c.SaveSession(context.Background(), root, survey(t, c, projects, nil), "revier", "before", at)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if stored.Name != "before" || !stored.At.Equal(at) || stored.Current != "revier" || len(stored.Projects) == 0 {
+		t.Errorf("stored = %+v, want the name, moment and current project as given", stored)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("path %s: %v, want the file written", path, err)
 	}
 }

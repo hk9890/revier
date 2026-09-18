@@ -43,8 +43,21 @@ type Config struct {
 	Actions []Action `toml:"action"`
 	Probes  []Probe  `toml:"probe"`
 	// Targets are the shared targets, as TOML decoded them, so a project
-	// can override any one field of one (shared.go).
+	// can override any one field of one (shared.go). Every [[target]] the
+	// file writes is here, so the config screen edits the file as it is;
+	// Shared is the ones a project gets.
 	Targets []map[string]any `toml:"target"`
+
+	// Problems is what config.toml declares that nothing can use, each with
+	// its reason: an action the TUI could never run, a shared target no
+	// project could take. Each costs itself alone (decisions.md D85): the
+	// action stays unbound, the target reaches no project, and the file is
+	// otherwise read whole. `revier doctor` is where these are read.
+	Problems []error `toml:"-"`
+
+	// sharedErr is parallel to Targets: the reason a shared target is
+	// refused, nil where it is sound.
+	sharedErr []error
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -86,6 +99,11 @@ type Action struct {
 	Key  string   `toml:"key"`
 	Name string   `toml:"name"`
 	Run  []string `toml:"run"`
+
+	// Refused is why the action is bound to nothing: a key the TUI cannot
+	// run, or nothing to run. The action is still listed, so the config
+	// screen can repair it, and a press of its name says this reason.
+	Refused error `toml:"-"`
 }
 
 // Root reports the configuration directory, honouring REVIER_CONFIG_HOME and
@@ -119,11 +137,41 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Targets)
+	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Shared())
 	if err != nil {
 		return nil, nil, err
 	}
 	return cfg, projects, nil
+}
+
+// Shared is the shared targets every project gets: Targets without the ones
+// validateShared refused.
+func (c *Config) Shared() []map[string]any {
+	out := make([]map[string]any, 0, len(c.Targets))
+	for i, t := range c.Targets {
+		if c.sharedErr[i] == nil {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// problemsAdded is what after holds against config.toml's rules that before
+// did not: the reasons a write is refused for. A write is refused for what
+// it breaks and not for what was broken before it (decisions.md D85), else
+// one bad action would lock the config screen against every other edit.
+func problemsAdded(before, after *Config) error {
+	had := map[string]bool{}
+	for _, err := range before.Problems {
+		had[err.Error()] = true
+	}
+	var out []error
+	for _, err := range after.Problems {
+		if !had[err.Error()] {
+			out = append(out, err)
+		}
+	}
+	return errors.Join(out...)
 }
 
 // File is config.toml under a configuration root.
@@ -151,11 +199,17 @@ func parse(data []byte) (*Config, error) {
 	if _, err := cfg.TriggerKey(); err != nil {
 		return nil, fmt.Errorf("ui.trigger_key: %w", err)
 	}
-	if err := validateActions(cfg.Actions); err != nil {
-		return nil, err
+	for i, err := range validateActions(cfg.Actions) {
+		if err != nil {
+			cfg.Actions[i].Refused = err
+			cfg.Problems = append(cfg.Problems, err)
+		}
 	}
-	if err := validateShared(cfg.Targets); err != nil {
-		return nil, err
+	cfg.sharedErr = validateShared(cfg.Targets)
+	for _, err := range cfg.sharedErr {
+		if err != nil {
+			cfg.Problems = append(cfg.Problems, err)
+		}
 	}
 	return cfg, nil
 }
@@ -186,19 +240,21 @@ var SurfaceKeys = []core.Chord{
 	"alt+n", "alt+r", "alt+s", "alt+q", "alt+c", "alt+h",
 }
 
-// validateActions refuses an action the TUI can never run. An action's key is
-// the TUI's alone - no desktop binding carries it - so a key the terminal
-// does not deliver, one the filter takes as typed text, or one the TUI takes
-// for itself does nothing, and the only place to say so is here.
-func validateActions(actions []Action) error {
-	var errs []error
-	for _, act := range actions {
+// validateActions refuses an action the TUI can never run, one error per
+// action, parallel to actions and nil where the action is sound. An action's
+// key is the TUI's alone - no desktop binding carries it - so a key the
+// terminal does not deliver, one the filter takes as typed text, or one the
+// TUI takes for itself does nothing, and the only place to say so is here.
+func validateActions(actions []Action) []error {
+	out := make([]error, len(actions))
+	for i, act := range actions {
+		var errs []error
 		if len(act.Run) == 0 {
 			errs = append(errs, fmt.Errorf("action %q runs nothing", act.Name))
 		}
 		chord, err := core.ParseChord(act.Key)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("action %q: %w", act.Name, err))
+			out[i] = errors.Join(append(errs, fmt.Errorf("action %q: %w", act.Name, err))...)
 			continue
 		}
 		sent, ok := chord.Terminal()
@@ -212,8 +268,9 @@ func validateActions(actions []Action) error {
 		case slices.Contains(SurfaceKeys, chord):
 			errs = append(errs, fmt.Errorf("action %q: key %q is one of revier's own keys; give it another", act.Name, act.Key))
 		}
+		out[i] = errors.Join(errs...)
 	}
-	return errors.Join(errs...)
+	return out
 }
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -269,16 +268,8 @@ func (m Model) submitRoot() (tea.Model, tea.Cmd) {
 // addOrAsk adds dir when it is a folder, and asks to create it, or to clone
 // into it, when it is not there.
 func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
-	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == dir {
-		m.err = errors.New("the home directory cannot be a project: it would own every folder no other project claims")
-		return m, nil
-	}
-	if err := m.nameFree(config.NameFor(dir)); err != nil {
+	if err := config.CanCreate(m.projects, config.NameFor(dir), dir); err != nil {
 		m.err = err
-		return m, nil
-	}
-	if p, ok := m.projectAt(dir); ok {
-		m.err = fmt.Errorf("%s is already project %q", contractHome(dir), p.Name)
 		return m, nil
 	}
 	info, err := os.Stat(dir)
@@ -323,16 +314,6 @@ func (m Model) nameFree(name revier.ProjectName) error {
 		return fmt.Errorf("project %q already exists: %s", name, contractHome(p.File))
 	}
 	return nil
-}
-
-// projectAt is the local project whose folder is dir.
-func (m Model) projectAt(dir string) (core.Project, bool) {
-	for _, p := range m.projects {
-		if p.Remote == nil && filepath.Clean(config.ExpandHome(p.Path)) == dir {
-			return p, true
-		}
-	}
-	return core.Project{}, false
 }
 
 // addProject writes the project file for dir and makes it the selected row.

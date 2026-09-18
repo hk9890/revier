@@ -217,6 +217,13 @@ func run(args []string) error {
 		// Its own app, as agent new has: the hosts are probed and listed
 		// inside the command's own bound.
 		return cmdShell(args)
+	case "session":
+		// Before the app, as the other families answer it: a usage request
+		// must not probe the desktop first.
+		if len(args) == 0 || slices.Contains([]string{"help", "--help", "-h"}, args[0]) {
+			fmt.Print(sessionUsage)
+			return nil
+		}
 	}
 
 	// A keypress command gets long enough for a detached launch's wait
@@ -585,6 +592,9 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	known := p.Remote != nil // a remote project's actions are its host's to know
 	for _, act := range a.cfg.Actions {
 		if act.Name == name {
+			if act.Refused != nil {
+				return act.Refused
+			}
 			run, known = act.Run, true
 			break
 		}
@@ -598,7 +608,7 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	a.launchedAction(p.Name)
-	return runAction(p.Name, argv, dir)
+	return runAction(p.Name, name, argv, dir)
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
@@ -610,13 +620,13 @@ var errActionFailed = errors.New("the action failed")
 // No shell: the argv is a list, so there is nothing to quote and nothing to
 // inject into. No context either: the command's 30s deadline is for host
 // calls, and an action - an editor, a long pull - runs as long as it runs.
-func runAction(project revier.ProjectName, argv []string, dir string) error {
+func runAction(project revier.ProjectName, name string, argv []string, dir string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	start := time.Now()
 	err := c.Run()
-	logging.Op("action", start, err, "project", project, "argv", argv)
+	logging.Op("action", start, err, "project", project, "action", name, "argv", argv)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/fsutil"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -111,19 +112,10 @@ func (r *Run) Save() error {
 	if err != nil {
 		return fmt.Errorf("encode run: %w", err)
 	}
-	tmp, err := os.CreateTemp(r.Dir, "summary-*.json")
-	if err != nil {
-		return fmt.Errorf("create temp summary: %w", err)
+	if err := fsutil.WriteFile(filepath.Join(r.Dir, summaryFile), b, 0o644); err != nil {
+		return fmt.Errorf("write summary: %w", err)
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp summary: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp summary: %w", err)
-	}
-	return os.Rename(tmp.Name(), filepath.Join(r.Dir, summaryFile))
+	return nil
 }
 
 // ErrNoRun is returned for an id that names no run.

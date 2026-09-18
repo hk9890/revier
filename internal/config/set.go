@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/hk9890/revier/internal/fsutil"
 )
 
 // Set writes one value into config.toml and leaves every other line of the
@@ -255,22 +257,7 @@ func replaceFile(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".config.toml.*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), mode); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err := fsutil.WriteFile(path, data, mode); err != nil {
 		return err
 	}
 	slog.Info("config written", "path", path)

@@ -26,7 +26,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	_, projects, err := config.Load(root)
+	cfg, projects, err := config.Load(root)
 	if err != nil {
 		return err
 	}
@@ -36,6 +36,16 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// `target "worktree"`, and a target name has no length limit.
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	bad := 0
+	if len(cfg.Problems) > 0 {
+		bad++
+		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
+		for _, err := range cfg.Problems {
+			// An action's or a shared target's refusal opens with what it
+			// is about, which is the column.
+			what, _, _ := strings.Cut(err.Error(), ":")
+			problemLine(w, what, what, err.Error())
+		}
+	}
 	for _, p := range projects {
 		probs := config.Problems(p)
 		if len(probs) == 0 {
@@ -60,7 +70,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	}
 	_ = w.Flush()
 
-	_, _ = fmt.Fprintf(out, "\n%d project(s), %d with problems\n", len(projects), bad)
+	_, _ = fmt.Fprintf(out, "\n%d project(s), %d file(s) with problems\n", len(projects), bad)
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.
