@@ -483,3 +483,17 @@ A key nothing reads is not a refusal at all. `revier doctor` is where the
 reasons are read in full. An edit revier itself makes is refused for what it
 breaks and not for what was broken before it, so a file is repaired one target
 at a time; what `revier new` and `revier link` write must come out whole.
+
+### D86 — Esc hides the popup, and the next press raises it
+
+Esc exited the surface, so every press was a cold start: a kitty process, the
+TUI, and a first survey that is a round trip to every linked host - a second
+from the key to the agent states. The popup now minimizes on Esc through the
+window host, and `revier popup` raises it under D76's run-or-raise as it did an
+open one, in tens of milliseconds, with the cursor and the query where they
+were. Hidden, it surveys nothing, since nobody reads the answer and every survey
+reaches every linked host; the terminal's focus report on the raise runs one
+survey and resumes the refresh. The surface knows it is the popup by the
+environment its terminal is started with, read and dropped at start so nothing
+it launches inherits it. In any other terminal, and where the host cannot hide,
+Esc exits as before.

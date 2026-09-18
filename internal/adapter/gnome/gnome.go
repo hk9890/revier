@@ -229,6 +229,16 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
+// Hide minimizes the window. activate restores a minimized window, so Focus
+// brings it back.
+func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
+	if ref.ID == "" {
+		return fmt.Errorf("gnome: cannot hide a zero ref")
+	}
+	_, err := h.run(ctx, "minimize", ref.ID)
+	return err
+}
+
 // Place positions a window through the extension. `--settled` makes wctl hold
 // the reply until the compositor has mapped and placed the window, so a
 // geometry request made straight after a launch is not overwritten by the

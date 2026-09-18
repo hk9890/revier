@@ -895,25 +895,26 @@ func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 }
 
 func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
-	// The remote hosts are asked while the local ones are listed: a round
-	// trip to another machine is the slow part, and the local listing need not
-	// wait for it.
+	// The remote hosts are asked while the local ones are listed and the
+	// local agents probed: a round trip to another machine is the slow part,
+	// and nothing local waits for it.
 	remote := make(chan map[revier.ProjectName]remoteAnswer, 1)
 	go func() { remote <- c.surveyRemotes(ctx, projects) }()
 	snap, err := c.snapshot(ctx)
 	if err != nil {
 		return Report{}, err
 	}
-	answers := <-remote
-	tags := c.tags(snap)
 	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
 	for _, p := range projects {
-		v := c.view(ctx, snap, p, bound[p.Name], attached[p.Name])
+		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name], attached[p.Name]))
+	}
+	answers := <-remote
+	tags := c.tags(snap)
+	for i, p := range projects {
 		if a, ok := answers[p.Name]; ok {
-			merge(&v, a)
-			c.localise(tags, v.Agents)
+			merge(&r.Views[i], a)
+			c.localise(tags, r.Views[i].Agents)
 		}
-		r.Views = append(r.Views, v)
 	}
 	for _, h := range c.hosts() {
 		r.Hosts = append(r.Hosts, h.Name())

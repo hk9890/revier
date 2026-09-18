@@ -1284,6 +1284,104 @@ func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 	}
 }
 
+// With no starting project from the working directory, the lookup - the
+// focused window's project, which lists every host - answers after the first
+// frame, and its answer places the cursor.
+func TestTheLookedUpStartPlacesTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
+
+	m = run(m, m.LookupStart())
+	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
+		t.Errorf("selected %q before the survey, want project-04", row)
+	}
+	m = survey(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
+		t.Errorf("selected %q after the survey, want project-04 still", row)
+	}
+}
+
+// A user who moved before the lookup answered is somewhere already, and the
+// answer leaves them there.
+func TestTheLookedUpStartDoesNotMoveACursorTheUserMoved(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
+	m, _ = press(m, "down")
+	moved := selectedRow(t, m)
+
+	m = run(m, m.LookupStart())
+	if row := selectedRow(t, m); row != moved {
+		t.Errorf("selected %q after the lookup, want %q where the user went", row, moved)
+	}
+}
+
+// A starting project from the working directory needs no lookup.
+func TestAStartFromTheDirectoryRunsNoLookup(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-02").
+		WithStart(func(context.Context) (revier.ProjectName, bool) { t.Error("looked up"); return "", false })
+	if m.LookupStart() != nil {
+		t.Error("a start from the directory still runs the lookup")
+	}
+}
+
+// In the popup, Esc on the list hides the window instead of exiting, nothing
+// surveys while it is hidden, and the raise - the terminal's focus report -
+// surveys once and the refresh goes on from there.
+func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
+	_, wm, c, projects := world(t, 3)
+	popup := wm.Add("revier", core.PopupClass)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
+	m = survey(m)
+
+	m, hide := press(m, "esc")
+	if hide == nil {
+		t.Fatal("esc returned no command")
+	}
+	next, cmd := m.Update(hide())
+	m = next.(tui.Model)
+	if cmd != nil || len(wm.Hidden) != 1 || wm.Hidden[0] != popup {
+		t.Fatalf("after esc: cmd %v, hidden %v; want the popup hidden and no quit", cmd, wm.Hidden)
+	}
+	// The survey that was running answers: the chain ends there.
+	if next, cmd = m.Update(m.Survey()()); cmd != nil {
+		t.Error("a survey answered while hidden scheduled the next one")
+	}
+	m = next.(tui.Model)
+	if next, cmd = m.Update(tea.FocusMsg{}); cmd == nil {
+		t.Fatal("the raise started no survey")
+	}
+	m = next.(tui.Model)
+	if _, cmd = m.Update(cmd()); cmd == nil {
+		t.Error("the survey after the raise scheduled no refresh")
+	}
+	if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
+		t.Error("a focus report while shown started a second chain")
+	}
+}
+
+// Outside the popup Esc quits as it did, and a popup whose window cannot be
+// hidden quits too, rather than staying on screen with a key that does
+// nothing.
+func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
+	_, wm, c, projects := world(t, 3)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "")
+	m = survey(m)
+	if _, cmd := press(m, "esc"); cmd == nil || cmd() != (tea.QuitMsg{}) {
+		t.Error("esc in a terminal of the user's own did not quit")
+	}
+
+	wm.Add("revier", core.PopupClass)
+	wm.HideErr = fmt.Errorf("wctl: no such window")
+	m = survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m, hide := press(m, "esc")
+	if _, cmd := m.Update(hide()); cmd == nil || cmd() != (tea.QuitMsg{}) {
+		t.Error("a hide that failed did not quit")
+	}
+}
+
 // The tree says which checkout this is. Dot entries are not part of that, and
 // a directory that cannot be read is not an error.
 func TestDetailPaneShowsTheProjectTree(t *testing.T) {

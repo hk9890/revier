@@ -135,7 +135,7 @@ the plan to confirm, and the result shown with the surface still up (D78).
 - Agent state for Claude Code, shown per project
 - kitty runtime, GNOME window control, Claude probe
 - The popup the desktop key opens: the TUI in kitty on GNOME, sized to show
-  the detail pane (D76)
+  the detail pane (D76), hidden on Esc and raised by the next press (D86)
 - `--json` output
 - Projects on another machine, surveyed by the revier installed there (D40)
 

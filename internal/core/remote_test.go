@@ -5,7 +5,9 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -204,6 +206,58 @@ func TestSurveyAsksAHostOnceForAllItsProjects(t *testing.T) {
 	want := []revier.ProjectName{"one", "two"}
 	if len(remote.Asked) != 1 || !slices.Equal(remote.Asked[0], want) {
 		t.Errorf("asked %v, want one call for %v", remote.Asked, want)
+	}
+}
+
+// slowRemote answers only once the local probe has run: a survey that
+// probed after the host answered would wait here for good.
+type slowRemote struct {
+	*hosttest.FakeRemote
+	probed chan struct{}
+}
+
+func (r slowRemote) Survey(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
+	select {
+	case <-r.probed:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return r.FakeRemote.Survey(ctx, names)
+}
+
+type signalProbe struct {
+	*hosttest.FakeProbe
+	once   sync.Once
+	probed chan struct{}
+}
+
+func (p *signalProbe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentState, error) {
+	p.once.Do(func() { close(p.probed) })
+	return p.FakeProbe.Inspect(ctx, panel)
+}
+
+// The local agents are probed while the host is still answering: the round
+// trip to it is the slow part of a survey, and a probe here that waited for
+// it would put its whole cost before the first frame.
+func TestSurveyProbesTheLocalAgentsWhileAHostAnswers(t *testing.T) {
+	probed := make(chan struct{})
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	remote := slowRemote{hosttest.NewRemote("buildbox", answer("demo", revier.StatusIdle)), probed}
+	probe := &signalProbe{FakeProbe: &hosttest.FakeProbe{Harness: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}, probed: probed}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	report, err := c.Survey(ctx, []core.Project{prepared(t, project()), prepared(t, remoteProject("demo"))}, nil, nil)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if u := report.Views[1].Unreachable; u != "" {
+		t.Errorf("unreachable = %q: the host answered, once the local probe had run", u)
+	}
+	if a := report.Views[0].Agents; len(a) != 1 || a[0].State.Status != revier.StatusRunning {
+		t.Errorf("agents = %+v, want the local agent probed", a)
 	}
 }
 
