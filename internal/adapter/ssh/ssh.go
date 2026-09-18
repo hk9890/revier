@@ -146,6 +146,11 @@ func quote(s string) string {
 // It goes over the shared master when one is up, so the panel shows as soon
 // as its terminal does. It is not in batch mode: a panel can answer a
 // prompt.
+func (r *Remote) PanelCommand(project revier.ProjectName, kind revier.PanelKind) []string {
+	return PanelCommand(r.host, project, string(kind))
+}
+
+// PanelCommand is Remote.PanelCommand for a host, the form the tests pin.
 func PanelCommand(host string, project revier.ProjectName, kind string) []string {
 	const tag = "\x00"
 	there := "revier " + kind + " exec -p " + quote(string(project)) + " --tag " + tag

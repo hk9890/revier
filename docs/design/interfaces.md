@@ -246,6 +246,11 @@ type Remote interface {
     // there, for the caller to run here with the terminal. The action is
     // the remote's configuration's to define.
     RunCommand(project ProjectName, action string) []string
+
+    // PanelCommand is the argv a panel here runs to show the project's agent
+    // or shell: `revier <kind> exec -p <project>` there. Arguments appended
+    // to it reach that command as they are (D84).
+    PanelCommand(project ProjectName, kind PanelKind) []string
 }
 ```
 

@@ -507,3 +507,12 @@ the TUI carried a second claim path that only a test fake ever ran. The port
 and the event path are removed, and the TUI's survey diff is the one claim
 path. The port comes back with the first host that has events, when one is
 built; its design is in git history.
+
+### D88 — a link's panel argv is the remote port's
+
+`internal/config` derived a link's home panels by calling the ssh adapter for
+their argv, the one store-to-adapter import, and the core appended resume
+arguments to that argv on an unstated assumption about its shell form. The
+argv is `Remote.PanelCommand`, and the core asks the port for it when the
+target resolves: config derives the panel kinds alone, one seam holds the
+contract, and a second transport plugs in without touching config.

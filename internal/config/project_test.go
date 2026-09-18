@@ -216,8 +216,11 @@ func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 	if got, _ := loaded.Home(); got.Key != "ctrl-h" {
 		t.Errorf("home = %+v, want the declared one", got)
 	}
-	if got := read(t, file); !strings.Contains(got, "[[target]]") || !strings.Contains(got, "exec ssh") {
-		t.Errorf("file =\n%s\nwant the home written whole", got)
+	// The panels are written by kind alone: the argv that reaches the host
+	// is the remote port's, and a declared home with kind-only panels gets
+	// it as the derived one does.
+	if got := read(t, file); !strings.Contains(got, "[[target]]") || !strings.Contains(got, `kind = "agent"`) || strings.Contains(got, "ssh") {
+		t.Errorf("file =\n%s\nwant the home written whole, by panel kind", got)
 	}
 }
 

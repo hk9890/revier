@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -179,11 +180,44 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	if err != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, err
 	}
+	if kind == revier.HostRuntime && p.Remote != nil {
+		if real, err = c.linkPanels(p, real); err != nil {
+			return nil, revier.Realization{}, revier.CompiledMatch{}, err
+		}
+	}
 	m := p.compiled[i].runtime
 	if kind == revier.HostWindow {
 		m = p.compiled[i].window
 	}
 	return host, real, m, nil
+}
+
+// linkPanels gives a link's panels the argv that reaches the host: the
+// remote port's, asked here so that config, which derives the panels, knows
+// no transport, and every consumer of the realization - a launch, a tab, a
+// resume - sees one argv. A panel the link declared with a command of its own
+// keeps it.
+func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realization, error) {
+	fill := false
+	for _, spec := range real.Panels {
+		if len(spec.Command) == 0 && (spec.Kind == revier.PanelAgent || spec.Kind == revier.PanelShell) {
+			fill = true
+		}
+	}
+	if !fill {
+		return real, nil
+	}
+	remote, err := c.remote(p.Remote.Host)
+	if err != nil {
+		return revier.Realization{}, err
+	}
+	real.Panels = slices.Clone(real.Panels)
+	for i, spec := range real.Panels {
+		if len(spec.Command) == 0 && (spec.Kind == revier.PanelAgent || spec.Kind == revier.PanelShell) {
+			real.Panels[i].Command = remote.PanelCommand(p.Remote.Project, spec.Kind)
+		}
+	}
+	return real, nil
 }
 
 // snapshot is one bulk listing per host, taken once and matched against every
