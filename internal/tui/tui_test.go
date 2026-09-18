@@ -850,8 +850,8 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	if _, again := press(m, "enter"); again != nil {
 		again()
 	}
-	if wm.Opened != 1 {
-		t.Errorf("the editor was launched %d times, want once", wm.Opened)
+	if len(wm.Opened) != 1 {
+		t.Errorf("the editor was launched %d times, want once", len(wm.Opened))
 	}
 }
 

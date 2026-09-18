@@ -129,7 +129,7 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 // workspace.
 func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
 	rt.Add("session:revier", "")
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
@@ -183,7 +183,7 @@ func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 
 func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}}
 	rt.Add("session:revier", "")
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
 	if err != nil {
@@ -250,15 +250,11 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	}
 }
 
-// noTabs is a runtime without the PanelOpener capability: the interface
-// alone is embedded, so the fake's optional methods are not promoted.
-type noTabs struct{ revier.Runtime }
-
 // On a runtime without tabs, a restore still opens the workspace with its
 // declared agents, and names the agents past them as not restored.
 func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
 

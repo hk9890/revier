@@ -1056,15 +1056,12 @@ func TestNoPlacementDeclaredIsNoPlacement(t *testing.T) {
 	}
 }
 
-// noPlacer is a window host without the placement capability.
-type noPlacer struct{ revier.WindowController }
-
 // A window host that cannot place windows ignores the declaration.
 func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
 	raw := project()
 	raw.Targets[1].Window.Place = "right top 75% 100%"
 	fake := hosttest.New("wm")
-	c := &core.Core{Window: noPlacer{fake}}
+	c := &core.Core{Window: bareWindow{fake}}
 
 	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
 		t.Fatalf("Go: %v", err)

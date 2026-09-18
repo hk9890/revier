@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -327,7 +325,7 @@ func TestAltRWithNoHostsSaysSo(t *testing.T) {
 func TestEscDuringAnAskAbandonsIt(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "beta")
 	m = step(m, "alt+r")
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("Enter on a host started no ask")
 	}

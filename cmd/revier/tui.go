@@ -14,10 +14,11 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// cmdTUI runs the surface. Without a terminal - `revier | grep` - it prints
-// the table instead, so a script sees what it always saw.
+// cmdTUI runs the surface. Without a terminal on its output - `revier | grep`,
+// or a writer that is no file at all - it prints the table instead, so a
+// script sees what it always saw.
 func cmdTUI(a *app) error {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
+	if f, ok := a.out.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
 		return cmdList(context.Background(), a, nil)
 	}
 	th, err := a.cfg.Theme()

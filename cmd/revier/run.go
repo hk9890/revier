@@ -56,8 +56,12 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 // passes on as its own.
 var errActionFailed = errors.New("the action failed")
 
-// runAction executes an argv in dir with the terminal attached and its output
-// on out, and returns the command's own error so its exit status survives.
+// runAction executes an argv in dir with stdin and stderr attached and its
+// stdout on out, and returns the command's own error so its exit status
+// survives. In production out is the terminal, handed to the action as its
+// own file; a writer that is no file, a test's buffer, is a pipe the action
+// writes and exec drains, so Run ends only once every process holding it has
+// closed it.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
 // inject into. No context either: the command's 30s deadline is for host
 // calls, and an action - an editor, a long pull - runs as long as it runs.

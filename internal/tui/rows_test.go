@@ -235,7 +235,6 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
 }
 
-// typed types a query into the surface, a key at a time.
 // assertSearchEnded checks that the typed query is gone, every project is listed
 // again, and the cursor stayed on the project the search found.
 func assertSearchEnded(t *testing.T, m tui.Model, typed, count, selected string) {

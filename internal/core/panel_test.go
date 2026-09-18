@@ -150,7 +150,7 @@ func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("session:revier", "")
-	c := &core.Core{Runtime: noTabs{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}}
 	p := prepared(t, tabProject())
 
 	_, err := c.Go(context.Background(), p, "tickets", nil)

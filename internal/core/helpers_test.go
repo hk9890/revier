@@ -12,9 +12,17 @@ import (
 // config.Load does for a real project file.
 func prepared(t *testing.T, p revier.Project) core.Project {
 	t.Helper()
-	out := core.PrepareProject(p)
-	return out
+	return core.PrepareProject(p)
 }
+
+// bareRuntime is a runtime with none of the optional capabilities, and
+// bareWindow a window host with none: the port interface alone is embedded,
+// so the fake's optional methods are not promoted. A test that needs a host
+// without one capability - no PanelWriter, no PanelOpener, no WindowPlacer -
+// wraps the fake in one of these.
+type bareRuntime struct{ revier.Runtime }
+
+type bareWindow struct{ revier.WindowController }
 
 // editor is a window-realized target; diff has both realizations; home is the
 // project's workspace on the runtime.

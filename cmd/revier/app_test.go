@@ -91,8 +91,8 @@ func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 	if ref := press(t, c, p, root, "editor"); !ref.IsZero() {
 		t.Errorf("ref = %v, want none: the target is still coming up", ref)
 	}
-	if wm.Opened != 0 {
-		t.Errorf("the editor was launched %d more times, want none", wm.Opened)
+	if len(wm.Opened) != 0 {
+		t.Errorf("the editor was launched %d more times, want none", len(wm.Opened))
 	}
 }
 

@@ -111,7 +111,7 @@ func TestPopupRefusesAHostThatCannotPlace(t *testing.T) {
 		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
 	}
 	fake := hosttest.New("wm")
-	if _, err := (&core.Core{Window: noPlacer{fake}}).Popup(context.Background(), popupArgv); !errors.Is(err, core.ErrNoPopupHost) {
+	if _, err := (&core.Core{Window: bareWindow{fake}}).Popup(context.Background(), popupArgv); !errors.Is(err, core.ErrNoPopupHost) {
 		t.Errorf("host without placement: err = %v, want ErrNoPopupHost", err)
 	}
 	if len(fake.Opened) != 0 {
