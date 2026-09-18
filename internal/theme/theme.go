@@ -34,7 +34,7 @@ type Theme struct {
 	Heading     lipgloss.Style // a section title in the detail pane
 	Count       lipgloss.Style // a count that is zero, and so says nothing is wrong
 	Match       lipgloss.Style // the letters of a name the filter matched
-	Accent      lipgloss.Style // the filter mark
+	Accent      lipgloss.Style // the filter mark and the text cursor
 	Cursor      lipgloss.Style // the selected row
 	Hover       lipgloss.Style // the row or button under the pointer
 	ProjectName lipgloss.Style // a project or target name

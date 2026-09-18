@@ -444,8 +444,16 @@ func (m Model) nameButton(name revier.ProjectName, w int) string {
 	if m.over.kind == hoverName {
 		label, keys = th.OnHover(label), th.OnHover(keys)
 	}
+	text, hint := m.nameButtonText(name)
+	return clipTo(th.Meta.Render(pad("Project", nameButtonStart))+label.Render(text)+keys.Render(hint), w)
+}
+
+// nameButtonText is the button's two runs, the name and the key hint after
+// it. The width the pointer is matched against is read off the same text,
+// so the two cannot disagree.
+func (m Model) nameButtonText(name revier.ProjectName) (text, hint string) {
 	edit := m.keys.Edit.Help()
-	return clipTo(th.Meta.Render(pad("Project", nameButtonStart))+label.Render(" "+string(name)+" ")+keys.Render(edit.Desc+" "+edit.Key+" "), w)
+	return " " + string(name) + " ", edit.Desc + " " + edit.Key + " "
 }
 
 // nameButtonStart is the column the button starts on: the label column less
@@ -455,6 +463,6 @@ const nameButtonStart = detailLabelWidth - 1
 
 // nameButtonWidth is the columns the button takes.
 func (m Model) nameButtonWidth(name revier.ProjectName) int {
-	edit := m.keys.Edit.Help()
-	return lipgloss.Width(" " + string(name) + " " + edit.Desc + " " + edit.Key + " ")
+	text, hint := m.nameButtonText(name)
+	return lipgloss.Width(text + hint)
 }

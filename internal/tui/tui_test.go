@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -565,14 +566,16 @@ func paneCursor(m tui.Model) string {
 }
 
 // paneCell is the terminal cell where the text starts on the pane line that
-// carries it.
+// carries it. The column is the rendered width of what stands before the
+// text, not its byte offset: a glyph is three bytes for one cell, and a
+// colour profile puts escape sequences in the line.
 func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 	t.Helper()
 	for y, raw := range strings.Split(m.View(), "\n") {
 		// The list, the pane's border, the pane.
 		if parts := strings.Split(raw, "│"); len(parts) > 1 {
 			if at := strings.Index(parts[1], text); at >= 0 {
-				return paneBorder(t, m) + 1 + at, y
+				return paneBorder(t, m) + 1 + lipgloss.Width(parts[1][:at]), y
 			}
 		}
 	}
@@ -1134,6 +1137,34 @@ func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
 	}
 }
 
+// Every key hint is drawn in the help colour: a target's key on its pane row,
+// the footer's keys and the help screen's key column. They were two colours,
+// and a key that changes colour by where it stands reads as two kinds of
+// thing.
+func TestEveryKeyHintIsTheHelpColour(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 40)
+	want, _, _ := strings.Cut(theme.Default().Help.Render("x"), "x")
+	colour := func(where, s, key string) {
+		t.Helper()
+		before, _, ok := strings.Cut(s, key)
+		if !ok {
+			t.Fatalf("%s %q has no %q", where, s, key)
+		}
+		if got := before[strings.LastIndex(before, "\x1b["):]; got != want {
+			t.Errorf("%s draws %q with %q, want the help colour %q", where, key, got, want)
+		}
+	}
+	colour("the pane", pane(m), "ctrl+shift+o")
+	colour("the footer", footer(m), "ctrl+shift+o")
+	m, _ = press(m, "alt+h")
+	colour("the help screen", screen(m), "alt+e")
+}
+
 // ctrl+shift+u cannot reach the surface as itself, and ctrl+u, which it
 // arrives as, is the query's. The query keeps it: nothing opens.
 func TestADesktopKeyTheQueryOwnsEditsTheQuery(t *testing.T) {
@@ -1692,18 +1723,13 @@ func wheel(m tui.Model, x int, b tea.MouseButton) tui.Model {
 }
 
 // paneBorder is the terminal column of the border between the list and the
-// pane, read off the rendered surface.
+// pane, read off the rendered surface: the rendered width of what stands
+// before it, so a colour profile's escape sequences do not count.
 func paneBorder(t *testing.T, m tui.Model) int {
 	t.Helper()
 	for _, raw := range strings.Split(m.View(), "\n") {
-		var bars []int
-		for i, c := range []rune(raw) {
-			if c == '│' {
-				bars = append(bars, i)
-			}
-		}
-		if len(bars) == 1 {
-			return bars[0]
+		if strings.Count(raw, "│") == 1 {
+			return lipgloss.Width(raw[:strings.Index(raw, "│")])
 		}
 	}
 	t.Fatalf("no line with a pane:\n%s", m.View())
