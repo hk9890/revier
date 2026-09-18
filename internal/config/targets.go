@@ -134,6 +134,9 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	if err != nil {
 		return TargetsWritten{}, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := problemsAdded(cfg, next); err != nil {
+		return TargetsWritten{}, fmt.Errorf("%s: %w", path, err)
+	}
 	got, err := DecodeTargets(next.Targets)
 	if err != nil || !sameTargets(got, want) {
 		return TargetsWritten{}, fmt.Errorf("%s: the shared targets did not come out as written; change them by hand", path)
@@ -146,11 +149,11 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	// between them must read as the change this write did not make, not as a
 	// breakage it did.
 	dir := filepath.Join(root, "projects")
-	before, err := LoadProjects(dir, cfg.Targets)
+	before, err := LoadProjects(dir, cfg.Shared())
 	if err != nil {
 		return TargetsWritten{}, err
 	}
-	projects, err := LoadProjects(dir, next.Targets)
+	projects, err := LoadProjects(dir, next.Shared())
 	if err != nil {
 		return TargetsWritten{}, err
 	}

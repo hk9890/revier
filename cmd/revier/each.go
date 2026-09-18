@@ -90,11 +90,11 @@ func cmdEach(w io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	_, projects, err := config.Load(cfgRoot)
+	cfg, projects, err := config.Load(cfgRoot)
 	if err != nil {
 		return err
 	}
-	warnProblems(projects)
+	warnProblems(cfg, projects)
 	var keep func(string) bool
 	if *filter != "" {
 		keep = shellTest(*filter)

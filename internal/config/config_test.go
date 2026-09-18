@@ -675,7 +675,8 @@ func TestLoadRejectsAnUnreadableTriggerKey(t *testing.T) {
 
 // An action's key is the TUI's alone, so a key the TUI cannot receive, or
 // reads as filter text, is refused at load and named, rather than bound to a
-// key that does nothing.
+// key that does nothing. The action costs itself alone (decisions.md D85):
+// it stays listed, carrying the reason, and the file is otherwise read.
 func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
 	for key, want := range map[string]string{
 		"y":            "typed text",
@@ -690,24 +691,53 @@ func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
 	} {
 		root := t.TempDir()
 		write(t, root, "config.toml", "[[action]]\nkey = \""+key+"\"\nname = \"sync\"\nrun = [\"true\"]\n")
-		_, _, err := config.Load(root)
-		if err == nil {
-			t.Errorf("Load accepted action key %q", key)
+		cfg, _, err := config.Load(root)
+		if err != nil {
+			t.Errorf("key %q: Load = %v, want the action refused alone", key, err)
+			continue
+		}
+		if len(cfg.Actions) != 1 || cfg.Actions[0].Refused == nil || len(cfg.Problems) != 1 {
+			t.Errorf("key %q: actions = %+v, problems = %v, want the one action listed and refused", key, cfg.Actions, cfg.Problems)
 			continue
 		}
 		for _, w := range []string{`action "sync"`, want} {
-			if !strings.Contains(err.Error(), w) {
-				t.Errorf("key %q: error = %q, want it to say %q", key, err, w)
+			if err := cfg.Actions[0].Refused; !strings.Contains(err.Error(), w) {
+				t.Errorf("key %q: refused = %q, want it to say %q", key, err, w)
 			}
 		}
 	}
 }
 
-// An action with nothing to run fails at load, not at the keypress.
+// An action with nothing to run is refused at load, not at the keypress.
 func TestLoadRefusesAnActionThatRunsNothing(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[action]]\nkey = \"ctrl-y\"\nname = \"sync\"\n")
-	if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), `action "sync" runs nothing`) {
-		t.Errorf("Load = %v, want the empty action named", err)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load = %v, want the action refused alone", err)
+	}
+	if err := cfg.Actions[0].Refused; err == nil || !strings.Contains(err.Error(), `action "sync" runs nothing`) {
+		t.Errorf("refused = %v, want the empty action named", err)
+	}
+}
+
+// A mistake in one action costs that action and nothing else: the sound
+// action beside it is not refused, and every project still loads.
+func TestABrokenActionCostsOnlyItself(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", "[[action]]\nkey = \"y\"\nname = \"bad\"\nrun = [\"true\"]\n\n[[action]]\nkey = \"ctrl-y\"\nname = \"sync\"\nrun = [\"true\"]\n")
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "projects"), "revier.toml", valid)
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(projects) != 1 || projects[0].Invalid != nil {
+		t.Errorf("projects = %+v, want the one project loaded whole", projects)
+	}
+	if cfg.Actions[0].Refused == nil || cfg.Actions[1].Refused != nil {
+		t.Errorf("actions = %+v, want only the first refused", cfg.Actions)
 	}
 }

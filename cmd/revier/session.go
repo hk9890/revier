@@ -15,7 +15,9 @@ import (
 	"github.com/hk9890/revier/internal/session"
 )
 
-const sessionUsage = `usage:
+const sessionUsage = `revier session - save the set of open projects, and open it again
+
+usage:
   revier session save [--name <label>]
   revier session restore [<id>|<name>] [--dry-run]
   revier session list [--json]
@@ -53,26 +55,15 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	s, gaps := a.core.Session(ctx, report, a.state.Current)
-	// An empty save would become the newest session, which a plain restore
-	// opens: the save made before a reboot would lose to one made after it.
-	if len(s.Projects) == 0 {
-		fmt.Println("nothing is open; no session saved")
+	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.state.Current, *name, time.Now())
+	if errors.Is(err, core.ErrNothingOpen) {
+		fmt.Println(err)
 		return nil
 	}
-	s.At, s.Name = time.Now(), *name
-
-	stored, path, err := session.Save(a.stateRoot, s)
 	if err != nil {
 		return err
 	}
 	targets, conversations := stored.Targets(), stored.Conversations()
-	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path,
-		"projects", len(stored.Projects), "targets", targets, "conversations", conversations,
-		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
-	for _, err := range gaps.Failed {
-		slog.Warn("session save: probe could not be asked", "err", err)
-	}
 	fmt.Printf("%s: %s, %s\n", stored.ID,
 		core.Count(len(stored.Projects), "project"), core.Count(targets, "target"))
 	if conversations > 0 {

@@ -2,7 +2,10 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
@@ -241,6 +244,43 @@ type SessionGaps struct {
 	Failed   []error
 	InTab    []string
 	Attached int
+}
+
+// ErrNothingOpen is a save with no project open, which is a normal outcome
+// and not a failure. An empty session is refused because it would become
+// the newest, the one a plain restore opens: the save made before a reboot
+// would lose to one made after it.
+var ErrNothingOpen = errors.New("nothing is open; no session saved")
+
+// SaveSession records what r found open under stateRoot, named name and
+// stamped at, and returns the session as stored, the file it wrote, and what
+// the save could not record. It refuses with ErrNothingOpen when no project
+// is open. Every save - the command, the surface, a shutdown - goes through
+// here, so the refusal and what is logged are decided once.
+func (c *Core) SaveSession(ctx context.Context, stateRoot string, r Report, current revier.ProjectName, name string, at time.Time) (session.Session, string, SessionGaps, error) {
+	s, gaps := c.Session(ctx, r, current)
+	if len(s.Projects) == 0 {
+		return session.Session{}, "", gaps, ErrNothingOpen
+	}
+	s.At, s.Name = at, name
+	stored, path, err := store(stateRoot, s, gaps, "save")
+	return stored, path, gaps, err
+}
+
+// store writes s and logs what it holds and what it lacks. by names the
+// caller, so the log says which save wrote the file.
+func store(stateRoot string, s session.Session, gaps SessionGaps, by string) (session.Session, string, error) {
+	stored, path, err := session.Save(stateRoot, s)
+	if err != nil {
+		return session.Session{}, "", fmt.Errorf("save the session: %w", err)
+	}
+	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path, "by", by,
+		"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
+		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
+	for _, err := range gaps.Failed {
+		slog.Warn("session save: probe could not be asked", "err", err)
+	}
+	return stored, path, nil
 }
 
 // agentPanel is one panel a probe claimed, and the target of the session being

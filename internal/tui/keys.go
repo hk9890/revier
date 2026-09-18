@@ -58,6 +58,9 @@ func newKeyMap(actions []config.Action) keyMap {
 		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
 	}
 	for _, act := range actions {
+		if act.Refused != nil {
+			continue
+		}
 		c := actionChord(act)
 		k.actions = append(k.actions, key.NewBinding(
 			key.WithKeys(string(c)),
@@ -68,7 +71,7 @@ func newKeyMap(actions []config.Action) keyMap {
 }
 
 // actionChord is an action's key in canonical form. A key that does not parse
-// is empty, which no press is; config.Load has refused it already.
+// is empty, which no press is; config.Load has refused the action already.
 func actionChord(act config.Action) core.Chord {
 	c, _ := core.ParseChord(act.Key)
 	return c

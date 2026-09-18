@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
@@ -28,11 +27,11 @@ func cmdNew(args []string) error {
 	if err != nil {
 		return err
 	}
-	_, projects, err := config.Load(root)
+	cfg, projects, err := config.Load(root)
 	if err != nil {
 		return err
 	}
-	warnProblems(projects)
+	warnProblems(cfg, projects)
 	name := ""
 	if len(pos) > 0 {
 		name = pos[0]
@@ -43,13 +42,8 @@ func cmdNew(args []string) error {
 
 // createProject writes the project for the working directory and trusts the
 // directory's mise configuration, as `os open` does for a session it creates.
-// An empty name is the directory's own.
-//
-// Two directories are refused, and a name already taken. A directory that is
-// already a project's path would become two projects fighting over it. The
-// home directory would own every directory under it that no other project
-// claims, so a keypress in any of them would resolve to it instead of
-// reporting no project.
+// An empty name is the directory's own. What config.CanCreate refuses is
+// refused here.
 func createProject(root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -58,18 +52,8 @@ func createProject(root string, projects []core.Project, name revier.ProjectName
 	if name == "" {
 		name = config.NameFor(dir)
 	}
-	for _, p := range projects {
-		if filepath.Clean(p.Path) == dir {
-			return core.Project{}, fmt.Errorf("%s is already project %q", dir, p.Name)
-		}
-		// A file of another name can declare this project name, and the load
-		// refuses two projects under one name.
-		if p.Name == name {
-			return core.Project{}, fmt.Errorf("project %q already exists: %s", name, p.File)
-		}
-	}
-	if home, err := os.UserHomeDir(); err == nil && filepath.Clean(home) == dir {
-		return core.Project{}, fmt.Errorf("refusing to make the home directory a project; run this in the project's own directory")
+	if err := config.CanCreate(projects, name, dir); err != nil {
+		return core.Project{}, err
 	}
 	p, err := config.Create(root, name, dir, checkout.Origin(dir))
 	if err != nil {

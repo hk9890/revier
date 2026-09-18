@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -425,15 +424,9 @@ func (c *Core) SaveChanged(ctx context.Context, stateRoot string, r Report, curr
 		return session.Session{}, false, gaps, err
 	}
 	s.At = at
-	stored, path, err := session.Save(stateRoot, s)
+	stored, _, err = store(stateRoot, s, gaps, "shutdown")
 	if err != nil {
-		return session.Session{}, false, gaps, fmt.Errorf("save the session: %w", err)
-	}
-	slog.Info("session saved", "id", stored.ID, "path", path, "by", "shutdown",
-		"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
-		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
-	for _, err := range gaps.Failed {
-		slog.Warn("session save: probe could not be asked", "err", err)
+		return session.Session{}, false, gaps, err
 	}
 	return stored, true, gaps, nil
 }

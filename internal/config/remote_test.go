@@ -360,8 +360,12 @@ name = "editor"
   [target.remote]
   name = "renamed"
 `)
-	if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), "[target.remote] holds") {
-		t.Errorf("err = %v, want \"name\" under [target.remote] refused", err)
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), "[target.remote] holds") {
+		t.Errorf("problems = %v, want \"name\" under [target.remote] refused", cfg.Problems)
 	}
 
 	body := link + `

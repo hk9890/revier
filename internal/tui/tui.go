@@ -992,7 +992,7 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	for _, act := range m.actions {
-		if actionChord(act) != c {
+		if act.Refused != nil || actionChord(act) != c {
 			continue
 		}
 		v, ok := m.selected()
@@ -1012,11 +1012,14 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		cmd.Dir = dir
 		project := p.Name
 		start := time.Now()
+		// An action may open anything; the window that appears next is the
+		// project's (claim-on-appear). The launch is recorded now, as the
+		// CLI records it, so core.ClaimWindow runs from the action's start
+		// and not from its exit, which for an editor is hours later.
+		m.apply(actedMsg{launch: &state.Launch{Project: project, At: start}})
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
-			// An action may open anything; the window that appears next is
-			// the project's (claim-on-appear).
-			return actedMsg{err: err, launch: &state.Launch{Project: project, At: time.Now()}}
+			return actedMsg{err: err}
 		}), true
 	}
 	return nil, false

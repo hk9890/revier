@@ -169,7 +169,10 @@ func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	}
 }
 
-// A shared target no project could use is refused in config.toml, once.
+// A shared target no project could use is refused in config.toml, once, and
+// costs itself alone (decisions.md D85): it reaches no project, the sound
+// targets beside it reach every one, and the file stays listed whole for the
+// config screen to repair.
 func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 	for body, want := range map[string]string{
 		"[[target]]\nkey = \"ctrl-o\"\n":                              "has no name",
@@ -177,9 +180,24 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 		"[[target]]\nname = \"a\"\n  [target.window]\n  launch = 5\n": `target "a"`,
 	} {
 		root := t.TempDir()
-		write(t, root, "config.toml", body)
-		if _, _, err := config.Load(root); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("Load(%q) = %v, want %q", body, err, want)
+		write(t, root, "config.toml", body+sharedConfig)
+		if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, filepath.Join(root, "projects"), "app.toml", "path = \"/tmp/app\"\n")
+		cfg, projects, err := config.Load(root)
+		if err != nil {
+			t.Errorf("Load(%q) = %v, want the target refused alone", body, err)
+			continue
+		}
+		if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), want) {
+			t.Errorf("Load(%q) problems = %v, want one saying %q", body, cfg.Problems, want)
+		}
+		if len(cfg.Shared()) != len(cfg.Targets)-1 {
+			t.Errorf("Load(%q): %d of %d targets shared, want one refused", body, len(cfg.Shared()), len(cfg.Targets))
+		}
+		if len(projects) != 1 || projects[0].Invalid != nil || len(projects[0].Targets) != 2 {
+			t.Errorf("Load(%q) projects = %+v, want the project whole with the two sound shared targets", body, projects)
 		}
 	}
 }
