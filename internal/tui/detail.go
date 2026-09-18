@@ -192,6 +192,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 
 	status, style := "stopped", th.NameDim
 	switch {
+	case v.Invalid != "":
+		status, style = "invalid", th.PathMissing
 	case v.Unreachable != "":
 		status, style = "unreachable", th.PathMissing
 	case v.Running:
@@ -219,11 +221,20 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString(hang("", v.Unreachable, w, th.PathMissing))
 		b.WriteString("\n")
 	}
+	// A file that did not load is read here for the same reason. The pane is
+	// the only place with room for it, and the project is listed precisely so
+	// that there is somewhere to read it.
+	if v.Invalid != "" {
+		b.WriteString(hang("", v.Invalid, w, th.PathMissing))
+		b.WriteString("\n")
+	}
 	// Only worth saying when it is the reason nothing can start. A running
 	// project whose directory has since gone is a different problem, and the
 	// red path already says it. A remote project's host clones it on open
 	// (decisions.md D40), so Enter is the same answer there.
-	if !v.PathExists && !v.Running && v.Unreachable == "" {
+	// A file that did not load has no path to be missing and nothing to
+	// clone into: what is wrong with it is the reason printed above.
+	if !v.PathExists && !v.Running && v.Unreachable == "" && v.Invalid == "" {
 		where, clone := "this machine", "Enter: clone and open"
 		if v.Project.Remote != nil {
 			where, clone = v.Project.Remote.Host, "Enter: clone there and open"
@@ -342,6 +353,11 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	t := row.target
 	mark, state, stateStyle, name := th.Glyphs.Stopped, "stopped", th.Count, th.NameDim
 	switch {
+	// A target its own config refused is a mistake to go and fix; one no host
+	// here can realize is the expected result on a machine without that host.
+	// The two must not read alike.
+	case !t.Available && t.Reason != "":
+		state, stateStyle = "invalid", th.PathMissing
 	case !t.Available:
 		state = "no host here"
 	case !t.Ref.IsZero():

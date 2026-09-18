@@ -34,7 +34,7 @@ func press(t *testing.T, c *core.Core, p core.Project, root string, name revier.
 // window.
 func demoProject(t *testing.T) core.Project {
 	t.Helper()
-	p, err := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
+	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^home$"}}},
 		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
@@ -42,9 +42,6 @@ func demoProject(t *testing.T) core.Project {
 		{Name: "editor", Key: "ctrl-shift-o", Window: &revier.Realization{
 			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	return p
 }
 

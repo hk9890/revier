@@ -71,8 +71,10 @@ probed.
 
 ### D17 — projects are prepared at load
 
-A bad template is refused at load, naming the file, not at the keystroke. The
-TUI reads a file changed elsewhere on restart.
+Templates are rendered and matches compiled once, when the configuration is
+read, so no refresh re-derives them and no adapter ever sees a `{{ }}`. What a
+failure there costs is D85's. The TUI reads a file changed elsewhere on
+restart.
 
 ### D18 — a realization starts in the project directory
 
@@ -442,10 +444,10 @@ project there, so an editor over ssh renders a path on the host and a page
 renders the repository it is a clone of; neither names anything on this
 machine, and only the host knows them. `revier link` asks the host anyway, so
 it writes both into the file, and a checkout here is still refused. An argv
-element that renders empty is refused at load, whatever left it empty: an
+element that renders empty refuses its target, whatever left it empty: an
 argument is read by position, so none of them is optional, and an empty one
 reaches the program as the current directory or a missing operand and says so
-nowhere.
+nowhere. What that refusal costs is D85's.
 
 ### D84 — a link's workspace is panels here, each an ssh that becomes the host's panel
 
@@ -464,3 +466,19 @@ an agent starts inherits the tag, so the panel is the process nearest the one
 started. sshd runs a command in a shell that read no profile, where `claude`
 was not on the PATH and every agent read unknown, so each command runs in the
 login shell.
+
+### D85 — a refusal disables the smallest thing that is wrong
+
+Replaces the refusal scope of D17 and D83. One project file whose shared web
+target rendered `{{.GitURL}}` to nothing refused all ninety, so the surface,
+all four desktop chords and `revier popup` were gone until that file was
+fixed: the tool that reaches a broken project is the one thing that must not
+break with it. A rule now refuses the target it names; a rule about the
+project as a whole refuses the project; neither refuses the set. Each is
+loaded and listed carrying its reason - `available: false` with a `Reason`,
+or `Invalid` on the project - because a file that disappears from the surface
+takes with it the one place its reason could be read. Its key still fails
+loudly when pressed, since nothing may run from an argv that did not render.
+A key nothing reads is not a refusal at all. `revier doctor` is where the
+reasons are read in full, and an edit revier itself makes is still refused
+unless the file comes out whole.

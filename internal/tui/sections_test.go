@@ -41,10 +41,7 @@ func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 				Name: "session:" + string(name), Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + string(name) + "$"}}},
 		}})
 	}
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleActivity{}}}
 	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30)
 }

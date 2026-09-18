@@ -104,10 +104,13 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 		_ = os.Remove(path)
 		return core.Project{}, werr
 	}
-	p, err := LoadProject(path, shared)
-	if err != nil {
+	// A file revier itself has just written is expected to load whole, so a
+	// problem in it is revier's mistake, not the user's, and the file goes
+	// again rather than becoming a project that cannot run.
+	p := LoadProject(path, shared)
+	if probs := Problems(p); len(probs) > 0 {
 		_ = os.Remove(path)
-		return core.Project{}, err
+		return core.Project{}, errors.Join(probs...)
 	}
 	slog.Info("project file written", "project", name, "path", path)
 	return p, nil

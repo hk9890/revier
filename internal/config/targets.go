@@ -138,14 +138,47 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	if err != nil || !sameTargets(got, want) {
 		return TargetsWritten{}, fmt.Errorf("%s: the shared targets did not come out as written; change them by hand", path)
 	}
-	projects, err := LoadProjects(filepath.Join(root, "projects"), next.Targets)
+	dir := filepath.Join(root, "projects")
+	projects, err := LoadProjects(dir, next.Targets)
 	if err != nil {
-		return TargetsWritten{}, fmt.Errorf("not written, a project would not load with it: %w", err)
+		return TargetsWritten{}, fmt.Errorf("%s: %w", dir, err)
+	}
+	// A shared target is part of every project, so this write can break
+	// projects the editor never opened. It is refused for what it breaks, not
+	// for what is already broken: a project that does not load today must not
+	// be able to lock the config screen against every other edit.
+	before, err := LoadProjects(dir, cfg.Targets)
+	if err != nil {
+		return TargetsWritten{}, fmt.Errorf("%s: %w", dir, err)
+	}
+	if err := brokenBy(before, projects); err != nil {
+		return TargetsWritten{}, fmt.Errorf("not written, it would break %w", err)
 	}
 	if err := replaceFile(path, []byte(text)); err != nil {
 		return TargetsWritten{}, err
 	}
 	return TargetsWritten{Shared: next.Targets, Projects: projects}, nil
+}
+
+// brokenBy names the projects that are whole in before and not in after: what
+// this write would cost. A project already broken in before is left out, and
+// so is one this write repairs.
+func brokenBy(before, after []core.Project) error {
+	whole := make(map[revier.ProjectName]bool, len(before))
+	for _, p := range before {
+		whole[p.Name] = len(Problems(p)) == 0
+	}
+	var errs []error
+	for _, p := range after {
+		probs := Problems(p)
+		if len(probs) > 0 && whole[p.Name] {
+			errs = append(errs, fmt.Errorf("%s: %w", p.Name, errors.Join(probs...)))
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d project(s): %w", len(errs), errors.Join(errs...))
 }
 
 // sameTargets compares targets as they serialize, so an empty list and a

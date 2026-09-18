@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -22,6 +21,13 @@ type Project struct {
 	// edits or removes it. Empty for a project built in memory.
 	File string
 
+	// Invalid is why nothing in this project can run: its file did not
+	// parse, or a rule about the project as a whole refused it. The project
+	// is kept and listed anyway - a file that vanishes from the surface
+	// takes with it the one place its reason could be read (decisions.md
+	// D85).
+	Invalid error
+
 	compiled []compiledTarget // parallel to Project.Targets
 }
 
@@ -34,7 +40,21 @@ type compiledTarget struct {
 	// be the one.
 	windowClass revier.CompiledMatch
 	hasClass    bool
+
+	// err is why this target cannot be used: a template that did not
+	// render, a match that did not compile, or a rule that refused it. The
+	// target keeps its place in the project so the surface can name it and
+	// say why, and every lookup fails closed on it through resolveAt.
+	err error
 }
+
+// TargetErr is why the i-th target cannot be used, or nil when it can.
+func (p Project) TargetErr(i int) error { return p.compiled[i].err }
+
+// Refuse records that a rule refused the i-th target. config calls it for the
+// rules it checks before a project is prepared, so that a refusal and a
+// rendering failure reach the surface by the same route.
+func (p *Project) Refuse(i int, err error) { p.compiled[i].err = err }
 
 // index returns the position of the named target.
 func (p Project) index(name revier.TargetName) (int, bool) {
@@ -46,43 +66,40 @@ func (p Project) index(name revier.TargetName) (int, bool) {
 	return 0, false
 }
 
-// Prepare prepares every project. One that cannot be prepared fails the whole
-// set with an error naming it: this is load time, where a refusal can be read
-// and the file fixed, not the keystroke, where it cannot.
-func Prepare(projects []revier.Project) ([]Project, error) {
+// Prepare prepares every project. Preparing cannot fail: a target that does
+// not render or compile is kept and marked, and the project keeps the rest.
+func Prepare(projects []revier.Project) []Project {
 	out := make([]Project, 0, len(projects))
-	var errs []error
 	for _, p := range projects {
-		prepared, err := PrepareProject(p)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("project %q: %w", p.Name, err))
-			continue
-		}
-		out = append(out, prepared)
+		out = append(out, PrepareProject(p))
 	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return out, nil
+	return out
 }
 
 // PrepareProject renders one project's templates and compiles its matches.
 //
 // A template referring to a missing key, a pattern that does not parse, and a
-// match that constrains nothing are all errors here. They used to surface at
-// the keystroke, or be swallowed by the survey as a project with no available
-// targets; a bad file is now refused at load like every other validation
-// failure, naming the target.
-func PrepareProject(p revier.Project) (Project, error) {
-	rendered, err := Render(p)
-	if err != nil {
-		return Project{}, err
-	}
+// match that constrains nothing are all failures of one target. Each is
+// recorded against that target, which then reports itself unavailable with
+// the reason; the project's other targets are prepared and work. Refusing the
+// whole project - or, as it once did, the whole configuration - costs the user
+// every target that was written correctly (decisions.md D85).
+func PrepareProject(p revier.Project) Project {
+	rendered, errs := Render(p)
 	compiled := make([]compiledTarget, len(rendered.Targets))
 	for i, t := range rendered.Targets {
+		compiled[i].err = errs[i]
+		if compiled[i].err != nil {
+			// The realizations are as written, not as rendered: a match
+			// compiled from an unrendered pattern would match by accident.
+			compiled[i].runtime, compiled[i].window = matchesNothing, matchesNothing
+			continue
+		}
+		var err error
 		if t.Window != nil {
 			if compiled[i].window, err = compileMatch(t.Name, revier.HostWindow, t.Window.Match); err != nil {
-				return Project{}, err
+				compiled[i].err, compiled[i].window = err, matchesNothing
+				continue
 			}
 			if class := t.Window.Match.Class; class != "" {
 				// Already known to compile: the full match did.
@@ -99,11 +116,12 @@ func PrepareProject(p revier.Project) (Project, error) {
 		}
 		if t.Runtime != nil {
 			if compiled[i].runtime, err = compileMatch(t.Name, revier.HostRuntime, t.Runtime.Match); err != nil {
-				return Project{}, err
+				compiled[i].err, compiled[i].runtime = err, matchesNothing
+				continue
 			}
 		}
 	}
-	return Project{Project: rendered, compiled: compiled}, nil
+	return Project{Project: rendered, compiled: compiled}
 }
 
 // matchesNothing is a compiled match no instance satisfies. The zero

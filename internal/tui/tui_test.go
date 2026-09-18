@@ -43,10 +43,7 @@ func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Co
 	}
 	last := raw[n-1].Name
 	rt.Add("session:"+string(last), "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	return rt, wm, c, projects
 }
 
@@ -276,12 +273,9 @@ func TestEnterOnAProjectOpensItsHome(t *testing.T) {
 // does have rather than doing nothing.
 func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
-	projects, err := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
+	projects := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
 		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	m, cmd := press(m, "enter")
 	if cmd != nil {
@@ -1095,10 +1089,7 @@ func TestCtrlAltKeysFire(t *testing.T) {
 		{Name: "editor", Key: "ctrl-alt-o", Window: &revier.Realization{
 			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}}}
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	actions := []config.Action{{Key: "ctrl-alt-y", Name: "sync", Run: []string{"true"}}}
@@ -1142,10 +1133,7 @@ func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
 				Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 		},
 	}}
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
 	c := &core.Core{Runtime: rt, Window: wm}
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
@@ -1180,10 +1168,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 				Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
 		}},
 	}
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
@@ -1241,10 +1226,7 @@ func TestDetailPaneShowsTheProjectTree(t *testing.T) {
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Launch: []string{"x"}, Match: revier.Match{Title: "^session:here$"}}},
 	}}}
-	projects, err := core.Prepare(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare(raw)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
 
@@ -1289,13 +1271,10 @@ func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
 		return revier.Target{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}
 	}
-	projects, err := core.Prepare([]revier.Project{
+	projects := core.Prepare([]revier.Project{
 		{Name: "long", Path: path, Targets: []revier.Target{home("long")}},
 		{Name: "short", Path: "/p/short", Targets: []revier.Target{home("short")}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	rt.Add("session:long", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
 	return c, projects
 }
@@ -1487,13 +1466,10 @@ func countedWorld(t *testing.T, statuses []revier.Status) tui.Model {
 			State: revier.AgentState{Harness: "claude", Status: s, Activity: marker + " task"}})
 		panels = append(panels, revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelAgent, Title: "claude " + marker})
 	}
-	projects, err := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
+	projects := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	rt.Add("session:duo", "kitty", panels...)
 	c := &core.Core{Runtime: rt, Probes: probes}
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
@@ -1575,13 +1551,10 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 		}
 		return out
 	}
-	projects, err := core.Prepare([]revier.Project{
+	projects := core.Prepare([]revier.Project{
 		{Name: "first", Path: dir, Targets: targets("first")},
 		{Name: "second", Path: dir, Targets: targets("second")},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
 	border := paneBorder(t, m)

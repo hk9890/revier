@@ -679,10 +679,7 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 		},
 	}
 
-	prepared, err := core.PrepareProject(p)
-	if err != nil {
-		t.Fatalf("PrepareProject: %v", err)
-	}
+	prepared := core.PrepareProject(p)
 	homeRef, err := cr.Go(c, prepared, "home", nil)
 	if err != nil {
 		t.Fatalf("open home: %v", err)
@@ -972,7 +969,7 @@ func TestOneElementLaunchRunsWithoutAShell(t *testing.T) {
 func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 	h, c := server(t), ctx(t)
 	cr := &core.Core{Runtime: h}
-	p, err := core.PrepareProject(revier.Project{
+	p := core.PrepareProject(revier.Project{
 		Name: "revier",
 		Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -985,9 +982,6 @@ func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 			}},
 		},
 	})
-	if err != nil {
-		t.Fatalf("PrepareProject: %v", err)
-	}
 	diff, err := cr.Go(c, p, "diff", nil)
 	if err != nil {
 		t.Fatalf("open diff: %v", err)

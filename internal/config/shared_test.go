@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -183,7 +184,8 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 	}
 }
 
-// A project the merge leaves incomplete is refused against its own file.
+// A project the merge leaves incomplete keeps its place in the set, and the
+// target the merge left incomplete is the one that is refused.
 func TestAProjectIncompleteAfterTheMergeIsRefused(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[target]]\nname = \"editor\"\n  [target.window]\n  launch = [\"idea\"]\n")
@@ -191,9 +193,16 @@ func TestAProjectIncompleteAfterTheMergeIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n")
-	_, _, err := config.Load(root)
-	if err == nil || !strings.Contains(err.Error(), file) || !strings.Contains(err.Error(), "empty match") {
-		t.Errorf("Load = %v, want demo.toml named with the empty match", err)
+	_, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(projects) != 1 || projects[0].File != file {
+		t.Fatalf("projects = %v, want demo.toml loaded", projects)
+	}
+	probs := errors.Join(config.Problems(projects[0])...)
+	if probs == nil || !strings.Contains(probs.Error(), "empty match") {
+		t.Errorf("problems = %v, want the editor refused for its empty match", probs)
 	}
 }
 
@@ -206,9 +215,18 @@ func TestAWrongTypeInTheProjectFileIsReportedAtItsLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n\n[[target]]\nname = \"home\"\nhome = \"yes\"\n")
-	_, _, err := config.Load(root)
-	if err == nil || !strings.Contains(err.Error(), "line 5") || strings.Contains(err.Error(), "shared targets") {
-		t.Errorf("Load = %v, want the error at line 5 of demo.toml", err)
+	_, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("%d projects, want demo.toml listed with its reason", len(projects))
+	}
+	// A file that does not decode has no targets to refuse, so the project
+	// itself carries the reason.
+	got := projects[0].Invalid
+	if got == nil || !strings.Contains(got.Error(), "line 5") || strings.Contains(got.Error(), "shared targets") {
+		t.Errorf("Invalid = %v, want the error at line 5 of demo.toml", got)
 	}
 }
 

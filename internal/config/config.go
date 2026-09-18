@@ -3,9 +3,17 @@
 //
 // Validation happens here rather than at the keystroke. A match that
 // constrains nothing, a project with no home target, or two targets sharing a
-// key are all rejected at load, where the message can name the file. So is a
+// key are all found at load, where the message can name the file. So is a
 // template that does not render or a pattern that does not compile: projects
 // leave this package prepared (core.Project), with that work done once.
+//
+// What a failure costs is the smallest thing that is wrong (decisions.md
+// D85). validateTargets refuses one target, validateProject refuses one
+// project, and loading refuses nothing: every file becomes a project, marked
+// with what could not be read. Nothing here returns an error for a mistake in
+// a project file, because there is no caller that mistake should stop -
+// revier is how a user reaches the project they have to fix. The write paths
+// are the exception, and ask Problems before they replace a file.
 package config
 
 import (
@@ -228,39 +236,44 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 	sort.Strings(names)
 
 	projects := make([]core.Project, 0, len(names))
-	var errs []error
 	for _, name := range names {
-		p, err := LoadProject(filepath.Join(dir, name), shared)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		projects = append(projects, p)
-	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		projects = append(projects, LoadProject(filepath.Join(dir, name), shared))
 	}
 	return projects, nil
 }
 
-// LoadProject reads, validates, and prepares one project file. Every error
-// names the file: a rendering or compile failure is reported here, at load,
-// and never reaches a keystroke. shared are config.toml's shared targets,
-// merged in before anything is checked.
-func LoadProject(path string, shared []map[string]any) (core.Project, error) {
+// LoadProject reads, validates, and prepares one project file. It always
+// returns a project: one whose file could not be read or parsed, or which a
+// project-wide rule refused, comes back carrying the reason in Invalid, and
+// one whose targets were refused carries a reason on each. shared are
+// config.toml's shared targets, merged in before anything is checked.
+//
+// Nothing here returns an error, because there is no caller a project file's
+// own mistake should stop. The surface lists what loaded and says what did
+// not; `revier doctor` is where the reasons are read in full.
+func LoadProject(path string, shared []map[string]any) core.Project {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+		return invalid(path, fmt.Errorf("%s: %w", path, err))
 	}
 	return loadProject(path, data, shared)
 }
 
+// invalid is the project a file that could not be read or parsed still
+// produces: its name, its file, and why. It declares no target, so every
+// operation on it fails closed with the reason.
+func invalid(path string, err error) core.Project {
+	p := core.PrepareProject(revier.Project{Name: nameOf(path)})
+	p.File, p.Invalid = path, err
+	return p
+}
+
 // loadProject is LoadProject on the text the file at path has, or is about
 // to have.
-func loadProject(path string, data []byte, shared []map[string]any) (core.Project, error) {
+func loadProject(path string, data []byte, shared []map[string]any) core.Project {
 	p, err := decodeProject(data, shared)
 	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", path, err)
+		return invalid(path, fmt.Errorf("%s: %w", path, err))
 	}
 	p.Name = nameOf(path)
 	// A path is expanded once, here, so every consumer - templates, working
@@ -280,15 +293,36 @@ func loadProject(path string, data []byte, shared []map[string]any) (core.Projec
 			}
 		}
 	}
-	if err := Validate(p); err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", path, err)
-	}
-	prepared, err := core.PrepareProject(p)
-	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", path, err)
-	}
+	prepared := core.PrepareProject(p)
 	prepared.File = path
-	return prepared, nil
+	if err := validateProject(p); err != nil {
+		prepared.Invalid = fmt.Errorf("%s: %w", path, err)
+	}
+	// A rule's refusal wins over a rendering failure of the same target: both
+	// name the same mistake, and the rule says which key to look for in the
+	// file, where the template only says that it rendered to nothing.
+	for i, err := range validateTargets(p) {
+		if err != nil {
+			prepared.Refuse(i, err)
+		}
+	}
+	return prepared
+}
+
+// Problems is every reason a loaded project is not whole: the project-wide
+// refusal first, then one per refused target. It is empty for a project that
+// loaded entire, which is what a write path asks before it replaces a file.
+func Problems(p core.Project) []error {
+	var out []error
+	if p.Invalid != nil {
+		out = append(out, p.Invalid)
+	}
+	for i := range p.Targets {
+		if err := p.TargetErr(i); err != nil {
+			out = append(out, err)
+		}
+	}
+	return out
 }
 
 // nameOf is the name of the project a file holds: the file's name without
@@ -298,10 +332,21 @@ func nameOf(path string) revier.ProjectName {
 }
 
 // Validate rejects a project whose structure would fail at the keystroke
-// instead of at load. Every rule here names a failure that is invisible until
-// the key is pressed. Whether a template renders and a pattern compiles is
-// core.PrepareProject's to check; LoadProject runs both.
+// instead of at load: the project-wide rules and every target's, joined. It is
+// the check a write runs before it replaces a file, where the question is
+// whether the result is whole.
+//
+// Loading asks a narrower question of each rule - does this refuse the project
+// or one target - and calls validateProject and validateTargets instead.
 func Validate(p revier.Project) error {
+	errs := []error{validateProject(p)}
+	return errors.Join(append(errs, validateTargets(p)...)...)
+}
+
+// validateProject holds the rules that refuse the project as a whole: there is
+// nowhere to run, no way to address it, or nothing to open. A project they
+// refuse is still loaded and listed, carrying the reason (decisions.md D85).
+func validateProject(p revier.Project) error {
 	var errs []error
 
 	if p.Path == "" && p.Remote == nil {
@@ -322,8 +367,24 @@ func Validate(p revier.Project) error {
 			errs = append(errs, fmt.Errorf("remote.host: %w", err))
 		}
 	}
-
 	homes := 0
+	for _, t := range p.Targets {
+		if t.Home {
+			homes++
+		}
+	}
+	if homes == 0 {
+		errs = append(errs, errors.New("no target is marked home; nothing to open or return to"))
+	}
+	return errors.Join(errs...)
+}
+
+// validateTargets checks each target on its own, returning one error per
+// target, parallel to p.Targets and nil where the target is sound. A target
+// these rules refuse loses only itself: the project keeps the others, and the
+// refused one reports why instead of disappearing (decisions.md D85).
+func validateTargets(p revier.Project) []error {
+	out := make([]error, len(p.Targets))
 	seenName := map[revier.TargetName]bool{}
 	// Keyed by the canonical chord, not by the text. Two targets written
 	// "ctrl-o" and "Ctrl+O" are the same key, and the raw strings do not say
@@ -333,9 +394,14 @@ func Validate(p revier.Project) error {
 		raw    string
 	}{}
 
-	for _, t := range p.Targets {
+	// The first target marked home is the project's; a later one is refused
+	// rather than making the count ambiguous for every target at once.
+	home := false
+
+	for i, t := range p.Targets {
+		var errs []error
 		if t.Name == "" {
-			errs = append(errs, errors.New("a target has no name"))
+			out[i] = errors.New("a target has no name")
 			continue
 		}
 		if err := core.ValidateTargetName(t.Name); err != nil {
@@ -347,7 +413,10 @@ func Validate(p revier.Project) error {
 		seenName[t.Name] = true
 
 		if t.Home {
-			homes++
+			if home {
+				errs = append(errs, fmt.Errorf("target %q is marked home, and an earlier target already is; exactly one may be", t.Name))
+			}
+			home = true
 		}
 		if t.Key != "" {
 			if err := core.ValidateKeyTarget(t.Name); err != nil {
@@ -432,17 +501,9 @@ func Validate(p revier.Project) error {
 			errs = append(errs, fmt.Errorf("target %q: prefer must be %q or %q, got %q",
 				t.Name, revier.HostWindow, revier.HostRuntime, t.Prefer))
 		}
+		out[i] = errors.Join(errs...)
 	}
-
-	switch homes {
-	case 1:
-	case 0:
-		errs = append(errs, errors.New("no target is marked home; nothing to open or return to"))
-	default:
-		errs = append(errs, fmt.Errorf("%d targets are marked home; exactly one may be", homes))
-	}
-
-	return errors.Join(errs...)
+	return out
 }
 
 // validateTab checks a target declared inside another. Each rule is a tab

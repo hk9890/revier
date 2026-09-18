@@ -90,11 +90,8 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "y", Command: []string{"goose"}},
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{good, broken}}
-	p, err := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,
+	p := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,
 		Runtime: &revier.Realization{Name: "session:p", Launch: []string{"x"}, Match: revier.Match{Title: "^session:p$"}}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)

@@ -14,10 +14,15 @@ type ProjectView struct {
 	// Unreachable says why a remote project's host gave no answer: the
 	// text of the failure, empty when it answered. Its agents and its
 	// checkout are then unknown, and the view carries none of either.
-	Unreachable string       `json:"unreachable,omitempty"`
-	Home        TargetRef    `json:"home,omitzero"`
-	Targets     []TargetView `json:"targets"`
-	Agents      []AgentView  `json:"agents,omitempty"`
+	Unreachable string `json:"unreachable,omitempty"`
+	// Invalid says why nothing in this project can run: its file did not
+	// parse, or a rule about the project as a whole refused it. The project
+	// is listed anyway, because a file that vanishes from the surface takes
+	// with it the one place the reason could be read.
+	Invalid string       `json:"invalid,omitempty"`
+	Home    TargetRef    `json:"home,omitzero"`
+	Targets []TargetView `json:"targets"`
+	Agents  []AgentView  `json:"agents,omitempty"`
 }
 
 // Attention reports whether any agent in the project is waiting for the human.
@@ -41,6 +46,10 @@ type TargetView struct {
 	Ref       TargetRef  `json:"ref,omitzero"`
 	Attached  bool       `json:"attached,omitempty"`
 	Available bool       `json:"available"` // a host that can realize it is configured
+	// Reason says why Available is false. A target no host here can realize
+	// and a target its own config refused are both unavailable, and only the
+	// reason tells the user which of the two to go and fix.
+	Reason string `json:"reason,omitempty"`
 }
 
 type AgentView struct {

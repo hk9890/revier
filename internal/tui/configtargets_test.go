@@ -180,7 +180,7 @@ func TestTheConfigScreenDeletesASharedTarget(t *testing.T) {
 		t.Errorf("footer = %q, want the question", f)
 	}
 	m, _ = press(m, "y")
-	if f := footer(m); !strings.Contains(f, "would not load") {
+	if f := footer(m); !strings.Contains(f, "it would break") {
 		t.Errorf("footer = %q, want the refusal", f)
 	}
 	if got := configText(t, root); got != sharedTargets {

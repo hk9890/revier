@@ -15,10 +15,16 @@ import (
 // The fields available are those of revier.Project: {{.Name}}, {{.Path}}, and
 // {{.Vars.<key>}}. A realization that names no Dir gets the project path, and
 // every panel gets the realization's Dir.
-func Render(p revier.Project) (revier.Project, error) {
+//
+// A target whose templates do not render is returned as it was written, and
+// its error sits at the same index of the returned slice. The other targets
+// are rendered and usable: one launch argv that cannot be built is that
+// target's problem and no other's (decisions.md D85).
+func Render(p revier.Project) (revier.Project, []error) {
 	out := p
 	out.Targets = make([]revier.Target, len(p.Targets))
 	copy(out.Targets, p.Targets)
+	errs := make([]error, len(p.Targets))
 
 	for i := range out.Targets {
 		for _, slot := range []**revier.Realization{&out.Targets[i].Window, &out.Targets[i].Runtime} {
@@ -27,12 +33,13 @@ func Render(p revier.Project) (revier.Project, error) {
 			}
 			r, err := renderRealization(p, **slot)
 			if err != nil {
-				return revier.Project{}, fmt.Errorf("target %q: %w", out.Targets[i].Name, err)
+				errs[i] = fmt.Errorf("target %q: %w", out.Targets[i].Name, err)
+				break
 			}
 			*slot = &r
 		}
 	}
-	return out, nil
+	return out, errs
 }
 
 func renderRealization(p revier.Project, r revier.Realization) (revier.Realization, error) {

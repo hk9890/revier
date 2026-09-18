@@ -62,8 +62,7 @@ func main() {
 
 	host := &tmux.Host{Socket: socket}
 	c := &core.Core{Runtime: host}
-	project, err := core.PrepareProject(demoProject())
-	fatal(err)
+	project := core.PrepareProject(demoProject())
 
 	switch os.Args[1] {
 	case "survey":

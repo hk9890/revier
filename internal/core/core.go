@@ -161,6 +161,13 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 // that walks a project's targets resolves each one first, so a tab fails
 // closed in all of them; the few that serve tabs branch before this.
 func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
+	// A target its own configuration refused resolves to nothing, here,
+	// where every lookup that walks a project's targets passes. The keypress
+	// then fails loudly with the reason instead of running something built
+	// from a launch argv that did not render (decisions.md D85).
+	if err := p.compiled[i].err; err != nil {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, err
+	}
 	if p.isTab(i) {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("target %q: %w", p.Targets[i].Name, errTab)
 	}
@@ -851,9 +858,11 @@ type Report struct {
 // is what was bound to each project by hand or by a claim; an attachment that
 // is still listed follows the project's targets, marked Attached.
 //
-// Every project here is already rendered and compiled; a project that could
-// not be was refused at load, so the survey has no per-project error path and
-// does no work that a previous refresh did not also have to do.
+// Every project here is already rendered and compiled, so the survey does no
+// work that a previous refresh did not also have to do. What could not be
+// rendered or compiled arrives marked rather than missing: an invalid project
+// and a refused target each carry their reason into the view, because the
+// survey is the one place a user reads why something is not there.
 //
 // The TUI surveys every refresh, so a survey is logged only when it failed or
 // was slow, and a failure that repeats only once (logging.Poll).
@@ -1023,6 +1032,9 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 	// that reaches the project is not the agent in it.
 	local := p.Remote == nil
 	v := revier.ProjectView{Project: p.Project, PathExists: local && dirExists(p.Path)}
+	if p.Invalid != nil {
+		v.Invalid = p.Invalid.Error()
+	}
 
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
@@ -1044,6 +1056,13 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 			v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
 		}
 		host, _, m, err := c.resolveAt(p, i)
+		// A target no host here can realize is the expected headless result,
+		// and Available already says it. A Reason is set only for the other
+		// kind: a target its own configuration refused, which is a mistake in
+		// a file and needs saying (decisions.md D85).
+		if err != nil && !errors.Is(err, ErrNoHost) {
+			tv.Reason = err.Error()
+		}
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()

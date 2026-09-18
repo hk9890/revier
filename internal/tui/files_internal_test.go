@@ -30,10 +30,7 @@ func editableModel(t *testing.T) (Model, string) {
 	if err := os.WriteFile(file, []byte(editable), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, err := config.LoadProject(file, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := config.LoadProject(file, nil)
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, []core.Project{p}, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	return m, file
 }
@@ -47,10 +44,7 @@ func TestAWrittenProjectLeavesTheListARunningSurveyHolds(t *testing.T) {
 	if err := os.WriteFile(file, []byte(strings.Replace(editable, "/p/alpha", "/p/moved", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, err := config.LoadProject(file, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := config.LoadProject(file, nil)
 	m.replaceProject("alpha", p)
 	if got := held[0].Path; got != "/p/alpha" {
 		t.Errorf("the running survey's list changed under it: path = %q", got)

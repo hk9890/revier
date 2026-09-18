@@ -36,6 +36,7 @@ func newApp(ctx context.Context) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
+	warnProblems(projects)
 	stateRoot, err := state.Root()
 	if err != nil {
 		return nil, err
@@ -55,6 +56,36 @@ func newApp(ctx context.Context) (*app, error) {
 		// `revier keys` reads one. cmdKeys selects it when it is needed.
 		core: newCore(cfg, rt, win, nil),
 	}, nil
+}
+
+// warnProblems says on stderr that some of the configuration did not load,
+// and writes each reason to the log. One line, naming the count and where to
+// read the rest: the reasons themselves ran to twenty lines on this user's
+// machine, and a command that prints them before every keypress is a command
+// nobody reads.
+//
+// `list` is left out, for the reason openLog leaves it out of the log: a
+// surface with a linked project runs it on that host every refresh
+// (decisions.md D40), and a configuration problem is the same on every one of
+// those runs. Its own output already marks the projects concerned.
+func warnProblems(projects []core.Project) {
+	if invoked == "list" {
+		return
+	}
+	files := 0
+	for _, p := range projects {
+		probs := config.Problems(p)
+		if len(probs) == 0 {
+			continue
+		}
+		files++
+		for _, err := range probs {
+			slog.Warn("config problem", "project", p.Name, "file", p.File, "err", err)
+		}
+	}
+	if files > 0 {
+		fmt.Fprintf(os.Stderr, "revier: warning: %d project file(s) have problems; run `revier doctor`\n", files)
+	}
 }
 
 func (a *app) project(name revier.ProjectName) (core.Project, bool) {

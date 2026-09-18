@@ -22,16 +22,13 @@ import (
 // onto the workspace there.
 func remoteProject(t *testing.T) core.Project {
 	t.Helper()
-	p, err := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
+	p := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
 				{Kind: revier.PanelAgent, Command: ssh.PanelCommand("buildbox", "far", "agent")},
 				{Kind: revier.PanelShell, Command: ssh.PanelCommand("buildbox", "far", "shell")},
 			}}},
 	}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	return p
 }
 

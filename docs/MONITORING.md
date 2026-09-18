@@ -47,6 +47,7 @@ doc reads what it already did.
 | `session saved` | a save, with its counts and gaps |
 | `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
 | `shutdown step`, `shutdown` | a shutdown: each step's `ref`, `panel`, `busy` and `err`, then the counts; its save writes `session saved` with `by` shutdown |
+| `config problem` | one `WARN` per refusal at load, with `project` and `file`; not written by `list`, which runs every refresh on a linked host |
 | `state load`, `state update` | the TUI could not read the state file, or a process could not update it |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
 | `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |

@@ -429,10 +429,7 @@ func TestAFolderThatIsAProjectIsRefused(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	_, _, c, _ := world(t, 1)
-	projects, err := core.Prepare([]revier.Project{{Name: "other", Path: "/p/widget"}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	projects := core.Prepare([]revier.Project{{Name: "other", Path: "/p/widget"}})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+n")

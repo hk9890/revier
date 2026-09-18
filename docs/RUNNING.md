@@ -45,6 +45,7 @@ EOF
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 
 ./bin/revier status -p demo    # which hosts were selected
+./bin/revier doctor            # what did not load whole, and its fix; exit 1 if any
 ./bin/revier open demo         # run-or-raise the workspace
 ./bin/revier list              # agent state and target availability
 ./bin/revier list --json       # what both renderers read
