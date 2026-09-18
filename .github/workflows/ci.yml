@@ -38,9 +38,9 @@ jobs:
       - name: L3 adapter parsing
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
-      # ubuntu-latest ships tmux, which is all L4 needs: every test starts a
-      # private server on its own socket and kills it in cleanup.
-      - name: L4 live tmux
+      # ubuntu-latest ships tmux and sh, which is all L4 needs: every tmux test
+      # starts a private server on its own socket and kills it in cleanup.
+      - name: L4 live
         run: |
           tmux -V
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...

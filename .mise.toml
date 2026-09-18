@@ -76,7 +76,7 @@ run = "gotestsum --format pkgname-and-test-fails -- -race -tags=integration ./..
 CGO_ENABLED = "1"
 
 [tasks."test:live"]
-description = "L4 tmux, headless. Skips when tmux is not installed."
+description = "L4 real processes, headless: tmux on a private socket, and shell scripts. The tmux tests skip when tmux is not installed."
 run = "gotestsum --format pkgname-and-test-fails -- -race -tags=live -timeout=120s ./..."
 [tasks."test:live".env]
 CGO_ENABLED = "1"

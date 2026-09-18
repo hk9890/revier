@@ -315,8 +315,9 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 	}
 }
 
-// hostTimeout bounds one round of host calls - a survey, or one focus - so a
-// hung wctl or kitty socket costs one refresh and not the surface.
+// hostTimeout bounds one round of host calls - a survey, one focus, or the
+// probe of a runtime host - so a hung wctl or kitty socket costs one refresh
+// and not the surface.
 const hostTimeout = 10 * time.Second
 
 // Survey is one refresh: one bulk listing per host, matched locally. It is a

@@ -264,16 +264,6 @@ func Count(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-// LinkedAs is the name of the link here to project on host, if there is one.
-func LinkedAs(projects []Project, host string, project revier.ProjectName) (revier.ProjectName, bool) {
-	for _, p := range projects {
-		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
-			return p.Name, true
-		}
-	}
-	return "", false
-}
-
 func projectNamed(projects []Project, name revier.ProjectName) (Project, bool) {
 	for _, p := range projects {
 		if p.Name == name {

@@ -294,8 +294,7 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	}
 	items := make([]list.Item, 0, len(msg.views))
 	for _, v := range msg.views {
-		linked, _ := core.LinkedAs(m.projects, msg.host, v.Project.Name)
-		items = append(items, remoteItem{view: v, linked: linked})
+		items = append(items, remoteItem{view: v, linked: core.LinkedAs(m.projects, msg.host, v.Project.Name)})
 	}
 	m.host = msg.host
 	m.setRemoteFilter("")
