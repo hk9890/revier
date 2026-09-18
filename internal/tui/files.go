@@ -156,6 +156,11 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // not hold the change up.
 func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 	name := v.Project.Name
+	// Before the first survey the view is the files' alone, and says nothing
+	// about what runs.
+	if !m.surveyed {
+		return fmt.Errorf("no survey has answered yet; wait for it before %s %s", doing, name)
+	}
 	running := v.Running
 	for _, t := range v.Targets {
 		running = running || !t.Ref.IsZero()

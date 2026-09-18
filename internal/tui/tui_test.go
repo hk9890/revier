@@ -201,12 +201,63 @@ func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	if body := listColumn(m); strings.Contains(body, glyphs.Stopped) || strings.Contains(body, glyphs.Running) {
 		t.Errorf("first frame marks projects open or stopped before any host answered:\n%s", body)
 	}
+	// The pane beside the rows makes no such claim either.
+	if p := pane(m); strings.Contains(p, "stopped") || strings.Contains(p, "running") {
+		t.Errorf("first frame's pane says what runs before any host answered:\n%s", p)
+	}
 	m = survey(m)
 	if strings.Contains(ruleLine(m), "surveying") || !strings.Contains(ruleLine(m), "90/90") {
 		t.Errorf("after the survey the counts should be real:\n%s", m.View())
 	}
 	if body := listColumn(m); !strings.Contains(body, glyphs.Running) {
 		t.Errorf("after the survey the open project should carry its mark:\n%s", body)
+	}
+	if p := pane(m); !strings.Contains(p, "running") {
+		t.Errorf("after the survey the pane should say the open project runs:\n%s", p)
+	}
+}
+
+// The rows before the first survey are in file order, and the survey re-sorts
+// them. The list component keeps the cursor's index across that, not its
+// project, so a cursor left where it was would land on whatever sorted into
+// its index: the first survey places it on the top row instead. A cursor
+// the user moved on those rows stays on the project they moved it to.
+func TestTheFirstSurveyPlacesTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 4)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m = survey(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "project-03") {
+		t.Errorf("after the first survey the cursor should be on the top row, project-03: %q", row)
+	}
+
+	m = resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	if row := selectedRow(t, m); !strings.Contains(row, "project-02") {
+		t.Fatalf("before the survey the cursor moves on the rows: %q", row)
+	}
+	m = survey(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "project-02") {
+		t.Errorf("after the first survey the cursor should stay on the project the user moved to, project-02: %q", row)
+	}
+}
+
+// Before the first survey nothing is known about what runs, so a delete is
+// refused rather than allowed on a project that is open: its rows carry no
+// ref yet, and a session started by hand has no binding in state to refuse it
+// by.
+func TestADeleteBeforeTheFirstSurveyIsRefused(t *testing.T) {
+	_, _, c, projects := world(t, 4)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	for range 3 {
+		m, _ = press(m, "down")
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-03") {
+		t.Fatalf("cursor on %q, want project-03, the open one", row)
+	}
+	m, _ = press(m, "alt+d")
+	if f := footer(m); strings.Contains(f, "delete project-03?") || !strings.Contains(f, "no survey has answered") {
+		t.Errorf("footer = %q, want the delete refused until a survey has answered", f)
 	}
 }
 

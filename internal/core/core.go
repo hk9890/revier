@@ -883,11 +883,13 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 // each target and whether a host here could realize it - with nothing
 // running and no agent. The TUI draws its first frame from it, so the names
 // are on the screen while the hosts are listed and a remote host is asked,
-// which is the slow part of a survey. It lists nothing and asks nobody.
-func (c *Core) Unsurveyed(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings) []revier.ProjectView {
+// which is the slow part of a survey. It lists nothing and asks nobody: with
+// no listing there is no instance to bind to or to probe, so it takes no
+// bindings and no context.
+func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	views := make([]revier.ProjectView, 0, len(projects))
 	for _, p := range projects {
-		views = append(views, c.view(ctx, snapshot{}, p, bound[p.Name], nil))
+		views = append(views, c.view(context.Background(), nil, p, nil, nil))
 	}
 	return views
 }

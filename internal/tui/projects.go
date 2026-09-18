@@ -342,7 +342,7 @@ func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
 // attention sorting moves rows, so holding the index would move the cursor to
 // a different project while the user was reading it.
 func (m *Model) reload() {
-	was, hadSelection := m.selectedName()
+	was, hadSelection := m.plist.SelectedItem().(projectItem)
 
 	items := make([]list.Item, 0, len(m.views))
 	for _, v := range m.views {
@@ -356,19 +356,23 @@ func (m *Model) reload() {
 		m.plist.SetFilterText(m.filter)
 	}
 
-	switch {
-	case hadSelection && m.placed:
-		m.selectName(was)
-	case m.start != "":
-		// The first survey: open on the project of the working directory, the
-		// way the shell picker preselects it (os_list_json.py:570). After
-		// that the user's own selection wins.
-		m.selectName(m.start)
-	}
 	// The rows before the first survey are the files' alone, in file order,
-	// and the cursor on them is nobody's choice: the first survey puts it on
-	// the top row, which is the project that needs the user most.
-	m.placed = m.surveyed
+	// and the cursor's place on them is nobody's choice unless the user
+	// moved it. SetItems keeps the cursor's index, not its project, so the
+	// first survey places the cursor itself: on the project the user moved
+	// to, else on the project of the working directory, the way the shell
+	// picker preselects it (os_list_json.py:570), else on the top row, which
+	// is the project that needs the user most. After that the user's own
+	// selection wins.
+	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
+	switch {
+	case hadSelection && (!was.unsurveyed || moved):
+		m.selectName(was.view.Project.Name)
+	case m.start != "":
+		m.selectName(m.start)
+	default:
+		m.plist.Select(0)
+	}
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.
