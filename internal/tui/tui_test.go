@@ -63,9 +63,16 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // timer does.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "")
+	m := tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors()
 	next, _ := m.Update(m.Survey()())
 	return next.(tui.Model)
+}
+
+// clocked gives the model a clock a test advances by hand, and returns the
+// hand: two clicks are as far apart as the test says, not as the machine ran.
+func clocked(m tui.Model) (tui.Model, *time.Time) {
+	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	return m.WithClock(func() time.Time { return now }), &now
 }
 
 func survey(m tui.Model) tui.Model {
@@ -734,7 +741,7 @@ func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "")
+	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
 	stray := wm.Add("Pull requests - Chromium", "chromium")
 	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
 

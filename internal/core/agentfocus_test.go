@@ -46,6 +46,27 @@ func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	}
 }
 
+// Two processes can each have an OS window of one title. The window raised is
+// the one of the process the instance runs in, whichever the window host
+// lists first: the title says which window, the pid says whose.
+func TestGoAgentRaisesTheWindowOfItsOwnProcess(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 4242})
+	own := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{titleProbe{}}}
+	p := prepared(t, project())
+
+	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {
+		t.Fatalf("GoAgent: %v", err)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != own {
+		t.Errorf("window focuses = %v, want only the window of pid 1001 %v", wm.Focuses, own)
+	}
+}
+
 // Two instances of one project, as two kitty processes, can each hold a panel
 // 1. The survey reports each agent with its instance, and going to one focuses
 // that one, where a lookup by panel id alone was ambiguous (decisions.md D75).

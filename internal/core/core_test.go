@@ -701,6 +701,26 @@ func TestBindLeavesAmbiguityAlone(t *testing.T) {
 	}
 }
 
+// One new window of the class, with a title the rule does not match yet, is
+// the launch's: the common case, and the one a title that settles late would
+// otherwise miss.
+func TestBindTakesTheOneNewWindowOfTheClass(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+	p := prepared(t, revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"x"}, Match: revier.Match{Title: "^h$"}}},
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$", Title: "revier"}}},
+	}})
+	fresh := wm.AddInstance(revier.Instance{Title: "Untitled", Class: "code"})
+	inst, ok, err := c.Bind(context.Background(), p, "editor", nil, 0)
+	if err != nil || !ok || inst.Ref != fresh {
+		t.Fatalf("Bind = %+v, %v, %v; want the one window of the class bound", inst, ok, err)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != fresh {
+		t.Errorf("window focuses = %v, want the bound window raised", wm.Focuses)
+	}
+}
+
 // A survey reports a bound instance as the target's, ahead of the rule.
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")

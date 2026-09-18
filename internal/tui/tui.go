@@ -100,6 +100,7 @@ type Model struct {
 	actions   []config.Action
 	shared    []map[string]any // config.toml's shared targets, for a project file read again
 	refresh   time.Duration
+	now       func() time.Time // the clock the double-click window is measured on; a test sets it
 	theme     theme.Theme
 	frame     int  // the spinner frame a working agent shows
 	spinning  bool // whether a spin tick is out, so a survey starts no second one
@@ -204,7 +205,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	keys := newKeyMap(actions)
 	m := Model{
 		core: c, projects: projects, stateRoot: stateRoot, actions: actions, shared: cfg.Targets,
-		refresh: refresh, theme: th, width: 80, height: 24,
+		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
 		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),

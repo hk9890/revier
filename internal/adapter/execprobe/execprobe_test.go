@@ -3,7 +3,11 @@ package execprobe_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -76,6 +80,29 @@ func TestInspectEnforcesTheTimeout(t *testing.T) {
 	}
 	if took := time.Since(start); took > time.Second {
 		t.Errorf("Inspect took %s, want the 100ms bound to hold", took)
+	}
+}
+
+// A probe that leaves a process behind in its own session, outside the group
+// the timeout kills, still lets Inspect return: the pipe that process holds
+// open is abandoned shortly after the probe itself exits.
+func TestInspectReturnsWhenAnEscapedGrandchildHoldsThePipe(t *testing.T) {
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("setsid is not installed")
+	}
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	p := execprobe.New("aider", script(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 30' & echo '{"status":"idle"}'`)).WithTimeout(time.Second)
+	t.Cleanup(func() {
+		if b, err := os.ReadFile(pidFile); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	start := time.Now()
+	_, _ = p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
+	if took := time.Since(start); took > 500*time.Millisecond {
+		t.Errorf("Inspect took %s with a grandchild holding stdout, want it back well under the timeout", took)
 	}
 }
 
