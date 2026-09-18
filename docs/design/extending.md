@@ -139,9 +139,12 @@ A link, in the same directory, is a project on another machine
 ```toml
 # The path and the repository are the host's, as `revier link` recorded them:
 # a target here renders them, and neither names anything on this machine
-# (decisions.md D83). A template reading one the file does not hold is
-# refused at load, rather than launching on an empty argument.
-path = "~/dev/far"
+# (decisions.md D83). An argument that renders to nothing - a path the file
+# does not hold - is refused at load rather than launched. The path is
+# written out in full: a local project's "~" is expanded at load against the
+# home directory here, and a link's is not, so a "~" written here reaches the
+# launch below as a tilde.
+path = "/home/hans/dev/far"
 git_url = "git@github.com:hk9890/far.git"
 
 [remote]

@@ -212,9 +212,13 @@ missing is cloned from its `git_url` when it is opened.
 A project can live on another machine. `revier link <host> <project>`, or
 alt+r in the TUI, writes a link file for it in the same directory. The file
 names the host and, when it differs from the file's own name, the project's
-name there:
+name there, and records what the host said about the project: the path and
+the repository, both the host's:
 
 ```toml
+path = "/home/hans/dev/far"
+git_url = "git@github.com:hk9890/far.git"
+
 [remote]
 host = "buildbox"
 project = "far"
@@ -222,8 +226,9 @@ project = "far"
 
 The pane that reaches the workspace is derived: `ssh -t buildbox revier open
 far --attach`. A link may add `[[target]]` entries of its own, such as an
-editor over ssh, and a `path` for their templates, which is the path on the
-host. It has no `git_url` and no directory here.
+editor over ssh, which render that path and that repository. Neither names
+anything on this machine: the link has no directory here, and the checkout
+stays the host's to clone.
 
 revier must be installed on the host, with tmux and the project's own file
 under its `~/.config/revier/projects/`. The list then shows the link as

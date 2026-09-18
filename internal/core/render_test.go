@@ -176,21 +176,24 @@ func TestRenderFillsEveryPanelDirFromItsRealization(t *testing.T) {
 	}
 }
 
-// A field the project leaves empty is refused where a template reads it: a
-// link written before its host reported a path would otherwise launch an
-// editor on nothing (decisions.md D83).
-func TestRenderRejectsAnEmptyFieldATemplateReads(t *testing.T) {
+// An argument that renders to nothing is refused: a link written before its
+// host reported a path would otherwise launch an editor on the empty string,
+// and nothing would say why (decisions.md D83).
+func TestRenderRejectsAnArgumentThatRendersToNothing(t *testing.T) {
 	link := &revier.Link{Host: "buildbox", Project: "far"}
 	for name, tc := range map[string]struct {
 		launch []string
+		vars   map[string]string
 		want   string
 	}{
-		"a path the link has not recorded":       {[]string{"code", "{{.Path}}"}, "path"},
-		"a repository the link has not recorded": {[]string{"chrome", "{{.GitURL}}"}, "git_url"},
+		"a path the link has not recorded":       {launch: []string{"code", "{{.Path}}"}, want: "{{.Path}}"},
+		"a repository the link has not recorded": {launch: []string{"chrome", "{{.GitURL}}"}, want: "{{.GitURL}}"},
+		"a var written blank":                    {launch: []string{"git", "switch", "{{.Vars.branch}}"}, vars: map[string]string{"branch": ""}, want: "{{.Vars.branch}}"},
 	} {
 		p := revier.Project{
 			Name:   "far",
 			Remote: link,
+			Vars:   tc.vars,
 			Targets: []revier.Target{{
 				Name:   "editor",
 				Window: &revier.Realization{Launch: tc.launch, Match: revier.Match{Class: "^Code$"}},
@@ -200,6 +203,19 @@ func TestRenderRejectsAnEmptyFieldATemplateReads(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "editor") {
 			t.Errorf("%s: err = %v, want one naming the target and %q", name, err, tc.want)
 		}
+	}
+
+	// A guard is how a template says the argument is optional, and there is
+	// no such thing in an argv: the position stays either way.
+	guarded := revier.Project{
+		Name: "far", Remote: link,
+		Targets: []revier.Target{{
+			Name:   "editor",
+			Window: &revier.Realization{Launch: []string{"code", "{{if .Path}}{{.Path}}{{end}}"}, Match: revier.Match{Class: "^Code$"}},
+		}},
+	}
+	if _, err := core.Render(guarded); err == nil {
+		t.Error("a guarded argument still renders to nothing, and is still refused")
 	}
 
 	p := revier.Project{
@@ -218,9 +234,9 @@ func TestRenderRejectsAnEmptyFieldATemplateReads(t *testing.T) {
 	}
 }
 
-// A field nothing reads is not required: a link with no path still opens its
-// pane onto the host.
-func TestRenderLeavesAnEmptyFieldNoTemplateReads(t *testing.T) {
+// A field no argument renders is not required: a link with no path still
+// opens its pane onto the host.
+func TestRenderLeavesAnEmptyFieldNoArgumentRenders(t *testing.T) {
 	p := revier.Project{
 		Name:   "far",
 		Remote: &revier.Link{Host: "buildbox", Project: "far"},

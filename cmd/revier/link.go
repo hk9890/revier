@@ -100,6 +100,7 @@ func (a *app) link(ctx context.Context, host string, project, name revier.Projec
 	for _, v := range views {
 		if v.Project.Name == project {
 			on, found = v.Project, true
+			break
 		}
 	}
 	if !found {

@@ -60,11 +60,8 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 		return revier.Realization{}, fmt.Errorf("place: %w", err)
 	}
 	if len(r.Launch) > 0 {
-		out.Launch = make([]string, len(r.Launch))
-		for i, arg := range r.Launch {
-			if out.Launch[i], err = expand(p, arg); err != nil {
-				return revier.Realization{}, fmt.Errorf("launch[%d]: %w", i, err)
-			}
+		if out.Launch, err = expandArgv(p, r.Launch); err != nil {
+			return revier.Realization{}, fmt.Errorf("launch%w", err)
 		}
 	}
 	if len(r.Panels) > 0 {
@@ -83,11 +80,9 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 			if len(spec.Command) == 0 {
 				continue
 			}
-			cmd := make([]string, len(spec.Command))
-			for j, arg := range spec.Command {
-				if cmd[j], err = expand(p, arg); err != nil {
-					return revier.Realization{}, fmt.Errorf("panel[%d] command[%d]: %w", i, j, err)
-				}
+			cmd, err := expandArgv(p, spec.Command)
+			if err != nil {
+				return revier.Realization{}, fmt.Errorf("panel[%d] command%w", i, err)
 			}
 			out.Panels[i].Command = cmd
 		}
@@ -97,10 +92,7 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 
 // expand renders one string. A template referring to a missing key is an
 // error rather than an empty string: a launch argv silently losing an argument
-// is far harder to diagnose than a refusal at load. A key the project has but
-// leaves empty is refused for the same reason (decisions.md D83): a link
-// written before its host reported a path would otherwise open an editor on
-// nothing.
+// is far harder to diagnose than a refusal at load.
 func expand(p revier.Project, s string) (string, error) {
 	if !strings.Contains(s, "{{") {
 		return s, nil
@@ -113,43 +105,27 @@ func expand(p revier.Project, s string) (string, error) {
 	if err := t.Execute(&b, p); err != nil {
 		return "", err
 	}
-	if err := readsEmpty(t, p); err != nil {
-		return "", err
-	}
 	return b.String(), nil
 }
 
-// The marks stand in for a field the project leaves empty, and appear in the
-// output only where the template read one.
-const (
-	markPath   = "\x00path\x00"
-	markGitURL = "\x00git_url\x00"
-)
-
-// readsEmpty reports the empty field a template reads, by rendering it again
-// against a project whose empty fields are marked. Reading the output is what
-// tells a template that names a field from one that merely contains its text.
-func readsEmpty(t *template.Template, p revier.Project) error {
-	if p.Path != "" && p.GitURL != "" {
-		return nil
-	}
-	marked := p
-	if marked.Path == "" {
-		marked.Path = markPath
-	}
-	if marked.GitURL == "" {
-		marked.GitURL = markGitURL
-	}
-	var b strings.Builder
-	if err := t.Execute(&b, marked); err != nil {
-		return err
-	}
-	for _, f := range []struct{ mark, key string }{{markPath, "path"}, {markGitURL, "git_url"}} {
-		if strings.Contains(b.String(), f.mark) {
-			return fmt.Errorf("reads %s, and the project has none", f.key)
+// expandArgv renders an argv list, and refuses an argument that renders to
+// nothing (decisions.md D83). A template over a value the project leaves
+// empty - a link with no path recorded, a var written blank - hands the
+// program an empty argument, which it reads as the current directory, an
+// empty pattern or a missing operand, and nothing says why. The error names
+// the index, because an argv is read by position.
+func expandArgv(p revier.Project, argv []string) ([]string, error) {
+	out := make([]string, len(argv))
+	for i, arg := range argv {
+		var err error
+		if out[i], err = expand(p, arg); err != nil {
+			return nil, fmt.Errorf("[%d]: %w", i, err)
+		}
+		if out[i] == "" {
+			return nil, fmt.Errorf("[%d]: %q renders to an empty argument", i, arg)
 		}
 	}
-	return nil
+	return out, nil
 }
 
 // RenderArgv expands an argv list against a project, for a configured action.
@@ -157,12 +133,9 @@ func readsEmpty(t *template.Template, p revier.Project) error {
 // and a realization's launch argv are rendered by the same rules, so a user
 // learns one template language.
 func RenderArgv(p revier.Project, argv []string) ([]string, error) {
-	out := make([]string, len(argv))
-	for i, arg := range argv {
-		var err error
-		if out[i], err = expand(p, arg); err != nil {
-			return nil, fmt.Errorf("argv[%d]: %w", i, err)
-		}
+	out, err := expandArgv(p, argv)
+	if err != nil {
+		return nil, fmt.Errorf("argv%w", err)
 	}
 	return out, nil
 }

@@ -373,6 +373,9 @@ func (m Model) projectScreen() (string, int) {
 		if m.ptext.Path != "" {
 			info("path there", m.ptext.Path)
 		}
+		if m.ptext.GitURL != "" {
+			info("git url there", m.ptext.GitURL)
+		}
 	}
 
 	b.WriteString(m.heading("Targets", w))

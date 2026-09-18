@@ -1,14 +1,12 @@
 package config_test
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -438,7 +436,8 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 }
 
 // A link holds the repository the host records, for a target here that
-// renders it; the checkout it names is still the host's (decisions.md D83).
+// renders it. The checkout it names is still the host's, which
+// internal/checkout refuses to clone here (decisions.md D83).
 func TestALinkKeepsTheHostsGitURL(t *testing.T) {
 	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:hk9890/far.git\"\n" + link
 	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
@@ -447,9 +446,6 @@ func TestALinkKeepsTheHostsGitURL(t *testing.T) {
 	}
 	if p.GitURL != "git@github.com:hk9890/far.git" {
 		t.Errorf("git_url = %q, want the host's", p.GitURL)
-	}
-	if _, err := checkout.Ensure(p.Project, io.Discard); err == nil || !strings.Contains(err.Error(), "buildbox") {
-		t.Errorf("err = %v, want the clone refused, naming the host that holds the checkout", err)
 	}
 	bad := "path = \"/srv/far\"\ngit_url = \"git@github.com:$(id).git\"\n" + link
 	if _, err := config.LoadProject(write(t, t.TempDir(), "bad.toml", bad), nil); err == nil {
