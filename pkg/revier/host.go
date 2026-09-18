@@ -86,14 +86,6 @@ type TargetRef struct {
 // IsZero reports whether the ref points at nothing.
 func (r TargetRef) IsZero() bool { return r.Host == "" && r.ID == "" }
 
-// WindowWatcher is an optional capability, detected by type assertion. A host
-// that implements it enables claim-on-appear, which is how a window opened by
-// `xdg-open` becomes bound to the project it was opened from. A host that does
-// not still supports declared targets and explicit attach.
-type WindowWatcher interface {
-	Watch(ctx context.Context) (<-chan WindowEvent, error)
-}
-
 // WindowPlacer is an optional capability, detected by type assertion. A host
 // that implements it can position a window it did not open, which is how a
 // launched workspace lands where the user expects rather than where the
@@ -199,19 +191,6 @@ type Hider interface {
 type PanelCloser interface {
 	ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }
-
-type WindowEvent struct {
-	Kind     WindowEventKind
-	Instance Instance
-}
-
-type WindowEventKind uint8
-
-const (
-	WindowOpened WindowEventKind = iota
-	WindowClosed
-	WindowFocused
-)
 
 // Attacher is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can put the calling terminal onto

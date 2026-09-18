@@ -7,9 +7,9 @@
 // logged-in session - wctl talks to a running Shell - which is why
 // docs/TESTING.md confines the manual layer to this package.
 //
-// wctl 0.7.0 has no event or watch command, so this host does not implement
-// WindowWatcher. Claim-on-appear, when it is built, has to diff successive
-// Instances calls on the refresh the TUI already runs.
+// wctl 0.7.0 has no event or watch command, so claim-on-appear diffs
+// successive Instances calls on the refresh the TUI already runs
+// (decisions.md D87).
 package gnome
 
 import (

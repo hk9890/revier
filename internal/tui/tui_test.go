@@ -729,37 +729,6 @@ func TestPollingClaimsNothingOutsideTheBounds(t *testing.T) {
 	}
 }
 
-// Claim-on-appear on the event path: a watching host reports the window and
-// the claim lands without waiting for a refresh.
-func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
-	rt, _, c, projects := world(t, 1)
-	wm := hosttest.NewWatcher("wm")
-	c.Window = wm
-	_ = rt
-	root := stateWith(t, nil)
-	st, _ := state.Load(root)
-	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
-	_ = st.Save(root)
-
-	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
-	stray := wm.Add("Pull requests - Chromium", "chromium")
-	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
-
-	// Init batches the first survey with the watcher; run what it returns.
-	batch, ok := m.Init()().(tea.BatchMsg)
-	if !ok {
-		t.Fatal("Init should batch the survey and the watcher for a watching host")
-	}
-	for _, cmd := range batch {
-		next, _ := m.Update(cmd())
-		m = next.(tui.Model)
-	}
-	got, _ := state.Load(root)
-	if refs := got.Attached["project-00"]; len(refs) != 1 || refs[0] != stray {
-		t.Fatalf("attached = %+v, want the opened window on project-00", got.Attached)
-	}
-}
-
 // A target's launch that outlived the activation's wait is bound by a later
 // refresh, by class, and the target then shows as running.
 func TestPollingBindsALaunchedTargetByClass(t *testing.T) {

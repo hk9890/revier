@@ -403,20 +403,6 @@ func literal(pattern string) string {
 	return s
 }
 
-// FakeWatcher is a Fake that also implements revier.WindowWatcher: a test pushes
-// events into Events and the TUI's watcher path receives them.
-type FakeWatcher struct {
-	*Fake
-	Events chan revier.WindowEvent
-}
-
-// NewWatcher returns a watching fake with a buffered event channel.
-func NewWatcher(name string) *FakeWatcher {
-	return &FakeWatcher{Fake: New(name), Events: make(chan revier.WindowEvent, 8)}
-}
-
-func (w *FakeWatcher) Watch(context.Context) (<-chan revier.WindowEvent, error) { return w.Events, nil }
-
 // FakeProbe is an AgentProbe that reports a fixed state for every panel whose
 // title carries a marker. It exists so core tests can assert on the survey's
 // agent half without a real harness.

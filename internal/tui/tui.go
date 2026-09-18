@@ -9,11 +9,10 @@
 // goes through the same core paths the CLI commands use.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
-// process. A window host that reports events (revier.WindowWatcher) is
-// subscribed to, and a window that opens shortly after a launch is claimed at
-// once; otherwise successive surveys are diffed, and the claim lands within
-// two refresh intervals. State is re-read on every refresh, because the
-// launch that starts the clock is written by another process.
+// process: successive surveys are diffed, and a window that opens shortly
+// after a launch is claimed within two refresh intervals. State is re-read on
+// every refresh, because the launch that starts the clock is written by
+// another process.
 package tui
 
 import (
@@ -334,14 +333,6 @@ type surveyMsg struct {
 	err    error
 }
 
-// windowMsg is one event from a watching window host, and the channel it
-// came on, so the next wait reads the same subscription.
-type windowMsg struct {
-	event  revier.WindowEvent
-	ok     bool
-	events <-chan revier.WindowEvent
-}
-
 type tickMsg struct{}
 
 // spinMsg advances the working spinner. It runs on its own timer, because
@@ -381,18 +372,8 @@ type launchedMsg struct {
 }
 
 // Init surveys immediately; the timer starts once the first survey answers.
-// A window host that can report events is watched from the start.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.Survey(), m.input.Focus(), m.lookupStart()}
-	if w, ok := m.core.Window.(revier.WindowWatcher); ok {
-		events, err := w.Watch(context.Background())
-		if err == nil {
-			cmds = append(cmds, waitEvent(events))
-		} else {
-			slog.Warn("window watch, claiming by polling only", "host", m.core.Window.Name(), "err", err)
-		}
-	}
-	return tea.Batch(cmds...)
+	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart())
 }
 
 // lookupStart asks the lookup where to open, when the working directory did
@@ -435,16 +416,6 @@ func (m Model) leaveWord() string {
 		return "hide the popup"
 	}
 	return "quit"
-}
-
-// waitEvent delivers the next window event as a message. Watch is called
-// once, in Init: each call starts a subscription, so re-arming reads the
-// channel that message carries rather than subscribing again.
-func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
-	return func() tea.Msg {
-		ev, ok := <-events
-		return windowMsg{event: ev, ok: ok, events: events}
-	}
 }
 
 // hostTimeout bounds one round of host calls - a survey, one focus, or the
@@ -561,14 +532,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.frame++
 		return m, spin()
-	case windowMsg:
-		if !msg.ok {
-			return m, nil // the watcher ended; polling still claims
-		}
-		if msg.event.Kind == revier.WindowOpened {
-			m.claimByEvent(msg.event.Instance)
-		}
-		return m, waitEvent(msg.events)
 	case tickMsg:
 		if m.hidden {
 			m.idle = true
@@ -682,7 +645,8 @@ func (m *Model) claimByPolling(report core.Report, before *state.State) {
 		}
 		now := time.Now()
 		if claimed, ok := m.core.Claim(m.windows, report.Windows, l, now, m.projects); ok {
-			claim(st, l, claimed, "poll")
+			slog.Info("claim", "project", l.Project.Name, "target", claimed.Target, "ref", claimed.Ref)
+			st.Claim(claimed.Target, claimed.Ref)
 			return true
 		}
 		if !l.Pending(now) {
@@ -692,26 +656,6 @@ func (m *Model) claimByPolling(report core.Report, before *state.State) {
 		}
 		return changed
 	})
-}
-
-// claimByEvent is the same decision for a window a watching host reported.
-func (m *Model) claimByEvent(inst revier.Instance) {
-	m.updateState(func(st *state.State) bool {
-		l, ok := m.launch(st)
-		if !ok {
-			return false
-		}
-		claimed, ok := m.core.ClaimEvent(inst, l, time.Now(), m.projects)
-		if ok {
-			claim(st, l, claimed, "event")
-		}
-		return ok
-	})
-}
-
-func claim(st *state.State, l core.Launch, c core.Claimed, by string) {
-	slog.Info("claim", "project", l.Project.Name, "target", c.Target, "ref", c.Ref, "by", by)
-	st.Claim(c.Target, c.Ref)
 }
 
 // loadState reads state for a survey to start from. A state file that cannot

@@ -73,10 +73,9 @@ The third mechanism exists because the interesting case is the unreliable one.
 Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
 window. Claim-on-appear settles an action's launch, and it runs in the TUI, the
-one long-lived process. GNOME reports no window events through `wctl`, so the
-TUI diffs successive surveys and the claim lands within two refresh intervals,
-about two seconds. A window host that reports events would claim within a
-second. The claim happens only while the TUI is open, only within five seconds
+one long-lived process. The TUI diffs successive surveys and the claim lands
+within two refresh intervals, about two seconds; no host reports window events
+(D87). The claim happens only while the TUI is open, only within five seconds
 of the action, only for a window no declared target matches, and only when one such
 window appeared.
 

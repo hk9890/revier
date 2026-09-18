@@ -141,26 +141,6 @@ type WindowController interface {
     Host
 }
 
-// WindowWatcher is an optional capability, detected by type assertion. A host
-// that implements it enables claim-on-appear. One that does not still supports
-// declared targets and explicit attach.
-type WindowWatcher interface {
-    Watch(ctx context.Context) (<-chan WindowEvent, error)
-}
-
-type WindowEvent struct {
-    Kind     WindowEventKind
-    Instance Instance
-}
-
-type WindowEventKind uint8
-
-const (
-    WindowOpened WindowEventKind = iota
-    WindowClosed
-    WindowFocused
-)
-
 // WindowPlacer is an optional capability. A host that implements it positions
 // a window revier launched (D24); geometry is four tokens in the host's own
 // vocabulary. One that does not ignores every declared placement.

@@ -499,3 +499,11 @@ to open on, by the environment its terminal is started with, read and dropped
 at start so nothing it launches inherits it; the project is resolved at the
 keypress, while the focused window is still the user's. In any other terminal,
 and where the host cannot hide, Esc exits as before.
+
+### D87 — claim-on-appear polls; there is no window-event port
+
+`WindowWatcher` was a port no host implemented: `wctl` reports no events, and
+the TUI carried a second claim path that only a test fake ever ran. The port
+and the event path are removed, and the TUI's survey diff is the one claim
+path. The port comes back with the first host that has events, when one is
+built; its design is in git history.

@@ -984,14 +984,6 @@ func (c *Core) Claim(before, after []revier.Instance, l Launch, now time.Time, p
 	return Claimed{Ref: candidates[0].Ref, Target: l.Target}, true
 }
 
-// ClaimEvent is Claim for one window a watching host just reported.
-func (c *Core) ClaimEvent(inst revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
-	if !l.Pending(now) || !c.candidate(inst, l, projects) {
-		return Claimed{}, false
-	}
-	return Claimed{Ref: inst.Ref, Target: l.Target}, true
-}
-
 func (c *Core) candidate(inst revier.Instance, l Launch, projects []Project) bool {
 	if l.Target == "" {
 		return !c.declared(inst, projects)
