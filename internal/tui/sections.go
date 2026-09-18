@@ -175,19 +175,12 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	c, bound, agent := m.core, m.bound[p.Name], rows[i].agent
-	var homePending bool
-	if home, ok := p.Home(); ok {
-		homePending = m.pending.Pending(p.Name, home.Name, core.BindWindow)
-	}
+	c, root, agent := m.core, m.stateRoot, rows[i].agent
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
-		res, err := c.ActivateAgent(ctx, p, agent, bound, homePending)
-		if res.Target == "" || res.ComingUp {
-			return actedMsg{err: err}
-		}
-		return landed(p, res, err)
+		_, err := c.ActivateAgentWaiting(ctx, p, agent, core.StateLedger{Root: root})
+		return actedMsg{err: err}
 	}
 }
 

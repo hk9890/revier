@@ -264,7 +264,7 @@ func run(out io.Writer, args []string) error {
 }
 
 // commandTimeout bounds a command that has no bound of its own.
-const commandTimeout = core.BindWait + 30*time.Second
+var commandTimeout = core.BindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {

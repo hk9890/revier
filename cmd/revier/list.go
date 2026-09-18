@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
@@ -55,10 +56,13 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	views := report.Views
 
 	// Drop attachments and bindings whose windows are gone, so state does not
-	// accumulate refs to closed windows forever. The prune is made again on
-	// the state as it is on disk: another process may have written it since.
-	if a.state.Prune(report.Hosts, report.Instances, before) {
-		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances, before) })
+	// accumulate refs to closed windows forever. The settle is made on the
+	// state as it is on disk: another process may have written it since. With
+	// no previous listing nothing is new, so a list claims nothing.
+	if _, err := state.Update(a.stateRoot, func(s *state.State) bool {
+		return a.core.Settle(s, before, report, nil, false, a.projects, time.Now())
+	}); err != nil {
+		slog.Warn("state update", "err", err)
 	}
 
 	if *asJSON {

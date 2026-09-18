@@ -806,6 +806,8 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 // launch is in state before the wait for its window begins, so a desktop key
 // pressed meanwhile sees it too (decisions.md D21).
 func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
+	defer func(w time.Duration) { core.BindWait = w }(core.BindWait)
+	core.BindWait = 20 * time.Millisecond
 	_, _, c, projects := world(t, 1)
 	wm := hosttest.NewLateWindows("wm")
 	c.Window = wm
@@ -814,13 +816,12 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	m, _ = press(m, "tab")
 	m, _ = press(m, "down") // editor
 	m, cmd := press(m, "enter")
-	next, wait := m.Update(cmd())
+	// The activation runs whole in its command, the wait for the window
+	// included; the launch is on disk from before that wait.
+	next, _ := m.Update(cmd())
 	m = next.(tui.Model)
-	if wait == nil {
-		t.Fatal("a detached launch should go on to wait for its window")
-	}
 	if got, _ := state.Load(root); got.Launch == nil || got.Launch.Target != "editor" {
-		t.Fatalf("launch = %+v, want the editor recorded before the wait", got.Launch)
+		t.Fatalf("launch = %+v, want the editor recorded", got.Launch)
 	}
 
 	if _, again := press(m, "enter"); again != nil {

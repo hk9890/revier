@@ -18,7 +18,7 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	written := make(chan struct{}, 1)
-	ledger := stateLedger{root: root, written: written}
+	ledger := core.StateLedger{Root: root, Written: written}
 	m := Model{stateRoot: root}
 
 	ledger.Launched("work", "home", time.Now())

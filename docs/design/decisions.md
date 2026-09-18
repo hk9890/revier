@@ -536,3 +536,15 @@ refused with a reason while Enter moved the cursor and said nothing.
 render it. A running workspace is raised, since raising touches no directory;
 a fresh start into a missing directory is refused; a project with no home
 shows the reason, and the surface also moves to the targets it has.
+
+### D91 — one ledger, the state file, and every activation goes through it
+
+The launch rule of D21 was written four times: `ActivateWaiting`, a ledger
+in the command line over its startup state, a ledger in the surface for a
+restore, and the surface's own message chain for a press. A rule copied that
+often breaks silently when one copy is missed. `core.StateLedger` is the one
+ledger, the state file read and written under its lock at every step, and
+the command line, the surface and a restore all activate through
+`ActivateWaiting` with it. What a survey settles in state - prune, claim,
+expire - is `core.Settle`, the one function the surface and `revier list`
+call.
