@@ -52,11 +52,9 @@ func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, erro
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	for _, w := range before {
-		if w.Class == PopupClass {
-			slog.Info("popup: raise", "ref", w.Ref)
-			return w.Ref, c.Window.Focus(ctx, w.Ref)
-		}
+	if w, ok := popupWindow(before); ok {
+		slog.Info("popup: raise", "ref", w.Ref)
+		return w.Ref, c.Window.Focus(ctx, w.Ref)
 	}
 	width, err := area.WorkareaWidth(ctx)
 	if err != nil {
@@ -69,12 +67,8 @@ func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, erro
 		return revier.TargetRef{}, err
 	}
 	w, _, err := c.awaitNew(ctx, before, BindWait, popupPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
-		for _, w := range fresh {
-			if w.Class == PopupClass {
-				return w, true, false
-			}
-		}
-		return revier.Instance{}, false, false
+		w, ok := popupWindow(fresh)
+		return w, ok, false
 	})
 	if errors.Is(err, errNoNewWindow) {
 		return revier.TargetRef{}, fmt.Errorf("popup: no window of class %s appeared in %s", PopupClass, BindWait)
@@ -107,13 +101,22 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	w, ok := popupWindow(windows)
+	if !ok {
+		return fmt.Errorf("popup: no window of class %s to hide", PopupClass)
+	}
+	slog.Info("popup: hide", "ref", w.Ref)
+	return hider.Hide(ctx, w.Ref)
+}
+
+// popupWindow is the popup among the windows listed: the first of its class.
+func popupWindow(windows []revier.Instance) (revier.Instance, bool) {
 	for _, w := range windows {
 		if w.Class == PopupClass {
-			slog.Info("popup: hide", "ref", w.Ref)
-			return hider.Hide(ctx, w.Ref)
+			return w, true
 		}
 	}
-	return fmt.Errorf("popup: no window of class %s to hide", PopupClass)
+	return revier.Instance{}, false
 }
 
 // popupGeometry centres the popup at popupWidth when the workarea holds it,

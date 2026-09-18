@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -44,31 +43,39 @@ func (r *Remote) Name() string { return r.host }
 // to give up.
 var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 
-// shared are the flags that make every call to one host reuse one
-// connection. A survey runs on every refresh, and a handshake is a quarter
-// of a second where a call over the master is under ten milliseconds. The
-// master outlives the process that opened it by ControlPersist, so a popup
-// raised minutes later still surveys over it. The socket lives under the
-// runtime directory, which is the user's alone and is gone at logout; the
-// path must stay under the socket limit, so its name is a hash of the
-// destination. No flags when no directory can be made: every call then
-// connects on its own.
-func shared() []string {
+// alive are the flags that probe the connection, so a network that went away
+// ends it within a minute rather than when the kernel gives up. Keepalives
+// are the master's: a call over the shared connection is probed by whichever
+// call opened it, so every call carries them.
+var alive = []string{"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"}
+
+// connection are the flags of the connection every call makes: probed, and
+// shared with every other call to the host. A survey runs on every refresh,
+// and a handshake is a quarter of a second where a call over the master is
+// under ten milliseconds. The master outlives the process that opened it by
+// ControlPersist, so a popup raised minutes later still surveys over it. The
+// socket lives under the runtime directory, which is the user's alone and is
+// gone at logout; the path must stay under the socket limit, so its name is
+// a hash of the destination. Without the directory - no runtime directory,
+// or one that refuses a subdirectory - every call connects on its own: a
+// directory under /tmp is not the user's alone.
+func connection() []string {
+	flags := append([]string{}, alive...)
 	dir := os.Getenv("XDG_RUNTIME_DIR")
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "revier-"+strconv.Itoa(os.Getuid()))
-	} else {
-		dir = filepath.Join(dir, "revier")
+		return flags
 	}
+	dir = filepath.Join(dir, "revier")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil
+		return flags
 	}
-	return []string{"-o", "ControlMaster=auto", "-o", "ControlPath=" + filepath.Join(dir, "ssh-%C"), "-o", "ControlPersist=10m"}
+	return append(flags, "-o", "ControlMaster=auto", "-o", "ControlPath="+filepath.Join(dir, "ssh-%C"), "-o", "ControlPersist=10m")
 }
 
-// flags are options and shared together: what every call carries.
+// flags are options and connection together: what every call that reads an
+// answer carries.
 func flags() []string {
-	return append(append([]string{}, options...), shared()...)
+	return append(append([]string{}, options...), connection()...)
 }
 
 // login wraps a command line in the login shell of the user on the remote.
@@ -137,12 +144,13 @@ func quote(s string) string {
 // The connection is probed, so a network that went away ends the ssh, and
 // with it the agent, within a minute rather than when the kernel gives up.
 // It goes over the shared master when one is up, so the panel shows as soon
-// as its terminal does.
+// as its terminal does. It is not in batch mode: a panel can answer a
+// prompt.
 func PanelCommand(host string, project revier.ProjectName, kind string) []string {
 	const tag = "\x00"
 	there := "revier " + kind + " exec -p " + quote(string(project)) + " --tag " + tag
-	words := []string{"exec", "ssh", "-t", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"}
-	for _, f := range shared() {
+	words := []string{"exec", "ssh", "-t"}
+	for _, f := range connection() {
 		words = append(words, quote(f))
 	}
 	script := strings.Join(words, " ") + " -- " + quote(host) + ` "` + doubleQuoted(login(there)) + `"`

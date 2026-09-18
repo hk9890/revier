@@ -128,11 +128,7 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 		slog.Info("resolve", "project", p.Name, "by", "flag")
 		return p, nil
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		slog.Warn("resolve: working directory", "err", err)
-	} else if p, ok := a.projectForPath(cwd); ok {
-		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
+	if p, ok := a.resolveHere(); ok {
 		return p, nil
 	}
 	if p, ok := a.resolveAway(ctx); ok {
@@ -141,7 +137,22 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 	return core.Project{}, errNoProject
 }
 
-// resolveAway is steps 2 and 3 for a command run away from every project
+// resolveHere is step 2: the project owning the working directory, read from
+// the files alone.
+func (a *app) resolveHere() (core.Project, bool) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		slog.Warn("resolve: working directory", "err", err)
+		return core.Project{}, false
+	}
+	p, ok := a.projectForPath(cwd)
+	if ok {
+		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
+	}
+	return p, ok
+}
+
+// resolveAway is step 3 for a command run away from every project
 // directory: the focused window, before the remembered project, because a
 // desktop binding has no useful working directory, and the project the user
 // is looking at beats the one revier last acted on. It lists every host,

@@ -25,9 +25,11 @@ func cmdPopup(ctx context.Context, a *app) error {
 	// kitty window closed; one as large as the workarea is maximized, and a
 	// maximized window refuses the placement. The option also keeps the
 	// popup's own size out of what the user's next kitty window opens at.
-	// The env option marks the surface as the popup's (core.PopupEnv).
+	// env(1) marks the surface as the popup's (core.PopupEnv), and nothing
+	// else: kitty's own env option would reach every window launched into
+	// this kitty, which is where the surface's targets open.
 	argv := []string{"kitty", "--class", core.PopupClass, "--title", "revier",
-		"-o", "remember_window_size=no", "-o", "env=" + core.PopupEnv + "=1", "-e", self}
+		"-o", "remember_window_size=no", "-e", "env", core.PopupEnv + "=1", self}
 	_, err = a.core.Popup(ctx, argv)
 	if !errors.Is(err, core.ErrNoPopupHost) {
 		return err

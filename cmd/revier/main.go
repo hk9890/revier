@@ -318,11 +318,8 @@ func cmdTUI(a *app) error {
 	// the surface asks for it once it shows. Neither is an error to miss:
 	// the TUI opens on the first row instead.
 	start := revier.ProjectName("")
-	if cwd, err := os.Getwd(); err == nil {
-		if p, ok := a.projectForPath(cwd); ok {
-			slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
-			start = p.Name
-		}
+	if p, ok := a.resolveHere(); ok {
+		start = p.Name
 	}
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {

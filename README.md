@@ -249,8 +249,10 @@ ends with its tab or its connection; a saved session resumes it on the host.
 An agent started on the host from another machine is counted, and cannot be
 reached from here. `revier run <action> -p far` runs on the host, so an action
 is one the host's `config.toml` defines. A host that does not answer shows as
-unreachable. ssh runs in batch mode, so the host has to accept a key;
-`ControlMaster` in `~/.ssh/config` keeps the refresh and a new tab fast.
+unreachable. ssh runs in batch mode, so the host has to accept a key. Every
+call to a host shares one connection, kept ten minutes after the last call;
+`ssh -O exit -o ControlPath="$XDG_RUNTIME_DIR/revier/ssh-%C" <host>` ends it
+early.
 
 ## Keybindings
 
