@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -43,9 +42,6 @@ const autoRuntime = "auto"
 // RuntimeSelector picks the runtime host for a configured preference list,
 // probing as startup does. An empty list is the default search.
 type RuntimeSelector func(ctx context.Context, want []string) (revier.Runtime, error)
-
-// runtimeTimeout bounds one probe of a runtime host.
-const runtimeTimeout = 10 * time.Second
 
 // runtimeMsg is a runtime choice probed: the host it selected, or why none.
 type runtimeMsg struct {
@@ -222,7 +218,7 @@ func (m Model) switchRuntime(step int) (tea.Model, tea.Cmd) {
 	m.switching = next
 	pick := m.pick
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), runtimeTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
 		rt, err := pick(ctx, want)
 		return runtimeMsg{want: want, runtime: rt, err: err}

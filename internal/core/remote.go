@@ -53,6 +53,17 @@ func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectVie
 	return c.survey(ctx, host, nil)
 }
 
+// LinkedAs is the name of the link here to project on host, or "" when
+// nothing here links to it.
+func LinkedAs(projects []Project, host string, project revier.ProjectName) revier.ProjectName {
+	for _, p := range projects {
+		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
+			return p.Name
+		}
+	}
+	return ""
+}
+
 // remoteAnswer is what a host said about one of its projects, or why it
 // said nothing.
 type remoteAnswer struct {

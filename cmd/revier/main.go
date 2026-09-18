@@ -694,7 +694,7 @@ func cmdStatus(ctx context.Context, a *app, args []string) error {
 	fmt.Printf("project   %s\npath      %s\n", p.Name, p.Path)
 	fmt.Printf("runtime   %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.Window))
 	if attached := a.state.Attached[p.Name]; len(attached) > 0 {
-		fmt.Printf("attached  %d window(s)\n", len(attached))
+		fmt.Printf("attached  %s\n", core.Count(len(attached), "window"))
 	}
 	return nil
 }

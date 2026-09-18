@@ -64,20 +64,14 @@ func printRemote(a *app, host string, views []revier.ProjectView) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "PROJECT\tPATH\tSTATE\tAGENT\tLINKED AS")
 	for _, v := range views {
+		linked := "-"
+		if name := core.LinkedAs(a.projects, host, v.Project.Name); name != "" {
+			linked = string(name)
+		}
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			v.Project.Name, v.Project.Path, runState(v), agentSummary(v), a.linkedAs(host, v.Project.Name))
+			v.Project.Name, v.Project.Path, runState(v), agentSummary(v), linked)
 	}
 	return w.Flush()
-}
-
-// linkedAs is the name of the link here to a project on a host, or "-".
-func (a *app) linkedAs(host string, project revier.ProjectName) string {
-	for _, p := range a.projects {
-		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
-			return string(p.Name)
-		}
-	}
-	return "-"
 }
 
 // link writes a link to a project on a host, under name, or under the

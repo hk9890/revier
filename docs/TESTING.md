@@ -6,7 +6,7 @@ without it.
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
-mise run test:live         # L4        real tmux, still headless
+mise run test:live         # L4        real processes: tmux and sh, still headless
 mise run test:all          # everything runnable without a screen
 mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
 mise run quality:full      # + L4                               (pre-handoff)
@@ -25,7 +25,7 @@ Only L6 ever reaches one.
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
 | L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json` |
-| L4 | real tmux, private socket | `live` | the tmux host, and the core against a real substrate |
+| L4 | real processes: tmux on a private socket, `sh` scripts | `live` | the tmux host, the core against a real substrate, and the adapters that run a shell (`claude`, `execprobe`, `ssh`) |
 | L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a

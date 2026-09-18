@@ -298,7 +298,7 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 	written := make(chan struct{}, 1)
 	walk := func() tea.Msg {
 		defer close(written)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		st := loadedState(root)
 		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
 		cancel()
