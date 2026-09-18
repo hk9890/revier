@@ -1362,6 +1362,28 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 }
 
+// The working spinner redraws the surface every tick; hidden, nobody sees
+// it, so it stops with the surveys, and the survey after the raise starts it
+// again.
+func TestTheSpinnerStopsWhileThePopupIsHidden(t *testing.T) {
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	c.Probes[0].(*hosttest.FakeProbe).State.Status = revier.StatusRunning
+	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	if next, cmd := m.Update(tui.Spin()); cmd == nil {
+		t.Fatal("a working agent on a shown surface scheduled no spin")
+	} else {
+		m = next.(tui.Model)
+	}
+
+	m, hide := press(m, "esc")
+	next, _ := m.Update(hide())
+	m = next.(tui.Model)
+	if _, cmd := m.Update(tui.Spin()); cmd != nil {
+		t.Error("the spinner went on while hidden")
+	}
+}
+
 // Outside the popup Esc quits as it did, and a popup whose window cannot be
 // hidden quits too, rather than staying on screen with a key that does
 // nothing.

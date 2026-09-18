@@ -493,8 +493,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick(m.refresh)
 	case spinMsg:
 		// The spinner stops when nothing works, so an idle surface does not
-		// redraw; the next survey that finds a working agent starts it again.
-		if !m.anyWorking() {
+		// redraw, and while hidden, where nobody sees it; the next survey
+		// that finds a working agent starts it again.
+		if m.hidden || !m.anyWorking() {
 			m.spinning = false
 			return m, nil
 		}
@@ -515,9 +516,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.Survey()
 	case startMsg:
-		// The user's own cursor wins: a keystroke or a query in the time the
-		// lookup took means they are already somewhere.
-		if msg.ok && m.start == "" && m.filter == "" && m.focus == focusList && m.plist.Index() == 0 {
+		// The user's own cursor wins: a keystroke, a query or a dialog in
+		// the time the lookup took means they are already somewhere.
+		if msg.ok && m.start == "" && m.filter == "" && m.dialog == dialogNone && m.focus == focusList && m.plist.Index() == 0 {
 			m.start = msg.name
 			m.selectName(msg.name)
 		}

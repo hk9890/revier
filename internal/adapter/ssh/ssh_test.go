@@ -168,9 +168,11 @@ func TestOptionsNeverAskForAPassword(t *testing.T) {
 }
 
 // Every call to a host goes over one connection: the survey runs each
-// refresh, and a handshake per refresh is most of what it costs. The socket's
-// directory exists before ssh is asked to write there, is the user's alone,
-// and its path stays under the limit a unix socket path has.
+// refresh, and a handshake per refresh is most of what it costs. Every call
+// probes the connection too, since the keepalives are the master's and any
+// call may be the one that opens it. The socket's directory exists before
+// ssh is asked to write there, is the user's alone, and its path stays under
+// the limit a unix socket path has.
 func TestEveryCallSharesOneConnection(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	for _, argv := range [][]string{ssh.Options(), ssh.New("buildbox").RunCommand("far", "pull"), ssh.PanelCommand("buildbox", "far", "agent")} {
@@ -178,22 +180,38 @@ func TestEveryCallSharesOneConnection(t *testing.T) {
 		if !strings.Contains(line, "ControlMaster=auto") || !strings.Contains(line, "ControlPersist=") {
 			t.Errorf("%q: want a shared connection", line)
 		}
+		if !strings.Contains(line, "ServerAliveInterval=") || !strings.Contains(line, "ServerAliveCountMax=") {
+			t.Errorf("%q: want a probed connection", line)
+		}
 	}
 	var path string
-	for _, f := range ssh.Shared() {
+	for _, f := range ssh.Connection() {
 		if p, ok := strings.CutPrefix(f, "ControlPath="); ok {
 			path = p
 		}
 	}
 	if path == "" {
-		t.Fatalf("shared = %q, want a ControlPath", ssh.Shared())
+		t.Fatalf("connection = %q, want a ControlPath", ssh.Connection())
 	}
 	info, err := os.Stat(filepath.Dir(path))
-	if err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("%s: %v, mode %v; want the directory made, for the user alone", filepath.Dir(path), err, info.Mode())
+	if err != nil {
+		t.Fatalf("%s: %v; want the directory made", filepath.Dir(path), err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("%s: mode %v; want the directory the user's alone", filepath.Dir(path), info.Mode())
 	}
 	if !strings.HasSuffix(path, "%C") {
 		t.Errorf("path = %s, want the destination's hash, not its name", path)
+	}
+}
+
+// Without a runtime directory there is nowhere that is the user's alone for
+// the socket, so every call connects on its own, still probed.
+func TestNoRuntimeDirectoryMeansNoSharedConnection(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	line := strings.Join(ssh.Connection(), " ")
+	if strings.Contains(line, "ControlPath=") || !strings.Contains(line, "ServerAliveInterval=") {
+		t.Errorf("connection = %q, want keepalives and no socket", line)
 	}
 }
 
