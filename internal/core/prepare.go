@@ -48,13 +48,27 @@ type compiledTarget struct {
 	err error
 }
 
+// refuse records why a target cannot be used and leaves it matching nothing.
+// Every match is blanked, not only the one that failed: the zero
+// CompiledMatch is the opposite of matchesNothing - it constrains nothing and
+// takes every instance - and the lookups that read a match without resolving
+// first (Core.served, Core.declared) would then hand this target every
+// instance the host lists.
+func (c *compiledTarget) refuse(err error) {
+	c.err = err
+	c.runtime, c.window, c.windowClass = matchesNothing, matchesNothing, matchesNothing
+	c.hasClass = true
+}
+
 // TargetErr is why the i-th target cannot be used, or nil when it can.
 func (p Project) TargetErr(i int) error { return p.compiled[i].err }
 
 // Refuse records that a rule refused the i-th target. config calls it for the
 // rules it checks before a project is prepared, so that a refusal and a
-// rendering failure reach the surface by the same route.
-func (p *Project) Refuse(i int, err error) { p.compiled[i].err = err }
+// rendering failure reach the surface by the same route - and match nothing
+// by the same route too, which is what keeps a refused target out of every
+// lookup and not only out of the ones that resolve.
+func (p *Project) Refuse(i int, err error) { p.compiled[i].refuse(err) }
 
 // index returns the position of the named target.
 func (p Project) index(name revier.TargetName) (int, bool) {
@@ -88,17 +102,16 @@ func PrepareProject(p revier.Project) Project {
 	rendered, errs := Render(p)
 	compiled := make([]compiledTarget, len(rendered.Targets))
 	for i, t := range rendered.Targets {
-		compiled[i].err = errs[i]
-		if compiled[i].err != nil {
+		if errs[i] != nil {
 			// The realizations are as written, not as rendered: a match
 			// compiled from an unrendered pattern would match by accident.
-			compiled[i].runtime, compiled[i].window = matchesNothing, matchesNothing
+			compiled[i].refuse(errs[i])
 			continue
 		}
 		var err error
 		if t.Window != nil {
 			if compiled[i].window, err = compileMatch(t.Name, revier.HostWindow, t.Window.Match); err != nil {
-				compiled[i].err, compiled[i].window = err, matchesNothing
+				compiled[i].refuse(err)
 				continue
 			}
 			if class := t.Window.Match.Class; class != "" {
@@ -116,7 +129,7 @@ func PrepareProject(p revier.Project) Project {
 		}
 		if t.Runtime != nil {
 			if compiled[i].runtime, err = compileMatch(t.Name, revier.HostRuntime, t.Runtime.Match); err != nil {
-				compiled[i].err, compiled[i].runtime = err, matchesNothing
+				compiled[i].refuse(err)
 				continue
 			}
 		}

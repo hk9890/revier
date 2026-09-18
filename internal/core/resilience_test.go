@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -124,5 +125,35 @@ func TestSurveyListsAnInvalidProject(t *testing.T) {
 	}
 	if got := report.Views[0].Invalid; !strings.Contains(got, "line 2") {
 		t.Errorf("Invalid = %q, want the reason carried into the view", got)
+	}
+}
+
+// A refused target matches nothing, in every lookup and not only in the ones
+// that resolve. Core.declared and Core.served read a compiled match directly,
+// so a refused target whose match was left at the zero CompiledMatch - which
+// constrains nothing and takes every instance - would quietly claim every
+// window on the machine for this project.
+func TestARefusedTargetMatchesNothing(t *testing.T) {
+	p := project()
+	// The window match does not compile; the runtime match beside it is
+	// sound, and is the one a refusal that blanks only the failed match
+	// would leave taking everything.
+	p.Targets = append(p.Targets, revier.Target{
+		Name:    "both",
+		Window:  &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "("}},
+		Runtime: &revier.Realization{Name: "both", Launch: []string{"sh"}, Match: revier.Match{Title: "^both$"}},
+	})
+	prep := prepared(t, p)
+	if prep.TargetErr(len(prep.Targets)-1) == nil {
+		t.Fatal("the target should be refused for its pattern")
+	}
+
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	stray := revier.Instance{Ref: revier.TargetRef{Host: "wm", ID: "9"}, Title: "notes", Class: "gedit"}
+	l := core.Launch{Project: prep, At: time.Now()}
+
+	got, ok := c.Claim(nil, []revier.Instance{stray}, l, time.Now(), []core.Project{prep})
+	if !ok || got.Ref != stray.Ref {
+		t.Errorf("claimed %+v (%v), want the stray window: no target of this project matches it", got, ok)
 	}
 }

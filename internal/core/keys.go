@@ -220,9 +220,10 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 			}
 			ch, err := ParseChord(t.Key)
 			if err != nil {
-				// config.Validate rejects a key that does not parse, so a
-				// project that reached here has readable keys. Skipping keeps
-				// a hand-built Project from breaking the whole report.
+				// A key that does not parse refuses its target at load
+				// (decisions.md D85), and the target is still here carrying
+				// it. There is no chord to want, and `revier doctor` is
+				// where that refusal is read.
 				continue
 			}
 			k := key{string(t.Name), ch}

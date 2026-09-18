@@ -331,13 +331,16 @@ func nameOf(path string) revier.ProjectName {
 	return revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 }
 
-// Validate rejects a project whose structure would fail at the keystroke
-// instead of at load: the project-wide rules and every target's, joined. It is
-// the check a write runs before it replaces a file, where the question is
-// whether the result is whole.
+// Validate is every structural rule at once: the project-wide ones and every
+// target's, joined. It answers "is this project whole", of a project that is
+// not yet prepared.
 //
-// Loading asks a narrower question of each rule - does this refuse the project
-// or one target - and calls validateProject and validateTargets instead.
+// Nothing in revier asks that question any more. Loading asks each rule the
+// narrower one - does this refuse the project or one target - through
+// validateProject and validateTargets, and a write path asks Problems of the
+// prepared project, which also covers the templates and patterns Validate
+// cannot see. This is kept as the one entry point the rules are pinned
+// through.
 func Validate(p revier.Project) error {
 	errs := []error{validateProject(p)}
 	return errors.Join(append(errs, validateTargets(p)...)...)
@@ -369,7 +372,10 @@ func validateProject(p revier.Project) error {
 	}
 	homes := 0
 	for _, t := range p.Targets {
-		if t.Home {
+		// A nameless target is refused and cannot be opened, so it is no
+		// home: counting it would leave the project looking whole while
+		// nothing in it can be opened or returned to.
+		if t.Home && t.Name != "" {
 			homes++
 		}
 	}

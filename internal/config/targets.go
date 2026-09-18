@@ -138,18 +138,21 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	if err != nil || !sameTargets(got, want) {
 		return TargetsWritten{}, fmt.Errorf("%s: the shared targets did not come out as written; change them by hand", path)
 	}
-	dir := filepath.Join(root, "projects")
-	projects, err := LoadProjects(dir, next.Targets)
-	if err != nil {
-		return TargetsWritten{}, fmt.Errorf("%s: %w", dir, err)
-	}
 	// A shared target is part of every project, so this write can break
 	// projects the editor never opened. It is refused for what it breaks, not
 	// for what is already broken: a project that does not load today must not
-	// be able to lock the config screen against every other edit.
+	// be able to lock the config screen against every other edit. The two
+	// loads read the same files, so before is taken first: a file changed
+	// between them must read as the change this write did not make, not as a
+	// breakage it did.
+	dir := filepath.Join(root, "projects")
 	before, err := LoadProjects(dir, cfg.Targets)
 	if err != nil {
-		return TargetsWritten{}, fmt.Errorf("%s: %w", dir, err)
+		return TargetsWritten{}, err
+	}
+	projects, err := LoadProjects(dir, next.Targets)
+	if err != nil {
+		return TargetsWritten{}, err
 	}
 	if err := brokenBy(before, projects); err != nil {
 		return TargetsWritten{}, fmt.Errorf("not written, it would break %w", err)

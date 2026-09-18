@@ -138,7 +138,9 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 //
 // A host that answered but could not reach the project itself - its file
 // there names a further host - has said why, and that word is this side's
-// too.
+// too. So is a file there that did not load whole: the host lists the project
+// and says what is wrong with it, and this side is the only place the user
+// reading the surface would ever see it (decisions.md D85).
 func merge(v *revier.ProjectView, a remoteAnswer) {
 	if a.err == nil && a.view.Unreachable != "" {
 		a.err = errors.New(a.view.Unreachable)
@@ -149,4 +151,5 @@ func merge(v *revier.ProjectView, a remoteAnswer) {
 	}
 	v.PathExists = a.view.PathExists
 	v.Agents = a.view.Agents
+	v.Invalid = a.view.Invalid
 }
