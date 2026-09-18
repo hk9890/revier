@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -564,13 +565,18 @@ func paneCursor(m tui.Model) string {
 	return ""
 }
 
-// paneCell is a terminal cell on the pane line that carries the text.
+// paneCell is the terminal cell where the text starts on the pane line that
+// carries it. The column is the rendered width of what stands before the
+// text, not its byte offset: a glyph is three bytes for one cell, and a
+// colour profile puts escape sequences in the line.
 func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 	t.Helper()
 	for y, raw := range strings.Split(m.View(), "\n") {
 		// The list, the pane's border, the pane.
-		if parts := strings.Split(raw, "│"); len(parts) > 1 && strings.Contains(parts[1], text) {
-			return paneBorder(t, m) + 2, y
+		if parts := strings.Split(raw, "│"); len(parts) > 1 {
+			if at := strings.Index(parts[1], text); at >= 0 {
+				return paneBorder(t, m) + 1 + lipgloss.Width(parts[1][:at]), y
+			}
 		}
 	}
 	t.Fatalf("no pane line carries %q:\n%s", text, m.View())
@@ -1129,6 +1135,34 @@ func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
 	if strings.Contains(f, "ctrl+shift+u") {
 		t.Errorf("footer = %q, names home's key, which the query takes here", f)
 	}
+}
+
+// Every key hint is drawn in the help colour: a target's key on its pane row,
+// the footer's keys and the help screen's key column. They were two colours,
+// and a key that changes colour by where it stands reads as two kinds of
+// thing.
+func TestEveryKeyHintIsTheHelpColour(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 40)
+	want, _, _ := strings.Cut(theme.Default().Help.Render("x"), "x")
+	colour := func(where, s, key string) {
+		t.Helper()
+		before, _, ok := strings.Cut(s, key)
+		if !ok {
+			t.Fatalf("%s %q has no %q", where, s, key)
+		}
+		if got := before[strings.LastIndex(before, "\x1b["):]; got != want {
+			t.Errorf("%s draws %q with %q, want the help colour %q", where, key, got, want)
+		}
+	}
+	colour("the pane", pane(m), "ctrl+shift+o")
+	colour("the footer", footer(m), "ctrl+shift+o")
+	m, _ = press(m, "alt+h")
+	colour("the help screen", screen(m), "alt+e")
 }
 
 // ctrl+shift+u cannot reach the surface as itself, and ctrl+u, which it
@@ -1712,18 +1746,13 @@ func wheel(m tui.Model, x int, b tea.MouseButton) tui.Model {
 }
 
 // paneBorder is the terminal column of the border between the list and the
-// pane, read off the rendered surface.
+// pane, read off the rendered surface: the rendered width of what stands
+// before it, so a colour profile's escape sequences do not count.
 func paneBorder(t *testing.T, m tui.Model) int {
 	t.Helper()
 	for _, raw := range strings.Split(m.View(), "\n") {
-		var bars []int
-		for i, c := range []rune(raw) {
-			if c == '│' {
-				bars = append(bars, i)
-			}
-		}
-		if len(bars) == 1 {
-			return bars[0]
+		if strings.Count(raw, "│") == 1 {
+			return lipgloss.Width(raw[:strings.Index(raw, "│")])
 		}
 	}
 	t.Fatalf("no line with a pane:\n%s", m.View())
@@ -1775,24 +1804,24 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 	// One column left of the border is still the list.
 	m = wheel(m, border-1, tea.MouseButtonWheelDown)
 	m = wheel(m, border-1, tea.MouseButtonWheelUp)
-	if top := strings.Split(pane(m), "\n")[0]; top != "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "Project  first edit alt+e" {
 		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
 	}
 
 	m = wheel(m, border, tea.MouseButtonWheelDown)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
 		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "first") {
 		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
 	}
 	m = survey(m)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
 		t.Errorf("a refresh put the pane back at its top")
 	}
 
 	m, _ = press(m, "down")
-	if top := strings.Split(pane(m), "\n")[0]; top != "second alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "Project  second edit alt+e" {
 		t.Errorf("pane top = %q after moving to the next project, want its name", top)
 	}
 }

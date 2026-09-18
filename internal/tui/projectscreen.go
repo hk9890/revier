@@ -436,16 +436,33 @@ func settingLine(th theme.Theme, sel bool, label, value, note string, w int) str
 
 // nameButton is the project's name at the top of the pane, drawn as a bar
 // button: it opens the project screen, and carries the key that does too.
+// The line is a row like the ones under it, "Project" in the label column,
+// and the key hint says what it does, as every bar button's does.
 func (m Model) nameButton(name revier.ProjectName, w int) string {
 	th := m.theme
 	label, keys := th.Header, th.Help
 	if m.over.kind == hoverName {
 		label, keys = th.OnHover(label), th.OnHover(keys)
 	}
-	return clipTo(label.Render(" "+string(name)+" ")+keys.Render(m.keys.Edit.Help().Key+" "), w)
+	text, hint := m.nameButtonText(name)
+	return clipTo(th.Meta.Render(pad("Project", nameButtonStart))+label.Render(text)+keys.Render(hint), w)
 }
+
+// nameButtonText is the button's two runs, the name and the key hint after
+// it. The width the pointer is matched against is read off the same text,
+// so the two cannot disagree.
+func (m Model) nameButtonText(name revier.ProjectName) (text, hint string) {
+	edit := m.keys.Edit.Help()
+	return " " + string(name) + " ", edit.Desc + " " + edit.Key + " "
+}
+
+// nameButtonStart is the column the button starts on: the label column less
+// the button's own leading space, so the name stands level with the values
+// under it.
+const nameButtonStart = detailLabelWidth - 1
 
 // nameButtonWidth is the columns the button takes.
 func (m Model) nameButtonWidth(name revier.ProjectName) int {
-	return lipgloss.Width(" " + string(name) + " " + m.keys.Edit.Help().Key + " ")
+	text, hint := m.nameButtonText(name)
+	return lipgloss.Width(text + hint)
 }

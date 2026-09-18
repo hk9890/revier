@@ -34,7 +34,7 @@ type Theme struct {
 	Heading     lipgloss.Style // a section title in the detail pane
 	Count       lipgloss.Style // a count that is zero, and so says nothing is wrong
 	Match       lipgloss.Style // the letters of a name the filter matched
-	Accent      lipgloss.Style // the filter mark, and a target key
+	Accent      lipgloss.Style // the filter mark and the text cursor
 	Cursor      lipgloss.Style // the selected row
 	Hover       lipgloss.Style // the row or button under the pointer
 	ProjectName lipgloss.Style // a project or target name
@@ -47,7 +47,7 @@ type Theme struct {
 	Idle        lipgloss.Style // an agent at rest
 	Attention   lipgloss.Style // an agent waiting for the user, and errors
 	Border      lipgloss.Style // pane separators
-	Help        lipgloss.Style // the key legend
+	Help        lipgloss.Style // every key hint: the legend, a button's key, a target key
 	Frame       lipgloss.Style // the block the whole surface is rendered in
 }
 

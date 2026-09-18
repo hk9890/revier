@@ -79,7 +79,7 @@ func TestAltEOpensTheProjectScreen(t *testing.T) {
 // the screen.
 func TestTheNameInThePaneOpensTheProjectScreen(t *testing.T) {
 	m, _, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
-	x, y := paneCell(t, m, "demo alt+e")
+	x, y := paneCell(t, m, "demo edit alt+e")
 	m = clickAt(m, x, y)
 	if !strings.Contains(screen(m), "Project demo") {
 		t.Errorf("the click did not open the screen:\n%s", screen(m))

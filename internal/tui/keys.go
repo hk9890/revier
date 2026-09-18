@@ -240,8 +240,8 @@ func helpKey(k, desc string) key.Binding {
 
 func newHelp(th theme.Theme) help.Model {
 	h := help.New()
-	h.Styles.ShortKey = th.Accent
-	h.Styles.ShortDesc = th.Help
+	h.Styles.ShortKey = th.Help
+	h.Styles.ShortDesc = th.ProjectName
 	h.Styles.ShortSeparator = th.Border
 	h.Styles.Ellipsis = th.Help
 	return h
