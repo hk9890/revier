@@ -78,8 +78,8 @@ func TestNewAgentStartsEmptyInTheProject(t *testing.T) {
 		t.Errorf("outcome = %v, want empty", outcome)
 	}
 	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
-		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Dir: "/home/hans/dev/github/revier"},
-		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/hans/dev/github/revier"},
+		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Dir: "/home/user/dev/github/revier"},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/user/dev/github/revier"},
 	})
 }
 
@@ -178,7 +178,7 @@ func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 	if len(rt.Tabs) != 1 {
 		t.Fatalf("Tabs = %+v, want one tab", rt.Tabs)
 	}
-	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Dir: "/home/hans/dev/github/revier"}})
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{{Kind: revier.PanelShell, Dir: "/home/user/dev/github/revier"}})
 }
 
 func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
@@ -278,7 +278,7 @@ func twoWorkspaces(t *testing.T, revierPanels, otherPanels []revier.Panel) (*cor
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt}
 	other := agentProject()
-	other.Name, other.Path = "other", "/home/hans/dev/other"
+	other.Name, other.Path = "other", "/home/user/dev/other"
 	other.Targets[0].Runtime.Name, other.Targets[0].Runtime.Match.Title = "session:other", "^session:other$"
 	projects := []core.Project{prepared(t, agentProject()), prepared(t, other)}
 	a := rt.Add("session:revier", "", revierPanels...)

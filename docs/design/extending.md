@@ -144,8 +144,8 @@ A link, in the same directory, is a project on another machine
 # written out in full: a local project's "~" is expanded at load against the
 # home directory here, and a link's is not, so a "~" written here reaches the
 # launch below as a tilde.
-path = "/home/hans/dev/far"
-git_url = "git@github.com:hk9890/far.git"
+path = "/home/user/dev/far"
+git_url = "git@github.com:example/far.git"
 
 [remote]
 host = "buildbox"   # the ssh destination

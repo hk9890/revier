@@ -29,7 +29,7 @@ type bareWindow struct{ revier.WindowController }
 func project() revier.Project {
 	return revier.Project{
 		Name: "revier",
-		Path: "/home/hans/dev/github/revier",
+		Path: "/home/user/dev/github/revier",
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true,
@@ -41,7 +41,7 @@ func project() revier.Project {
 			{
 				Name: "editor", Key: "ctrl-o",
 				Window: &revier.Realization{
-					Launch: []string{"code", "/home/hans/dev/github/revier"},
+					Launch: []string{"code", "/home/user/dev/github/revier"},
 					Match:  revier.Match{Class: "^code$"},
 				},
 			},

@@ -17,7 +17,7 @@ func keyProject(t *testing.T, name revier.ProjectName) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{
 		Name: name,
-		Path: "/home/hans/dev/github/" + string(name),
+		Path: "/home/user/dev/github/" + string(name),
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true, Key: "ctrl-shift-u",
@@ -191,7 +191,7 @@ func TestAChordNobodyHoldsIsFree(t *testing.T) {
 // This is the `web` case on this machine: one project of eighty-nine has it.
 func TestAChordOneProjectDeclaresIsStillWanted(t *testing.T) {
 	only := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true, Key: "ctrl-shift-u",
@@ -224,7 +224,7 @@ func TestAChordOneProjectDeclaresIsStillWanted(t *testing.T) {
 // a conflict that stops every project's keys (decisions.md D85).
 func TestARefusedTargetWantsNoChord(t *testing.T) {
 	p := prepared(t, revier.Project{
-		Name: "demo", Path: "/home/hans/demo",
+		Name: "demo", Path: "/home/user/demo",
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true, Key: "ctrl-shift-u",
@@ -255,7 +255,7 @@ func TestARefusedTargetWantsNoChord(t *testing.T) {
 // when it is needed.
 func TestProjectsThatDisagreeProduceTwoMarkedRows(t *testing.T) {
 	other := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "editor", Key: "ctrl-shift-e",
@@ -289,7 +289,7 @@ func TestProjectsThatDisagreeProduceTwoMarkedRows(t *testing.T) {
 // breaks the working one.
 func TestTwoTargetsOnOneChordAreBothMarked(t *testing.T) {
 	other := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "terminal", Key: "ctrl-shift-u",
@@ -390,7 +390,7 @@ func TestASecondSwitchedOnHolderIsNotHidden(t *testing.T) {
 // stale - and repairing the stale one breaks the key that opens revier.
 func TestATargetOnTheTriggerChordIsMarked(t *testing.T) {
 	clash := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "menu", Key: "alt-space",

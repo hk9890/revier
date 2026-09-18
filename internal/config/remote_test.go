@@ -460,9 +460,9 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 // renders it. The checkout it names is still the host's, which
 // internal/checkout refuses to clone here (decisions.md D83).
 func TestALinkKeepsTheHostsGitURL(t *testing.T) {
-	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:hk9890/far.git\"\n" + link
+	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:example/far.git\"\n" + link
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if p.GitURL != "git@github.com:hk9890/far.git" {
+	if p.GitURL != "git@github.com:example/far.git" {
 		t.Errorf("git_url = %q, want the host's", p.GitURL)
 	}
 	bad := "path = \"/srv/far\"\ngit_url = \"git@github.com:$(id).git\"\n" + link
@@ -477,20 +477,20 @@ func TestCreateLinkRecordsTheHostsPathAndRepository(t *testing.T) {
 	root := t.TempDir()
 	p, err := config.CreateLink(root, "far", "buildbox", revier.Project{
 		Name:   "far",
-		Path:   "/home/hans/dev/far",
-		GitURL: "git@github.com:hk9890/far.git",
+		Path:   "/home/user/dev/far",
+		GitURL: "git@github.com:example/far.git",
 	})
 	if err != nil {
 		t.Fatalf("CreateLink: %v", err)
 	}
-	if p.Path != "/home/hans/dev/far" || p.GitURL != "git@github.com:hk9890/far.git" {
+	if p.Path != "/home/user/dev/far" || p.GitURL != "git@github.com:example/far.git" {
 		t.Errorf("link = %+v, want the host's path and repository", p.Project)
 	}
 	body, err := os.ReadFile(config.ProjectFile(root, "far"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), `path = "/home/hans/dev/far"`) || !strings.Contains(string(body), "git_url =") {
+	if !strings.Contains(string(body), `path = "/home/user/dev/far"`) || !strings.Contains(string(body), "git_url =") {
 		t.Errorf("file = %q, want the host's answer written into it", body)
 	}
 }
