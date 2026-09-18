@@ -8,6 +8,16 @@ import (
 	"testing"
 )
 
+// A message of several lines carries its label on the first line only: the
+// column says what the problem is about, and the lines under it continue it.
+func TestAContinuationLineHasNoLabel(t *testing.T) {
+	var out strings.Builder
+	problemLine(&out, `target "editor"`, "", "the first line\nthe second line")
+	if want := "  target \"editor\"\tthe first line\n  \tthe second line\n"; out.String() != want {
+		t.Errorf("problemLine wrote %q, want %q", out.String(), want)
+	}
+}
+
 const sound = `
 path = "/tmp/sound"
 

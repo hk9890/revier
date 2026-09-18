@@ -167,8 +167,11 @@ func TestSaveInTheSameSecondKeepsBoth(t *testing.T) {
 	root := t.TempDir()
 	first := mustSave(t, root, sample(12, "one"))
 	second := mustSave(t, root, sample(12, "two"))
-	if first == second {
-		t.Fatalf("both saves wrote %s", first)
+	// The second id is the first with -2: a user types it to restore, so the
+	// scheme is a contract.
+	base := session.NewID(at(12))
+	if filepath.Base(first) != base+".toml" || filepath.Base(second) != base+"-2.toml" {
+		t.Fatalf("saves wrote %s and %s, want %s.toml and %s-2.toml", first, second, base, base)
 	}
 	all, err := session.List(root)
 	if err != nil {

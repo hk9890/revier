@@ -6,6 +6,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -20,7 +21,7 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	agent := strings.TrimSuffix(args, ".args")
 	dir := t.TempDir()
 
-	if err := run([]string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
+	if err := run(io.Discard, []string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
 		t.Fatalf("agent new: %v", err)
 	}
 	// The declared agent writes its own line whenever it gets to run, before
@@ -45,7 +46,7 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 // A panel no workspace holds is named, whatever the runtime.
 func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 	work(t)
-	err := run([]string{"agent", "new", "--panel", "%999"})
+	err := run(io.Discard, []string{"agent", "new", "--panel", "%999"})
 	if err == nil || !strings.Contains(err.Error(), "%999") {
 		t.Errorf("err = %v, want the unknown panel named", err)
 	}
@@ -55,7 +56,7 @@ func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 func TestAgentNewNeedsTheWorkspaceOpen(t *testing.T) {
 	work(t)
 	reboot(t)
-	err := run([]string{"agent", "new", "-p", "work"})
+	err := run(io.Discard, []string{"agent", "new", "-p", "work"})
 	if err == nil || !strings.Contains(err.Error(), "not open") {
 		t.Errorf("err = %v, want the workspace named as not open", err)
 	}

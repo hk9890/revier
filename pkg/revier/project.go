@@ -146,6 +146,15 @@ type Realization struct {
 	Inside TargetName `toml:"inside" json:"inside,omitempty"`
 }
 
+// PanelSpecs is what a runtime host runs for the realization: its panels, or
+// Launch in Dir as the one panel.
+func (r Realization) PanelSpecs() []PanelSpec {
+	if len(r.Panels) == 0 {
+		return []PanelSpec{{Command: r.Launch, Dir: r.Dir}}
+	}
+	return r.Panels
+}
+
 // Match recognises an instance. An empty field does not constrain; every
 // non-empty field must match. Title and Class are regular expressions.
 type Match struct {

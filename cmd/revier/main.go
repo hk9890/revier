@@ -9,28 +9,20 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"slices"
-	"syscall"
-	"text/tabwriter"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"golang.org/x/term"
-
 	"github.com/hk9890/revier/internal/build"
-	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
-	"github.com/hk9890/revier/internal/tui"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 const usage = `revier - a project-grouped control surface for running agents
@@ -109,7 +101,7 @@ func main() {
 	start := time.Now()
 	args := os.Args[1:]
 	openLog(args)
-	err := run(args)
+	err := run(os.Stdout, args)
 	if err == nil {
 		logging.Op("command", start, nil, "args", args, "exit", 0)
 		return
@@ -183,7 +175,7 @@ func outcome(err error) (status int, say bool) {
 	return 1, true
 }
 
-func run(args []string) error {
+func run(out io.Writer, args []string) error {
 	cmd := ""
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]
@@ -191,37 +183,37 @@ func run(args []string) error {
 
 	switch cmd {
 	case "version", "--version":
-		fmt.Printf("revier %s (%s, %s)\n", build.Version, build.Commit, build.Date)
+		_, _ = fmt.Fprintf(out, "revier %s (%s, %s)\n", build.Version, build.Commit, build.Date)
 		return nil
 	case "help", "--help", "-h":
-		fmt.Print(usage)
+		_, _ = fmt.Fprint(out, usage)
 		return nil
 	case "new":
-		return cmdNew(args)
+		return cmdNew(out, args)
 	case "doctor":
 		// No app: what is wrong with the configuration is a question about
 		// files, and probing the desktop for hosts would be a second way for
 		// the command that diagnoses failures to fail.
-		return cmdDoctor(os.Stdout, args)
+		return cmdDoctor(out, args)
 	case "each":
 		// No app: a run in every project needs the project list and the state
 		// root, and no host. Probing the desktop would be work, and a way to
 		// fail, that has nothing to do with running a command in directories.
 		// No deadline either, for the reason runAction has none.
-		return cmdEach(os.Stdout, args)
+		return cmdEach(out, args)
 	case "agent":
 		// Its own app: how long an agent command may take is one of its
 		// flags, and the hosts are probed and listed inside that bound.
-		return cmdAgent(args)
+		return cmdAgent(out, args)
 	case "shell":
 		// Its own app, as agent new has: the hosts are probed and listed
 		// inside the command's own bound.
-		return cmdShell(args)
+		return cmdShell(out, args)
 	case "session":
 		// Before the app, as the other families answer it: a usage request
 		// must not probe the desktop first.
 		if len(args) == 0 || slices.Contains([]string{"help", "--help", "-h"}, args[0]) {
-			fmt.Print(sessionUsage)
+			_, _ = fmt.Fprint(out, sessionUsage)
 			return nil
 		}
 	}
@@ -231,7 +223,7 @@ func run(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
-	a, err := newApp(ctx)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -301,426 +293,4 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 		positional = append(positional, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
-}
-
-// cmdTUI runs the surface. Without a terminal - `revier | grep` - it prints
-// the table instead, so a script sees what it always saw.
-func cmdTUI(a *app) error {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return cmdList(context.Background(), a, nil)
-	}
-	th, err := a.cfg.Theme()
-	if err != nil {
-		return err
-	}
-	// The popup's terminal says so in the environment, which is read and
-	// dropped here: what the surface launches must not take it for the
-	// popup. The value is the project `revier popup` resolved at the
-	// keypress, when the focused window was still the user's.
-	mark, popup := os.LookupEnv(core.PopupEnv)
-	_ = os.Unsetenv(core.PopupEnv)
-	// The project of the working directory is read from the files, before
-	// the first frame. The one of the focused window lists every host, so
-	// the surface asks for it once it shows; in the popup it would find the
-	// popup itself, so the popup's answer stands. Neither is an error to
-	// miss: the TUI opens on the first row instead.
-	start := revier.ProjectName("")
-	if popup {
-		if p, ok := a.project(revier.ProjectName(mark)); ok {
-			start = p.Name
-		}
-	} else if p, ok := a.resolveHere(); ok {
-		start = p.Name
-	}
-	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
-		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
-			return selectRuntime(ctx, want, runtimeAdapters())
-		})
-	// All motion reports the pointer with no button held, which the hover
-	// needs, as well as the wheel and clicks. It takes plain drag-to-select
-	// from the terminal; shift-drag still selects in kitty and most others.
-	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
-	if popup {
-		// Focus reports are how the hidden popup learns it was raised.
-		m = m.WithPopup()
-		opts = append(opts, tea.WithReportFocus())
-	} else {
-		m = m.WithStart(func(ctx context.Context) (revier.ProjectName, bool) {
-			p, ok := a.resolveAway(ctx)
-			return p.Name, ok
-		})
-	}
-	_, err = tea.NewProgram(m, opts...).Run()
-	return err
-}
-
-func cmdList(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("list", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "emit the view as JSON")
-	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	// Named, the list is those projects alone. This is how a revier on
-	// another machine is asked about the projects that live there
-	// (decisions.md D40), and a name it does not know is an error, so a
-	// missing project file there is reported, not shown as nothing.
-	projects := a.projects
-	if len(pos) > 0 {
-		projects = nil
-		for _, name := range pos {
-			p, ok := a.project(revier.ProjectName(name))
-			if !ok {
-				return fmt.Errorf("no project named %q", name)
-			}
-			projects = append(projects, p)
-		}
-	}
-
-	// What the survey can judge: a ref written after this, by another
-	// process, is to a window the listing may have missed. A state that
-	// cannot be read is nil, and a nil state lets nothing be pruned.
-	before, err := state.Load(a.stateRoot)
-	if err != nil {
-		slog.Warn("state load, nothing pruned", "err", err)
-	}
-	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
-	if err != nil {
-		return err
-	}
-	views := report.Views
-
-	// Drop attachments and bindings whose windows are gone, so state does not
-	// accumulate refs to closed windows forever. The prune is made again on
-	// the state as it is on disk: another process may have written it since.
-	if a.state.Prune(report.Hosts, report.Instances, before) {
-		a.update(func(s *state.State) { s.Prune(report.Hosts, report.Instances, before) })
-	}
-
-	if *asJSON {
-		// What a save on another machine records for its link to a project
-		// here (decisions.md D84).
-		if *conversations {
-			a.core.NameConversations(ctx, report)
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(views)
-	}
-
-	if len(views) == 0 {
-		root, _ := configRootForMessage()
-		fmt.Printf("no projects. add one under %s/projects/<name>.toml\n", root)
-		return nil
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
-	for _, v := range views {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			v.Project.Label(), runState(v), agentSummary(v), targetSummary(v))
-	}
-	return w.Flush()
-}
-
-func runState(v revier.ProjectView) string {
-	switch {
-	case v.Invalid != "":
-		return "invalid"
-	case v.Unreachable != "":
-		return "unreachable"
-	case v.Running:
-		return "running"
-	}
-	return "-"
-}
-
-// agentSummary shows the worst state across the project's agents, because the
-// list exists to answer "which one needs me" at a glance.
-func agentSummary(v revier.ProjectView) string {
-	worst, ok := core.Worst(v.Agents)
-	if !ok {
-		return "-"
-	}
-	if worst.Activity == "" {
-		return worst.Status.String()
-	}
-	return worst.Status.String() + ": " + worst.Activity
-}
-
-func targetSummary(v revier.ProjectView) string {
-	out := ""
-	for _, t := range v.Targets {
-		mark := " "
-		switch {
-		case !t.Available && t.Reason != "":
-			mark = "!" // its own configuration refused it
-		case !t.Available:
-			mark = "x" // no host on this machine can realize it
-		case !t.Ref.IsZero():
-			mark = "*" // running
-		}
-		name := string(t.Name)
-		if t.Attached {
-			name = "(" + t.Ref.Title + ")" // bound at runtime, so it has no name
-		}
-		if out != "" {
-			out += " "
-		}
-		out += mark + name
-	}
-	return out
-}
-
-func cmdOpen(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("open", flag.ContinueOnError)
-	attach := fs.Bool("attach", false, "end with this terminal on the workspace")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 1 {
-		return fmt.Errorf("usage: revier open [name] [--attach]")
-	}
-	name := ""
-	if len(pos) > 0 {
-		name = pos[0]
-	}
-	// A name revier does not know, typed in a directory, is a project being
-	// started: the file is written and the workspace opened in one step, as
-	// `os open` does. Without a name there is nothing to call it, and the
-	// usual resolution applies.
-	if _, known := a.project(revier.ProjectName(name)); name != "" && !known {
-		p, err := createProject(a.cfgRoot, a.projects, revier.ProjectName(name))
-		if err != nil {
-			return err
-		}
-		a.projects = append(a.projects, p)
-	}
-	p, err := a.resolveProject(ctx, name)
-	if err != nil {
-		return err
-	}
-	// A project its file refused as a whole is neither cloned nor opened: a
-	// git_url the load refused must not reach git (decisions.md D85).
-	if p.Invalid != nil {
-		return p.Invalid
-	}
-	home, ok := p.Home()
-	if !ok {
-		return fmt.Errorf("project %q has no home target", p.Name)
-	}
-	// A remote project's checkout is its host's to clone: the agent panel
-	// opened here runs `revier agent exec` there, and that one clones
-	// (decisions.md D84).
-	if p.Remote == nil {
-		cloned, err := checkout.Ensure(p.Project, os.Stderr)
-		if err != nil {
-			return err
-		}
-		if cloned {
-			// The clone ran without a deadline. The host calls still need
-			// one, and the one set at startup may have been spent waiting
-			// for git.
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
-		}
-	}
-	ref, err := a.goTarget(ctx, p, home.Name)
-	if err != nil {
-		return err
-	}
-	if *attach {
-		return a.attach(ref)
-	}
-	fmt.Printf("%s: %s\n", p.Name, describe(ref))
-	return nil
-}
-
-// attach ends the command with this terminal on the instance: the process
-// becomes the runtime's attach, so the pane that ran `revier open --attach`
-// is the workspace from here on. It is what the ssh pane of a remote
-// project runs on the host (decisions.md D40). Only a runtime that can
-// attach a terminal offers it; a runtime whose instances are windows of
-// their own has been raised already, and there is nothing to become.
-func (a *app) attach(ref revier.TargetRef) error {
-	att, ok := a.core.Runtime.(revier.Attacher)
-	if !ok {
-		name := "none"
-		if a.core.Runtime != nil {
-			name = a.core.Runtime.Name()
-		}
-		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes tmux", name)
-	}
-	if ref.IsZero() {
-		return errors.New("--attach: the workspace has not come up yet, so there is nothing to attach to")
-	}
-	argv, err := att.AttachCommand(ref)
-	if err != nil {
-		return err
-	}
-	path, err := exec.LookPath(argv[0])
-	if err != nil {
-		return err
-	}
-	// The exec replaces the process, so the command's own line is never
-	// written: this one stands for it.
-	slog.Info("attach", "ref", ref, "argv", argv)
-	return syscall.Exec(path, argv, os.Environ())
-}
-
-func cmdGo(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("go", flag.ContinueOnError)
-	project := projectFlag(fs)
-	picker := fs.Bool("picker", false, "open the popup when no project resolves")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		return fmt.Errorf("usage: revier go <target> [-p project] [--picker]")
-	}
-	p, err := a.resolveProject(ctx, *project)
-	if errors.Is(err, errNoProject) && *picker {
-		return cmdPopup(ctx, a)
-	}
-	if err != nil {
-		return err
-	}
-	ref, err := a.goTarget(ctx, p, revier.TargetName(pos[0]))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s: %s\n", p.Name, describe(ref))
-	return nil
-}
-
-func cmdRun(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	project := projectFlag(fs)
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		return fmt.Errorf("usage: revier run <action> [-p project]")
-	}
-	p, err := a.resolveProject(ctx, *project)
-	if err != nil {
-		return err
-	}
-	name := pos[0]
-	var run []string
-	known := p.Remote != nil // a remote project's actions are its host's to know
-	for _, act := range a.cfg.Actions {
-		if act.Name == name {
-			if act.Refused != nil {
-				return act.Refused
-			}
-			run, known = act.Run, true
-			break
-		}
-	}
-	if !known {
-		// A key bound to nothing must say so, not do nothing.
-		return fmt.Errorf("no action named %q", name)
-	}
-	argv, dir, err := a.core.ActionCommand(p, name, run)
-	if err != nil {
-		return err
-	}
-	a.launchedAction(p.Name)
-	return runAction(p.Name, name, argv, dir)
-}
-
-// errActionFailed marks an action's own failure, whose exit status revier
-// passes on as its own.
-var errActionFailed = errors.New("the action failed")
-
-// runAction executes an argv in dir with the terminal attached, and returns
-// the command's own error so its exit status survives.
-// No shell: the argv is a list, so there is nothing to quote and nothing to
-// inject into. No context either: the command's 30s deadline is for host
-// calls, and an action - an editor, a long pull - runs as long as it runs.
-func runAction(project revier.ProjectName, name string, argv []string, dir string) error {
-	c := exec.Command(argv[0], argv[1:]...)
-	c.Dir = dir
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	start := time.Now()
-	err := c.Run()
-	logging.Op("action", start, err, "project", project, "action", name, "argv", argv)
-	if err != nil {
-		return fmt.Errorf("%w: %w", errActionFailed, err)
-	}
-	return nil
-}
-
-func cmdAttach(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
-	project := projectFlag(fs)
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		return fmt.Errorf("usage: revier attach [-p project]")
-	}
-	if a.core.Window == nil {
-		return fmt.Errorf("attach needs a window host; none is available here")
-	}
-	p, err := a.resolveProject(ctx, *project)
-	if err != nil {
-		return err
-	}
-	ref, err := a.core.Window.Focused(ctx)
-	if err != nil {
-		return err
-	}
-	if ref.IsZero() {
-		return fmt.Errorf("no window is focused")
-	}
-	a.commit(p.Name, func(s *state.State) { s.Attach(p.Name, ref) })
-	fmt.Printf("%s: attached %s\n", p.Name, describe(ref))
-	return nil
-}
-
-func cmdStatus(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	project := projectFlag(fs)
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		return fmt.Errorf("usage: revier status [-p project]")
-	}
-	p, err := a.resolveProject(ctx, *project)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("project   %s\npath      %s\n", p.Name, p.Path)
-	fmt.Printf("runtime   %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.Window))
-	if attached := a.state.Attached[p.Name]; len(attached) > 0 {
-		fmt.Printf("attached  %s\n", core.Count(len(attached), "window"))
-	}
-	return nil
-}
-
-func hostName(h revier.Host) string {
-	if h == nil {
-		return "-"
-	}
-	return h.Name()
-}
-
-func describe(ref revier.TargetRef) string {
-	if ref.IsZero() {
-		return "launching"
-	}
-	if ref.Title == "" {
-		return ref.Host + "/" + ref.ID
-	}
-	return fmt.Sprintf("%s (%s/%s)", ref.Title, ref.Host, ref.ID)
 }

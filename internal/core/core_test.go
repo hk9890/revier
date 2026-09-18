@@ -15,48 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// prepared is the form Go and Survey take: rendered and compiled once, as
-// config.Load does for a real project file.
-func prepared(t *testing.T, p revier.Project) core.Project {
-	t.Helper()
-	out := core.PrepareProject(p)
-	return out
-}
-
-// editor is a window-realized target; diff has both realizations; home is the
-// project's workspace on the runtime.
-func project() revier.Project {
-	return revier.Project{
-		Name: "revier",
-		Path: "/home/hans/dev/github/revier",
-		Targets: []revier.Target{
-			{
-				Name: "home", Home: true,
-				Runtime: &revier.Realization{
-					Launch: []string{"kitty"},
-					Match:  revier.Match{Title: "^session:revier$"},
-				},
-			},
-			{
-				Name: "editor", Key: "ctrl-o",
-				Window: &revier.Realization{
-					Launch: []string{"code", "/home/hans/dev/github/revier"},
-					Match:  revier.Match{Class: "^code$"},
-				},
-			},
-			{
-				Name: "diff", Key: "ctrl-shift-d",
-				Window: &revier.Realization{
-					Launch: []string{"meld"}, Match: revier.Match{Class: "^meld$"},
-				},
-				Runtime: &revier.Realization{
-					Launch: []string{"nvim", "-d"}, Match: revier.Match{Title: "^diff:revier$"},
-				},
-			},
-		},
-	}
-}
-
 func TestResolvePrefersWindowByDefault(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	diff, _ := project().Target("diff")
@@ -466,35 +424,6 @@ func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
 	}
 }
 
-// osWindowProject is a workspace and a runtime-only diff target, as a kitty
-// user has them: both are OS windows a window host also lists.
-func osWindowProject() revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
-		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
-			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
-	}}
-}
-
-// osWindowHosts builds a runtime that reports OSWindows and a window host that
-// sees the same two windows, and returns the window host's refs for them.
-func osWindowHosts() (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef, revier.TargetRef) {
-	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
-	wm := hosttest.New("wm")
-	homeRt := rt.Add("session:revier", "kitty")
-	diffRt := rt.Add("diff:revier", "kitty")
-	_ = homeRt
-	_ = diffRt
-	// The window host reports the pid the runtime reports (hosttest assigns
-	// 1000+id), because every OS window of one kitty process shares it.
-	homeWm := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	diffWm := wm.AddInstance(revier.Instance{Title: "diff:revier", Class: "kitty", PID: 1002})
-	wm.AddInstance(revier.Instance{Title: "Some Editor", Class: "code", PID: 4242})
-	return rt, wm, homeWm, diffWm
-}
-
 // A terminal on Wayland cannot raise its own OS window, so focusing a runtime
 // target also raises that window through the window host.
 func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
@@ -698,6 +627,26 @@ func TestBindLeavesAmbiguityAlone(t *testing.T) {
 	}
 	if _, ok, _ := c.Bind(context.Background(), p, "home", nil, 0); ok {
 		t.Error("a runtime target has no window to bind")
+	}
+}
+
+// One new window of the class, with a title the rule does not match yet, is
+// the launch's: the common case, and the one a title that settles late would
+// otherwise miss.
+func TestBindTakesTheOneNewWindowOfTheClass(t *testing.T) {
+	wm := hosttest.New("wm")
+	c := &core.Core{Window: wm}
+	p := prepared(t, revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"x"}, Match: revier.Match{Title: "^h$"}}},
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$", Title: "revier"}}},
+	}})
+	fresh := wm.AddInstance(revier.Instance{Title: "Untitled", Class: "code"})
+	inst, ok, err := c.Bind(context.Background(), p, "editor", nil, 0)
+	if err != nil || !ok || inst.Ref != fresh {
+		t.Fatalf("Bind = %+v, %v, %v; want the one window of the class bound", inst, ok, err)
+	}
+	if len(wm.Focuses) != 1 || wm.Focuses[0] != fresh {
+		t.Errorf("window focuses = %v, want the bound window raised", wm.Focuses)
 	}
 }
 
@@ -1127,20 +1076,12 @@ func TestNoPlacementDeclaredIsNoPlacement(t *testing.T) {
 	}
 }
 
-// noPlacer is a window host without the placement capability. The method
-// shadows the one promoted from the fake with a signature that does not
-// satisfy revier.WindowPlacer, which is how a host that cannot place windows
-// is expressed in a test.
-type noPlacer struct{ *hosttest.Fake }
-
-func (noPlacer) Place() {}
-
 // A window host that cannot place windows ignores the declaration.
 func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
 	raw := project()
 	raw.Targets[1].Window.Place = "right top 75% 100%"
 	fake := hosttest.New("wm")
-	c := &core.Core{Window: noPlacer{fake}}
+	c := &core.Core{Window: bareWindow{fake}}
 
 	if _, err := c.Go(context.Background(), prepared(t, raw), "editor", nil); err != nil {
 		t.Fatalf("Go: %v", err)

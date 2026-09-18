@@ -544,6 +544,28 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 	}
 }
 
+// The first line below the last row is not a row: the pointer lights nothing
+// there, and a click chooses nothing.
+func TestThePointerBelowTheLastRowLightsNothing(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30) // room under the rows
+	_, mc := margins(m)
+	below := rowTop(m) + 3*2 // three rows of two lines each
+
+	plain := m.View()
+	if m = motion(m, mc+6, below); m.View() != plain {
+		t.Errorf("the list changed with the pointer below its last row:\n%s", m.View())
+	}
+	was := selectedRow(t, m)
+	if m = clickAt(m, mc+6, below); selectedRow(t, m) != was {
+		t.Errorf("selected %q after a click below the last row, want %q", selectedRow(t, m), was)
+	}
+}
+
 // The light follows what is under the pointer, not the index it was on: after
 // the keyboard scrolls the list, the surface is the one a fresh move of the
 // pointer to the same cell draws.

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -127,10 +128,11 @@ func TestADoubleClickClearsTheQuery(t *testing.T) {
 	for i := range projects {
 		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
 	}
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
 	m, _ = press(m, "0")
 	m, _ = press(m, "0")
 	m = clickAt(m, 5, 5) // project-00, the only match
+	*now = now.Add(399 * time.Millisecond)
 	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = next.(tui.Model)
 	if cmd == nil {
@@ -147,7 +149,7 @@ func TestADoubleClickClearsTheQuery(t *testing.T) {
 // A target key opens what it names, so it ends the search as Enter does.
 func TestATargetKeyClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor
 	if cmd == nil {
 		t.Fatal("ctrl+shift+o ran nothing")
@@ -159,7 +161,7 @@ func TestATargetKeyClearsTheQuery(t *testing.T) {
 // cursor stays on the row clicked.
 func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := typed(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
+	m := typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
 	if cmd == nil {
@@ -175,7 +177,7 @@ func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 func TestAnActionClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
 	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
@@ -191,7 +193,7 @@ func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	homeless := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
 		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}}})
-	m := typed(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
+	m := typeInto(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
 	m, cmd := press(m, "enter")
 	if cmd != nil {
 		t.Fatal("enter on a project without home ran something")
@@ -201,7 +203,7 @@ func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	}
 
 	_, _, c, projects := world(t, 3) // /p/project-NN is not on this machine
-	m = typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m = typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd = press(m, "enter")
 	if cmd != nil {
 		t.Fatal("enter on a missing checkout with nothing to clone from ran something")
@@ -222,7 +224,7 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
 	}
 	rt.OpenErr = errors.New("kitty is not running")
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("enter on a project returned no command")
@@ -233,14 +235,6 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 		t.Errorf("footer = %q, want the launch failure said", f)
 	}
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
-}
-
-// typed types a query into the surface, a key at a time.
-func typed(m tui.Model, q string) tui.Model {
-	for _, r := range q {
-		m, _ = press(m, string(r))
-	}
-	return m
 }
 
 // assertSearchEnded checks that the typed query is gone, every project is listed
@@ -494,6 +488,34 @@ func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
 	}
 }
 
+// A listing that exactly fills the room keeps its last entry: the ellipsis
+// stands in for rows that are missing, and none is.
+func TestASnapshotThatExactlyFitsKeepsItsLastEntry(t *testing.T) {
+	// A short path, so the Path line stays one row at this width.
+	dir, err := os.MkdirTemp("", "fit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// Nineteen rows of pane at this height; the facts, the targets and the
+	// agents take fourteen of them, so five entries fit exactly.
+	for i := range 5 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, c, projects := world(t, 1)
+	projects[0].Path = dir
+
+	body := pane(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24))
+	if !strings.Contains(body, "f04") || strings.Contains(body, "...") {
+		t.Errorf("a listing that exactly fits lost its last entry to an ellipsis:\n%s", body)
+	}
+	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n != 19 {
+		t.Errorf("pane is %d rows, want the 19 it has", n)
+	}
+}
+
 // A wide pane puts the snapshot beside the facts, level with the name, so
 // both fill the height.
 func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
@@ -540,10 +562,12 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	for i := range projects {
 		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
 	}
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
 
 	m = clickAt(m, 5, 5) // project-02
+	*now = now.Add(100 * time.Millisecond)
 	m = clickAt(m, 5, 7) // project-00: a second choice, not a double click
+	*now = now.Add(399 * time.Millisecond)
 	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = next.(tui.Model)
 	if cmd == nil {
@@ -555,6 +579,28 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	}
 	if !strings.Contains(ruleLine(m), " 3/3 ") {
 		t.Errorf("a double click must not leave the list:\n%s", m.View())
+	}
+}
+
+// Two clicks on one row 400 ms apart are two choices of the same row, not an
+// opening: the window closes at the desktop's own bound (mouse.go).
+func TestASecondClickAfterTheWindowOpensNothing(t *testing.T) {
+	rt, _, c, projects := world(t, 3)
+	for i := range projects {
+		projects[i].Path = t.TempDir()
+	}
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
+
+	m = clickAt(m, 5, 7) // project-00, which is stopped: opening it would show
+	*now = now.Add(400 * time.Millisecond)
+	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = next.(tui.Model)
+	if cmd != nil {
+		cmd()
+		t.Errorf("two clicks 400 ms apart returned a command, and opened %v", rt.Opened)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+		t.Errorf("selected %q, want the clicked row kept", row)
 	}
 }
 

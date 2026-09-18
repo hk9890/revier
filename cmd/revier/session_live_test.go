@@ -10,6 +10,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -421,7 +422,7 @@ func TestSessionRestoreWithNothingSaved(t *testing.T) {
 	if out := capture(t, "session", "restore"); !strings.Contains(out, "no saved session") {
 		t.Errorf("restore printed %q, want it to say there is nothing to restore", out)
 	}
-	err := run([]string{"session", "restore", "before-reboot"})
+	err := run(io.Discard, []string{"session", "restore", "before-reboot"})
 	if err == nil || !strings.Contains(err.Error(), "no stored session") {
 		t.Errorf("err = %v, want the missing name refused", err)
 	}

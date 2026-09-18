@@ -52,6 +52,19 @@ func TestASkippedKeyNamesItsHolderAndTheWayPastIt(t *testing.T) {
 	}
 }
 
+// One held key is still said, in the singular.
+func TestOneSkippedKeyIsStillSaid(t *testing.T) {
+	p := installPlan()
+	p.Steps = p.Steps[:2] // the picker, and the one editor key something holds
+	out := plan(p, "install", false, false)
+	if want := "1 key is held by something else. --force takes it."; !strings.Contains(out, want) {
+		t.Errorf("output does not say %q:\n%s", want, out)
+	}
+	if strings.Contains(plan(p, "install", false, true), "held by something else") {
+		t.Errorf("a forced run has nothing held:\n%s", out)
+	}
+}
+
 func TestAForcedRunSaysWhatItSwitchedOff(t *testing.T) {
 	p := installPlan()
 	for i := range p.Steps {

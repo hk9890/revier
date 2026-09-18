@@ -7,6 +7,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,7 +96,7 @@ func TestNewWritesAProjectForTheDirectory(t *testing.T) {
 func TestNewRefusesADirectoryThatIsAlreadyAProject(t *testing.T) {
 	_, workdir := fileScratch(t)
 	chdir(t, workdir)
-	err := run([]string{"new", "again"})
+	err := run(io.Discard, []string{"new", "again"})
 	if err == nil || !strings.Contains(err.Error(), `already project "demo"`) {
 		t.Fatalf("err = %v, want a refusal naming the project", err)
 	}
@@ -149,7 +150,7 @@ func TestOpenAMissingDirectoryWithoutGitURLNamesTheField(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "projects", "gone.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := run([]string{"open", "gone"})
+	err := run(io.Discard, []string{"open", "gone"})
 	if err == nil || !strings.Contains(err.Error(), "git_url") {
 		t.Fatalf("err = %v, want a failure naming git_url", err)
 	}

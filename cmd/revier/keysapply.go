@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -56,13 +55,13 @@ func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error 
 	}
 
 	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(a.out)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(plan); err != nil {
 			return err
 		}
 	} else {
-		printPlan(os.Stdout, plan, sub, dryRun, *force)
+		printPlan(a.out, plan, sub, dryRun, *force)
 	}
 
 	// A skipped key and a failed one are both reasons the desktop is not what

@@ -1,6 +1,7 @@
 package sshconfig_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -86,6 +87,26 @@ func TestAMissingFileNamesNothing(t *testing.T) {
 	hosts, err := sshconfig.Hosts(filepath.Join(t.TempDir(), "none"))
 	if err != nil || len(hosts) != 0 {
 		t.Errorf("hosts = %v, err = %v; want none and no error", hosts, err)
+	}
+}
+
+// An Include chain is followed sixteen deep, as ssh follows it: the file at
+// depth sixteen is read, the one under it is not.
+func TestAnIncludeChainIsFollowedSixteenDeep(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 18 {
+		write(t, dir, fmt.Sprintf("c%d", i), fmt.Sprintf("Host h%d\nInclude c%d\n", i, i+1))
+	}
+	hosts, err := sshconfig.Hosts(filepath.Join(dir, "c0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for i := range 17 {
+		want = append(want, fmt.Sprintf("h%d", i))
+	}
+	if !slices.Equal(hosts, want) {
+		t.Errorf("hosts = %v, want h0 through h16", hosts)
 	}
 }
 

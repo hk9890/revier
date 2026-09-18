@@ -1,7 +1,11 @@
 // Layer L1: parsing the one pane option that carries a panel's variables.
-package tmux
+package tmux_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hk9890/revier/internal/adapter/tmux"
+)
 
 func TestParseVars(t *testing.T) {
 	cases := []struct {
@@ -25,7 +29,7 @@ func TestParseVars(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := parseVars(tc.in)
+			got := tmux.ParseVars(tc.in)
 			if len(got) != len(tc.want) {
 				t.Fatalf("parseVars(%q) = %v, want %v", tc.in, got, tc.want)
 			}

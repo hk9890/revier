@@ -15,18 +15,12 @@ import (
 // shared targets.
 func projectRoot(t *testing.T, body string) (string, []map[string]any) {
 	t.Helper()
-	root := t.TempDir()
-	write(t, root, "config.toml", sharedConfig)
-	dir := filepath.Join(root, "projects")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	file := write(t, dir, "demo.toml", body)
+	root := projectsRoot(t, sharedConfig, map[string]string{"demo.toml": body})
 	cfg, _, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	return file, cfg.Targets
+	return config.ProjectFile(root, "demo"), cfg.Targets
 }
 
 func read(t *testing.T, file string) string {

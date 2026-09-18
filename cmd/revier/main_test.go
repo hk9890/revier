@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,14 @@ func TestAToolFailureIsPrintedWithRevierStatus(t *testing.T) {
 	err := fmt.Errorf("tmux: open home: tmux new-window: %w: no server running", &exec.ExitError{})
 	if status, say := outcome(err); status != 1 || !say {
 		t.Errorf("outcome = %d, %v; want 1, with the message printed", status, say)
+	}
+}
+
+// `revier keys install` that left keys behind ends with its own status, 4,
+// and says nothing more: the plan it printed has already named every key.
+func TestAnIncompleteKeysInstallEndsWithStatusFourAndNoMoreWords(t *testing.T) {
+	if status, say := outcome(fmt.Errorf("install: %w", errKeysIncomplete)); status != exitKeysIncomplete || say {
+		t.Errorf("outcome = %d, %v; want %d, silent", status, say, exitKeysIncomplete)
 	}
 }
 
@@ -43,7 +52,7 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 		{"attach", "extra"},
 		{"status", "extra"},
 	} {
-		err := run(args)
+		err := run(io.Discard, args)
 		if err == nil || !strings.Contains(err.Error(), "usage: revier "+args[0]) {
 			t.Errorf("revier %s: err = %v, want the usage", strings.Join(args, " "), err)
 		}

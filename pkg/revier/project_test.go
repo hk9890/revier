@@ -68,6 +68,36 @@ func TestStatusJSONRoundTrip(t *testing.T) {
 	}
 }
 
+// A status outside the four still has a name, and the name is the one the
+// wire form reads back as unknown, so a bad value cannot break a round trip.
+func TestAnUnknownStatusValueIsNamedUnknown(t *testing.T) {
+	bad := revier.Status(99)
+	if bad.String() != "unknown" {
+		t.Errorf("Status(99).String() = %q, want unknown", bad.String())
+	}
+	b, err := bad.MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var got revier.Status
+	if err := got.UnmarshalJSON(b); err != nil || got != revier.StatusUnknown {
+		t.Errorf("round trip of %s = %v, %v; want StatusUnknown", b, got, err)
+	}
+}
+
+// A label is the name, and for a project on another machine the name and its
+// host, so two of one name stay apart in a listing.
+func TestLabelNamesTheHostOfARemoteProject(t *testing.T) {
+	local := revier.Project{Name: "revier"}
+	if local.Label() != "revier" {
+		t.Errorf("local Label() = %q, want revier", local.Label())
+	}
+	remote := revier.Project{Name: "revier", Remote: &revier.Link{Host: "buildbox"}}
+	if remote.Label() != "revier@buildbox" {
+		t.Errorf("remote Label() = %q, want revier@buildbox", remote.Label())
+	}
+}
+
 func TestProjectHomeAndTargetLookup(t *testing.T) {
 	p := revier.Project{
 		Name: "revier",

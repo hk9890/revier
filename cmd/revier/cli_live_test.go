@@ -10,8 +10,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
-	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,12 +113,11 @@ func scratch(t *testing.T) string {
 // capture runs the command and returns everything it printed.
 func capture(t *testing.T, args ...string) string {
 	t.Helper()
-	return stdout(t, func() error {
-		if err := run(args); err != nil {
-			return fmt.Errorf("revier %s: %w", strings.Join(args, " "), err)
-		}
-		return nil
-	})
+	var b bytes.Buffer
+	if err := run(&b, args); err != nil {
+		t.Fatalf("revier %s: %v\n%s", strings.Join(args, " "), err, b.String())
+	}
+	return b.String()
 }
 
 func TestListWithNoProjectsRunning(t *testing.T) {
@@ -208,7 +208,7 @@ func TestJSONOutput(t *testing.T) {
 
 func TestUnknownTargetIsAnError(t *testing.T) {
 	scratch(t)
-	if err := run([]string{"go", "absent", "-p", "demo"}); err == nil {
+	if err := run(io.Discard, []string{"go", "absent", "-p", "demo"}); err == nil {
 		t.Fatal("want an error for an unknown target")
 	}
 }
@@ -230,7 +230,7 @@ func TestUnknownProjectAfterPositionalIsAnError(t *testing.T) {
 	scratch(t)
 	capture(t, "open", "demo")
 
-	if err := run([]string{"go", "home", "-p", "nosuchproject"}); err == nil {
+	if err := run(io.Discard, []string{"go", "home", "-p", "nosuchproject"}); err == nil {
 		t.Fatal("want an error for an unknown project named after the target")
 	}
 }
@@ -257,7 +257,7 @@ func TestRunExecutesAnAction(t *testing.T) {
 // the action reported.
 func TestRunPropagatesTheExitStatus(t *testing.T) {
 	scratch(t)
-	err := run([]string{"run", "fail", "-p", "demo"})
+	err := run(io.Discard, []string{"run", "fail", "-p", "demo"})
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 3 {
 		t.Fatalf("err = %v, want the action's exit status 3", err)
@@ -266,7 +266,7 @@ func TestRunPropagatesTheExitStatus(t *testing.T) {
 
 func TestRunUnknownActionIsAnError(t *testing.T) {
 	scratch(t)
-	err := run([]string{"run", "nosuch", "-p", "demo"})
+	err := run(io.Discard, []string{"run", "nosuch", "-p", "demo"})
 	if err == nil || !strings.Contains(err.Error(), "nosuch") {
 		t.Fatalf("err = %v, want an error naming the action", err)
 	}
@@ -280,7 +280,7 @@ func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
 	// The working directory is this package, which no project claims; state
 	// is fresh, and no window host probes here.
 	scratch(t)
-	err := run([]string{"go", "home"})
+	err := run(io.Discard, []string{"go", "home"})
 	if err == nil {
 		t.Fatal("go with no project resolved: want an error")
 	}
@@ -304,7 +304,7 @@ func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	err := run([]string{"go", "home", "--picker"})
+	err := run(io.Discard, []string{"go", "home", "--picker"})
 	if err == nil || errors.Is(err, errNoProject) {
 		t.Fatalf("err = %v, want the popup's refusal and not the no-project outcome", err)
 	}
@@ -317,7 +317,7 @@ func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
 // does not open a window.
 func TestPopupRefusesArguments(t *testing.T) {
 	scratch(t)
-	if err := run([]string{"popup", "--help"}); err == nil || !strings.Contains(err.Error(), "usage: revier popup") {
+	if err := run(io.Discard, []string{"popup", "--help"}); err == nil || !strings.Contains(err.Error(), "usage: revier popup") {
 		t.Errorf("err = %v, want the usage", err)
 	}
 }

@@ -309,15 +309,10 @@ func TestPromptToAWorkingAgentReturnsAtOnce(t *testing.T) {
 	}
 }
 
-// noWriter is a runtime without the PanelWriter capability.
-type noWriter struct{ *hosttest.Fake }
-
-func (noWriter) Capabilities() revier.Capabilities { return revier.Capabilities{} }
-
 func TestPromptNeedsARuntimeThatCanType(t *testing.T) {
-	fake := hosttest.New("rt")
+	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: noWriter{fake}, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{titleProbe{}}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
 	if err != nil {
 		t.Fatal(err)

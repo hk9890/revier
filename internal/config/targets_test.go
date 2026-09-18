@@ -2,8 +2,6 @@ package config_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -44,12 +42,7 @@ key = "ctrl-shift-o"
 // project with no targets of its own, and the shared targets as read.
 func targetsRoot(t *testing.T, text string) (string, []map[string]any) {
 	t.Helper()
-	root := t.TempDir()
-	write(t, root, "config.toml", text)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n")
+	root := projectsRoot(t, text, map[string]string{"demo.toml": "path = \"/tmp/demo\"\n"})
 	cfg, _, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
