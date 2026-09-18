@@ -18,7 +18,7 @@ import (
 // the revier there and takes its answer. What stays local is the workspace
 // that shows it: the home target's realization here is panels that each run an
 // ssh onto the host, matched, raised and closed like any other
-// (decisions.md D83).
+// (decisions.md D84).
 
 // RemoteOf returns the remote a project lives on: nil for a project on this
 // machine, and an error for a host nothing is wired for.

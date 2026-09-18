@@ -353,7 +353,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 	if *asJSON {
 		// What a save on another machine records for its link to a project
-		// here (decisions.md D83).
+		// here (decisions.md D84).
 		if *conversations {
 			a.core.NameConversations(ctx, report)
 		}
@@ -457,7 +457,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	}
 	// A remote project's checkout is its host's to clone: the agent panel
 	// opened here runs `revier agent exec` there, and that one clones
-	// (decisions.md D83).
+	// (decisions.md D84).
 	if p.Remote == nil {
 		cloned, err := checkout.Ensure(p.Project, os.Stderr)
 		if err != nil {

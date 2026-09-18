@@ -175,7 +175,7 @@ type Conversation struct {
 // assertion. Activity is the activity line a harness writes into its panel's
 // title, read from the title alone: what a survey shows for an agent whose
 // process is on another machine, where the title crosses the ssh and nothing
-// else does (decisions.md D83). A probe without it shows no activity there.
+// else does (decisions.md D84). A probe without it shows no activity there.
 type Titled interface {
 	Activity(title string) string
 }

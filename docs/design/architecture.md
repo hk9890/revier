@@ -110,7 +110,7 @@ Detection signals the adapters use:
 
 The host that lists what `revier agent exec` started for a terminal on another
 machine is not selected: it is wired beside whichever runtime was, because it
-holds what no runtime does, and no target resolves to it (decisions.md D83).
+holds what no runtime does, and no target resolves to it (decisions.md D84).
 
 ## Package layout
 

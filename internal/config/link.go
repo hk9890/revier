@@ -36,7 +36,7 @@ func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 // The project's name on the host is the link's own name unless the file
 // says otherwise. The home target is the workspace as it is laid out here: an
 // agent panel and a shell panel, each an ssh onto the host that runs `revier
-// agent exec` or `revier shell exec` there (decisions.md D83). Which harness
+// agent exec` or `revier shell exec` there (decisions.md D84). Which harness
 // and which directory is the host's project file's to say. A link may declare
 // further targets, which run here and reach the host
 // themselves - an editor over ssh, a page (decisions.md D82).

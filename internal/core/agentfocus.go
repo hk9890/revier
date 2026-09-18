@@ -12,7 +12,7 @@ import (
 
 // GoAgent brings an agent the survey reported to the front: its tab becomes
 // current and the window holding it is raised. A link's agent is reached the
-// same way, in the panel here that shows it (decisions.md D83). One that no
+// same way, in the panel here that shows it (decisions.md D84). One that no
 // panel here shows - a link's started from another machine, or one this
 // machine serves to a terminal elsewhere - is ErrAgentElsewhere.
 //

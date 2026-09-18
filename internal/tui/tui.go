@@ -872,7 +872,7 @@ func (m Model) act() (Model, tea.Cmd) {
 	if home, ok := p.Home(); ok {
 		// A remote project's checkout is its host's: the agent panel
 		// opened here runs `revier agent exec` there, which clones
-		// (decisions.md D83).
+		// (decisions.md D84).
 		if p.Remote != nil {
 			return m, m.goTarget(p, home.Name)
 		}

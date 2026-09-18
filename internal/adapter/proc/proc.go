@@ -1,6 +1,6 @@
 // Package proc implements a Host over /proc: the agents and shells that
 // `revier agent exec` started on this machine for a terminal on another one
-// (decisions.md D83).
+// (decisions.md D84).
 //
 // Such a process runs under sshd and in no terminal this machine has, so no
 // runtime lists it. It carries two variables in its environment instead: the

@@ -180,7 +180,7 @@ func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController,
 }
 
 // servedProcesses lists what `revier agent exec` started here for a terminal
-// on another machine (decisions.md D83). It is not selected: it holds what no
+// on another machine (decisions.md D84). It is not selected: it holds what no
 // runtime does, beside whichever runtime was. It needs a /proc, and a machine
 // without one serves panels that no survey sees.
 func servedProcesses() revier.Host {

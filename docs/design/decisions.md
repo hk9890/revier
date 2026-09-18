@@ -166,7 +166,7 @@ the list was blank. The agent column gives way in steps before a name is cut.
 Containers stay out. An ssh-wrapping runtime would reimplement every adapter;
 asking the remote revier for `list --json` costs one port, `Remote`. The
 workspace that shows it is local, so focus and bindings see an ordinary
-instance (D83).
+instance (D84).
 
 ### D41 — a link is its own kind of file
 

@@ -7,7 +7,7 @@ import "context"
 // nothing here. What runs on the remote machine is that revier's business,
 // surveyed by its own hosts and probes, and this side reads the view it
 // produces. The terminals that show what runs there are panels of this
-// machine's runtime, and are driven as such (decisions.md D83).
+// machine's runtime, and are driven as such (decisions.md D84).
 type Remote interface {
 	// Name is the host as the project file names it.
 	Name() string

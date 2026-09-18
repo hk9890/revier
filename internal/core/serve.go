@@ -9,7 +9,7 @@ import (
 
 // Serving a panel to a terminal on another machine: a link's panel there is an
 // ssh that runs `revier agent exec` or `revier shell exec` here, and that
-// process becomes the panel's program (decisions.md D83). What the program is
+// process becomes the panel's program (decisions.md D84). What the program is
 // and where it starts is this machine's project file's to say, as it is for a
 // panel a runtime here opens.
 

@@ -15,7 +15,7 @@ import (
 )
 
 // A link's agent is a process on its host, shown by a panel here that runs an
-// ssh (decisions.md D83). The host's revier says what the agent does; every
+// ssh (decisions.md D84). The host's revier says what the agent does; every
 // act on it - going to it, typing into it, closing it - is an act on the panel
 // here. The two are one agent by the tag the panel gave the process: this
 // machine's name and the panel's pid.

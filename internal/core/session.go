@@ -428,7 +428,7 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool)
 // --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
 //
 // A link's agent panel is an ssh onto the host, and the host resumes
-// (decisions.md D83).
+// (decisions.md D84).
 func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutcome {
 	if link {
 		return startLinkAgent(spec, r)

@@ -17,7 +17,7 @@ import (
 )
 
 // cmdAgentExec becomes the project's agent, for a terminal on another machine:
-// it is what the agent panel of a link runs here over ssh (decisions.md D83).
+// it is what the agent panel of a link runs here over ssh (decisions.md D84).
 func cmdAgentExec(args []string) error {
 	fs := flag.NewFlagSet("agent exec", flag.ContinueOnError)
 	project := projectFlag(fs)

@@ -239,7 +239,7 @@ type Attacher interface {
 
 A revier on another machine (D40). It is asked what it knows, and nothing
 else: it lists no instances, opens nothing and focuses nothing here. The
-panels that show what runs there are this machine's runtime's (D83).
+panels that show what runs there are this machine's runtime's (D84).
 
 ```go
 type Remote interface {
@@ -338,7 +338,7 @@ the TUI sort order.
 An optional capability of an `AgentProbe`, detected by type assertion. A
 link's agent has no process here, so no probe can inspect its panel; its title
 crosses the ssh, and a probe that reads titles gives the activity line from
-that alone (D83).
+that alone (D84).
 
 ```go
 type Titled interface {

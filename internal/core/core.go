@@ -44,7 +44,7 @@ type Core struct {
 
 	// Served lists what `revier agent exec` started here for a terminal on
 	// another machine, where no runtime of this machine holds it
-	// (decisions.md D83). Its instances are matched by a target's runtime
+	// (decisions.md D84). Its instances are matched by a target's runtime
 	// realization and probed beside the instance the runtime holds. It opens
 	// and focuses nothing, and no target resolves to it. Nil without one.
 	Served revier.Host
