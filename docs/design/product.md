@@ -101,6 +101,7 @@ revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
 revier list [--json]   machine-readable inventory
 revier status          the project for the current directory
+revier doctor          every file that did not load whole, and its fix (D85)
 revier each -- <cmd>   run one command in every project's directory (D32)
 revier session save    record the projects that are open now (D46)
 revier session restore open what a saved session recorded
@@ -167,3 +168,19 @@ that can realize it is available.
 
 The mechanism is portable. An individual target may not be, and its config says
 so by which realizations it declares.
+
+A mistake in the configuration degrades the same way. What is wrong is
+disabled; nothing above it is (D85). revier is how you reach a broken project,
+so it must not break with one.
+
+| What is wrong | What it costs |
+|---|---|
+| a key nothing reads | nothing: it is ignored |
+| a rule about one target | that target, which reports `invalid` with its reason; pressing its key fails and launches nothing |
+| a rule about the project — no home, no path, an unusable name | that project, listed with its reason; its sound targets still resolve |
+| a project file that is not TOML | that project, listed by its file name with the parse error |
+| `config.toml` itself unreadable | everything: there is nothing left to read the rest with |
+
+`revier doctor` reports every one of them, with the edit that answers it.
+Every other command runs, warns on stderr that some files have problems, and
+names `doctor`.

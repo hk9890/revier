@@ -47,10 +47,7 @@ func write(t *testing.T, dir, name, body string) string {
 
 func TestLoadProject(t *testing.T) {
 	dir := t.TempDir()
-	p, err := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
 	if p.Name != "revier" || p.Path == "" {
 		t.Fatalf("project = %+v", p)
 	}
@@ -81,7 +78,7 @@ func TestLoadProjectRefusesNameKey(t *testing.T) {
 		"launch": []any{"x"}, "match": map[string]any{"class": "^x$"},
 	}}}
 	for _, s := range [][]map[string]any{nil, shared} {
-		_, err := config.LoadProject(path, s)
+		err := config.LoadProject(path, s).Invalid
 		if err == nil || !strings.Contains(err.Error(), "file name is the project's name") {
 			t.Errorf("shared %v: err = %v, want the name key refused", s, err)
 		}
@@ -107,7 +104,7 @@ func TestValidateRejects(t *testing.T) {
 			revier.Project{Path: "/p", Targets: []revier.Target{
 				{Name: "a", Home: true, Window: &base}, {Name: "b", Home: true, Window: &base},
 			}},
-			"2 targets are marked home",
+			"is marked home, and an earlier target already is",
 		},
 		{
 			"empty match",
@@ -271,9 +268,10 @@ func TestValidateAcceptsANamelessWindowAndAWordTargetName(t *testing.T) {
 	}
 }
 
-// A pattern that does not compile and a template that does not render are
-// refused at load, naming the file, like every other invalid project.
-func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
+// A pattern that does not compile and a template that does not render cost
+// their own target and nothing else: the project loads, its other targets
+// work, and the refused one carries the reason (decisions.md D85).
+func TestLoadProjectRefusesOnlyTheBrokenTarget(t *testing.T) {
 	cases := map[string]string{
 		"bad regex":   strings.Replace(valid, `class = "^code$"`, `class = "("`, 1),
 		"missing key": strings.Replace(valid, `"{{.Path}}"`, `"{{.Vars.absent}}"`, 1),
@@ -283,24 +281,53 @@ func TestLoadProjectRejectsWhatPrepareRejects(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := write(t, dir, "broken.toml", body)
-			_, err := config.LoadProject(path, nil)
-			if err == nil {
-				t.Fatal("want an error")
+			p := config.LoadProject(path, nil)
+			if p.Invalid != nil {
+				t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 			}
-			if !strings.Contains(err.Error(), path) {
-				t.Errorf("error should name the file: %v", err)
+			if p.File != path {
+				t.Errorf("File = %q, want %q", p.File, path)
+			}
+			broken := 0
+			for i := range p.Targets {
+				if p.TargetErr(i) != nil {
+					broken++
+				}
+			}
+			if broken != 1 {
+				t.Fatalf("%d refused targets, want exactly the one that is broken", broken)
+			}
+			if len(config.Problems(p)) != 1 {
+				t.Errorf("Problems = %v, want the one refusal", config.Problems(p))
 			}
 		})
+	}
+}
+
+// A file that is not TOML at all still becomes a project: it is listed, it
+// declares no target, and it says why.
+func TestLoadProjectKeepsAnUnparseableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := write(t, dir, "broken.toml", "path = \"/p\"\nthis is not toml\n")
+	p := config.LoadProject(path, nil)
+	if p.Invalid == nil {
+		t.Fatal("Invalid = nil, want the parse failure")
+	}
+	if !strings.Contains(p.Invalid.Error(), path) {
+		t.Errorf("Invalid should name the file: %v", p.Invalid)
+	}
+	if p.Name != "broken" {
+		t.Errorf("Name = %q, want the file name", p.Name)
+	}
+	if len(p.Targets) != 0 {
+		t.Errorf("Targets = %v, want none", p.Targets)
 	}
 }
 
 // Projects leave Load prepared: templates rendered, so a host never sees one.
 func TestLoadProjectRendersTemplates(t *testing.T) {
 	dir := t.TempDir()
-	p, err := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
 	home, _ := p.Home()
 	if home.Runtime.Match.Title != "^session:revier$" {
 		t.Errorf("match title = %q, want it rendered", home.Runtime.Match.Title)
@@ -373,10 +400,7 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 	}
 	dir := t.TempDir()
 	body := strings.Replace(valid, `path = "/home/hans/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
-	p, err := config.LoadProject(write(t, dir, "revier.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, dir, "revier.toml", body), nil)
 	if want := filepath.Join(home, "dev/github/revier"); p.Path != want {
 		t.Errorf("path = %q, want %q", p.Path, want)
 	}

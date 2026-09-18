@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,10 +20,7 @@ host = "buildbox"
 `
 
 func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
 	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {
 		t.Fatalf("remote = %+v, want buildbox and the link's own name there", p.Remote)
 	}
@@ -55,10 +53,7 @@ func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
 // host is asked by its name, the list shows this one.
 func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"far\"", 1)
-	p, err := config.LoadProject(write(t, t.TempDir(), "build.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "build.toml", body), nil)
 	if p.Name != "build" || p.Remote.Project != "far" {
 		t.Errorf("name %q, on the host %q; want build here and far there", p.Name, p.Remote.Project)
 	}
@@ -81,10 +76,7 @@ key = "ctrl-o"
   launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
   match = { title = "far \\[SSH: buildbox\\]" }
 `
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	if p.Path != "~/dev/far" {
 		t.Errorf("path = %q, want the host's, kept as written", p.Path)
 	}
@@ -108,10 +100,7 @@ home = true
   launch = ["ssh", "buildbox"]
   match = { title = "^far$" }
 `
-	p, err = config.LoadProject(write(t, t.TempDir(), "far.toml", own), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", own), nil)
 	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
 		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
 	}
@@ -130,10 +119,7 @@ home = true
   [target.remote.runtime]
   place = "right top 75% 100%"
 `
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	home, ok := p.Home()
 	if !ok || home.Runtime == nil {
 		t.Fatalf("home = %+v, want the derived pane under the declared target", home)
@@ -233,7 +219,7 @@ name = "editor"
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	if _, err := config.LoadProject(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil); err == nil ||
+	if err := loadErr(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil); err == nil ||
 		!strings.Contains(err.Error(), "[target.remote]") {
 		t.Errorf("err = %v, want [target.remote] refused on a local project", err)
 	}
@@ -245,7 +231,7 @@ name = "editor"
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	if _, err := config.LoadProject(write(t, t.TempDir(), "far.toml", localOnLink), nil); err == nil ||
+	if err := loadErr(write(t, t.TempDir(), "far.toml", localOnLink), nil); err == nil ||
 		!strings.Contains(err.Error(), "[target.remote.window]") {
 		t.Errorf("err = %v, want a link's realization asked for under [target.remote.window]", err)
 	}
@@ -295,7 +281,7 @@ func TestALinkTargetWithNoRealizationIsRefused(t *testing.T) {
 name = "editor"
 key = "ctrl-o"
 `
-	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	err := loadErr(write(t, t.TempDir(), "far.toml", body), nil)
 	if err == nil || !strings.Contains(err.Error(), "declares no realization") {
 		t.Errorf("err = %v, want the link's own editor refused for declaring no realization", err)
 	}
@@ -313,10 +299,7 @@ home = true
   launch = ["code", "--remote", "ssh-remote+buildbox"]
   match = { class = "^Code$" }
 `
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	if home, _ := p.Home(); home.Runtime != nil {
 		t.Errorf("home runtime = %+v, want the declared window alone", home.Runtime)
 	}
@@ -334,10 +317,7 @@ home = true
     kind = "shell"
     title = "shell"
 `
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	home, _ := p.Home()
 	if len(home.Runtime.Launch) != 0 || len(home.Runtime.Panels) != 1 {
 		t.Errorf("home runtime = %+v, want the panels alone", home.Runtime)
@@ -374,7 +354,7 @@ name = "editor"
     launch = ["code"]
     match = { class = "^Code$" }
 `
-	if _, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil); err == nil ||
+	if err := loadErr(write(t, t.TempDir(), "far.toml", body), nil); err == nil ||
 		!strings.Contains(err.Error(), "[target.remote] holds") {
 		t.Errorf("err = %v, want \"home\" under [target.remote] refused in a link file too", err)
 	}
@@ -449,15 +429,12 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 // internal/checkout refuses to clone here (decisions.md D83).
 func TestALinkKeepsTheHostsGitURL(t *testing.T) {
 	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:hk9890/far.git\"\n" + link
-	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err != nil {
-		t.Fatalf("LoadProject: %v", err)
-	}
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	if p.GitURL != "git@github.com:hk9890/far.git" {
 		t.Errorf("git_url = %q, want the host's", p.GitURL)
 	}
 	bad := "path = \"/srv/far\"\ngit_url = \"git@github.com:$(id).git\"\n" + link
-	if _, err := config.LoadProject(write(t, t.TempDir(), "bad.toml", bad), nil); err == nil {
+	if err := loadErr(write(t, t.TempDir(), "bad.toml", bad), nil); err == nil {
 		t.Error("a git_url a link records is validated as any other")
 	}
 }
@@ -492,15 +469,22 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 		{"whitespace", "build box", "whitespace"},
 	} {
 		body := strings.Replace(link, `host = "buildbox"`, `host = "`+tc.host+`"`, 1)
-		_, err := config.LoadProject(write(t, t.TempDir(), tc.name+".toml", body), nil)
+		err := loadErr(write(t, t.TempDir(), tc.name+".toml", body), nil)
 		if err == nil || !strings.Contains(err.Error(), "remote.host:") || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want one naming remote.host and %q", tc.name, err, tc.want)
 		}
 	}
 	for _, host := range []string{"buildbox", "hans@build.example.com", "10.0.0.7"} {
 		body := strings.Replace(link, `host = "buildbox"`, `host = "`+host+`"`, 1)
-		if _, err := config.LoadProject(write(t, t.TempDir(), "ok.toml", body), nil); err != nil {
+		if err := loadErr(write(t, t.TempDir(), "ok.toml", body), nil); err != nil {
 			t.Errorf("%s: %v", host, err)
 		}
 	}
+}
+
+// loadErr is every reason a file did not load whole, joined: what LoadProject
+// returned as its error before a project file's mistake stopped costing the
+// project, or the set, more than the part that is wrong (decisions.md D85).
+func loadErr(path string, shared []map[string]any) error {
+	return errors.Join(config.Problems(config.LoadProject(path, shared))...)
 }

@@ -58,3 +58,11 @@ Reserve errors for a tool that misbehaved.
 
 A probe that fails reports `StatusUnknown`. One broken harness must not blank
 the dashboard.
+
+**A refusal disables the smallest thing that is wrong** (`docs/design/decisions.md`
+D85). A rule about one target refuses that target, through
+`core.Project.Refuse`; a rule about the project sets `Project.Invalid`; nothing
+refuses the set. Add a rule to `config.validateTargets` unless it is about the
+project as a whole, in which case `config.validateProject`. Both keep the
+project loaded and listed, so every reason stays readable in the surface and in
+`revier doctor`.

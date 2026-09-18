@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestRenderExpandsEveryTemplatedField(t *testing.T) {
 		}},
 	}
 
-	out, err := core.Render(p)
+	out, err := renderAll(p)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestRenderDoesNotMutateInput(t *testing.T) {
 			Window: &revier.Realization{Name: "{{.Name}}", Launch: []string{"a"}, Match: revier.Match{Class: "^{{.Name}}$"}},
 		}},
 	}
-	if _, err := core.Render(p); err != nil {
+	if _, err := renderAll(p); err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	if p.Targets[0].Window.Name != "{{.Name}}" {
@@ -88,7 +89,7 @@ func TestRenderRejectsAMissingKey(t *testing.T) {
 			Window: &revier.Realization{Launch: []string{"{{.Vars.absent}}"}, Match: revier.Match{Class: "^x$"}},
 		}},
 	}
-	_, err := core.Render(p)
+	_, err := renderAll(p)
 	if err == nil {
 		t.Fatal("want an error for a missing key")
 	}
@@ -105,7 +106,7 @@ func TestRenderLeavesPlainStringsAlone(t *testing.T) {
 			Window: &revier.Realization{Launch: []string{"code", "/plain/path"}, Match: revier.Match{Class: "^code$"}},
 		}},
 	}
-	out, err := core.Render(p)
+	out, err := renderAll(p)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -124,7 +125,7 @@ func TestRenderFillsDirFromTheProjectPath(t *testing.T) {
 			{Name: "notes", Runtime: &revier.Realization{Dir: "{{.Path}}/docs", Launch: []string{"sh"}, Match: revier.Match{Title: "^n$"}}},
 		},
 	}
-	out, err := core.Render(p)
+	out, err := renderAll(p)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -165,7 +166,7 @@ func TestRenderFillsEveryPanelDirFromItsRealization(t *testing.T) {
 			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}},
 		}}},
 	}
-	out, err := core.Render(p)
+	out, err := renderAll(p)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -199,7 +200,7 @@ func TestRenderRejectsAnArgumentThatRendersToNothing(t *testing.T) {
 				Window: &revier.Realization{Launch: tc.launch, Match: revier.Match{Class: "^Code$"}},
 			}},
 		}
-		_, err := core.Render(p)
+		_, err := renderAll(p)
 		if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "editor") {
 			t.Errorf("%s: err = %v, want one naming the target and %q", name, err, tc.want)
 		}
@@ -214,7 +215,7 @@ func TestRenderRejectsAnArgumentThatRendersToNothing(t *testing.T) {
 			Window: &revier.Realization{Launch: []string{"code", "{{if .Path}}{{.Path}}{{end}}"}, Match: revier.Match{Class: "^Code$"}},
 		}},
 	}
-	if _, err := core.Render(guarded); err == nil {
+	if _, err := renderAll(guarded); err == nil {
 		t.Error("a guarded argument still renders to nothing, and is still refused")
 	}
 
@@ -225,7 +226,7 @@ func TestRenderRejectsAnArgumentThatRendersToNothing(t *testing.T) {
 			Window: &revier.Realization{Launch: []string{"code", "{{.Path}}"}, Match: revier.Match{Class: "^Code$"}},
 		}},
 	}
-	out, err := core.Render(p)
+	out, err := renderAll(p)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -246,7 +247,15 @@ func TestRenderLeavesAnEmptyFieldNoArgumentRenders(t *testing.T) {
 			Runtime: &revier.Realization{Launch: []string{"ssh", "{{.Name}}"}, Match: revier.Match{Title: "^session:far$"}},
 		}},
 	}
-	if _, err := core.Render(p); err != nil {
+	if _, err := renderAll(p); err != nil {
 		t.Errorf("Render: %v", err)
 	}
+}
+
+// renderAll is core.Render with its per-target errors joined: these tests ask
+// what a project renders to, not which of its targets a failure belongs to,
+// which TestPrepareReportsBadPatternsAndTemplates covers.
+func renderAll(p revier.Project) (revier.Project, error) {
+	out, errs := core.Render(p)
+	return out, errors.Join(errs...)
 }

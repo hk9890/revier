@@ -63,6 +63,8 @@ revier go <target> [-p name]  run-or-raise a target; pressing it again returns h
 revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
 revier status                 which project this directory resolves to
+revier doctor                 every project file that did not load whole, with
+                              the edit that fixes each problem
 revier keys status [--json]   the desktop keys revier wants, and who holds each
 revier keys install [--force] claim the desktop keys
 revier keys uninstall         release the keys revier holds
@@ -298,6 +300,12 @@ where you came from.** A target is logical — `ctrl+shift+d` means "diff viewer
 in every project that declares one. What it resolves to depends on the host that
 can provide it: a Meld window on a desktop, `nvim -d` in a pane over SSH. The
 key and the promise do not change.
+
+A mistake in a project file disables only what is wrong with it. A bad target
+reports `invalid` and its key says why when pressed; a bad file is still
+listed, with the reason; every other project is untouched, and the surface and
+the desktop keys keep working. `revier doctor` prints every problem with the
+edit that fixes it.
 
 ## Building
 

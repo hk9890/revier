@@ -19,10 +19,7 @@ import (
 // config.Load does for a real project file.
 func prepared(t *testing.T, p revier.Project) core.Project {
 	t.Helper()
-	out, err := core.PrepareProject(p)
-	if err != nil {
-		t.Fatalf("PrepareProject: %v", err)
-	}
+	out := core.PrepareProject(p)
 	return out
 }
 
@@ -219,13 +216,14 @@ func TestGoRejectsUnknownTarget(t *testing.T) {
 }
 
 // A match that constrains nothing would select whichever instance the host
-// happened to list first, so it is refused at load rather than acted on.
+// happened to list first, so the target that declares one is refused. The
+// refusal is that target's: the project keeps every other target.
 func TestPrepareRejectsUnboundedMatch(t *testing.T) {
 	p := revier.Project{Name: "loose", Targets: []revier.Target{
 		{Name: "loose", Runtime: &revier.Realization{Launch: []string{"x"}}},
 	}}
 
-	_, err := core.PrepareProject(p)
+	err := core.PrepareProject(p).TargetErr(0)
 	if !errors.Is(err, core.ErrUnboundedMatch) {
 		t.Fatalf("err = %v, want ErrUnboundedMatch", err)
 	}
@@ -234,9 +232,9 @@ func TestPrepareRejectsUnboundedMatch(t *testing.T) {
 	}
 }
 
-// A pattern that does not parse and a template that does not render are load
-// failures naming the project, not keystroke failures and not a silently
-// unavailable project on the dashboard.
+// A pattern that does not parse and a template that does not render refuse
+// their own target, naming it and the realization. Neither is a keystroke
+// failure, and neither costs the project its other targets.
 func TestPrepareReportsBadPatternsAndTemplates(t *testing.T) {
 	cases := []struct {
 		name string
@@ -249,11 +247,15 @@ func TestPrepareReportsBadPatternsAndTemplates(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := revier.Project{Name: "broken", Targets: []revier.Target{{Name: "home", Home: true, Window: &tc.real}}}
-			_, err := core.Prepare([]revier.Project{p})
+			out := core.Prepare([]revier.Project{p})
+			if len(out) != 1 {
+				t.Fatalf("%d projects, want the one it was given", len(out))
+			}
+			err := out[0].TargetErr(0)
 			if err == nil {
 				t.Fatal("want an error")
 			}
-			for _, want := range []string{tc.want, `"broken"`, `"home"`} {
+			for _, want := range []string{tc.want, `"home"`} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q should mention %q", err, want)
 				}

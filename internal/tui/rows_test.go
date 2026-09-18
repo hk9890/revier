@@ -188,12 +188,9 @@ func TestAnActionClearsTheQuery(t *testing.T) {
 // directory is missing with nothing to clone from is refused.
 func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
-	homeless, err := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
+	homeless := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
 		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	m := typed(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
 	m, cmd := press(m, "enter")
 	if cmd != nil {
@@ -460,13 +457,10 @@ func longNamedWorld(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, *core.
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
 	}}}
-	projects, err := core.Prepare([]revier.Project{{Name: longName, Path: "/p/x", Targets: []revier.Target{
+	projects := core.Prepare([]revier.Project{{Name: longName, Path: "/p/x", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:x", Launch: []string{"x"}, Match: revier.Match{Title: "^session:x$"}}},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
 	return rt, nil, c, projects
 }
@@ -598,15 +592,12 @@ func TestAStoppedTargetSaysStopped(t *testing.T) {
 // table's right column is agent state only, and the targets are the pane's.
 func TestARunningRowDoesNotNameItsOpenTargets(t *testing.T) {
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
-	projects, err := core.Prepare([]revier.Project{{Name: "alpha", Path: t.TempDir(), Targets: []revier.Target{
+	projects := core.Prepare([]revier.Project{{Name: "alpha", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:alpha", Launch: []string{"x"}, Match: revier.Match{Title: "^session:alpha$"}}},
 		{Name: "editor", Window: &revier.Realization{
 			Launch: []string{"code"}, Match: revier.Match{Class: "^code-alpha$"}}},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	rt.Add("session:alpha", "kitty")
 	wm.Add("editor", "code-alpha")
 	m := resize(refreshed(t, &core.Core{Runtime: rt, Window: wm}, projects, stateWith(t, nil), nil), 96, 20)

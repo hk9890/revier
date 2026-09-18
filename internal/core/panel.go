@@ -215,6 +215,11 @@ func (c *Core) holds(snap snapshot, p Project, name revier.TargetName, bound Bin
 // runtime can open it, and its ref is the instance that holds it while the tab
 // is open. The instance's agents are its own target's to report.
 func (c *Core) tabView(snap snapshot, p Project, i int, bound Bindings, tv revier.TargetView) revier.TargetView {
+	// A tab never reaches resolveAt, so its own refusal is read here.
+	if err := p.compiled[i].err; err != nil {
+		tv.Reason = err.Error()
+		return tv
+	}
 	if _, ok := c.Runtime.(revier.PanelOpener); !ok {
 		return tv
 	}

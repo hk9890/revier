@@ -77,10 +77,7 @@ func benchmarkSurvey(b *testing.B, n int) {
 	c := benchCore(n)
 	// Preparation is load-time work and stays outside the timed loop: the
 	// benchmark measures what a refresh costs, and a refresh prepares nothing.
-	projects, err := core.Prepare(benchProjects(n))
-	if err != nil {
-		b.Fatal(err)
-	}
+	projects := core.Prepare(benchProjects(n))
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -102,9 +99,7 @@ func BenchmarkPrepare(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := core.PrepareProject(p); err != nil {
-			b.Fatal(err)
-		}
+		core.PrepareProject(p)
 	}
 }
 

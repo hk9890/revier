@@ -241,9 +241,12 @@ func editProject(file string, shared []map[string]any, change func([]string, pro
 		return core.Project{}, fmt.Errorf("%s: %w", file, err)
 	}
 	text := []byte(strings.Join(lines, "\n"))
-	p, err := loadProject(file, text, shared)
-	if err != nil {
-		return core.Project{}, fmt.Errorf("not written: %w", err)
+	// Loading no longer refuses a project, so the edit is what refuses: an
+	// edit the surface makes must leave the file whole, where a file the user
+	// wrote by hand is loaded as it is and reports what is wrong with it.
+	p := loadProject(file, text, shared)
+	if probs := Problems(p); len(probs) > 0 {
+		return core.Project{}, fmt.Errorf("not written: %w", errors.Join(probs...))
 	}
 	if check != nil {
 		decoded, err := decodeProject(text, shared)

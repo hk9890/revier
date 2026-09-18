@@ -52,6 +52,8 @@ usage:
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
   revier status                 which project this directory resolves to
+  revier doctor                 every project file that did not load whole, and
+                                what to do about each problem
   revier keys status [--json]   the desktop chords revier wants, and who holds them
   revier agent wait <agent> --until <status> [--timeout s]
                                 block until an agent reaches a status
@@ -130,6 +132,7 @@ func openLog(args []string) {
 	if len(args) > 0 {
 		cmd = args[0]
 	}
+	invoked = cmd
 	level := slog.LevelInfo
 	if cmd == "list" {
 		level = slog.LevelWarn
@@ -143,6 +146,10 @@ func openLog(args []string) {
 		fmt.Fprintf(os.Stderr, "revier: warning: no log: %v\n", err)
 	}
 }
+
+// invoked is the command this process is running, as openLog read it. Only
+// the configuration warning reads it, and only to stay out of `revier list`.
+var invoked string
 
 // outcome is the exit status a failed command ends with, and whether its
 // message is still to be printed.
@@ -168,6 +175,9 @@ func outcome(err error) (status int, say bool) {
 	// `revier each` has already named every project it failed in.
 	case errors.Is(err, errEachFailed):
 		return exitEachFailed, false
+	// `revier doctor` is its own report; a line here would add nothing to it.
+	case errors.Is(err, errSilent):
+		return 1, false
 	}
 	return 1, true
 }
@@ -187,6 +197,11 @@ func run(args []string) error {
 		return nil
 	case "new":
 		return cmdNew(args)
+	case "doctor":
+		// No app: what is wrong with the configuration is a question about
+		// files, and probing the desktop for hosts would be a second way for
+		// the command that diagnoses failures to fail.
+		return cmdDoctor(os.Stdout, args)
 	case "each":
 		// No app: a run in every project needs the project list and the state
 		// root, and no host. Probing the desktop would be work, and a way to
@@ -379,6 +394,8 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 func runState(v revier.ProjectView) string {
 	switch {
+	case v.Invalid != "":
+		return "invalid"
 	case v.Unreachable != "":
 		return "unreachable"
 	case v.Running:
@@ -405,6 +422,8 @@ func targetSummary(v revier.ProjectView) string {
 	for _, t := range v.Targets {
 		mark := " "
 		switch {
+		case !t.Available && t.Reason != "":
+			mark = "!" // its own configuration refused it
 		case !t.Available:
 			mark = "x" // no host on this machine can realize it
 		case !t.Ref.IsZero():
