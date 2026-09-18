@@ -878,6 +878,20 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 	return c.buildReport(ctx, projects, bound, attached)
 }
 
+// Unsurveyed is the view of every project before any host has answered:
+// what the files alone say - the name, the path and whether it is here,
+// each target and whether a host here could realize it - with nothing
+// running and no agent. The TUI draws its first frame from it, so the names
+// are on the screen while the hosts are listed and a remote host is asked,
+// which is the slow part of a survey. It lists nothing and asks nobody.
+func (c *Core) Unsurveyed(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings) []revier.ProjectView {
+	views := make([]revier.ProjectView, 0, len(projects))
+	for _, p := range projects {
+		views = append(views, c.view(ctx, snapshot{}, p, bound[p.Name], nil))
+	}
+	return views
+}
+
 func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
 	// The remote hosts are asked while the local ones are listed: a round
 	// trip to another machine is the slow part, and the local listing need not

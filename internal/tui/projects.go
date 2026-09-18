@@ -14,9 +14,13 @@ import (
 )
 
 // projectItem is one project in the list. The view is carried whole, so the
-// delegate renders from the survey and never looks anything up.
+// delegate renders from the survey and never looks anything up. Before the
+// first survey answers the view is the files' alone, and the row says so by
+// carrying no mark: a stopped mark on ninety rows for half a second would be
+// a claim, and a wrong one for every project that is open.
 type projectItem struct {
-	view revier.ProjectView
+	view       revier.ProjectView
+	unsurveyed bool
 }
 
 // FilterValue is what the fuzzy filter matches. Only the name: a path or an
@@ -27,6 +31,7 @@ func (i projectItem) FilterValue() string { return string(i.view.Project.Name) }
 func (i projectItem) rowView() revier.ProjectView { return i.view }
 func (i projectItem) rowPath() string             { return contractHome(i.view.Project.Path) }
 func (i projectItem) rowNote() string             { return "" }
+func (i projectItem) rowUnsurveyed() bool         { return i.unsurveyed }
 
 // tableRow is an item the project table draws: the projects here, and the
 // projects of a host in the link dialog. The two differ in whose home a path
@@ -35,6 +40,7 @@ type tableRow interface {
 	rowView() revier.ProjectView
 	rowPath() string
 	rowNote() string
+	rowUnsurveyed() bool
 }
 
 // newProjectList is the picker. Filtering is on but its own filter bar is
@@ -94,7 +100,10 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// The mark says whether the project is open, and nothing else: what its
 	// agents are doing is the right-hand side's, as counts by state.
 	mark, markStyle, name := th.Glyphs.Stopped, th.NameDim, th.NameDim
-	if v.Running {
+	switch {
+	case it.rowUnsurveyed():
+		mark = strings.Repeat(" ", lipgloss.Width(mark))
+	case v.Running:
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
 	}
 	// A row with a note of its own is one Enter has nothing to do on.
@@ -337,7 +346,7 @@ func (m *Model) reload() {
 
 	items := make([]list.Item, 0, len(m.views))
 	for _, v := range m.views {
-		items = append(items, projectItem{view: v})
+		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed})
 	}
 	// The command SetItems returns re-runs the filter asynchronously. The
 	// filter is re-applied synchronously below instead, so the list is correct
@@ -348,7 +357,7 @@ func (m *Model) reload() {
 	}
 
 	switch {
-	case hadSelection:
+	case hadSelection && m.placed:
 		m.selectName(was)
 	case m.start != "":
 		// The first survey: open on the project of the working directory, the
@@ -356,6 +365,10 @@ func (m *Model) reload() {
 		// that the user's own selection wins.
 		m.selectName(m.start)
 	}
+	// The rows before the first survey are the files' alone, in file order,
+	// and the cursor on them is nobody's choice: the first survey puts it on
+	// the top row, which is the project that needs the user most.
+	m.placed = m.surveyed
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.

@@ -174,10 +174,13 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	}
 }
 
-// bubbletea paints once before the first survey answers. That frame must not
-// say there are no projects when there are ninety, and must not carry the list
-// component's own empty text.
-func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
+// bubbletea paints before the first survey answers, and the survey is a
+// round trip to every linked host. Those frames list every project from its
+// file, with no mark and no count, because the names are what the surface
+// is opened for; the rule says the survey is pending rather than counting
+// what is not known yet, and nothing says there are no projects when there
+// are ninety. The survey lays the marks over the same rows.
+func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	_, _, c, projects := world(t, 90)
 	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 
@@ -190,10 +193,31 @@ func TestTheFrameBeforeTheFirstSurveyClaimsNothing(t *testing.T) {
 	if head := ruleLine(m); !strings.Contains(head, "surveying") {
 		t.Errorf("rule = %q, want it to say the survey is pending", head)
 	}
+	first := rows(m)
+	if len(first) == 0 || !strings.Contains(first[0], "project-00") {
+		t.Errorf("first frame rows = %q, want the projects listed from their files", first)
+	}
+	glyphs := theme.Default().Glyphs
+	if body := listColumn(m); strings.Contains(body, glyphs.Stopped) || strings.Contains(body, glyphs.Running) {
+		t.Errorf("first frame marks projects open or stopped before any host answered:\n%s", body)
+	}
 	m = survey(m)
 	if strings.Contains(ruleLine(m), "surveying") || !strings.Contains(ruleLine(m), "90/90") {
 		t.Errorf("after the survey the counts should be real:\n%s", m.View())
 	}
+	if body := listColumn(m); !strings.Contains(body, glyphs.Running) {
+		t.Errorf("after the survey the open project should carry its mark:\n%s", body)
+	}
+}
+
+// listColumn is the rows' left side, without the pane beside them.
+func listColumn(m tui.Model) string {
+	var out []string
+	for _, row := range rows(m) {
+		left, _, _ := strings.Cut(row, "│")
+		out = append(out, left)
+	}
+	return strings.Join(out, "\n")
 }
 
 // With no project files the surface says so, and says where they go, rather

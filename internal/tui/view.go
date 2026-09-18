@@ -248,9 +248,10 @@ func (m Model) ruleCount() string {
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints
-// once before the first survey answers, and on that frame every count is zero
-// and the list is empty, which says there are no projects when there are
-// ninety. With no project configured there is nothing to wait for.
+// before the first survey answers, and on those frames the rows are the
+// files' alone: the rule says the survey is pending rather than counting
+// what is not yet known. With no project configured there is nothing to
+// wait for.
 func (m Model) ready() bool {
 	return m.surveyed || len(m.projects) == 0
 }
