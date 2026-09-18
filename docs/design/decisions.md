@@ -525,3 +525,14 @@ desktop was the thing misbehaving. A survey now stands over the hosts that
 answered: the failed host's targets show as unknown with its reason, its
 refs are not taken as gone, and a press on one of them is refused with that
 reason. The other hosts' targets go as before.
+
+### D90 — opening a project is one decision, made in the core
+
+The command line and the surface each decided what opening a project means,
+and disagreed: on a missing checkout with nothing to clone from, `open`
+refused while Enter raised a running workspace; on no home target, `open`
+refused with a reason while Enter moved the cursor and said nothing.
+`core.Open` decides once - refuse with the reason, clone, or go - and both
+render it. A running workspace is raised, since raising touches no directory;
+a fresh start into a missing directory is refused; a project with no home
+shows the reason, and the surface also moves to the targets it has.

@@ -17,8 +17,8 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os/exec"
 	"sort"
@@ -31,7 +31,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
@@ -1010,36 +1009,23 @@ func (m Model) act() (Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if home, ok := p.Home(); ok {
-		// A project its file refused as a whole is not cloned or opened:
-		// the reason is the one thing to do about it (decisions.md D85), and
-		// a git_url the load refused must not reach git.
-		if p.Invalid != nil {
-			m.err = p.Invalid
-			return m, nil
+	// What Enter does is the core's decision, the one `revier open` makes
+	// (decisions.md D90); the surface renders it. A project with no home has
+	// nothing to open, so the cursor goes to what it does have, with the
+	// reason in the footer.
+	home, _ := p.Home()
+	open, err := core.Open(p, func() bool { return v.Running })
+	if err != nil {
+		m.err = err
+		if errors.Is(err, core.ErrNoHome) {
+			return m.focusOn(focusTargets), nil
 		}
-		// A remote project's checkout is its host's: the agent panel
-		// opened here runs `revier agent exec` there, which clones
-		// (decisions.md D84).
-		if p.Remote != nil {
-			return m, m.goTarget(p, home.Name)
-		}
-		if !v.PathExists && p.GitURL != "" {
-			return m, m.clone(p, home.Name)
-		}
-		if !v.PathExists && !v.Running {
-			// Nothing to clone from, and nothing to raise: refused as
-			// `revier open` refuses it, rather than started in whatever
-			// directory the runtime falls back to. The check is made
-			// again, as the directory may have appeared since the survey.
-			if _, err := checkout.Ensure(p.Project, io.Discard); err != nil {
-				m.err = err
-				return m, nil
-			}
-		}
-		return m, m.goTarget(p, home.Name)
+		return m, nil
 	}
-	return m.focusOn(focusTargets), nil
+	if open == core.OpenClone {
+		return m, m.clone(p, home.Name)
+	}
+	return m, m.goTarget(p, home.Name)
 }
 
 // goRow activates one row of the pane: an attached instance is focused
