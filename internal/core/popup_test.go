@@ -11,7 +11,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-var popupArgv = []string{"kitty", "--class", core.PopupClass, "-e", "revier"}
+func popupArgv(context.Context) []string {
+	return []string{"kitty", "--class", core.PopupClass, "-e", "revier"}
+}
 
 // A press with the popup open raises it where the user left it: no second
 // terminal, and no placement.
@@ -92,7 +94,7 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 		if err != nil {
 			t.Fatalf("width %d: Popup: %v", tc.width, err)
 		}
-		if len(wm.Opened) != 1 || !slices.Equal(wm.Opened[0].Launch, popupArgv) {
+		if len(wm.Opened) != 1 || !slices.Equal(wm.Opened[0].Launch, popupArgv(context.Background())) {
 			t.Fatalf("width %d: opened = %v, want one launch of the argv", tc.width, wm.Opened)
 		}
 		if ref.IsZero() || !slices.Equal(wm.Placements[ref.ID], tc.want) {

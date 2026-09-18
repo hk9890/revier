@@ -36,11 +36,14 @@ const (
 	popupPoll = 20 * time.Millisecond
 )
 
-// Popup raises the popup when it is open. Otherwise it launches argv, which
-// must start a terminal of class PopupClass running the surface, then raises
-// the new window and places it (decisions.md D76). The size is decided before
-// the launch, so the window moves once and is never resized after it shows.
-func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, error) {
+// Popup raises the popup when it is open. Otherwise it launches what argv
+// returns, which must start a terminal of class PopupClass running the
+// surface, then raises the new window and places it (decisions.md D76). The
+// size is decided before the launch, so the window moves once and is never
+// resized after it shows. argv is a function, asked only for a launch: what
+// it carries - the project the surface opens on - costs a listing the raise
+// must not pay.
+func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost
 	}
@@ -61,7 +64,7 @@ func (c *Core) Popup(ctx context.Context, argv []string) (revier.TargetRef, erro
 		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
 	}
 	if _, err := c.Window.Open(ctx, revier.Realization{
-		Launch: argv,
+		Launch: argv(ctx),
 		Match:  revier.Match{Class: "^" + PopupClass + "$"},
 	}); err != nil {
 		return revier.TargetRef{}, err

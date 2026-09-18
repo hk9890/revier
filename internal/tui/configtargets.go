@@ -451,13 +451,9 @@ func (m Model) confirmDropTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// setTargets takes what a change to the shared targets left: the targets for
-// the screen, and every project loaded with them, for the surface.
+// setTargets takes what a change to the shared targets left.
 func (m *Model) setTargets(w config.TargetsWritten) {
-	m.shared = w.Shared
-	m.targets, _ = config.DecodeTargets(w.Shared)
-	m.projects = w.Projects
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setFiles(w.Shared, w.Projects)
 }
 
 // describeTarget is a target's row note, on either screen: where it opens.
