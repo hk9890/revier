@@ -136,6 +136,30 @@ Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
 a restore acts on; it holds names, conversations and directories, never a host
 or an argv.
 
+## Drive a link without a host
+
+A link's panels run ssh, and the revier they start must be the one under
+test. Put a stand-in `ssh` first on PATH that runs the command line here with a
+second configuration, which is the host's:
+
+```bash
+H=$(mktemp -d); mkdir -p "$H/projects" "$H/state"            # the host: no runtime, it is reached over ssh alone
+printf '[hosts]\nruntime = ["none"]\nwindow = ["none"]\n' > "$H/config.toml"
+cp "$S/projects/demo.toml" "$H/projects/demo.toml"           # with `panels`: a `kind = "agent"` panel, launched as claude
+printf '[remote]\nhost = "fakehost"\nproject = "demo"\n' > "$S/projects/far.toml"
+printf '#!/bin/sh\nshift\nexec sh -c "$1"\n' > "$S/bin/loginsh"   # a login shell that keeps this PATH
+printf '#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done; shift; shift\nREVIER_CONFIG_HOME=%s REVIER_STATE_HOME=%s/state SHELL=%s/bin/loginsh exec sh -c "$1"\n' "$H" "$H" "$S" > "$S/bin/ssh"
+chmod +x "$S/bin/ssh" "$S/bin/loginsh"; ln -s "$PWD/bin/revier" "$S/bin/revier"
+
+./bin/revier open far                                        # two panes, each the stand-in ssh become the host's panel
+REVIER_CONFIG_HOME=$H ./bin/revier list --json demo          # the host's view: the agent under its tag, on host "proc"
+./bin/revier list --json far                                 # the view here: the same agent, by its pane here
+```
+
+The agent's pid for the session file is the process whose environment carries
+`REVIER_TAG`. `revier agent prompt`, `wait`, `new`, `session save` and
+`shutdown --agents` then run against `far` as they do against `demo`.
+
 ## Drive the TUI without a screen
 
 The TUI needs a terminal, and a tmux pane is one. Run it on a private server

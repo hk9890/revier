@@ -60,7 +60,9 @@ const (
 	AgentEmpty
 	// AgentUnresumable starts empty although a conversation was recorded: no
 	// probe here can resume that harness, or the panel it starts in runs
-	// another harness, whose command a resume flag would break.
+	// another harness, whose command a resume flag would break; or, for a
+	// link, the conversation or its directory is a word the panel's ssh
+	// cannot carry to the host.
 	AgentUnresumable
 	// AgentDirGone starts empty in the project, because the directory it
 	// worked in is gone - a worktree removed since the save. Resuming it
@@ -128,6 +130,8 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 
 	s := session.Session{Current: current}
 	var gaps SessionGaps
+	there, failed := c.conversationsThere(ctx, r.Views)
+	gaps.Failed = failed
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
@@ -167,6 +171,19 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			if !listed {
 				continue
 			}
+			if v.Project.Remote != nil {
+				// A link's agents are its host's to name, each under the panel
+				// here that shows it, in the order the runtime lists the panels.
+				for _, panel := range inst.Panels {
+					if a, ok := there[v.Project.Name][c.tagOf(panel)]; ok {
+						if a.Session == "" {
+							gaps.Unnamed++
+						}
+						targets[len(targets)-1].Agents = append(targets[len(targets)-1].Agents, a)
+					}
+				}
+				continue
+			}
 			for _, panel := range inst.Panels {
 				// A tab's panel is its tab target's, and a restore of the
 				// instance would otherwise open it a second time.
@@ -188,7 +205,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	}
 
 	named, failed := c.conversations(ctx, agents)
-	gaps.Failed = failed
+	gaps.Failed = append(gaps.Failed, failed...)
 	for i, a := range agents {
 		if named[i].ID == "" {
 			gaps.Unnamed++
@@ -343,13 +360,13 @@ func resumesOf(t session.Target) []Resume {
 // is copied before anything is written to it: the realization arrives sharing
 // the prepared project's panels, and a restore must not edit the project every
 // later keypress reads.
-func (c *Core) resuming(real revier.Realization, resumes []Resume) (revier.Realization, []AgentOutcome, []Resume) {
+func (c *Core) resuming(real revier.Realization, resumes []Resume, link bool) (revier.Realization, []AgentOutcome, []Resume) {
 	if len(resumes) == 0 {
 		return real, nil, nil
 	}
 	var outcomes []AgentOutcome
 	var extra []Resume
-	real.Panels, outcomes, extra = c.layAgents(real.Panels, resumes)
+	real.Panels, outcomes, extra = c.layAgents(real.Panels, resumes, link)
 	return real, outcomes, extra
 }
 
@@ -369,8 +386,9 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if err != nil {
 		return nil
 	}
-	_, outcomes, extra := c.resuming(real, resumes)
-	_, added := c.agentTabs(host, real, extra)
+	link := p.Remote != nil
+	_, outcomes, extra := c.resuming(real, resumes, link)
+	_, added := c.agentTabs(host, real, extra, link)
 	return append(outcomes, added...)
 }
 
@@ -382,7 +400,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 // returned: each is added to the open instance as an agent tab, which is what
 // `revier agent new` adds, so an agent opened by hand beside a workspace comes
 // back the way it was opened.
-func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.PanelSpec, []AgentOutcome, []Resume) {
+func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool) ([]revier.PanelSpec, []AgentOutcome, []Resume) {
 	panels := append([]revier.PanelSpec(nil), layout...)
 	var outcomes []AgentOutcome
 	n := 0
@@ -390,7 +408,7 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.
 		if panels[i].Kind != revier.PanelAgent || n == len(resumes) {
 			continue
 		}
-		outcomes = append(outcomes, c.startAgent(&panels[i], resumes[n]))
+		outcomes = append(outcomes, c.startAgent(&panels[i], resumes[n], link))
 		n++
 	}
 	return panels, outcomes, resumes[n:]
@@ -408,7 +426,13 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume) ([]revier.
 // The conversation is resumed only into a panel that runs its harness: a
 // claude conversation laid over an opencode panel would start `opencode
 // --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
-func (c *Core) startAgent(spec *revier.PanelSpec, r Resume) AgentOutcome {
+//
+// A link's agent panel is an ssh onto the host, and the host resumes
+// (decisions.md D84).
+func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutcome {
+	if link {
+		return startLinkAgent(spec, r)
+	}
 	if r.Dir != "" && !dirExists(r.Dir) {
 		return AgentDirGone
 	}

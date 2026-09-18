@@ -101,24 +101,36 @@ func TestGoAgentWithoutTabsFocusesTheInstance(t *testing.T) {
 	}
 }
 
-// A link's agent is the host's: the host focuses its tab, by the panel and the
-// instance its own survey reported, and the pane onto the host is raised here.
-func TestGoAgentOnALinkFocusesOnTheHostAndRaisesThePane(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox")
+// A link's agent runs on its host and is shown by a panel here. The host
+// reports it under the tag that panel gave it - this machine's name and the
+// panel's pid - and the survey names it by the panel, so going to it is a focus
+// of that panel here and asks the host nothing.
+func TestALinksAgentIsReachedInThePanelThatShowsIt(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{
+		Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{
+			{Panel: "box.4242", Ref: revier.TargetRef{Host: "proc", ID: "session:far-there"}, State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention}},
+			{Panel: "laptop.77", Ref: revier.TargetRef{Host: "proc", ID: "session:far-there"}, State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}},
+		},
+	})
 	rt := hosttest.NewRuntime("rt")
-	pane := rt.Add("far", "")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
-	there := revier.TargetRef{Host: "kitty", ID: "/tmp/kitty-2/1"}
+	pane := rt.Add("far", "", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Command: []string{"ssh", "-t", "buildbox"}})
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
 
-	res, err := c.GoAgent(context.Background(), linkProject(t), revier.AgentView{Panel: "7", Ref: there}, nil)
-	if err != nil {
+	agents := agentsOf(t, c, p)
+	if len(agents) != 2 || agents[0].Panel != "9" || agents[0].Ref != pane || agents[0].State.Status != revier.StatusAttention {
+		t.Fatalf("agents = %+v, want the first in panel 9 of %v, waiting", agents, pane)
+	}
+	if _, err := c.GoAgent(context.Background(), p, agents[0], nil); err != nil {
 		t.Fatalf("GoAgent: %v", err)
 	}
-	want := hosttest.RemoteFocus{Address: "far-there:7", Ref: there}
-	if len(remote.Focused) != 1 || remote.Focused[0] != want {
-		t.Errorf("remote focused %+v, want %+v", remote.Focused, want)
+	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "9" {
+		t.Errorf("panel focuses = %v, want panel 9", rt.PanelFocuses)
 	}
-	if res.Target != "home" || res.Ref != pane {
-		t.Errorf("result = %+v, want the home pane %v", res, pane)
+
+	// The second was started from another machine: nothing here shows it.
+	if _, err := c.GoAgent(context.Background(), p, agents[1], nil); !errors.Is(err, core.ErrAgentElsewhere) {
+		t.Errorf("err = %v, want ErrAgentElsewhere", err)
 	}
 }

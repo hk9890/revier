@@ -108,6 +108,10 @@ Detection signals the adapters use:
 | gnome | `$XDG_CURRENT_DESKTOP` contains GNOME, `wctl` on PATH |
 | hyprland | `$HYPRLAND_INSTANCE_SIGNATURE` |
 
+The host that lists what `revier agent exec` started for a terminal on another
+machine is not selected: it is wired beside whichever runtime was, because it
+holds what no runtime does, and no target resolves to it (decisions.md D84).
+
 ## Package layout
 
 Where each package sits is the Layout table in

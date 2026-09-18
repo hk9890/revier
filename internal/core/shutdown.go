@@ -100,9 +100,9 @@ func Busy(plan []CloseStep) []CloseStep {
 // walks it.
 //
 // Each instance is closed once: one instance can back two targets, and a tab
-// target's ref is the instance that holds it. A remote project's agents are
-// its host's and are not closed from here; the pane onto the host is a
-// target here like any other.
+// target's ref is the instance that holds it. A remote project's agent is
+// closed by closing the panel here that shows it, which ends the ssh and with
+// it the agent; one no panel here shows is its host's alone.
 func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownScope) []CloseStep {
 	instances := make(map[string]revier.Instance, len(r.Instances))
 	for _, inst := range r.Instances {
@@ -127,10 +127,7 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 		if only != "" && v.Project.Name != only {
 			continue
 		}
-		var local []revier.AgentView
-		if v.Project.Remote == nil {
-			local = v.Agents
-		}
+		local := c.agentsHere(v)
 		if scope == ShutdownAgents {
 			for _, a := range local {
 				if k := key(a.Ref) + "\x00" + string(a.Panel); !seen[k] && !seen[key(a.Ref)] {

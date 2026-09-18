@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -33,9 +34,11 @@ func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 
 // link fills in what a link file leaves to be derived (decisions.md D41).
 // The project's name on the host is the link's own name unless the file
-// says otherwise. The home target is the pane that reaches the workspace: an
-// ssh onto the host that runs `revier open` there and ends attached to it.
-// A link may declare further targets, which run here and reach the host
+// says otherwise. The home target is the workspace as it is laid out here: an
+// agent panel and a shell panel, each an ssh onto the host that runs `revier
+// agent exec` or `revier shell exec` there (decisions.md D84). Which harness
+// and which directory is the host's project file's to say. A link may declare
+// further targets, which run here and reach the host
 // themselves - an editor over ssh, a page (decisions.md D82).
 //
 // A home target the link already has - its own, or the remote part of the
@@ -51,9 +54,12 @@ func link(p *revier.Project) {
 	}
 	title := "session:" + string(p.Name)
 	pane := revier.Realization{
-		Name:   title,
-		Launch: []string{"ssh", "-t", p.Remote.Host, "revier", "open", string(p.Remote.Project), "--attach"},
-		Match:  revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"},
+		Name: title,
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: ssh.PanelCommand(p.Remote.Host, p.Remote.Project, "agent")},
+			{Kind: revier.PanelShell, Command: ssh.PanelCommand(p.Remote.Host, p.Remote.Project, "shell")},
+		},
+		Match: revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"},
 	}
 	for i, t := range p.Targets {
 		if !t.Home {
@@ -81,7 +87,7 @@ func fillPane(r *revier.Realization, pane revier.Realization) {
 		r.Name = pane.Name
 	}
 	if len(r.Launch) == 0 && len(r.Panels) == 0 {
-		r.Launch = pane.Launch
+		r.Panels = pane.Panels
 	}
 	if r.Match.IsZero() {
 		r.Match = pane.Match

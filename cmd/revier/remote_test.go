@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -23,7 +24,10 @@ func remoteProject(t *testing.T) core.Project {
 	t.Helper()
 	p, err := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "far", Launch: []string{"ssh", "-t", "buildbox", "revier", "open", "far", "--attach"}, Match: revier.Match{Title: "^far$"}}},
+			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: ssh.PanelCommand("buildbox", "far", "agent")},
+				{Kind: revier.PanelShell, Command: ssh.PanelCommand("buildbox", "far", "shell")},
+			}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -97,25 +101,6 @@ func TestListTableShowsTheHostAndAnUnreachableOne(t *testing.T) {
 	}
 }
 
-// An agent of a remote project is driven by the revier on its host: the
-// address goes there as typed.
-func TestRemoteForFindsTheHostOfARemoteProjectsAgent(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
-
-	r, there, err := a.remoteFor("far:home")
-	if err != nil || r == nil || r.Name() != "buildbox" || there != "far:home" {
-		t.Errorf("remoteFor(far:home) = %v, %q, %v; want buildbox and the address as the host knows it", r, there, err)
-	}
-	if r, _, err := a.remoteFor("demo"); err != nil || r != nil {
-		t.Errorf("remoteFor(demo) = %v, err %v; want a local project", r, err)
-	}
-	if _, _, err := a.remoteFor("nope:home"); err == nil {
-		t.Error("remoteFor(nope:home): want the unknown project refused")
-	}
-}
-
 // An action on a remote project runs on the host, through the remote's
 // command, and needs no action of that name in the configuration here.
 func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
@@ -132,12 +117,11 @@ func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
 	}
 }
 
-// An agent or a shell asked for a remote project opens on the host, whose
-// workspace holds it: by -p, with a target only the host has; or by the panel
-// of the ssh pane a key was pressed in, where the host picks its own target
-// and a --dir, a path on this machine, is neither sent nor checked. Nothing
-// opens here.
-func TestTabsOfARemoteProjectOpenOnTheHost(t *testing.T) {
+// An agent or a shell asked for a remote project opens here, as a tab of the
+// link's workspace that reaches the host itself: by -p, or by the panel a key
+// was pressed in. A --dir is a path on this machine and is dropped, not
+// checked. The host is asked nothing.
+func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	rt := hosttest.NewRuntime("tmux")
 	pane := rt.Add("far", "", revier.Panel{ID: "%7", Kind: revier.PanelTool})
@@ -145,26 +129,24 @@ func TestTabsOfARemoteProjectOpenOnTheHost(t *testing.T) {
 	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
 	ctx := context.Background()
 
-	if err := a.newAgent(ctx, "far:work", "", "", "abc-123"); err != nil {
-		t.Fatalf("agent new -p far:work: %v", err)
+	if err := a.newAgent(ctx, "far", "", "", "abc-123"); err != nil {
+		t.Fatalf("agent new -p far: %v", err)
 	}
-	if err := a.newAgent(ctx, "", "%7", t.TempDir(), ""); err != nil {
-		t.Fatalf("agent new --panel: %v", err)
-	}
-	// A --dir that is no directory here is not the host's concern.
 	if err := a.newShell(ctx, "", "%7", "/srv/only-on-the-host"); err != nil {
 		t.Fatalf("shell new --panel: %v", err)
 	}
-	want := []hosttest.RemoteTab{
-		{Kind: revier.PanelAgent, Address: "far:work", Resume: "abc-123"},
-		{Kind: revier.PanelAgent, Address: "far"},
-		{Kind: revier.PanelShell, Address: "far"},
+	if len(rt.Tabs) != 2 || rt.Tabs[0].Ref != pane || rt.Tabs[1].Ref != pane {
+		t.Fatalf("tabs = %+v, want two in %v", rt.Tabs, pane)
 	}
-	if !slices.Equal(remote.Tabs, want) {
-		t.Errorf("remote tabs = %+v, want %+v", remote.Tabs, want)
+	agent, shell := rt.Tabs[0].Real.Panels[0], rt.Tabs[1].Real.Panels[0]
+	if agent.Kind != revier.PanelAgent || !slices.Equal(agent.Command[len(agent.Command)-2:], []string{"--resume", "abc-123"}) {
+		t.Errorf("agent tab = %+v, want the agent panel resuming abc-123", agent)
 	}
-	if len(rt.Tabs) != 0 {
-		t.Errorf("local tabs = %+v in %+v, want none", rt.Tabs, pane)
+	if shell.Kind != revier.PanelShell || shell.Dir != "" {
+		t.Errorf("shell tab = %+v, want the shell panel with no directory here", shell)
+	}
+	if len(remote.Asked) != 0 {
+		t.Errorf("the host was asked %v, want nothing", remote.Asked)
 	}
 }
 

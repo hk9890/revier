@@ -167,8 +167,17 @@ type SessionID string
 // worktrees, and resumed anywhere else it carries on in the wrong checkout.
 // Either is empty when the harness does not say.
 type Conversation struct {
-	ID  SessionID
-	Dir string
+	ID  SessionID `json:"id,omitempty"`
+	Dir string    `json:"dir,omitempty"`
+}
+
+// Titled is an optional capability of an AgentProbe, detected by type
+// assertion. Activity is the activity line a harness writes into its panel's
+// title, read from the title alone: what a survey shows for an agent whose
+// process is on another machine, where the title crosses the ssh and nothing
+// else does (decisions.md D84). A probe without it shows no activity there.
+type Titled interface {
+	Activity(title string) string
 }
 
 // Resumable is an optional capability of an AgentProbe, detected by type

@@ -41,8 +41,12 @@ var (
 	ErrNoWriter = errors.New("runtime cannot type into a panel")
 )
 
-// AgentPoll is how often Wait and Prompt read an agent again.
-const AgentPoll = 500 * time.Millisecond
+// AgentPoll is how often Wait and Prompt read an agent again. LinkPoll is
+// the same for a link's agent, whose every read is an ssh to its host.
+const (
+	AgentPoll = 500 * time.Millisecond
+	LinkPoll  = 2 * time.Second
+)
 
 // PromptConfirmPolls is how many polls Prompt watches an idle agent for the
 // turn it asked for. A runtime reports that text was delivered, never that it
@@ -55,6 +59,17 @@ type Agent struct {
 	Ref   revier.TargetRef
 	Panel revier.Panel
 	State revier.AgentState
+
+	// link is set for an agent of a link: its state is its host's to say.
+	link *Project
+}
+
+// Poll is how often the agent is read again: over ssh for a link's.
+func (a Agent) Poll() time.Duration {
+	if a.link != nil {
+		return LinkPoll
+	}
+	return AgentPoll
 }
 
 // untils are the statuses a wait can ask for. "stopped" is an agent doing no
@@ -105,6 +120,9 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 		where, only = where+":"+addr, revier.TargetName(addr)
 	}
 	scope := c.running(snap, p, bound, only)
+	if p.Remote != nil {
+		return c.linkAgent(ctx, p, addr, only, scope, snap)
+	}
 	switch {
 	case addr != "" && only == "":
 		return c.panel(ctx, scope, p.Name, addr)
@@ -202,6 +220,10 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 				out = append(out, c.heldTab(snap, p, i, bound)...)
 			}
 			continue
+		}
+		if inst, ok := c.served(snap, p, i); ok && !seen[key(inst.Ref)] {
+			seen[key(inst.Ref)] = true
+			out = append(out, held{target: t.Name, inst: inst})
 		}
 		host, _, m, err := c.resolveAt(p, i)
 		if err != nil {
@@ -317,8 +339,11 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 
 // reread reads the agent's panel again, from one listing of its host.
 func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
+	if a.link != nil {
+		return c.rereadLink(ctx, a)
+	}
 	var host revier.Host
-	for _, h := range c.hosts() {
+	for _, h := range c.allHosts() {
 		if h.Name() == a.Ref.Host {
 			host = h
 		}

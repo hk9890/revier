@@ -162,9 +162,9 @@ func (m Model) agentRows() []agentRow {
 	return out
 }
 
-// goAgentRow brings the agent of one row of the Agents section to the front.
-// For a link the pane onto its host is raised as well, or launched, and
-// settled as a Go settles it.
+// goAgentRow brings the agent of one row of the Agents section to the front:
+// the panel here that shows it, for a link's agent too, unless the link's
+// workspace is still coming up.
 func (m Model) goAgentRow(i int) tea.Cmd {
 	rows := m.agentRows()
 	v, ok := m.selected()

@@ -1,13 +1,15 @@
 package ssh_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/pkg/revier"
@@ -24,27 +26,6 @@ func record(r *ssh.Remote, out string, err error) *[][]string {
 	return &calls
 }
 
-// A local deadline is the remote wait's timeout too: ending the ssh alone
-// would leave `revier agent wait` polling on the host.
-func TestWaitCarriesTheDeadlineAsTheRemoteTimeout(t *testing.T) {
-	r := ssh.New("buildbox")
-	calls := record(r, "running\n", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if _, err := r.Wait(ctx, "demo", "stopped"); err != nil {
-		t.Fatal(err)
-	}
-	args := (*calls)[0]
-	i := slices.Index(args, "--timeout")
-	if i < 0 || i+1 >= len(args) {
-		t.Fatalf("ran %v, want --timeout <seconds>", args)
-	}
-	secs, err := strconv.ParseFloat(args[i+1], 64)
-	if err != nil || secs <= 0 || secs > 30 {
-		t.Errorf("--timeout %q, want the seconds left of 30", args[i+1])
-	}
-}
-
 func TestSurveyAsksForTheNamedProjectsInOneCall(t *testing.T) {
 	r := ssh.New("buildbox")
 	calls := record(r, `[{"project":{"name":"demo","path":"/x"},"running":true,"path_exists":true,"targets":[]}]`, nil)
@@ -59,6 +40,24 @@ func TestSurveyAsksForTheNamedProjectsInOneCall(t *testing.T) {
 	}
 	if len(views) != 1 || views[0].Project.Name != "demo" || !views[0].Running {
 		t.Errorf("views = %+v, want demo running", views)
+	}
+}
+
+// A save asks the same question with each agent's conversation in the answer.
+func TestConversationsAsksTheSurveyForTheConversations(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, `[{"project":{"name":"demo"},"targets":[],"agents":[{"panel":"box.7","state":{"harness":"claude","status":"idle"},"conversation":{"id":"abc-123","dir":"/x/wt"}}]}]`, nil)
+
+	views, err := r.Conversations(context.Background(), []revier.ProjectName{"demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"revier", "list", "--json", "--conversations", "demo"}
+	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
+		t.Errorf("ran %v, want one call %v", *calls, want)
+	}
+	if c := views[0].Agents[0].Conversation; c == nil || c.ID != "abc-123" || c.Dir != "/x/wt" {
+		t.Errorf("conversation = %+v, want abc-123 in /x/wt", c)
 	}
 }
 
@@ -80,87 +79,41 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 	}
 }
 
-func TestPromptForwardsTheAddressAndTheText(t *testing.T) {
-	r := ssh.New("buildbox")
-	calls := record(r, "", nil)
-	if err := r.Prompt(context.Background(), "demo:home", "-run the tests"); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"revier", "agent", "prompt", "demo:home", "--", "-run the tests"}
-	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
-		t.Errorf("ran %v, want %v", *calls, want)
-	}
-}
-
-// A tab is opened by the revier on the host, for the address as the host
-// knows it; a resume goes with an agent only when there is one.
-func TestNewAgentAndNewShellRunTheCommandsOnTheHost(t *testing.T) {
-	r := ssh.New("buildbox")
-	calls := record(r, "", nil)
-	ctx := context.Background()
-	if err := r.NewAgent(ctx, "demo:home", "abc-123"); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.NewAgent(ctx, "demo", ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.NewShell(ctx, "demo"); err != nil {
-		t.Fatal(err)
-	}
-	want := [][]string{
-		{"revier", "agent", "new", "-p", "demo:home", "--resume", "abc-123"},
-		{"revier", "agent", "new", "-p", "demo"},
-		{"revier", "shell", "new", "-p", "demo"},
-	}
-	if len(*calls) != len(want) {
-		t.Fatalf("ran %v, want %v", *calls, want)
-	}
-	for i := range want {
-		if !slices.Equal((*calls)[i], want[i]) {
-			t.Errorf("call %d ran %v, want %v", i, (*calls)[i], want[i])
-		}
+// sshd runs a command in a shell that read no profile, where a PATH set in
+// one - the directory Claude Code installs into - is missing. The command
+// line runs in the user's login shell instead, as one word. The shell is
+// $SHELL, which sshd sets, and not ${SHELL:-sh}: the line is parsed by that
+// login shell, and fish rejects the braces.
+func TestACommandRunsInTheLoginShell(t *testing.T) {
+	got := ssh.Login("revier list --json 'my project'")
+	want := `exec "$SHELL" -lc 'revier list --json '\''my project'\'''`
+	if got != want {
+		t.Errorf("login = %s, want %s", got, want)
 	}
 }
 
-// An agent is focused by the revier on the host, for the address as the host
-// knows it, and in the instance the host reported it in when there is one.
-func TestFocusAgentRunsTheCommandOnTheHost(t *testing.T) {
-	r := ssh.New("buildbox")
-	calls := record(r, "", nil)
-	ctx := context.Background()
-	if err := r.FocusAgent(ctx, "demo:1", revier.TargetRef{Host: "kitty", ID: "/tmp/kitty-2/1"}); err != nil {
+// A profile that writes to stdout - a greeting, a version manager's notice -
+// would precede the JSON. What the command reads back is the command's own
+// stdout alone, and the profile's goes to stderr.
+func TestAReadCommandKeepsTheProfileOutOfItsStdout(t *testing.T) {
+	line := ssh.Quiet("revier list --json far")
+	if want := ssh.Login("revier list --json far >&3") + " 3>&1 1>&2"; line != want {
+		t.Fatalf("quiet = %s, want %s", line, want)
+	}
+	home := t.TempDir()
+	if err := os.WriteFile(home+"/.profile", []byte("echo welcome\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.FocusAgent(ctx, "demo:7", revier.TargetRef{}); err != nil {
+	// A login shell that prints from its profile, then runs the line.
+	var out, errb bytes.Buffer
+	c := exec.Command("sh", "-c", ssh.Quiet("printf '[]'"))
+	c.Env = append(os.Environ(), "SHELL=sh", "HOME="+home)
+	c.Stdout, c.Stderr = &out, &errb
+	if err := c.Run(); err != nil {
 		t.Fatal(err)
 	}
-	want := [][]string{
-		{"revier", "agent", "focus", "demo:1", "--ref", "/tmp/kitty-2/1"},
-		{"revier", "agent", "focus", "demo:7"},
-	}
-	if len(*calls) != len(want) {
-		t.Fatalf("ran %v, want %v", *calls, want)
-	}
-	for i := range want {
-		if !slices.Equal((*calls)[i], want[i]) {
-			t.Errorf("call %d ran %v, want %v", i, (*calls)[i], want[i])
-		}
-	}
-}
-
-func TestWaitReadsTheStatusTheRemotePrinted(t *testing.T) {
-	r := ssh.New("buildbox")
-	calls := record(r, "attention\n", nil)
-	s, err := r.Wait(context.Background(), "demo", "stopped")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s != revier.StatusAttention {
-		t.Errorf("status = %s, want attention", s)
-	}
-	want := []string{"revier", "agent", "wait", "demo", "--until", "stopped"}
-	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
-		t.Errorf("ran %v, want %v", *calls, want)
+	if out.String() != "[]" || !strings.Contains(errb.String(), "welcome") {
+		t.Errorf("stdout %q, stderr %q; want the JSON alone on stdout and the profile on stderr", out.String(), errb.String())
 	}
 }
 
@@ -168,17 +121,9 @@ func TestWaitReadsTheStatusTheRemotePrinted(t *testing.T) {
 // tty and carries the action and the project as one word each.
 func TestRunCommandAsksForATTYAndQuotesItsWords(t *testing.T) {
 	argv := ssh.New("buildbox").RunCommand("far", "pull all")
-	want := append(append([]string{"ssh", "-t"}, ssh.Options()...), "--", "buildbox", "revier run 'pull all' -p far")
+	want := append(append([]string{"ssh", "-t"}, ssh.Options()...), "--", "buildbox", ssh.Login("revier run 'pull all' -p far"))
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
-	}
-}
-
-func TestWaitRefusesAWordThatIsNoStatus(t *testing.T) {
-	r := ssh.New("buildbox")
-	record(r, "bash: revier: command not found\n", nil)
-	if _, err := r.Wait(context.Background(), "demo", "idle"); err == nil {
-		t.Error("want an error for a word that is no status")
 	}
 }
 
@@ -217,5 +162,34 @@ func TestOptionsNeverAskForAPassword(t *testing.T) {
 	opts := strings.Join(ssh.Options(), " ")
 	if !strings.Contains(opts, "BatchMode=yes") || !strings.Contains(opts, "ConnectTimeout=") {
 		t.Errorf("options = %q, want BatchMode and a connect timeout", opts)
+	}
+}
+
+// The panel's command is a shell that becomes the ssh, so the pid it wrote
+// into the tag is the pid the runtime reports for the panel. What runs on the
+// host runs in the login shell there, and reaches it through three shells
+// with a name that needs quoting still one word.
+func TestAPanelCommandTagsWhatItStartsWithItsOwnPid(t *testing.T) {
+	argv := ssh.PanelCommand("buildbox", "it's far", "agent")
+	if len(argv) != 4 || argv[0] != "sh" || argv[1] != "-c" || !strings.HasPrefix(argv[2], "exec ssh -t ") {
+		t.Fatalf("argv = %q, want sh -c 'exec ssh -t ...' sh", argv)
+	}
+	argv[2] = strings.Replace(argv[2], "exec ssh -t", "printf '%s\\n'", 1)
+	out, err := exec.Command(argv[0], append(argv[1:], "--resume", "abc-123")...).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	there := lines[len(lines)-1]
+	// What sshd hands the user's shell: run it, with a login shell that only
+	// prints its command line.
+	line, err := exec.Command("sh", "-c", "SHELL=echo; "+strings.TrimPrefix(there, "exec ")).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, _ := os.Hostname()
+	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
+	if !want.Match(line) {
+		t.Errorf("on the host it runs %q, want %s", line, want)
 	}
 }
