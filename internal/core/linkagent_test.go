@@ -68,15 +68,16 @@ func TestALinksAgentTakesItsActivityFromThePanelHere(t *testing.T) {
 	}
 }
 
-// activityProbe reads the activity from the title and knows no status, as the
-// Claude probe does for a panel whose process is not on this machine.
+// activityProbe reads the activity from a title and nothing from a panel, as
+// the Claude probe does for a panel whose process is not on this machine.
 type activityProbe struct{}
 
 func (activityProbe) Name() string            { return "claude" }
 func (activityProbe) Match(revier.Panel) bool { return false }
-func (activityProbe) Inspect(_ context.Context, p revier.Panel) (revier.AgentState, error) {
-	return revier.AgentState{Harness: "claude", Activity: p.Title}, nil
+func (activityProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, error) {
+	return revier.AgentState{}, errors.New("no claude here")
 }
+func (activityProbe) Activity(title string) string { return title }
 
 // A prompt for a link's agent is typed into the panel here. Whether it may be
 // is judged from the state the host reports, and the turn it starts is seen
@@ -110,15 +111,65 @@ func TestAPromptForALinksAgentIsTypedIntoThePanelHere(t *testing.T) {
 }
 
 // An agent nothing here shows cannot be driven from here, and is told from a
-// link with no agent at all.
+// link with no agent at all, and from a panel here the host lists no agent in.
 func TestAnAgentShownNowhereHereIsNotFound(t *testing.T) {
 	c, _, _, _ := linked(t, hostAgent("laptop.77", revier.StatusIdle))
 	if _, err := c.Agent(context.Background(), linkProject(t), "", nil); !errors.Is(err, core.ErrAgentElsewhere) {
 		t.Errorf("err = %v, want ErrAgentElsewhere", err)
 	}
+	if _, err := c.Agent(context.Background(), linkProject(t), "10", nil); !errors.Is(err, core.ErrNotAgent) {
+		t.Errorf("err = %v, want ErrNotAgent for the shell panel", err)
+	}
 	c, _, _, _ = linked(t)
 	if _, err := c.Agent(context.Background(), linkProject(t), "", nil); !errors.Is(err, core.ErrNoAgent) {
 		t.Errorf("err = %v, want ErrNoAgent", err)
+	}
+}
+
+// A link's agent is addressed by the target whose instance shows it, as a
+// local one is: the home for the agent in the link's workspace, and a local
+// window of the link holds none of the host's agents.
+func TestALinksAgentIsAddressedByItsTarget(t *testing.T) {
+	c, rt, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	rt.Add("far-logs", "", revier.Panel{ID: "20", Kind: revier.PanelShell, PID: 5000})
+	p := linkProject(t)
+	a, err := c.Agent(context.Background(), p, "home", nil)
+	if err != nil || a.Ref != pane || a.Panel.ID != "9" {
+		t.Errorf("Agent(far:home) = %+v, %v; want panel 9 of %v", a, err, pane)
+	}
+	if _, err := c.Agent(context.Background(), p, "logs", nil); !errors.Is(err, core.ErrNoAgent) {
+		t.Errorf("Agent(far:logs) err = %v, want ErrNoAgent", err)
+	}
+}
+
+// A host with a terminal of its own reports the agents in it too, in a runtime
+// that may be named as the one here. Only an agent a panel here shows is
+// here: the host's own is reached from nowhere here, and a shutdown leaves it
+// alone rather than closing a panel of the runtime here by the host's ids.
+func TestTheHostsOwnAgentIsNotTakenForOneHere(t *testing.T) {
+	theirs := revier.AgentView{Panel: "3", Ref: revier.TargetRef{Host: "kitty", ID: "unix:@kitty-999/1"}, State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true, Agents: []revier.AgentView{theirs}})
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("far", "", revier.Panel{ID: "3", Kind: revier.PanelTool, PID: 4242})
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
+
+	agents := agentsOf(t, c, p)
+	if len(agents) != 1 || agents[0].Panel != "3" || !agents[0].Ref.IsZero() {
+		t.Fatalf("agents = %+v, want the host's under its own name and no ref here", agents)
+	}
+	if _, err := c.GoAgent(context.Background(), p, agents[0], nil); !errors.Is(err, core.ErrAgentElsewhere) {
+		t.Errorf("GoAgent err = %v, want ErrAgentElsewhere", err)
+	}
+	if _, err := c.Agent(context.Background(), p, "", nil); !errors.Is(err, core.ErrAgentElsewhere) {
+		t.Errorf("Agent err = %v, want ErrAgentElsewhere", err)
+	}
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan := c.ShutdownPlan(report, "", core.ShutdownAgents); len(plan) != 0 {
+		t.Errorf("plan = %+v, want nothing closed here for the host's own agent", plan)
 	}
 }
 

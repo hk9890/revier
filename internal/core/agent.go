@@ -41,8 +41,12 @@ var (
 	ErrNoWriter = errors.New("runtime cannot type into a panel")
 )
 
-// AgentPoll is how often Wait and Prompt read an agent again.
-const AgentPoll = 500 * time.Millisecond
+// AgentPoll is how often Wait and Prompt read an agent again. LinkPoll is
+// the same for a link's agent, whose every read is an ssh to its host.
+const (
+	AgentPoll = 500 * time.Millisecond
+	LinkPoll  = 2 * time.Second
+)
 
 // PromptConfirmPolls is how many polls Prompt watches an idle agent for the
 // turn it asked for. A runtime reports that text was delivered, never that it
@@ -58,6 +62,14 @@ type Agent struct {
 
 	// link is set for an agent of a link: its state is its host's to say.
 	link *Project
+}
+
+// Poll is how often the agent is read again: over ssh for a link's.
+func (a Agent) Poll() time.Duration {
+	if a.link != nil {
+		return LinkPoll
+	}
+	return AgentPoll
 }
 
 // untils are the statuses a wait can ask for. "stopped" is an agent doing no
@@ -103,14 +115,14 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings
 	if err != nil {
 		return Agent{}, err
 	}
-	if p.Remote != nil {
-		return c.linkAgent(ctx, p, addr, snap)
-	}
 	where, only := string(p.Name), revier.TargetName("")
 	if _, ok := p.index(revier.TargetName(addr)); ok {
 		where, only = where+":"+addr, revier.TargetName(addr)
 	}
 	scope := c.running(snap, p, bound, only)
+	if p.Remote != nil {
+		return c.linkAgent(ctx, p, addr, only, scope, snap)
+	}
 	switch {
 	case addr != "" && only == "":
 		return c.panel(ctx, scope, p.Name, addr)

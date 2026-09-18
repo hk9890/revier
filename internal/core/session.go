@@ -60,7 +60,9 @@ const (
 	AgentEmpty
 	// AgentUnresumable starts empty although a conversation was recorded: no
 	// probe here can resume that harness, or the panel it starts in runs
-	// another harness, whose command a resume flag would break.
+	// another harness, whose command a resume flag would break; or, for a
+	// link, the conversation or its directory is a word the panel's ssh
+	// cannot carry to the host.
 	AgentUnresumable
 	// AgentDirGone starts empty in the project, because the directory it
 	// worked in is gone - a worktree removed since the save. Resuming it

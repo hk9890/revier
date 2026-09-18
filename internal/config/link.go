@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -55,8 +56,8 @@ func link(p *revier.Project) {
 	pane := revier.Realization{
 		Name: title,
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: RemotePanel(p.Remote.Host, p.Remote.Project, "agent")},
-			{Kind: revier.PanelShell, Command: RemotePanel(p.Remote.Host, p.Remote.Project, "shell")},
+			{Kind: revier.PanelAgent, Command: ssh.PanelCommand(p.Remote.Host, p.Remote.Project, "agent")},
+			{Kind: revier.PanelShell, Command: ssh.PanelCommand(p.Remote.Host, p.Remote.Project, "shell")},
 		},
 		Match: revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"},
 	}
@@ -91,39 +92,4 @@ func fillPane(r *revier.Realization, pane revier.Realization) {
 	if r.Match.IsZero() {
 		r.Match = pane.Match
 	}
-}
-
-// RemotePanel is the command of a link's panel: `revier <kind> exec` on the
-// host, in a terminal here.
-//
-// The tag names the panel to both machines. It is this machine's name and the
-// pid of the ssh, which is the pid the runtime here reports for the panel, so
-// the agent the host lists under the tag is found again in the panel that
-// shows it, and nothing has to be recorded. The shell that expands the pid is
-// replaced by the ssh, which keeps it.
-//
-// Arguments after the command go to `revier <kind> exec` as they are, which
-// is how a restore passes --resume. They cross two shells unquoted, so the
-// core passes only words that need no quoting.
-//
-// The command line runs in the login shell of the user there: sshd runs it in
-// a shell that read no profile, where the PATH a profile sets is missing. The
-// connection is probed, so a network that went away ends the ssh, and with it
-// the agent, within a minute rather than when the kernel gives up.
-func RemotePanel(host string, project revier.ProjectName, kind string) []string {
-	const tag = "\x00"
-	there := "revier " + kind + " exec -p " + shellQuote(string(project)) + " --tag " + tag
-	login := `exec "${SHELL:-sh}" -lc ` + shellQuote(there)
-	script := "exec ssh -t -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- " + shellQuote(host) + ` "` + doubleQuoted(login) + `"`
-	return []string{"sh", "-c", strings.ReplaceAll(script, tag, `$(uname -n).$$ $*`), "sh"}
-}
-
-// shellQuote is s as one word of a POSIX shell.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-// doubleQuoted is s as it stands between double quotes in a POSIX shell.
-func doubleQuoted(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "`", "\\`").Replace(s)
 }

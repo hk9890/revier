@@ -882,7 +882,7 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 		v := c.view(ctx, snap, p, bound[p.Name], attached[p.Name])
 		if a, ok := answers[p.Name]; ok {
 			merge(&v, a)
-			c.localise(ctx, tags, v.Agents)
+			c.localise(tags, v.Agents)
 		}
 		r.Views = append(r.Views, v)
 	}

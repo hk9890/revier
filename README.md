@@ -52,7 +52,8 @@ To install from source instead, see [Building](#building).
 
 ```
 revier                        the TUI: every project, its agent state, its targets
-revier list [--json] [name..] the same, printed once, or for the named projects
+revier list [--json] [name..] the same, printed once, or for the named projects;
+                              --conversations names each agent's conversation
 revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
                               with this terminal on it (tmux)
 revier new [name]             write a project file for this directory
@@ -77,6 +78,10 @@ revier agent focus <project>[:<target>]
                               switch to the agent's tab and raise its window
 revier shell new [-p <project> | --panel <id>] [--dir <path>]
                               add a shell tab to an open workspace
+revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]
+revier shell exec -p <project> [--tag <tag>] [--dir <path>]
+                              become the project's agent or shell in this
+                              terminal: what a link's panels run on the host
 revier session save [--name label]
                               record the projects that are open now
 revier session restore [id|name] [--dry-run]

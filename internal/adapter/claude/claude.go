@@ -79,6 +79,10 @@ type listedSession struct {
 
 func (p *Probe) Name() string { return "claude" }
 
+// Activity is the title's activity line, for a panel whose process is not on
+// this machine (revier.Titled).
+func (p *Probe) Activity(title string) string { return Activity(title) }
+
 // Match recognises a Claude pane by its foreground command.
 func (p *Probe) Match(panel revier.Panel) bool {
 	return panel.Runs("claude") || panel.Runs("claude-code")

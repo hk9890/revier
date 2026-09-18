@@ -137,7 +137,7 @@ func waitFor(ctx context.Context, address string, until []revier.Status) (revier
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	state, err := a.core.Wait(ctx, ag, until, core.AgentPoll)
+	state, err := a.core.Wait(ctx, ag, until, ag.Poll())
 	if err != nil {
 		return state, fmt.Errorf("%s: %w", address, err)
 	}
@@ -163,7 +163,7 @@ func cmdAgentPrompt(args []string) error {
 	if err != nil {
 		return err
 	}
-	state, err := a.core.Prompt(ctx, ag, pos[1], core.AgentPoll)
+	state, err := a.core.Prompt(ctx, ag, pos[1], ag.Poll())
 	if err != nil {
 		return fmt.Errorf("%s: %w", pos[0], err)
 	}
@@ -255,7 +255,7 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 			return err
 		}
 		if resume != "" && outcome != core.AgentResumed {
-			fmt.Fprintf(os.Stderr, "revier: warning: no probe here can resume %s; the agent started empty\n", resume)
+			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
 		}
 		return nil
 	}

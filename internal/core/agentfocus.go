@@ -12,8 +12,9 @@ import (
 
 // GoAgent brings an agent the survey reported to the front: its tab becomes
 // current and the window holding it is raised. A link's agent is reached the
-// same way, in the panel here that shows it (decisions.md D83); one that no
-// panel here shows is ErrAgentElsewhere.
+// same way, in the panel here that shows it (decisions.md D83). One that no
+// panel here shows - a link's started from another machine, or one this
+// machine serves to a terminal elsewhere - is ErrAgentElsewhere.
 //
 // The agent is named by its instance and its panel, as the survey saw it, and
 // not looked up again by panel id: a panel id is one process's, and two kitty
@@ -21,7 +22,7 @@ import (
 func (c *Core) GoAgent(ctx context.Context, p Project, a revier.AgentView, _ Bindings) (res Result, err error) {
 	start := time.Now()
 	defer func() { logging.Op("go agent", start, err, "project", p.Name, "ref", a.Ref, "panel", a.Panel) }()
-	if p.Remote != nil && !c.here(a) {
+	if !c.here(a) {
 		return Result{}, fmt.Errorf("agent %s: %w", a.Panel, ErrAgentElsewhere)
 	}
 	return Result{}, c.FocusAgent(ctx, a.Ref, a.Panel)

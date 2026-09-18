@@ -44,9 +44,19 @@ var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 // login wraps a command line in the login shell of the user on the remote.
 // sshd runs a command in a shell that reads no profile, so a PATH set there -
 // ~/.local/bin, where Claude Code installs - is missing: the remote revier
-// then found no `claude`, and every agent read as unknown.
+// then found no `claude`, and every agent read as unknown. sshd always sets
+// SHELL, and it is $SHELL and not ${SHELL:-sh} because the line is parsed by
+// that login shell, and fish rejects the braces.
 func login(line string) string {
-	return `exec "${SHELL:-sh}" -lc ` + quote(line)
+	return `exec "$SHELL" -lc ` + quote(line)
+}
+
+// quiet is login for a command whose output is read: what the profile writes
+// on the way - a greeting, a version manager's notice - goes to stderr, and
+// only the command's own stdout comes back, else a profile that says one
+// word breaks the JSON.
+func quiet(line string) string {
+	return login(line+" >&3") + " 3>&1 1>&2"
 }
 
 // exec runs one command on the remote and returns what it wrote. The remote
@@ -59,7 +69,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	for i, a := range args {
 		words[i] = quote(a)
 	}
-	full := append(append([]string{}, options...), "--", r.host, login(strings.Join(words, " ")))
+	full := append(append([]string{}, options...), "--", r.host, quiet(strings.Join(words, " ")))
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, "ssh", full...)
 	c.Stdout, c.Stderr = &out, &errb
@@ -76,6 +86,33 @@ func quote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// PanelCommand is the command of a link's panel here: `revier <kind> exec`
+// on the host, in the login shell there, with this terminal.
+//
+// The tag names the panel to both machines. It is this machine's name and the
+// pid of the ssh, which is the pid the runtime here reports for the panel, so
+// the agent the host lists under the tag is found again in the panel that
+// shows it, and nothing has to be recorded. The shell that expands the pid is
+// replaced by the ssh, which keeps it.
+//
+// Arguments after the command go to `revier <kind> exec` as they are, which
+// is how a restore passes --resume. They cross two shells unquoted, so the
+// core passes only words that need no quoting.
+//
+// The connection is probed, so a network that went away ends the ssh, and
+// with it the agent, within a minute rather than when the kernel gives up.
+func PanelCommand(host string, project revier.ProjectName, kind string) []string {
+	const tag = "\x00"
+	there := "revier " + kind + " exec -p " + quote(string(project)) + " --tag " + tag
+	script := "exec ssh -t -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- " + quote(host) + ` "` + doubleQuoted(login(there)) + `"`
+	return []string{"sh", "-c", strings.ReplaceAll(script, tag, `$(uname -n).$$ $*`), "sh"}
+}
+
+// doubleQuoted is s as it stands between double quotes in a POSIX shell.
+func doubleQuoted(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "`", "\\`").Replace(s)
 }
 
 // RunCommand is the ssh that runs the action on the remote with this

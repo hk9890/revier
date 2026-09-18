@@ -56,7 +56,7 @@ func (f *FakeRemote) Survey(_ context.Context, names []revier.ProjectName) ([]re
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	return append([]revier.ProjectView(nil), f.Views...), nil
+	return answer(f.Views), nil
 }
 
 func (f *FakeRemote) Conversations(context.Context, []revier.ProjectName) ([]revier.ProjectView, error) {
@@ -65,5 +65,16 @@ func (f *FakeRemote) Conversations(context.Context, []revier.ProjectName) ([]rev
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	return append([]revier.ProjectView(nil), f.Named...), nil
+	return answer(f.Named), nil
+}
+
+// answer is a copy of the views down to their agents, as an answer decoded
+// from JSON would be: the core renames a link's agents in place, and the
+// next call must answer as the host does, not as the core left it.
+func answer(views []revier.ProjectView) []revier.ProjectView {
+	out := append([]revier.ProjectView(nil), views...)
+	for i := range out {
+		out[i].Agents = append([]revier.AgentView(nil), out[i].Agents...)
+	}
+	return out
 }

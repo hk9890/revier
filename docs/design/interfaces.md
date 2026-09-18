@@ -333,6 +333,19 @@ interface would not have allowed.
 `StatusAttention` is the state the whole product exists to surface. It drives
 the TUI sort order.
 
+## Titled
+
+An optional capability of an `AgentProbe`, detected by type assertion. A
+link's agent has no process here, so no probe can inspect its panel; its title
+crosses the ssh, and a probe that reads titles gives the activity line from
+that alone (D83).
+
+```go
+type Titled interface {
+    Activity(title string) string
+}
+```
+
 ## Resumable
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -24,8 +25,8 @@ func remoteProject(t *testing.T) core.Project {
 	p, err := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
-				{Kind: revier.PanelAgent, Command: config.RemotePanel("buildbox", "far", "agent")},
-				{Kind: revier.PanelShell, Command: config.RemotePanel("buildbox", "far", "shell")},
+				{Kind: revier.PanelAgent, Command: ssh.PanelCommand("buildbox", "far", "agent")},
+				{Kind: revier.PanelShell, Command: ssh.PanelCommand("buildbox", "far", "shell")},
 			}}},
 	}})
 	if err != nil {

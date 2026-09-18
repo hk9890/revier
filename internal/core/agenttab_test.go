@@ -233,13 +233,16 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 		t.Errorf("agent panel = %+v, want %q and no directory here", got, want)
 	}
 
-	// A word a shell would read is not sent: the agent starts empty.
-	outcome, err = c.NewAgent(context.Background(), w, core.Resume{Session: "abc; rm -rf /"})
-	if err != nil || outcome != core.AgentEmpty {
-		t.Errorf("NewAgent = %v, %v; want empty", outcome, err)
-	}
-	if got := rt.Tabs[1].Real.Panels[0].Command; !slices.Equal(got, want[:4]) {
-		t.Errorf("agent panel = %q, want %q", got, want[:4])
+	// A word a shell would read is not sent, and the agent starts empty: the
+	// conversation without its directory would carry on in the wrong checkout.
+	for _, r := range []core.Resume{{Session: "abc; rm -rf /"}, {Session: "abc-123", Dir: "/srv/far/my wt"}} {
+		outcome, err = c.NewAgent(context.Background(), w, r)
+		if err != nil || outcome != core.AgentUnresumable {
+			t.Errorf("NewAgent(%+v) = %v, %v; want unresumable", r, outcome, err)
+		}
+		if got := rt.Tabs[len(rt.Tabs)-1].Real.Panels[0].Command; !slices.Equal(got, want[:4]) {
+			t.Errorf("agent panel = %q, want %q", got, want[:4])
+		}
 	}
 }
 
