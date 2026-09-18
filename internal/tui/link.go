@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/sshconfig"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -293,7 +294,7 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	}
 	items := make([]list.Item, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, linked: m.linkedAs(msg.host, v.Project.Name)})
+		items = append(items, remoteItem{view: v, linked: core.LinkedAs(m.projects, msg.host, v.Project.Name)})
 	}
 	m.host = msg.host
 	m.setRemoteFilter("")
@@ -305,16 +306,6 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 		m.err = fmt.Errorf("%s has no projects; `revier new` there writes one", msg.host)
 	}
 	return m, m.rinput.Focus()
-}
-
-// linkedAs is the name of the link here to a project on a host, if any.
-func (m Model) linkedAs(host string, project revier.ProjectName) revier.ProjectName {
-	for _, p := range m.projects {
-		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
-			return p.Name
-		}
-	}
-	return ""
 }
 
 // link is Enter on a project of the host: the step that names the link,

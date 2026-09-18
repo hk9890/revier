@@ -1,12 +1,10 @@
 package ssh_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
-	"os/exec"
-	"regexp"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -94,27 +92,13 @@ func TestACommandRunsInTheLoginShell(t *testing.T) {
 }
 
 // A profile that writes to stdout - a greeting, a version manager's notice -
-// would precede the JSON. What the command reads back is the command's own
-// stdout alone, and the profile's goes to stderr.
+// would precede the JSON. A read command's stdout is moved aside before the
+// login shell runs, and the profile's goes to stderr; ssh_live_test.go runs
+// the line in a real shell.
 func TestAReadCommandKeepsTheProfileOutOfItsStdout(t *testing.T) {
 	line := ssh.Quiet("revier list --json far")
 	if want := ssh.Login("revier list --json far >&3") + " 3>&1 1>&2"; line != want {
 		t.Fatalf("quiet = %s, want %s", line, want)
-	}
-	home := t.TempDir()
-	if err := os.WriteFile(home+"/.profile", []byte("echo welcome\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// A login shell that prints from its profile, then runs the line.
-	var out, errb bytes.Buffer
-	c := exec.Command("sh", "-c", ssh.Quiet("printf '[]'"))
-	c.Env = append(os.Environ(), "SHELL=sh", "HOME="+home)
-	c.Stdout, c.Stderr = &out, &errb
-	if err := c.Run(); err != nil {
-		t.Fatal(err)
-	}
-	if out.String() != "[]" || !strings.Contains(errb.String(), "welcome") {
-		t.Errorf("stdout %q, stderr %q; want the JSON alone on stdout and the profile on stderr", out.String(), errb.String())
 	}
 }
 
@@ -166,31 +150,60 @@ func TestOptionsNeverAskForAPassword(t *testing.T) {
 	}
 }
 
+// Every call to a host goes over one connection: the survey runs each
+// refresh, and a handshake per refresh is most of what it costs. Every call
+// probes the connection too, since the keepalives are the master's and any
+// call may be the one that opens it. The socket's directory exists before
+// ssh is asked to write there, is the user's alone, and its path stays under
+// the limit a unix socket path has.
+func TestEveryCallSharesOneConnection(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	for _, argv := range [][]string{ssh.Options(), ssh.New("buildbox").RunCommand("far", "pull"), ssh.PanelCommand("buildbox", "far", "agent")} {
+		line := strings.Join(argv, " ")
+		if !strings.Contains(line, "ControlMaster=auto") || !strings.Contains(line, "ControlPersist=") {
+			t.Errorf("%q: want a shared connection", line)
+		}
+		if !strings.Contains(line, "ServerAliveInterval=") || !strings.Contains(line, "ServerAliveCountMax=") {
+			t.Errorf("%q: want a probed connection", line)
+		}
+	}
+	var path string
+	for _, f := range ssh.Connection() {
+		if p, ok := strings.CutPrefix(f, "ControlPath="); ok {
+			path = p
+		}
+	}
+	if path == "" {
+		t.Fatalf("connection = %q, want a ControlPath", ssh.Connection())
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("%s: %v; want the directory made", filepath.Dir(path), err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("%s: mode %v; want the directory the user's alone", filepath.Dir(path), info.Mode())
+	}
+	if !strings.HasSuffix(path, "%C") {
+		t.Errorf("path = %s, want the destination's hash, not its name", path)
+	}
+}
+
+// Without a runtime directory there is nowhere that is the user's alone for
+// the socket, so every call connects on its own, still probed.
+func TestNoRuntimeDirectoryMeansNoSharedConnection(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	line := strings.Join(ssh.Connection(), " ")
+	if strings.Contains(line, "ControlPath=") || !strings.Contains(line, "ServerAliveInterval=") {
+		t.Errorf("connection = %q, want keepalives and no socket", line)
+	}
+}
+
 // The panel's command is a shell that becomes the ssh, so the pid it wrote
-// into the tag is the pid the runtime reports for the panel. What runs on the
-// host runs in the login shell there, and reaches it through three shells
-// with a name that needs quoting still one word.
-func TestAPanelCommandTagsWhatItStartsWithItsOwnPid(t *testing.T) {
+// into the tag is the pid the runtime reports for the panel. What it runs on
+// the host is checked through real shells in ssh_live_test.go.
+func TestAPanelCommandIsAShellThatBecomesTheSSH(t *testing.T) {
 	argv := ssh.PanelCommand("buildbox", "it's far", "agent")
 	if len(argv) != 4 || argv[0] != "sh" || argv[1] != "-c" || !strings.HasPrefix(argv[2], "exec ssh -t ") {
 		t.Fatalf("argv = %q, want sh -c 'exec ssh -t ...' sh", argv)
-	}
-	argv[2] = strings.Replace(argv[2], "exec ssh -t", "printf '%s\\n'", 1)
-	out, err := exec.Command(argv[0], append(argv[1:], "--resume", "abc-123")...).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	there := lines[len(lines)-1]
-	// What sshd hands the user's shell: run it, with a login shell that only
-	// prints its command line.
-	line, err := exec.Command("sh", "-c", "SHELL=echo; "+strings.TrimPrefix(there, "exec ")).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	host, _ := os.Hostname()
-	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
-	if !want.Match(line) {
-		t.Errorf("on the host it runs %q, want %s", line, want)
 	}
 }

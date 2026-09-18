@@ -80,6 +80,10 @@ type Fake struct {
 	ClosedPanels []revier.PanelID
 	CloseErr     error
 	Refuses      map[string]bool
+	// Hidden records every ref passed to Hide, in order. HideErr makes it
+	// fail.
+	Hidden  []revier.TargetRef
+	HideErr error
 
 	caps revier.Capabilities
 }
@@ -198,6 +202,15 @@ func (f *Fake) Close(_ context.Context, ref revier.TargetRef) error {
 		f.Remove(ref)
 	}
 	return nil
+}
+
+// Hide records the call and leaves the instance listed, as a minimized
+// window is. Fake implements revier.Hider; HideErr makes it fail.
+func (f *Fake) Hide(_ context.Context, ref revier.TargetRef) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Hidden = append(f.Hidden, ref)
+	return f.HideErr
 }
 
 // ClosePanel removes the panel from its instance and records the call.

@@ -188,7 +188,7 @@ func brokenBy(before, after []core.Project) error {
 	if len(errs) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%d project(s): %w", len(errs), errors.Join(errs...))
+	return fmt.Errorf("%s: %w", core.Count(len(errs), "project"), errors.Join(errs...))
 }
 
 // sameTargets compares targets as they serialize, so an empty list and a

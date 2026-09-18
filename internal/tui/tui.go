@@ -155,6 +155,10 @@ type Model struct {
 	shown  revier.ProjectName               // the project the pane holds, so a new one starts at its top
 	tkeys  map[core.Chord]revier.TargetName // press to target name, over every project
 	start  revier.ProjectName               // the project to open on, from the working directory
+	lookup StartLookup                      // the project to open on when start is none, asked once the surface shows
+	popup  bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	hidden bool                             // the popup is off the screen; nothing surveys until it is raised
+	idle   bool                             // the survey chain ended while hidden; the raise starts it again
 	trees  map[string]treeEntry             // cached directory listings, by project path
 	input  textinput.Model                  // the filter query, with its own cursor
 	path   textinput.Model                  // the directory field of the new-project screen
@@ -238,6 +242,36 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	return m
 }
 
+// StartLookup finds the project to open on when the working directory is in
+// none: the one of the focused window, else the one remembered. It lists
+// every host, so it runs after the first frame, not before it.
+type StartLookup func(ctx context.Context) (revier.ProjectName, bool)
+
+// WithStart sets the lookup Init runs. Its answer moves the cursor only
+// while the user has not: a cursor that jumps under a keystroke is worse
+// than one that starts on the top row.
+func (m Model) WithStart(lookup StartLookup) Model {
+	m.lookup = lookup
+	return m
+}
+
+// WithPopup makes the surface the popup: Esc on the list hides its window
+// instead of exiting, nothing surveys while it is hidden, and the raise
+// surveys once and resumes (decisions.md D86).
+func (m Model) WithPopup() Model {
+	m.popup = true
+	return m
+}
+
+// startMsg is the lookup's answer.
+type startMsg struct {
+	name revier.ProjectName
+	ok   bool
+}
+
+// hiddenMsg follows the hide of the popup's window.
+type hiddenMsg struct{ err error }
+
 // surveyMsg is one survey's answer, and the state it started from: what it
 // may prune (state.Prune).
 type surveyMsg struct {
@@ -295,15 +329,58 @@ type launchedMsg struct {
 // Init surveys immediately; the timer starts once the first survey answers.
 // A window host that can report events is watched from the start.
 func (m Model) Init() tea.Cmd {
-	blink := m.input.Focus()
+	cmds := []tea.Cmd{m.Survey(), m.input.Focus(), m.lookupStart()}
 	if w, ok := m.core.Window.(revier.WindowWatcher); ok {
 		events, err := w.Watch(context.Background())
 		if err == nil {
-			return tea.Batch(m.Survey(), waitEvent(events), blink)
+			cmds = append(cmds, waitEvent(events))
+		} else {
+			slog.Warn("window watch, claiming by polling only", "host", m.core.Window.Name(), "err", err)
 		}
-		slog.Warn("window watch, claiming by polling only", "host", m.core.Window.Name(), "err", err)
 	}
-	return tea.Batch(m.Survey(), blink)
+	return tea.Batch(cmds...)
+}
+
+// lookupStart asks the lookup where to open, when the working directory did
+// not say. Nil without a lookup, or with a start already.
+func (m Model) lookupStart() tea.Cmd {
+	lookup := m.lookup
+	if lookup == nil || m.start != "" {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		name, ok := lookup(ctx)
+		return startMsg{name: name, ok: ok}
+	}
+}
+
+// hide takes the popup's window off the screen.
+func (m Model) hide() tea.Cmd {
+	c := m.core
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return hiddenMsg{err: c.HidePopup(ctx)}
+	}
+}
+
+// leave is Esc on the list with no query: the popup hides, any other
+// surface quits.
+func (m Model) leave() tea.Cmd {
+	if m.popup {
+		return m.hide()
+	}
+	return tea.Quit
+}
+
+// leaveWord names what leave does, for the help.
+func (m Model) leaveWord() string {
+	if m.popup {
+		return "hide the popup"
+	}
+	return "quit"
 }
 
 // waitEvent delivers the next window event as a message. Watch is called
@@ -316,13 +393,18 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 	}
 }
 
+// hostTimeout bounds one round of host calls - a survey, one focus, or the
+// probe of a runtime host - so a hung wctl or kitty socket costs one refresh
+// and not the surface.
+const hostTimeout = 10 * time.Second
+
 // Survey is one refresh: one bulk listing per host, matched locally. It is a
 // command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
 	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
 		// A state that cannot be read is nil, which lets nothing be pruned.
 		before, _ := loadState(root)
@@ -404,6 +486,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.windows, m.surveyed = msg.report.Windows, true
 			m.reload()
 		}
+		// Hidden, nobody reads the answer, and the chain ends here: a
+		// survey a second is a round trip to every linked host for nothing.
+		if m.hidden {
+			m.idle = true
+			return m, nil
+		}
 		if !m.spinning && m.anyWorking() {
 			m.spinning = true
 			return m, tea.Batch(tick(m.refresh), spin())
@@ -411,8 +499,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick(m.refresh)
 	case spinMsg:
 		// The spinner stops when nothing works, so an idle surface does not
-		// redraw; the next survey that finds a working agent starts it again.
-		if !m.anyWorking() {
+		// redraw, and while hidden, where nobody sees it; the next survey
+		// that finds a working agent starts it again.
+		if m.hidden || !m.anyWorking() {
 			m.spinning = false
 			return m, nil
 		}
@@ -427,7 +516,40 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, waitEvent(msg.events)
 	case tickMsg:
+		if m.hidden {
+			m.idle = true
+			return m, nil
+		}
 		return m, m.Survey()
+	case startMsg:
+		// The user's own cursor wins: a keystroke, a query or a dialog in
+		// the time the lookup took means they are already somewhere.
+		if msg.ok && m.start == "" && m.filter == "" && m.dialog == dialogNone && m.focus == focusList && m.plist.Index() == 0 {
+			m.start = msg.name
+			m.selectName(msg.name)
+		}
+		return m, nil
+	case hiddenMsg:
+		if msg.err != nil {
+			// The popup cannot leave the screen, so it leaves the way it
+			// did before it could hide.
+			slog.Warn("popup hide, quitting instead", "err", msg.err)
+			return m, tea.Quit
+		}
+		m.hidden = true
+		return m, nil
+	case tea.FocusMsg:
+		// The raise: one survey now, then the chain as before. A chain still
+		// running while hidden goes on by itself.
+		if !m.hidden {
+			return m, nil
+		}
+		m.hidden = false
+		if m.idle {
+			m.idle = false
+			return m, m.Survey()
+		}
+		return m, nil
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends.
@@ -651,7 +773,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case m.focus != focusList:
 			m.toList()
 		default:
-			return m, tea.Quit
+			return m, m.leave()
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Enter):
@@ -919,7 +1041,7 @@ func (m Model) goRow(i int) tea.Cmd {
 	if ref := row.attached; !ref.IsZero() {
 		c := m.core
 		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)

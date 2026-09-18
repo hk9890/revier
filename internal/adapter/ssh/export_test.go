@@ -17,8 +17,11 @@ func Login(line string) string { return login(line) }
 // Quiet exposes quiet.
 func Quiet(line string) string { return quiet(line) }
 
-// Options exposes the flags every call carries.
-func Options() []string { return options }
+// Options exposes the flags every call that reads an answer carries.
+func Options() []string { return flags() }
+
+// Connection exposes the flags of the connection every call makes.
+func Connection() []string { return connection() }
 
 // Classify exposes classify, with a context a test does not have to make.
 func Classify(host string, args []string, stderr string, err error) error {

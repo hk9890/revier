@@ -18,8 +18,10 @@ test-integration:
 vet:
 	@go vet ./...
 
+# The goimports version is the one .mise.toml pins; bump both together, or
+# `make fmt` writes what `mise run fmt:check` refuses.
 fmt:
-	@go fmt ./...
+	@go run golang.org/x/tools/cmd/goimports@v0.49.0 -local github.com/hk9890/revier -w cmd internal pkg scripts
 
 tidy:
 	@go mod tidy

@@ -90,7 +90,7 @@ func warnProblems(cfg *config.Config, projects []core.Project) {
 		}
 	}
 	if files > 0 {
-		fmt.Fprintf(os.Stderr, "revier: warning: %d configuration file(s) have problems; run `revier doctor`\n", files)
+		fmt.Fprintf(os.Stderr, "revier: warning: %s with problems; run `revier doctor`\n", core.Count(files, "configuration file"))
 	}
 }
 
@@ -128,30 +128,50 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 		slog.Info("resolve", "project", p.Name, "by", "flag")
 		return p, nil
 	}
+	if p, ok := a.resolveHere(); ok {
+		return p, nil
+	}
+	if p, ok := a.resolveAway(ctx); ok {
+		return p, nil
+	}
+	return core.Project{}, errNoProject
+}
+
+// resolveHere is step 2: the project owning the working directory, read from
+// the files alone.
+func (a *app) resolveHere() (core.Project, bool) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		slog.Warn("resolve: working directory", "err", err)
-	} else if p, ok := a.projectForPath(cwd); ok {
-		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
-		return p, nil
+		return core.Project{}, false
 	}
-	// The focused window, before the remembered project: a desktop binding
-	// has no useful working directory, and the project the user is looking at
-	// beats the one revier last acted on.
+	p, ok := a.projectForPath(cwd)
+	if ok {
+		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
+	}
+	return p, ok
+}
+
+// resolveAway is step 3 for a command run away from every project
+// directory: the focused window, before the remembered project, because a
+// desktop binding has no useful working directory, and the project the user
+// is looking at beats the one revier last acted on. It lists every host,
+// which is why the TUI runs it after its first frame.
+func (a *app) resolveAway(ctx context.Context) (core.Project, bool) {
 	p, ok, err := a.core.ProjectOfFocused(ctx, a.projects)
 	if err != nil {
 		slog.Warn("resolve: focused window", "err", err)
 	} else if ok {
 		slog.Info("resolve", "project", p.Name, "by", "focused window")
-		return p, nil
+		return p, true
 	}
 	if a.state.Current != "" {
 		if p, ok := a.project(a.state.Current); ok {
 			slog.Info("resolve", "project", p.Name, "by", "last project")
-			return p, nil
+			return p, true
 		}
 	}
-	return core.Project{}, errNoProject
+	return core.Project{}, false
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
