@@ -129,7 +129,7 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 // workspace.
 func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
 	rt.Add("session:revier", "")
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
@@ -183,7 +183,7 @@ func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 
 func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}}
 	rt.Add("session:revier", "")
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
 	if err != nil {
@@ -250,28 +250,11 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	}
 }
 
-// noTabs is a runtime without the PanelOpener capability.
-type noTabs struct{ rt *hosttest.FakeRuntime }
-
-func (n noTabs) Name() string                                        { return n.rt.Name() }
-func (n noTabs) Probe(ctx context.Context) error                     { return n.rt.Probe(ctx) }
-func (n noTabs) Capabilities() revier.Capabilities                   { return n.rt.Capabilities() }
-func (n noTabs) Focus(ctx context.Context, r revier.TargetRef) error { return n.rt.Focus(ctx, r) }
-func (n noTabs) Focused(ctx context.Context) (revier.TargetRef, error) {
-	return n.rt.Focused(ctx)
-}
-func (n noTabs) Instances(ctx context.Context) ([]revier.Instance, error) {
-	return n.rt.Instances(ctx)
-}
-func (n noTabs) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
-	return n.rt.Open(ctx, r)
-}
-
 // On a runtime without tabs, a restore still opens the workspace with its
 // declared agents, and names the agents past them as not restored.
 func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
 

@@ -8,6 +8,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,7 +119,7 @@ func TestAgentWaitEndsOnTheStatusOrTimesOut(t *testing.T) {
 		t.Errorf("wait printed %q, want the status it ended on", out)
 	}
 	start := time.Now()
-	err := run([]string{"agent", "wait", "agents:home", "--until", "running", "--timeout", "0.3"})
+	err := run(io.Discard, []string{"agent", "wait", "agents:home", "--until", "running", "--timeout", "0.3"})
 	if !errors.Is(err, errWaitTimeout) {
 		t.Fatalf("err = %v, want the timeout, which exits %d", err, exitTimeout)
 	}
@@ -155,7 +156,7 @@ func TestAgentPromptRefusals(t *testing.T) {
 		"agents:notes": "no agent panel",
 		"agents":       "names more than one agent",
 	} {
-		err := run([]string{"agent", "prompt", addr, "hello"})
+		err := run(io.Discard, []string{"agent", "prompt", addr, "hello"})
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("prompt %s: err = %v, want %q", addr, err, want)
 		}
@@ -193,7 +194,7 @@ func wedgedTmux(t *testing.T) {
 func TestAgentWaitTimesOutOnAHostThatNeverAnswers(t *testing.T) {
 	wedgedTmux(t)
 	start := time.Now()
-	err := run([]string{"agent", "wait", "demo", "--until", "idle", "--timeout", "0.3"})
+	err := run(io.Discard, []string{"agent", "wait", "demo", "--until", "idle", "--timeout", "0.3"})
 	if !errors.Is(err, errWaitTimeout) {
 		t.Fatalf("err = %v, want the timeout, which exits %d", err, exitTimeout)
 	}
@@ -210,7 +211,7 @@ func TestAgentPromptGivesUpOnAHostThatNeverAnswers(t *testing.T) {
 	promptTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { promptTimeout = old })
 	start := time.Now()
-	if err := run([]string{"agent", "prompt", "demo", "hello"}); err == nil {
+	if err := run(io.Discard, []string{"agent", "prompt", "demo", "hello"}); err == nil {
 		t.Fatal("prompt succeeded against a host that never answered")
 	}
 	if time.Since(start) > 5*time.Second {

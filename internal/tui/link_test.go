@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -39,10 +37,10 @@ func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Mod
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20), remote, root
 }
 
-// step sends a key and runs the command it returns, feeding the message
+// step presses a key and runs the command it returns, feeding the message
 // back, the way the program does.
-func step(m tui.Model, msg tea.KeyMsg) tui.Model {
-	m, cmd := send(m, msg)
+func step(m tui.Model, key string) tui.Model {
+	m, cmd := press(m, key)
 	if cmd != nil {
 		if out := cmd(); out != nil {
 			next, _ := m.Update(out)
@@ -52,14 +50,12 @@ func step(m tui.Model, msg tea.KeyMsg) tui.Model {
 	return m
 }
 
-var altR = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}, Alt: true}
-
 // alt+r lists the hosts the ssh configuration names; Enter on one asks it
 // and shows its projects, with the link here that already points at each.
 func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 	m, remote, _ := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha", "beta")
 
-	m = step(m, altR)
+	m = step(m, "alt+r")
 	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") {
 		t.Fatalf("rows = %q, want the two hosts", r)
 	}
@@ -67,7 +63,7 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 		t.Errorf("header = %q, want the dialog named", h)
 	}
 
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "enter")
 	if last := remote.Asked[len(remote.Asked)-1]; len(last) != 0 {
 		t.Errorf("asked %v, want the dialog's ask to be for every project", remote.Asked)
 	}
@@ -91,13 +87,13 @@ func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
 func TestEnterOnAHostsProjectWritesTheLinkUnderTheOfferedName(t *testing.T) {
 	m, _, root := linkWorld(t, nil, "beta")
 
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
 	if q := query(m); !strings.Contains(q, "rs-buildbox-beta") {
 		t.Fatalf("field = %q, want the offered name", q)
 	}
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "enter")
 
 	body, err := os.ReadFile(config.ProjectFile(root, "rs-buildbox-beta"))
 	if err != nil || !strings.Contains(string(body), `host = "buildbox"`) || !strings.Contains(string(body), `project = "beta"`) {
@@ -116,9 +112,9 @@ func TestEnterOnAHostsProjectWritesTheLinkUnderTheOfferedName(t *testing.T) {
 // project here is overwritten.
 func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
 	m, _, root := linkWorld(t, remoteOnDisk(t, "alpha"), "beta")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
 
 	m, _ = press(m, "alph")
 	if q := query(m); !strings.Contains(q, "alph") || strings.Contains(q, "rs-") {
@@ -132,7 +128,7 @@ func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
 		t.Errorf("rows = %q, want the taken name said", rows(m))
 	}
 
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "enter")
 	if h := barLine(m); !strings.Contains(h, "Name the link") {
 		t.Errorf("header = %q, want the name step still up", h)
 	}
@@ -151,10 +147,10 @@ func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
 // project it left.
 func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "beta", "gamma")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	m, _ = press(m, "down")
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "enter")
 	m, _ = press(m, "esc")
 	if h := barLine(m); !strings.Contains(h, "buildbox") || strings.Contains(h, "Name the link") {
 		t.Errorf("header = %q, want the host's projects", h)
@@ -169,11 +165,11 @@ func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 // back where it was, before it goes back to the hosts (decisions.md D44).
 func TestTypingFiltersTheHostsProjects(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "alpha", "beta", "gamma")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	m, _ = press(m, "down")
 
-	m = typed(m, "gam")
+	m = typeInto(m, "gam")
 	if q := query(m); !strings.Contains(q, "gam") {
 		t.Errorf("field = %q, want the query", q)
 	}
@@ -184,7 +180,7 @@ func TestTypingFiltersTheHostsProjects(t *testing.T) {
 		t.Errorf("rows = %q, want gamma alone", rows(m))
 	}
 
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "enter")
 	if q := query(m); !strings.Contains(q, "rs-buildbox-gamma") {
 		t.Fatalf("field = %q, want gamma offered", q)
 	}
@@ -214,13 +210,13 @@ func TestTypingFiltersTheHostsProjects(t *testing.T) {
 // dialog opens, the first Esc on the hosts closes it.
 func TestEscClosesTheHostsAfterALinkWrittenFromAQuery(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "alpha", "beta")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = typed(m, "bet")
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = typeInto(m, "bet")
+	m = step(m, "enter")
+	m = step(m, "enter")
 
-	m = step(m, altR)
+	m = step(m, "alt+r")
 	if h := barLine(m); !strings.Contains(h, "Link") {
 		t.Fatalf("header = %q, want the hosts up", h)
 	}
@@ -233,9 +229,9 @@ func TestEscClosesTheHostsAfterALinkWrittenFromAQuery(t *testing.T) {
 // A query matching none of the host's projects says so.
 func TestAQueryMatchingNoneOfTheHostsProjectsSaysSo(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "alpha")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = typed(m, "zz")
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = typeInto(m, "zz")
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, `No project on buildbox matches "zz"`) {
 		t.Errorf("rows = %q, want the empty match said", rows(m))
 	}
@@ -247,8 +243,8 @@ func TestAQueryMatchingNoneOfTheHostsProjectsSaysSo(t *testing.T) {
 func TestAHostsMissingCheckoutShowsTheMissingFolder(t *testing.T) {
 	m, remote, _ := linkWorld(t, nil)
 	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}}}
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	r := rows(m)
 	if len(r) < 2 || !strings.Contains(r[0], theme.Default().Glyphs.NoFolder) || strings.Contains(r[1], "not on") {
 		t.Errorf("rows = %q, want the missing-folder glyph and no note", r)
@@ -260,8 +256,8 @@ func TestAHostsMissingCheckoutShowsTheMissingFolder(t *testing.T) {
 func TestAHostsPathIsWrittenAgainstItsHome(t *testing.T) {
 	m, remote, _ := linkWorld(t, nil)
 	remote.Views = []revier.ProjectView{{Project: revier.Project{Name: "delta", Path: "/home/someone/dev/delta"}, PathExists: true}}
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	if r := rows(m); len(r) < 2 || !strings.Contains(r[1], "~/dev/delta") {
 		t.Errorf("rows = %q, want the path under ~", r)
 	}
@@ -270,9 +266,9 @@ func TestAHostsPathIsWrittenAgainstItsHome(t *testing.T) {
 // A project already linked is refused, not written twice.
 func TestEnterOnALinkedProjectIsRefused(t *testing.T) {
 	m, _, root := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
 	if f := footer(m); !strings.Contains(f, "already linked as alpha") {
 		t.Errorf("footer = %q, want the existing link named", f)
 	}
@@ -285,8 +281,8 @@ func TestEnterOnALinkedProjectIsRefused(t *testing.T) {
 // list.
 func TestEscWalksBackThroughTheDialog(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "beta")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	m, _ = press(m, "esc")
 	if r := rows(m); len(r) < 1 || !strings.Contains(r[0], "buildbox") {
 		t.Errorf("rows = %q, want the hosts again", r)
@@ -302,8 +298,8 @@ func TestEscWalksBackThroughTheDialog(t *testing.T) {
 func TestAHostThatDoesNotAnswerIsSaidInTheFooter(t *testing.T) {
 	m, remote, _ := linkWorld(t, nil)
 	remote.Err = errors.New("buildbox: connection refused")
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
 	if f := footer(m); !strings.Contains(f, "connection refused") {
 		t.Errorf("footer = %q, want the failure", f)
 	}
@@ -317,7 +313,7 @@ func TestAHostThatDoesNotAnswerIsSaidInTheFooter(t *testing.T) {
 func TestAltRWithNoHostsSaysSo(t *testing.T) {
 	m, _, _ := linkWorld(t, nil)
 	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
-	m = step(m, altR)
+	m = step(m, "alt+r")
 	if f := footer(m); !strings.Contains(f, "no hosts") {
 		t.Errorf("footer = %q, want no hosts said", f)
 	}
@@ -328,8 +324,8 @@ func TestAltRWithNoHostsSaysSo(t *testing.T) {
 // project list under an "asking" footer.
 func TestEscDuringAnAskAbandonsIt(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "beta")
-	m = step(m, altR)
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("Enter on a host started no ask")
 	}
@@ -351,10 +347,10 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "beta")
 	stale := m.Survey()
 
-	m = step(m, altR)
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = step(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
+	m = step(m, "enter")
 
 	next, _ := m.Update(stale())
 	m = next.(tui.Model)
@@ -368,7 +364,7 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 // the surface (decisions.md D45).
 func TestTheDialogOwnsTheKeys(t *testing.T) {
 	m, _, _ := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha")
-	m = step(m, altR)
+	m = step(m, "alt+r")
 
 	m, _ = press(m, "a")
 	m, _ = press(m, "tab")

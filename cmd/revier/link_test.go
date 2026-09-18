@@ -33,7 +33,7 @@ func TestLinkListsTheHostsProjectsAndWhatIsLinked(t *testing.T) {
 	a, _ := hostWith(t, "far", "other")
 	a.projects = []core.Project{remoteProject(t)}
 
-	out := stdout(t, func() error { return cmdLink(context.Background(), a, []string{"buildbox"}) })
+	out := output(t, a, func() error { return cmdLink(context.Background(), a, []string{"buildbox"}) })
 	for _, want := range []string{"far", "/home/hans/dev/far", "other"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table = %q, want %s", out, want)
@@ -50,7 +50,7 @@ func TestLinkListsTheHostsProjectsAndWhatIsLinked(t *testing.T) {
 func TestLinkWritesALinkToAProjectTheHostHas(t *testing.T) {
 	a, _ := hostWith(t, "far")
 
-	out := stdout(t, func() error { return cmdLink(context.Background(), a, []string{"buildbox", "far", "--name", "build"}) })
+	out := output(t, a, func() error { return cmdLink(context.Background(), a, []string{"buildbox", "far", "--name", "build"}) })
 	file := config.ProjectFile(a.cfgRoot, "build")
 	if !strings.Contains(out, file) {
 		t.Errorf("printed %q, want the file named", out)

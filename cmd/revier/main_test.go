@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,7 +52,7 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 		{"attach", "extra"},
 		{"status", "extra"},
 	} {
-		err := run(args)
+		err := run(io.Discard, args)
 		if err == nil || !strings.Contains(err.Error(), "usage: revier "+args[0]) {
 			t.Errorf("revier %s: err = %v, want the usage", strings.Join(args, " "), err)
 		}

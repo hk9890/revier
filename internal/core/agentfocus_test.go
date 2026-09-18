@@ -111,7 +111,7 @@ func TestGoAgentRefusesAnAgentThatIsGone(t *testing.T) {
 func TestGoAgentWithoutTabsFocusesTheInstance(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", agentPanel("2", "idle"))
-	c := &core.Core{Runtime: noTabs{rt}, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{titleProbe{}}}
 	p := prepared(t, project())
 
 	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {

@@ -149,7 +149,7 @@ func TestADoubleClickClearsTheQuery(t *testing.T) {
 // A target key opens what it names, so it ends the search as Enter does.
 func TestATargetKeyClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor
 	if cmd == nil {
 		t.Fatal("ctrl+shift+o ran nothing")
@@ -161,7 +161,7 @@ func TestATargetKeyClearsTheQuery(t *testing.T) {
 // cursor stays on the row clicked.
 func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := typed(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
+	m := typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
 	if cmd == nil {
@@ -177,7 +177,7 @@ func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 func TestAnActionClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
 	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
@@ -193,7 +193,7 @@ func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	homeless := core.Prepare([]revier.Project{{Name: "homeless", Path: "/p/homeless", Targets: []revier.Target{
 		{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 	}}})
-	m := typed(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
+	m := typeInto(resize(refreshed(t, c, homeless, stateWith(t, nil), nil), 120, 20), "home")
 	m, cmd := press(m, "enter")
 	if cmd != nil {
 		t.Fatal("enter on a project without home ran something")
@@ -203,7 +203,7 @@ func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	}
 
 	_, _, c, projects := world(t, 3) // /p/project-NN is not on this machine
-	m = typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m = typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd = press(m, "enter")
 	if cmd != nil {
 		t.Fatal("enter on a missing checkout with nothing to clone from ran something")
@@ -224,7 +224,7 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 		projects[i].Path = t.TempDir() // Enter opens only a directory that is there
 	}
 	rt.OpenErr = errors.New("kitty is not running")
-	m := typed(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
 	m, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("enter on a project returned no command")
@@ -235,14 +235,6 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 		t.Errorf("footer = %q, want the launch failure said", f)
 	}
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
-}
-
-// typed types a query into the surface, a key at a time.
-func typed(m tui.Model, q string) tui.Model {
-	for _, r := range q {
-		m, _ = press(m, string(r))
-	}
-	return m
 }
 
 // assertSearchEnded checks that the typed query is gone, every project is listed

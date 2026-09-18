@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"text/tabwriter"
 
 	"github.com/hk9890/revier/internal/config"
@@ -34,11 +33,11 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 			return err
 		}
 		if len(hosts) == 0 {
-			fmt.Printf("no hosts in %s\n", path)
+			_, _ = fmt.Fprintf(a.out, "no hosts in %s\n", path)
 			return nil
 		}
 		for _, h := range hosts {
-			fmt.Println(h)
+			_, _ = fmt.Fprintln(a.out, h)
 		}
 		return nil
 	case 1:
@@ -52,7 +51,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("created %s\n", p.File)
+		_, _ = fmt.Fprintf(a.out, "created %s\n", p.File)
 		return nil
 	}
 	return fmt.Errorf("usage: revier link [host [project]] [--name name]")
@@ -61,7 +60,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 // printRemote is the table of a host's projects, with the link here that
 // already points at each, so a second link to one is not written unaware.
 func printRemote(a *app, host string, views []revier.ProjectView) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "PROJECT\tPATH\tSTATE\tAGENT\tLINKED AS")
 	for _, v := range views {
 		linked := "-"

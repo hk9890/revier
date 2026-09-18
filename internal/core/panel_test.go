@@ -147,15 +147,10 @@ func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 	}
 }
 
-// tablessRuntime is a runtime with no PanelOpener.
-type tablessRuntime struct{ *hosttest.Fake }
-
-func (tablessRuntime) Capabilities() revier.Capabilities { return revier.Capabilities{Layout: true} }
-
 func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
-	rt := tablessRuntime{hosttest.New("tmux")}
+	rt := hosttest.NewRuntime("tmux")
 	rt.Add("session:revier", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: bareRuntime{rt}}
 	p := prepared(t, tabProject())
 
 	_, err := c.Go(context.Background(), p, "tickets", nil)

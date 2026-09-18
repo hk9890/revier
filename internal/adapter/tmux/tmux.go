@@ -271,7 +271,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
 	}
-	panels := panelsOf(r)
+	panels := r.PanelSpecs()
 
 	out, err := h.newSession(ctx, r.Name, panels[0])
 	if err != nil {
@@ -315,15 +315,6 @@ func (h *Host) name(ctx context.Context, session, window, pane, name string, pan
 		return err
 	}
 	return h.fill(ctx, window, pane, panels)
-}
-
-// panelsOf is what a realization runs: its panels, or r.Launch in r.Dir as the
-// one panel.
-func panelsOf(r revier.Realization) []revier.PanelSpec {
-	if len(r.Panels) == 0 {
-		return []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
-	}
-	return r.Panels
 }
 
 // start is the part of a new-session, new-window or split-window that starts
@@ -373,7 +364,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	if err := h.own(ref); err != nil {
 		return "", err
 	}
-	panels := panelsOf(r)
+	panels := r.PanelSpecs()
 	args := []string{"new-window", "-d", "-a", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-t", sessionOf(ref.ID) + ":{end}"}
 	out, err := h.run(ctx, append(args, start(panels[0])...)...)
 	if err != nil {

@@ -30,21 +30,6 @@ func press(t *testing.T, c *core.Core, p core.Project, root string, name revier.
 	return ref
 }
 
-// demoProject is a workspace and a diff pane on the runtime, and an editor
-// window.
-func demoProject(t *testing.T) core.Project {
-	t.Helper()
-	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^home$"}}},
-		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
-			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff$"}}},
-		{Name: "editor", Key: "ctrl-shift-o", Window: &revier.Realization{
-			Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
-	}})
-	return p
-}
-
 // The press that toggles back goes home, and pins home. Pinned to diff, the
 // home window would be where the diff key lands from then on: every later
 // press would find home through the binding and toggle back to it again.
@@ -62,18 +47,6 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 	if got := press(t, c, p, root, "diff"); got != diffRef {
 		t.Errorf("third press = %v, want diff %v: the key must still reach its target", got, diffRef)
 	}
-}
-
-// lateWindows is a window host whose windows appear later than the launch
-// that asked for them: Open starts nothing it can list yet.
-type lateWindows struct {
-	*hosttest.Fake
-	opened int
-}
-
-func (l *lateWindows) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
-	l.opened++
-	return revier.TargetRef{}, nil
 }
 
 // A window the launch made and could not focus is pinned with the failure, so
@@ -106,7 +79,7 @@ func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
 // window of that target that has since closed, which is what made this
 // launch necessary.
 func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
-	wm := &lateWindows{Fake: hosttest.New("gnome")}
+	wm := hosttest.NewLateWindows("gnome")
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	st := &state.State{Launch: &state.Launch{Project: "demo", Target: "editor", At: time.Now().Add(-3 * time.Second)}}
@@ -118,8 +91,8 @@ func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 	if ref := press(t, c, p, root, "editor"); !ref.IsZero() {
 		t.Errorf("ref = %v, want none: the target is still coming up", ref)
 	}
-	if wm.opened != 0 {
-		t.Errorf("the editor was launched %d more times, want none", wm.opened)
+	if len(wm.Opened) != 0 {
+		t.Errorf("the editor was launched %d more times, want none", len(wm.Opened))
 	}
 }
 
@@ -143,7 +116,7 @@ func TestListSavesItsPrune(t *testing.T) {
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: loaded, stateRoot: root, core: c}
 
 	// The listing itself is not what is under test.
-	stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
+	output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	got, err := state.Load(root)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +137,7 @@ func TestListJSONCarriesAttachments(t *testing.T) {
 	st.Attach("demo", stray)
 	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
 
-	out := stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
+	out := output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	var views []revier.ProjectView
 	if err := json.Unmarshal([]byte(out), &views); err != nil {
 		t.Fatal(err)

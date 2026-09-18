@@ -551,10 +551,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
 	}
-	panels := r.Panels
-	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
-	}
+	panels := r.PanelSpecs()
 
 	socket, first, err := h.openFirst(ctx, r, panels[0])
 	if err != nil {
@@ -763,10 +760,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 // openTab is OpenTab's launches into the OS window whose current window is
 // win, with every window it opens added to opened.
 func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
-	panels := r.Panels
-	if len(panels) == 0 {
-		panels = []revier.PanelSpec{{Command: r.Launch, Dir: r.Dir}}
-	}
+	panels := r.PanelSpecs()
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
 	names := make([]string, 0, len(vars))

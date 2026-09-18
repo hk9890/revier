@@ -39,15 +39,11 @@ key = "ctrl-shift-o"
 // given project files, loaded.
 func sharedRoot(t *testing.T, projects map[string]string) []core.Project {
 	t.Helper()
-	root := t.TempDir()
-	write(t, root, "config.toml", sharedConfig)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	files := make(map[string]string, len(projects))
 	for name, body := range projects {
-		write(t, filepath.Join(root, "projects"), name+".toml", body)
+		files[name+".toml"] = body
 	}
-	_, loaded, err := config.Load(root)
+	_, loaded, err := config.Load(projectsRoot(t, sharedConfig, files))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
