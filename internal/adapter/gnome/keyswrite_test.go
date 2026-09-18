@@ -1,8 +1,7 @@
-//go:build integration
-
-// Layer L3: the commands the GNOME writer builds, against a recorder. No GNOME
-// session and no dconf: what is asserted is the argv, because that is the whole
-// of what this type contributes.
+// The commands the GNOME writer builds, against a recorder. No GNOME session,
+// no dconf and no recorded output, so the default layer runs it: what is
+// asserted is the argv, because that is the whole of what this type
+// contributes.
 package gnome_test
 
 import (

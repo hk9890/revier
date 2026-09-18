@@ -49,6 +49,9 @@ focusing after `Open` passed L2 and failed L4.
 
 - Tests sit next to the code. A live test file ends in `live_test.go` and
   carries `//go:build live`.
+- An adapter test that needs no recorded output and no tool stays untagged, so
+  `mise run test` runs it: `internal/adapter/kitty/ref_test.go`,
+  `internal/adapter/gnome/keyswrite_test.go`.
 - A live test starts its substrate on a socket named after itself and kills it
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must

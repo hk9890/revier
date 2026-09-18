@@ -22,6 +22,14 @@ func TestAToolFailureIsPrintedWithRevierStatus(t *testing.T) {
 	}
 }
 
+// `revier keys install` that left keys behind ends with its own status, 4,
+// and says nothing more: the plan it printed has already named every key.
+func TestAnIncompleteKeysInstallEndsWithStatusFourAndNoMoreWords(t *testing.T) {
+	if status, say := outcome(fmt.Errorf("install: %w", errKeysIncomplete)); status != exitKeysIncomplete || say {
+		t.Errorf("outcome = %d, %v; want %d, silent", status, say, exitKeysIncomplete)
+	}
+}
+
 // An argument a command takes no place for is refused, not dropped: `revier
 // new my project` would otherwise write a project called my.
 func TestAnExtraArgumentIsRefused(t *testing.T) {

@@ -412,6 +412,26 @@ func TestAPlanRefusesAConfigurationDisagreement(t *testing.T) {
 	}
 }
 
+// The refusal names every spelling once, as a sentence: two are joined by
+// "and", three by a comma and an "and".
+func TestARefusalNamesEverySpellingOnce(t *testing.T) {
+	editorWanting := func(name revier.ProjectName, key string) core.Project {
+		return prepared(t, revier.Project{Name: name, Path: "/home/hans/" + string(name), Targets: []revier.Target{
+			{Name: "editor", Key: key, Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+		}})
+	}
+	c := &core.Core{KeyBinder: theShellTool()}
+	for want, projects := range map[string][]core.Project{
+		"editor wants ctrl+shift+e and editor wants ctrl+shift+o.":                            {editorWanting("setup", "ctrl-shift-e"), editorWanting("revier", "ctrl-shift-o")},
+		"editor wants ctrl+shift+e, editor wants ctrl+shift+o and editor wants ctrl+shift+w.": {editorWanting("setup", "ctrl-shift-e"), editorWanting("revier", "ctrl-shift-o"), editorWanting("notes", "ctrl-shift-w")},
+	} {
+		_, err := c.PlanInstallKeys(context.Background(), projects, "alt+space")
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want it to say %q", err, want)
+		}
+	}
+}
+
 // One key that cannot be written must not take the others with it. Stopping
 // would hide the reason behind the first failure.
 func TestOneFailedKeyDoesNotStopTheRest(t *testing.T) {

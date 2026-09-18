@@ -93,7 +93,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m.bodyList().Select(index)
 		last := m.last
-		m.last = click{index: index, at: time.Now()}
+		m.last = click{index: index, at: m.now()}
 		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
 			m.last = click{}
 			if m.dialog != dialogNone {
