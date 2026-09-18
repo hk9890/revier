@@ -226,16 +226,45 @@ func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realizatio
 type snapshot map[string][]revier.Instance
 
 func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
+	s, failed := c.listing(ctx)
+	return s, failed.err()
+}
+
+// hostErrs is why each host that could not list is missing from a listing,
+// by host name.
+type hostErrs map[string]error
+
+// err is every host's failure, in the order the hosts are listed, or nil.
+func (e hostErrs) err() error {
+	if len(e) == 0 {
+		return nil
+	}
+	hosts := slices.Sorted(maps.Keys(e))
+	errs := make([]error, 0, len(hosts))
+	for _, h := range hosts {
+		errs = append(errs, e[h])
+	}
+	return errors.Join(errs...)
+}
+
+// listing is one bulk listing per host, with the hosts that could not list
+// left out and their failures returned beside it. A host that cannot answer
+// costs its own targets and no other's (decisions.md D89): a survey over the
+// other hosts still stands, and a press on a target of the failed host is
+// refused with its reason.
+func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 	s := make(snapshot)
+	failed := hostErrs{}
 	for _, h := range c.allHosts() {
 		in, err := h.Instances(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%s: instances: %w", h.Name(), err)
+			failed[h.Name()] = fmt.Errorf("%s: instances: %w", h.Name(), err)
+			continue
 		}
 		s[h.Name()] = in
 	}
 	c.identify(s)
-	return s, nil
+	return s, failed
 }
 
 // identify gives a runtime instance with no identity of its own the title the
@@ -479,8 +508,11 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 	if err != nil {
 		return Result{}, err
 	}
-	snap, err := c.snapshot(ctx)
-	if err != nil {
+	// The target's own host must have answered: a launch over a listing it
+	// is missing from would open a second copy. Another host's failure costs
+	// only what that host lists.
+	snap, failed := c.listing(ctx)
+	if err := failed[host.Name()]; err != nil {
 		return Result{}, err
 	}
 
@@ -601,8 +633,8 @@ func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName, b
 	if err != nil {
 		return false, err
 	}
-	snap, err := c.snapshot(ctx)
-	if err != nil {
+	snap, failed := c.listing(ctx)
+	if err := failed[host.Name()]; err != nil {
 		return false, err
 	}
 	_, found := c.locate(snap, p, i, host, m, bound[name])
@@ -887,8 +919,17 @@ type Report struct {
 	Views     []revier.ProjectView
 	Instances []revier.Instance
 	Windows   []revier.Instance
-	Hosts     []string
+	// Hosts are the hosts that listed. A host that could not is not here,
+	// so nothing bound to it is taken as gone, and its failure is in Failed.
+	Hosts []string
+	// Failed is why each host that could not list is missing, by host name.
+	// Its targets are in the views marked Unknown (decisions.md D89).
+	Failed map[string]error
 }
+
+// HostErr is every failure a survey degraded over, joined, or nil: what a
+// surface says beside the view it still has.
+func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
 // local matching for every project. bound is where each project's targets
@@ -923,7 +964,7 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	views := make([]revier.ProjectView, 0, len(projects))
 	for _, p := range projects {
-		views = append(views, c.view(context.Background(), nil, p, nil, nil))
+		views = append(views, c.view(context.Background(), nil, nil, p, nil, nil))
 	}
 	return views
 }
@@ -934,13 +975,13 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 	// and nothing local waits for it.
 	remote := make(chan map[revier.ProjectName]remoteAnswer, 1)
 	go func() { remote <- c.surveyRemotes(ctx, projects) }()
-	snap, err := c.snapshot(ctx)
-	if err != nil {
-		return Report{}, err
-	}
+	snap, failed := c.listing(ctx)
 	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
+	if len(failed) > 0 {
+		r.Failed = failed
+	}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, p, bound[p.Name], attached[p.Name]))
+		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name]))
 	}
 	answers := <-remote
 	tags := c.tags(snap)
@@ -951,6 +992,9 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 		}
 	}
 	for _, h := range c.hosts() {
+		if failed[h.Name()] != nil {
+			continue
+		}
 		r.Hosts = append(r.Hosts, h.Name())
 		r.Instances = append(r.Instances, snap[h.Name()]...)
 	}
@@ -1073,7 +1117,7 @@ func dirExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
+func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
 	// A remote project's checkout and agents are its host's word, laid over
 	// this view by merge; the path is in the host's terms, and the pane here
 	// that reaches the project is not the agent in it.
@@ -1113,6 +1157,13 @@ func (c *Core) view(ctx context.Context, snap snapshot, p Project, bound Binding
 		if err == nil {
 			tv.Available = true
 			tv.Host = host.Name()
+			// The host could not list: whether the target is up is not
+			// known, which is not the same as stopped.
+			if ferr := failed[host.Name()]; ferr != nil {
+				tv.Unknown = ferr.Error()
+				v.Targets = append(v.Targets, tv)
+				continue
+			}
 			if inst, found := c.locate(snap, p, i, host, m, bound[t.Name]); found {
 				tv.Ref = inst.Ref
 				if t.Home {

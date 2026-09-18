@@ -516,3 +516,12 @@ arguments to that argv on an unstated assumption about its shell form. The
 argv is `Remote.PanelCommand`, and the core asks the port for it when the
 target resolves: config derives the panel kinds alone, one seam holds the
 contract, and a second transport plugs in without touching config.
+
+### D89 — a host that cannot list costs its own targets and no other's
+
+One host's `Instances` failure - a `wctl` timeout - failed the whole survey
+and every `go`, so the runtime view and the keys were gone exactly when the
+desktop was the thing misbehaving. A survey now stands over the hosts that
+answered: the failed host's targets show as unknown with its reason, its
+refs are not taken as gone, and a press on one of them is refused with that
+reason. The other hosts' targets go as before.

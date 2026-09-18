@@ -365,6 +365,10 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 		state, stateStyle = "invalid", th.PathMissing
 	case !t.Available:
 		state = "no host here"
+	case t.Unknown != "":
+		// The host could not list this survey: up or not is not known, and
+		// the footer says why.
+		mark, state, stateStyle = strings.Repeat(" ", lipgloss.Width(mark)), "unknown", th.Meta
 	case !m.ready():
 		// The files' view, before any host has answered: whether the target
 		// is up is not known yet, and the row says so rather than "stopped".

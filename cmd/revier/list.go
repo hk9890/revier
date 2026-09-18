@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"os"
 	"text/tabwriter"
 
 	"github.com/hk9890/revier/internal/core"
@@ -47,6 +48,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
 	if err != nil {
 		return err
+	}
+	if err := report.HostErr(); err != nil {
+		fmt.Fprintf(os.Stderr, "revier: warning: %v\n", err)
 	}
 	views := report.Views
 
@@ -117,6 +121,8 @@ func targetSummary(v revier.ProjectView) string {
 			mark = "!" // its own configuration refused it
 		case !t.Available:
 			mark = "x" // no host on this machine can realize it
+		case t.Unknown != "":
+			mark = "?" // its host could not list
 		case !t.Ref.IsZero():
 			mark = "*" // running
 		}

@@ -50,6 +50,10 @@ type TargetView struct {
 	// and a target its own config refused are both unavailable, and only the
 	// reason tells the user which of the two to go and fix.
 	Reason string `json:"reason,omitempty"`
+	// Unknown says why the host that realizes the target could not list its
+	// instances this survey: the target may be running or not, and a press
+	// on it is refused with this reason until the host answers again.
+	Unknown string `json:"unknown,omitempty"`
 }
 
 type AgentView struct {

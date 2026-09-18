@@ -506,6 +506,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.surveyErr = msg.err
 		if msg.err == nil {
+			// A host that could not list degraded the survey rather than
+			// failing it: the view stands, and the footer says which host.
+			m.surveyErr = msg.report.HostErr()
 			m.claimByPolling(msg.report, msg.before)
 			m.views = sorted(m.known(m.uncovered(msg.report.Views)))
 			m.windows, m.surveyed = msg.report.Windows, true
