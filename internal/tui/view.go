@@ -248,17 +248,19 @@ func (m Model) ruleCount() string {
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints
-// once before the first survey answers, and on that frame every count is zero
-// and the list is empty, which says there are no projects when there are
-// ninety. With no project configured there is nothing to wait for.
+// before the first survey answers, and on those frames the rows are the
+// files' alone: the rule says the survey is pending rather than counting
+// what is not yet known. With no project configured there is nothing to
+// wait for.
 func (m Model) ready() bool {
 	return m.surveyed || len(m.projects) == 0
 }
 
 // empty is what the list shows in place of rows, in revier's words
-// rather than the list component's "No items.": nothing before the first
-// survey, where to add a project when none is configured, and that the filter
-// is why the list is empty when it is.
+// rather than the list component's "No items.": where to add a project when
+// none is configured, and that the filter is why the list is empty when it
+// is. The rows before the first survey are the files' alone, so a query that
+// matches none of them is why the list is empty then too.
 //
 // It wraps rather than clips: the directory is the part worth reading, and a
 // scratch REVIER_CONFIG_HOME is longer than the list is wide.
@@ -272,7 +274,7 @@ func (m Model) empty() string {
 		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
 	case m.dialog == dialogRemote && m.rfilter != "":
 		return say(th.NameDim, fmt.Sprintf("No project on %s matches %q.", m.host, m.rfilter))
-	case m.dialog != dialogNone || !m.ready():
+	case m.dialog != dialogNone:
 		return ""
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"

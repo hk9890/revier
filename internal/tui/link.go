@@ -45,6 +45,7 @@ type remoteItem struct {
 func (i remoteItem) FilterValue() string         { return string(i.view.Project.Name) }
 func (i remoteItem) rowView() revier.ProjectView { return i.view }
 func (i remoteItem) rowPath() string             { return remoteHome(i.view.Project.Path) }
+func (i remoteItem) rowUnsurveyed() bool         { return false }
 
 func (i remoteItem) rowNote() string {
 	if i.linked == "" {

@@ -228,6 +228,12 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	// config.Load has decoded them already, so this cannot fail.
 	m.targets, _ = config.DecodeTargets(cfg.Targets)
 	m.layout()
+	// The first frame lists every project from its file, before any host
+	// has answered: the survey is a round trip to every linked host, and
+	// the names are what the surface is opened for. The first survey lays
+	// the marks and the counts over the same rows.
+	m.views = c.Unsurveyed(projects)
+	m.reload()
 	return m
 }
 

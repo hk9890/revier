@@ -190,7 +190,12 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	b.WriteString(m.nameButton(v.Project.Name, w))
 	b.WriteString("\n")
 
+	// Before the first survey the view is the files' alone, and says nothing
+	// about what runs: the pane says so, as the rows do by carrying no mark.
 	status, style := "stopped", th.NameDim
+	if !m.ready() {
+		status, style = "surveying", th.Meta
+	}
 	switch {
 	case v.Invalid != "":
 		status, style = "invalid", th.PathMissing
@@ -360,6 +365,10 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 		state, stateStyle = "invalid", th.PathMissing
 	case !t.Available:
 		state = "no host here"
+	case !m.ready():
+		// The files' view, before any host has answered: whether the target
+		// is up is not known yet, and the row says so rather than "stopped".
+		mark, state, stateStyle = strings.Repeat(" ", lipgloss.Width(mark)), "surveying", th.Meta
 	case !t.Ref.IsZero():
 		mark, state, stateStyle, name = th.Glyphs.Running, "running", th.Running, th.ProjectName
 	}
