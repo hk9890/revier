@@ -18,7 +18,10 @@ func Login(line string) string { return login(line) }
 func Quiet(line string) string { return quiet(line) }
 
 // Options exposes the flags every call carries.
-func Options() []string { return options }
+func Options() []string { return flags() }
+
+// Shared exposes the connection-sharing flags.
+func Shared() []string { return shared() }
 
 // Classify exposes classify, with a context a test does not have to make.
 func Classify(host string, args []string, stderr string, err error) error {

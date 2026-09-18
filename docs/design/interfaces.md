@@ -220,6 +220,14 @@ type Closer interface {
 type PanelCloser interface {
     ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }
+
+// Hider is an optional capability of a WindowController. Hide takes a window
+// off the screen without closing it, and Focus brings it back as it was: how
+// the popup leaves on Esc and is raised by the next press (D86). Where the
+// host cannot hide, the popup exits.
+type Hider interface {
+    Hide(ctx context.Context, ref TargetRef) error
+}
 ```
 
 ## Attacher

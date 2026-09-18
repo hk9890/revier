@@ -74,7 +74,7 @@ func (m Model) helpSections() []helpSection {
 			{key: "pgup / pgdown", desc: "a page up / down"},
 			{key: "enter", desc: "open the project"},
 			{key: "type", desc: "filter the projects"},
-			{key: "esc", desc: "clear the filter, or quit"},
+			{key: "esc", desc: "clear the filter, or " + m.leaveWord()},
 			{key: k.Quit.Help().Key, desc: "quit"},
 		}},
 		{title: "Sections", entries: []helpEntry{

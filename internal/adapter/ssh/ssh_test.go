@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -163,6 +164,36 @@ func TestOptionsNeverAskForAPassword(t *testing.T) {
 	opts := strings.Join(ssh.Options(), " ")
 	if !strings.Contains(opts, "BatchMode=yes") || !strings.Contains(opts, "ConnectTimeout=") {
 		t.Errorf("options = %q, want BatchMode and a connect timeout", opts)
+	}
+}
+
+// Every call to a host goes over one connection: the survey runs each
+// refresh, and a handshake per refresh is most of what it costs. The socket's
+// directory exists before ssh is asked to write there, is the user's alone,
+// and its path stays under the limit a unix socket path has.
+func TestEveryCallSharesOneConnection(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	for _, argv := range [][]string{ssh.Options(), ssh.New("buildbox").RunCommand("far", "pull"), ssh.PanelCommand("buildbox", "far", "agent")} {
+		line := strings.Join(argv, " ")
+		if !strings.Contains(line, "ControlMaster=auto") || !strings.Contains(line, "ControlPersist=") {
+			t.Errorf("%q: want a shared connection", line)
+		}
+	}
+	var path string
+	for _, f := range ssh.Shared() {
+		if p, ok := strings.CutPrefix(f, "ControlPath="); ok {
+			path = p
+		}
+	}
+	if path == "" {
+		t.Fatalf("shared = %q, want a ControlPath", ssh.Shared())
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("%s: %v, mode %v; want the directory made, for the user alone", filepath.Dir(path), err, info.Mode())
+	}
+	if !strings.HasSuffix(path, "%C") {
+		t.Errorf("path = %s, want the destination's hash, not its name", path)
 	}
 }
 
