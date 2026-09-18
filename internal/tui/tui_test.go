@@ -1329,8 +1329,12 @@ func TestAStartFromTheDirectoryRunsNoLookup(t *testing.T) {
 
 // In the popup, Esc on the list hides the window instead of exiting, nothing
 // surveys while it is hidden, and the raise - the terminal's focus report -
-// surveys once and the refresh goes on from there.
+// reads the project files again, surveys once, and the refresh goes on from
+// there. A project written while the popup was hidden is on the raised one:
+// every press used to load the files, and a popup that hides owes the same.
 func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
 	_, wm, c, projects := world(t, 3)
 	popup := wm.Add("revier", core.PopupClass)
 	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
@@ -1350,12 +1354,26 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 		t.Error("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "projects", "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if next, cmd = m.Update(tea.FocusMsg{}); cmd == nil {
+		t.Fatal("the raise read nothing")
+	}
+	m = next.(tui.Model)
+	if next, cmd = m.Update(cmd()); cmd == nil {
 		t.Fatal("the raise started no survey")
 	}
 	m = next.(tui.Model)
-	if _, cmd = m.Update(cmd()); cmd == nil {
+	if next, cmd = m.Update(cmd()); cmd == nil {
 		t.Error("the survey after the raise scheduled no refresh")
+	}
+	m = next.(tui.Model)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
+		t.Errorf("the raised popup lists no project written while hidden:\n%s", body)
 	}
 	if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
 		t.Error("a focus report while shown started a second chain")

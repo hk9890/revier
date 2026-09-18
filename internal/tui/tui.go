@@ -271,6 +271,39 @@ type startMsg struct {
 // hiddenMsg follows the hide of the popup's window.
 type hiddenMsg struct{ err error }
 
+// reloadedMsg is the project files read again, on the raise of the popup:
+// what `revier new`, a link or an edit changed while it was hidden.
+type reloadedMsg struct {
+	shared   []map[string]any
+	projects []core.Project
+	err      error
+}
+
+// reloadFiles reads the configuration again. Every press used to load it,
+// since the popup exited on Esc; a popup that hides must read it on the
+// raise, or a project added from a terminal is missing until it quits.
+func reloadFiles() tea.Msg {
+	var msg reloadedMsg
+	msg.err = withConfigRoot(func(root string) error {
+		cfg, projects, err := config.Load(root)
+		if err != nil {
+			return err
+		}
+		msg.shared, msg.projects = cfg.Targets, projects
+		return nil
+	})
+	return msg
+}
+
+// setFiles takes the project files as read again: the shared targets for the
+// config screen, and every project loaded with them, for the surface.
+func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
+	m.shared = shared
+	m.targets, _ = config.DecodeTargets(shared)
+	m.projects = projects
+	m.tkeys = targetKeys(m.projects, m.keys)
+}
+
 // surveyMsg is one survey's answer, and the state it started from: what it
 // may prune (state.Prune).
 type surveyMsg struct {
@@ -538,12 +571,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hidden = true
 		return m, nil
 	case tea.FocusMsg:
-		// The raise: one survey now, then the chain as before. A chain still
-		// running while hidden goes on by itself.
+		// The raise: the files again, then one survey, then the chain as
+		// before. A chain still running while hidden goes on by itself.
 		if !m.hidden {
 			return m, nil
 		}
 		m.hidden = false
+		return m, reloadFiles
+	case reloadedMsg:
+		if msg.err != nil {
+			// The old list stands: a file broken while hidden must not
+			// empty the popup.
+			slog.Warn("reload on raise", "err", msg.err)
+		} else {
+			m.setFiles(msg.shared, msg.projects)
+		}
 		if m.idle {
 			m.idle = false
 			return m, m.Survey()

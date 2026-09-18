@@ -313,33 +313,40 @@ func cmdTUI(a *app) error {
 	if err != nil {
 		return err
 	}
+	// The popup's terminal says so in the environment, which is read and
+	// dropped here: what the surface launches must not take it for the
+	// popup. The value is the project `revier popup` resolved at the
+	// keypress, when the focused window was still the user's.
+	mark, popup := os.LookupEnv(core.PopupEnv)
+	_ = os.Unsetenv(core.PopupEnv)
 	// The project of the working directory is read from the files, before
 	// the first frame. The one of the focused window lists every host, so
-	// the surface asks for it once it shows. Neither is an error to miss:
-	// the TUI opens on the first row instead.
+	// the surface asks for it once it shows; in the popup it would find the
+	// popup itself, so the popup's answer stands. Neither is an error to
+	// miss: the TUI opens on the first row instead.
 	start := revier.ProjectName("")
-	if p, ok := a.resolveHere(); ok {
+	if p, ok := a.project(revier.ProjectName(mark)); popup && ok {
+		start = p.Name
+	} else if p, ok := a.resolveHere(); !popup && ok {
 		start = p.Name
 	}
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectRuntime(ctx, want, runtimeAdapters())
-		}).
-		WithStart(func(ctx context.Context) (revier.ProjectName, bool) {
-			p, ok := a.resolveAway(ctx)
-			return p.Name, ok
 		})
 	// All motion reports the pointer with no button held, which the hover
 	// needs, as well as the wheel and clicks. It takes plain drag-to-select
 	// from the terminal; shift-drag still selects in kitty and most others.
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
-	// The popup's terminal says so in the environment, which is read and
-	// dropped here: what the surface launches must not take it for the
-	// popup. Focus reports are how the hidden popup learns it was raised.
-	if os.Getenv(core.PopupEnv) != "" {
-		_ = os.Unsetenv(core.PopupEnv)
+	if popup {
+		// Focus reports are how the hidden popup learns it was raised.
 		m = m.WithPopup()
 		opts = append(opts, tea.WithReportFocus())
+	} else {
+		m = m.WithStart(func(ctx context.Context) (revier.ProjectName, bool) {
+			p, ok := a.resolveAway(ctx)
+			return p.Name, ok
+		})
 	}
 	_, err = tea.NewProgram(m, opts...).Run()
 	return err
