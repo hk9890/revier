@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 )
 
 // cmdDoctor reports every project file that did not load whole, and what to do
@@ -70,7 +71,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	}
 	_ = w.Flush()
 
-	_, _ = fmt.Fprintf(out, "\n%d project(s), %d file(s) with problems\n", len(projects), bad)
+	_, _ = fmt.Fprintf(out, "\n%s, %s with problems\n", core.Count(len(projects), "project"), core.Count(bad, "file"))
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.

@@ -63,7 +63,7 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 		"fix: the file is not valid TOML",
 		"template.toml",
 		"fix: fix the template",
-		"4 project(s), 3 file(s) with problems",
+		"4 projects, 3 files with problems",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("report should contain %q:\n%s", want, got)
@@ -87,7 +87,7 @@ func TestDoctorEndsCleanWhenEverythingLoads(t *testing.T) {
 	if err := cmdDoctor(&out, nil); err != nil {
 		t.Fatalf("cmdDoctor: %v", err)
 	}
-	if !strings.Contains(out.String(), "1 project(s), 0 file(s) with problems") {
+	if !strings.Contains(out.String(), "1 project, 0 files with problems") {
 		t.Errorf("report = %q", out.String())
 	}
 }
@@ -105,7 +105,7 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
-	for _, want := range []string{"config.toml", `action "sync"`, "typed text", "1 project(s), 1 file(s) with problems"} {
+	for _, want := range []string{"config.toml", `action "sync"`, "typed text", "1 project, 1 file with problems"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report should contain %q:\n%s", want, out.String())
 		}

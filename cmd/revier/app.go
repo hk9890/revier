@@ -90,7 +90,7 @@ func warnProblems(cfg *config.Config, projects []core.Project) {
 		}
 	}
 	if files > 0 {
-		fmt.Fprintf(os.Stderr, "revier: warning: %d configuration file(s) have problems; run `revier doctor`\n", files)
+		fmt.Fprintf(os.Stderr, "revier: warning: %s with problems; run `revier doctor`\n", core.Count(files, "configuration file"))
 	}
 }
 

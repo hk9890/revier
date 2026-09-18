@@ -60,7 +60,7 @@ run = "govulncheck ./..."
 
 # ---- tests -----------------------------------------------------------------
 # Layer model: docs/TESTING.md. L1+L2 are the default suite and touch nothing
-# outside the process. L3 parses recorded adapter output. L4/L5 drive a real
+# outside the process. L3 parses recorded adapter output. L4 drives a real
 # headless substrate. L6 is manual and is the only layer that reaches a screen.
 
 [tasks.test]

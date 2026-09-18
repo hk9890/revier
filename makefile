@@ -19,7 +19,7 @@ vet:
 	@go vet ./...
 
 fmt:
-	@go fmt ./...
+	@go run golang.org/x/tools/cmd/goimports@v0.49.0 -local github.com/hk9890/revier -w cmd internal pkg scripts
 
 tidy:
 	@go mod tidy

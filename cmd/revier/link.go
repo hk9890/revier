@@ -72,10 +72,8 @@ func printRemote(a *app, host string, views []revier.ProjectView) error {
 
 // linkedAs is the name of the link here to a project on a host, or "-".
 func (a *app) linkedAs(host string, project revier.ProjectName) string {
-	for _, p := range a.projects {
-		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
-			return string(p.Name)
-		}
+	if name, ok := core.LinkedAs(a.projects, host, project); ok {
+		return string(name)
 	}
 	return "-"
 }

@@ -2,7 +2,7 @@ version: "2"
 
 run:
   timeout: 5m
-  # Layers L3-L5 sit behind these tags. Without them the linter never sees the
+  # Layers L3 and L4 sit behind these tags. Without them the linter never sees the
   # adapter and live-substrate tests, which is where most of the I/O lives.
   build-tags:
     - integration

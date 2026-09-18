@@ -315,13 +315,17 @@ func waitEvent(events <-chan revier.WindowEvent) tea.Cmd {
 	}
 }
 
+// hostTimeout bounds one round of host calls - a survey, or one focus - so a
+// hung wctl or kitty socket costs one refresh and not the surface.
+const hostTimeout = 10 * time.Second
+
 // Survey is one refresh: one bulk listing per host, matched locally. It is a
 // command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
 	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
 		// A state that cannot be read is nil, which lets nothing be pruned.
 		before, _ := loadState(root)
@@ -918,7 +922,7 @@ func (m Model) goRow(i int) tea.Cmd {
 	if ref := row.attached; !ref.IsZero() {
 		c := m.core
 		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)
