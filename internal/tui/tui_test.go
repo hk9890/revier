@@ -564,13 +564,16 @@ func paneCursor(m tui.Model) string {
 	return ""
 }
 
-// paneCell is a terminal cell on the pane line that carries the text.
+// paneCell is the terminal cell where the text starts on the pane line that
+// carries it.
 func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 	t.Helper()
 	for y, raw := range strings.Split(m.View(), "\n") {
 		// The list, the pane's border, the pane.
-		if parts := strings.Split(raw, "│"); len(parts) > 1 && strings.Contains(parts[1], text) {
-			return paneBorder(t, m) + 2, y
+		if parts := strings.Split(raw, "│"); len(parts) > 1 {
+			if at := strings.Index(parts[1], text); at >= 0 {
+				return paneBorder(t, m) + 1 + at, y
+			}
 		}
 	}
 	t.Fatalf("no pane line carries %q:\n%s", text, m.View())
@@ -1752,24 +1755,24 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 	// One column left of the border is still the list.
 	m = wheel(m, border-1, tea.MouseButtonWheelDown)
 	m = wheel(m, border-1, tea.MouseButtonWheelUp)
-	if top := strings.Split(pane(m), "\n")[0]; top != "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "Project  first edit alt+e" {
 		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
 	}
 
 	m = wheel(m, border, tea.MouseButtonWheelDown)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
 		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "first") {
 		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
 	}
 	m = survey(m)
-	if top := strings.Split(pane(m), "\n")[0]; top == "first alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
 		t.Errorf("a refresh put the pane back at its top")
 	}
 
 	m, _ = press(m, "down")
-	if top := strings.Split(pane(m), "\n")[0]; top != "second alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "Project  second edit alt+e" {
 		t.Errorf("pane top = %q after moving to the next project, want its name", top)
 	}
 }

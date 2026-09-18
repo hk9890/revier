@@ -498,8 +498,8 @@ func TestASnapshotThatExactlyFitsKeepsItsLastEntry(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	// Nineteen rows of pane at this height; the facts, the targets and the
-	// agents take fourteen of them, so five entries fit exactly.
-	for i := range 5 {
+	// agents take fifteen of them, so four entries fit exactly.
+	for i := range 4 {
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -508,7 +508,7 @@ func TestASnapshotThatExactlyFitsKeepsItsLastEntry(t *testing.T) {
 	projects[0].Path = dir
 
 	body := pane(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24))
-	if !strings.Contains(body, "f04") || strings.Contains(body, "...") {
+	if !strings.Contains(body, "f03") || strings.Contains(body, "...") {
 		t.Errorf("a listing that exactly fits lost its last entry to an ellipsis:\n%s", body)
 	}
 	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n != 19 {
@@ -527,7 +527,7 @@ func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 260, 30)
 
 	top := strings.Split(pane(m), "\n")[0]
-	if !strings.HasPrefix(top, "long") || !strings.Contains(top, "Project Snapshot") {
+	if !strings.HasPrefix(top, "Project  long") || !strings.Contains(top, "Project Snapshot") {
 		t.Errorf("pane top = %q, want the name and the snapshot's heading on one line", top)
 	}
 }

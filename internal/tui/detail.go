@@ -187,7 +187,11 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
+	// The name stands level with the list's query, and the rule under it
+	// level with the list's rule, so the two columns read as one head.
 	b.WriteString(m.nameButton(v.Project.Name, w))
+	b.WriteString("\n")
+	b.WriteString(th.Border.Render(strings.Repeat("─", w)))
 	b.WriteString("\n")
 
 	// Before the first survey the view is the files' alone, and says nothing
@@ -375,7 +379,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	head := gridHead(lead,
 		highlight(string(t.Name), row.matches, style(name), style(th.Match)),
 		style(stateStyle).Render(mark+" "+state), space)
-	return fill(clipTo(head+style(th.Accent).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
+	return fill(clipTo(head+style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
 }
 
 // detailAgent is one row of the Agents section, on the Targets section's grid:

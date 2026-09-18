@@ -216,7 +216,7 @@ func (m Model) helpScreen() string {
 		rule := max(w-lipgloss.Width(s.title)-3, 0)
 		lines = append(lines, clipTo(" "+th.Heading.Render(s.title)+" "+th.Border.Render(strings.Repeat("─", rule)), w))
 		for _, e := range s.entries {
-			lines = append(lines, clipTo("   "+th.Accent.Render(pad(e.key, keyWidth))+"  "+th.Help.Render(e.desc), w))
+			lines = append(lines, clipTo("   "+th.Help.Render(pad(e.key, keyWidth))+"  "+th.Help.Render(e.desc), w))
 		}
 	}
 	return strings.Join(lines, "\n")

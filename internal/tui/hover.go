@@ -76,7 +76,7 @@ func (m Model) paneAt(x, y int) hovered {
 	line += m.detail.YOffset
 	// The pane's content starts past its border and padding.
 	_, mc := m.margins()
-	if cx := x - mc - m.listWidth() - paneChrome; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
+	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
 		return hovered{kind: hoverName}
 	}
 	switch line {
