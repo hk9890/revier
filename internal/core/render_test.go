@@ -175,3 +175,62 @@ func TestRenderFillsEveryPanelDirFromItsRealization(t *testing.T) {
 		}
 	}
 }
+
+// A field the project leaves empty is refused where a template reads it: a
+// link written before its host reported a path would otherwise launch an
+// editor on nothing (decisions.md D83).
+func TestRenderRejectsAnEmptyFieldATemplateReads(t *testing.T) {
+	link := &revier.Link{Host: "buildbox", Project: "far"}
+	for name, tc := range map[string]struct {
+		launch []string
+		want   string
+	}{
+		"a path the link has not recorded":       {[]string{"code", "{{.Path}}"}, "path"},
+		"a repository the link has not recorded": {[]string{"chrome", "{{.GitURL}}"}, "git_url"},
+	} {
+		p := revier.Project{
+			Name:   "far",
+			Remote: link,
+			Targets: []revier.Target{{
+				Name:   "editor",
+				Window: &revier.Realization{Launch: tc.launch, Match: revier.Match{Class: "^Code$"}},
+			}},
+		}
+		_, err := core.Render(p)
+		if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "editor") {
+			t.Errorf("%s: err = %v, want one naming the target and %q", name, err, tc.want)
+		}
+	}
+
+	p := revier.Project{
+		Name: "far", Remote: link, Path: "/srv/far",
+		Targets: []revier.Target{{
+			Name:   "editor",
+			Window: &revier.Realization{Launch: []string{"code", "{{.Path}}"}, Match: revier.Match{Class: "^Code$"}},
+		}},
+	}
+	out, err := core.Render(p)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got := out.Targets[0].Window.Launch[1]; got != "/srv/far" {
+		t.Errorf("launch = %q, want the recorded path", got)
+	}
+}
+
+// A field nothing reads is not required: a link with no path still opens its
+// pane onto the host.
+func TestRenderLeavesAnEmptyFieldNoTemplateReads(t *testing.T) {
+	p := revier.Project{
+		Name:   "far",
+		Remote: &revier.Link{Host: "buildbox", Project: "far"},
+		Targets: []revier.Target{{
+			Name:    "home",
+			Home:    true,
+			Runtime: &revier.Realization{Launch: []string{"ssh", "{{.Name}}"}, Match: revier.Match{Title: "^session:far$"}},
+		}},
+	}
+	if _, err := core.Render(p); err != nil {
+		t.Errorf("Render: %v", err)
+	}
+}

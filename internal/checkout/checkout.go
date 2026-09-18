@@ -60,6 +60,12 @@ func Origin(dir string) string {
 // No deadline: the clone of a large repository outlasts any timeout a keypress
 // command sets for its host calls.
 func Ensure(p revier.Project, out io.Writer) (bool, error) {
+	if p.Remote != nil {
+		// A link records the host's path and repository for its targets to
+		// render (decisions.md D83). Cloning either here would put a second
+		// checkout under a path that names a directory on another machine.
+		return false, fmt.Errorf("project %q is a link: %s holds its checkout", p.Name, p.Remote.Host)
+	}
 	fi, err := os.Stat(p.Path)
 	switch {
 	case err == nil && fi.IsDir():
