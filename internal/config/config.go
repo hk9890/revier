@@ -321,11 +321,6 @@ func Validate(p revier.Project) error {
 		if err := validateHost(p.Remote.Host); err != nil {
 			errs = append(errs, fmt.Errorf("remote.host: %w", err))
 		}
-		if p.GitURL != "" {
-			// The checkout is the host's to clone, from the git_url of the
-			// project file there; one here would be a copy nothing reads.
-			errs = append(errs, errors.New("a link has no git_url; the project file on the host has it"))
-		}
 	}
 
 	homes := 0

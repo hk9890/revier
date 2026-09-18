@@ -95,14 +95,18 @@ func (a *app) link(ctx context.Context, host string, project, name revier.Projec
 	if err != nil {
 		return core.Project{}, err
 	}
+	var on revier.Project
 	found := false
 	for _, v := range views {
-		found = found || v.Project.Name == project
+		if v.Project.Name == project {
+			on, found = v.Project, true
+			break
+		}
 	}
 	if !found {
 		return core.Project{}, fmt.Errorf("%s has no project named %q; `revier link %s` lists what it has", host, project, host)
 	}
-	p, err := config.CreateLink(a.cfgRoot, name, host, project)
+	p, err := config.CreateLink(a.cfgRoot, name, host, on)
 	if err != nil {
 		return core.Project{}, err
 	}

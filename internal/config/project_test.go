@@ -244,7 +244,7 @@ name = "remote-editor"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	file := write(t, dir, "far.toml", link)
+	file := write(t, dir, "far.toml", "path = \"/srv/far\"\n"+link)
 	cfg, _, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // link is a project on another machine, in the smallest file that says so.
@@ -386,7 +387,7 @@ key = "ctrl-o"
   launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}"]
   match = { class = "^Code$" }
 `)
-	p, err := config.CreateLink(root, "far", "buildbox", "")
+	p, err := config.CreateLink(root, "far", "buildbox", revier.Project{Path: "/srv/far"})
 	if err != nil {
 		t.Fatalf("CreateLink: %v", err)
 	}
@@ -404,7 +405,7 @@ key = "ctrl-o"
 // and loads it back: the name on the host only when it differs.
 func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 	root := t.TempDir()
-	p, err := config.CreateLink(root, "far", "buildbox", "")
+	p, err := config.CreateLink(root, "far", "buildbox", revier.Project{Path: "/srv/far"})
 	if err != nil {
 		t.Fatalf("CreateLink: %v", err)
 	}
@@ -419,26 +420,60 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 		t.Errorf("file = %q: the same name is not written twice", body)
 	}
 
-	build, err := config.CreateLink(root, "build", "buildbox", "far")
+	build, err := config.CreateLink(root, "build", "buildbox", revier.Project{Name: "far", Path: "/srv/far"})
 	if err != nil {
 		t.Fatalf("CreateLink: %v", err)
 	}
 	if build.Name != "build" || build.Remote.Project != "far" {
 		t.Errorf("link = %+v, want build here and far there", build.Project)
 	}
-	if _, err := config.CreateLink(root, "far", "buildbox", ""); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if _, err := config.CreateLink(root, "far", "buildbox", revier.Project{Path: "/srv/far"}); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("err = %v, want the existing file kept", err)
 	}
-	if _, err := config.CreateLink(root, "bad", "-oProxyCommand=x", ""); err == nil {
+	if _, err := config.CreateLink(root, "bad", "-oProxyCommand=x", revier.Project{Path: "/srv/far"}); err == nil {
 		t.Error("want the host refused before anything is written")
 	}
 }
 
-func TestALinkRefusesAGitURL(t *testing.T) {
-	body := "git_url = \"git@github.com:hk9890/far.git\"\n" + link
-	_, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	if err == nil || !strings.Contains(err.Error(), "git_url") {
-		t.Errorf("err = %v, want git_url refused on a link", err)
+// A link holds the repository the host records, for a target here that
+// renders it. The checkout it names is still the host's, which
+// internal/checkout refuses to clone here (decisions.md D83).
+func TestALinkKeepsTheHostsGitURL(t *testing.T) {
+	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:hk9890/far.git\"\n" + link
+	p, err := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if p.GitURL != "git@github.com:hk9890/far.git" {
+		t.Errorf("git_url = %q, want the host's", p.GitURL)
+	}
+	bad := "path = \"/srv/far\"\ngit_url = \"git@github.com:$(id).git\"\n" + link
+	if _, err := config.LoadProject(write(t, t.TempDir(), "bad.toml", bad), nil); err == nil {
+		t.Error("a git_url a link records is validated as any other")
+	}
+}
+
+// `revier link` records what the host says about the project, so a target
+// here renders a path and a repository that name nothing on this machine.
+func TestCreateLinkRecordsTheHostsPathAndRepository(t *testing.T) {
+	root := t.TempDir()
+	p, err := config.CreateLink(root, "far", "buildbox", revier.Project{
+		Name:   "far",
+		Path:   "/home/hans/dev/far",
+		GitURL: "git@github.com:hk9890/far.git",
+	})
+	if err != nil {
+		t.Fatalf("CreateLink: %v", err)
+	}
+	if p.Path != "/home/hans/dev/far" || p.GitURL != "git@github.com:hk9890/far.git" {
+		t.Errorf("link = %+v, want the host's path and repository", p.Project)
+	}
+	body, err := os.ReadFile(config.ProjectFile(root, "far"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `path = "/home/hans/dev/far"`) || !strings.Contains(string(body), "git_url =") {
+		t.Errorf("file = %q, want the host's answer written into it", body)
 	}
 }
 

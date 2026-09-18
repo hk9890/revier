@@ -446,3 +446,15 @@ local-only. A project file writes the part of its own kind, and the other
 part - a realization nothing would read - is refused at load. The derived ssh
 pane fills what a link's home target leaves out, so a placement costs no
 repetition of the launch.
+
+### D83 — a link records what the host says about the project, and an argument that renders to nothing is refused
+
+Replaces "a link has no git_url". A link's targets run here and reach the
+project there, so an editor over ssh renders a path on the host and a page
+renders the repository it is a clone of; neither names anything on this
+machine, and only the host knows them. `revier link` asks the host anyway, so
+it writes both into the file, and a checkout here is still refused. An argv
+element that renders empty is refused at load, whatever left it empty: an
+argument is read by position, so none of them is optional, and an empty one
+reaches the program as the current directory or a missing operand and says so
+nowhere.

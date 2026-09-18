@@ -137,12 +137,19 @@ A link, in the same directory, is a project on another machine
 (decisions.md D41). It has a `[remote]` table and no directory here:
 
 ```toml
+# The path and the repository are the host's, as `revier link` recorded them:
+# a target here renders them, and neither names anything on this machine
+# (decisions.md D83). An argument that renders to nothing - a path the file
+# does not hold - is refused at load rather than launched. The path is
+# written out in full: a local project's "~" is expanded at load against the
+# home directory here, and a link's is not, so a "~" written here reaches the
+# launch below as a tilde.
+path = "/home/hans/dev/far"
+git_url = "git@github.com:hk9890/far.git"
+
 [remote]
 host = "buildbox"   # the ssh destination
 project = "far"     # its name there; defaults to this file's name
-
-# Optional: the path on the host, for templates in targets declared here.
-path = "~/dev/far"
 
 # Optional: further targets, windows here that reach the project there. The
 # home target, the ssh pane onto the workspace, is derived; a declared one

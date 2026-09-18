@@ -409,7 +409,7 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	p, err := config.CreateLink(root, m.linkNameValue(), m.host, it.view.Project.Name)
+	p, err := config.CreateLink(root, m.linkNameValue(), m.host, it.view.Project)
 	if err != nil {
 		m.err = err
 		return m, nil

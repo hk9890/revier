@@ -60,21 +60,22 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 }
 
 // CreateLink writes a link file for a project on another machine
-// (decisions.md D41), and loads it back as Create does. project is the
-// name on the host; empty is the link's own name.
-func CreateLink(root string, name revier.ProjectName, host string, project revier.ProjectName) (core.Project, error) {
+// (decisions.md D41), and loads it back as Create does. on is the project as
+// the host reports it: its name there, empty for the link's own name, and
+// the path and repository a target here renders (decisions.md D83).
+func CreateLink(root string, name revier.ProjectName, host string, on revier.Project) (core.Project, error) {
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)
 	}
 	// A link gets the shared targets through their remote part (decisions.md
-	// D80), so it is loaded back with them: the project handed to the caller
+	// D82), so it is loaded back with them: the project handed to the caller
 	// is the one the next start reads, and a shared target that would refuse
 	// the link is caught here rather than after the file is written.
 	shared, err := sharedTargets(root)
 	if err != nil {
 		return core.Project{}, err
 	}
-	return write(root, name, linkTOML(name, host, project), shared)
+	return write(root, name, linkTOML(name, host, on), shared)
 }
 
 // write puts body under the project's file name and loads it back. An

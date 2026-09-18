@@ -8,16 +8,25 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// linkTOML is a new link: the [remote] table alone, since everything else
-// is derived (decisions.md D41). The name on the host is written only when
-// it differs, so the file says no more than it has to.
-func linkTOML(name revier.ProjectName, host string, project revier.ProjectName) string {
+// linkTOML is a new link: where the project is, and what the host says about
+// it that a target here renders (decisions.md D41, D83). The path and the
+// repository are the host's answer when the link is written, kept as written
+// because neither names anything on this machine; everything else is derived.
+// The name on the host is written only when it differs, so the file says no
+// more than it has to.
+func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s: written by `revier link`.\n", name)
+	if on.Path != "" {
+		fmt.Fprintf(&b, "path = %s\n", quote(on.Path))
+	}
+	if on.GitURL != "" {
+		fmt.Fprintf(&b, "git_url = %s\n", quote(on.GitURL))
+	}
 	b.WriteString("[remote]\n")
 	fmt.Fprintf(&b, "host = %s\n", quote(host))
-	if project != "" && project != name {
-		fmt.Fprintf(&b, "project = %s\n", quote(string(project)))
+	if on.Name != "" && on.Name != name {
+		fmt.Fprintf(&b, "project = %s\n", quote(string(on.Name)))
 	}
 	return b.String()
 }
