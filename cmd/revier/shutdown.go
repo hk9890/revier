@@ -59,7 +59,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	plan := core.CloseLast(a.core.ShutdownPlan(report, only, scope), report.Instances, core.RunsUnder())
 	if len(plan) == 0 {
-		fmt.Fprintln(a.out, "nothing to close")
+		_, _ = fmt.Fprintln(a.out, "nothing to close")
 		return nil
 	}
 	if *dry {
@@ -78,13 +78,13 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		case err != nil:
 			return fmt.Errorf("%w; nothing closed", err)
 		case saved:
-			fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
+			_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
 				core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
 			for _, note := range gaps.Notes() {
-				fmt.Fprintf(a.out, "  %s\n", note)
+				_, _ = fmt.Fprintf(a.out, "  %s\n", note)
 			}
 		case stored.ID != "":
-			fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
+			_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
 		}
 	}
 
@@ -97,7 +97,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	n, open, failed := closed.Counts()
-	fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
+	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}

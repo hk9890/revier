@@ -72,7 +72,7 @@ func cmdAgent(out io.Writer, args []string) error {
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Fprint(out, agentUsage)
+		_, _ = fmt.Fprint(out, agentUsage)
 		return nil
 	case "wait":
 		return cmdAgentWait(out, args)
@@ -124,7 +124,7 @@ func cmdAgentWait(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(out, state.Status)
+	_, _ = fmt.Fprintln(out, state.Status)
 	return nil
 }
 

@@ -31,6 +31,6 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
+	_, _ = fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
 	return nil
 }

@@ -21,11 +21,7 @@ func writeConfig(t *testing.T, text string) string {
 
 func readConfig(t *testing.T, root string) string {
 	t.Helper()
-	data, err := os.ReadFile(config.File(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return read(t, config.File(root))
 }
 
 // A value is replaced on its own line. Every comment stays, the one after the

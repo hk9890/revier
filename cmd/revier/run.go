@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -48,22 +49,22 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	a.launchedAction(p.Name)
-	return runAction(p.Name, name, argv, dir)
+	return runAction(a.out, p.Name, name, argv, dir)
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
 // passes on as its own.
 var errActionFailed = errors.New("the action failed")
 
-// runAction executes an argv in dir with the terminal attached, and returns
-// the command's own error so its exit status survives.
+// runAction executes an argv in dir with the terminal attached and its output
+// on out, and returns the command's own error so its exit status survives.
 // No shell: the argv is a list, so there is nothing to quote and nothing to
 // inject into. No context either: the command's 30s deadline is for host
 // calls, and an action - an editor, a long pull - runs as long as it runs.
-func runAction(project revier.ProjectName, name string, argv []string, dir string) error {
+func runAction(out io.Writer, project revier.ProjectName, name string, argv []string, dir string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = dir
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, out, os.Stderr
 	start := time.Now()
 	err := c.Run()
 	logging.Op("action", start, err, "project", project, "action", name, "argv", argv)

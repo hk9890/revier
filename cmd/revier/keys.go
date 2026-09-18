@@ -46,7 +46,7 @@ func cmdKeys(ctx context.Context, a *app, args []string) error {
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Fprint(a.out, keysUsage)
+		_, _ = fmt.Fprint(a.out, keysUsage)
 		return nil
 	case "status", "install", "uninstall":
 		// The desktop is probed here and not in newApp: it costs a gsettings

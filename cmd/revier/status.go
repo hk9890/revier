@@ -23,10 +23,10 @@ func cmdStatus(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(a.out, "project   %s\npath      %s\n", p.Name, p.Path)
-	fmt.Fprintf(a.out, "runtime   %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.Window))
+	_, _ = fmt.Fprintf(a.out, "project   %s\npath      %s\n", p.Name, p.Path)
+	_, _ = fmt.Fprintf(a.out, "runtime   %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.Window))
 	if attached := a.state.Attached[p.Name]; len(attached) > 0 {
-		fmt.Fprintf(a.out, "attached  %s\n", core.Count(len(attached), "window"))
+		_, _ = fmt.Fprintf(a.out, "attached  %s\n", core.Count(len(attached), "window"))
 	}
 	return nil
 }

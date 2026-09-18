@@ -183,10 +183,10 @@ func run(out io.Writer, args []string) error {
 
 	switch cmd {
 	case "version", "--version":
-		fmt.Fprintf(out, "revier %s (%s, %s)\n", build.Version, build.Commit, build.Date)
+		_, _ = fmt.Fprintf(out, "revier %s (%s, %s)\n", build.Version, build.Commit, build.Date)
 		return nil
 	case "help", "--help", "-h":
-		fmt.Fprint(out, usage)
+		_, _ = fmt.Fprint(out, usage)
 		return nil
 	case "new":
 		return cmdNew(out, args)
@@ -213,7 +213,7 @@ func run(out io.Writer, args []string) error {
 		// Before the app, as the other families answer it: a usage request
 		// must not probe the desktop first.
 		if len(args) == 0 || slices.Contains([]string{"help", "--help", "-h"}, args[0]) {
-			fmt.Fprint(out, sessionUsage)
+			_, _ = fmt.Fprint(out, sessionUsage)
 			return nil
 		}
 	}

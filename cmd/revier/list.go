@@ -70,7 +70,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 	if len(views) == 0 {
 		root, _ := configRootForMessage()
-		fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
+		_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
 		return nil
 	}
 

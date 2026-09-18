@@ -58,22 +58,22 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	}
 	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.state.Current, *name, time.Now())
 	if errors.Is(err, core.ErrNothingOpen) {
-		fmt.Fprintln(a.out, err)
+		_, _ = fmt.Fprintln(a.out, err)
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	targets, conversations := stored.Targets(), stored.Conversations()
-	fmt.Fprintf(a.out, "%s: %s, %s\n", stored.ID,
+	_, _ = fmt.Fprintf(a.out, "%s: %s, %s\n", stored.ID,
 		core.Count(len(stored.Projects), "project"), core.Count(targets, "target"))
 	if conversations > 0 {
-		fmt.Fprintf(a.out, "  %s recorded\n", core.Count(conversations, "agent conversation"))
+		_, _ = fmt.Fprintf(a.out, "  %s recorded\n", core.Count(conversations, "agent conversation"))
 	}
 	for _, note := range gaps.Notes() {
-		fmt.Fprintf(a.out, "  %s\n", note)
+		_, _ = fmt.Fprintf(a.out, "  %s\n", note)
 	}
-	fmt.Fprintf(a.out, "  %s\n", path)
+	_, _ = fmt.Fprintf(a.out, "  %s\n", path)
 	return nil
 }
 
@@ -95,7 +95,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	}
 	s, err := session.Load(a.stateRoot, ref)
 	if ref == "" && errors.Is(err, session.ErrNoSession) {
-		fmt.Fprintln(a.out, "no saved session. write one with revier session save")
+		_, _ = fmt.Fprintln(a.out, "no saved session. write one with revier session save")
 		return nil
 	}
 	if err != nil {
@@ -119,13 +119,13 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	if back != nil {
-		fmt.Fprintln(a.out, back)
+		_, _ = fmt.Fprintln(a.out, back)
 	}
 	opened, pending, failed := restored.Counts()
 	if pending > 0 {
-		fmt.Fprintf(a.out, "%s: opened %d, %d not up yet\n", s.ID, opened, pending)
+		_, _ = fmt.Fprintf(a.out, "%s: opened %d, %d not up yet\n", s.ID, opened, pending)
 	} else {
-		fmt.Fprintf(a.out, "%s: opened %d\n", s.ID, opened)
+		_, _ = fmt.Fprintf(a.out, "%s: opened %d\n", s.ID, opened)
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d targets did not open", failed)
@@ -157,7 +157,7 @@ func cmdSessionList(a *app, args []string) error {
 		return enc.Encode(all)
 	}
 	if len(all) == 0 {
-		fmt.Fprintf(a.out, "no saved sessions. write one with revier session save\n")
+		_, _ = fmt.Fprintf(a.out, "no saved sessions. write one with revier session save\n")
 		return nil
 	}
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)

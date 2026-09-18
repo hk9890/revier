@@ -250,22 +250,9 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	}
 }
 
-// noTabs is a runtime without the PanelOpener capability.
-type noTabs struct{ rt *hosttest.FakeRuntime }
-
-func (n noTabs) Name() string                                        { return n.rt.Name() }
-func (n noTabs) Probe(ctx context.Context) error                     { return n.rt.Probe(ctx) }
-func (n noTabs) Capabilities() revier.Capabilities                   { return n.rt.Capabilities() }
-func (n noTabs) Focus(ctx context.Context, r revier.TargetRef) error { return n.rt.Focus(ctx, r) }
-func (n noTabs) Focused(ctx context.Context) (revier.TargetRef, error) {
-	return n.rt.Focused(ctx)
-}
-func (n noTabs) Instances(ctx context.Context) ([]revier.Instance, error) {
-	return n.rt.Instances(ctx)
-}
-func (n noTabs) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
-	return n.rt.Open(ctx, r)
-}
+// noTabs is a runtime without the PanelOpener capability: the interface
+// alone is embedded, so the fake's optional methods are not promoted.
+type noTabs struct{ revier.Runtime }
 
 // On a runtime without tabs, a restore still opens the workspace with its
 // declared agents, and names the agents past them as not restored.

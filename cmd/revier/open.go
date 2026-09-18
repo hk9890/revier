@@ -76,7 +76,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if *attach {
 		return a.attach(ref)
 	}
-	fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
+	_, _ = fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
 	return nil
 }
 

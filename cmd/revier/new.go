@@ -61,6 +61,6 @@ func createProject(out io.Writer, root string, projects []core.Project, name rev
 		return core.Project{}, err
 	}
 	checkout.Trust(dir, os.Stderr)
-	fmt.Fprintf(out, "created %s\n", p.File)
+	_, _ = fmt.Fprintf(out, "created %s\n", p.File)
 	return p, nil
 }

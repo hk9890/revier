@@ -33,11 +33,11 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 			return err
 		}
 		if len(hosts) == 0 {
-			fmt.Fprintf(a.out, "no hosts in %s\n", path)
+			_, _ = fmt.Fprintf(a.out, "no hosts in %s\n", path)
 			return nil
 		}
 		for _, h := range hosts {
-			fmt.Fprintln(a.out, h)
+			_, _ = fmt.Fprintln(a.out, h)
 		}
 		return nil
 	case 1:
@@ -51,7 +51,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(a.out, "created %s\n", p.File)
+		_, _ = fmt.Fprintf(a.out, "created %s\n", p.File)
 		return nil
 	}
 	return fmt.Errorf("usage: revier link [host [project]] [--name name]")

@@ -33,6 +33,6 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 		return fmt.Errorf("no window is focused")
 	}
 	a.commit(p.Name, func(s *state.State) { s.Attach(p.Name, ref) })
-	fmt.Fprintf(a.out, "%s: attached %s\n", p.Name, describe(ref))
+	_, _ = fmt.Fprintf(a.out, "%s: attached %s\n", p.Name, describe(ref))
 	return nil
 }

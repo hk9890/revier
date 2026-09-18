@@ -41,7 +41,7 @@ func cmdShell(out io.Writer, args []string) error {
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Fprint(out, shellUsage)
+		_, _ = fmt.Fprint(out, shellUsage)
 		return nil
 	case "new":
 		return cmdShellNew(out, args)
