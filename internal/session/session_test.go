@@ -31,6 +31,38 @@ func sample(day int, name string) session.Session {
 	}
 }
 
+// A project renamed on the surface is still the one every saved session
+// opens again: the sessions are rewritten in place, under their own ids, and
+// one that never named the project is left as it was.
+func TestRenameMovesAProjectInEverySession(t *testing.T) {
+	root := t.TempDir()
+	other := sample(11, "other")
+	other.Current, other.Projects[0].Name = "setup", "setup"
+	for _, s := range []session.Session{sample(12, "before-reboot"), other} {
+		if _, _, err := session.Save(root, s); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+	}
+	if err := session.Rename(root, "revier", "rv"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	renamed, err := session.Load(root, "before-reboot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.ID != "2026-09-12T14-33-05" || renamed.Current != "rv" || renamed.Projects[0].Name != "rv" {
+		t.Errorf("session = %+v, want rv under the same id", renamed)
+	}
+	if want := sample(12, "").Projects[0].Targets; !slices.EqualFunc(renamed.Projects[0].Targets, want, func(a, b session.Target) bool {
+		return a.Name == b.Name && slices.Equal(a.Agents, b.Agents)
+	}) {
+		t.Errorf("targets = %+v, want them kept", renamed.Projects[0].Targets)
+	}
+	if kept, _ := session.Load(root, "other"); kept.Current != "setup" || kept.Projects[0].Name != "setup" {
+		t.Errorf("other session = %+v, want it left alone", kept)
+	}
+}
+
 func TestSaveThenLoadRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	if _, _, err := session.Save(root, sample(12, "before-reboot")); err != nil {

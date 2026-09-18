@@ -46,9 +46,12 @@ var options = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=5"}
 // ~/.local/bin, where Claude Code installs - is missing: the remote revier
 // then found no `claude`, and every agent read as unknown. sshd always sets
 // SHELL, and it is $SHELL and not ${SHELL:-sh} because the line is parsed by
-// that login shell, and fish rejects the braces.
+// that login shell, and fish rejects the braces. The line stands between
+// double quotes, which POSIX shells and fish read alike: inside single quotes
+// fish reads `\'` as a quote, so the `'\”` a quoted word carries would end
+// the line early there.
 func login(line string) string {
-	return `exec "$SHELL" -lc ` + quote(line)
+	return `exec "$SHELL" -lc "` + doubleQuoted(line) + `"`
 }
 
 // quiet is login for a command whose output is read: what the profile writes

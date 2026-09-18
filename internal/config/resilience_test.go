@@ -183,6 +183,20 @@ func TestAnAlreadyBrokenProjectDoesNotVetoASharedEdit(t *testing.T) {
 	}
 }
 
+// A project with a broken target of its own still vetoes the loss of the
+// shared target it opens with: the edit is refused for what it breaks, which
+// is not what was broken before it.
+func TestABrokenTargetDoesNotCostAProjectItsVeto(t *testing.T) {
+	shared := "[[target]]\nname = \"home\"\nhome = true\n  [target.runtime]\n  name = \"home\"\n  launch = [\"sh\"]\n  match = { title = \"^{{.Name}}$\" }\n"
+	demo := "path = \"/tmp/demo\"\n\n[[target]]\nname = \"web\"\n  [target.window]\n  launch = [\"browser\", \"{{.Vars.absent}}\"]\n  match = { class = \"^browser$\" }\n"
+	root := projectsRoot(t, shared, map[string]string{"demo.toml": demo})
+
+	_, err := config.RemoveTarget(root, 0, sharedOf(t, root))
+	if err == nil || !strings.Contains(err.Error(), "demo") || !strings.Contains(err.Error(), "home") {
+		t.Errorf("err = %v, want the write refused for the home demo loses", err)
+	}
+}
+
 // sharedOf is the shared targets config.toml holds, as the caller of a write
 // has them.
 func sharedOf(t *testing.T, root string) []map[string]any {

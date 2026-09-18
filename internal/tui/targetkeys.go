@@ -56,7 +56,13 @@ func targetKeys(projects []core.Project, keys keyMap) map[core.Chord]revier.Targ
 	out := map[core.Chord]revier.TargetName{}
 	var late []folded
 	for _, p := range projects {
-		for _, t := range p.Targets {
+		for i, t := range p.Targets {
+			// A refused target binds nothing (decisions.md D85): the key it
+			// carries may be the one another target holds, which is what it
+			// was refused for.
+			if p.TargetErr(i) != nil {
+				continue
+			}
 			c, ok := chordName(t.Key)
 			if !ok {
 				continue

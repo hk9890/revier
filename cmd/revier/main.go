@@ -61,10 +61,11 @@ usage:
                                 type one line into an agent and submit it
   revier agent new [-p name | --panel id] [--resume id] [--dir path]
                                 add an agent tab, with its shell, to an open
-                                workspace; on a remote project, there
+                                workspace; for a link, the tab's agent runs
+                                on the host and --dir is dropped
   revier shell new [-p name | --panel id] [--dir path]
-                                add a shell tab to an open workspace; on a
-                                remote project, there
+                                add a shell tab to an open workspace; for a
+                                link, the tab's shell runs on the host
   revier session save [--name label]
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]
@@ -469,6 +470,11 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	p, err := a.resolveProject(ctx, name)
 	if err != nil {
 		return err
+	}
+	// A project its file refused as a whole is neither cloned nor opened: a
+	// git_url the load refused must not reach git (decisions.md D85).
+	if p.Invalid != nil {
+		return p.Invalid
 	}
 	home, ok := p.Home()
 	if !ok {

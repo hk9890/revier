@@ -870,6 +870,13 @@ func (m Model) act() (Model, tea.Cmd) {
 		return m, nil
 	}
 	if home, ok := p.Home(); ok {
+		// A project its file refused as a whole is not cloned or opened:
+		// the reason is the one thing to do about it (decisions.md D85), and
+		// a git_url the load refused must not reach git.
+		if p.Invalid != nil {
+			m.err = p.Invalid
+			return m, nil
+		}
 		// A remote project's checkout is its host's: the agent panel
 		// opened here runs `revier agent exec` there, which clones
 		// (decisions.md D84).

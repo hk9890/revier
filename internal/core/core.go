@@ -161,10 +161,14 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 // that walks a project's targets resolves each one first, so a tab fails
 // closed in all of them; the few that serve tabs branch before this.
 func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
-	// A target its own configuration refused resolves to nothing, here,
-	// where every lookup that walks a project's targets passes. The keypress
-	// then fails loudly with the reason instead of running something built
-	// from a launch argv that did not render (decisions.md D85).
+	// A project its file refused as a whole, and a target its own
+	// configuration refused, resolve to nothing, here, where every lookup
+	// that walks a project's targets passes. The keypress then fails loudly
+	// with the reason instead of running something built from a launch argv
+	// that did not render, or in a project with no path (decisions.md D85).
+	if p.Invalid != nil {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, p.Invalid
+	}
 	if err := p.compiled[i].err; err != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, err
 	}

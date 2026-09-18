@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -18,25 +17,33 @@ import (
 // that leaves its name on the host to be derived from its own gets that name
 // written first, so the link still reaches the project it reached. An
 // existing file is never overwritten, and the old file is removed only once
-// the new one loads.
+// the new one loads no worse than it did: what was wrong with the file before
+// is not the rename's to refuse.
 func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (core.Project, error) {
 	old := ProjectFile(root, from)
+	if info, err := os.Lstat(old); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		// Moved here, the file would leave the repository it is linked in
+		// from; the write paths keep such a link, and a rename cannot.
+		target, _ := filepath.EvalSymlinks(old)
+		return core.Project{}, fmt.Errorf("%s is a link to %s; rename that file, and the link, by hand", old, target)
+	}
 	data, err := os.ReadFile(old)
 	if err != nil {
 		return core.Project{}, err
 	}
-	declared, err := decodeProject(data, nil)
+	declared, _, err := decodeProject(data, nil)
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", old, err)
 	}
 	if target, value, found := writesName(declared.Targets, from); found {
-		return core.Project{}, fmt.Errorf("target %q writes the name out as %q; make it {{.Name}} there first, or the target would look for %q after the rename", target, value, from)
+		return core.Project{}, fmt.Errorf("target %q writes the name out as %q beside {{.Name}}; make it {{.Name}} there first, or the target would look for %q after the rename", target, value, from)
 	}
-	text, err := keepRemoteProject(string(data), from)
-	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", old, err)
+	text := string(data)
+	if declared.Remote != nil && declared.Remote.Project == "" {
+		text = setKey(text, "remote", "project", quote(string(from)))
 	}
-	p, err := write(root, to, text, shared)
+	before := loadProject(old, data, shared)
+	p, err := writeUnless(root, to, text, shared, func(p core.Project) []error { return newProblems(before, p) })
 	if err != nil {
 		return core.Project{}, err
 	}
@@ -48,12 +55,17 @@ func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (
 	return p, nil
 }
 
-// writesName finds a target value that carries the project's name as text
-// rather than as {{.Name}}: `revier new` writes one into a match pattern for
-// a name a regexp would read, such as the dot in "example.com", and a file
-// written by hand may hold others. A rename leaves such a value looking for
-// the old name, so Open would stop producing what Match finds
-// (docs/CODING.md), and the rename is refused instead.
+// nameTemplate is the template that renders the project's name.
+var nameTemplate = regexp.MustCompile(`\{\{\s*\.Name\b`)
+
+// writesName finds a realization that writes the project's name out beside
+// {{.Name}}: `revier new` writes the name quoted into a match pattern where
+// a regexp would read it, such as the dot in "example.com", under a name
+// that renders the template. A rename leaves such a pattern looking for the
+// old name while the name follows, so Open would stop producing what Match
+// finds (docs/CODING.md), and the rename is refused instead. A realization
+// that writes the name out everywhere stays consistent with itself, and a
+// launch or a panel command is nothing Match reads.
 func writesName(targets []revier.Target, name revier.ProjectName) (revier.TargetName, string, bool) {
 	forms := []string{string(name), regexp.QuoteMeta(string(name))}
 	for _, t := range targets {
@@ -61,35 +73,22 @@ func writesName(targets []revier.Target, name revier.ProjectName) (revier.Target
 			if r == nil {
 				continue
 			}
-			values := []string{r.Name, r.Dir, r.Place, r.Match.Title, r.Match.Class}
-			values = append(values, r.Launch...)
-			for _, p := range r.Panels {
-				values = append(values, p.Title)
-				values = append(values, p.Command...)
-			}
-			for _, v := range values {
+			literal, templated := "", false
+			for _, v := range []string{r.Name, r.Match.Title, r.Match.Class} {
+				if nameTemplate.MatchString(v) {
+					templated = true
+					continue
+				}
 				for _, form := range forms {
-					if strings.Contains(v, form) {
-						return t.Name, v, true
+					if literal == "" && strings.Contains(v, form) {
+						literal = v
 					}
 				}
+			}
+			if templated && literal != "" {
+				return t.Name, literal, true
 			}
 		}
 	}
 	return "", "", false
-}
-
-// keepRemoteProject writes a link's name on the host where the file leaves it
-// to default to the link's name, which is about to change.
-func keepRemoteProject(text string, name revier.ProjectName) (string, error) {
-	var doc struct {
-		Remote *revier.Link `toml:"remote"`
-	}
-	if _, err := toml.Decode(text, &doc); err != nil {
-		return "", err
-	}
-	if doc.Remote == nil || doc.Remote.Project != "" {
-		return text, nil
-	}
-	return setKey(text, "remote", "project", quote(string(name))), nil
 }

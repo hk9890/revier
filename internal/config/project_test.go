@@ -172,6 +172,41 @@ func TestSaveProjectTargetRefuses(t *testing.T) {
 	}
 }
 
+// A write is refused for what it breaks, not for what was broken before it:
+// a file with two refused targets is repaired one at a time, and a change
+// that leaves the target it writes refused has not repaired it.
+func TestAProjectIsRepairedOneTargetAtATime(t *testing.T) {
+	body := "path = \"/tmp/demo\"\n\n[[target]]\nname = \"home\"\nhome = true\n  [target.runtime]\n  name = \"home\"\n  launch = [\"sh\"]\n  match = { title = \"^home$\" }\n\n" +
+		"[[target]]\nname = \"web\"\n  [target.window]\n  launch = [\"browser\", \"{{.Vars.absent}}\"]\n  match = { class = \"^browser$\" }\n\n" +
+		"[[target]]\nname = \"docs\"\n  [target.window]\n  launch = [\"zeal\"]\n  match = { class = \"^zeal($\" }\n"
+	file := write(t, t.TempDir(), "demo.toml", body)
+	if probs := config.Problems(config.LoadProject(file, nil)); len(probs) != 2 {
+		t.Fatalf("problems = %v, want web and docs refused", probs)
+	}
+
+	web := revier.Target{Name: "web", Window: &revier.Realization{Launch: []string{"browser"}, Match: revier.Match{Class: "^browser$"}}}
+	p, err := config.SaveProjectTarget(file, nil, "web", config.TargetEdit{Target: web})
+	if err != nil {
+		t.Fatalf("SaveProjectTarget(web): %v, want the repair written with docs still refused", err)
+	}
+	if probs := config.Problems(p); len(probs) != 1 || !strings.Contains(probs[0].Error(), "docs") {
+		t.Errorf("problems = %v, want docs alone", probs)
+	}
+
+	stillBroken := revier.Target{Name: "docs", Window: &revier.Realization{Launch: []string{"zeal", "--new"}, Match: revier.Match{Class: "^zeal($"}}}
+	if _, err := config.SaveProjectTarget(file, nil, "docs", config.TargetEdit{Target: stillBroken}); err == nil || !strings.Contains(err.Error(), "not written") {
+		t.Errorf("err = %v, want a change that leaves docs refused refused", err)
+	}
+	docs := revier.Target{Name: "docs", Window: &revier.Realization{Launch: []string{"zeal"}, Match: revier.Match{Class: "^zeal$"}}}
+	p, err = config.SaveProjectTarget(file, nil, "docs", config.TargetEdit{Target: docs})
+	if err != nil {
+		t.Fatalf("SaveProjectTarget(docs): %v", err)
+	}
+	if probs := config.Problems(p); len(probs) != 0 {
+		t.Errorf("problems = %v, want the file whole", probs)
+	}
+}
+
 // Editing a link's derived home declares one, which replaces the derived
 // pane.
 func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {

@@ -65,10 +65,11 @@ func TestRenameLeavesALinkThatNamesTheHostsProject(t *testing.T) {
 }
 
 // `revier new` writes the name into a match pattern where a regexp would
-// read it, such as the dot in "example.com". The pattern would look for the
-// old name after the rename, so the rename is refused and names it.
+// read it, such as the dot in "example.com", under a name that renders
+// {{.Name}}. The pattern would look for the old name after the rename while
+// the name followed, so the rename is refused and names it.
 func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
-	body := strings.Replace(valid, "^session:{{.Name}}$", `^session:example\\.com$`, 1)
+	body := strings.NewReplacer("  name = \"home\"\n", "  name = \"session:{{.Name}}\"\n", "^session:{{.Name}}$", `^session:example\\.com$`).Replace(valid)
 	root := renameRoot(t, "example.com", body)
 	_, err := config.Rename(root, "example.com", "web", nil)
 	if err == nil || !strings.Contains(err.Error(), "writes the name out") || !strings.Contains(err.Error(), "home") {
@@ -76,6 +77,68 @@ func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
 	}
 	if _, err := os.Stat(config.ProjectFile(root, "example.com")); err != nil {
 		t.Errorf("old file: %v, want it kept", err)
+	}
+}
+
+// A project named after a program its file runs - claude, with a panel that
+// runs claude - is renamed like any other: a launch or a panel command is
+// nothing Match reads, and a realization that writes the name out everywhere
+// stays consistent with itself.
+func TestRenameReadsOnlyWhatMatchReads(t *testing.T) {
+	root := renameRoot(t, "claude", valid)
+	if _, err := config.Rename(root, "claude", "cl", nil); err != nil {
+		t.Errorf("Rename: %v, want a project named after its program renamed", err)
+	}
+
+	pane := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.runtime]
+  name = "session:far"
+  match = { title = "^session:far$" }
+    [[target.remote.runtime.panels]]
+    kind = "agent"
+    command = ["sh", "-c", "exec ssh buildbox revier agent exec -p 'far'", "sh"]
+`
+	root = renameRoot(t, "far", pane)
+	p, err := config.Rename(root, "far", "near", nil)
+	if err != nil || p.Remote.Project != "far" {
+		t.Errorf("Rename = %+v, %v; want the link's written-out home kept, reaching far", p.Project, err)
+	}
+}
+
+// A rename is refused for what it breaks, not for what was broken before it:
+// a target refused at load stays refused under the new name, and is no reason
+// to keep the old one.
+func TestRenameToleratesWhatWasAlreadyBroken(t *testing.T) {
+	body := valid + "\n[[target]]\nname = \"docs\"\n  [target.window]\n  launch = [\"zeal\"]\n  match = { class = \"^zeal($\" }\n"
+	root := renameRoot(t, "revier", body)
+	p, err := config.Rename(root, "revier", "rv", nil)
+	if err != nil {
+		t.Fatalf("Rename: %v, want the broken target carried over", err)
+	}
+	if probs := config.Problems(p); len(probs) != 1 || !strings.Contains(probs[0].Error(), "docs") {
+		t.Errorf("problems = %v, want the one target still refused", probs)
+	}
+}
+
+// A project file linked in from elsewhere - a dotfiles repository - is not
+// moved out of it: the rename is refused, naming the file to rename by hand.
+func TestRenameRefusesALinkedFile(t *testing.T) {
+	root := renameRoot(t, "elsewhere", valid)
+	target := config.ProjectFile(root, "elsewhere")
+	if err := os.Symlink(target, config.ProjectFile(root, "revier")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Rename(root, "revier", "rv", nil)
+	if err == nil || !strings.Contains(err.Error(), target) {
+		t.Errorf("err = %v, want the refusal naming %s", err, target)
+	}
+	for _, name := range []revier.ProjectName{"revier", "elsewhere"} {
+		if _, err := os.Lstat(config.ProjectFile(root, name)); err != nil {
+			t.Errorf("%s: %v, want it kept", name, err)
+		}
 	}
 }
 

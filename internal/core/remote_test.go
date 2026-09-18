@@ -66,6 +66,32 @@ func TestSurveyTakesARemoteProjectsAgentsFromItsHost(t *testing.T) {
 	}
 }
 
+// A link's own file can be refused here and its project's file there: both
+// reasons are the surface's to show, and the host answering whole does not
+// clear what this side found.
+func TestSurveyKeepsALinksOwnReasonBesideTheHosts(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := prepared(t, remoteProject("demo"))
+	p.Invalid = errors.New(`demo.toml: git_url: "x y" contains whitespace`)
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := report.Views[0].Invalid; !strings.Contains(got, "whitespace") {
+		t.Errorf("Invalid = %q, want this side's reason kept", got)
+	}
+	remote.Views[0].Invalid = "demo.toml: no target is marked home"
+	report, err = c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := report.Views[0].Invalid; !strings.Contains(got, "whitespace") || !strings.Contains(got, "marked home") {
+		t.Errorf("Invalid = %q, want both machines' reasons", got)
+	}
+}
+
 // Running is about the window here. An agent working on the host with no
 // pane onto it here is an agent in a stopped project, and Enter opens one.
 func TestSurveyKeepsRunningLocalForARemoteProject(t *testing.T) {

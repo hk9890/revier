@@ -55,12 +55,12 @@ func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
 	if err != nil {
 		return ProjectText{}, err
 	}
-	own, err := decodeProject(data, nil)
+	own, _, err := decodeProject(data, nil)
 	if err != nil {
 		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
 	}
 	out := ProjectText{Path: own.Path, GitURL: own.GitURL, Vars: own.Vars}
-	merged, err := decodeProject(data, shared)
+	merged, _, err := decodeProject(data, shared)
 	if err != nil {
 		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
 	}
@@ -167,9 +167,16 @@ func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetNa
 			return dropLines(lines, e.start, e.end), nil
 		}
 		return applyTarget(lines, i, f.targets[i], f.rawOf(i), f.base(), TargetEdit{Target: own, PanelFrom: from})
-	}, func(p revier.Project) error {
-		if i := findTarget(p.Targets, t.Name); i < 0 || !sameTargets(p.Targets[i:i+1], []revier.Target{t}) {
+	}, func(decoded revier.Project, prepared core.Project) error {
+		if i := findTarget(decoded.Targets, t.Name); i < 0 || !sameTargets(decoded.Targets[i:i+1], []revier.Target{t}) {
 			return errors.New("the target did not come out as written; change it by hand")
+		}
+		// The target written is the one being fixed: a change that leaves it
+		// refused has not fixed it, whatever it was refused for before.
+		if i := findTarget(prepared.Targets, t.Name); i >= 0 {
+			if err := prepared.TargetErr(i); err != nil {
+				return fmt.Errorf("not written: %w", err)
+			}
 		}
 		return nil
 	})
@@ -218,13 +225,14 @@ func (f projectFile) rawOf(i int) map[string]any {
 }
 
 // editProject runs one change to a project file, and writes it only if the
-// result loads, and check, when given, accepts the project it decodes to.
-func editProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project) error) (core.Project, error) {
+// result loads no worse than the file did, and check, when given, accepts the
+// project it decodes to and the one it prepares to.
+func editProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return core.Project{}, err
 	}
-	own, err := decodeProject(data, nil)
+	own, _, err := decodeProject(data, nil)
 	if err != nil {
 		return core.Project{}, fmt.Errorf("%s: %w", file, err)
 	}
@@ -242,16 +250,18 @@ func editProject(file string, shared []map[string]any, change func([]string, pro
 	}
 	text := []byte(strings.Join(lines, "\n"))
 	// Loading no longer refuses a project, so the edit is what refuses: an
-	// edit the surface makes must leave the file whole, where a file the user
-	// wrote by hand is loaded as it is and reports what is wrong with it.
+	// edit the surface makes is refused for what it breaks, where a file the
+	// user wrote by hand is loaded as it is and reports what is wrong with
+	// it. What was wrong before the edit is not this edit's to refuse: a file
+	// with two broken targets is repaired one at a time.
 	p := loadProject(file, text, shared)
-	if probs := Problems(p); len(probs) > 0 {
+	if probs := newProblems(loadProject(file, data, shared), p); len(probs) > 0 {
 		return core.Project{}, fmt.Errorf("not written: %w", errors.Join(probs...))
 	}
 	if check != nil {
-		decoded, err := decodeProject(text, shared)
+		decoded, _, err := decodeProject(text, shared)
 		if err == nil {
-			err = check(decoded)
+			err = check(decoded, p)
 		}
 		if err != nil {
 			return core.Project{}, fmt.Errorf("%s: %w", file, err)

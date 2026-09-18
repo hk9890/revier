@@ -32,6 +32,7 @@ func cmdNew(args []string) error {
 	if err != nil {
 		return err
 	}
+	warnProblems(projects)
 	name := ""
 	if len(pos) > 0 {
 		name = pos[0]

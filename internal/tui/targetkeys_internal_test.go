@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A target key is bound under the one canonical spelling, whatever spelling
@@ -28,6 +30,19 @@ func TestATargetKeyIsBoundUnderItsCanonicalSpelling(t *testing.T) {
 		if !ok || got != tc.want {
 			t.Errorf("chordName(%q) = %q, %v; want %q, true", tc.in, got, ok, tc.want)
 		}
+	}
+}
+
+// A target refused at load binds no key here: the key it carries may be the
+// one it was refused for, held by another target, which it would take over.
+func TestARefusedTargetBindsNoKey(t *testing.T) {
+	p := core.PrepareProject(revier.Project{Name: "demo", Path: "/p", Targets: []revier.Target{
+		{Name: "editor", Key: "ctrl-o", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+		{Name: "pulls", Key: "ctrl-o", Window: &revier.Realization{Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
+	}})
+	p.Refuse(1, errors.New(`targets "editor" and "pulls" share key "ctrl+o"`))
+	if got := targetKeys([]core.Project{p}, newKeyMap(nil)); got["ctrl+o"] != "editor" {
+		t.Errorf("ctrl+o = %q, want editor, the target that holds the key", got["ctrl+o"])
 	}
 }
 

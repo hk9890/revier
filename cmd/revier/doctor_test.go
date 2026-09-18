@@ -41,9 +41,10 @@ func doctorRoot(t *testing.T, files map[string]string) {
 // now that no other command refuses to run over them (decisions.md D85).
 func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 	doctorRoot(t, map[string]string{
-		"sound.toml":  sound,
-		"nohome.toml": strings.Replace(sound, "home = true\n", "", 1),
-		"bad.toml":    "path = \"/p\"\nthis is not toml\n",
+		"sound.toml":    sound,
+		"nohome.toml":   strings.Replace(sound, "home = true\n", "", 1),
+		"bad.toml":      "path = \"/p\"\nthis is not toml\n",
+		"template.toml": strings.Replace(sound, `launch = ["sh"]`, `launch = ["sh", "{{.Path)}}"]`, 1),
 	})
 
 	var out strings.Builder
@@ -59,7 +60,10 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 		"fix: mark the workspace target `home = true`",
 		"bad.toml",
 		"line 2",
-		"3 project(s), 2 with problems",
+		"fix: the file is not valid TOML",
+		"template.toml",
+		"fix: fix the template",
+		"4 project(s), 3 with problems",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("report should contain %q:\n%s", want, got)
@@ -67,6 +71,11 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 	}
 	if strings.Contains(got, "sound.toml") {
 		t.Errorf("a project that loaded whole should not be reported:\n%s", got)
+	}
+	// A template that does not parse says "unexpected", which is not the
+	// decoder's "expected": the advice names the template, not the TOML.
+	if strings.Count(got, "not valid TOML") != 1 {
+		t.Errorf("the TOML advice should be given once, for bad.toml alone:\n%s", got)
 	}
 }
 

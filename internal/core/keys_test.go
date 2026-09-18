@@ -219,6 +219,37 @@ func TestAChordOneProjectDeclaresIsStillWanted(t *testing.T) {
 	}
 }
 
+// A target refused at load wants no chord: the key it carries may be the one
+// it was refused for, held by another target, and asked for it would read as
+// a conflict that stops every project's keys (decisions.md D85).
+func TestARefusedTargetWantsNoChord(t *testing.T) {
+	p := prepared(t, revier.Project{
+		Name: "demo", Path: "/home/hans/demo",
+		Targets: []revier.Target{
+			{
+				Name: "home", Home: true, Key: "ctrl-shift-u",
+				Runtime: &revier.Realization{Launch: []string{"kitty"}, Match: revier.Match{Title: "^session:demo$"}},
+			},
+			{
+				Name: "pulls", Key: "ctrl-shift-u",
+				Window: &revier.Realization{Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}},
+			},
+		},
+	})
+	p.Refuse(1, errors.New(`targets "home" and "pulls" share key "ctrl+shift+u"`))
+	report := keysOf(t, hosttest.NewKeys("gnome"), keyProject(t, "revier"), p)
+
+	home := row(t, report, "ctrl+shift+u")
+	if home.Target != "home" || home.Conflict {
+		t.Errorf("home row = %+v, want it unmarked: the refused target asks for nothing", home)
+	}
+	for _, r := range report.Rows {
+		if r.Target == "pulls" {
+			t.Errorf("row %+v, want no row for the refused target", r)
+		}
+	}
+}
+
 // Projects that disagree produce a row each, both marked. One row would hide
 // the disagreement, and refusing would make a diagnostic command fail exactly
 // when it is needed.

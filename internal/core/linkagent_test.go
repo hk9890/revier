@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -233,6 +234,81 @@ func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 	got := report.Views[0].Agents[0].Conversation
 	if got == nil || got.ID != "abc-123" || got.Dir != "/srv/wt" {
 		t.Errorf("conversation = %+v, want abc-123 in /srv/wt", got)
+	}
+}
+
+// An agent this machine serves to a terminal elsewhere ends with that
+// terminal (decisions.md D84): a shutdown here plans nothing for it, and no
+// busy check names it.
+func TestAShutdownLeavesAServedAgentToItsTerminal(t *testing.T) {
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", revier.Panel{ID: "box.4242", Kind: revier.PanelTool, Title: "agent", PID: 7})
+	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "agent", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Served: served, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Views[0].Agents) != 1 {
+		t.Fatalf("agents = %+v, want the served one surveyed", report.Views[0].Agents)
+	}
+	if plan := c.ShutdownPlan(report, "", core.ShutdownAgents); len(plan) != 0 {
+		t.Errorf("plan = %+v, want nothing to close here", plan)
+	}
+}
+
+// Two links to one project on one host are handed one answer, and each
+// names the host's agents by its own panels: the second must not undo the
+// first, and neither reads the other's agents as elsewhere.
+func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
+	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	alt := linkProject(t)
+	alt.Name = "far-alt"
+	report, err := c.Survey(context.Background(), []core.Project{linkProject(t), alt}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range report.Views {
+		if len(v.Agents) != 1 || v.Agents[0].Ref != pane || v.Agents[0].Panel != "9" {
+			t.Errorf("%s: agents = %+v, want the one in panel 9 of %v", v.Project.Name, v.Agents, pane)
+		}
+	}
+}
+
+// A target its file refused is not served: the realization it keeps is as
+// written, not as rendered, so nothing may run from it (decisions.md D85),
+// and the reason is what the panel on the other machine prints.
+func TestServeSkipsARefusedTarget(t *testing.T) {
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude", "--add-dir", "{{.Vars.extra}}"}},
+			{Kind: revier.PanelShell},
+		}}}}})
+	if p.TargetErr(0) == nil {
+		t.Fatal("the target should be refused for the key it renders")
+	}
+	c := &core.Core{}
+	if _, err := c.ServeAgent(p, core.Resume{}); err == nil || !strings.Contains(err.Error(), "extra") {
+		t.Errorf("ServeAgent = %v, want the refusal, naming the key that is missing", err)
+	}
+	if _, err := c.ServeShell(p, ""); err == nil || !strings.Contains(err.Error(), "extra") {
+		t.Errorf("ServeShell = %v, want the refusal", err)
+	}
+}
+
+// A conversation reaches `revier agent exec` by its id alone, so the harness
+// is the panel's, as an agent tab takes it: a conversation is not resumed
+// into a panel that runs another harness, which would start
+// `opencode --resume <claude id>`.
+func TestServeResumesOnlyIntoThePanelsOwnHarness(t *testing.T) {
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}}}}}})
+	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
+	s, err := c.ServeAgent(p, core.Resume{Session: "abc-123"})
+	if err != nil || s.Outcome != core.AgentUnresumable || !slices.Equal(s.Argv, []string{"opencode"}) {
+		t.Errorf("ServeAgent = %+v, %v; want the agent started empty, its command as declared", s, err)
 	}
 }
 

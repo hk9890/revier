@@ -163,18 +163,22 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	return TargetsWritten{Shared: next.Targets, Projects: projects}, nil
 }
 
-// brokenBy names the projects that are whole in before and not in after: what
-// this write would cost. A project already broken in before is left out, and
-// so is one this write repairs.
+// brokenBy names what this write would cost: each project with a problem in
+// after that it did not have in before. A problem a project already had is
+// left out, and so is one this write repairs; a project with one broken
+// target of its own still vetoes the loss of the shared home it opens with.
 func brokenBy(before, after []core.Project) error {
-	whole := make(map[revier.ProjectName]bool, len(before))
+	prior := make(map[revier.ProjectName]core.Project, len(before))
 	for _, p := range before {
-		whole[p.Name] = len(Problems(p)) == 0
+		prior[p.Name] = p
 	}
 	var errs []error
 	for _, p := range after {
-		probs := Problems(p)
-		if len(probs) > 0 && whole[p.Name] {
+		was, known := prior[p.Name]
+		if !known {
+			continue
+		}
+		if probs := newProblems(was, p); len(probs) > 0 {
 			errs = append(errs, fmt.Errorf("%s: %w", p.Name, errors.Join(probs...)))
 		}
 	}

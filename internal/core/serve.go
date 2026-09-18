@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -28,9 +29,16 @@ type Served struct {
 // workspace is the first runtime realization of the project that declares a
 // panel of that kind, or its home's when none does. It is read from the
 // project and not resolved: a machine reached over ssh alone has no runtime,
-// and serves its panels all the same.
+// and serves its panels all the same. A refused target is passed over, as
+// resolveAt passes over it: its realization is as written, not as rendered,
+// and nothing may run from an argv that did not render (decisions.md D85).
 func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.PanelSpec, error) {
-	for _, t := range p.Targets {
+	var refused []error
+	for i, t := range p.Targets {
+		if err := p.TargetErr(i); err != nil {
+			refused = append(refused, err)
+			continue
+		}
 		if t.Runtime == nil || tabTarget(t) {
 			continue
 		}
@@ -39,9 +47,15 @@ func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.Pan
 		}
 	}
 	if home, ok := p.Home(); ok && home.Runtime != nil && kind == revier.PanelShell {
-		return *home.Runtime, revier.PanelSpec{Kind: revier.PanelShell, Dir: home.Runtime.Dir}, nil
+		if i, ok := p.index(home.Name); ok && p.TargetErr(i) == nil {
+			return *home.Runtime, revier.PanelSpec{Kind: revier.PanelShell, Dir: home.Runtime.Dir}, nil
+		}
 	}
-	return revier.Realization{}, revier.PanelSpec{}, fmt.Errorf("%s: no target declares %s panel", p.Name, article(kind))
+	err := fmt.Errorf("%s: no target declares %s panel", p.Name, article(kind))
+	if len(refused) > 0 {
+		err = fmt.Errorf("%w: %w", err, errors.Join(refused...))
+	}
+	return revier.Realization{}, revier.PanelSpec{}, err
 }
 
 func article(kind revier.PanelKind) string {
@@ -52,11 +66,17 @@ func article(kind revier.PanelKind) string {
 }
 
 // ServeAgent is the project's agent panel, started as a restore starts it: in
-// the directory and on the conversation r names, when both can be had.
+// the directory and on the conversation r names, when both can be had. The
+// conversation arrives with no harness named - the panel's ssh carries the id
+// alone - so the harness is the panel's, as an agent tab takes it: a
+// conversation of one harness is never resumed into a panel that runs another.
 func (c *Core) ServeAgent(p Project, r Resume) (Served, error) {
 	real, spec, err := workspace(p, revier.PanelAgent)
 	if err != nil {
 		return Served{}, err
+	}
+	if r.Harness == "" {
+		r.Harness = c.harnessOf(spec)
 	}
 	outcome := c.startAgent(&spec, r, false)
 	if len(spec.Command) == 0 {

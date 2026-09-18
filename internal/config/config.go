@@ -254,7 +254,8 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 func LoadProject(path string, shared []map[string]any) core.Project {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return invalid(path, fmt.Errorf("%s: %w", path, err))
+		// The error names the file already.
+		return invalid(path, err)
 	}
 	return loadProject(path, data, shared)
 }
@@ -271,7 +272,7 @@ func invalid(path string, err error) core.Project {
 // loadProject is LoadProject on the text the file at path has, or is about
 // to have.
 func loadProject(path string, data []byte, shared []map[string]any) core.Project {
-	p, err := decodeProject(data, shared)
+	p, parts, err := decodeProject(data, shared)
 	if err != nil {
 		return invalid(path, fmt.Errorf("%s: %w", path, err))
 	}
@@ -300,8 +301,12 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 	}
 	// A rule's refusal wins over a rendering failure of the same target: both
 	// name the same mistake, and the rule says which key to look for in the
-	// file, where the template only says that it rendered to nothing.
+	// file, where the template only says that it rendered to nothing. A part
+	// of the other kind is a rule about the target too.
 	for i, err := range validateTargets(p) {
+		if part := parts[p.Targets[i].Name]; part != nil {
+			err = errors.Join(part, err)
+		}
 		if err != nil {
 			prepared.Refuse(i, err)
 		}
@@ -311,7 +316,7 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 
 // Problems is every reason a loaded project is not whole: the project-wide
 // refusal first, then one per refused target. It is empty for a project that
-// loaded entire, which is what a write path asks before it replaces a file.
+// loaded entire, which is what `revier new` asks before it keeps a file.
 func Problems(p core.Project) []error {
 	var out []error
 	if p.Invalid != nil {
@@ -319,6 +324,33 @@ func Problems(p core.Project) []error {
 	}
 	for i := range p.Targets {
 		if err := p.TargetErr(i); err != nil {
+			out = append(out, err)
+		}
+	}
+	return out
+}
+
+// newProblems is what after is not whole for that before was: the reasons a
+// write is refused for. A write is refused for what it breaks and not for
+// what was broken before it, else one unfixed target would lock every other
+// edit of the file, and the file could only be repaired by hand
+// (decisions.md D85). A problem is the project's, or one target's by name.
+func newProblems(before, after core.Project) []error {
+	had := map[string]bool{}
+	if before.Invalid != nil {
+		had["project"] = true
+	}
+	for i, t := range before.Targets {
+		if before.TargetErr(i) != nil {
+			had["target "+string(t.Name)] = true
+		}
+	}
+	var out []error
+	if after.Invalid != nil && !had["project"] {
+		out = append(out, after.Invalid)
+	}
+	for i, t := range after.Targets {
+		if err := after.TargetErr(i); err != nil && !had["target "+string(t.Name)] {
 			out = append(out, err)
 		}
 	}

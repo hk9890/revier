@@ -43,6 +43,11 @@ func (c *Core) agentTab(real revier.Realization, r Resume, link bool) (revier.Re
 	tab := revier.Realization{Dir: agent.Dir, Panels: []revier.PanelSpec{agent}}
 	if shell, ok := declared(real.Panels, revier.PanelShell); ok {
 		shell.Dir = agent.Dir
+		if link {
+			// The shell starts on the host, where the directory is: it
+			// carries the same argument the agent's ssh does.
+			shell.Command = append(append([]string(nil), shell.Command...), linkDir(r)...)
+		}
 		tab.Panels = append(tab.Panels, shell)
 	}
 	return tab, outcome

@@ -214,16 +214,18 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 	targetsPerChord[trigger] = map[string]bool{PickerTarget: true}
 
 	for _, p := range projects {
-		for _, t := range p.Targets {
-			if t.Key == "" {
+		for i, t := range p.Targets {
+			// A refused target wants no chord (decisions.md D85): it is still
+			// here carrying its key, and that key is what a rule refused it
+			// for - it does not parse, or another target holds it, which
+			// would read as a conflict of every project. `revier doctor` is
+			// where the refusal is read.
+			if t.Key == "" || p.TargetErr(i) != nil {
 				continue
 			}
 			ch, err := ParseChord(t.Key)
 			if err != nil {
-				// A key that does not parse refuses its target at load
-				// (decisions.md D85), and the target is still here carrying
-				// it. There is no chord to want, and `revier doctor` is
-				// where that refusal is read.
+				// A hand-built project: config refuses such a target at load.
 				continue
 			}
 			k := key{string(t.Name), ch}
