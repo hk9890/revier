@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +75,7 @@ func TestShutdownRefusesABusyAgentUnlessForced(t *testing.T) {
 	work(t)
 	agentStatus(t, "busy")
 
-	err := run([]string{"shutdown"})
+	err := run(io.Discard, []string{"shutdown"})
 	if !errors.Is(err, errShutdownBusy) {
 		t.Fatalf("err = %v, want the busy refusal", err)
 	}

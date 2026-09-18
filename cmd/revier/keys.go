@@ -46,7 +46,7 @@ func cmdKeys(ctx context.Context, a *app, args []string) error {
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Print(keysUsage)
+		fmt.Fprint(a.out, keysUsage)
 		return nil
 	case "status", "install", "uninstall":
 		// The desktop is probed here and not in newApp: it costs a gsettings
@@ -100,11 +100,11 @@ func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
 	}
 
 	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(a.out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(report)
 	}
-	printKeys(os.Stdout, report)
+	printKeys(a.out, report)
 	return nil
 }
 

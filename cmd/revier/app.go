@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -25,9 +26,13 @@ type app struct {
 	state     *state.State
 	stateRoot string
 	core      *core.Core
+	// out is where a command's own output goes: stdout, or a buffer under
+	// test, so a test reads what was printed without swapping the process's
+	// stdout. Warnings go to stderr as before.
+	out io.Writer
 }
 
-func newApp(ctx context.Context) (*app, error) {
+func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	cfgRoot, err := config.Root()
 	if err != nil {
 		return nil, err
@@ -51,7 +56,7 @@ func newApp(ctx context.Context) (*app, error) {
 	}
 	return &app{
 		cfg: cfg, cfgRoot: cfgRoot, projects: projects, state: st,
-		stateRoot: stateRoot,
+		stateRoot: stateRoot, out: out,
 		// No keybinder: probing the desktop costs a process, and only
 		// `revier keys` reads one. cmdKeys selects it when it is needed.
 		core: newCore(cfg, rt, win, nil),

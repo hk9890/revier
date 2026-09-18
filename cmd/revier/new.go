@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/hk9890/revier/internal/checkout"
@@ -14,7 +15,7 @@ import (
 // cmdNew writes a project file for the working directory. It needs no host,
 // so it runs before any is probed: a new checkout on a machine with no
 // terminal revier can drive still gets its project.
-func cmdNew(args []string) error {
+func cmdNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -36,7 +37,7 @@ func cmdNew(args []string) error {
 	if len(pos) > 0 {
 		name = pos[0]
 	}
-	_, err = createProject(root, projects, revier.ProjectName(name))
+	_, err = createProject(out, root, projects, revier.ProjectName(name))
 	return err
 }
 
@@ -44,7 +45,7 @@ func cmdNew(args []string) error {
 // directory's mise configuration, as `os open` does for a session it creates.
 // An empty name is the directory's own. What config.CanCreate refuses is
 // refused here.
-func createProject(root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
+func createProject(out io.Writer, root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return core.Project{}, err
@@ -60,6 +61,6 @@ func createProject(root string, projects []core.Project, name revier.ProjectName
 		return core.Project{}, err
 	}
 	checkout.Trust(dir, os.Stderr)
-	fmt.Printf("created %s\n", p.File)
+	fmt.Fprintf(out, "created %s\n", p.File)
 	return p, nil
 }

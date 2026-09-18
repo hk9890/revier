@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"text/tabwriter"
@@ -57,22 +58,22 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	}
 	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.state.Current, *name, time.Now())
 	if errors.Is(err, core.ErrNothingOpen) {
-		fmt.Println(err)
+		fmt.Fprintln(a.out, err)
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	targets, conversations := stored.Targets(), stored.Conversations()
-	fmt.Printf("%s: %s, %s\n", stored.ID,
+	fmt.Fprintf(a.out, "%s: %s, %s\n", stored.ID,
 		core.Count(len(stored.Projects), "project"), core.Count(targets, "target"))
 	if conversations > 0 {
-		fmt.Printf("  %s recorded\n", core.Count(conversations, "agent conversation"))
+		fmt.Fprintf(a.out, "  %s recorded\n", core.Count(conversations, "agent conversation"))
 	}
 	for _, note := range gaps.Notes() {
-		fmt.Printf("  %s\n", note)
+		fmt.Fprintf(a.out, "  %s\n", note)
 	}
-	fmt.Printf("  %s\n", path)
+	fmt.Fprintf(a.out, "  %s\n", path)
 	return nil
 }
 
@@ -94,7 +95,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	}
 	s, err := session.Load(a.stateRoot, ref)
 	if ref == "" && errors.Is(err, session.ErrNoSession) {
-		fmt.Println("no saved session. write one with revier session save")
+		fmt.Fprintln(a.out, "no saved session. write one with revier session save")
 		return nil
 	}
 	if err != nil {
@@ -111,20 +112,20 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		for _, r := range preview {
 			core.LogRestore(r)
 		}
-		return printRestored(preview)
+		return printRestored(a.out, preview)
 	}
 	restored, back := a.core.Restore(ctx, s, report, a.projects, ledger{a})
-	if err := printRestored(restored); err != nil {
+	if err := printRestored(a.out, restored); err != nil {
 		return err
 	}
 	if back != nil {
-		fmt.Println(back)
+		fmt.Fprintln(a.out, back)
 	}
 	opened, pending, failed := restored.Counts()
 	if pending > 0 {
-		fmt.Printf("%s: opened %d, %d not up yet\n", s.ID, opened, pending)
+		fmt.Fprintf(a.out, "%s: opened %d, %d not up yet\n", s.ID, opened, pending)
 	} else {
-		fmt.Printf("%s: opened %d\n", s.ID, opened)
+		fmt.Fprintf(a.out, "%s: opened %d\n", s.ID, opened)
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d targets did not open", failed)
@@ -132,8 +133,8 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	return nil
 }
 
-func printRestored(rs core.Restored) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+func printRestored(out io.Writer, rs core.Restored) error {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	for _, r := range rs {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Target, r.Note())
 	}
@@ -151,15 +152,15 @@ func cmdSessionList(a *app, args []string) error {
 		return err
 	}
 	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(a.out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(all)
 	}
 	if len(all) == 0 {
-		fmt.Printf("no saved sessions. write one with revier session save\n")
+		fmt.Fprintf(a.out, "no saved sessions. write one with revier session save\n")
 		return nil
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tNAME\tPROJECTS\tTARGETS\tAGENTS")
 	for _, s := range all {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), s.Conversations())

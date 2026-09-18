@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -59,14 +59,14 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	plan := core.CloseLast(a.core.ShutdownPlan(report, only, scope), report.Instances, core.RunsUnder())
 	if len(plan) == 0 {
-		fmt.Println("nothing to close")
+		fmt.Fprintln(a.out, "nothing to close")
 		return nil
 	}
 	if *dry {
-		return printClosePlan(plan)
+		return printClosePlan(a.out, plan)
 	}
 	if busy := core.Busy(plan); len(busy) > 0 && !*force {
-		if err := printClosePlan(busy); err != nil {
+		if err := printClosePlan(a.out, busy); err != nil {
 			return err
 		}
 		return errShutdownBusy
@@ -78,18 +78,18 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		case err != nil:
 			return fmt.Errorf("%w; nothing closed", err)
 		case saved:
-			fmt.Printf("session %s saved: %s, %s\n", stored.ID,
+			fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
 				core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
 			for _, note := range gaps.Notes() {
-				fmt.Printf("  %s\n", note)
+				fmt.Fprintf(a.out, "  %s\n", note)
 			}
 		case stored.ID != "":
-			fmt.Printf("session %s already holds what is open\n", stored.ID)
+			fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
 		}
 	}
 
 	closed := a.core.Shutdown(ctx, plan, core.CloseWait)
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	for _, r := range closed {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Name(), r.Note())
 	}
@@ -97,7 +97,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	n, open, failed := closed.Counts()
-	fmt.Printf("closed %d, %d still open\n", n, open)
+	fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}
@@ -105,8 +105,8 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 }
 
 // printClosePlan prints what a shutdown closes, a busy agent marked.
-func printClosePlan(plan []core.CloseStep) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+func printClosePlan(out io.Writer, plan []core.CloseStep) error {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	for _, s := range plan {
 		note := "close"
 		switch {

@@ -826,24 +826,12 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 	}
 }
 
-// lateWindows is a window host whose windows appear later than the launch
-// that asked for them: Open starts nothing it can list yet.
-type lateWindows struct {
-	*hosttest.Fake
-	opened int
-}
-
-func (l *lateWindows) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
-	l.opened++
-	return revier.TargetRef{}, nil
-}
-
 // A second press while a launch is coming up does not launch again, and the
 // launch is in state before the wait for its window begins, so a desktop key
 // pressed meanwhile sees it too (decisions.md D21).
 func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	_, _, c, projects := world(t, 1)
-	wm := &lateWindows{Fake: hosttest.New("wm")}
+	wm := hosttest.NewLateWindows("wm")
 	c.Window = wm
 	root := stateWith(t, nil)
 	m := refreshed(t, c, projects, root, nil)
@@ -862,8 +850,8 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	if _, again := press(m, "enter"); again != nil {
 		again()
 	}
-	if wm.opened != 1 {
-		t.Errorf("the editor was launched %d times, want once", wm.opened)
+	if wm.Opened != 1 {
+		t.Errorf("the editor was launched %d times, want once", wm.Opened)
 	}
 }
 

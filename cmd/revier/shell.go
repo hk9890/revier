@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -33,17 +34,17 @@ exec becomes the project's shell in this terminal. It is what the shell panel
 of a link runs on the project's machine over ssh.
 `
 
-func cmdShell(args []string) error {
+func cmdShell(out io.Writer, args []string) error {
 	sub := ""
 	if len(args) > 0 {
 		sub, args = args[0], args[1:]
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Print(shellUsage)
+		fmt.Fprint(out, shellUsage)
 		return nil
 	case "new":
-		return cmdShellNew(args)
+		return cmdShellNew(out, args)
 	case "exec":
 		return cmdShellExec(args)
 	default:
@@ -54,7 +55,7 @@ func cmdShell(args []string) error {
 
 // cmdShellNew adds a shell tab to an open workspace. Like `revier agent new`
 // it is what a kitty key runs, so it prints nothing on success.
-func cmdShellNew(args []string) error {
+func cmdShellNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("shell new", flag.ContinueOnError)
 	project := projectFlag(fs)
 	panel := fs.String("panel", "", "the open workspace holding this panel")
@@ -74,7 +75,7 @@ func cmdShellNew(args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	a, err := newApp(ctx)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -104,4 +105,22 @@ func homeTarget(p core.Project) (revier.TargetName, error) {
 		return "", fmt.Errorf("project %q has no home target", p.Name)
 	}
 	return home.Name, nil
+}
+
+// cmdShellExec becomes the project's shell, as cmdAgentExec becomes its agent.
+func cmdShellExec(args []string) error {
+	fs := flag.NewFlagSet("shell exec", flag.ContinueOnError)
+	project := projectFlag(fs)
+	tag := fs.String("tag", "", "the name the terminal that shows the shell knows it by")
+	dir := fs.String("dir", "", "the directory the shell starts in")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 || *project == "" {
+		return errors.New("usage: revier shell exec -p <project> [--tag <tag>] [--dir <path>]")
+	}
+	return serve(*project, *tag, func(c *core.Core, p core.Project) (core.Served, error) {
+		return c.ServeShell(p, *dir)
+	})
 }

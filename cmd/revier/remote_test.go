@@ -4,13 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"os"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -18,52 +15,13 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// remoteProject is a project on buildbox, its home target here the ssh pane
-// onto the workspace there.
-func remoteProject(t *testing.T) core.Project {
-	t.Helper()
-	p := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
-				{Kind: revier.PanelAgent, Command: ssh.PanelCommand("buildbox", "far", "agent")},
-				{Kind: revier.PanelShell, Command: ssh.PanelCommand("buildbox", "far", "shell")},
-			}}},
-	}})
-	return p
-}
-
-// stdout runs f with os.Stdout captured. The pipe is drained while f runs, so
-// output larger than the pipe buffer cannot block the command.
-func stdout(t *testing.T, f func() error) string {
-	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan string, 1)
-	go func() {
-		b, _ := io.ReadAll(r)
-		done <- string(b)
-	}()
-	saved := os.Stdout
-	os.Stdout = w
-	runErr := f()
-	os.Stdout = saved
-	_ = w.Close()
-	out := <-done
-	if runErr != nil {
-		t.Fatalf("%v\n%s", runErr, out)
-	}
-	return out
-}
-
 // `revier list a b` is those projects alone, in the order asked, which is
 // how a revier on another machine is asked about the projects there.
 func TestListNamedProjectsIsThoseAlone(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
 
-	out := stdout(t, func() error { return cmdList(context.Background(), a, []string{"--json", "far"}) })
+	out := output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json", "far"}) })
 	var views []revier.ProjectView
 	if err := json.Unmarshal([]byte(out), &views); err != nil {
 		t.Fatal(err)
@@ -92,7 +50,7 @@ func TestListTableShowsTheHostAndAnUnreachableOne(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
 
-	out := stdout(t, func() error { return cmdList(context.Background(), a, nil) })
+	out := output(t, a, func() error { return cmdList(context.Background(), a, nil) })
 	if !strings.Contains(out, "far@buildbox") || !strings.Contains(out, "unreachable") {
 		t.Errorf("table = %q, want the host on the name and the state unreachable", out)
 	}

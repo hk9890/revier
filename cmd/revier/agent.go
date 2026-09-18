@@ -5,12 +5,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
@@ -63,23 +65,23 @@ var errWaitTimeout = errors.New("timed out")
 // variable, so a test need not wait this long for it.
 var promptTimeout = commandTimeout
 
-func cmdAgent(args []string) error {
+func cmdAgent(out io.Writer, args []string) error {
 	sub := ""
 	if len(args) > 0 {
 		sub, args = args[0], args[1:]
 	}
 	switch sub {
 	case "", "help", "--help", "-h":
-		fmt.Print(agentUsage)
+		fmt.Fprint(out, agentUsage)
 		return nil
 	case "wait":
-		return cmdAgentWait(args)
+		return cmdAgentWait(out, args)
 	case "prompt":
-		return cmdAgentPrompt(args)
+		return cmdAgentPrompt(out, args)
 	case "new":
-		return cmdAgentNew(args)
+		return cmdAgentNew(out, args)
 	case "focus":
-		return cmdAgentFocus(args)
+		return cmdAgentFocus(out, args)
 	case "exec":
 		return cmdAgentExec(args)
 	default:
@@ -92,7 +94,7 @@ func cmdAgent(args []string) error {
 // good: `revier agent wait` on a long turn is the point of it. The timeout
 // covers the host probes and the lookup as well as the wait, since a host that
 // never answers is a wait that never ends.
-func cmdAgentWait(args []string) error {
+func cmdAgentWait(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
@@ -115,21 +117,21 @@ func cmdAgentWait(args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
 	defer cancel()
-	state, err := waitFor(ctx, pos[0], statuses)
+	state, err := waitFor(ctx, out, pos[0], statuses)
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
 	if err != nil {
 		return err
 	}
-	fmt.Println(state.Status)
+	fmt.Fprintln(out, state.Status)
 	return nil
 }
 
 // waitFor finds the agent an address names and waits for one of the statuses.
 // The state is the last one read, zero when the agent was never found.
-func waitFor(ctx context.Context, address string, until []revier.Status) (revier.AgentState, error) {
-	a, err := newApp(ctx)
+func waitFor(ctx context.Context, out io.Writer, address string, until []revier.Status) (revier.AgentState, error) {
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
@@ -144,7 +146,7 @@ func waitFor(ctx context.Context, address string, until []revier.Status) (revier
 	return state, nil
 }
 
-func cmdAgentPrompt(args []string) error {
+func cmdAgentPrompt(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent prompt", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -155,7 +157,7 @@ func cmdAgentPrompt(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
 	defer cancel()
-	a, err := newApp(ctx)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -176,7 +178,7 @@ func cmdAgentPrompt(args []string) error {
 // cmdAgentFocus brings one agent to the front.
 // With --ref the address names a panel of that instance, so a panel id two
 // kitty processes share still names one agent.
-func cmdAgentFocus(args []string) error {
+func cmdAgentFocus(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent focus", flag.ContinueOnError)
 	instance := fs.String("ref", "", "the instance holding the panel")
 	pos, err := parseArgs(fs, args)
@@ -188,7 +190,7 @@ func cmdAgentFocus(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	a, err := newApp(ctx)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -217,7 +219,7 @@ func cmdAgentFocus(args []string) error {
 // cmdAgentNew adds an agent tab to an open workspace. It is what the kitty
 // hotkey runs, so it prints nothing on success: there is no terminal to read
 // it in.
-func cmdAgentNew(args []string) error {
+func cmdAgentNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent new", flag.ContinueOnError)
 	project := projectFlag(fs)
 	panel := fs.String("panel", "", "the open workspace holding this panel")
@@ -238,7 +240,7 @@ func cmdAgentNew(args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	a, err := newApp(ctx)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -317,4 +319,34 @@ func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
 		return core.Agent{}, fmt.Errorf("no project named %q", name)
 	}
 	return a.core.Agent(ctx, p, sel, a.state.Bound[p.Name])
+}
+
+// cmdAgentExec becomes the project's agent, for a terminal on another machine:
+// it is what the agent panel of a link runs here over ssh (decisions.md D84).
+func cmdAgentExec(args []string) error {
+	fs := flag.NewFlagSet("agent exec", flag.ContinueOnError)
+	project := projectFlag(fs)
+	tag := fs.String("tag", "", "the name the terminal that shows the agent knows it by")
+	resume := fs.String("resume", "", "the conversation to start the agent on")
+	dir := fs.String("dir", "", "the directory the agent starts in")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 || *project == "" {
+		return errors.New("usage: revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]")
+	}
+	return serve(*project, *tag, func(c *core.Core, p core.Project) (core.Served, error) {
+		// A checkout that is missing here is cloned by the agent's panel
+		// alone: the shell's starts beside it, and two clones into one
+		// directory fail each other.
+		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
+			return core.Served{}, err
+		}
+		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+		if err == nil && *resume != "" && s.Outcome != core.AgentResumed {
+			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent starts empty\n", *resume, s.Outcome)
+		}
+		return s, err
+	})
 }
