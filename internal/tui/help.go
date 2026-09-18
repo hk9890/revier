@@ -161,7 +161,10 @@ func (m Model) desktopHelpEntries() []helpEntry {
 	seen := map[helpEntry]bool{}
 	var targets []helpEntry
 	for _, p := range m.projects {
-		for _, t := range p.Targets {
+		for i, t := range p.Targets {
+			if p.TargetErr(i) != nil {
+				continue
+			}
 			c, ok := chordName(t.Key)
 			if !ok {
 				continue

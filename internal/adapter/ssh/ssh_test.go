@@ -83,10 +83,11 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 // one - the directory Claude Code installs into - is missing. The command
 // line runs in the user's login shell instead, as one word. The shell is
 // $SHELL, which sshd sets, and not ${SHELL:-sh}: the line is parsed by that
-// login shell, and fish rejects the braces.
+// login shell, and fish rejects the braces. The word is double-quoted, which
+// fish and a POSIX shell read alike where they read `'\”` differently.
 func TestACommandRunsInTheLoginShell(t *testing.T) {
-	got := ssh.Login("revier list --json 'my project'")
-	want := `exec "$SHELL" -lc 'revier list --json '\''my project'\'''`
+	got := ssh.Login("revier list --json 'it'\\''s' '$HOME'")
+	want := `exec "$SHELL" -lc "revier list --json 'it'\\''s' '\$HOME'"`
 	if got != want {
 		t.Errorf("login = %s, want %s", got, want)
 	}

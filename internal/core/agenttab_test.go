@@ -232,6 +232,10 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	if !slices.Equal(got.Command, want) || got.Dir != "" {
 		t.Errorf("agent panel = %+v, want %q and no directory here", got, want)
 	}
+	// The shell beside it starts on the host too, in the same directory.
+	if shell := rt.Tabs[0].Real.Panels[1]; !slices.Equal(shell.Command, []string{"sh", "-c", "exec ssh far", "sh", "--dir", "/srv/far/wt"}) {
+		t.Errorf("shell panel = %q, want the directory carried to the host", shell.Command)
+	}
 
 	// A word a shell would read is not sent, and the agent starts empty: the
 	// conversation without its directory would carry on in the wrong checkout.

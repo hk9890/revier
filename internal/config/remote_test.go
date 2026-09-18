@@ -10,6 +10,7 @@ import (
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -212,29 +213,47 @@ name = "tickets"
 // The part of the other kind would never be read, so the file that writes it
 // does not load.
 func TestAProjectFileWritesOnlyThePartOfItsKind(t *testing.T) {
-	remoteOnLocal := "path = \"/srv/near\"\n" + `
+	remoteOnLocal := valid + `
 [[target]]
-name = "editor"
+name = "pages"
   [target.remote.window]
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	if err := loadErr(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil); err == nil ||
-		!strings.Contains(err.Error(), "[target.remote]") {
+	p := config.LoadProject(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil)
+	if err := refusalOf(p, "pages"); err == nil || !strings.Contains(err.Error(), "[target.remote]") {
 		t.Errorf("err = %v, want [target.remote] refused on a local project", err)
+	}
+	// The mistake is one target's, and costs that target: the project loads
+	// with its home, as any refused target leaves it (decisions.md D85).
+	if p.Invalid != nil || refusalOf(p, "home") != nil {
+		t.Errorf("Invalid = %v, home refused = %v; want the project and its home whole", p.Invalid, refusalOf(p, "home"))
 	}
 
 	localOnLink := link + `
 [[target]]
-name = "editor"
+name = "pages"
   [target.window]
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	if err := loadErr(write(t, t.TempDir(), "far.toml", localOnLink), nil); err == nil ||
-		!strings.Contains(err.Error(), "[target.remote.window]") {
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", localOnLink), nil)
+	if err := refusalOf(p, "pages"); err == nil || !strings.Contains(err.Error(), "[target.remote.window]") {
 		t.Errorf("err = %v, want a link's realization asked for under [target.remote.window]", err)
 	}
+	if p.Invalid != nil || refusalOf(p, "home") != nil {
+		t.Errorf("Invalid = %v, home refused = %v; want the link and its derived home whole", p.Invalid, refusalOf(p, "home"))
+	}
+}
+
+// refusalOf is why the named target of a loaded project was refused, or nil.
+func refusalOf(p core.Project, name revier.TargetName) error {
+	for i, t := range p.Targets {
+		if t.Name == name {
+			return p.TargetErr(i)
+		}
+	}
+	return errors.New("no such target")
 }
 
 // The drop rule runs both ways: a shared target with only a remote part is a
@@ -421,6 +440,15 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 	}
 	if _, err := config.CreateLink(root, "bad", "-oProxyCommand=x", revier.Project{Path: "/srv/far"}); err == nil {
 		t.Error("want the host refused before anything is written")
+	}
+	// A project that is a link on the host reaches a third machine, whose
+	// checkout `revier agent exec` on the host refuses to serve.
+	chained := revier.Project{Name: "far", Path: "/srv/far", Remote: &revier.Link{Host: "third", Project: "far"}}
+	if _, err := config.CreateLink(root, "chained", "buildbox", chained); err == nil || !strings.Contains(err.Error(), "third") {
+		t.Errorf("err = %v, want the link refused, naming the machine that holds the project", err)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "chained")); err == nil {
+		t.Error("a refused link left a file behind")
 	}
 }
 

@@ -81,14 +81,16 @@ var errNameKey = errors.New("name is not read: the file name is the project's na
 // in. It is parsed once as tables; the typed decode of the file alone runs
 // only where it is the answer - a local project with no shared targets - or
 // where the merge failed, so an error in the file is still reported against
-// its own lines.
-func decodeProject(data []byte, shared []map[string]any) (revier.Project, error) {
+// its own lines. The second answer is the targets the file writes the wrong
+// part for, by name (validateParts): they decode without that part, and the
+// caller that prepares the project refuses each.
+func decodeProject(data []byte, shared []map[string]any) (revier.Project, map[revier.TargetName]error, error) {
 	var raw map[string]any
 	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return revier.Project{}, err
+		return revier.Project{}, nil, err
 	}
 	if _, ok := raw["name"]; ok {
-		return revier.Project{}, errNameKey
+		return revier.Project{}, nil, errNameKey
 	}
 	own := func() (revier.Project, error) {
 		var p revier.Project
@@ -97,11 +99,10 @@ func decodeProject(data []byte, shared []map[string]any) (revier.Project, error)
 	}
 	_, isLink := raw["remote"]
 	ownTargets := tablesOf(raw["target"])
-	if err := validateParts(ownTargets, isLink); err != nil {
-		return revier.Project{}, err
-	}
+	parts := validateParts(ownTargets, isLink)
 	if len(shared) == 0 && !isLink {
-		return own()
+		p, err := own()
+		return p, parts, err
 	}
 	declared := map[string]bool{}
 	for _, t := range ownTargets {
@@ -112,11 +113,11 @@ func decodeProject(data []byte, shared []map[string]any) (revier.Project, error)
 	var merged revier.Project
 	if err := recode(raw, &merged); err != nil {
 		if p, ownErr := own(); ownErr != nil {
-			return p, ownErr
+			return p, parts, ownErr
 		}
-		return revier.Project{}, fmt.Errorf("with the shared targets of config.toml: %w", err)
+		return revier.Project{}, parts, fmt.Errorf("with the shared targets of config.toml: %w", err)
 	}
-	return merged, nil
+	return merged, parts, nil
 }
 
 // A target carries a realization for a local project under [target.window]
@@ -139,9 +140,16 @@ func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) [
 		remote, _ := flat["remote"].(map[string]any)
 		delete(flat, "remote")
 		if isLink {
+			// The two realizations alone: any other key under [target.remote]
+			// is refused by name (validateRemoteKeys), and lifted it would
+			// change the name the refusal is laid on.
 			delete(flat, "window")
 			delete(flat, "runtime")
-			maps.Copy(flat, remote)
+			for _, k := range []string{"window", "runtime"} {
+				if v, ok := remote[k]; ok {
+					flat[k] = v
+				}
+			}
 		}
 		name, _ := flat["name"].(string)
 		_, window := flat["window"]
@@ -154,32 +162,38 @@ func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) [
 	return out
 }
 
-// validateParts refuses a project file that writes the part of the other
-// kind: a realization nothing would ever read is a target that silently does
-// nothing, which is exactly what loading catches.
-func validateParts(targets []map[string]any, isLink bool) error {
-	var errs []error
+// validateParts refuses a target that writes the part of the other kind: a
+// realization nothing would ever read is a target that silently does
+// nothing, which is exactly what loading catches. The refusals are by target
+// name, one target's mistake costing that target and not the project
+// (decisions.md D85): the part is dropped by partsFor either way, and
+// loadProject lays the reason on the target once the project is prepared.
+func validateParts(targets []map[string]any, isLink bool) map[revier.TargetName]error {
+	out := map[revier.TargetName]error{}
 	for i, t := range targets {
 		name, _ := t["name"].(string)
-		if name == "" {
-			name = fmt.Sprintf("%d", i+1)
+		shown := name
+		if shown == "" {
+			shown = fmt.Sprintf("%d", i+1)
 		}
+		var errs []error
 		if isLink {
 			for _, k := range []string{"window", "runtime"} {
 				if _, ok := t[k]; ok {
-					errs = append(errs, fmt.Errorf("target %q: a link declares its realization under [target.remote.%s], because it reaches a project on another machine", name, k))
+					errs = append(errs, fmt.Errorf("target %q: a link declares its realization under [target.remote.%s], because it reaches a project on another machine", shown, k))
 				}
 			}
 			if remote, ok := t["remote"].(map[string]any); ok {
-				errs = append(errs, validateRemoteKeys(name, remote)...)
+				errs = append(errs, validateRemoteKeys(shown, remote)...)
 			}
-			continue
+		} else if _, ok := t["remote"]; ok {
+			errs = append(errs, fmt.Errorf("target %q: [target.remote] is for a link, and this project is local; declare [target.window] or [target.runtime]", shown))
 		}
-		if _, ok := t["remote"]; ok {
-			errs = append(errs, fmt.Errorf("target %q: [target.remote] is for a link, and this project is local; declare [target.window] or [target.runtime]", name))
+		if len(errs) > 0 {
+			out[revier.TargetName(name)] = errors.Join(append([]error{out[revier.TargetName(name)]}, errs...)...)
 		}
 	}
-	return errors.Join(errs...)
+	return out
 }
 
 // mergeTargets is the shared targets, each merged with the project's own of

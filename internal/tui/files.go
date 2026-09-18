@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -52,13 +53,44 @@ func (m *Model) replaceProject(name revier.ProjectName, p core.Project) {
 	views := slices.Clone(m.views)
 	for i := range views {
 		if views[i].Project.Name == name {
-			views[i].Project = p.Project
+			views[i] = provisional(views[i], p)
 		}
 	}
 	m.projects, m.views = projects, views
 	m.tkeys = targetKeys(m.projects, m.keys)
 	m.reload()
 	m.selectName(p.Name)
+}
+
+// provisional is the view of a project as its file was just written, until
+// the next survey answers: the row the survey found for a target the file
+// still declares, a bare row for one it now declares, the attached windows,
+// and the file's own reason. A target the file no longer declares has no row
+// to run.
+func provisional(v revier.ProjectView, p core.Project) revier.ProjectView {
+	found := map[revier.TargetName]revier.TargetView{}
+	var attached []revier.TargetView
+	for _, tv := range v.Targets {
+		if tv.Attached {
+			attached = append(attached, tv)
+			continue
+		}
+		found[tv.Name] = tv
+	}
+	targets := make([]revier.TargetView, 0, len(p.Targets)+len(attached))
+	for _, t := range p.Targets {
+		tv, ok := found[t.Name]
+		if !ok {
+			tv = revier.TargetView{Name: t.Name}
+		}
+		tv.Key = t.Key
+		targets = append(targets, tv)
+	}
+	v.Project, v.Targets, v.Invalid = p.Project, append(targets, attached...), ""
+	if p.Invalid != nil {
+		v.Invalid = p.Invalid.Error()
+	}
+	return v
 }
 
 // askDelete starts the confirmation for removing the highlighted project's
@@ -115,27 +147,39 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // refuseRunning refuses deleting or renaming a project with a target running
-// or a window attached to it. An attachment on the window host is alive:
-// every refresh prunes the ones that host no longer lists. One on another
-// host - a surface started where that host does not probe - cannot be
-// reached from here, so it does not hold the change up.
+// or a window attached to it. The last survey says what runs; a target that
+// landed since, or a launch whose window is still to appear, is read from
+// state, else the change would leave that window reachable by no name. An
+// attachment or a binding on a host here is alive: every refresh prunes the
+// ones that host no longer lists. One on another host - a surface started
+// where that host does not probe - cannot be reached from here, so it does
+// not hold the change up.
 func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
+	name := v.Project.Name
 	running := v.Running
 	for _, t := range v.Targets {
 		running = running || !t.Ref.IsZero()
 	}
+	for _, ref := range m.bound[name] {
+		running = running || m.hostHere(ref.Host)
+	}
 	if running {
-		return fmt.Errorf("%s is running; close its targets before %s it", v.Project.Name, doing)
+		return fmt.Errorf("%s is running; close its targets before %s it", name, doing)
 	}
-	if m.core.Window == nil {
-		return nil
+	if m.pending != nil && m.pending.Project == name && time.Since(m.pending.At) <= core.BindWindow {
+		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
 	}
-	for _, ref := range m.attached[v.Project.Name] {
-		if ref.Host == m.core.Window.Name() {
-			return fmt.Errorf("%s has an attached window open; close it before %s the project", v.Project.Name, doing)
+	for _, ref := range m.attached[name] {
+		if m.core.Window != nil && ref.Host == m.core.Window.Name() {
+			return fmt.Errorf("%s has an attached window open; close it before %s the project", name, doing)
 		}
 	}
 	return nil
+}
+
+// hostHere reports a host this surface lists, whose refs a refresh prunes.
+func (m Model) hostHere(host string) bool {
+	return (m.core.Runtime != nil && host == m.core.Runtime.Name()) || (m.core.Window != nil && host == m.core.Window.Name())
 }
 
 func without(projects []core.Project, name revier.ProjectName) []core.Project {

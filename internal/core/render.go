@@ -120,7 +120,8 @@ func expand(p revier.Project, s string) (string, error) {
 // empty - a link with no path recorded, a var written blank - hands the
 // program an empty argument, which it reads as the current directory, an
 // empty pattern or a missing operand, and nothing says why. The error names
-// the index, because an argv is read by position.
+// the index, because an argv is read by position. A word written empty is
+// not rendered and stays: the file says so, and `-m ""` is an argument.
 func expandArgv(p revier.Project, argv []string) ([]string, error) {
 	out := make([]string, len(argv))
 	for i, arg := range argv {
@@ -128,7 +129,7 @@ func expandArgv(p revier.Project, argv []string) ([]string, error) {
 		if out[i], err = expand(p, arg); err != nil {
 			return nil, fmt.Errorf("[%d]: %w", i, err)
 		}
-		if out[i] == "" {
+		if out[i] == "" && arg != "" {
 			return nil, fmt.Errorf("[%d]: %q renders to an empty argument", i, arg)
 		}
 	}

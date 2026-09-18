@@ -94,6 +94,7 @@ func cmdEach(w io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
+	warnProblems(projects)
 	var keep func(string) bool
 	if *filter != "" {
 		keep = shellTest(*filter)

@@ -77,9 +77,15 @@ func serve(project, tag string, what func(*core.Core, core.Project) (core.Served
 	if err != nil {
 		return err
 	}
+	warnProblems(projects)
 	i := slices.IndexFunc(projects, func(p core.Project) bool { return string(p.Name) == project })
 	if i < 0 {
 		return fmt.Errorf("no project named %q", project)
+	}
+	// A project its file refused as a whole serves nothing, and says why: the
+	// panel on the other machine is the one place its user reads the reason.
+	if p := projects[i]; p.Invalid != nil {
+		return p.Invalid
 	}
 	s, err := what(newCore(cfg, nil, nil, nil), projects[i])
 	if err != nil {

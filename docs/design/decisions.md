@@ -410,11 +410,11 @@ marks a missing checkout on the row.
 A `name` key could disagree with the file name, and no file ever used it that
 way; it only doubled every rename. A file that still has one is refused at load
 rather than read either way. A rename moves the file, writes a link's name on
-the host when the link derived it, and moves the state entries. It is refused
-while the project runs, because templates and the link pane match the name, and
-refused when a target writes the name out instead of `{{.Name}}` - which
-`revier new` does for a name a regexp would read - since that pattern would go
-on looking for the old name.
+the host when the link derived it, and moves the state entries and the saved
+sessions. It is refused while the project runs, because templates and the link
+pane match the name, and refused when a realization writes the name out beside
+`{{.Name}}` - which `revier new` does for a name a regexp would read - since
+that pattern would go on looking for the old name while the name followed.
 
 ### D81 — a project is edited on its own screen, and never in `$EDITOR`
 
@@ -480,5 +480,6 @@ or `Invalid` on the project - because a file that disappears from the surface
 takes with it the one place its reason could be read. Its key still fails
 loudly when pressed, since nothing may run from an argv that did not render.
 A key nothing reads is not a refusal at all. `revier doctor` is where the
-reasons are read in full, and an edit revier itself makes is still refused
-unless the file comes out whole.
+reasons are read in full. An edit revier itself makes is refused for what it
+breaks and not for what was broken before it, so a file is repaired one target
+at a time; what `revier new` and `revier link` write must come out whole.

@@ -140,7 +140,11 @@ func advise(msg string) string {
 		return "give the target a `[target.window]` or `[target.runtime]` table"
 	case strings.Contains(msg, "error parsing regexp"):
 		return "fix the `match` pattern; the message names the part that does not parse"
-	case strings.Contains(msg, "expected"), strings.Contains(msg, "toml:"):
+	case strings.Contains(msg, "template:"):
+		return "fix the template; the message names what does not parse or evaluate"
+	case strings.Contains(msg, "name is not read"):
+		return "delete the `name = ...` line; the file name is the project's name"
+	case strings.Contains(msg, "toml: line"):
 		return "the file is not valid TOML; the message names the line"
 	}
 	return ""

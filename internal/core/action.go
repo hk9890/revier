@@ -8,6 +8,11 @@ import "fmt"
 // D40). A project on this machine runs run, rendered against the project, in
 // its checkout.
 func (c *Core) ActionCommand(p Project, name string, run []string) (argv []string, dir string, err error) {
+	// A project its file refused as a whole has no directory an action could
+	// run in, and says so (decisions.md D85).
+	if p.Invalid != nil {
+		return nil, "", fmt.Errorf("action %q: %w", name, p.Invalid)
+	}
 	r, err := c.RemoteOf(p)
 	if err != nil {
 		return nil, "", fmt.Errorf("action %q: %w", name, err)

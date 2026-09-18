@@ -94,12 +94,11 @@ func (c *Core) here(a revier.AgentView) bool {
 	return c.Runtime != nil && !a.Ref.IsZero() && a.Ref.Host == c.Runtime.Name()
 }
 
-// agentsHere is the agents a shutdown can close: every agent of a project on
-// this machine, and of a link the ones a panel here shows.
+// agentsHere is the agents a shutdown can close: the ones a panel of this
+// machine's runtime shows. A link's agent no panel here shows is its host's,
+// and an agent this machine serves to a terminal elsewhere ends with that
+// terminal (decisions.md D84); neither is a step of a shutdown here.
 func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
-	if v.Project.Remote == nil {
-		return v.Agents
-	}
 	var out []revier.AgentView
 	for _, a := range v.Agents {
 		if c.here(a) {
@@ -199,22 +198,40 @@ var plainWord = regexp.MustCompile(`^[A-Za-z0-9._/:=@+~-]+$`)
 // panel's command is the ssh that runs `revier agent exec` on the host, and
 // the conversation and its directory go to it as arguments: whether the
 // directory is still there and which harness resumes are the host's to say,
-// and it starts the agent empty when it cannot. A word that cannot be sent
-// starts the agent empty here: the conversation without its directory would
-// carry on in the wrong checkout, which is what AgentDirGone refuses.
+// and it starts the agent empty when it cannot. A directory that cannot be
+// sent starts the agent empty in the project, as a local one starts when the
+// directory is gone: the conversation without its directory would carry on
+// in the wrong checkout. A conversation that cannot be sent starts the agent
+// empty in its directory, as a local one starts when no probe resumes it.
 func startLinkAgent(spec *revier.PanelSpec, r Resume) AgentOutcome {
-	if r.Session == "" {
-		return AgentEmpty
-	}
-	if !plainWord.MatchString(string(r.Session)) || (r.Dir != "" && !plainWord.MatchString(r.Dir)) {
+	if r.Dir != "" && !plainWord.MatchString(r.Dir) {
+		if r.Session == "" {
+			return AgentEmpty
+		}
 		return AgentUnresumable
 	}
-	command := append(append([]string(nil), spec.Command...), "--resume", string(r.Session))
-	if r.Dir != "" {
-		command = append(command, "--dir", r.Dir)
+	command := append([]string(nil), spec.Command...)
+	outcome := AgentEmpty
+	if r.Session != "" {
+		if !plainWord.MatchString(string(r.Session)) {
+			outcome = AgentUnresumable
+		} else {
+			command = append(command, "--resume", string(r.Session))
+			outcome = AgentResumed
+		}
 	}
-	spec.Command = command
-	return AgentResumed
+	spec.Command = append(command, linkDir(r)...)
+	return outcome
+}
+
+// linkDir is the directory a link's panel carries to the host, as the
+// arguments of `revier agent exec` and `revier shell exec`, when it can cross
+// the shells between them.
+func linkDir(r Resume) []string {
+	if r.Dir == "" || !plainWord.MatchString(r.Dir) {
+		return nil
+	}
+	return []string{"--dir", r.Dir}
 }
 
 // conversationsThere asks each link's host which conversation each of its
@@ -265,23 +282,21 @@ func (c *Core) conversationsOn(ctx context.Context, host string, links []revier.
 		return nil, err
 	}
 	out := map[revier.ProjectName]map[revier.PanelID]session.Agent{}
-	{
-		for _, v := range links {
-			agents := map[revier.PanelID]session.Agent{}
-			for _, there := range named {
-				if there.Project.Name != v.Project.Remote.Project {
-					continue
-				}
-				for _, a := range there.Agents {
-					agent := session.Agent{Harness: a.State.Harness}
-					if a.Conversation != nil {
-						agent.Session, agent.Dir = a.Conversation.ID, a.Conversation.Dir
-					}
-					agents[a.Panel] = agent
-				}
+	for _, v := range links {
+		agents := map[revier.PanelID]session.Agent{}
+		for _, there := range named {
+			if there.Project.Name != v.Project.Remote.Project {
+				continue
 			}
-			out[v.Project.Name] = agents
+			for _, a := range there.Agents {
+				agent := session.Agent{Harness: a.State.Harness}
+				if a.Conversation != nil {
+					agent.Session, agent.Dir = a.Conversation.ID, a.Conversation.Dir
+				}
+				agents[a.Panel] = agent
+			}
 		}
+		out[v.Project.Name] = agents
 	}
 	return out, nil
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -135,6 +137,9 @@ func (m Model) projectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.prow == m.addProjectTargetRow() && key.Matches(msg, m.keys.Enter):
 		return m.openProjectTargetForm(len(m.ptext.Targets))
 	case key.Matches(msg, m.keys.Enter):
+		// As wide as the row leaves it, so a long path scrolls under the
+		// cursor instead of running off the right edge, typed blind.
+		m.pedit.Width = max(m.listWidth()-lipgloss.Width(cursor(m.theme, true))-configLabelWidth-1, 8)
 		m.pedit.SetValue(m.projectValue(m.projectFields()[m.prow]))
 		m.pedit.CursorEnd()
 		return m, m.pedit.Focus()
@@ -183,9 +188,9 @@ func (m *Model) saveProjectField(f projectField, value string) error {
 	return m.projectWritten(m.proj, written)
 }
 
-// renameProject moves the project file, and what state holds under the old
-// name with it. A running project is refused: its instances are found by
-// titles its name is part of.
+// renameProject moves the project file, and what state and the saved
+// sessions hold under the old name with it. A running project is refused:
+// its instances are found by titles its name is part of.
 func (m *Model) renameProject(to revier.ProjectName) error {
 	from := m.proj
 	if to == from {
@@ -210,6 +215,9 @@ func (m *Model) renameProject(to revier.ProjectName) error {
 		st.Rename(from, to)
 		return true
 	})
+	if err := session.Rename(m.stateRoot, from, to); err != nil {
+		slog.Warn("rename: the saved sessions keep the old name", "from", from, "to", to, "err", err)
+	}
 	return m.projectWritten(from, written)
 }
 

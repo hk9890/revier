@@ -138,15 +138,50 @@ func Save(stateRoot string, s Session) (Session, string, error) {
 		path = filepath.Join(dir, id+".toml")
 	}
 	s.ID = id
-
-	var b strings.Builder
-	if err := toml.NewEncoder(&b).Encode(s); err != nil {
-		return Session{}, "", fmt.Errorf("encode session: %w", err)
-	}
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
-		return Session{}, "", fmt.Errorf("write %s: %w", path, err)
+	if err := write(path, s); err != nil {
+		return Session{}, "", err
 	}
 	return s, path, nil
+}
+
+func write(path string, s Session) error {
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(s); err != nil {
+		return fmt.Errorf("encode session: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// Rename moves what every stored session records under a project to its new
+// name, in place: a project renamed on the surface (decisions.md D80) is
+// still the one a session saved before the rename opens again. A session
+// that does not name the project is left as it is.
+func Rename(stateRoot string, from, to revier.ProjectName) error {
+	all, err := List(stateRoot)
+	if err != nil {
+		return err
+	}
+	for _, s := range all {
+		changed := false
+		if s.Current == from {
+			s.Current, changed = to, true
+		}
+		for i := range s.Projects {
+			if s.Projects[i].Name == from {
+				s.Projects[i].Name, changed = to, true
+			}
+		}
+		if !changed {
+			continue
+		}
+		if err := write(filepath.Join(Dir(stateRoot), s.ID+".toml"), s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Load reads one session. An empty ref is the newest stored session, which is

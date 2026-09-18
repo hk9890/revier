@@ -67,6 +67,12 @@ func CreateLink(root string, name revier.ProjectName, host string, on revier.Pro
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)
 	}
+	// A project that is itself a link on the host has its checkout and its
+	// agents on a third machine, which `revier agent exec` there refuses to
+	// serve (internal/checkout); the link belongs on that machine.
+	if on.Remote != nil {
+		return core.Project{}, fmt.Errorf("%q on %s is itself a link to %s; link the project on %s instead", on.Name, host, on.Remote.Host, on.Remote.Host)
+	}
 	// A link gets the shared targets through their remote part (decisions.md
 	// D82), so it is loaded back with them: the project handed to the caller
 	// is the one the next start reads, and a shared target that would refuse
@@ -79,9 +85,15 @@ func CreateLink(root string, name revier.ProjectName, host string, on revier.Pro
 }
 
 // write puts body under the project's file name and loads it back. An
-// existing file is never overwritten, and a file that does not load is
+// existing file is never overwritten, and a file that does not load whole is
 // removed again, so the directory holds a project revier accepts or nothing.
 func write(root string, name revier.ProjectName, body string, shared []map[string]any) (core.Project, error) {
+	return writeUnless(root, name, body, shared, Problems)
+}
+
+// writeUnless is write with what the loaded project may not carry: the
+// problems refuse names are the file's, and it goes again.
+func writeUnless(root string, name revier.ProjectName, body string, shared []map[string]any, refuse func(core.Project) []error) (core.Project, error) {
 	if err := ValidateName(name); err != nil {
 		return core.Project{}, err
 	}
@@ -104,11 +116,11 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 		_ = os.Remove(path)
 		return core.Project{}, werr
 	}
-	// A file revier itself has just written is expected to load whole, so a
-	// problem in it is revier's mistake, not the user's, and the file goes
-	// again rather than becoming a project that cannot run.
+	// A file revier itself has just written is expected to load as it was
+	// meant to, so a problem in it is revier's mistake, not the user's, and
+	// the file goes again rather than becoming a project that cannot run.
 	p := LoadProject(path, shared)
-	if probs := Problems(p); len(probs) > 0 {
+	if probs := refuse(p); len(probs) > 0 {
 		_ = os.Remove(path)
 		return core.Project{}, errors.Join(probs...)
 	}

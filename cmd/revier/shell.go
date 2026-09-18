@@ -93,8 +93,15 @@ func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 }
 
 // homeTarget is the target `revier shell new -p <project>` opens its tab in.
-// Every project has one: a load refuses a project without it.
+// A project without one is loaded and listed all the same (decisions.md D85),
+// and is refused here with its reason.
 func homeTarget(p core.Project) (revier.TargetName, error) {
-	home, _ := p.Home()
+	home, ok := p.Home()
+	if !ok || home.Name == "" {
+		if p.Invalid != nil {
+			return "", p.Invalid
+		}
+		return "", fmt.Errorf("project %q has no home target", p.Name)
+	}
 	return home.Name, nil
 }

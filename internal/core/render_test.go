@@ -154,6 +154,11 @@ func TestRenderArgv(t *testing.T) {
 	if _, err := core.RenderArgv(p, []string{"{{.Vars.absent}}"}); err == nil {
 		t.Error("a missing key must be an error, not an empty argument")
 	}
+	// A word written empty is not rendered and stays: `-m ""` is an argument.
+	got, err = core.RenderArgv(p, []string{"git", "commit", "--allow-empty-message", "-m", ""})
+	if err != nil || len(got) != 5 || got[4] != "" {
+		t.Errorf("RenderArgv = %q, %v; want the empty word kept", got, err)
+	}
 }
 
 // A panel starts where its realization starts. The fallback is the core's, so

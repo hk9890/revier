@@ -64,9 +64,9 @@ func (h *Host) Probe(context.Context) error {
 }
 
 type process struct {
-	pid, ppid      int
-	tag, workspace string
-	cmdline        []string
+	pid, ppid, pgrp, tty, tpgid int
+	tag, workspace              string
+	cmdline                     []string
 }
 
 // Instances reads /proc once. A process of another user refuses the read of
@@ -89,7 +89,10 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 
 	panels := map[string][]revier.Panel{}
 	for tag, tagged := range byTag {
-		p := nearest(tagged)
+		p, ok := nearest(tagged)
+		if !ok {
+			continue
+		}
 		panels[p.workspace] = append(panels[p.workspace], revier.Panel{
 			ID: revier.PanelID(tag), Kind: kindOf(p.cmdline), PID: p.pid, Command: p.cmdline,
 		})
@@ -136,22 +139,38 @@ func (h *Host) read(pid int) (process, bool) {
 		return process{}, false
 	}
 	// The command name in parentheses may hold spaces and parentheses of its
-	// own; the fields after its last ')' are fixed: state, then ppid.
+	// own; the fields after its last ')' are fixed: state, ppid, pgrp,
+	// session, tty, tpgid.
 	fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
-	if len(fields) < 2 {
+	if len(fields) < 6 {
 		return process{}, false
 	}
-	p.ppid, err = strconv.Atoi(fields[1])
-	return p, err == nil
+	for _, f := range []struct {
+		into *int
+		at   int
+	}{{&p.ppid, 1}, {&p.pgrp, 2}, {&p.tty, 4}, {&p.tpgid, 5}} {
+		if *f.into, err = strconv.Atoi(fields[f.at]); err != nil {
+			return process{}, false
+		}
+	}
+	return p, true
 }
 
 // nearest is the panel's process among those that carry one tag: the program
-// nearest the one `revier agent exec` became that is not a shell, as the kitty
-// host reads a window's foreground. Everything the program starts inherits the
-// tag - a tool, or a second agent run with `claude -p`, which Claude Code lists
-// as a session of its own - and is deeper. With shells alone, the panel is the
-// first of them.
-func nearest(tagged []process) process {
+// in the foreground of the panel's terminal nearest the one `revier agent
+// exec` became that is not a shell, as the kitty host reads a window's
+// foreground. Everything the program starts inherits the tag - a tool, or a
+// second agent run with `claude -p`, which Claude Code lists as a session of
+// its own - and is deeper. With shells alone in the foreground, the panel is
+// the first of them.
+//
+// The terminal is the one the tagged process nearest the top of the tree
+// runs on, the pty sshd gave it, and only its foreground process group is the
+// panel's: a helper a shell's profile started is in the background or on a pty
+// of its own, a daemon has no terminal, and a process that outlived the
+// terminal - the ssh ended, the pty hung up - is in no foreground group. A tag
+// with nothing in the foreground has no panel.
+func nearest(tagged []process) (process, bool) {
 	byPID := make(map[int]process, len(tagged))
 	for _, p := range tagged {
 		byPID[p.pid] = p
@@ -172,12 +191,28 @@ func nearest(tagged []process) process {
 		}
 		return tagged[i].pid < tagged[j].pid
 	})
+	tty := 0
 	for _, p := range tagged {
-		if !isShell(p.cmdline) {
-			return p
+		if p.tty != 0 {
+			tty = p.tty
+			break
 		}
 	}
-	return tagged[0]
+	var foreground []process
+	for _, p := range tagged {
+		if tty != 0 && p.tty == tty && p.pgrp == p.tpgid {
+			foreground = append(foreground, p)
+		}
+	}
+	for _, p := range foreground {
+		if !isShell(p.cmdline) {
+			return p, true
+		}
+	}
+	if len(foreground) == 0 {
+		return process{}, false
+	}
+	return foreground[0], true
 }
 
 func kindOf(cmdline []string) revier.PanelKind {
