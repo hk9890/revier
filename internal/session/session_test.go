@@ -22,7 +22,7 @@ func sample(day int, name string) session.Session {
 			Name: "revier",
 			Targets: []session.Target{
 				{Name: "home", Agents: []session.Agent{
-					{Harness: "claude", Session: "abc-123", Dir: "/home/hans/dev/github/revier/.claude/worktrees/tui"},
+					{Harness: "claude", Session: "abc-123", Dir: "/home/user/dev/github/revier/.claude/worktrees/tui"},
 					{Harness: "claude"},
 				}},
 				{Name: "editor"},
@@ -116,7 +116,7 @@ func TestSavedFileIsReadableTOML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/hans/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`} {
+	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/user/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`} {
 		if !contains(string(b), want) {
 			t.Errorf("saved file has no %s:\n%s", want, b)
 		}

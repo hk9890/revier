@@ -22,7 +22,7 @@ import (
 func agentProject() revier.Project {
 	return revier.Project{
 		Name: "revier",
-		Path: "/home/hans/dev/github/revier",
+		Path: "/home/user/dev/github/revier",
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true,
@@ -96,7 +96,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
-		agent("2", "abc-123", "/home/hans/dev/github/revier"),
+		agent("2", "abc-123", "/home/user/dev/github/revier"),
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
@@ -120,7 +120,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	if !slices.Equal(names, []revier.TargetName{"home"}) {
 		t.Errorf("targets = %v, want only the live one", names)
 	}
-	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: "/home/hans/dev/github/revier"}}
+	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: "/home/user/dev/github/revier"}}
 	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
 		t.Errorf("agents = %+v, want %+v", got, want)
 	}
@@ -386,7 +386,7 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	if len(panels) != 2 {
 		t.Fatalf("panels = %+v, want the layout", panels)
 	}
-	if !slices.Equal(panels[0].Command, []string{"zsh"}) || panels[0].Dir != "/home/hans/dev/github/revier" {
+	if !slices.Equal(panels[0].Command, []string{"zsh"}) || panels[0].Dir != "/home/user/dev/github/revier" {
 		t.Errorf("the shell panel was rewritten: %+v", panels[0])
 	}
 	want := []string{"claude", "--model", "opus", "--resume", "abc-123"}
@@ -441,14 +441,14 @@ func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 		t.Fatalf("GoResuming: %v", err)
 	}
 	samePanels(t, "opened", rt.Opened[0].Panels, []revier.PanelSpec{
-		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/hans/dev/github/revier"},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/user/dev/github/revier"},
 		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "declared"}, Dir: root},
 	})
 	tabs := tabPanels(rt)
 	if len(tabs) != 2 {
 		t.Fatalf("tabs = %+v, want an agent tab for each agent past the layout", tabs)
 	}
-	project := "/home/hans/dev/github/revier"
+	project := "/home/user/dev/github/revier"
 	samePanels(t, "first tab", tabs[0], []revier.PanelSpec{
 		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus", "--resume", "by-hand"}, Dir: worktree},
 		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: worktree},
@@ -477,14 +477,14 @@ func TestRestoreStartsAnAgentEmptyWhenItsDirectoryIsGone(t *testing.T) {
 		{Harness: "claude", Session: "by-hand", Dir: gone},
 	})
 	declared := rt.Opened[0].Panels[1]
-	if !slices.Equal(declared.Command, []string{"claude", "--model", "opus"}) || declared.Dir != "/home/hans/dev/github/revier" {
+	if !slices.Equal(declared.Command, []string{"claude", "--model", "opus"}) || declared.Dir != "/home/user/dev/github/revier" {
 		t.Errorf("declared agent = %+v, want it empty where the workspace starts", declared)
 	}
 	tabs := tabPanels(rt)
 	if len(tabs) != 1 {
 		t.Fatalf("tabs = %+v, want the agent past the layout still opened", tabs)
 	}
-	if tab := tabs[0][0]; !slices.Equal(tab.Command, []string{"claude", "--model", "opus"}) || tab.Dir != "/home/hans/dev/github/revier" {
+	if tab := tabs[0][0]; !slices.Equal(tab.Command, []string{"claude", "--model", "opus"}) || tab.Dir != "/home/user/dev/github/revier" {
 		t.Errorf("tab agent = %+v, want it empty where the workspace starts", tab)
 	}
 }
@@ -569,7 +569,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 		t.Errorf("the project now has %d panels, want its 2: a tab was added to it", len(panels))
 	}
 	want := []string{"claude", "--model", "opus"}
-	if got := panels[1]; !slices.Equal(got.Command, want) || got.Dir != "/home/hans/dev/github/revier" {
+	if got := panels[1]; !slices.Equal(got.Command, want) || got.Dir != "/home/user/dev/github/revier" {
 		t.Errorf("the project now reads %+v, want %v: the resume was written into it", got, want)
 	}
 }

@@ -19,7 +19,7 @@ func hostWith(t *testing.T, names ...string) (*app, *hosttest.FakeRemote) {
 	t.Helper()
 	var views []revier.ProjectView
 	for _, n := range names {
-		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/hans/dev/" + n}, PathExists: true})
+		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
 	}
 	remote := hosttest.NewRemote("buildbox", views...)
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), NewRemote: func(string) revier.Remote { return remote }}
@@ -34,7 +34,7 @@ func TestLinkListsTheHostsProjectsAndWhatIsLinked(t *testing.T) {
 	a.projects = []core.Project{remoteProject(t)}
 
 	out := output(t, a, func() error { return cmdLink(context.Background(), a, []string{"buildbox"}) })
-	for _, want := range []string{"far", "/home/hans/dev/far", "other"} {
+	for _, want := range []string{"far", "/home/user/dev/far", "other"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table = %q, want %s", out, want)
 		}

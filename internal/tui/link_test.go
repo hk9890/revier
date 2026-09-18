@@ -30,7 +30,7 @@ func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Mod
 
 	var views []revier.ProjectView
 	for _, n := range onHost {
-		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/hans/dev/" + n}, PathExists: true})
+		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
 	}
 	remote := hosttest.NewRemote("buildbox", views...)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), NewRemote: func(string) revier.Remote { return remote }}

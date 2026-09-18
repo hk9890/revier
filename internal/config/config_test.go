@@ -13,7 +13,7 @@ import (
 )
 
 const valid = `
-path = "/home/hans/dev/github/revier"
+path = "/home/user/dev/github/revier"
 
 [vars]
 url = "https://example.invalid/pulls"
@@ -333,7 +333,7 @@ func TestLoadProjectRendersTemplates(t *testing.T) {
 		t.Errorf("match title = %q, want it rendered", home.Runtime.Match.Title)
 	}
 	editor, _ := p.Target("editor")
-	if editor.Window.Launch[1] != "/home/hans/dev/github/revier" {
+	if editor.Window.Launch[1] != "/home/user/dev/github/revier" {
 		t.Errorf("launch = %v, want it rendered", editor.Window.Launch)
 	}
 }
@@ -399,7 +399,7 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 		t.Skip("no home directory")
 	}
 	dir := t.TempDir()
-	body := strings.Replace(valid, `path = "/home/hans/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
+	body := strings.Replace(valid, `path = "/home/user/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
 	p := config.LoadProject(write(t, dir, "revier.toml", body), nil)
 	if want := filepath.Join(home, "dev/github/revier"); p.Path != want {
 		t.Errorf("path = %q, want %q", p.Path, want)

@@ -36,7 +36,7 @@ func remoteProject(name string) revier.Project {
 // there, and one agent in it is in the given state.
 func answer(name string, status revier.Status) revier.ProjectView {
 	return revier.ProjectView{
-		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/hans/dev/" + name},
+		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/user/dev/" + name},
 		Running:    true,
 		PathExists: true,
 		Agents:     []revier.AgentView{{Panel: "1", State: revier.AgentState{Harness: "claude", Status: status}}},

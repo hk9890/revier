@@ -12,7 +12,7 @@ import (
 func TestRenderExpandsEveryTemplatedField(t *testing.T) {
 	p := revier.Project{
 		Name: "revier",
-		Path: "/home/hans/dev/github/revier",
+		Path: "/home/user/dev/github/revier",
 		Vars: map[string]string{"url": "https://example.invalid/pulls", "x": "right"},
 		Targets: []revier.Target{{
 			Name: "pulls",
@@ -52,7 +52,7 @@ func TestRenderExpandsEveryTemplatedField(t *testing.T) {
 		t.Errorf("place = %q", w.Place)
 	}
 	r := out.Targets[0].Runtime
-	if r.Panels[0].Command[2] != "/home/hans/dev/github/revier" {
+	if r.Panels[0].Command[2] != "/home/user/dev/github/revier" {
 		t.Errorf("panel command = %v", r.Panels[0].Command)
 	}
 	if r.Panels[0].Title != "agent:revier" {

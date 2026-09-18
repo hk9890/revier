@@ -16,7 +16,7 @@ func benchProject(i int) revier.Project {
 	name := revier.ProjectName(fmt.Sprintf("project-%03d", i))
 	return revier.Project{
 		Name: name,
-		Path: "/home/hans/dev/" + string(name),
+		Path: "/home/user/dev/" + string(name),
 		Vars: map[string]string{"url": "https://example.invalid/" + string(name)},
 		Targets: []revier.Target{
 			{Name: "home", Home: true, Key: "ctrl-shift-h", Runtime: &revier.Realization{

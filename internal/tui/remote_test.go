@@ -43,7 +43,7 @@ func remoteOnDisk(t *testing.T, name string) []core.Project {
 // checkout is there, and its one agent is in the given state.
 func hostSays(name string, status revier.Status) revier.ProjectView {
 	return revier.ProjectView{
-		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/hans/dev/" + name},
+		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/user/dev/" + name},
 		PathExists: true,
 		Agents:     []revier.AgentView{{Panel: "1", State: revier.AgentState{Harness: "claude", Status: status}}},
 	}

@@ -16,7 +16,7 @@ func TestEnsureRefusesToCloneALink(t *testing.T) {
 	p := revier.Project{
 		Name:   "far",
 		Path:   "/srv/far",
-		GitURL: "git@github.com:hk9890/far.git",
+		GitURL: "git@github.com:example/far.git",
 		Remote: &revier.Link{Host: "buildbox", Project: "far"},
 	}
 	cloned, err := checkout.Ensure(p, io.Discard)

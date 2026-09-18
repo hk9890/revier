@@ -48,7 +48,7 @@ Behaviour is almost never in the adapter named after the tool. Search
 
 ## Outside this repository
 
-- The `os` command in `~/setup/scripts/sessions/` is the shell implementation
-  revier replaces. It is not being ported; see `docs/design/decisions.md` D1.
+- The shell scripts revier replaces are private and not being ported; see
+  `docs/design/decisions.md` D1.
 - `wctl` — <https://github.com/carlo9890/gnome-window-control>, the GNOME window
   host's dependency.

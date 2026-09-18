@@ -223,8 +223,8 @@ name there, and records what the host said about the project: the path and
 the repository, both the host's:
 
 ```toml
-path = "/home/hans/dev/far"
-git_url = "git@github.com:hk9890/far.git"
+path = "/home/user/dev/far"
+git_url = "git@github.com:example/far.git"
 
 [remote]
 host = "buildbox"
@@ -322,3 +322,7 @@ Installing revier is [Install](#install) above.
 
 Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),
 [TESTING.md](docs/TESTING.md), [RUNNING.md](docs/RUNNING.md).
+
+## License
+
+[MIT](LICENSE).

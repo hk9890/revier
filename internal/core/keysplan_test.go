@@ -294,7 +294,7 @@ func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
 		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier-home"),
 	)
 	moved := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "home", Home: true, Key: "ctrl-shift-j",
@@ -390,7 +390,7 @@ func TestUninstallDoesNotRestoreWhatItNeverWrote(t *testing.T) {
 // which is the difference between a diagnostic and a change.
 func TestAPlanRefusesAConfigurationDisagreement(t *testing.T) {
 	other := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "editor", Key: "ctrl-shift-e",
@@ -416,7 +416,7 @@ func TestAPlanRefusesAConfigurationDisagreement(t *testing.T) {
 // "and", three by a comma and an "and".
 func TestARefusalNamesEverySpellingOnce(t *testing.T) {
 	editorWanting := func(name revier.ProjectName, key string) core.Project {
-		return prepared(t, revier.Project{Name: name, Path: "/home/hans/" + string(name), Targets: []revier.Target{
+		return prepared(t, revier.Project{Name: name, Path: "/home/user/" + string(name), Targets: []revier.Target{
 			{Name: "editor", Key: key, Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
 		}})
 	}
@@ -489,7 +489,7 @@ func TestADesktopThatCannotBeWrittenIsReported(t *testing.T) {
 func theWebProject(t *testing.T) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "web", Key: "ctrl-shift-i",
@@ -579,7 +579,7 @@ func TestAStaleShortcutUnderADesktopDefaultNeedsForce(t *testing.T) {
 // keys back until the file that disagrees is fixed.
 func TestUninstallDoesNotRefuseAConfigurationDisagreement(t *testing.T) {
 	other := prepared(t, revier.Project{
-		Name: "setup", Path: "/home/hans/setup",
+		Name: "setup", Path: "/home/user/setup",
 		Targets: []revier.Target{
 			{
 				Name: "editor", Key: "ctrl-shift-e",
