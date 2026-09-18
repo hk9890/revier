@@ -1368,12 +1368,17 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 		t.Fatal("the raise started no survey")
 	}
 	m = next.(tui.Model)
+	// The row is on the raised popup before the survey answers, as a row is
+	// on the first frame: the survey is the slow part.
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
+		t.Errorf("the raised popup lists no project written while hidden before the survey:\n%s", body)
+	}
 	if next, cmd = m.Update(cmd()); cmd == nil {
 		t.Error("the survey after the raise scheduled no refresh")
 	}
 	m = next.(tui.Model)
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
-		t.Errorf("the raised popup lists no project written while hidden:\n%s", body)
+		t.Errorf("the raised popup lists no project written while hidden after the survey:\n%s", body)
 	}
 	if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
 		t.Error("a focus report while shown started a second chain")

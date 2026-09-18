@@ -49,23 +49,13 @@ func cmdPopup(ctx context.Context, a *app) error {
 // kitty window closed; one as large as the workarea is maximized, and a
 // maximized window refuses the placement. The option also keeps the popup's
 // own size out of what the user's next kitty window opens at. env(1) marks
-// the surface as the popup's (core.PopupEnv) and names its project, and
-// nothing else: kitty's own env option would reach every window launched
-// into this kitty, which is where the surface's targets open.
+// the surface as the popup's (core.PopupEnv) and names its project, empty
+// when none resolved, and nothing else: kitty's own env option would reach
+// every window launched into this kitty, which is where the surface's
+// targets open. The variable is set either way, which is what makes the
+// surface the popup.
 func popupArgv(self string, start revier.ProjectName) []string {
-	mark := core.PopupEnv + "=" + popupMark(start)
+	mark := core.PopupEnv + "=" + string(start)
 	return []string{"kitty", "--class", core.PopupClass, "--title", "revier",
 		"-o", "remember_window_size=no", "-e", "env", mark, self}
 }
-
-// popupMark is the value of core.PopupEnv: the project the surface opens on,
-// or popupNoStart when none resolved. Either way it is set, which is what
-// makes the surface the popup.
-func popupMark(start revier.ProjectName) string {
-	if start == "" {
-		return popupNoStart
-	}
-	return string(start)
-}
-
-const popupNoStart = "-"

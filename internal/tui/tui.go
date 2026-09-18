@@ -275,6 +275,7 @@ type hiddenMsg struct{ err error }
 // what `revier new`, a link or an edit changed while it was hidden.
 type reloadedMsg struct {
 	shared   []map[string]any
+	actions  []config.Action
 	projects []core.Project
 	err      error
 }
@@ -289,7 +290,7 @@ func reloadFiles() tea.Msg {
 		if err != nil {
 			return err
 		}
-		msg.shared, msg.projects = cfg.Targets, projects
+		msg.shared, msg.actions, msg.projects = cfg.Targets, cfg.Actions, projects
 		return nil
 	})
 	return msg
@@ -302,6 +303,26 @@ func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
 	m.targets, _ = config.DecodeTargets(shared)
 	m.projects = projects
 	m.tkeys = targetKeys(m.projects, m.keys)
+}
+
+// reloadViews puts the projects as read again on the screen before the
+// survey answers, as the first frame does: a project removed goes, one
+// added gets the row its file alone gives, and the cursor stays on its
+// project by name. A row that stayed keeps what the last survey found until
+// the next one answers.
+func (m *Model) reloadViews() {
+	have := make(map[revier.ProjectName]bool, len(m.views))
+	for _, v := range m.views {
+		have[v.Project.Name] = true
+	}
+	var added []core.Project
+	for _, p := range m.projects {
+		if !have[p.Name] {
+			added = append(added, p)
+		}
+	}
+	m.views = sorted(append(m.known(m.views), m.core.Unsurveyed(added)...))
+	m.reload()
 }
 
 // surveyMsg is one survey's answer, and the state it started from: what it
@@ -585,6 +606,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Warn("reload on raise", "err", msg.err)
 		} else {
 			m.setFiles(msg.shared, msg.projects)
+			m.setActions(msg.actions)
+			m.reloadViews()
 		}
 		if m.idle {
 			m.idle = false

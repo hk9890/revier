@@ -325,9 +325,11 @@ func cmdTUI(a *app) error {
 	// popup itself, so the popup's answer stands. Neither is an error to
 	// miss: the TUI opens on the first row instead.
 	start := revier.ProjectName("")
-	if p, ok := a.project(revier.ProjectName(mark)); popup && ok {
-		start = p.Name
-	} else if p, ok := a.resolveHere(); !popup && ok {
+	if popup {
+		if p, ok := a.project(revier.ProjectName(mark)); ok {
+			start = p.Name
+		}
+	} else if p, ok := a.resolveHere(); ok {
 		start = p.Name
 	}
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
