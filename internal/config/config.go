@@ -194,7 +194,7 @@ func parse(data []byte) (*Config, error) {
 		if pr.Name == "" || pr.Exec == "" {
 			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
 		}
-		cfg.Probes[i].Exec = ExpandHome(pr.Exec)
+		cfg.Probes[i].Exec = probeExec(pr.Exec)
 	}
 
 	if _, err := cfg.Theme(); err != nil {
@@ -690,6 +690,22 @@ func oneWord(s string) error {
 // httpsUserinfo is an http or https authority with a user part in it:
 // https://user:token@host/...
 var httpsUserinfo = regexp.MustCompile(`^https?://[^/]+@`)
+
+// probeExec is the binary a probe runs. A bare name is looked up on PATH when
+// the probe runs. Any other relative path is read against the home directory
+// rather than against the directory a command runs in, which is the home
+// directory in the TUI and wherever the user is in the CLI.
+func probeExec(exec string) string {
+	exec = ExpandHome(exec)
+	if filepath.IsAbs(exec) || !strings.ContainsRune(exec, filepath.Separator) {
+		return exec
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return exec
+	}
+	return filepath.Join(home, exec)
+}
 
 // ExpandHome resolves a leading "~" against the user's home directory, so a
 // path typed the way it is spoken reaches the file system.

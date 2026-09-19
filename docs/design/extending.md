@@ -233,8 +233,10 @@ panel per refresh, so a probe stays cheap or it becomes the reason the TUI feels
 slow; the timeout is half a second, and a probe that overruns it is killed with
 everything it started.
 
-The probe runs in the home directory, not in revier's, which a removed worktree
-can take away. A relative `exec` resolves from there.
+The probe runs in revier's working directory. The TUI moves to the home
+directory once it has read its start project, because it outlives the worktree
+it was started in. A relative `exec` resolves against the home directory in
+every command.
 
 `name` is also the foreground command the probe claims. A probe named `aider`
 reads panels running `aider` and no others, so an unrelated agent pane never

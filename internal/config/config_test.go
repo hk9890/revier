@@ -453,6 +453,17 @@ func TestLoadProbes(t *testing.T) {
 		t.Errorf("probes = %+v", cfg.Probes)
 	}
 
+	// A relative path is read against the home directory, as in the TUI,
+	// whichever directory the command runs in; a bare name stays for PATH.
+	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\nexec = \"bin/aider-probe\"\n\n[[probe]]\nname = \"goose\"\nexec = \"goose-probe\"\n")
+	cfg, _, err = config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Probes) != 2 || cfg.Probes[0].Exec != filepath.Join(home, "bin/aider-probe") || cfg.Probes[1].Exec != "goose-probe" {
+		t.Errorf("probes = %+v", cfg.Probes)
+	}
+
 	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\n")
 	if _, _, err := config.Load(root); err == nil {
 		t.Error("a probe without exec should be refused at load")
