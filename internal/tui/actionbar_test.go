@@ -172,10 +172,11 @@ func TestTheHomeDirectoryIsRefused(t *testing.T) {
 	}
 }
 
-// With shared targets in config.toml the written file declares none of its
-// own, so the screen names the shared targets rather than promise the
-// template's agent, shell and editor.
-func TestTheNewProjectScreenNamesTheSharedTargets(t *testing.T) {
+// With shared targets in config.toml of which none is home, the written file
+// declares a home of its own and nothing else, so the screen names that home
+// and the shared targets rather than promise the template's agent, shell and
+// editor.
+func TestTheNewProjectScreenNamesItsOwnHomeAndTheSharedTargets(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
 	_, _, c, projects := world(t, 1)
 	shared := []map[string]any{{
@@ -191,11 +192,34 @@ func TestTheNewProjectScreenNamesTheSharedTargets(t *testing.T) {
 	m = typeInto(m, "~/dev/widget")
 
 	body := strings.Join(lines(m), "\n")
-	if !strings.Contains(body, "shared targets: browser") {
-		t.Errorf("screen = %q, want the shared targets named", body)
+	if !strings.Contains(body, "its own home and shared targets: browser") {
+		t.Errorf("screen = %q, want its own home and the shared targets named", body)
 	}
 	if strings.Contains(body, "an agent, a shell and an editor") {
 		t.Errorf("screen = %q, want no promise of the template's targets", body)
+	}
+}
+
+// With a shared home the written file declares no targets, so the screen
+// names the shared targets alone.
+func TestTheNewProjectScreenNamesTheSharedTargetsWhenOneIsHome(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	shared := []map[string]any{{
+		"name": "home", "home": true,
+		"runtime": map[string]any{
+			"name": "session:{{.Name}}", "match": map[string]any{"title": "^session:{{.Name}}$"},
+		},
+	}}
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
+	m = resize(m, 120, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "~/dev/widget")
+
+	body := strings.Join(lines(m), "\n")
+	if !strings.Contains(body, "with the shared targets: home") || strings.Contains(body, "its own home") {
+		t.Errorf("screen = %q, want the shared targets alone named", body)
 	}
 }
 
