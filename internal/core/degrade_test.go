@@ -90,3 +90,59 @@ func TestGoRefusesATargetOfAHostThatCannotList(t *testing.T) {
 		t.Error("Running(home) = nil, want the runtime's failure")
 	}
 }
+
+// A tab lives in the runtime alone. A window host that cannot list costs it
+// nothing on a runtime whose instances need no window to be raised.
+func TestATabGoesWhileTheWindowHostCannotList(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	wm := hosttest.New("wm")
+	wm.InstancesErr = errors.New("went away")
+	c := &core.Core{Runtime: rt, Window: wm}
+	p := prepared(t, tabProject())
+
+	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+		t.Fatalf("Go(tickets) = %v, want the tab opened", err)
+	}
+	if open, err := c.Running(context.Background(), p, "tickets", nil); err != nil || !open {
+		t.Errorf("Running(tickets) = %v, %v; want the tab open", open, err)
+	}
+	if _, err := c.AgentWorkspace(context.Background(), p, "home", nil); err != nil {
+		t.Errorf("AgentWorkspace(home) = %v, want the workspace", err)
+	}
+}
+
+// A tab whose runtime cannot list is unknown, not closed, as every other
+// target of a host that did not answer is.
+func TestATabOfARuntimeThatCannotListIsUnknown(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.InstancesErr = errors.New("went away")
+	c := &core.Core{Runtime: rt}
+
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv := report.Views[0].Targets[1]
+	if tv.Name != "tickets" || tv.Unknown == "" || !tv.Available {
+		t.Errorf("tickets = %+v, want unknown with the reason", tv)
+	}
+}
+
+// A window host that cannot list after a shutdown does not make the
+// runtime's window that stayed read as closed.
+func TestShutdownJudgesEachStepByItsOwnHost(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	rt.Refuses = map[string]bool{plan[0].Ref.ID: true}
+	wm.InstancesErr = errors.New("went away")
+
+	out := c.Shutdown(context.Background(), plan, 2*core.ClosePoll)
+	if !out[0].Open {
+		t.Errorf("%s = %+v, want still open: its own host lists it", out[0].Name(), out[0])
+	}
+	if closed, open, _ := out.Counts(); closed != 2 || open != 1 {
+		t.Errorf("counts = %d closed, %d open; want 2 and 1", closed, open)
+	}
+}

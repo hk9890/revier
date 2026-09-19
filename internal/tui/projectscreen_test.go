@@ -28,7 +28,13 @@ key = "ctrl-o"
 // runtime is rt. It returns the project file and the state root too.
 func projectSurface(t *testing.T, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
 	t.Helper()
-	root := configRoot(t, sharedTargets)
+	return projectSurfaceOver(t, sharedTargets, body, rt)
+}
+
+// projectSurfaceOver is projectSurface with shared as config.toml.
+func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
+	t.Helper()
+	root := configRoot(t, shared)
 	dir := filepath.Join(root, "projects")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -77,6 +83,17 @@ func TestAltEOpensTheProjectScreen(t *testing.T) {
 
 // The name over the pane is a button: it carries its key, and a click opens
 // the screen.
+// A shared target config.toml refuses reaches no project, and costs the
+// screen nothing: the project opens with the targets it has.
+func TestTheProjectScreenOpensBesideARefusedSharedTarget(t *testing.T) {
+	refused := sharedTargets + "\n[[target]]\nname = \"web\"\nhome = \"yes\"\n  [target.window]\n  launch = [\"firefox\"]\n  match = { class = \"^firefox$\" }\n"
+	m, _, _ := projectSurfaceOver(t, refused, demoProject, hosttest.NewRuntime("rt"))
+	m, _ = press(m, "alt+e")
+	if s := screen(m); !strings.Contains(s, "Project demo") || strings.Contains(s, "incompatible types") {
+		t.Errorf("project screen = %q, want demo open without the refused web", s)
+	}
+}
+
 func TestTheNameInThePaneOpensTheProjectScreen(t *testing.T) {
 	m, _, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
 	x, y := paneCell(t, m, "demo edit alt+e")

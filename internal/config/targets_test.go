@@ -222,3 +222,72 @@ func TestATargetEditOverAChangedFileIsRefused(t *testing.T) {
 		t.Errorf("config.toml changed:\n%s", got)
 	}
 }
+
+// refusedConfig is targetsConfig with a third shared target that Load
+// refuses for a value of the wrong type: launch is a list.
+const refusedConfig = targetsConfig + `
+[[target]]
+name = "web"
+  [target.window]
+  launch = "firefox"
+  match = { class = "^firefox$" }
+`
+
+// A shared target Load refuses is listed by its name, so the config screen
+// shows it and can delete it (decisions.md D85).
+func TestARefusedSharedTargetCanBeRemoved(t *testing.T) {
+	root, shared := targetsRoot(t, refusedConfig)
+	listed := config.ListTargets(shared)
+	if len(listed) != 3 || listed[2].Name != "web" {
+		t.Fatalf("ListTargets = %+v, want the refused web last, by name", listed)
+	}
+	if _, err := config.RemoveTarget(root, 2, shared); err != nil {
+		t.Fatalf("RemoveTarget(web) = %v, want the refused target deleted", err)
+	}
+	if got := readConfig(t, root); strings.Contains(got, `name = "web"`) {
+		t.Errorf("config.toml still holds web:\n%s", got)
+	}
+}
+
+// A refused shared target costs the edit of another nothing.
+func TestARefusedSharedTargetDoesNotBlockAnotherEdit(t *testing.T) {
+	root, shared := targetsRoot(t, refusedConfig)
+	edit := sharedTyped(t, shared[:1])[0]
+	edit.Key = "ctrl-shift-h"
+	if _, err := config.ReplaceTarget(root, 0, shared, config.TargetEdit{Target: edit, PanelFrom: []int{0, 1}}); err != nil {
+		t.Errorf("ReplaceTarget(home) = %v, want it written", err)
+	}
+}
+
+// A project is read with the shared targets it gets, and a refused one is
+// not among them.
+func TestAProjectReadsWithTheUsableSharedTargets(t *testing.T) {
+	root, shared := targetsRoot(t, refusedConfig)
+	if _, err := config.ReadProject(config.ProjectFile(root, "demo"), config.Usable(shared)); err != nil {
+		t.Errorf("ReadProject = %v, want demo read without the refused web", err)
+	}
+}
+
+// Two stray keys under [target.remote] are one problem, reported the same
+// way on every parse, so an unrelated write is not refused for it.
+func TestAnUnrelatedWriteIsNotRefusedForStrayRemoteKeys(t *testing.T) {
+	root, _ := targetsRoot(t, targetsConfig+`
+[[target]]
+name = "web"
+  [target.window]
+  launch = ["firefox"]
+  match = { class = "^firefox$" }
+  [target.remote]
+  name = "x"
+  key = "y"
+  prefer = "window"
+`)
+	for i := range 20 {
+		shared := sharedOf(t, root)
+		edit := sharedTyped(t, shared[:1])[0]
+		edit.Key = []string{"ctrl-shift-h", "ctrl-shift-u"}[i%2]
+		if _, err := config.ReplaceTarget(root, 0, shared, config.TargetEdit{Target: edit, PanelFrom: []int{0, 1}}); err != nil {
+			t.Fatalf("ReplaceTarget(home) = %v, want it written", err)
+		}
+	}
+}

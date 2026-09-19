@@ -114,7 +114,9 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		}
 		return printRestored(a.out, preview)
 	}
-	restored, back := a.core.Restore(ctx, s, report, a.projects, a.ledger())
+	// Each step bounds its own launch and wait. The command's deadline is
+	// one keypress's, and a walk of several cold starts outlasts it.
+	restored, back := a.core.Restore(context.WithoutCancel(ctx), s, report, a.projects, a.ledger())
 	if err := printRestored(a.out, restored); err != nil {
 		return err
 	}

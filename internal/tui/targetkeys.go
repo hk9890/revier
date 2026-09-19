@@ -130,6 +130,7 @@ func (m Model) targetKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 	if !ok {
 		return m, nil, true
 	}
+	name = m.ownTarget(p, c, name)
 	for _, t := range p.Targets {
 		if t.Name == name {
 			next, cmd := opened(m, m.goTarget(p, name))
@@ -140,17 +141,69 @@ func (m Model) targetKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 	return m, nil, true
 }
 
+// ownTarget is the target of p that the chord means where p binds the chord
+// itself, else fallback, the name the vocabulary kept. Two projects may give
+// one chord to two targets, and the highlighted project's own wins. A chord
+// that folds to c binds under c only where no target declares c outright, as
+// targetKeys binds it.
+func (m Model) ownTarget(p core.Project, c core.Chord, fallback revier.TargetName) revier.TargetName {
+	outright, folded := chordTarget(p, c)
+	switch {
+	case outright != "":
+		return outright
+	case folded != "" && !m.declares(c):
+		return folded
+	}
+	return fallback
+}
+
+// chordTarget is the first target of p that declares c outright, and the first
+// whose chord folds to c.
+func chordTarget(p core.Project, c core.Chord) (outright, folded revier.TargetName) {
+	for i, t := range p.Targets {
+		if p.TargetErr(i) != nil {
+			continue
+		}
+		tc, ok := chordName(t.Key)
+		if !ok {
+			continue
+		}
+		if tc == c {
+			return t.Name, folded
+		}
+		if sent, ok := tc.Terminal(); ok && sent == c && folded == "" {
+			folded = t.Name
+		}
+	}
+	return "", folded
+}
+
+// declares reports a target of any project that declares c outright.
+func (m Model) declares(c core.Chord) bool {
+	for _, p := range m.projects {
+		if outright, _ := chordTarget(p, c); outright != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // targetKeysOf is the highlighted project's own chords, for the footer. They
 // are the keys that will do something on this row, so a desktop-only key is
 // left out: the footer would name a key that does nothing here.
 func (m Model) targetKeysOf(v revier.ProjectView) []targetKeyHelp {
 	var out []targetKeyHelp
+	p, _ := m.project(v.Project.Name)
 	for _, t := range v.Targets {
 		c, ok := chordName(t.Key)
 		if !ok {
 			continue
 		}
-		if sent, ok := c.Terminal(); ok && m.tkeys[sent] == t.Name {
+		sent, ok := c.Terminal()
+		if !ok {
+			continue
+		}
+		if name, bound := m.tkeys[sent]; bound && m.ownTarget(p, sent, name) == t.Name {
 			out = append(out, targetKeyHelp{key: string(c), name: string(t.Name)})
 		}
 	}

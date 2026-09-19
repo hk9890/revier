@@ -230,6 +230,27 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 	return s, failed.err()
 }
 
+// answered is a listing the named hosts answered. Another host's failure
+// costs only what that host lists (decisions.md D89), so an operation names
+// the hosts whose instances it reads, and no others. An empty name is no host.
+func (c *Core) answered(ctx context.Context, hosts ...string) (snapshot, error) {
+	snap, failed := c.listing(ctx)
+	for _, h := range hosts {
+		if err := failed[h]; err != nil {
+			return nil, err
+		}
+	}
+	return snap, nil
+}
+
+// nameOf is the host's name, or empty for no host.
+func nameOf(h revier.Host) string {
+	if h == nil {
+		return ""
+	}
+	return h.Name()
+}
+
 // hostErrs is why each host that could not list is missing from a listing,
 // by host name.
 type hostErrs map[string]error
@@ -253,12 +274,21 @@ func (e hostErrs) err() error {
 // other hosts still stands, and a press on a target of the failed host is
 // refused with its reason. The failure is logged here, once per host until
 // it changes (logging.Repeat): a survey that degraded is not a survey that
-// failed, so nothing above logs it.
+// failed, so nothing above logs it. The hosts are independent and listed at
+// once, so a listing costs the slowest host and not the sum of them.
 func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
+	hosts := c.allHosts()
+	lists := make([][]revier.Instance, len(hosts))
+	errs := make([]error, len(hosts))
+	var wg sync.WaitGroup
+	for i, h := range hosts {
+		wg.Go(func() { lists[i], errs[i] = h.Instances(ctx) })
+	}
+	wg.Wait()
 	s := make(snapshot)
 	failed := hostErrs{}
-	for _, h := range c.allHosts() {
-		in, err := h.Instances(ctx)
+	for i, h := range hosts {
+		in, err := lists[i], errs[i]
 		logging.Repeat("instances\x00"+h.Name(), "instances", err, "host", h.Name())
 		if err != nil {
 			failed[h.Name()] = fmt.Errorf("%s: instances: %w", h.Name(), err)
@@ -363,7 +393,7 @@ func (c *Core) ProjectOfFocused(ctx context.Context, projects []Project) (Projec
 	if ref.IsZero() {
 		return Project{}, false, nil
 	}
-	snap, err := c.snapshot(ctx)
+	snap, err := c.answered(ctx, ref.Host)
 	if err != nil {
 		return Project{}, false, err
 	}
@@ -625,7 +655,7 @@ func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName, b
 		return false, fmt.Errorf("%w: %s", ErrNoTarget, name)
 	}
 	if p.isTab(i) {
-		snap, err := c.snapshot(ctx)
+		snap, err := c.answered(ctx, nameOf(c.Runtime))
 		if err != nil {
 			return false, err
 		}
@@ -1139,7 +1169,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
 		if p.isTab(i) {
-			v.Targets = append(v.Targets, c.tabView(snap, p, i, bound, tv))
+			v.Targets = append(v.Targets, c.tabView(snap, failed, p, i, bound, tv))
 			continue
 		}
 		// What this machine serves to a terminal elsewhere is probed whether

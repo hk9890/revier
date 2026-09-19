@@ -31,6 +31,9 @@ const (
 	// window target on a headless box - which is ErrNoHost's outcome seen
 	// from here.
 	RestoreNoHost
+	// RestoreRefused is a target its project file refuses, or whose project
+	// is invalid: a mistake in a file, which revier doctor names.
+	RestoreRefused
 )
 
 var restoreNames = map[RestoreAction]string{
@@ -39,6 +42,7 @@ var restoreNames = map[RestoreAction]string{
 	RestoreNoProject: "no such project",
 	RestoreNoTarget:  "no such target",
 	RestoreNoHost:    "no host for it here",
+	RestoreRefused:   "refused by its project file; see revier doctor",
 }
 
 func (a RestoreAction) String() string { return restoreNames[a] }
@@ -133,6 +137,9 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 
 	s := session.Session{Current: current}
 	var gaps SessionGaps
+	// One instance can back two targets. Its agents are recorded once, under
+	// the first, or a restore would resume each of them twice.
+	recorded := map[string]bool{}
 	there, failed := c.conversationsThere(ctx, r.Views)
 	gaps.Failed = failed
 	var agents []agentPanel
@@ -171,9 +178,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
-			if !listed {
+			if !listed || recorded[key(inst.Ref)] {
 				continue
 			}
+			recorded[key(inst.Ref)] = true
 			if v.Project.Remote != nil {
 				// A link's agents are its host's to name, each under the panel
 				// here that shows it, in the order the runtime lists the panels.
@@ -363,6 +371,8 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 				switch {
 				case !declared:
 					step.Action = RestoreNoTarget
+				case v.Invalid != "" || tv.Reason != "":
+					step.Action = RestoreRefused
 				case !tv.Available:
 					step.Action = RestoreNoHost
 				case !tv.Ref.IsZero():
