@@ -15,16 +15,21 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
+// fakeClaude puts a claude first on PATH that runs body as a shell script.
+func fakeClaude(t *testing.T, body string) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 // hungClaude puts a claude first on PATH that never answers, with a child
 // that keeps its stdout open.
 func hungClaude(t *testing.T) {
 	t.Helper()
-	bin := t.TempDir()
-	script := "#!/bin/sh\nsleep 30 &\nsleep 30\n"
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	fakeClaude(t, "sleep 30 &\nsleep 30")
 }
 
 // A claude whose child keeps stdout open past the deadline does not hold the
@@ -57,5 +62,46 @@ func TestInspectReturnsWithoutADeadlineOfItsCaller(t *testing.T) {
 	}
 	if took := time.Since(start); took > 10*time.Second {
 		t.Errorf("Inspect took %v, want the listing's own bound", took)
+	}
+}
+
+// A revier whose working directory was removed - a worktree it was started
+// in - still lists: the command runs in the home directory, not in revier's.
+func TestInspectListsWhenTheWorkingDirectoryWasRemoved(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	fakeClaude(t, `[ "$(pwd -P)" = "$(cd "$HOME" && pwd -P)" ] || exit 1`+"\n"+
+		`echo '[{"pid":101,"status":"busy"}]'`)
+	removed := filepath.Join(t.TempDir(), "worktree")
+	if err := os.Mkdir(removed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(removed)
+	if err := os.Remove(removed); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusRunning {
+		t.Errorf("status = %v, want running", got.Status)
+	}
+}
+
+// A home directory that does not exist leaves the listing where revier runs,
+// rather than failing it.
+func TestInspectListsWhenTheHomeDirectoryIsMissing(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "gone"))
+	fakeClaude(t, `echo '[{"pid":101,"status":"busy"}]'`)
+
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusRunning {
+		t.Errorf("status = %v, want running", got.Status)
 	}
 }

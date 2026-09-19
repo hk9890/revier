@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -63,6 +64,15 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, p.exec)
 	c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(in), &out, &errb
+	// The probe learns the panel from stdin, not from where it runs, so it
+	// runs in the home directory rather than in revier's own, which a removed
+	// worktree can take away and fail every probe until revier is restarted.
+	// A home that is unset or gone would fail every probe itself, and name
+	// the probe as the missing file, so it leaves revier's own.
+	c.Dir, _ = os.UserHomeDir()
+	if _, err := os.Stat(c.Dir); err != nil {
+		c.Dir = ""
+	}
 	// The timeout must end the whole process tree, not only the script: a
 	// child it started holds the output pipe open, and Run would otherwise
 	// wait on that pipe for as long as the child lives. So the probe runs in
