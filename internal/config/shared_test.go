@@ -264,6 +264,36 @@ func TestCreateWritesNoTargetsWhenTheyAreShared(t *testing.T) {
 	}
 }
 
+// With shared targets of which none is home, a new project file writes the
+// template's home alone, as a project with no home does not load.
+func TestCreateWritesItsOwnHomeWhenNoSharedTargetIsHome(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "config.toml", `
+[[target]]
+name = "browser"
+  [target.window]
+  launch = ["firefox"]
+  match = { class = "^firefox$" }
+`)
+	p, err := config.Create(root, "widget", t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	data, err := os.ReadFile(p.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(data), "[[target]]"); n != 1 || !strings.Contains(string(data), "name = \"home\"\nhome = true") {
+		t.Errorf("project file =\n%s\nwant the home target alone", data)
+	}
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"browser", "home"}) {
+		t.Errorf("targets = %v, want the shared browser and its own home", got)
+	}
+	if got := config.Problems(p); len(got) > 0 {
+		t.Errorf("problems = %v, want none", got)
+	}
+}
+
 // A project turns a shared standalone target into a tab with one line. The
 // shared match and name it keeps are not used, and do not refuse the load.
 func TestAProjectMakesASharedTargetATab(t *testing.T) {

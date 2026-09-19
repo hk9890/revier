@@ -74,13 +74,27 @@ func CanCreate(projects []core.Project, name revier.ProjectName, dir string) err
 // load is removed again, so Create leaves behind a project revier accepts or
 // nothing at all. gitURL may be empty; a non-empty one must pass
 // ValidateGitURL. When config.toml has shared targets, the file has no
-// targets of its own: the project has the shared ones.
+// targets of its own: the project has the shared ones. When none of them is
+// home, the file writes the template's home target alone, since a project
+// with no home is refused at load.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
 	shared, err := sharedTargets(root)
 	if err != nil {
 		return core.Project{}, err
 	}
-	return write(root, name, projectTOML(name, dir, gitURL, len(shared) == 0), shared)
+	return write(root, name, projectTOML(name, dir, gitURL, shared), shared)
+}
+
+// SharedHome is whether the usable shared targets give a local project its
+// home, so a new project file needs no home of its own. A home with no local
+// part is a link's alone.
+func SharedHome(shared []map[string]any) bool {
+	for _, t := range partsFor(shared, nil, false) {
+		if home, _ := t["home"].(bool); home {
+			return true
+		}
+	}
+	return false
 }
 
 // CreateLink writes a link file for a project on another machine
@@ -161,9 +175,10 @@ func writeUnless(root string, name revier.ProjectName, body string, shared []map
 // with it; without one, the desktop chords the other projects declare still
 // reach these targets by name.
 //
-// With targets false the file is the project alone, for a configuration
-// whose shared targets give it its targets.
-func projectTOML(name revier.ProjectName, dir, gitURL string, targets bool) string {
+// With shared targets the file leaves the editor out, and the home target
+// too when a shared target is home: the shared targets give the project the
+// rest.
+func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[string]any) string {
 	var b strings.Builder
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 
@@ -172,7 +187,7 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, targets bool) stri
 	if gitURL != "" {
 		p("git_url = %s\n", quote(gitURL))
 	}
-	if !targets {
+	if SharedHome(shared) {
 		return b.String()
 	}
 	p("\n")
@@ -184,7 +199,11 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, targets bool) stri
 	p("    [[target.runtime.panels]]\n")
 	p("    kind = \"agent\"\n    title = \"claude\"\n    command = [\"claude\"]\n")
 	p("    [[target.runtime.panels]]\n")
-	p("    kind = \"shell\"\n    title = \"shell\"\n\n")
+	p("    kind = \"shell\"\n    title = \"shell\"\n")
+	if len(shared) > 0 {
+		return b.String()
+	}
+	p("\n")
 
 	// IntelliJ shows the project name first in its title, then " - <file>" or
 	// " [<path>] - <file>"; project names carry no spaces, so a space or the
