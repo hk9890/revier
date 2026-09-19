@@ -29,4 +29,12 @@ type Remote interface {
 	// but handed the one the user is at. The action is the remote's to
 	// know; its configuration there defines it.
 	RunCommand(project ProjectName, action string) []string
+
+	// PanelCommand is the argv a panel of this machine's runtime runs to show
+	// the project's agent or shell: `revier <kind> exec -p <project>` on the
+	// remote, kind being PanelAgent or PanelShell. Arguments appended to the
+	// argv reach that command as they are, which is how a restore passes the
+	// conversation to resume and the directory to start in
+	// (decisions.md D84).
+	PanelCommand(project ProjectName, kind PanelKind) []string
 }

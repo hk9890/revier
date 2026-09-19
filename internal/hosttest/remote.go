@@ -35,6 +35,12 @@ type Run struct {
 	Action  string
 }
 
+// PanelCommand is a stand-in for the ssh: the host, the kind and the project,
+// so a test can read what the panel was built for and what was appended.
+func (f *FakeRemote) PanelCommand(project revier.ProjectName, kind revier.PanelKind) []string {
+	return []string{"ssh", f.name, "revier", string(kind), "exec", "-p", string(project)}
+}
+
 func (f *FakeRemote) RunCommand(project revier.ProjectName, action string) []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

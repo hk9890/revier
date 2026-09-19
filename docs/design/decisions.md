@@ -499,3 +499,52 @@ to open on, by the environment its terminal is started with, read and dropped
 at start so nothing it launches inherits it; the project is resolved at the
 keypress, while the focused window is still the user's. In any other terminal,
 and where the host cannot hide, Esc exits as before.
+
+### D87 — claim-on-appear polls; there is no window-event port
+
+`WindowWatcher` was a port no host implemented: `wctl` reports no events, and
+the TUI carried a second claim path that only a test fake ever ran. The port
+and the event path are removed, and the TUI's survey diff is the one claim
+path. The port comes back with the first host that has events, when one is
+built; its design is in git history.
+
+### D88 — a link's panel argv is the remote port's
+
+`internal/config` derived a link's home panels by calling the ssh adapter for
+their argv, the one store-to-adapter import, and the core appended resume
+arguments to that argv on an unstated assumption about its shell form. The
+argv is `Remote.PanelCommand`, and the core asks the port for it when the
+target resolves: config derives the panel kinds alone, one seam holds the
+contract, and a second transport plugs in without touching config.
+
+### D89 — a host that cannot list costs its own targets and no other's
+
+One host's `Instances` failure - a `wctl` timeout - failed the whole survey
+and every `go`, so the runtime view and the keys were gone exactly when the
+desktop was the thing misbehaving. A survey now stands over the hosts that
+answered: the failed host's targets show as unknown with its reason, its
+refs are not taken as gone, and a press on one of them is refused with that
+reason. The other hosts' targets go as before.
+
+### D90 — opening a project is one decision, made in the core
+
+The command line and the surface each decided what opening a project means,
+and disagreed: on a missing checkout with nothing to clone from, `open`
+refused while Enter raised a running workspace; on no home target, `open`
+refused with a reason while Enter moved the cursor and said nothing.
+`core.Open` decides once - refuse with the reason, clone, or go - and both
+render it. A running workspace is raised, since raising touches no directory;
+a fresh start into a missing directory is refused; a project with no home
+shows the reason, and the surface also moves to the targets it has.
+
+### D91 — one ledger, the state file, and every activation goes through it
+
+The launch rule of D21 was written four times: `ActivateWaiting`, a ledger
+in the command line over its startup state, a ledger in the surface for a
+restore, and the surface's own message chain for a press. A rule copied that
+often breaks silently when one copy is missed. `core.StateLedger` is the one
+ledger, the state file read and written under its lock at every step, and
+the command line, the surface and a restore all activate through
+`ActivateWaiting` with it. What a survey settles in state - prune, claim,
+expire - is `core.Settle`, the one function the surface and `revier list`
+call.

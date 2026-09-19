@@ -12,7 +12,8 @@ import (
 // produces. Long, because an editor's cold start takes this long; a keypress
 // process lingers for it and the TUI waits off its update loop, so neither
 // wait is seen.
-const BindWait = 30 * time.Second
+// A variable, so a test need not wait this long for a window that never comes.
+var BindWait = 30 * time.Second
 
 // Activate is one press of a target: run-or-raise it, unless pending says a
 // launch of it by an earlier press, here or from another process, is still on

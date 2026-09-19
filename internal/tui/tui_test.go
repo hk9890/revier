@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -735,34 +736,27 @@ func TestPollingClaimsNothingOutsideTheBounds(t *testing.T) {
 	}
 }
 
-// Claim-on-appear on the event path: a watching host reports the window and
-// the claim lands without waiting for a refresh.
-func TestWatcherClaimsAnOpenedWindow(t *testing.T) {
-	rt, _, c, projects := world(t, 1)
-	wm := hosttest.NewWatcher("wm")
-	c.Window = wm
-	_ = rt
+// A refresh the window host could not answer is not an empty listing: the
+// windows it lists again once it answers were there before, so none is new
+// and none is claimed (decisions.md D89).
+func TestAWindowHostThatFailedOnceClaimsNothingWhenItAnswersAgain(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	wm.Add("Pull requests - Chromium", "chromium")
 	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
 	st, _ := state.Load(root)
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
 	_ = st.Save(root)
 
-	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
-	stray := wm.Add("Pull requests - Chromium", "chromium")
-	wm.Events <- revier.WindowEvent{Kind: revier.WindowOpened, Instance: revier.Instance{Ref: stray, Title: "Pull requests - Chromium", Class: "chromium"}}
-
-	// Init batches the first survey with the watcher; run what it returns.
-	batch, ok := m.Init()().(tea.BatchMsg)
-	if !ok {
-		t.Fatal("Init should batch the survey and the watcher for a watching host")
+	wm.InstancesErr = errors.New("went away")
+	m = survey(m)
+	wm.InstancesErr = nil
+	survey(m)
+	if got, _ := state.Load(root); len(got.Attached["project-00"]) != 0 {
+		t.Fatalf("attached = %+v, want nothing: the window was listed before the host went away", got.Attached)
 	}
-	for _, cmd := range batch {
-		next, _ := m.Update(cmd())
-		m = next.(tui.Model)
-	}
-	got, _ := state.Load(root)
-	if refs := got.Attached["project-00"]; len(refs) != 1 || refs[0] != stray {
-		t.Fatalf("attached = %+v, want the opened window on project-00", got.Attached)
+	if got, _ := state.Load(root); got.Launch == nil {
+		t.Fatal("the launch was consumed by a claim of nothing new")
 	}
 }
 
@@ -843,6 +837,8 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 // launch is in state before the wait for its window begins, so a desktop key
 // pressed meanwhile sees it too (decisions.md D21).
 func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
+	defer func(w time.Duration) { core.BindWait = w }(core.BindWait)
+	core.BindWait = 20 * time.Millisecond
 	_, _, c, projects := world(t, 1)
 	wm := hosttest.NewLateWindows("wm")
 	c.Window = wm
@@ -851,13 +847,12 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	m, _ = press(m, "tab")
 	m, _ = press(m, "down") // editor
 	m, cmd := press(m, "enter")
-	next, wait := m.Update(cmd())
+	// The activation runs whole in its command, the wait for the window
+	// included; the launch is on disk from before that wait.
+	next, _ := m.Update(cmd())
 	m = next.(tui.Model)
-	if wait == nil {
-		t.Fatal("a detached launch should go on to wait for its window")
-	}
 	if got, _ := state.Load(root); got.Launch == nil || got.Launch.Target != "editor" {
-		t.Fatalf("launch = %+v, want the editor recorded before the wait", got.Launch)
+		t.Fatalf("launch = %+v, want the editor recorded", got.Launch)
 	}
 
 	if _, again := press(m, "enter"); again != nil {

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/hk9890/revier/internal/checkout"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -43,31 +44,22 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	// A project its file refused as a whole is neither cloned nor opened: a
-	// git_url the load refused must not reach git (decisions.md D85).
-	if p.Invalid != nil {
-		return p.Invalid
+	home, _ := p.Home()
+	open, err := core.Open(p, func() (bool, error) {
+		return a.core.Running(ctx, p, home.Name, a.state.Bound[p.Name])
+	})
+	if err != nil {
+		return err
 	}
-	home, ok := p.Home()
-	if !ok {
-		return fmt.Errorf("project %q has no home target", p.Name)
-	}
-	// A remote project's checkout is its host's to clone: the agent panel
-	// opened here runs `revier agent exec` there, and that one clones
-	// (decisions.md D84).
-	if p.Remote == nil {
-		cloned, err := checkout.Ensure(p.Project, os.Stderr)
-		if err != nil {
+	if open == core.OpenClone {
+		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
 			return err
 		}
-		if cloned {
-			// The clone ran without a deadline. The host calls still need
-			// one, and the one set at startup may have been spent waiting
-			// for git.
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
-			defer cancel()
-		}
+		// The clone ran without a deadline. The host calls still need one,
+		// and the one set at startup may have been spent waiting for git.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
+		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {

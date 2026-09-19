@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -33,11 +32,10 @@ func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
 	if len(panels) != 2 || panels[0].Kind != revier.PanelAgent || panels[1].Kind != revier.PanelShell {
 		t.Fatalf("panels = %+v, want an agent and a shell", panels)
 	}
-	if got, want := panels[0].Command, ssh.PanelCommand("buildbox", "far", "agent"); !slices.Equal(got, want) {
-		t.Errorf("agent = %q, want %q", got, want)
-	}
-	if got, want := panels[1].Command, ssh.PanelCommand("buildbox", "far", "shell"); !slices.Equal(got, want) {
-		t.Errorf("shell = %q, want %q", got, want)
+	// The argv that reaches the host is the remote port's, asked by the
+	// core when the target is resolved: the file derives the kinds alone.
+	if len(panels[0].Command) != 0 || len(panels[1].Command) != 0 {
+		t.Errorf("commands = %q, %q; want none: the transport is the core's to ask", panels[0].Command, panels[1].Command)
 	}
 	if len(home.Runtime.Launch) != 0 {
 		t.Errorf("launch = %q, want none beside the panels", home.Runtime.Launch)
@@ -57,10 +55,6 @@ func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 	p := config.LoadProject(write(t, t.TempDir(), "build.toml", body), nil)
 	if p.Name != "build" || p.Remote.Project != "far" {
 		t.Errorf("name %q, on the host %q; want build here and far there", p.Name, p.Remote.Project)
-	}
-	home, _ := p.Home()
-	if got, want := home.Runtime.Panels[0].Command, ssh.PanelCommand("buildbox", "far", "agent"); !slices.Equal(got, want) {
-		t.Errorf("agent = %q, want the project named as the host names it: %q", got, want)
 	}
 }
 

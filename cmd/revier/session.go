@@ -114,7 +114,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		}
 		return printRestored(a.out, preview)
 	}
-	restored, back := a.core.Restore(ctx, s, report, a.projects, ledger{a})
+	restored, back := a.core.Restore(ctx, s, report, a.projects, a.ledger())
 	if err := printRestored(a.out, restored); err != nil {
 		return err
 	}

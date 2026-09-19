@@ -233,28 +233,16 @@ func (a *app) update(apply func(s *state.State)) {
 }
 
 // goTarget is the whole run-or-raise for one target, as core.ActivateWaiting
-// walks it, with the app's state as its ledger.
+// walks it, with the state on disk as its ledger.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
-	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil, ledger{a})
+	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil, a.ledger())
 	return ref, err
 }
 
-// ledger is the app's state as an activation reads and writes it.
-type ledger struct{ a *app }
-
-func (l ledger) Bound(p revier.ProjectName) core.Bindings { return l.a.state.Bound[p] }
-
-func (l ledger) Pending(p revier.ProjectName, t revier.TargetName) bool {
-	return l.a.state.Launch.Pending(p, t, core.BindWindow)
-}
-
-func (l ledger) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
-	l.a.update(func(s *state.State) { s.Launched(p, t, at) })
-}
-
-func (l ledger) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-	l.a.update(func(s *state.State) { s.Landed(p, t, ref) })
-}
+// ledger is the state on disk as an activation reads and writes it: what is
+// there now, not what was loaded at startup, since the surface writes claims
+// while a command runs.
+func (a *app) ledger() core.StateLedger { return core.StateLedger{Root: a.stateRoot} }
 
 // launchedAction records that an action ran, so a window that appears within
 // core.ClaimWindow and matches no declared target is attached to the project:

@@ -41,7 +41,8 @@ doc reads what it already did.
 | `resolve` | a command picks its project, `by` flag, directory, focused window or last project |
 | `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. |
 | `bind` | the wait for a launched window ends |
-| `claim` | the TUI binds or attaches a window that appeared, `by` poll or event |
+| `claim` | the TUI binds or attaches a window that appeared |
+| `instances` | a `host` could not list; its targets show unknown and a press on one is refused, while the other hosts' go on (`docs/design/decisions.md` D89) |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
 | `probe` | an agent probe failed, and the agent shows unknown |
 | `session saved` | a save, with its counts and gaps |

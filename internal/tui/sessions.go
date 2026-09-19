@@ -306,7 +306,7 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 			return restoredMsg{id: s.ID, err: err}
 		}
 		// No deadline over the whole walk: each step bounds its own.
-		out, back := c.Restore(context.Background(), s, report, projects, stateLedger{root: root, written: written})
+		out, back := c.Restore(context.Background(), s, report, projects, core.StateLedger{Root: root, Written: written})
 		return restoredMsg{id: s.ID, restored: out, back: back}
 	}
 	return m, tea.Batch(walk, waitLedger(written))
@@ -337,9 +337,7 @@ func (m Model) ledgerWritten(msg ledgerMsg) (tea.Model, tea.Cmd) {
 	if !msg.ok {
 		return m, nil
 	}
-	if st, err := loadState(m.stateRoot); err == nil && st != nil {
-		m.keep(st)
-	}
+	m.takeState()
 	return m, waitLedger(msg.written)
 }
 
@@ -368,47 +366,6 @@ func loadedState(root string) *state.State {
 		return st
 	}
 	return &state.State{}
-}
-
-// stateLedger is state on disk as a restore reads and writes it. It is read
-// and written under the state's lock at every step, because the surface
-// claims windows into the same file while the restore runs. Each write is
-// said on written, so the surface takes it in on its update loop.
-type stateLedger struct {
-	root    string
-	written chan<- struct{}
-}
-
-func (l stateLedger) Bound(p revier.ProjectName) core.Bindings {
-	return loadedState(l.root).Bound[p]
-}
-
-func (l stateLedger) Pending(p revier.ProjectName, t revier.TargetName) bool {
-	return loadedState(l.root).Launch.Pending(p, t, core.BindWindow)
-}
-
-func (l stateLedger) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
-	l.update(func(st *state.State) { st.Launched(p, t, at) })
-}
-
-func (l stateLedger) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-	l.update(func(st *state.State) { st.Landed(p, t, ref) })
-}
-
-func (l stateLedger) update(apply func(st *state.State)) {
-	_, err := state.Update(l.root, func(st *state.State) bool {
-		apply(st)
-		return true
-	})
-	if err != nil {
-		slog.Warn("restore: state update", "err", err, "root", l.root)
-	}
-	// The surface reads the whole state again, so a write still waiting to be
-	// read already stands for this one.
-	select {
-	case l.written <- struct{}{}:
-	default:
-	}
 }
 
 // sessionNameScreen is what stands in the list's place while the name is

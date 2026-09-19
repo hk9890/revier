@@ -739,12 +739,6 @@ func TestClaimBounds(t *testing.T) {
 	if _, ok := c.Claim(append(before, stray), append(before, stray), action, now, projects); ok {
 		t.Error("a window already present is not new")
 	}
-	if got, ok := c.ClaimEvent(unsettled, target, now, projects); !ok || got.Target != "editor" {
-		t.Errorf("event path = %+v, %v; want the same binding", got, ok)
-	}
-	if _, ok := c.ClaimEvent(editor, action, now, projects); ok {
-		t.Error("the event path must not attach a declared target's window")
-	}
 	// A terminal's OS window carries the title its runtime rule matches, so
 	// another project's workspace opening after an action is declared too.
 	workspace := revier.Instance{Ref: ref("6"), Title: "session:revier", Class: "kitty"}
