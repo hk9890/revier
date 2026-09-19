@@ -548,3 +548,13 @@ the command line, the surface and a restore all activate through
 `ActivateWaiting` with it. What a survey settles in state - prune, claim,
 expire - is `core.Settle`, the one function the surface and `revier list`
 call.
+
+### D92 — del closes, alt+del deletes, and a delete closes first
+
+One key closes whatever row the cursor is on, and a modifier on it deletes
+what the configuration holds of that row. A delete used to be refused while
+anything ran. It now closes first, through the same plan as a shutdown,
+because a refusal only sends the user to close by hand. A target of
+`config.toml` is every project's, so no project's row deletes it. Unlinking
+touches no file on the host. ctrl+del is not the key because bubbletea v1
+does not read its sequence.

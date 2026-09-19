@@ -129,6 +129,7 @@ type Model struct {
 	afield    int                // the pane line the agent query is on, -1 with no Agents section
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
+	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
 	dialog    dialog             // the link dialog, while it is up
 	host      string             // the host the dialog's second step shows
 	rfilter   string             // the query over the host's projects
@@ -583,6 +584,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.planned(msg)
 	case shutdownMsg:
 		return m.shutDown(msg)
+	case closePlannedMsg:
+		return m.closePlanned(msg)
 	case ledgerMsg:
 		return m.ledgerWritten(msg)
 	case runtimeMsg:
@@ -748,6 +751,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.step(-1)
 	case key.Matches(msg, m.keys.Edit):
 		return m.openProject()
+	case key.Matches(msg, m.keys.Close) && atEnd(m.field()):
+		return m.askClose()
 	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
 	}

@@ -111,6 +111,10 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyPgUp}
 	case "pgdown":
 		msg = tea.KeyMsg{Type: tea.KeyPgDown}
+	case "delete":
+		msg = tea.KeyMsg{Type: tea.KeyDelete}
+	case "alt+delete":
+		msg = tea.KeyMsg{Type: tea.KeyDelete, Alt: true}
 	default:
 		letter, alt := strings.CutPrefix(key, "alt+")
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter), Alt: alt}

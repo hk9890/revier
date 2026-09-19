@@ -83,17 +83,21 @@ func (m Model) helpSections() []helpSection {
 		}},
 		{title: "Targets", entries: []helpEntry{
 			{key: "enter", desc: "go to the target"},
+			{key: k.Close.Help().Key, desc: "close the target or the attached window; asks first when it holds an agent"},
+			{key: k.Delete.Help().Key, desc: "delete the target from the project file, closing it first; not a target of config.toml"},
 			{key: "type", desc: "filter the targets"},
 			{key: "esc", desc: "clear the filter, or back to the projects"},
 		}},
 		{title: "Agents", entries: []helpEntry{
 			{key: "enter", desc: "go to the agent's tab"},
+			{key: k.Close.Help().Key, desc: "close the agent's tab; asks first when it works or waits for you"},
 			{key: "type", desc: "filter the agents"},
 			{key: "esc", desc: "clear the filter, or back to the projects"},
 		}},
 		{title: "Selected project", entries: []helpEntry{
 			{key: k.Edit.Help().Key, desc: "open the project screen: its file's values and targets"},
-			{key: k.Delete.Help().Key, desc: "delete its project file"},
+			{key: k.Close.Help().Key, desc: "close what is open of it, after a confirm"},
+			{key: k.Delete.Help().Key + " / alt+d", desc: "delete its project file, closing it first; for a link, unlink it and change nothing on its host"},
 		}},
 		{title: "Top bar", entries: barHelpEntries()},
 		{title: "Sessions", entries: []helpEntry{
@@ -111,6 +115,7 @@ func (m Model) helpSections() []helpSection {
 			{key: "ctrl+e", desc: "end of the line"},
 			{key: "ctrl+w / alt+backspace", desc: "delete a word"},
 			{key: "ctrl+u", desc: "delete the line"},
+			{key: "del", desc: "delete the character right of the cursor; at the end of the line it closes the row"},
 		}},
 	}
 	if targets := m.targetHelpEntries(); len(targets) > 0 {

@@ -174,6 +174,65 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 	return plan
 }
 
+// CloseRow is one row of a project that del closes: a target, a window
+// attached to the project, or the agent in a panel of an instance. One of
+// Target, Attached and Panel is set.
+type CloseRow struct {
+	Target   revier.TargetName
+	Attached revier.TargetRef
+	Agent    revier.TargetRef // the instance that holds the agent's panel
+	Panel    revier.PanelID
+}
+
+// ClosePlan decides what closing one row of a project closes. A tab target
+// closes its tab and leaves the workspace; an agent closes its panel, which
+// for a link's agent is the panel here that shows it. A row with nothing open
+// here, a link's agent no panel here shows among them, closes nothing.
+func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []CloseStep {
+	i := slices.IndexFunc(r.Views, func(v revier.ProjectView) bool { return v.Project.Name == project })
+	if i < 0 {
+		return nil
+	}
+	v := r.Views[i]
+	local := c.agentsHere(v)
+	step := CloseStep{Project: project}
+	switch {
+	case row.Panel != "":
+		j := slices.IndexFunc(local, func(a revier.AgentView) bool { return key(a.Ref) == key(row.Agent) && a.Panel == row.Panel })
+		if j < 0 {
+			return nil
+		}
+		return []CloseStep{c.closeStep(CloseStep{Project: project, Ref: local[j].Ref, Panel: row.Panel, Agents: local[j : j+1]})}
+	case !row.Attached.IsZero():
+		j := slices.IndexFunc(v.Targets, func(tv revier.TargetView) bool { return tv.Attached && key(tv.Ref) == key(row.Attached) })
+		if j < 0 {
+			return nil
+		}
+		step.Ref = v.Targets[j].Ref
+	default:
+		j := slices.IndexFunc(v.Targets, func(tv revier.TargetView) bool {
+			return !tv.Attached && tv.Name == row.Target && !tv.Ref.IsZero()
+		})
+		if j < 0 {
+			return nil
+		}
+		step.Target, step.Ref = row.Target, v.Targets[j].Ref
+		if t, ok := v.Project.Target(row.Target); ok && tabTarget(t) {
+			k := slices.IndexFunc(r.Instances, func(inst revier.Instance) bool { return key(inst.Ref) == key(step.Ref) })
+			if k < 0 {
+				return nil
+			}
+			panel, open := tabOf(r.Instances[k], row.Target)
+			if !open {
+				return nil
+			}
+			step.Panel = panel
+		}
+	}
+	step.Agents = agentsIn(local, step.Ref, step.Panel)
+	return []CloseStep{c.closeStep(step)}
+}
+
 // agentsIn are the agents in an instance, or in one panel of it.
 func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panel revier.PanelID) []revier.AgentView {
 	var out []revier.AgentView

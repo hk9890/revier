@@ -114,31 +114,41 @@ func TestDeleteDeclinedKeepsTheFileAndDoesNothingElse(t *testing.T) {
 	}
 }
 
-// A project with anything running is refused, as the picker refuses a
-// running session.
-func TestDeleteRefusesARunningProject(t *testing.T) {
+// A project with anything running is closed first, after a confirm that
+// names the delete, and its file goes once everything closed: no window
+// outlives the only entry that can reach it.
+func TestDeleteClosesARunningProjectFirst(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:alpha", "sh")
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
 	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
 
-	m, _ = press(m, "alt+d")
-	if f := footer(m); !strings.Contains(f, "running") {
-		t.Fatalf("footer = %q, want the refusal", f)
+	m, cmd := press(m, "alt+d")
+	m = run(m, cmd)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close and delete alpha?") {
+		t.Fatalf("subtitle = %q, want the confirm naming the delete", sub)
 	}
-	// The refresh comes every second; the refusal has to outlast it.
-	if f := footer(survey(m)); !strings.Contains(f, "running") {
-		t.Errorf("footer after a refresh = %q, want the refusal still there", f)
-	}
-	_, _ = press(m, "y")
+	// y is no answer here: the confirm takes enter on its first row.
+	m, _ = press(m, "y")
 	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
-		t.Errorf("a running project's file was removed: %v", err)
+		t.Fatalf("the file went before the confirm: %v", err)
+	}
+
+	m, cmd = press(m, "enter")
+	m = run(m, cmd)
+	if len(rt.Closed) != 1 {
+		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); !os.IsNotExist(err) {
+		t.Errorf("alpha.toml is still there: %v", err)
+	}
+	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+		t.Errorf("bar = %q, want the surface back", bar)
 	}
 }
 
-// A window attached to the project is refused as a running target is: it
-// would outlive the only entry that can reach it.
-func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
+// A window attached to the project closes with it before the delete.
+func TestDeleteClosesAnAttachedWindowFirst(t *testing.T) {
 	wm := hosttest.New("wm")
 	ref := wm.Add("Pull requests", "chromium")
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
@@ -146,13 +156,36 @@ func TestDeleteRefusesAProjectWithAnAttachedWindow(t *testing.T) {
 	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"alpha": {ref}})
 	m := resize(refreshed(t, c, projects, root, nil), 120, 20)
 
-	m, _ = press(m, "alt+d")
-	if f := footer(m); !strings.Contains(f, "attached window") {
-		t.Fatalf("footer = %q, want the refusal", f)
+	m, cmd := press(m, "alt+delete")
+	m = run(m, cmd)
+	m, cmd = press(m, "enter")
+	run(m, cmd)
+	if len(wm.Closed) != 1 || wm.Closed[0] != ref {
+		t.Errorf("window host closed %v, want the attached window", wm.Closed)
 	}
-	_, _ = press(m, "y")
+	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); !os.IsNotExist(err) {
+		t.Errorf("alpha.toml is still there: %v", err)
+	}
+}
+
+// Esc on the confirm keeps both the project's windows and its file.
+func TestDeleteDeclinedOnTheConfirmClosesNothing(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:alpha", "sh")
+	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, cmd := press(m, "alt+d")
+	m = run(m, cmd)
+	m, _ = press(m, "esc")
+	if len(rt.Closed) != 0 {
+		t.Errorf("runtime closed %v, want nothing", rt.Closed)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
-		t.Errorf("the file of a project with an attached window was removed: %v", err)
+		t.Errorf("alpha.toml went on a declined delete: %v", err)
+	}
+	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+		t.Errorf("bar = %q, want the surface back", bar)
 	}
 }
 
