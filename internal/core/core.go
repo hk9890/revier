@@ -1213,10 +1213,16 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 		v.Targets = append(v.Targets, tv)
 	}
 	// A gone attachment is left out rather than shown dead: the caller prunes
-	// it from state against this same listing.
+	// it from state against this same listing. A live one is probed like a
+	// target, so a shutdown sees the agent in an attached terminal and keeps
+	// it from ending unasked (decisions.md D78).
 	for _, ref := range attached {
 		if inst, ok := byRef(snap, ref); ok {
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
+			if k := key(inst.Ref); local && !seen[k] {
+				seen[k] = true
+				v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
+			}
 		}
 	}
 	return v
