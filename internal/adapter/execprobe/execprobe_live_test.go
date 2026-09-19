@@ -96,6 +96,20 @@ func TestInspectRunsWhenTheWorkingDirectoryWasRemoved(t *testing.T) {
 	}
 }
 
+// A home directory that does not exist leaves the script where revier runs,
+// rather than failing it.
+func TestInspectRunsWhenTheHomeDirectoryIsMissing(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "gone"))
+	p := execprobe.New("aider", script(t, `echo '{"status":"idle"}'`))
+	got, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusIdle {
+		t.Errorf("status = %v, want idle", got.Status)
+	}
+}
+
 // A probe that leaves a process behind in its own session, outside the group
 // the timeout kills, still lets Inspect return: the pipe that process holds
 // open is abandoned shortly after the probe itself exits.

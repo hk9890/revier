@@ -263,8 +263,13 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
 	// The listing covers every session wherever it runs, so it runs in the
 	// home directory rather than in revier's own, which a removed worktree
-	// can take away and fail every probe until revier is restarted.
+	// can take away and fail every probe until revier is restarted. A home
+	// that is unset or gone would fail every probe itself, so it leaves
+	// revier's own.
 	cmd.Dir, _ = os.UserHomeDir()
+	if _, err := os.Stat(cmd.Dir); err != nil {
+		cmd.Dir = ""
+	}
 	cmd.WaitDelay = waitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
