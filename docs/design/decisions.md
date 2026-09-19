@@ -568,3 +568,12 @@ because a refusal only sends the user to close by hand. A target of
 `config.toml` is every project's, so no project's row deletes it. Unlinking
 touches no file on the host. ctrl+del is not the key because bubbletea v1
 does not read its sequence.
+
+### D94 — a tab target closes as its whole tab, and its busy check covers every panel in it
+
+A tab opened with a panel group holds panels that carry no target mark, and
+closing the one panel the target is found by left the others on screen while
+the shutdown said "closed". `Panel` now names the tab that holds it, and the
+optional `TabCloser` closes that tab whole; a step waits until no panel of the
+tab is listed. Since the whole tab ends, its agents are those of every panel in
+it, so a busy agent beside the marked panel still refuses the step.

@@ -78,6 +78,7 @@ type osWindow struct {
 }
 
 type tab struct {
+	ID       int      `json:"id"`
 	IsActive bool     `json:"is_active"`
 	Windows  []window `json:"windows"`
 }
@@ -358,7 +359,9 @@ func (h *Host) decode(l listing) []revier.Instance {
 		}
 		for _, t := range w.Tabs {
 			for _, win := range t.Windows {
-				inst.Panels = append(inst.Panels, panelOf(win, parent))
+				panel := panelOf(win, parent)
+				panel.Tab = strconv.Itoa(t.ID)
+				inst.Panels = append(inst.Panels, panel)
 			}
 		}
 		out = append(out, inst)
@@ -868,6 +871,17 @@ func (h *Host) ClosePanel(ctx context.Context, ref revier.TargetRef, panel revie
 		return err
 	}
 	_, err = h.kitten(ctx, socket, "close-window", "--match", "id:"+panel.String())
+	return err
+}
+
+// CloseTab closes the kitty tab that holds the window, with every window in
+// it, on the socket of the process the instance lives in.
+func (h *Host) CloseTab(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	socket, _, err := parseRef(ref.ID)
+	if err != nil {
+		return err
+	}
+	_, err = h.kitten(ctx, socket, "close-tab", "--match", "window_id:"+panel.String())
 	return err
 }
 

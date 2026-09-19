@@ -292,6 +292,83 @@ func TestClosePlanClosesATabAlone(t *testing.T) {
 	}
 }
 
+// groupTab is a workspace whose tickets tab holds a panel group: the panel
+// the target is found by, and an agent beside it in the same tab.
+func groupTab(t *testing.T, status revier.Status) (*core.Core, *hosttest.FakeRuntime, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("kitty")
+	home := agent("1", "", "")
+	home.Tab = "t1"
+	marked := revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "taskmgr-ui", Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "tickets"}}
+	sibling := agent("3", "", "")
+	sibling.Tab = "t2"
+	rt.Add("session:revier", "kitty", home, marked, sibling)
+	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
+	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}, rt, []core.Project{prepared(t, tabProject())}
+}
+
+// A tab target covers every panel of its tab: its step holds the agent in
+// the panel the target is not found by, so a busy one refuses the step and a
+// shutdown of the targets alone leaves the tab.
+func TestATabStepHoldsTheAgentsOfEveryPanelInTheTab(t *testing.T) {
+	c, _, projects := groupTab(t, revier.StatusRunning)
+	report := survey(t, c, projects, nil)
+
+	plan := c.ClosePlan(report, "revier", core.CloseRow{Target: "tickets"})
+	if len(plan) != 1 || plan[0].Action != core.CloseTab || len(plan[0].Agents) != 1 || plan[0].Agents[0].Panel != "3" || !plan[0].Busy() {
+		t.Fatalf("del plan = %+v, want one busy tab step holding the agent in panel 3", plan)
+	}
+	if got := stepNames(c.ShutdownPlan(report, "", core.ShutdownTargets)); len(got) != 0 {
+		t.Errorf("targets = %v, want the tab left: it holds an agent", got)
+	}
+}
+
+// A tab closes whole: both panels go, the workspace's own panel stays, and
+// the step is closed.
+func TestShutdownClosesTheWholeTab(t *testing.T) {
+	c, rt, projects := groupTab(t, revier.StatusIdle)
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+
+	out := c.Shutdown(context.Background(), plan, 0)
+	if closed, open, failed := out.Counts(); closed != 1 || open != 0 || failed != 0 {
+		t.Errorf("counts = %d closed, %d open, %d failed; want the tab closed", closed, open, failed)
+	}
+	if !slices.Equal(rt.ClosedTabs, []revier.PanelID{"2"}) || len(rt.ClosedPanels) != 0 {
+		t.Errorf("tabs %v, panels %v; want the tab of panel 2 closed", rt.ClosedTabs, rt.ClosedPanels)
+	}
+	left := survey(t, c, projects, nil).Instances
+	if len(left) != 1 || len(left[0].Panels) != 1 || left[0].Panels[0].ID != "1" {
+		t.Errorf("instances after = %+v, want the workspace with its own panel", left)
+	}
+}
+
+// panelsOnly is a runtime with tabs that closes a panel and cannot close a
+// tab.
+type panelsOnly struct {
+	revier.Runtime
+	revier.PanelOpener
+	revier.PanelCloser
+}
+
+// On a runtime that cannot close a tab, the tab closes as its one panel, and
+// the step is still open while the other panel is listed.
+func TestATabIsClosedOnlyWhenNoPanelOfItIsListed(t *testing.T) {
+	c, rt, projects := groupTab(t, revier.StatusIdle)
+	c.Runtime = panelsOnly{rt, rt, rt}
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+	if len(plan) != 1 || plan[0].Action != core.ClosePanel {
+		t.Fatalf("plan = %+v, want the tab's panel", plan)
+	}
+
+	out := c.Shutdown(context.Background(), plan, 0)
+	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"2"}) {
+		t.Errorf("panels closed = %v, want panel 2", rt.ClosedPanels)
+	}
+	if closed, open, _ := out.Counts(); closed != 0 || open != 1 || out[0].Note() != "still open" {
+		t.Errorf("counts = %d closed, %d open, note %q; want still open: panel 3 is listed", closed, open, out[0].Note())
+	}
+}
+
 // An agent closes its panel; the workspace and its shell stay.
 func TestClosePlanClosesOneAgent(t *testing.T) {
 	c, _, _, projects := openDesktop(t, revier.StatusRunning)

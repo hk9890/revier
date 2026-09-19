@@ -201,6 +201,14 @@ type PanelCloser interface {
     ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }
 
+// TabCloser is an optional capability of a Runtime. CloseTab closes the tab
+// that holds panel, with every panel in it, which is how a tab target whose
+// tab holds a panel group closes whole (D94). Without it, the panel alone
+// closes.
+type TabCloser interface {
+    CloseTab(ctx context.Context, ref TargetRef, panel PanelID) error
+}
+
 // Hider is an optional capability of a WindowController. Hide takes a window
 // off the screen without closing it, and Focus brings it back as it was: how
 // the popup leaves on Esc and is raised by the next press (D86). Where the
@@ -283,6 +291,7 @@ type Panel struct {
     Vars    map[string]string // runtime-provided: kitty user vars, tmux options
     PID     int
     Command []string          // foreground argv, when the runtime can see it
+    Tab     string            // the tab that holds it: a kitty tab, a tmux window; empty without tabs
 }
 
 // AgentProbe derives agent state from a panel.
