@@ -36,19 +36,24 @@ const (
 	CloseInstance CloseAction = iota
 	// ClosePanel closes one panel of the instance through the runtime.
 	ClosePanel
+	// CloseTab closes the tab that holds the panel through the runtime, with
+	// every panel in it.
+	CloseTab
 	// CloseUnsupported is a step whose host cannot close it. It is a normal
 	// outcome: the shutdown names it and leaves it open.
 	CloseUnsupported
 )
 
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
-// window and for an agent. Panel is set when only that panel closes. Agents
-// are the agents on this machine that end with it.
+// window and for an agent. Panel is set when only that panel closes, and Tab
+// as well when the whole tab that holds it closes. Agents are the agents on
+// this machine that end with it.
 type CloseStep struct {
 	Project revier.ProjectName
 	Target  revier.TargetName
 	Ref     revier.TargetRef
 	Panel   revier.PanelID
+	Tab     string
 	Action  CloseAction
 	Agents  []revier.AgentView
 }
@@ -147,7 +152,7 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 				tabs = append(tabs, tv)
 				continue
 			}
-			held := agentsIn(local, tv.Ref, "")
+			held := agentsIn(local, tv.Ref, nil)
 			if scope == ShutdownTargets && len(held) > 0 {
 				continue
 			}
@@ -160,15 +165,17 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 			if seen[key(tv.Ref)] {
 				continue
 			}
-			panel, open := tabOf(instances[key(tv.Ref)], tv.Name)
+			inst := instances[key(tv.Ref)]
+			panel, open := tabOf(inst, tv.Name)
 			if !open {
 				continue
 			}
-			held := agentsIn(local, tv.Ref, panel)
+			tab, panels := tabAt(inst, panel)
+			held := agentsIn(local, tv.Ref, panels)
 			if scope == ShutdownTargets && len(held) > 0 {
 				continue
 			}
-			plan = append(plan, c.closeStep(CloseStep{Project: v.Project.Name, Target: tv.Name, Ref: tv.Ref, Panel: panel, Agents: held}))
+			plan = append(plan, c.closeStep(CloseStep{Project: v.Project.Name, Target: tv.Name, Ref: tv.Ref, Panel: panel, Tab: tab, Agents: held}))
 		}
 	}
 	return plan
@@ -196,6 +203,7 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 	v := r.Views[i]
 	local := c.agentsHere(v)
 	step := CloseStep{Project: project}
+	var panels []revier.PanelID
 	switch {
 	case row.Panel != "":
 		j := slices.IndexFunc(local, func(a revier.AgentView) bool { return key(a.Ref) == key(row.Agent) && a.Panel == row.Panel })
@@ -227,17 +235,19 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 				return nil
 			}
 			step.Panel = panel
+			step.Tab, panels = tabAt(r.Instances[k], panel)
 		}
 	}
-	step.Agents = agentsIn(local, step.Ref, step.Panel)
+	step.Agents = agentsIn(local, step.Ref, panels)
 	return []CloseStep{c.closeStep(step)}
 }
 
-// agentsIn are the agents in an instance, or in one panel of it.
-func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panel revier.PanelID) []revier.AgentView {
+// agentsIn are the agents in an instance, or in the given panels of it when
+// there are any.
+func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panels []revier.PanelID) []revier.AgentView {
 	var out []revier.AgentView
 	for _, a := range agents {
-		if key(a.Ref) == key(ref) && (panel == "" || a.Panel == panel) {
+		if key(a.Ref) == key(ref) && (len(panels) == 0 || slices.Contains(panels, a.Panel)) {
 			out = append(out, a)
 		}
 	}
@@ -245,11 +255,14 @@ func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panel revier.Pane
 }
 
 // closeStep sets how the step closes: through the host that listed the
-// instance, when it can.
+// instance, when it can. A tab closes as its one panel on a runtime that
+// cannot close a tab.
 func (c *Core) closeStep(s CloseStep) CloseStep {
 	s.Action = CloseUnsupported
 	if s.Panel != "" {
-		if _, ok := c.panelCloser(s.Ref); ok {
+		if _, ok := c.tabCloser(s.Ref); ok && s.Tab != "" {
+			s.Action = CloseTab
+		} else if _, ok := c.panelCloser(s.Ref); ok {
 			s.Action = ClosePanel
 		}
 		return s
@@ -277,6 +290,14 @@ func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
 	return closer, ok
 }
 
+func (c *Core) tabCloser(ref revier.TargetRef) (revier.TabCloser, bool) {
+	if c.Runtime == nil || c.Runtime.Name() != ref.Host {
+		return nil, false
+	}
+	closer, ok := c.Runtime.(revier.TabCloser)
+	return closer, ok
+}
+
 // CloseLast moves the steps that would end the calling process to the end of
 // the plan, so a shutdown run from a terminal of a workspace closes everything
 // else before its own terminal. self reports a panel the process runs under.
@@ -292,7 +313,7 @@ func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.P
 			return self(revier.Panel{PID: inst.PID})
 		}
 		for _, p := range inst.Panels {
-			if (s.Panel == "" || p.ID == s.Panel) && self(p) {
+			if (s.Panel == "" || p.ID == s.Panel || (s.Tab != "" && p.Tab == s.Tab)) && self(p) {
 				return true
 			}
 		}
@@ -407,8 +428,11 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		case ClosePanel:
 			closer, _ := c.panelCloser(s.Ref)
 			res.Err = closer.ClosePanel(ctx, s.Ref, s.Panel)
+		case CloseTab:
+			closer, _ := c.tabCloser(s.Ref)
+			res.Err = closer.CloseTab(ctx, s.Ref, s.Panel)
 		}
-		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel,
+		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "tab", s.Tab,
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported, "err", res.Err)
 		out = append(out, res)
 	}
@@ -438,7 +462,7 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 				r.Open = false
 				continue
 			}
-			still := listed(snap, r.Ref, r.Panel)
+			still := listed(snap, r.CloseStep)
 			if r.Err != nil && !still {
 				r.Err = nil
 			}
@@ -456,13 +480,16 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 	}
 }
 
-// listed reports an instance, or one panel of it, in a listing.
-func listed(snap snapshot, ref revier.TargetRef, panel revier.PanelID) bool {
-	inst, ok := byRef(snap, ref)
-	if !ok || panel == "" {
+// listed reports what a step closes in a listing: its instance, its panel,
+// or any panel of its tab.
+func listed(snap snapshot, s CloseStep) bool {
+	inst, ok := byRef(snap, s.Ref)
+	if !ok || s.Panel == "" {
 		return ok
 	}
-	return holdsPanel(inst, panel)
+	return slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool {
+		return p.ID == s.Panel || (s.Tab != "" && p.Tab == s.Tab)
+	})
 }
 
 // SaveChanged saves the session a shutdown ends, unless the newest saved

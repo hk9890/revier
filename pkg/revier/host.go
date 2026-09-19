@@ -192,6 +192,16 @@ type PanelCloser interface {
 	ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }
 
+// TabCloser is an optional capability of a Runtime, detected by type
+// assertion. CloseTab closes the tab that holds panel, with every panel in it,
+// and leaves the rest of the instance. It is how a shutdown or a del ends a tab
+// target whose tab holds a panel group, where closing the one panel the target
+// is found by would leave the others on screen (decisions.md D94). A runtime
+// without it closes that panel alone.
+type TabCloser interface {
+	CloseTab(ctx context.Context, ref TargetRef, panel PanelID) error
+}
+
 // Attacher is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can put the calling terminal onto
 // one of its instances, which is how `revier open --attach` ends: a tmux
