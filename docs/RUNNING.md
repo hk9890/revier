@@ -88,9 +88,8 @@ configuration above: without it, it reaches the user's real agent.
 
 ## Drive save and restore across a reboot
 
-`tmux kill-server` on the private server is the reboot: every workspace is gone
-and the bindings in state point at nothing, while the project files and the
-saved session are untouched.
+`tmux kill-server` on the private server is the reboot: workspaces and
+bindings are gone, project files and the saved session stay.
 
 ```bash
 ./bin/revier session save --name before-reboot   # what is open now
@@ -139,9 +138,8 @@ or an argv.
 
 ## Drive a link without a host
 
-A link's panels run ssh, and the revier they start must be the one under
-test. Put a stand-in `ssh` first on PATH that runs the command line here with a
-second configuration, which is the host's:
+Put a stand-in `ssh` first on PATH that runs the panel's command line here,
+under a second configuration that plays the host:
 
 ```bash
 H=$(mktemp -d); mkdir -p "$H/projects" "$H/state"            # the host: no runtime, it is reached over ssh alone
@@ -218,24 +216,14 @@ command without it addresses their real sessions.
 
 ## Verify an adapter against its real tool
 
-```bash
-mise run test:live      # L4 tmux and the CLI end-to-end; headless
-```
-
-Each test starts a server on a socket named after itself and kills it in
-cleanup, so suites cannot collide and a crashed run leaves at most one stray
-server. Any substrate that is not installed skips rather than fails.
+Run `mise run test:live`, the L4 layer [TESTING.md](TESTING.md) owns; it is
+headless.
 
 ## When a screen is unavoidable
 
-Two hosts need the user's live session: GNOME, because `wctl` talks to a Shell
-extension in a logged-in desktop, and kitty's `Open` and `Focus`, because they
-create and raise real OS windows. Everything else is reachable headless.
-
-Before asking for a manual check, exhaust the substrates above — the core, the
-resolution rules, run-or-raise, toggle-back, and every adapter except those two
-are all reachable without a screen. Then hand the user a specific command and
-say what to look for, rather than running it yourself:
+Only the GNOME host and kitty's `Open` and `Focus` need the user's live
+session. Exhaust the substrates above first, then hand the user a specific
+command and say what to look for, rather than running it yourself:
 
 ```bash
 wctl list --json | jq '.[] | {id, title, wm_class}'   # read-only, safe to run
@@ -276,6 +264,4 @@ hyperfine --warmup 3 -N './bin/revier go home -p demo'               # the keypr
 
 `revier keys install` and `revier keys uninstall` rewrite the user's desktop
 configuration, so they are the user's step and never a verification step. Their
-`--dry-run` reads and prints only, and is safe to run. `dconf` writes go through
-the session's own service, so `DCONF_PROFILE` does not isolate them: there is no
-scratch desktop to install into, and the layers above are where this is proved.
+`--dry-run` reads and prints only, and is safe to run.

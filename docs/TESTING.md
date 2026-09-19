@@ -1,8 +1,5 @@
 # Testing
 
-`mise` is the canonical surface; `make` covers the subset that must work
-without it.
-
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
@@ -12,13 +9,10 @@ mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
 mise run quality:full      # + L4                               (pre-handoff)
 ```
 
-`make test`, `make test-integration`, `make vet`, `make fmt` are the fallback.
-There is no `make lint`: golangci-lint is pinned in `.mise.toml`.
-
 ## Layers
 
 The layer decides whether a test can run at all on a machine with no display.
-Only L6 ever reaches one.
+Only L6 ever reaches one. L5 was retired and its number is not reused.
 
 | Layer | Substrate | Tag | Covers |
 |---|---|---|---|
@@ -57,7 +51,7 @@ focusing after `Open` passed L2 and failed L4.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must
   stay green on a machine without tmux.
 - Leave tmux unpinned in `.mise.toml`: the live layer runs against
-  whatever is installed, which is how CI caught the 3.4-versus-3.7 difference.
+  whatever is installed, which is how CI caught the delimiter difference above.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.
@@ -73,9 +67,9 @@ gate; run them when changing `Survey`, `Render`, or matching:
 go test -run='^$' -bench='Survey|Render|MatchCompile' -benchtime=200x ./internal/core/
 ```
 
-`BenchmarkSurvey90` is the size that matters. Results live in taskmgr task
-`revier-ledpxj`; record new ones there, never in the repository — a measurement
-is one run on one machine and ages silently in a doc.
+`BenchmarkSurvey90` is the size that matters. Put a result in the PR that
+changes the hot path, never in the repository — a measurement is one run on
+one machine and ages silently in a doc.
 
 A change is green when `mise run quality:full` passes. Driving the product by
 hand is [RUNNING.md](RUNNING.md)'s, and it is never a substitute for a layer.
