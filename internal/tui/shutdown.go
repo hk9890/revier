@@ -82,11 +82,14 @@ type plannedMsg struct {
 	err     error
 }
 
-// shutdownMsg is a shutdown's answer.
+// shutdownMsg is a shutdown's answer. recheck is set instead when an agent
+// of the plan turned busy after the plan was shown: the plan with its agents
+// as they are now, and nothing closed.
 type shutdownMsg struct {
-	saved  string
-	closed core.Closed
-	err    error
+	saved   string
+	closed  core.Closed
+	recheck []core.CloseStep
+	err     error
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -253,7 +256,7 @@ func (m Model) shutEnter() (tea.Model, tea.Cmd) {
 			m.shutBack()
 			return m, nil
 		}
-		return m.shutRun()
+		return m.shutRun(true)
 	}
 	return m, nil
 }
@@ -304,12 +307,24 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 }
 
 // shutRun saves the session when it changed and closes what the plan names.
-// Confirming a plan with a busy agent is the TUI's --force.
-func (m Model) shutRun() (tea.Model, tea.Cmd) {
+// Confirming a plan with a busy agent is the TUI's --force. Any other plan
+// confirmed was shown from a survey its agents may have moved on from, so it
+// is checked again first and closes nothing when one of them turned busy.
+func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, report, plan, saves := m.core, m.stateRoot, s.report, s.plan, s.saves()
+	c, root, projects, report, plan, saves := m.core, m.stateRoot, m.projects, s.report, s.plan, s.saves()
+	recheck := confirmed && len(core.Busy(plan)) == 0
 	return m, func() tea.Msg {
+		if recheck {
+			_, now, err := surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep { return c.Recheck(r, plan) })
+			if err != nil {
+				return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
+			}
+			if len(core.Busy(now)) > 0 {
+				return shutdownMsg{recheck: now}
+			}
+		}
 		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
@@ -341,6 +356,11 @@ func (m Model) shutRun() (tea.Model, tea.Cmd) {
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
+	if msg.recheck != nil {
+		s.plan, s.row = msg.recheck, 0
+		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+		return m, nil
+	}
 	if s.one {
 		return m.closed(msg)
 	}

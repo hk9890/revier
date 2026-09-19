@@ -139,7 +139,7 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		m.dialog = dialogShutdown
 		return m, nil
 	}
-	return m.shutRun()
+	return m.shutRun(false)
 }
 
 // confirms reports a close to ask about first: a delete, a project, a target
