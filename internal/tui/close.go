@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,6 +54,12 @@ func (m Model) askClose() (tea.Model, tea.Cmd) {
 		if !r.attached.IsZero() {
 			return m.closeRow(name, core.CloseRow{Attached: r.attached}, r.attached.Title, false)
 		}
+		// Whether it is open is not known (decisions.md D89): the host says,
+		// not a plan made without it.
+		if r.target.Unknown != "" {
+			m.err = fmt.Errorf("%s: %s; wait for the host before closing it", r.target.Name, r.target.Unknown)
+			return m, nil
+		}
 		return m.closeRow(name, core.CloseRow{Target: r.target.Name}, string(r.target.Name), false)
 	case focusAgents:
 		rows := m.agentRows()
@@ -94,20 +100,12 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	c, root := m.core, m.stateRoot
 	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop}
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		st := loadedState(root)
-		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
-		if err != nil {
-			asked.err = err
-			return asked
-		}
-		asked.report = report
-		if whole {
-			asked.plan = c.ShutdownPlan(report, project, core.ShutdownAll)
-		} else {
-			asked.plan = c.ClosePlan(report, project, row)
-		}
+		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+			if whole {
+				return c.ShutdownPlan(r, project, core.ShutdownAll)
+			}
+			return c.ClosePlan(r, project, row)
+		})
 		return asked
 	}
 }
@@ -120,6 +118,13 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		m.err = msg.err
+		return m, nil
+	}
+	if len(msg.plan) == 0 && msg.drop {
+		// Nothing of it closes here: it closed since the last survey, or
+		// another project holds what is open of it too. The delete is asked
+		// as for what is not open, and checked again on the answer.
+		m.confirm, m.ctarget = msg.project, msg.row.Target
 		return m, nil
 	}
 	if len(msg.plan) == 0 {
@@ -174,11 +179,18 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	case open > 0:
 		err = fmt.Errorf("%s still open", core.Count(open, "step"))
-	case one.drop && one.pick.Target != "":
-		m.err = m.removeTarget(one.project, one.pick.Target)
-		return m, nil
 	case one.drop:
-		m.err = m.removeProject(one.project)
+		if one.pick.Target != "" {
+			err = m.removeTarget(one.project, one.pick.Target)
+		} else {
+			err = m.removeProject(one.project)
+		}
+		// Update logs no error a shutdownMsg brings, because the close logs
+		// its own steps; the delete after it is not one of them.
+		if err != nil {
+			slog.Error("delete after the close", "project", one.project, "target", one.pick.Target, "err", err)
+		}
+		m.err = err
 		return m, nil
 	}
 	if err != nil && one.drop {

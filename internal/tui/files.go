@@ -118,6 +118,10 @@ func (m Model) askDelete() (tea.Model, tea.Cmd) {
 	// Before the first survey the view is the files' alone, and says nothing
 	// about what is open.
 	if m.surveyed && m.openHere(v) {
+		if err := m.refuseUnsettled(v, "deleting"); err != nil {
+			m.err = err
+			return m, nil
+		}
 		return m.closeRow(v.Project.Name, core.CloseRow{}, string(v.Project.Name), true)
 	}
 	if err := m.refuseRunning(v, "deleting"); err != nil {
@@ -153,19 +157,49 @@ func (m Model) askDropTarget(v revier.ProjectView) (tea.Model, tea.Cmd) {
 	i := slices.IndexFunc(text.Targets, func(pt config.ProjectTarget) bool { return pt.Target.Name == name })
 	switch {
 	case i < 0:
-		m.err = fmt.Errorf("target %q is in no file", name)
-	case text.Targets[i].Source == config.FromShared, text.Targets[i].Source == config.Overridden:
-		m.err = fmt.Errorf("target %q is config.toml's, shared by every project; the config screen changes it", name)
+		err = fmt.Errorf("target %q is in no file", name)
+	case text.Targets[i].Source == config.FromShared:
+		err = fmt.Errorf("target %q is config.toml's, shared by every project; the config screen changes it", name)
+	case text.Targets[i].Source == config.Overridden:
+		err = fmt.Errorf("target %q is config.toml's, shared by every project; the project screen drops this project's changes to it", name)
 	case text.Targets[i].Source == config.Derived:
-		m.err = fmt.Errorf("target %q comes with the link and is in no file", name)
-	case row.target.Unknown != "":
-		m.err = fmt.Errorf("%s: %s; wait for the host before deleting it", name, row.target.Unknown)
-	case !row.target.Ref.IsZero():
+		err = fmt.Errorf("target %q comes with the link and is in no file", name)
+	default:
+		// Asked before anything closes: a delete the file refuses must not
+		// cost the windows and agents the close ends first.
+		err = config.CheckRemoveProjectTarget(p.File, m.shared, name)
+	}
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	open, err := m.targetOpen(v.Project.Name, row.target)
+	switch {
+	case err != nil:
+		m.err = err
+	case open:
 		return m.closeRow(v.Project.Name, core.CloseRow{Target: name}, string(name), true)
 	default:
 		m.confirm, m.ctarget = v.Project.Name, name
 	}
 	return m, nil
+}
+
+// targetOpen reports a target running here, by the last survey or by where
+// state says it landed. It refuses while that is not known: before the first
+// survey, while its host cannot list, or while its window is still to
+// appear.
+func (m Model) targetOpen(project revier.ProjectName, tv revier.TargetView) (bool, error) {
+	switch {
+	case !m.surveyed:
+		return false, fmt.Errorf("no survey has answered yet; wait for it before deleting %s", tv.Name)
+	case tv.Unknown != "":
+		return false, fmt.Errorf("%s: %s; wait for the host before deleting it", tv.Name, tv.Unknown)
+	case m.pending != nil && m.pending.Project == project && m.pending.Target == tv.Name && time.Since(m.pending.At) <= core.BindWindow:
+		return false, fmt.Errorf("%s is coming up; wait for its window before deleting it", tv.Name)
+	}
+	ref, bound := m.bound[project][tv.Name]
+	return !tv.Ref.IsZero() || (bound && m.hostHere(ref.Host)), nil
 }
 
 // confirmDelete takes the key that answers the question. Only "y" deletes;
@@ -177,12 +211,16 @@ func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() != "y" {
 		return m, nil
 	}
+	// Asked again: a survey may have arrived between the question and the
+	// answer, and the target or the project may have started since.
 	if target != "" {
+		if err := m.refuseStartedTarget(name, target); err != nil {
+			m.err = err
+			return m, nil
+		}
 		m.err = m.removeTarget(name, target)
 		return m, nil
 	}
-	// Asked again: a survey may have arrived between the question and the
-	// answer, and the project may have started since.
 	for _, v := range m.views {
 		if v.Project.Name == name {
 			if err := m.refuseRunning(v, "deleting"); err != nil {
@@ -246,6 +284,21 @@ func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 	if m.running(v) {
 		return fmt.Errorf("%s is running; close its targets before %s it", name, doing)
 	}
+	if err := m.refuseUnsettled(v, doing); err != nil {
+		return err
+	}
+	if m.attachedHere(name) {
+		return fmt.Errorf("%s has an attached window open; close it before %s the project", name, doing)
+	}
+	return nil
+}
+
+// refuseUnsettled refuses the change while what of the project runs is not
+// known: a target whose host could not list, or a launch whose window is
+// still to appear. A close cannot reach either, so a delete that closes first
+// is refused for them too.
+func (m Model) refuseUnsettled(v revier.ProjectView, doing string) error {
+	name := v.Project.Name
 	// A target whose host could not list may be running (decisions.md D89):
 	// the change waits for the host, not for a guess.
 	for _, t := range v.Targets {
@@ -256,8 +309,26 @@ func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 	if m.pending != nil && m.pending.Project == name && time.Since(m.pending.At) <= core.BindWindow {
 		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
 	}
-	if m.attachedHere(name) {
-		return fmt.Errorf("%s has an attached window open; close it before %s the project", name, doing)
+	return nil
+}
+
+// refuseStartedTarget refuses deleting the entry of a target that runs, or
+// may, by the survey that answered since the question.
+func (m Model) refuseStartedTarget(project revier.ProjectName, target revier.TargetName) error {
+	for _, v := range m.views {
+		if v.Project.Name != project {
+			continue
+		}
+		for _, tv := range v.Targets {
+			if tv.Attached || tv.Name != target {
+				continue
+			}
+			open, err := m.targetOpen(project, tv)
+			if err == nil && open {
+				err = fmt.Errorf("%s is running; alt+del closes it before deleting it", target)
+			}
+			return err
+		}
 	}
 	return nil
 }

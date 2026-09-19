@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -266,5 +267,65 @@ func TestAltDelOnALinkUnlinks(t *testing.T) {
 	press(m, "y")
 	if _, err := os.Stat(projects[0].File); !os.IsNotExist(err) {
 		t.Errorf("the link's file is still there: %v", err)
+	}
+}
+
+// alt+del on the running home target is refused before anything closes: the
+// file cannot lose its home, and the close would end the workspace for a
+// delete that then does not happen.
+func TestAltDelRefusesTheHomeTargetBeforeClosingIt(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:alpha", "sh")
+	m, file := notesProject(t, rt)
+	before := fileText(t, file)
+
+	m, _ = press(m, "tab")
+	m, cmd := press(m, "alt+delete")
+	if cmd != nil {
+		t.Fatalf("footer = %q, want the refusal and no close planned", footer(m))
+	}
+	if f := footer(m); !strings.Contains(f, "home") {
+		t.Errorf("footer = %q, want the refusal naming the missing home", f)
+	}
+	if len(rt.Closed) != 0 || fileText(t, file) != before {
+		t.Errorf("closed %v, file changed %v; want neither", rt.Closed, fileText(t, file) != before)
+	}
+}
+
+// alt+del on a running project waits for a host that could not list: what
+// that host holds may be open, and no close reaches it (decisions.md D89).
+func TestAltDelWaitsForAHostThatCouldNotList(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	wm.InstancesErr = errors.New("went away")
+	m = survey(m)
+
+	m, cmd := press(m, "alt+delete")
+	if f := footer(m); cmd != nil || !strings.Contains(f, "wait for the host before deleting") {
+		t.Fatalf("footer = %q, want the refusal and no close planned", f)
+	}
+	if len(rt.Closed) != 0 {
+		t.Errorf("runtime closed %v, want nothing", rt.Closed)
+	}
+}
+
+// alt+del on a target that closed since the last survey has nothing to
+// close: it asks as for a target that is not open, and y removes the entry.
+func TestAltDelOnATargetClosedSinceAsks(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	notes := rt.Add("notes", "less")
+	m, file := notesProject(t, rt)
+	rt.Remove(notes)
+
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down")
+	m, cmd := press(m, "alt+delete")
+	m = run(m, cmd)
+	if f := footer(m); !strings.Contains(f, `delete target "notes" of alpha?`) {
+		t.Fatalf("footer = %q, want the question", f)
+	}
+	m, _ = press(survey(m), "y")
+	if body := fileText(t, file); strings.Contains(body, "notes") {
+		t.Errorf("file = %q, want notes gone; footer %q", body, footer(m))
 	}
 }

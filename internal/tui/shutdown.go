@@ -266,17 +266,24 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	c, projects, root := m.core, m.projects, m.stateRoot
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		st := loadedState(root)
-		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
-		if err != nil {
-			asked.err = err
-			return asked
-		}
-		asked.report, asked.plan = report, c.ShutdownPlan(report, asked.project, asked.scope)
+		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+			return c.ShutdownPlan(r, asked.project, asked.scope)
+		})
 		return asked
 	}
+}
+
+// surveyPlan surveys what is open now, attachments included, and makes the
+// plan from what it found. It runs off the update loop.
+func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) (core.Report, []core.CloseStep, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	st := loadedState(root)
+	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
+	if err != nil {
+		return core.Report{}, nil, err
+	}
+	return report, plan(report), nil
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -391,6 +398,8 @@ func (m Model) shutdownScreen() string {
 		}
 	case shutConfirm:
 		switch {
+		case s.running && s.one:
+			return say(th.Meta, "closing…")
 		case s.running:
 			return say(th.Meta, "shutting down…")
 		case !s.planned:
