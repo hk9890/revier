@@ -36,6 +36,6 @@ and return nothing:
 
 ## README scope
 
-`README.md` describes what revier is, how to install a release, and how to use
-it. Building from source, the layer model, the manual driver, and cutting a
-release are `docs/`, not README.
+`README.md` describes what revier is, how to install a release, how to use
+it, and the two commands that build it from source. The layer model, the
+manual driver, and cutting a release are `docs/`, not README.

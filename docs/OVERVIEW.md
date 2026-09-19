@@ -25,10 +25,11 @@ A findability map: where things live, and how to search for them.
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 
-## The three ports
+## The ports
 
-`Host` (`pkg/revier/host.go`) provides instances of targets. `Runtime` and
-`WindowController` are the same interface with different providers behind them.
+`Host` (`pkg/revier/host.go`) provides instances of targets. `Runtime` is a
+`Host` with `Capabilities`, the only one whose instances carry panels;
+`WindowController` is a `Host` by another name, so the wiring states the role.
 `AgentProbe` (`pkg/revier/agent.go`) reads a panel and reports what an agent is
 doing. `Remote` (`pkg/revier/remote.go`) is the revier on another machine,
 asked about the projects that live there.

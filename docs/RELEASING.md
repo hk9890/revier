@@ -12,11 +12,9 @@ from `actions/attest-build-provenance`. Archive names —
 the right asset. Version injection: `internal/build`, stamped by
 `.goreleaser.yaml` in a release and by `mise run build` locally.
 
-Two settings that look wrong and are not: cosign is pinned to **v2.6.3**
+One setting that looks wrong and is not: cosign is pinned to **v2.6.3**
 because v3 defaults to `--new-bundle-format`, which the `--output-signature`
-and `--output-certificate` flags in `.goreleaser.yaml` do not accept; and the
-provenance step keeps `continue-on-error` because attestation is unavailable
-on a user-owned **private** repository.
+and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 
 ## Cut a release
 
