@@ -59,3 +59,35 @@ func TestInspectReturnsWithoutADeadlineOfItsCaller(t *testing.T) {
 		t.Errorf("Inspect took %v, want the listing's own bound", took)
 	}
 }
+
+// A revier whose working directory was removed - a worktree it was started
+// in - still lists: the command runs in the home directory, not in revier's.
+func TestInspectListsWhenTheWorkingDirectoryWasRemoved(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		`[ "$(pwd -P)" = "$(cd "$HOME" && pwd -P)" ] || exit 1` + "\n" +
+		`echo '[{"pid":101,"status":"busy"}]'` + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	removed := filepath.Join(t.TempDir(), "worktree")
+	if err := os.Mkdir(removed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(removed)
+	if err := os.Remove(removed); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusRunning {
+		t.Errorf("status = %v, want running", got.Status)
+	}
+}

@@ -261,6 +261,10 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
+	// The listing covers every session wherever it runs, so it runs in the
+	// home directory rather than in revier's own, which a removed worktree
+	// can take away and fail every probe until revier is restarted.
+	cmd.Dir, _ = os.UserHomeDir()
 	cmd.WaitDelay = waitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
