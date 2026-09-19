@@ -116,7 +116,10 @@ a project opens its home target, on a target runs it, and on an agent makes its
 tab current and raises its window (D74). alt+e, or the project's name over the
 pane, opens the project screen: the project file as the config screen is
 `config.toml`, with the shared targets shown beside what the project changes of
-them (D81). alt+d deletes the project after a confirmation (D30).
+them (D81). del closes the row under the cursor - a project, a target, an
+attached window or an agent's tab - and alt+del deletes what the configuration
+holds of it: a project's file, which for a link is the link alone, or a target
+the project file declares. What is open closes first (D93).
 The sessions screen is the three `revier session` commands on the surface: the
 saved sessions, a pane with the restore plan for the one under the cursor, Enter
 to restore it and a save button on its top line (D46, D49). The shutdown wizard

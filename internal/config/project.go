@@ -186,14 +186,25 @@ func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetNa
 // target of its own goes, and an override leaves the shared target as it is
 // in config.toml.
 func RemoveProjectTarget(file string, shared []map[string]any, name revier.TargetName) (core.Project, error) {
-	return editProject(file, shared, func(lines []string, f projectFile) ([]string, error) {
+	return editProject(file, shared, removeTarget(name), nil)
+}
+
+// CheckRemoveProjectTarget is why RemoveProjectTarget would refuse, with
+// nothing written: the home target, or one a tab is inside, cannot go.
+func CheckRemoveProjectTarget(file string, shared []map[string]any, name revier.TargetName) error {
+	_, _, err := editedProject(file, shared, removeTarget(name), nil)
+	return err
+}
+
+func removeTarget(name revier.TargetName) func([]string, projectFile) ([]string, error) {
+	return func(lines []string, f projectFile) ([]string, error) {
 		i := findTarget(f.targets, name)
 		if i < 0 {
 			return nil, fmt.Errorf("target %q is config.toml's; the project file does not declare it", name)
 		}
 		e := targetEntries(lines)[i]
 		return dropLines(lines, e.start, e.end), nil
-	}, nil)
+	}
 }
 
 // projectFile is a project file's own targets, as typed and as TOML decoded
@@ -228,25 +239,35 @@ func (f projectFile) rawOf(i int) map[string]any {
 // result loads no worse than the file did, and check, when given, accepts the
 // project it decodes to and the one it prepares to.
 func editProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, error) {
-	data, err := os.ReadFile(file)
+	p, text, err := editedProject(file, shared, change, check)
 	if err != nil {
 		return core.Project{}, err
 	}
+	return p, replaceFile(file, text)
+}
+
+// editedProject is editProject's change and its checks, with nothing
+// written: the project and the file's text after it.
+func editedProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, []byte, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return core.Project{}, nil, err
+	}
 	own, _, err := decodeProject(data, nil)
 	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", file, err)
+		return core.Project{}, nil, fmt.Errorf("%s: %w", file, err)
 	}
 	var raw map[string]any
 	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", file, err)
+		return core.Project{}, nil, fmt.Errorf("%s: %w", file, err)
 	}
 	lines := strings.Split(string(data), "\n")
 	if len(targetEntries(lines)) != len(own.Targets) {
-		return core.Project{}, fmt.Errorf("%s: the targets are not written as [[target]] tables; change them by hand", file)
+		return core.Project{}, nil, fmt.Errorf("%s: the targets are not written as [[target]] tables; change them by hand", file)
 	}
 	lines, err = change(lines, projectFile{targets: own.Targets, raw: tablesOf(raw["target"]), link: own.Remote != nil})
 	if err != nil {
-		return core.Project{}, fmt.Errorf("%s: %w", file, err)
+		return core.Project{}, nil, fmt.Errorf("%s: %w", file, err)
 	}
 	text := []byte(strings.Join(lines, "\n"))
 	// Loading no longer refuses a project, so the edit is what refuses: an
@@ -256,7 +277,7 @@ func editProject(file string, shared []map[string]any, change func([]string, pro
 	// with two broken targets is repaired one at a time.
 	p := loadProject(file, text, shared)
 	if probs := newProblems(loadProject(file, data, shared), p); len(probs) > 0 {
-		return core.Project{}, fmt.Errorf("not written: %w", errors.Join(probs...))
+		return core.Project{}, nil, fmt.Errorf("not written: %w", errors.Join(probs...))
 	}
 	if check != nil {
 		decoded, _, err := decodeProject(text, shared)
@@ -264,10 +285,10 @@ func editProject(file string, shared []map[string]any, change func([]string, pro
 			err = check(decoded, p)
 		}
 		if err != nil {
-			return core.Project{}, fmt.Errorf("%s: %w", file, err)
+			return core.Project{}, nil, fmt.Errorf("%s: %w", file, err)
 		}
 	}
-	return p, replaceFile(file, text)
+	return p, text, nil
 }
 
 // overrideOf is what a project file writes for t, a target config.toml has

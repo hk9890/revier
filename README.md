@@ -108,9 +108,14 @@ machine. Esc clears the section's filter, then brings the cursor back to the
 projects. alt+e, or a click on the project's name at the top of the pane,
 opens the project screen: its name, path and git URL, and every target it has,
 the ones from `config.toml` included. A change there is written to the
-project's own file at once, and a new name renames the file. alt+d deletes the
-project, after asking. A configured action key runs the
-action against the selected project.
+project's own file at once, and a new name renames the file. del closes the row
+under the cursor: a project, a target, an attached window or an agent's tab. It
+asks first when the close ends an agent or a whole project. alt+del (or alt+d)
+deletes what the configuration holds of the row, after asking, and closes it
+first when it is open. On a project it deletes the project file. On a link it
+removes only the link and changes nothing on the host. On a target it removes
+the target from the project file; a target from `config.toml` is not deleted.
+A configured action key runs the action against the selected project.
 
 The top line holds what is not about one project, each with its key: **new**
 (alt+n) adds a project on this machine, **remote** (alt+r)

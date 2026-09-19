@@ -315,8 +315,11 @@ func (m Model) footer() string {
 	if m.restoring != "" || m.saving {
 		return m.progressLine()
 	}
-	if m.shut.running {
+	if m.shut.running && m.shut.saves() {
 		return m.theme.Meta.Render(" saving the session when it changed, and closing…")
+	}
+	if m.shut.running {
+		return m.theme.Meta.Render(" closing…")
 	}
 	if m.copied > 0 {
 		unit := "characters"
@@ -343,7 +346,7 @@ func (m Model) footer() string {
 	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Edit, m.keys.Delete)
+	keys = append(keys, m.keys.Close, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 

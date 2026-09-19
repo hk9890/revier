@@ -261,6 +261,75 @@ func TestShutdownClosesATabWithItsWorkspaceOrAlone(t *testing.T) {
 	}
 }
 
+// del on a target closes that target alone, with the agent it holds.
+func TestClosePlanClosesOneTarget(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+
+	plan := c.ClosePlan(report, "revier", core.CloseRow{Target: "home"})
+	if got := stepNames(plan); !slices.Equal(got, []string{"home"}) || len(plan[0].Agents) != 1 {
+		t.Fatalf("plan = %+v, want home with its agent", plan)
+	}
+	c.Shutdown(context.Background(), plan, 0)
+	if len(rt.Closed) != 1 || len(wm.Closed) != 0 {
+		t.Errorf("runtime closed %v, window host closed %v; want the workspace alone", rt.Closed, wm.Closed)
+	}
+}
+
+// A tab target closes its tab and leaves the workspace it lives in.
+func TestClosePlanClosesATabAlone(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		agent("1", "", ""),
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "taskmgr-ui", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
+	)
+	c := &core.Core{Runtime: rt}
+	projects := []core.Project{prepared(t, tabProject())}
+
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+	if got := stepNames(plan); !slices.Equal(got, []string{"tickets#2"}) || plan[0].Action != core.ClosePanel {
+		t.Errorf("plan = %+v, want the tab's panel", plan)
+	}
+}
+
+// An agent closes its panel; the workspace and its shell stay.
+func TestClosePlanClosesOneAgent(t *testing.T) {
+	c, _, _, projects := openDesktop(t, revier.StatusRunning)
+	report := survey(t, c, projects, nil)
+	a := report.Views[0].Agents[0]
+
+	plan := c.ClosePlan(report, "revier", core.CloseRow{Agent: a.Ref, Panel: a.Panel})
+	if got := stepNames(plan); !slices.Equal(got, []string{"#2"}) || plan[0].Action != core.ClosePanel || !plan[0].Busy() {
+		t.Errorf("plan = %+v, want the busy agent's panel alone", plan)
+	}
+}
+
+// A window attached by hand closes on its own.
+func TestClosePlanClosesAnAttachedWindow(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	stray := wm.Add("Meld", "meld")
+	report := survey(t, c, projects, map[revier.ProjectName][]revier.TargetRef{"revier": {stray}})
+
+	plan := c.ClosePlan(report, "revier", core.CloseRow{Attached: stray})
+	if len(plan) != 1 || plan[0].Ref != stray || plan[0].Action != core.CloseInstance {
+		t.Errorf("plan = %+v, want the attached window", plan)
+	}
+}
+
+// A row with nothing open closes nothing.
+func TestClosePlanOfWhatIsNotOpenIsEmpty(t *testing.T) {
+	c, _, _, _ := openDesktop(t, revier.StatusIdle)
+	projects := []core.Project{prepared(t, agentProject())}
+	c.Runtime = hosttest.NewRuntime("rt")
+	report := survey(t, c, projects, nil)
+
+	for _, row := range []core.CloseRow{{Target: "home"}, {Target: "nothing"}, {Agent: revier.TargetRef{Host: "rt", ID: "1"}, Panel: "2"}} {
+		if plan := c.ClosePlan(report, "revier", row); len(plan) != 0 {
+			t.Errorf("row %+v: plan = %+v, want none", row, plan)
+		}
+	}
+}
+
 // The terminal a shutdown runs in closes last, so the process lives until
 // everything else is closed.
 func TestCloseLastPutsTheCallersOwnTerminalAtTheEnd(t *testing.T) {

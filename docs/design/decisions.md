@@ -558,3 +558,13 @@ of its own fixed only the adapters that had one, and every new adapter had to
 copy it. The TUI reads its start project and then moves to the home
 directory, or to "/" without one, so no child can inherit a directory that
 vanishes.
+
+### D93 — del closes, alt+del deletes, and a delete closes first
+
+One key closes whatever row the cursor is on, and a modifier on it deletes
+what the configuration holds of that row. A delete used to be refused while
+anything ran. It now closes first, through the same plan as a shutdown,
+because a refusal only sends the user to close by hand. A target of
+`config.toml` is every project's, so no project's row deletes it. Unlinking
+touches no file on the host. ctrl+del is not the key because bubbletea v1
+does not read its sequence.

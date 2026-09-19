@@ -53,6 +53,22 @@ type shutdown struct {
 	running bool
 	saved   string // what the save before the close came to
 	closed  core.Closed
+
+	// one is a close del or alt+del asked for (close.go): of the project,
+	// or of its row when pick is set. It starts at the confirm step, or runs
+	// with no step at all, and leaves the surface as it was. drop deletes
+	// what the configuration holds of it once it is closed.
+	one   bool
+	pick  core.CloseRow
+	label string
+	drop  bool
+}
+
+// saves reports a close that saves the session first: the wizard's, and del
+// on a project. One row closed is no change of the session worth recording,
+// and a project about to be deleted is no project a session can restore.
+func (s shutdown) saves() bool {
+	return !s.one || (s.pick == core.CloseRow{} && !s.drop)
 }
 
 // plannedMsg is the survey and plan the confirm step shows, for the choice
@@ -86,21 +102,31 @@ var scopeRows = []struct {
 
 // openShutdown is the "shutdown" button and alt+q.
 func (m Model) openShutdown() (tea.Model, tea.Cmd) {
-	m.err = nil
-	if m.saving {
-		m.err = errors.New("a save is still running; shut down once it is done")
+	if m.err = m.refuseSave(); m.err != nil {
 		return m, nil
 	}
-	// The save before the close would record a desktop half restored, and the
-	// restore would open again what the shutdown closes.
-	if m.restoring != "" {
-		m.err = fmt.Errorf("the restore of %s is still running; shut down once it is done", m.restoring)
+	if m.shut.running {
+		m.err = errors.New("a close is still running; shut down once it is done")
 		return m, nil
 	}
 	m.toList()
 	m.dialog = dialogShutdown
 	m.shut = shutdown{}
 	return m, nil
+}
+
+// refuseSave refuses a close that saves the session first while a save or a
+// restore runs.
+func (m Model) refuseSave() error {
+	if m.saving {
+		return errors.New("a save is still running; shut down once it is done")
+	}
+	// The save before the close would record a desktop half restored, and the
+	// restore would open again what the shutdown closes.
+	if m.restoring != "" {
+		return fmt.Errorf("the restore of %s is still running; shut down once it is done", m.restoring)
+	}
+	return nil
 }
 
 // openProjects are the projects with something open, in the surface's order:
@@ -168,6 +194,10 @@ func (m Model) shutdownKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // to the surface.
 func (m *Model) shutBack() {
 	s := &m.shut
+	if s.one {
+		m.dialog, *s = dialogNone, shutdown{}
+		return
+	}
 	switch s.step {
 	case shutKind, shutDone:
 		m.dialog = dialogNone
@@ -236,17 +266,24 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	c, projects, root := m.core, m.projects, m.stateRoot
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		st := loadedState(root)
-		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
-		if err != nil {
-			asked.err = err
-			return asked
-		}
-		asked.report, asked.plan = report, c.ShutdownPlan(report, asked.project, asked.scope)
+		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+			return c.ShutdownPlan(r, asked.project, asked.scope)
+		})
 		return asked
 	}
+}
+
+// surveyPlan surveys what is open now, attachments included, and makes the
+// plan from what it found. It runs off the update loop.
+func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) (core.Report, []core.CloseStep, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	st := loadedState(root)
+	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
+	if err != nil {
+		return core.Report{}, nil, err
+	}
+	return report, plan(report), nil
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -271,10 +308,14 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 func (m Model) shutRun() (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, report, plan := m.core, m.stateRoot, s.report, s.plan
+	c, root, report, plan, saves := m.core, m.stateRoot, s.report, s.plan, s.saves()
 	return m, func() tea.Msg {
+		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
+		if !saves {
+			return shutdownMsg{closed: c.Shutdown(ctx, plan, core.CloseWait)}
+		}
 		st := loadedState(root)
 		stored, saved, _, err := c.SaveChanged(ctx, root, report, st.Current, time.Now())
 		if err != nil {
@@ -287,7 +328,6 @@ func (m Model) shutRun() (tea.Model, tea.Cmd) {
 		case stored.ID != "":
 			note = "session " + stored.ID + " already holds what was open"
 		}
-		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
 		closing, stop := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer stop()
 		return shutdownMsg{saved: note, closed: c.Shutdown(closing, plan, core.CloseWait)}
@@ -301,6 +341,9 @@ func (m Model) shutRun() (tea.Model, tea.Cmd) {
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
+	if s.one {
+		return m.closed(msg)
+	}
 	if msg.err != nil {
 		m.err = msg.err
 		return m, nil
@@ -315,6 +358,9 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 // shutdownTitle is the question the step asks, on the line over the rule.
 func (m Model) shutdownTitle() string {
 	s := m.shut
+	if s.one {
+		return m.closeTitle()
+	}
 	switch s.step {
 	case shutKind:
 		return "What to shut down?"
@@ -354,6 +400,8 @@ func (m Model) shutdownScreen() string {
 		}
 	case shutConfirm:
 		switch {
+		case s.running && s.one:
+			return say(th.Meta, "closing…")
 		case s.running:
 			return say(th.Meta, "shutting down…")
 		case !s.planned:
@@ -362,8 +410,11 @@ func (m Model) shutdownScreen() string {
 			return say(th.NameDim, "Nothing to close.")
 		}
 		run := "Shut down"
+		if s.one {
+			run = m.closeVerb()
+		}
 		if busy := core.Busy(s.plan); len(busy) > 0 {
-			run = "Shut down anyway: " + core.Count(busyAgents(busy), "busy agent")
+			run += " anyway: " + core.Count(busyAgents(busy), "busy agent")
 		}
 		rows = []string{run, "Cancel"}
 	case shutDone:
@@ -401,7 +452,11 @@ func (m Model) shutdownDetail() string {
 			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")
 		}
 	case s.step == shutConfirm && s.planned:
-		b.WriteString(th.Header.Render("Shutdown plan") + "\n")
+		header := "Shutdown plan"
+		if s.one {
+			header = "Close plan"
+		}
+		b.WriteString(th.Header.Render(header) + "\n")
 		if len(s.plan) == 0 {
 			b.WriteString(hang("", "nothing is open", w, th.Meta) + "\n")
 		}
@@ -418,7 +473,12 @@ func (m Model) shutdownDetail() string {
 				b.WriteString(planRow(th, "", th.ProjectName.Render(a.State.Harness), state, a.State.Activity, th.Path, w) + "\n")
 			}
 		}
-		b.WriteString(hang("", "\nthe session is saved first when it changed; "+contractHome(session.Dir(m.stateRoot)), w, th.Meta) + "\n")
+		switch {
+		case s.saves():
+			b.WriteString(hang("", "\nthe session is saved first when it changed; "+contractHome(session.Dir(m.stateRoot)), w, th.Meta) + "\n")
+		case s.drop:
+			b.WriteString(hang("", "\nthen "+m.dropNote(s.project, s.pick.Target), w, th.Meta) + "\n")
+		}
 	default:
 		b.WriteString(th.Header.Render("Shutdown") + "\n")
 		b.WriteString(hang("", "Saves the session when it changed, then closes what you choose. Esc goes back a step.", w, th.Meta) + "\n")

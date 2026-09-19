@@ -27,6 +27,7 @@ type keyMap struct {
 	Back     key.Binding
 	Quit     key.Binding
 	Edit     key.Binding
+	Close    key.Binding
 	Delete   key.Binding
 
 	// actions are the configured action keys, in configuration order.
@@ -50,12 +51,18 @@ func newKeyMap(actions []config.Action) keyMap {
 		Back: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Quit: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		// Alt and a letter, because every other free key is spoken for: a
-		// bare letter filters, del and ctrl+e edit the query, and the ctrl
-		// chords are where target keys and configured actions live. The
-		// surface matches both before the query is offered the key, so the
-		// letter never reaches the filter.
-		Edit:   key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "edit")),
-		Delete: key.NewBinding(key.WithKeys("alt+d"), key.WithHelp("alt+d", "delete")),
+		// bare letter filters, ctrl+e edits the query, and the ctrl chords are
+		// where target keys and configured actions live. The surface matches
+		// both before the query is offered the key, so the letter never
+		// reaches the filter.
+		Edit: key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "edit")),
+		// del closes what is open, and alt+del deletes what the configuration
+		// holds. del is the query's forward delete as well, and closes only
+		// with nothing right of the query's cursor, where a forward delete has
+		// nothing to delete. ctrl+del cannot be a key: bubbletea does not read
+		// its sequence.
+		Close:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "close")),
+		Delete: key.NewBinding(key.WithKeys("alt+delete", "alt+d"), key.WithHelp("alt+del", "delete")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {
@@ -99,7 +106,7 @@ func (k keyMap) claims(c core.Chord) bool {
 
 // own is every binding of the surface's own, the action bar's aside.
 func (k keyMap) own() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Delete}
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each
