@@ -65,6 +65,20 @@ func DecodeTargets(shared []map[string]any) ([]revier.Target, error) {
 	return out, nil
 }
 
+// ListTargets is every [[target]] config.toml writes, typed, in file order,
+// for the config screen. One validateShared refuses for its values is its name
+// alone, so the screen still lists it and can delete it (decisions.md D85).
+func ListTargets(shared []map[string]any) []revier.Target {
+	out := make([]revier.Target, len(shared))
+	for i, t := range shared {
+		if err := recode(t, &out[i]); err != nil {
+			name, _ := t["name"].(string)
+			out[i] = revier.Target{Name: revier.TargetName(name)}
+		}
+	}
+	return out
+}
+
 // AddTarget writes a new shared target at the end of config.toml, which must
 // still hold the shared targets was.
 func AddTarget(root string, was []map[string]any, t revier.Target) (TargetsWritten, error) {
@@ -121,11 +135,7 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	if len(targetEntries(lines)) != len(cfg.Targets) {
 		return TargetsWritten{}, fmt.Errorf("%s: the shared targets are not written as [[target]] tables; change them by hand", path)
 	}
-	have, err := DecodeTargets(cfg.Targets)
-	if err != nil {
-		return TargetsWritten{}, fmt.Errorf("%s: %w", path, err)
-	}
-	lines, want, err := change(lines, have, cfg.Targets)
+	lines, want, err := change(lines, ListTargets(cfg.Targets), cfg.Targets)
 	if err != nil {
 		return TargetsWritten{}, fmt.Errorf("%s: %w", path, err)
 	}
@@ -137,8 +147,7 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	if err := problemsAdded(cfg, next); err != nil {
 		return TargetsWritten{}, fmt.Errorf("%s: %w", path, err)
 	}
-	got, err := DecodeTargets(next.Targets)
-	if err != nil || !sameTargets(got, want) {
+	if !sameTargets(ListTargets(next.Targets), want) {
 		return TargetsWritten{}, fmt.Errorf("%s: the shared targets did not come out as written; change them by hand", path)
 	}
 	// A shared target is part of every project, so this write can break

@@ -196,7 +196,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 	if err != nil {
 		return Workspace{}, err
 	}
-	snap, err := c.snapshot(ctx)
+	snap, err := c.answered(ctx, host.Name())
 	if err != nil {
 		return Workspace{}, err
 	}
@@ -225,7 +225,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[rev
 	if c.Runtime == nil {
 		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
 	}
-	snap, err := c.snapshot(ctx)
+	snap, err := c.answered(ctx, c.Runtime.Name())
 	if err != nil {
 		return Workspace{}, err
 	}

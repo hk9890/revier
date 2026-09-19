@@ -133,3 +133,18 @@ func TestEscWalksTheShutdownWizardBack(t *testing.T) {
 		t.Errorf("bar = %q, want the surface", bar)
 	}
 }
+
+// A shutdown's answer starts no survey: the timer's chain shows what closed,
+// and a survey started here would be a second chain that never ends.
+func TestAShutdownStartsNoSecondSurvey(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	m, _ = press(m, "alt+q")
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	m, cmd = press(m, "enter")
+	if _, after := m.Update(cmd()); after != nil {
+		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
+	}
+}

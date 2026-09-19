@@ -49,7 +49,7 @@ const MaxAge = 10 * time.Second
 // Probe reads Claude Code panels. The zero value is ready to use; it holds the
 // last listing, so it is shared by pointer.
 type Probe struct {
-	// clock is replaced by tests to pin Since and the listing's age. Nil
+	// clock is replaced by tests to pin the listing's age. Nil
 	// means time.Now.
 	clock func() time.Time
 
@@ -96,7 +96,8 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title), Since: p.now()}
+	// No Since: the listing says what the agent does now, not since when.
+	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status = Status(s.Status)
 	}

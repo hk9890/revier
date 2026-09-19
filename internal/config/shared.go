@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -68,7 +69,8 @@ func validateShared(shared []map[string]any) []error {
 // home for every link and for no local project.
 func validateRemoteKeys(name string, remote map[string]any) []error {
 	var errs []error
-	for k := range remote {
+	// Sorted: problemsAdded compares the joined text of two parses.
+	for _, k := range slices.Sorted(maps.Keys(remote)) {
 		if k != "window" && k != "runtime" {
 			errs = append(errs, fmt.Errorf("target %q: [target.remote] holds a window and a runtime realization; %q belongs on the target itself", name, k))
 		}

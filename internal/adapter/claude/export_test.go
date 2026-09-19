@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// SetNow replaces the clock, so a test pins Since and the listing's age.
+// SetNow replaces the clock, so a test pins the listing's age.
 func (p *Probe) SetNow(now func() time.Time) { p.clock = now }
 
 // SetAgents replaces the `claude agents --json` call, so a test answers

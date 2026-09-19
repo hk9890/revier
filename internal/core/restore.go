@@ -96,7 +96,10 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 
 // Restore opens what a saved session recorded, and ends on the project the
 // save was left on, so a restored desktop lands where the saved one was. back
-// is why it could not return there.
+// is why it could not return there. It returns only to a home the session
+// recorded open or that runs now: the project last acted on may have been
+// closed before the save, and a restore launches nothing its plan did not
+// show.
 //
 // It walks the plan in file order and never in parallel: a launch is bound to
 // the window that appears after it, so two at once are two windows neither
@@ -123,7 +126,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		out = append(out, res)
 	}
 	if p, ok := projectNamed(projects, s.Current); ok {
-		if home, has := p.Home(); has {
+		if home, has := p.Home(); has && c.returnable(ctx, s, p, home.Name, l) {
 			if res := c.restoreLaunch(ctx, p, RestoreStep{Project: p.Name, Target: home.Name}, l); res.Err != nil {
 				back = fmt.Errorf("could not return to %s: %w", s.Current, res.Err)
 			}
@@ -262,6 +265,32 @@ func Count(n int, noun string) string {
 		return fmt.Sprintf("1 %s", noun)
 	}
 	return fmt.Sprintf("%d %ss", n, noun)
+}
+
+// returnable reports whether a restore may end on the project's home: the
+// session recorded it open, so the plan showed it, or it runs now, so the
+// return raises it and launches nothing.
+func (c *Core) returnable(ctx context.Context, s session.Session, p Project, home revier.TargetName, l Ledger) bool {
+	if recorded(s, p.Name, home) {
+		return true
+	}
+	running, err := c.Running(ctx, p, home, l.Bound(p.Name))
+	return err == nil && running
+}
+
+// recorded reports whether the session recorded the target of the project open.
+func recorded(s session.Session, p revier.ProjectName, t revier.TargetName) bool {
+	for _, sp := range s.Projects {
+		if sp.Name != p {
+			continue
+		}
+		for _, st := range sp.Targets {
+			if st.Name == t {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func projectNamed(projects []Project, name revier.ProjectName) (Project, bool) {
