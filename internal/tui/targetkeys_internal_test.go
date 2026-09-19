@@ -90,3 +90,37 @@ func TestTypedTextIsNoChord(t *testing.T) {
 		}
 	}
 }
+
+// Two projects may give one chord to two targets. A press means the
+// highlighted project's own, whichever the vocabulary kept; a chord that only
+// folds to the press yields to a target that declares it outright, as
+// targetKeys binds it.
+func TestAChordMeansTheHighlightedProjectsOwnTarget(t *testing.T) {
+	window := func(class string) *revier.Realization {
+		return &revier.Realization{Launch: []string{class}, Match: revier.Match{Class: "^" + class + "$"}}
+	}
+	a := core.PrepareProject(revier.Project{Name: "a", Path: "/a", Targets: []revier.Target{
+		{Name: "editor", Key: "ctrl-o", Window: window("code")},
+	}})
+	b := core.PrepareProject(revier.Project{Name: "b", Path: "/b", Targets: []revier.Target{
+		{Name: "web", Key: "ctrl-o", Window: window("firefox")},
+	}})
+	c := core.PrepareProject(revier.Project{Name: "c", Path: "/c", Targets: []revier.Target{
+		{Name: "diff", Key: "ctrl-shift-o", Window: window("meld")},
+	}})
+	m := Model{projects: []core.Project{a, b, c}}
+	m.tkeys = targetKeys(m.projects, newKeyMap(nil))
+
+	for _, tc := range []struct {
+		p    core.Project
+		want revier.TargetName
+	}{
+		{a, "editor"},
+		{b, "web"},
+		{c, m.tkeys["ctrl+o"]}, // ctrl+shift+o is a desktop key only here
+	} {
+		if got := m.ownTarget(tc.p, "ctrl+o", m.tkeys["ctrl+o"]); got != tc.want {
+			t.Errorf("ctrl+o on %s = %q, want %q", tc.p.Name, got, tc.want)
+		}
+	}
+}

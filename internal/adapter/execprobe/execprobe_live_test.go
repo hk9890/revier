@@ -73,43 +73,6 @@ func TestInspectEnforcesTheTimeout(t *testing.T) {
 	}
 }
 
-// A revier whose working directory was removed - a worktree it was started
-// in - still probes: the script runs in the home directory, not in revier's.
-func TestInspectRunsWhenTheWorkingDirectoryWasRemoved(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	removed := filepath.Join(t.TempDir(), "worktree")
-	if err := os.Mkdir(removed, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Chdir(removed)
-	if err := os.Remove(removed); err != nil {
-		t.Fatal(err)
-	}
-	p := execprobe.New("aider", script(t, `[ "$(pwd -P)" = "$(cd "$HOME" && pwd -P)" ] || exit 1; echo '{"status":"idle"}'`))
-	got, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
-	if err != nil {
-		t.Fatalf("Inspect: %v", err)
-	}
-	if got.Status != revier.StatusIdle {
-		t.Errorf("status = %v, want idle", got.Status)
-	}
-}
-
-// A home directory that does not exist leaves the script where revier runs,
-// rather than failing it.
-func TestInspectRunsWhenTheHomeDirectoryIsMissing(t *testing.T) {
-	t.Setenv("HOME", filepath.Join(t.TempDir(), "gone"))
-	p := execprobe.New("aider", script(t, `echo '{"status":"idle"}'`))
-	got, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
-	if err != nil {
-		t.Fatalf("Inspect: %v", err)
-	}
-	if got.Status != revier.StatusIdle {
-		t.Errorf("status = %v, want idle", got.Status)
-	}
-}
-
 // A probe that leaves a process behind in its own session, outside the group
 // the timeout kills, still lets Inspect return: the pipe that process holds
 // open is abandoned shortly after the probe itself exits.

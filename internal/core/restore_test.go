@@ -210,3 +210,20 @@ func TestSessionGapsNotesEveryGap(t *testing.T) {
 		t.Errorf("notes = %q, want %q", notes, want)
 	}
 }
+
+// A project last acted on and closed before the save is not reopened: the
+// restore launches nothing its plan did not show.
+func TestRestoreDoesNotLaunchACurrentHomeItDidNotRecord(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
+		{Name: "notes"},
+	}}}}
+
+	if _, _, back := restoreOf(t, c, s); back != nil {
+		t.Fatalf("back = %v", back)
+	}
+	if len(rt.Opened) != 1 || rt.Opened[0].Name != "notes:revier" {
+		t.Errorf("opened = %+v, want notes alone: home was not open at the save", rt.Opened)
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"slices"
 	"time"
@@ -25,25 +26,7 @@ func cmdTUI(a *app) error {
 	if err != nil {
 		return err
 	}
-	// The popup's terminal says so in the environment, which is read and
-	// dropped here: what the surface launches must not take it for the
-	// popup. The value is the project `revier popup` resolved at the
-	// keypress, when the focused window was still the user's.
-	mark, popup := os.LookupEnv(core.PopupEnv)
-	_ = os.Unsetenv(core.PopupEnv)
-	// The project of the working directory is read from the files, before
-	// the first frame. The one of the focused window lists every host, so
-	// the surface asks for it once it shows; in the popup it would find the
-	// popup itself, so the popup's answer stands. Neither is an error to
-	// miss: the TUI opens on the first row instead.
-	start := revier.ProjectName("")
-	if popup {
-		if p, ok := a.project(revier.ProjectName(mark)); ok {
-			start = p.Name
-		}
-	} else if p, ok := a.resolveHere(); ok {
-		start = p.Name
-	}
+	start, popup := tuiStart(a)
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectRuntime(ctx, want, runtimeAdapters())
@@ -64,4 +47,47 @@ func cmdTUI(a *app) error {
 	}
 	_, err = tea.NewProgram(m, opts...).Run()
 	return err
+}
+
+// tuiStart reads what the surface needs from where it was started - the
+// project it opens on, and whether it is the popup - and then leaves.
+//
+// The popup's terminal says so in the environment, which is read and dropped
+// here: what the surface launches must not take it for the popup. The value
+// is the project `revier popup` resolved at the keypress, when the focused
+// window was still the user's.
+//
+// The project of the working directory is read from the files, before the
+// first frame. The one of the focused window lists every host, so the surface
+// asks for it once it shows; in the popup it would find the popup itself, so
+// the popup's answer stands. Neither is an error to miss: the TUI opens on
+// the first row instead.
+func tuiStart(a *app) (start revier.ProjectName, popup bool) {
+	mark, popup := os.LookupEnv(core.PopupEnv)
+	_ = os.Unsetenv(core.PopupEnv)
+	if popup {
+		if p, ok := a.project(revier.ProjectName(mark)); ok {
+			start = p.Name
+		}
+	} else if p, ok := a.resolveHere(); ok {
+		start = p.Name
+	}
+	leaveStartDir()
+	return start, popup
+}
+
+// leaveStartDir moves the surface into the home directory, or into "/" when
+// the home is unset or missing. The start directory is often a worktree, and
+// the surface outlives it: once it is removed, every process the surface
+// starts inherits a directory that no longer exists, and git, claude and a
+// probe script each refuse to run in one.
+func leaveStartDir() {
+	home, err := os.UserHomeDir()
+	if err == nil {
+		err = os.Chdir(home)
+	}
+	if err != nil {
+		slog.Warn("tui: home directory", "err", err)
+		_ = os.Chdir("/")
+	}
 }

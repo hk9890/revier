@@ -119,7 +119,7 @@ pane, opens the project screen: the project file as the config screen is
 them (D81). del closes the row under the cursor - a project, a target, an
 attached window or an agent's tab - and alt+del deletes what the configuration
 holds of it: a project's file, which for a link is the link alone, or a target
-the project file declares. What is open closes first (D92).
+the project file declares. What is open closes first (D93).
 The sessions screen is the three `revier session` commands on the surface: the
 saved sessions, a pane with the restore plan for the one under the cursor, Enter
 to restore it and a save button on its top line (D46, D49). The shutdown wizard

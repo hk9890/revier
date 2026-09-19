@@ -49,7 +49,7 @@ const MaxAge = 10 * time.Second
 // Probe reads Claude Code panels. The zero value is ready to use; it holds the
 // last listing, so it is shared by pointer.
 type Probe struct {
-	// clock is replaced by tests to pin Since and the listing's age. Nil
+	// clock is replaced by tests to pin the listing's age. Nil
 	// means time.Now.
 	clock func() time.Time
 
@@ -96,7 +96,8 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title), Since: p.now()}
+	// No Since: the listing says what the agent does now, not since when.
+	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status = Status(s.Status)
 	}
@@ -261,15 +262,6 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
-	// The listing covers every session wherever it runs, so it runs in the
-	// home directory rather than in revier's own, which a removed worktree
-	// can take away and fail every probe until revier is restarted. A home
-	// that is unset or gone would fail every probe itself, so it leaves
-	// revier's own.
-	cmd.Dir, _ = os.UserHomeDir()
-	if _, err := os.Stat(cmd.Dir); err != nil {
-		cmd.Dir = ""
-	}
 	cmd.WaitDelay = waitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

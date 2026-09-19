@@ -549,7 +549,17 @@ the command line, the surface and a restore all activate through
 expire - is `core.Settle`, the one function the surface and `revier list`
 call.
 
-### D92 — del closes, alt+del deletes, and a delete closes first
+### D92 — the surface leaves its start directory; a host sets no directory for it
+
+The TUI is often started in a worktree and outlives it. Once the worktree is
+removed, every process it starts inherits a directory that is gone, and git,
+claude and a probe script each refuse to run. Giving each adapter a directory
+of its own fixed only the adapters that had one, and every new adapter had to
+copy it. The TUI reads its start project and then moves to the home
+directory, or to "/" without one, so no child can inherit a directory that
+vanishes.
+
+### D93 — del closes, alt+del deletes, and a delete closes first
 
 One key closes whatever row the cursor is on, and a modifier on it deletes
 what the configuration holds of that row. A delete used to be refused while

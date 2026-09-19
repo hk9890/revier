@@ -335,7 +335,9 @@ func (m Model) shutRun() (tea.Model, tea.Cmd) {
 }
 
 // shutDown takes a shutdown's answer: the result is the pane's, a step that
-// did not close is the footer's too.
+// did not close is the footer's too. The timer's next survey shows what
+// closed; starting one here would add a second survey-tick chain that never
+// ends, as it would for actedMsg.
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
@@ -350,7 +352,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	if _, _, failed := msg.closed.Counts(); failed > 0 {
 		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}
-	return m, m.Survey()
+	return m, nil
 }
 
 // shutdownTitle is the question the step asks, on the line over the rule.

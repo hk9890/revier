@@ -549,8 +549,8 @@ func (m Model) newFileLine(say func(lipgloss.Style, string) string, name revier.
 }
 
 // newTargets says what the written project will run. With shared targets in
-// config.toml the file declares no targets of its own, and the project gets
-// the shared ones.
+// config.toml the project gets the shared ones, and the file declares only
+// a home of its own, when no shared target is home.
 func (m Model) newTargets(name revier.ProjectName) string {
 	if len(m.targets) == 0 {
 		return fmt.Sprintf("an agent, a shell and an editor for %q", name)
@@ -559,7 +559,11 @@ func (m Model) newTargets(name revier.ProjectName) string {
 	for i, t := range m.targets {
 		names[i] = string(t.Name)
 	}
-	return fmt.Sprintf("%q with the shared targets: %s", name, strings.Join(names, ", "))
+	with := "the shared targets"
+	if !config.SharedHome(config.Usable(m.shared)) {
+		with = "its own home and shared targets"
+	}
+	return fmt.Sprintf("%q with %s: %s", name, with, strings.Join(names, ", "))
 }
 
 // choiceRows draws rows to choose from, with the chosen one marked as the

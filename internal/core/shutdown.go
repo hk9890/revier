@@ -419,25 +419,23 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 }
 
 // awaitClosed marks every closed step that is still listed once wait has
-// passed. A listing that fails ends the wait: what it could not see is taken
-// as gone, since the close itself answered without an error. A close that
+// passed. A step whose host cannot list is taken as gone, since the close
+// itself answered without an error; a step whose host answered is judged by
+// that listing, whatever another host did (decisions.md D89). A close that
 // failed on something the listing no longer holds is closed all the same:
 // whether it is gone is the listing's word, not Close's (revier.Closer).
 func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
 	deadline := time.Now().Add(wait)
 	for {
-		snap, err := c.snapshot(ctx)
-		if err != nil {
-			slog.Warn("shutdown: listing after the close", "err", err)
-			for i := range out {
-				out[i].Open = false
-			}
-			return
-		}
+		snap, failed := c.listing(ctx)
 		pending := false
 		for i := range out {
 			r := &out[i]
 			if r.Action == CloseUnsupported {
+				continue
+			}
+			if failed[r.Ref.Host] != nil {
+				r.Open = false
 				continue
 			}
 			still := listed(snap, r.Ref, r.Panel)

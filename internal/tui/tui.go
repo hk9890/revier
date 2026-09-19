@@ -96,7 +96,7 @@ type Model struct {
 	projects  []core.Project
 	stateRoot string
 	actions   []config.Action
-	shared    []map[string]any // config.toml's shared targets, for a project file read again
+	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
 	refresh   time.Duration
 	now       func() time.Time // the clock the double-click window is measured on; a test sets it
 	theme     theme.Theme
@@ -230,8 +230,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
 	_ = m.input.Focus()
-	// config.Load has decoded them already, so this cannot fail.
-	m.targets, _ = config.DecodeTargets(cfg.Targets)
+	m.targets = config.ListTargets(cfg.Targets)
 	m.layout()
 	// The first frame lists every project from its file, before any host
 	// has answered: the survey is a round trip to every linked host, and
@@ -301,7 +300,7 @@ func reloadFiles() tea.Msg {
 // config screen, and every project loaded with them, for the surface.
 func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
 	m.shared = shared
-	m.targets, _ = config.DecodeTargets(shared)
+	m.targets = config.ListTargets(shared)
 	m.projects = projects
 	m.tkeys = targetKeys(m.projects, m.keys)
 }
@@ -1071,8 +1070,11 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		// An action may open anything; the window that appears next is the
 		// project's (claim-on-appear). The launch is recorded now, as the
 		// CLI records it, so core.ClaimWindow runs from the action's start
-		// and not from its exit, which for an editor is hours later.
-		m.apply(state.Launch{Project: project, At: start})
+		// and not from its exit, which for an editor is hours later. A
+		// remote project's action runs on its host and opens no window here.
+		if p.Remote == nil {
+			m.apply(state.Launch{Project: project, At: start})
+		}
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
 			return actedMsg{err: err}

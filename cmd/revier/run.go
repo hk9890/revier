@@ -48,7 +48,11 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	a.launchedAction(p.Name)
+	// A remote project's action runs on its host and opens no window here,
+	// so no window that appears is its to claim.
+	if p.Remote == nil {
+		a.launchedAction(p.Name)
+	}
 	return runAction(a.out, p.Name, name, argv, dir)
 }
 

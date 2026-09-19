@@ -54,10 +54,6 @@ type Config struct {
 	// action stays unbound, the target reaches no project, and the file is
 	// otherwise read whole. `revier doctor` is where these are read.
 	Problems []error `toml:"-"`
-
-	// sharedErr is parallel to Targets: the reason a shared target is
-	// refused, nil where it is sound.
-	sharedErr []error
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -147,10 +143,18 @@ func Load(root string) (*Config, []core.Project, error) {
 // Shared is the shared targets every project gets: Targets without the ones
 // validateShared refused.
 func (c *Config) Shared() []map[string]any {
-	out := make([]map[string]any, 0, len(c.Targets))
-	for i, t := range c.Targets {
-		if c.sharedErr[i] == nil {
-			out = append(out, t)
+	return Usable(c.Targets)
+}
+
+// Usable is the shared targets a project gets out of every [[target]]
+// config.toml writes: the ones validateShared does not refuse. A surface that
+// holds the whole list, to edit the file as it is, passes this to the project
+// files.
+func Usable(targets []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(targets))
+	for i, err := range validateShared(targets) {
+		if err == nil {
+			out = append(out, targets[i])
 		}
 	}
 	return out
@@ -190,7 +194,7 @@ func parse(data []byte) (*Config, error) {
 		if pr.Name == "" || pr.Exec == "" {
 			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
 		}
-		cfg.Probes[i].Exec = ExpandHome(pr.Exec)
+		cfg.Probes[i].Exec = probeExec(pr.Exec)
 	}
 
 	if _, err := cfg.Theme(); err != nil {
@@ -205,8 +209,7 @@ func parse(data []byte) (*Config, error) {
 			cfg.Problems = append(cfg.Problems, err)
 		}
 	}
-	cfg.sharedErr = validateShared(cfg.Targets)
-	for _, err := range cfg.sharedErr {
+	for _, err := range validateShared(cfg.Targets) {
 		if err != nil {
 			cfg.Problems = append(cfg.Problems, err)
 		}
@@ -687,6 +690,22 @@ func oneWord(s string) error {
 // httpsUserinfo is an http or https authority with a user part in it:
 // https://user:token@host/...
 var httpsUserinfo = regexp.MustCompile(`^https?://[^/]+@`)
+
+// probeExec is the binary a probe runs. A bare name is looked up on PATH when
+// the probe runs. Any other relative path is read against the home directory
+// rather than against the directory a command runs in, which is the home
+// directory in the TUI and wherever the user is in the CLI.
+func probeExec(exec string) string {
+	exec = ExpandHome(exec)
+	if filepath.IsAbs(exec) || !strings.ContainsRune(exec, filepath.Separator) {
+		return exec
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return exec
+	}
+	return filepath.Join(home, exec)
+}
 
 // ExpandHome resolves a leading "~" against the user's home directory, so a
 // path typed the way it is spoken reaches the file system.

@@ -36,7 +36,7 @@ func (c *Core) GoAgent(ctx context.Context, p Project, a revier.AgentView, _ Bin
 // can bring the user. An instance or a panel gone since it was reported is
 // ErrAgentGone.
 func (c *Core) FocusAgent(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
-	snap, err := c.snapshot(ctx)
+	snap, err := c.answered(ctx, ref.Host)
 	if err != nil {
 		return err
 	}

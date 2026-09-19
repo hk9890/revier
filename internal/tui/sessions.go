@@ -479,6 +479,8 @@ func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
 			mark, markStyle = th.Glyphs.Running+" running", th.Running
 		case r.Action == core.RestoreNoHost:
 			mark = "no host here"
+		case r.Action == core.RestoreRefused:
+			mark = "refused"
 		}
 		op, reason := targetOp(th, r)
 		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), markStyle.Render(mark),

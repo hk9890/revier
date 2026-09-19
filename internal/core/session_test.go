@@ -639,3 +639,39 @@ func TestSaveSessionRefusesAnEmptySave(t *testing.T) {
 		t.Errorf("path %s: %v, want the file written", path, err)
 	}
 }
+
+// A target its project file refuses is a mistake in the file, and the plan
+// says so rather than blaming the machine for having no host.
+func TestRestorePlanNamesARefusedTarget(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	p := prepared(t, agentProject())
+	p.Refuse(1, errors.New("launch renders empty"))
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
+
+	if plan := c.RestorePlan(s, report); len(plan) != 1 || plan[0].Action != core.RestoreRefused {
+		t.Errorf("plan = %+v, want notes refused", plan)
+	}
+}
+
+// One instance can back two targets. Its agents are recorded once, or a
+// restore would resume each conversation twice.
+func TestSessionRecordsTheAgentsOfASharedInstanceOnce(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"))
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	proj := agentProject()
+	proj.Targets[1].Runtime.Match = revier.Match{Title: "^session:revier$"}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report, "")
+
+	if got := s.Conversations(); got != 1 {
+		t.Errorf("conversations = %d in %+v, want the one agent once", got, s.Projects)
+	}
+}
