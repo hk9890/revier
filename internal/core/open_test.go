@@ -14,19 +14,23 @@ import (
 func TestOpenDecidesFromTheProjectAndWhetherItRuns(t *testing.T) {
 	here := t.TempDir()
 	home := revier.Target{Name: "home", Home: true, Runtime: &revier.Realization{Name: "s", Launch: []string{"x"}, Match: revier.Match{Title: "^s$"}}}
-	never := func() bool { t.Error("running asked where the answer is known without it"); return false }
+	never := func() (bool, error) { t.Error("running asked where the answer is known without it"); return false, nil }
+	answer := func(up bool, err error) func() (bool, error) { return func() (bool, error) { return up, err } }
 	for name, tc := range map[string]struct {
 		project revier.Project
-		running func() bool
+		running func() (bool, error)
 		want    core.Opening
 		refused string
 	}{
 		"a checkout here":                   {revier.Project{Name: "p", Path: here, Targets: []revier.Target{home}}, never, core.OpenGo, ""},
 		"a link":                            {revier.Project{Name: "p", Path: "/on/the/host", Remote: &revier.Link{Host: "box"}, Targets: []revier.Target{home}}, never, core.OpenGo, ""},
 		"a missing checkout with a git_url": {revier.Project{Name: "p", Path: "/gone", GitURL: "git@x:p.git", Targets: []revier.Target{home}}, never, core.OpenClone, ""},
-		"a missing checkout that runs":      {revier.Project{Name: "p", Path: "/gone", Targets: []revier.Target{home}}, func() bool { return true }, core.OpenGo, ""},
-		"a missing checkout, stopped":       {revier.Project{Name: "p", Path: "/gone", Targets: []revier.Target{home}}, func() bool { return false }, 0, "git_url"},
-		"no home target":                    {revier.Project{Name: "p", Path: here, Targets: []revier.Target{{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}}}}, never, 0, "no home target"},
+		"a missing checkout that runs":      {revier.Project{Name: "p", Path: "/gone", Targets: []revier.Target{home}}, answer(true, nil), core.OpenGo, ""},
+		"a missing checkout, stopped":       {revier.Project{Name: "p", Path: "/gone", Targets: []revier.Target{home}}, answer(false, nil), 0, "git_url"},
+		// Whether it runs is not known: the refusal is the host's reason, not
+		// a git_url the user would go and add for nothing.
+		"a missing checkout, host not listing": {revier.Project{Name: "p", Path: "/gone", Targets: []revier.Target{home}}, answer(false, errors.New("rt: instances: went away")), 0, "went away"},
+		"no home target":                       {revier.Project{Name: "p", Path: here, Targets: []revier.Target{{Name: "editor", Window: &revier.Realization{Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}}}}, never, 0, "no home target"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := core.Open(core.PrepareProject(tc.project), tc.running)

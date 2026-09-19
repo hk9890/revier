@@ -58,11 +58,16 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// Drop attachments and bindings whose windows are gone, so state does not
 	// accumulate refs to closed windows forever. The settle is made on the
 	// state as it is on disk: another process may have written it since. With
-	// no previous listing nothing is new, so a list claims nothing.
-	if _, err := state.Update(a.stateRoot, func(s *state.State) bool {
-		return a.core.Settle(s, before, report, nil, false, a.projects, time.Now())
-	}); err != nil {
-		slog.Warn("state update", "err", err)
+	// no previous listing nothing is new, so a list claims nothing. The lock
+	// is taken only when the state loaded at startup has something to drop:
+	// a list runs every refresh on a linked host.
+	now := time.Now()
+	if a.core.Settle(a.state, before, report, nil, false, a.projects, now) {
+		if _, err := state.Update(a.stateRoot, func(s *state.State) bool {
+			return a.core.Settle(s, before, report, nil, false, a.projects, now)
+		}); err != nil {
+			slog.Warn("state update", "err", err)
+		}
 	}
 
 	if *asJSON {

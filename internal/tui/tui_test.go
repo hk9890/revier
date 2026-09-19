@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -726,6 +727,30 @@ func TestPollingClaimsNothingOutsideTheBounds(t *testing.T) {
 				t.Errorf("attached = %+v, want nothing claimed", got.Attached)
 			}
 		})
+	}
+}
+
+// A refresh the window host could not answer is not an empty listing: the
+// windows it lists again once it answers were there before, so none is new
+// and none is claimed (decisions.md D89).
+func TestAWindowHostThatFailedOnceClaimsNothingWhenItAnswersAgain(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	wm.Add("Pull requests - Chromium", "chromium")
+	root := stateWith(t, nil)
+	m := refreshed(t, c, projects, root, nil)
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
+	_ = st.Save(root)
+
+	wm.InstancesErr = errors.New("went away")
+	m = survey(m)
+	wm.InstancesErr = nil
+	survey(m)
+	if got, _ := state.Load(root); len(got.Attached["project-00"]) != 0 {
+		t.Fatalf("attached = %+v, want nothing: the window was listed before the host went away", got.Attached)
+	}
+	if got, _ := state.Load(root); got.Launch == nil {
+		t.Fatal("the launch was consumed by a claim of nothing new")
 	}
 }
 

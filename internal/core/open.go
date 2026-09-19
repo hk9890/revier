@@ -27,8 +27,10 @@ const (
 // cloned when the file records where from; else the home target is raised
 // when it runs, since raising touches no directory, and a fresh start is
 // refused rather than made in whatever directory the runtime falls back to.
-// running is asked only then, because it costs a listing.
-func Open(p Project, running func() bool) (Opening, error) {
+// running is asked only then, because it costs a listing; when it cannot
+// answer - its host could not list (D89) - the refusal carries that reason,
+// not a missing git_url.
+func Open(p Project, running func() (bool, error)) (Opening, error) {
 	if p.Invalid != nil {
 		return 0, p.Invalid
 	}
@@ -41,7 +43,11 @@ func Open(p Project, running func() bool) (Opening, error) {
 	if p.GitURL != "" {
 		return OpenClone, nil
 	}
-	if running() {
+	up, err := running()
+	if err != nil {
+		return 0, err
+	}
+	if up {
 		return OpenGo, nil
 	}
 	return 0, fmt.Errorf("project %q: %s does not exist, and the project file records no git_url to clone it from", p.Name, p.Path)

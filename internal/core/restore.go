@@ -13,8 +13,8 @@ import (
 
 // Ledger is where an activation reads and writes what it learns: where a
 // project's targets last landed, the launch still coming up, and the ref or
-// launch each activation leaves. The CLI and the TUI keep it in state; the
-// core keeps none.
+// launch each activation leaves. StateLedger is the one every surface uses
+// (decisions.md D91); a test may hand in another.
 type Ledger interface {
 	Bound(p revier.ProjectName) Bindings
 	Pending(p revier.ProjectName, t revier.TargetName) bool

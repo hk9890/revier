@@ -171,6 +171,13 @@ func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 	if running {
 		return fmt.Errorf("%s is running; close its targets before %s it", name, doing)
 	}
+	// A target whose host could not list may be running (decisions.md D89):
+	// the change waits for the host, not for a guess.
+	for _, t := range v.Targets {
+		if t.Unknown != "" {
+			return fmt.Errorf("%s: %s; wait for the host before %s it", name, t.Unknown, doing)
+		}
+	}
 	if m.pending != nil && m.pending.Project == name && time.Since(m.pending.At) <= core.BindWindow {
 		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
 	}

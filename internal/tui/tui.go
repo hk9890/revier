@@ -18,9 +18,9 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os/exec"
+	"slices"
 	"sort"
 	"time"
 
@@ -104,8 +104,9 @@ type Model struct {
 	spinning  bool // whether a spin tick is out, so a survey starts no second one
 
 	views    []revier.ProjectView // attention first, then config order
-	windows  []revier.Instance    // the window host's listing at the last survey
-	surveyed bool                 // whether a survey has answered: windows holds a listing, and the counts are real
+	windows  []revier.Instance    // the window host's listing at the last survey it answered
+	listed   bool                 // whether the window host has answered once: windows is a listing, and a diff against it means something
+	surveyed bool                 // whether a survey has answered: the counts are real
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
 	pending  *state.Launch                        // the launch still coming up, from state
@@ -346,12 +347,8 @@ func spin() tea.Cmd {
 
 // actedMsg follows a Go, a Focus, or an action; the next survey shows the
 // result. An activation wrote what it learned through the ledger, and the
-// surface takes state in on the update loop; an action's launch is the one
-// write made here, so it never races the claim path.
-type actedMsg struct {
-	err    error
-	launch *state.Launch
-}
+// surface takes state in on the update loop.
+type actedMsg struct{ err error }
 
 // Init surveys immediately; the timer starts once the first survey answers.
 func (m Model) Init() tea.Cmd {
@@ -493,7 +490,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.surveyErr = msg.report.HostErr()
 			m.claimByPolling(msg.report, msg.before)
 			m.views = sorted(m.known(m.uncovered(msg.report.Views)))
-			m.windows, m.surveyed = msg.report.Windows, true
+			m.surveyed = true
+			// The window listing stands only when the window host answered:
+			// one it is missing from is not an empty one, and the next diff
+			// would take every window as new and claim one of them.
+			if m.core.Window == nil || slices.Contains(msg.report.Hosts, m.core.Window.Name()) {
+				m.windows, m.listed = msg.report.Windows, true
+			}
 			m.reload()
 		}
 		// Hidden, nobody reads the answer, and the chain ends here: a
@@ -566,14 +569,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends. An activation wrote
-		// where it landed through the ledger, so the surface takes state in;
-		// an action's launch is written here.
+		// where it landed through the ledger, so the surface takes state in.
 		m.err = msg.err
-		if msg.launch != nil {
-			m.apply(msg)
-		} else {
-			m.takeState()
-		}
+		m.takeState()
 		return m, nil
 	case askedMsg:
 		return m.asked(msg)
@@ -592,10 +590,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clonedMsg:
 		if msg.err != nil {
 			m.err = msg.err
-			return m, nil
-		}
-		if msg.home == "" {
-			m.err = fmt.Errorf("cloned %s; project %q has no home target to open", contractHome(msg.project.Path), msg.project.Name)
 			return m, nil
 		}
 		return m, m.goTarget(msg.project, msg.home)
@@ -625,9 +619,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // gone, of those the survey started from: one written while it listed is the
 // next survey's.
 func (m *Model) claimByPolling(report core.Report, before *state.State) {
-	c, prev, surveyed, projects := m.core, m.windows, m.surveyed, m.projects
+	c, prev, listed, projects := m.core, m.windows, m.listed, m.projects
 	m.updateState(func(st *state.State) bool {
-		return c.Settle(st, before, report, prev, surveyed, projects, time.Now())
+		return c.Settle(st, before, report, prev, listed, projects, time.Now())
 	})
 }
 
@@ -658,9 +652,9 @@ func (m *Model) keep(st *state.State) {
 
 // apply writes an action's launch, which makes its project the current one,
 // as a CLI command makes it: a desktop key pressed next on a window no rule
-// names falls back to it.
-func (m *Model) apply(msg actedMsg) {
-	l := msg.launch
+// names falls back to it. It is written on the update loop, so it never
+// races the claim path.
+func (m *Model) apply(l state.Launch) {
 	m.updateState(func(st *state.State) bool {
 		st.Launched(l.Project, l.Target, l.At)
 		return true
@@ -973,7 +967,16 @@ func (m Model) act() (Model, tea.Cmd) {
 	// nothing to open, so the cursor goes to what it does have, with the
 	// reason in the footer.
 	home, _ := p.Home()
-	open, err := core.Open(p, func() bool { return v.Running })
+	open, err := core.Open(p, func() (bool, error) {
+		// The last survey's word. A home its host could not list is
+		// neither running nor stopped, and the refusal says why.
+		for _, tv := range v.Targets {
+			if !tv.Attached && tv.Name == home.Name && tv.Unknown != "" {
+				return false, errors.New(tv.Unknown)
+			}
+		}
+		return v.Running, nil
+	})
 	if err != nil {
 		m.err = err
 		if errors.Is(err, core.ErrNoHome) {
@@ -1064,7 +1067,7 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		// project's (claim-on-appear). The launch is recorded now, as the
 		// CLI records it, so core.ClaimWindow runs from the action's start
 		// and not from its exit, which for an editor is hours later.
-		m.apply(actedMsg{launch: &state.Launch{Project: project, At: start}})
+		m.apply(state.Launch{Project: project, At: start})
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
 			return actedMsg{err: err}

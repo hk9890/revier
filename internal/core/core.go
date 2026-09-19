@@ -234,7 +234,7 @@ func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
 // by host name.
 type hostErrs map[string]error
 
-// err is every host's failure, in the order the hosts are listed, or nil.
+// err is every host's failure, by host name, or nil.
 func (e hostErrs) err() error {
 	if len(e) == 0 {
 		return nil
@@ -251,12 +251,15 @@ func (e hostErrs) err() error {
 // left out and their failures returned beside it. A host that cannot answer
 // costs its own targets and no other's (decisions.md D89): a survey over the
 // other hosts still stands, and a press on a target of the failed host is
-// refused with its reason.
+// refused with its reason. The failure is logged here, once per host until
+// it changes (logging.Repeat): a survey that degraded is not a survey that
+// failed, so nothing above logs it.
 func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 	s := make(snapshot)
 	failed := hostErrs{}
 	for _, h := range c.allHosts() {
 		in, err := h.Instances(ctx)
+		logging.Repeat("instances\x00"+h.Name(), "instances", err, "host", h.Name())
 		if err != nil {
 			failed[h.Name()] = fmt.Errorf("%s: instances: %w", h.Name(), err)
 			continue

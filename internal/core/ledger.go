@@ -40,7 +40,7 @@ func (l StateLedger) Landed(p revier.ProjectName, t revier.TargetName, ref revie
 func (l StateLedger) load() *state.State {
 	st, err := state.Load(l.Root)
 	if err != nil {
-		slog.Warn("ledger: state load", "err", err, "root", l.Root)
+		slog.Warn("state load", "err", err, "root", l.Root)
 		return &state.State{}
 	}
 	return st
@@ -51,7 +51,7 @@ func (l StateLedger) update(apply func(st *state.State)) {
 		apply(st)
 		return true
 	}); err != nil {
-		slog.Warn("ledger: state update", "err", err, "root", l.Root)
+		slog.Warn("state update", "err", err, "root", l.Root)
 	}
 	if l.Written == nil {
 		return
@@ -65,18 +65,15 @@ func (l StateLedger) update(apply func(st *state.State)) {
 }
 
 // ActivateAgentWaiting is ActivateAgent with the ledger: the project's
-// bindings and whether its home is still coming up are the ledger's, and the
-// instance the agent's panel is in is recorded as where its target landed.
+// bindings and whether its home is still coming up are the ledger's. Nothing
+// is written back: an agent is focused where the survey saw it, and a
+// workspace still coming up is left to the press that launched it.
 func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.AgentView, l Ledger) (Result, error) {
 	homePending := false
 	if home, ok := p.Home(); ok {
 		homePending = l.Pending(p.Name, home.Name)
 	}
-	res, err := c.ActivateAgent(ctx, p, a, l.Bound(p.Name), homePending)
-	if res.Target != "" && !res.Ref.IsZero() {
-		l.Landed(p.Name, res.Target, res.Ref)
-	}
-	return res, err
+	return c.ActivateAgent(ctx, p, a, l.Bound(p.Name), homePending)
 }
 
 // Settle is what a survey settles in state, under one write: refs to windows
