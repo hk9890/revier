@@ -628,35 +628,68 @@ func TestShutdownClosesTheProjectsTheRecheckCouldRead(t *testing.T) {
 	}
 }
 
+// A force says not to refuse, and nothing else. The plan a refusal hands back
+// carries the mark of a step its survey could not read, and the force reads
+// everything again rather than carrying that mark: a host answering once more
+// closes the step the user asked for.
+func TestAForcedCloseReadsAStepARefusalCouldNotRead(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusRunning)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	wm.SetInstancesErr(errors.New("went away"))
+
+	_, err := c.Shutdown(context.Background(), plan, 0, reading(projects))
+	var refused *core.BusyRefusal
+	if !errors.As(err, &refused) {
+		t.Fatalf("shutdown err = %v, want the busy agent to refuse it", err)
+	}
+	i := slices.IndexFunc(refused.Plan, func(s core.CloseStep) bool { return s.Target == "editor" })
+	if i < 0 || refused.Plan[i].Unread == "" {
+		t.Fatalf("refused plan = %+v, want the editor marked as unread", refused.Plan)
+	}
+
+	wm.SetInstancesErr(nil)
+	out, err := c.Shutdown(context.Background(), refused.Plan, 0,
+		core.ShutdownOpts{Force: true, Projects: projects})
+	if err != nil {
+		t.Fatalf("forced shutdown: %v", err)
+	}
+	if closed, open, _ := out.Counts(); closed != 3 || open != 0 {
+		t.Errorf("counts = %d closed, %d open; want the busy agent and the editor closed", closed, open)
+	}
+	if len(wm.Closed) != 1 {
+		t.Errorf("window host closed %v, want the editor: its host answers again", wm.Closed)
+	}
+}
+
 // The step that would end the calling process goes last, ordered off the
 // survey the recheck took: a plan-time listing can name an instance that is
-// already gone. Forced, where there is no recheck, the caller's own report
-// stands in.
+// already gone. A forced close reads that survey too, so it orders the same.
 func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
 	self := func(p revier.Panel) bool { return p.ID == "1" }
+	for _, tc := range []struct {
+		name   string
+		status revier.Status
+		force  bool
+	}{
+		{"unforced", revier.StatusIdle, false},
+		{"forced past a busy agent", revier.StatusRunning, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _, projects := openDesktop(t, tc.status)
+			plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+			if got, want := stepNames(plan), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
+				t.Fatalf("plan = %v, want %v", got, want)
+			}
 
-	c, _, _, projects := openDesktop(t, revier.StatusIdle)
-	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
-	if got, want := stepNames(plan), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
-		t.Fatalf("plan = %v, want %v", got, want)
-	}
-
-	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects, Self: self})
-	if err != nil {
-		t.Fatalf("shutdown: %v", err)
-	}
-	if got, want := closedNames(out), []string{"notes", "editor", "home"}; !slices.Equal(got, want) {
-		t.Errorf("closed in %v, want %v: the workspace this process runs under goes last", got, want)
-	}
-
-	c, _, _, projects = openDesktop(t, revier.StatusIdle)
-	plan = c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
-	out, err = c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Force: true, Self: self})
-	if err != nil {
-		t.Fatalf("shutdown: %v", err)
-	}
-	if got, want := closedNames(out), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
-		t.Errorf("closed in %v, want %v: with no report there is nothing to order by", got, want)
+			out, err := c.Shutdown(context.Background(), plan, 0,
+				core.ShutdownOpts{Force: tc.force, Projects: projects, Self: self})
+			if err != nil {
+				t.Fatalf("shutdown: %v", err)
+			}
+			if got, want := closedNames(out), []string{"notes", "editor", "home"}; !slices.Equal(got, want) {
+				t.Errorf("closed in %v, want %v: the workspace this process runs under goes last", got, want)
+			}
+		})
 	}
 }
 
@@ -691,7 +724,7 @@ func TestShutdownClosesOnItsOwnBudgetAfterASlowSave(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(context.Context, core.Report) error {
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(context.Context, core.Report) error {
 		time.Sleep(50 * time.Millisecond)
 		return nil
 	}})
@@ -714,7 +747,7 @@ func TestShutdownSavesOnItsOwnBudgetAfterASlowRecheck(t *testing.T) {
 	time.Sleep(30 * time.Millisecond) // the caller's bound passes before the save
 
 	var live bool
-	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(saving context.Context, _ core.Report) error {
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(saving context.Context, _ core.Report) error {
 		live = saving.Err() == nil
 		return saving.Err()
 	}})
@@ -738,7 +771,7 @@ func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(context.Context, core.Report) error {
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(context.Context, core.Report) error {
 		cancel()
 		return nil
 	}})

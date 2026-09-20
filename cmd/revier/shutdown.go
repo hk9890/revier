@@ -81,7 +81,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 
 	opts := core.ShutdownOpts{
 		Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached,
-		Report: report, Self: core.RunsUnder(),
+		Self: core.RunsUnder(),
 	}
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard

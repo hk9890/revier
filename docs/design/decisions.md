@@ -632,6 +632,13 @@ are read off it, not off the listing the plan was drawn from. A del on a busy
 row asks rather than closing, and its second press is the force, as a confirm
 already is in the wizard.
 
+Forcing says not to refuse and says nothing else. The reading happens either
+way, and what it finds is what closes, is saved and is ordered: a force that
+skipped it wrote back into the session a window the user had closed by hand
+while the confirm stood, and kept a step marked unread by the refusal before
+it, so a link whose host answered again stayed open although the user had
+just asked for everything.
+
 A busy agent refuses the whole plan, because the user is about to be asked
 about it and the plan is what they read. Not reading a step's agents is a
 different thing, and refuses that step alone (D85): its host did not list, its

@@ -46,12 +46,11 @@ type shutdown struct {
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
-	// planned is whether the plan's survey has answered; report and plan are
-	// what it found, over the projects it covered - the ones the recheck on
-	// confirm surveys again.
+	// planned is whether the plan's survey has answered, and plan is what it
+	// found, over the projects it covered - the ones the recheck inside the
+	// close surveys again.
 	planned  bool
 	projects []core.Project
-	report   core.Report
 	plan     []core.CloseStep
 	running  bool
 	saved    string // what the save before the close came to
@@ -74,13 +73,12 @@ func (s shutdown) saves() bool {
 	return !s.one || (s.pick == core.CloseRow{} && !s.drop)
 }
 
-// plannedMsg is the survey and plan the confirm step shows, for the choice
-// it was asked for.
+// plannedMsg is the plan the confirm step shows, for the choice it was asked
+// for.
 type plannedMsg struct {
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
-	report  core.Report
 	plan    []core.CloseStep
 	err     error
 }
@@ -92,11 +90,7 @@ type shutdownMsg struct {
 	saved   string
 	closed  core.Closed
 	recheck []core.CloseStep
-	// report is the survey the refusal read the plan's agents from. The
-	// wizard keeps it, so the force the next press is closes and saves from
-	// it rather than from the listing the plan was drawn from.
-	report core.Report
-	err    error
+	err     error
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -277,7 +271,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
 			return c.ShutdownPlan(r, asked.project, asked.scope)
 		})
 		return asked
@@ -286,15 +280,15 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 
 // surveyPlan surveys what is open now, attachments included, and makes the
 // plan from what it found. It runs off the update loop.
-func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) (core.Report, []core.CloseStep, error) {
+func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) ([]core.CloseStep, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	st := loadedState(root)
 	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
 	if err != nil {
-		return core.Report{}, nil, err
+		return nil, err
 	}
-	return report, plan(report), nil
+	return plan(report), nil
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -310,7 +304,7 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 		m.shutBack()
 		return m, nil
 	}
-	m.shut.planned, m.shut.report, m.shut.plan = true, msg.report, msg.plan
+	m.shut.planned, m.shut.plan = true, msg.plan
 	return m, nil
 }
 
@@ -320,20 +314,20 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 // of the plan's agents turned busy since the plan was drawn, and the wizard
 // shows the plan again with the agents that refused it.
 //
-// The survey behind that refusal is the fresher one, so the close orders its
-// own steps and saves its session from it, which is core.Shutdown's to do:
-// the plan and the report the wizard drew go in, and what happens after the
-// recheck is read off the recheck.
+// Only the plan the wizard drew goes in. Every close, the forced one too,
+// reads the agents again inside core.Shutdown, and the order and the session
+// it saves come off that reading rather than off the listing the plan was
+// drawn from.
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, report, plan, saves := m.core, m.stateRoot, s.projects, s.report, s.plan, s.saves()
+	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
 		st := loadedState(root)
 		opts := core.ShutdownOpts{
 			Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached,
-			Report: report, Self: core.RunsUnder(),
+			Self: core.RunsUnder(),
 		}
 		note := ""
 		if saves {
@@ -376,7 +370,7 @@ func closeAnswer(closed core.Closed, err error) shutdownMsg {
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):
-		return shutdownMsg{recheck: refused.Plan, report: refused.Report}
+		return shutdownMsg{recheck: refused.Plan}
 	case err != nil:
 		return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
 	}
@@ -403,9 +397,9 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
 		// A del that closed at once asks here instead, so its second press
-		// is the force too (decisions.md D99). The refusal's survey is the
-		// fresher one, so the force closes and saves from it.
-		s.plan, s.report, s.row, s.step = msg.recheck, msg.report, 1, shutConfirm
+		// is the force too (decisions.md D99). That force surveys again
+		// like any other close, so it carries no listing from here.
+		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
 		m.dialog = dialogShutdown
 		return m, nil
 	}

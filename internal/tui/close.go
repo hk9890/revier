@@ -26,8 +26,7 @@ type closePlannedMsg struct {
 	row      core.CloseRow
 	label    string
 	drop     bool
-	projects []core.Project // what the survey covered, for the recheck on confirm
-	report   core.Report
+	projects []core.Project // what the survey covered, for the recheck inside the close
 	plan     []core.CloseStep
 	err      error
 }
@@ -101,7 +100,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	c, root := m.core, m.stateRoot
 	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects}
 	return m, func() tea.Msg {
-		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
 			if whole {
 				return c.ShutdownPlan(r, project, core.ShutdownAll)
 			}
@@ -133,7 +132,7 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.shut = shutdown{
-		step: shutConfirm, planned: true, projects: msg.projects, report: msg.report, plan: msg.plan,
+		step: shutConfirm, planned: true, projects: msg.projects, plan: msg.plan,
 		one: true, project: msg.project, pick: msg.row, label: msg.label, drop: msg.drop,
 	}
 	if confirms(msg) {

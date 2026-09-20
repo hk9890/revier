@@ -512,21 +512,18 @@ func phaseContext(parent context.Context, budget time.Duration) (context.Context
 type ShutdownOpts struct {
 	// Force closes a step whose agent works or waits for an answer. It is
 	// what `--force` sets, and what a confirm means in a surface that named
-	// the busy agents before it asked (decisions.md D78).
+	// the busy agents before it asked (decisions.md D78). It says not to
+	// refuse and nothing else: the recheck still runs, and what it reads is
+	// still what closes, is saved and is ordered.
 	Force bool
 
 	// Projects, Bound and Attached are what the recheck surveys, the three
-	// Survey takes. Without Force and without projects there is nothing to
-	// read the agents from, and the shutdown refuses rather than closing
-	// blind.
+	// Survey takes. With no projects there is nothing to read the agents
+	// from, so every step is one the recheck could not answer for and the
+	// close leaves them all open rather than closing blind.
 	Projects []Project
 	Bound    map[revier.ProjectName]Bindings
 	Attached map[revier.ProjectName][]revier.TargetRef
-
-	// Report is the survey the plan was made from. It stands in for the
-	// recheck's own where Force skips the recheck, and nowhere else: what a
-	// close works from is the freshest survey it has.
-	Report Report
 
 	// Self reports a panel the calling process runs under. With it, the
 	// steps that would end that process go last (CloseLast), ordered off the
@@ -552,13 +549,11 @@ type ShutdownOpts struct {
 // works or waits for an answer. Nothing closed.
 var ErrAgentBusy = errors.New("an agent is busy")
 
-// BusyRefusal is ErrAgentBusy with the plan as the recheck read it and the
-// survey it was read from, so a surface shows the plan again with the agents
-// that refused it, and a close forced after it works from that survey rather
-// than from the listing the plan was drawn from.
+// BusyRefusal is ErrAgentBusy with the plan as the recheck read it, so a
+// surface shows the plan again with the agents that refused it. The close
+// forced after it reads its own survey, so it carries no listing of its own.
 type BusyRefusal struct {
-	Plan   []CloseStep
-	Report Report
+	Plan []CloseStep
 }
 
 func (r *BusyRefusal) Error() string { return ErrAgentBusy.Error() }
@@ -569,32 +564,32 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // every step it closed is gone or wait has passed. One step's failure is not
 // the shutdown's: the others still close, and the one that did not is named.
 //
-// It closes nothing at all while an agent of the plan is busy, unless forced
-// (decisions.md D99). Every plan was made from a survey that has aged since -
-// by a confirm the user read, by a session saved before the close - so the
-// agents are read again here, the one place every close goes through. A
-// recheck that cannot be read refuses too: no agents read is not idle.
+// Every plan was made from a survey that has aged since - by a confirm the
+// user read, by a session saved before the close - so the agents are read
+// again here, the one place every close goes through, and that happens
+// whether or not the close is forced (decisions.md D99). Forcing says not to
+// refuse a busy agent; it does not say to work from an older listing.
+//
+// A busy agent then closes nothing at all unless forced. A step the recheck
+// could not read closes nothing either, and that one is its own refusal: the
+// rest of the plan still closes.
 //
 // That recheck's survey is the freshest one there is, so the order opts.Self
-// asks for and the session opts.Before saves are both taken from it, after
-// the guard: a refused close saves nothing, and a saved session holds what is
-// open now rather than what was open when the plan was drawn.
+// asks for and the session opts.Before saves are both taken from it: a
+// refused close saves nothing, and a saved session holds what is open now
+// rather than what was open when the plan was drawn.
 //
 // The closes and the wait after them then run on a budget of their own
 // (phaseContext), as the save before them does, so however long the recheck
 // took, the save is made and every step is asked to close.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
-	r := opts.Report
-	if !opts.Force {
-		fresh, freshPlan, err := c.recheck(ctx, plan, opts)
-		if err != nil {
-			return nil, err
-		}
-		if busy := Busy(freshPlan); len(busy) > 0 {
-			slog.Info("shutdown refused", "steps", len(freshPlan), "busy", len(busy))
-			return nil, &BusyRefusal{Plan: freshPlan, Report: fresh}
-		}
-		r, plan = fresh, freshPlan
+	r, plan, err := c.recheck(ctx, plan, opts)
+	if err != nil {
+		return nil, err
+	}
+	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
+		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
+		return nil, &BusyRefusal{Plan: plan}
 	}
 	if opts.Self != nil {
 		plan = CloseLast(plan, r.Instances, opts.Self)
@@ -676,6 +671,10 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 	out := make([]CloseStep, len(plan))
 	for i, step := range plan {
 		local, surveyed := here[step.Project]
+		// What an earlier reading found is dropped, not carried: this survey
+		// is the answer, and a plan handed back by a refusal comes in with
+		// the marks and agents that refusal read.
+		step.Unread, step.Agents = "", nil
 		// A link's agents are its host's word (D84). A host that stopped
 		// answering between the plan and the close reports none, and no
 		// agents read is not idle, so the panel here that shows a busy agent

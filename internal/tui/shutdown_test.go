@@ -239,6 +239,31 @@ func TestTheSaveBeforeTheCloseRecordsWhatIsOpenAtTheConfirm(t *testing.T) {
 	}
 }
 
+// A confirm that forces a busy agent saves from the same fresh survey as any
+// other close: forcing says not to refuse, not to work from the listing the
+// plan was drawn from.
+func TestTheForcedConfirmSavesWhatIsOpenAtTheConfirm(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	editor := wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shut down anyway: 1 busy agent") {
+		t.Fatalf("rows = %q, want the busy agent named, so the confirm is the force", body)
+	}
+
+	wm.Remove(editor)
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("sessions = %+v, %v; want the one saved before the forced close", all, err)
+	}
+	if names := savedProjects(all[0]); !slices.Equal(names, []revier.ProjectName{"project-01"}) {
+		t.Errorf("saved projects = %v, want project-01 alone: the editor was closed by hand", names)
+	}
+}
+
 // savedProjects names the projects a session recorded.
 func savedProjects(s session.Session) []revier.ProjectName {
 	var out []revier.ProjectName
