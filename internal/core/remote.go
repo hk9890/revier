@@ -156,7 +156,7 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // mistakes in separate files.
 //
 // The agents add to the ones read here rather than replacing them
-// (decisions.md D99): a terminal attached to the link by hand holds an agent
+// (decisions.md D101): a terminal attached to the link by hand holds an agent
 // of this machine that the host knows nothing about. merge returns the ones
 // it added, which are the only ones the host named and so the only ones
 // localise has a tag for.

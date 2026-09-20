@@ -320,7 +320,7 @@ func (h *Host) name(ctx context.Context, session, window, pane string, r revier.
 	}
 	if err := h.setVars(ctx, pane, r.Vars); err != nil {
 		// The mark is best effort: an unmarked panel falls back to the guess
-		// it replaces (decisions.md D98). Failing here would kill a session
+		// it replaces (decisions.md D100). Failing here would kill a session
 		// whose panes are already running, over a mark nothing depends on.
 		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
 	}

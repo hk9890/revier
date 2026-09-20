@@ -45,7 +45,7 @@ doc reads what it already did.
 | `instances` | a `host` could not list; its targets show unknown and a press on one is refused, while the other hosts' go on (`docs/design/decisions.md` D89) |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
 | `probe` | an agent probe failed, and the agent shows unknown |
-| `panel mark` | one `WARN` per launch whose first panel could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D98) |
+| `panel mark` | one `WARN` per launch whose first panel could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps |
 | `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
 | `shutdown step`, `shutdown`, `shutdown refused` | a shutdown: each step's `ref`, `panel`, `busy` and `err`, then the counts; its save writes `session saved` with `by` shutdown. A close the busy guard refused writes `shutdown refused` alone, with the plan's `steps` and `busy` counts, and closed and saved nothing (`docs/design/decisions.md` D97) |

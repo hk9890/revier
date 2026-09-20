@@ -27,7 +27,7 @@ const PanelTargetVar = "revier_target"
 // PanelHomeVar is the panel variable that names the target an instance was
 // opened for. It marks the instance's own first panel, the one a press that
 // returns home from a tab lands in, so that panel is identified rather than
-// guessed at (decisions.md D98).
+// guessed at (decisions.md D100).
 const PanelHomeVar = "revier_home"
 
 // isTab reports whether the i-th target is a tab inside another target.
@@ -121,7 +121,7 @@ func ownTab(in revier.Instance, panel revier.PanelID) bool {
 //
 // An instance opened before the mark existed carries none, and falls back to
 // the first panel no tab target claims. That guess can land in a shell inside
-// a tab, which is what the mark exists to stop (decisions.md D98).
+// a tab, which is what the mark exists to stop (decisions.md D100).
 func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 	for _, panel := range in.Panels {
 		if panel.Vars[PanelHomeVar] != "" {

@@ -560,7 +560,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		launch, agents, extra := c.resuming(real, resumes, p.Remote != nil)
 		// The instance's own first panel is marked with the target it was
 		// opened for, so a return home from a tab lands in it rather than in
-		// the first panel that happens to carry no tab mark (decisions.md D98).
+		// the first panel that happens to carry no tab mark (decisions.md D100).
 		launch.Vars = map[string]string{PanelHomeVar: string(name)}
 		ref, err := host.Open(ctx, launch)
 		if err != nil {
@@ -1337,7 +1337,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 			}
 		}
 	}
-	// An attachment is probed for a link too (decisions.md D99): it is a
+	// An attachment is probed for a link too (decisions.md D101): it is a
 	// terminal of this machine, holding an agent no host on the other side
 	// knows about, and taking the host's word as the project's whole answer
 	// ended it unasked.

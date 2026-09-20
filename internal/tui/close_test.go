@@ -121,7 +121,7 @@ func TestDelClosesAnAgentsTab(t *testing.T) {
 
 // An agent that starts a turn between the press and the close is not ended
 // by a del that would have closed at once: the close is refused, the plan is
-// shown with the agent busy, and the next press closes it (decisions.md D97).
+// shown with the agent busy, and the next press closes it (decisions.md D99).
 func TestDelOnAnAgentThatTurnedBusyAsksFirst(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	probeOf(c).State.Status = revier.StatusIdle

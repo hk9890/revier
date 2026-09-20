@@ -343,7 +343,7 @@ func TestServeStartsTheDeclaredPanels(t *testing.T) {
 // A terminal attached to a link by hand holds an agent of this machine. It is
 // probed like any attachment, and the host's answer adds to it rather than
 // replacing it, so the view shows both and a shutdown sees the busy one
-// (decisions.md D99).
+// (decisions.md D101).
 func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 	c, rt, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude",

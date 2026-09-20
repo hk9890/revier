@@ -578,7 +578,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	if err := h.setVars(ctx, socket, first, r.Vars); err != nil {
 		// The mark is best effort: an unmarked panel falls back to the guess
-		// it replaces (decisions.md D98). Failing here would leave the OS
+		// it replaces (decisions.md D100). Failing here would leave the OS
 		// window open and unnamed to the caller, which pins nothing, and the
 		// next press would open a second one.
 		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", first, "err", err)

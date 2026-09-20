@@ -603,7 +603,23 @@ one layout placing both, so a state's total sits over that state's counts.
 They count the rows the filter left, and the rule's line runs through the slot
 of a state with no agent.
 
-### D97 — the busy guard is in the close path, not in the surface that asks
+### D97 — the surface opens with the rows above the starting project in view
+
+The list is sorted with the projects that need the user first, so opening on
+a project resolved from the working directory or the focused window put it
+alone on the last line and said nothing about what else was waiting. It keeps
+ten rows above it, fewer on a screen with no room, where it is the last row in
+view: a row the user was taken to and cannot see is worse than no context.
+
+### D98 — a deleted row hands the cursor to the row that took its place
+
+Deleting the project under the cursor left it at the top of the list, from
+restoring a selection by a name the list no longer holds. The cursor keeps its
+position instead, or the last row when the deleted one was last. A close moves
+no row away, so the cursor keeps following its project there: the cursor
+follows what it was on while that is on the list, and the place otherwise.
+
+### D99 — the busy guard is in the close path, not in the surface that asks
 
 The guard lived in the wizard's confirm, so `revier shutdown` and the instant
 del both closed on a plan drawn before the session was saved and before the
@@ -623,7 +639,7 @@ therefore run on a budget of their own, counted from the moment the save is
 done, and carry the caller's cancellation but not its deadline: a cancel is a
 decision, and a bound that ran out before the first close is not one.
 
-### D98 — the workspace's own panel is marked, not guessed at
+### D100 — the workspace's own panel is marked, not guessed at
 
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose
 tab holds a shell beside the tab target's panel it picked that shell: a return
@@ -637,7 +653,7 @@ failed over the mark would hand the caller nothing to pin, so the next press
 would open a second copy. The host logs the failure and returns the instance.
 A tab's own mark stays fatal, because it is the tab's whole identity (D64).
 
-### D99 — a link's view is the host's agents and this machine's, added together
+### D101 — a link's view is the host's agents and this machine's, added together
 
 `local := p.Remote == nil` skipped the probe for a link, and the host's answer
 then replaced the view's agents outright, so a terminal attached to a link by

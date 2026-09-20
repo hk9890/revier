@@ -451,7 +451,7 @@ const CloseWait = 3 * time.Second
 const CloseBudget = 30 * time.Second
 
 // closeContext is what the closes and the wait after them run on: a deadline
-// of their own, and the caller's cancellation (decisions.md D97).
+// of their own, and the caller's cancellation (decisions.md D99).
 //
 // It does not inherit the caller's deadline. What runs before the closes -
 // the recheck survey, which waits on every link host, and the save - can take
@@ -532,7 +532,7 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // the shutdown's: the others still close, and the one that did not is named.
 //
 // It closes nothing at all while an agent of the plan is busy, unless forced
-// (decisions.md D97). Every plan was made from a survey that has aged since -
+// (decisions.md D99). Every plan was made from a survey that has aged since -
 // by a confirm the user read, by a session saved before the close - so the
 // agents are read again here, the one place every close goes through. A
 // recheck that cannot be read refuses too: no agents read is not idle.

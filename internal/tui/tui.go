@@ -144,38 +144,39 @@ type Model struct {
 
 	// The project list. Cursor, paging and fuzzy filtering are the
 	// component's; what a row looks like is the delegate's.
-	plist  list.Model
-	hlist  list.Model // the hosts, the link dialog's first step
-	rlist  list.Model // a host's projects, its second
-	slist  list.Model // the saved sessions
-	filter string     // the query, held here so a refresh can re-apply it
-	keys   keyMap
-	help   help.Model
-	detail viewport.Model
-	shown  revier.ProjectName               // the project the pane holds, so a new one starts at its top
-	tkeys  map[core.Chord]revier.TargetName // press to target name, over every project
-	start  revier.ProjectName               // the project to open on, from the working directory
-	lookup StartLookup                      // the project to open on when start is none, asked once the surface shows
-	popup  bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	hidden bool                             // the popup is off the screen; nothing surveys until it is raised
-	idle   bool                             // the survey chain ended while hidden; the raise starts it again
-	trees  map[string]treeEntry             // cached directory listings, by project path
-	input  textinput.Model                  // the filter query, with its own cursor
-	path   textinput.Model                  // the directory field of the new-project screen
-	nstep  newStep                          // the new-project screen's step
-	nrows  []string                         // what the new-project screen lists under the field
-	nrow   int                              // the chosen one of nrows, -1 for none
-	ndir   string                           // the folder the new-project screen asks to create
-	lname  textinput.Model                  // the name field of the link dialog's last step
-	rinput textinput.Model                  // the query over the link dialog's second step
-	sname  textinput.Model                  // the name field of a session being saved
-	over   hovered                          // what the pointer is on
-	cell   *pointerCell                     // where the pointer last was, nil before it moved
-	body   viewport.Model                   // the scrolling window over the list
-	last   click                            // the last click on a row, for telling a double click
-	press  *press                           // where the left button went down, while it is down
-	sel    selection                        // the box a drag is selecting
-	copied int                              // the characters the last selection copied, shown until the next press
+	plist   list.Model
+	hlist   list.Model // the hosts, the link dialog's first step
+	rlist   list.Model // a host's projects, its second
+	slist   list.Model // the saved sessions
+	filter  string     // the query, held here so a refresh can re-apply it
+	keys    keyMap
+	help    help.Model
+	detail  viewport.Model
+	shown   revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys   map[core.Chord]revier.TargetName // press to target name, over every project
+	start   revier.ProjectName               // the project to open on, from the working directory
+	placing bool                             // the cursor was put on the starting project; the next body sync places the list around it
+	lookup  StartLookup                      // the project to open on when start is none, asked once the surface shows
+	popup   bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	hidden  bool                             // the popup is off the screen; nothing surveys until it is raised
+	idle    bool                             // the survey chain ended while hidden; the raise starts it again
+	trees   map[string]treeEntry             // cached directory listings, by project path
+	input   textinput.Model                  // the filter query, with its own cursor
+	path    textinput.Model                  // the directory field of the new-project screen
+	nstep   newStep                          // the new-project screen's step
+	nrows   []string                         // what the new-project screen lists under the field
+	nrow    int                              // the chosen one of nrows, -1 for none
+	ndir    string                           // the folder the new-project screen asks to create
+	lname   textinput.Model                  // the name field of the link dialog's last step
+	rinput  textinput.Model                  // the query over the link dialog's second step
+	sname   textinput.Model                  // the name field of a session being saved
+	over    hovered                          // what the pointer is on
+	cell    *pointerCell                     // where the pointer last was, nil before it moved
+	body    viewport.Model                   // the scrolling window over the list
+	last    click                            // the last click on a row, for telling a double click
+	press   *press                           // where the left button went down, while it is down
+	sel     selection                        // the box a drag is selecting
+	copied  int                              // the characters the last selection copied, shown until the next press
 	// proposed is whether the link's name is still the one offered, which
 	// the first character typed replaces.
 	proposed bool
@@ -531,7 +532,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// the time the lookup took means they are already somewhere.
 		if msg.ok && m.start == "" && m.filter == "" && m.dialog == dialogNone && m.focus == focusList && m.plist.Index() == 0 {
 			m.start = msg.name
-			m.selectName(msg.name)
+			m.placing = m.selectName(msg.name)
 		}
 		return m, nil
 	case hiddenMsg:
