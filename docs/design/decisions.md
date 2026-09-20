@@ -611,3 +611,11 @@ a project resolved from the working directory or the focused window put it
 alone on the last line and said nothing about what else was waiting. It keeps
 ten rows above it, fewer on a screen with no room, where it is the last row in
 view: a row the user was taken to and cannot see is worse than no context.
+
+### D98 — a deleted row hands the cursor to the row that took its place
+
+Deleting the project under the cursor left it at the top of the list, from
+restoring a selection by a name the list no longer holds. The cursor keeps its
+position instead, or the last row when the deleted one was last. A close moves
+no row away, so the cursor keeps following its project there: the cursor
+follows what it was on while that is on the list, and the place otherwise.

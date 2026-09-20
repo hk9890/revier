@@ -93,6 +93,42 @@ func TestDeleteAsksAndThenRemovesTheFile(t *testing.T) {
 	}
 }
 
+// The cursor stays where it was: on the row that moves up into the deleted
+// one's place, not at the top of the list, which is where restoring the
+// selection by a name no longer on the list used to leave it.
+func TestDeleteLeavesTheCursorOnTheRowThatTookThePlace(t *testing.T) {
+	_, m, _ := fileWorld(t, "alpha", "bravo", "charlie", "delta")
+
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	if row := selectedRow(t, m); !strings.Contains(row, "charlie") {
+		t.Fatalf("selected %q before the delete, want charlie", row)
+	}
+	m, _ = press(m, "alt+d")
+	m, _ = press(m, "y")
+
+	if row := selectedRow(t, m); !strings.Contains(row, "delta") {
+		t.Errorf("selected %q, want delta, the row that took charlie's place", row)
+	}
+}
+
+// Deleting the last row has no row under it to take its place, so the cursor
+// takes the one above: the new last row.
+func TestDeletingTheLastRowLeavesTheCursorOnTheNewLastRow(t *testing.T) {
+	_, m, _ := fileWorld(t, "alpha", "bravo", "charlie")
+
+	m, _ = press(m, "end")
+	if row := selectedRow(t, m); !strings.Contains(row, "charlie") {
+		t.Fatalf("selected %q before the delete, want charlie", row)
+	}
+	m, _ = press(m, "alt+d")
+	m, _ = press(m, "y")
+
+	if row := selectedRow(t, m); !strings.Contains(row, "bravo") {
+		t.Errorf("selected %q, want bravo, the new last row", row)
+	}
+}
+
 // Any answer but "y" keeps the project, and the key is not acted on: an
 // Enter meant as "no" must not open the project.
 func TestDeleteDeclinedKeepsTheFileAndDoesNothingElse(t *testing.T) {

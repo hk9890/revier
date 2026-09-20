@@ -243,10 +243,19 @@ func (m *Model) removeProject(name revier.ProjectName) error {
 		return err
 	}
 	slog.Info("project deleted", "project", name, "path", p.File)
+	// The cursor takes the row that moves into the deleted one's place, so
+	// it stays where the user was working. reload restores the selection by
+	// name, which a deleted project cannot answer, and its fallback is the
+	// top of the list.
+	selected, _ := m.selectedName()
+	at := m.plist.Index()
 	m.projects = without(m.projects, name)
 	m.views = m.known(m.views)
 	m.tkeys = targetKeys(m.projects, m.keys)
 	m.reload()
+	if selected == name {
+		m.plist.Select(clampRow(at, len(m.plist.VisibleItems())))
+	}
 	return nil
 }
 
