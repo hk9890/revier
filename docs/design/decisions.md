@@ -616,6 +616,13 @@ are read off it, not off the listing the plan was drawn from. A del on a busy
 row asks rather than closing, and its second press is the force, as a confirm
 already is in the wizard.
 
+Putting the recheck in front of the closes put its survey inside whatever
+bound the caller gave the whole call, and ninety projects with a link host
+that does not answer spend most of one. The closes and the wait after them
+therefore run on a budget of their own, counted from the moment the save is
+done, and carry the caller's cancellation but not its deadline: a cancel is a
+decision, and a bound that ran out before the first close is not one.
+
 ### D98 — the workspace's own panel is marked, not guessed at
 
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose

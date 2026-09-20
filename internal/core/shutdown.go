@@ -445,6 +445,34 @@ const ClosePoll = 100 * time.Millisecond
 // CloseWait is how long a shutdown waits for what it closed to go.
 const CloseWait = 3 * time.Second
 
+// CloseBudget is how long the closes themselves may take, on top of the wait
+// that follows them. It is the close phase's own, and counts from the moment
+// the last thing before it is done.
+const CloseBudget = 30 * time.Second
+
+// closeContext is what the closes and the wait after them run on: a deadline
+// of their own, and the caller's cancellation (decisions.md D97).
+//
+// It does not inherit the caller's deadline. What runs before the closes -
+// the recheck survey, which waits on every link host, and the save - can take
+// most of a caller's bound on ninety projects, and the closes would then run
+// on a context already done, so steps that would have closed fail instead. A
+// caller that cancels still cancels everything, because a cancel is a
+// decision and a deadline before the closes is not one.
+func closeContext(parent context.Context, wait time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), CloseBudget+wait)
+	follow := func() {
+		if errors.Is(parent.Err(), context.Canceled) {
+			cancel()
+		}
+	}
+	// A caller that cancelled while the recheck or the save ran has already
+	// decided, so that is read here rather than waited for.
+	follow()
+	stop := context.AfterFunc(parent, follow)
+	return ctx, func() { stop(); cancel() }
+}
+
 // ShutdownOpts is what a close needs beyond its plan: whether a busy agent
 // is closed anyway, and the survey that reads the plan's agents again.
 type ShutdownOpts struct {
@@ -513,6 +541,10 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // asks for and the session opts.Before saves are both taken from it, after
 // the guard: a refused close saves nothing, and a saved session holds what is
 // open now rather than what was open when the plan was drawn.
+//
+// The closes and the wait after them then run on a budget of their own
+// (closeContext), so however long the recheck and the save took, every step
+// is asked to close.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	r := opts.Report
 	if !opts.Force {
@@ -534,6 +566,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			return nil, err
 		}
 	}
+	closing, stop := closeContext(ctx, wait)
+	defer stop()
 	out := make(Closed, 0, len(plan))
 	for _, s := range plan {
 		// The plan may come from a core whose hosts have changed since, as the
@@ -542,20 +576,20 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		switch res.Action {
 		case CloseInstance:
 			closer, _ := c.closer(s.Ref)
-			res.Err = closer.Close(ctx, s.Ref)
+			res.Err = closer.Close(closing, s.Ref)
 		case ClosePanel:
 			// A tab closes as its panels: the runtime ends the tab with the
 			// last of them (decisions.md D94).
 			closer, _ := c.panelCloser(s.Ref)
 			for _, p := range res.closes() {
-				res.Err = errors.Join(res.Err, closer.ClosePanel(ctx, s.Ref, p))
+				res.Err = errors.Join(res.Err, closer.ClosePanel(closing, s.Ref, p))
 			}
 		}
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported, "err", res.Err)
 		out = append(out, res)
 	}
-	c.awaitClosed(ctx, out, wait)
+	c.awaitClosed(closing, out, wait)
 	closed, open, failed := out.Counts()
 	slog.Info("shutdown", "closed", closed, "open", open, "failed", failed)
 	return out, nil

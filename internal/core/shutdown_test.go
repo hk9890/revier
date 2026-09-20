@@ -632,3 +632,58 @@ func closedNames(out core.Closed) []string {
 	}
 	return stepNames(plan)
 }
+
+// ctxCloser closes only on a live context, as a host that runs a command
+// does: an exec on a context already done fails without reaching the tool.
+type ctxCloser struct{ *hosttest.Fake }
+
+func (h ctxCloser) Close(ctx context.Context, ref revier.TargetRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return h.Fake.Close(ctx, ref)
+}
+
+// The closes have a budget of their own, so whatever the recheck and the save
+// spent of the caller's, every step is still asked to close. Ninety projects
+// and a link host that does not answer is where a caller's bound runs out
+// before the first close.
+func TestShutdownClosesOnItsOwnBudgetAfterASlowSave(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	c.Window = ctxCloser{wm}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(core.Report) error {
+		time.Sleep(50 * time.Millisecond)
+		return nil
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if closed, _, failed := out.Counts(); closed != 3 || failed != 0 {
+		t.Errorf("counts = %d closed, %d failed; want every step closed past the caller's deadline", closed, failed)
+	}
+}
+
+// A caller that cancels cancels the closes too: a deadline that passed before
+// them is not a decision, and a cancel is.
+func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	c.Window = ctxCloser{wm}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(core.Report) error {
+		cancel()
+		return nil
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if _, _, failed := out.Counts(); failed == 0 {
+		t.Errorf("counts = %d failed, want the cancelled close to fail", failed)
+	}
+}
