@@ -306,10 +306,9 @@ type AgentProbe interface {
 }
 
 type AgentState struct {
-    Harness  string    // "claude", "opencode"
+    Harness  string // "claude", "opencode"
     Status   Status
-    Activity string    // one-line live summary the agent set itself
-    Since    time.Time // when Status last changed
+    Activity string // one-line live summary the agent set itself
 }
 
 type Status uint8

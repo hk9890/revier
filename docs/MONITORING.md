@@ -49,6 +49,7 @@ doc reads what it already did.
 | `session saved` | a save, with its counts and gaps |
 | `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
 | `shutdown step`, `shutdown`, `shutdown refused` | a shutdown: each step's `ref`, `panel`, `busy`, `unread` and `err`, then the counts; its save writes `session saved` with `by` shutdown. A close the busy guard refused writes `shutdown refused` alone, with the plan's `steps` and `busy` counts, and closed and saved nothing (`docs/design/decisions.md` D99) |
+| `start directory` | one `WARN` when the home directory a process moves to cannot be reached, and it runs in `/` instead. Written by the surface, which always leaves, and by a command whose working directory was removed under the shell (`docs/design/decisions.md` D92) |
 | `config problem` | one `WARN` per refusal at load, with `project` and `file`; not written by `list`, which runs every refresh on a linked host |
 | `state load`, `state update` | the TUI could not read the state file, or a process could not update it |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
