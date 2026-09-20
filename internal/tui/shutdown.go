@@ -314,23 +314,32 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 // (decisions.md D78); every other close is refused by core.Shutdown when one
 // of the plan's agents turned busy since the plan was drawn, and the wizard
 // shows the plan again with the agents that refused it.
+//
+// The survey behind that refusal is the fresher one, so the close orders its
+// own steps and saves its session from it, which is core.Shutdown's to do:
+// the plan and the report the wizard drew go in, and what happens after the
+// recheck is read off the recheck.
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
 	c, root, projects, report, plan, saves := m.core, m.stateRoot, s.projects, s.report, s.plan, s.saves()
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
-		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
 		st := loadedState(root)
-		opts := core.ShutdownOpts{Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached}
+		opts := core.ShutdownOpts{
+			Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached,
+			Report: report, Self: core.RunsUnder(),
+		}
 		note := ""
 		if saves {
 			// The save runs after the busy guard, so a close it refuses
-			// leaves no session file behind either.
-			opts.Before = func() error {
+			// leaves no session file behind either, and it records the survey
+			// the close works from: a window closed by hand while the confirm
+			// was on screen is not saved and reopened by a later restore.
+			opts.Before = func(now core.Report) error {
 				ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 				defer cancel()
-				stored, saved, _, err := c.SaveChanged(ctx, root, report, st.Current, time.Now())
+				stored, saved, _, err := c.SaveChanged(ctx, root, now, st.Current, time.Now())
 				if err != nil {
 					return err
 				}

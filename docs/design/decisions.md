@@ -610,8 +610,11 @@ del both closed on a plan drawn before the session was saved and before the
 press landed: the race the guard exists to close. `core.Shutdown` now reads
 the plan's agents again and refuses the whole plan while one of them is busy,
 unless forced; the session is saved after that guard, so a refused close
-leaves no file behind. A del on a busy row asks rather than closing, and its
-second press is the force, as a confirm already is in the wizard.
+leaves no file behind. That recheck is the freshest survey there is, so both
+the saved session and the order that closes this process's own terminal last
+are read off it, not off the listing the plan was drawn from. A del on a busy
+row asks rather than closing, and its second press is the force, as a confirm
+already is in the wizard.
 
 ### D98 — the workspace's own panel is marked, not guessed at
 

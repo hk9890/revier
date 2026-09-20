@@ -62,13 +62,15 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	plan := core.CloseLast(a.core.ShutdownPlan(report, only, scope), report.Instances, core.RunsUnder())
+	plan := a.core.ShutdownPlan(report, only, scope)
 	if len(plan) == 0 {
 		_, _ = fmt.Fprintln(a.out, "nothing to close")
 		return nil
 	}
 	if *dry {
-		return printClosePlan(a.out, plan)
+		// A dry run prints the order this listing gives. The close takes its
+		// own from the survey it rechecks with.
+		return printClosePlan(a.out, core.CloseLast(plan, report.Instances, core.RunsUnder()))
 	}
 	if busy := core.Busy(plan); len(busy) > 0 && !*force {
 		if err := printClosePlan(a.out, busy); err != nil {
@@ -79,12 +81,15 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 
 	opts := core.ShutdownOpts{
 		Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached,
+		Report: report, Self: core.RunsUnder(),
 	}
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
-		// refuses leaves no session file behind either.
-		opts.Before = func() error {
-			stored, saved, gaps, err := a.core.SaveChanged(ctx, a.stateRoot, report, a.state.Current, time.Now())
+		// refuses leaves no session file behind either, and it records the
+		// survey the close works from rather than the one the plan was made
+		// from: a window closed by hand since is not saved and restored.
+		opts.Before = func(now core.Report) error {
+			stored, saved, gaps, err := a.core.SaveChanged(ctx, a.stateRoot, now, a.state.Current, time.Now())
 			switch {
 			case err != nil:
 				return err

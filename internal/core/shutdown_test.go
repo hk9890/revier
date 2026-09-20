@@ -591,3 +591,44 @@ func TestShutdownRefusesWhenTheRecheckCannotBeRead(t *testing.T) {
 		t.Errorf("err = %v, want an unreadable recheck rather than a busy refusal", err)
 	}
 }
+
+// The step that would end the calling process goes last, ordered off the
+// survey the recheck took: a plan-time listing can name an instance that is
+// already gone. Forced, where there is no recheck, the caller's own report
+// stands in.
+func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
+	self := func(p revier.Panel) bool { return p.ID == "1" }
+
+	c, _, _, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	if got, want := stepNames(plan), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
+		t.Fatalf("plan = %v, want %v", got, want)
+	}
+
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects, Self: self})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if got, want := closedNames(out), []string{"notes", "editor", "home"}; !slices.Equal(got, want) {
+		t.Errorf("closed in %v, want %v: the workspace this process runs under goes last", got, want)
+	}
+
+	c, _, _, projects = openDesktop(t, revier.StatusIdle)
+	plan = c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	out, err = c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Force: true, Self: self})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if got, want := closedNames(out), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
+		t.Errorf("closed in %v, want %v: with no report there is nothing to order by", got, want)
+	}
+}
+
+// closedNames names the steps of a shutdown in the order it walked them.
+func closedNames(out core.Closed) []string {
+	plan := make([]core.CloseStep, len(out))
+	for i, r := range out {
+		plan[i] = r.CloseStep
+	}
+	return stepNames(plan)
+}

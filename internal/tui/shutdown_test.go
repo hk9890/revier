@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -210,6 +211,41 @@ func TestConfirmClosesNothingWhenAnAgentTurnedBusy(t *testing.T) {
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
 		t.Errorf("instances = %+v, want the plan shown busy to close on the next confirm", left)
 	}
+}
+
+// The session saved before the close is the recheck's survey, not the one
+// the plan was drawn from: a window the user closed by hand while the confirm
+// was on screen is gone, and a restore must not open it again.
+func TestTheSaveBeforeTheCloseRecordsWhatIsOpenAtTheConfirm(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	editor := wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	if plan := pane(m); !strings.Contains(plan, "project-00") {
+		t.Fatalf("pane = %q, want project-00's editor in the plan", plan)
+	}
+
+	wm.Remove(editor)
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("sessions = %+v, %v; want the one saved before the close", all, err)
+	}
+	if names := savedProjects(all[0]); !slices.Equal(names, []revier.ProjectName{"project-01"}) {
+		t.Errorf("saved projects = %v, want project-01 alone: the editor was closed by hand", names)
+	}
+}
+
+// savedProjects names the projects a session recorded.
+func savedProjects(s session.Session) []revier.ProjectName {
+	var out []revier.ProjectName
+	for _, p := range s.Projects {
+		out = append(out, p.Name)
+	}
+	return out
 }
 
 // A host that stops answering between the plan and the confirm closes

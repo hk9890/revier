@@ -461,11 +461,25 @@ type ShutdownOpts struct {
 	Bound    map[revier.ProjectName]Bindings
 	Attached map[revier.ProjectName][]revier.TargetRef
 
+	// Report is the survey the plan was made from. It stands in for the
+	// recheck's own where Force skips the recheck, and nowhere else: what a
+	// close works from is the freshest survey it has.
+	Report Report
+
+	// Self reports a panel the calling process runs under. With it, the
+	// steps that would end that process go last (CloseLast), ordered off the
+	// same survey the agents were read from, so a shutdown run from a
+	// terminal of a workspace closes everything else before its own
+	// terminal. Nil keeps the plan's order.
+	Self func(revier.Panel) bool
+
 	// Before runs once the recheck has let the plan through and before the
-	// first close. It is where the session a shutdown ends is saved, so a
-	// close the busy guard refuses saves nothing either. Its failure is the
-	// shutdown's, and nothing closes.
-	Before func() error
+	// first close, handed the survey the agents and the order were read
+	// from. It is where the session a shutdown ends is saved, so a close the
+	// busy guard refuses saves nothing either, and the session records what
+	// is open now rather than what was open when the plan was drawn. Its
+	// failure is the shutdown's, and nothing closes.
+	Before func(Report) error
 }
 
 // ErrAgentBusy is a close refused because a step would end an agent that
@@ -488,23 +502,30 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // (decisions.md D97). Every plan was made from a survey that has aged since -
 // by a confirm the user read, by a session saved before the close - so the
 // agents are read again here, the one place every close goes through. A
-// recheck that cannot be read refuses too: no agents read is not idle. The
-// session is saved by opts.Before, after the guard, so a refused close saves
-// nothing either.
+// recheck that cannot be read refuses too: no agents read is not idle.
+//
+// That recheck's survey is the freshest one there is, so the order opts.Self
+// asks for and the session opts.Before saves are both taken from it, after
+// the guard: a refused close saves nothing, and a saved session holds what is
+// open now rather than what was open when the plan was drawn.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
+	r := opts.Report
 	if !opts.Force {
-		fresh, err := c.recheck(ctx, plan, opts)
+		fresh, freshPlan, err := c.recheck(ctx, plan, opts)
 		if err != nil {
 			return nil, err
 		}
-		if busy := Busy(fresh); len(busy) > 0 {
-			slog.Info("shutdown refused", "steps", len(fresh), "busy", len(busy))
-			return nil, &BusyRefusal{Plan: fresh}
+		if busy := Busy(freshPlan); len(busy) > 0 {
+			slog.Info("shutdown refused", "steps", len(freshPlan), "busy", len(busy))
+			return nil, &BusyRefusal{Plan: freshPlan}
 		}
-		plan = fresh
+		r, plan = fresh, freshPlan
+	}
+	if opts.Self != nil {
+		plan = CloseLast(plan, r.Instances, opts.Self)
 	}
 	if opts.Before != nil {
-		if err := opts.Before(); err != nil {
+		if err := opts.Before(r); err != nil {
 			return nil, err
 		}
 	}
@@ -535,18 +556,20 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	return out, nil
 }
 
-// recheck surveys again and returns the plan with each step's agents as that
-// survey finds them.
-func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) ([]CloseStep, error) {
+// recheck surveys again and returns that survey with the plan whose steps
+// carry the agents it found. Everything the close does from here - the order,
+// the session it saves - is read off the returned report, not off the one the
+// plan was drawn from.
+func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep, error) {
 	r, err := c.Survey(ctx, opts.Projects, opts.Bound, opts.Attached)
 	if err != nil {
-		return nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
 	}
 	fresh, err := c.rechecked(r, plan)
 	if err != nil {
-		return nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
 	}
-	return fresh, nil
+	return r, fresh, nil
 }
 
 // rechecked is the plan with each step's agents as a later survey finds them.
