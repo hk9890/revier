@@ -854,10 +854,17 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 // instance the title a window host reports for the same window, so the two
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
+//
+// It refuses as soon as two windows answer to one terminal, as runtimeOf
+// read the other way does and for the same reason (decisions.md D63, D67):
+// the window that is raised, and the window a row is folded into, are both
+// the wrong one when the title is shared and the pairing was a guess.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
 	if !c.bridged(inst) || inst.Title == "" {
 		return revier.Instance{}, false
 	}
+	var found revier.Instance
+	n := 0
 	for _, w := range snap[c.Window.Name()] {
 		if w.Title != inst.Title {
 			continue
@@ -865,9 +872,9 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 		if w.PID != 0 && inst.PID != 0 && w.PID != inst.PID {
 			continue
 		}
-		return w, true
+		found, n = w, n+1
 	}
-	return revier.Instance{}, false
+	return found, n == 1
 }
 
 // runtimeOf finds the runtime instance that is the terminal inside an OS
@@ -935,12 +942,21 @@ func (c *Core) bridged(inst revier.Instance) bool {
 // window the window host does not list is not focused at all, as an
 // activation of one is not (decisions.md D63).
 func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
-	snap, _ := c.listing(ctx)
+	snap, failed := c.listing(ctx)
 	inst, ok := byRef(snap, ref)
 	if !ok {
 		return c.focus(ctx, ref)
 	}
 	name := revier.TargetName(ref.Title)
+	// A window host that did not answer lists no window for anything, so the
+	// refusal below would tell the user the window is gone. What went wrong
+	// is named instead, as every refusal a host's silence causes is
+	// (decisions.md D89).
+	if c.bridged(inst) {
+		if err := failed[c.Window.Name()]; err != nil {
+			return fmt.Errorf("%s: %s: %w", c.Window.Name(), name, err)
+		}
+	}
 	osw, err := c.raisable(snap, inst, name)
 	if err != nil {
 		return err
@@ -1332,12 +1348,28 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// inside it (decisions.md D95), and is one row here: the terminal's, the
 	// side that holds the panels, so the agents of the row and the close that
 	// ends them are the same instance's.
+	//
+	// The window is dropped by the pairing the attachment was recorded with,
+	// read from the window's own side: runtimeOf refuses as soon as two
+	// terminals answer to one window, and the terminal it names has to be
+	// attached too. A window whose terminal cannot be named beyond doubt
+	// keeps its row rather than being folded away against a guess.
+	held := map[string]bool{}
+	for _, ref := range attached {
+		held[key(ref)] = true
+	}
+	var terminals []revier.Instance
+	if c.Runtime != nil {
+		terminals = snap[c.Runtime.Name()]
+	}
 	window := map[string]bool{}
 	for _, ref := range attached {
-		if inst, ok := byRef(snap, ref); ok {
-			if osw, ok := c.osWindowOf(snap, inst); ok {
-				window[key(osw.Ref)] = true
-			}
+		inst, ok := byRef(snap, ref)
+		if !ok || c.Window == nil || ref.Host != c.Window.Name() {
+			continue
+		}
+		if rt, ok := c.runtimeOf(terminals, inst); ok && held[key(rt.Ref)] {
+			window[key(ref)] = true
 		}
 	}
 	// An attachment is probed for a link too (decisions.md D101): it is a
