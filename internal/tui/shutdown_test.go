@@ -1,10 +1,16 @@
 package tui_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The shutdown button is on the bar with its key. A full shutdown plans every
@@ -146,5 +152,122 @@ func TestAShutdownStartsNoSecondSurvey(t *testing.T) {
 	m, cmd = press(m, "enter")
 	if _, after := m.Update(cmd()); after != nil {
 		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
+	}
+}
+
+// probeOf is the world's one agent probe, whose state a test changes between
+// the plan and the confirm.
+func probeOf(c *core.Core) *hosttest.FakeProbe { return c.Probes[0].(*hosttest.FakeProbe) }
+
+// fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
+func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {
+	t.Helper()
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+q")
+	m, cmd := press(m, "enter")
+	return run(m, cmd)
+}
+
+// An agent that starts a turn while the confirm is on screen is not closed
+// on a plan that showed it idle: the confirm closes nothing, saves nothing,
+// and shows the plan again with the agent busy.
+func TestConfirmClosesNothingWhenAnAgentTurnedBusy(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "busy agent") {
+		t.Fatalf("rows = %q, want a plan with no busy agent", body)
+	}
+
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "editing"}
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	if left, _ := rt.Instances(t.Context()); len(left) != 1 {
+		t.Errorf("instances = %+v, want the workspace still open", left)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %d, want no save for a shutdown that closed nothing", len(all))
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shut down anyway: 1 busy agent") {
+		t.Errorf("rows = %q, want the plan again with the agent busy", body)
+	}
+	if plan := pane(m); !strings.Contains(plan, "Shutdown plan") || !strings.Contains(plan, "editing") {
+		t.Errorf("pane = %q, want the plan with the agent's current activity", plan)
+	}
+	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "an agent turned busy since the plan was shown") {
+		t.Errorf("screen = %q, want the reason nothing closed", foot)
+	}
+	// The cursor is off the close it refused, so the Enter that forces it is
+	// aimed and not the second half of a double press.
+	if row := rows(m)[1]; !strings.Contains(row, theme.Default().Glyphs.Cursor) || !strings.Contains(row, "Cancel") {
+		t.Errorf("row under the cursor = %q, want Cancel", row)
+	}
+
+	m, _ = press(m, "up")
+	m, cmd = press(m, "enter")
+	run(m, cmd)
+	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
+		t.Errorf("instances = %+v, want the plan shown busy to close on the next confirm", left)
+	}
+}
+
+// A host that stops answering between the plan and the confirm closes
+// nothing: a survey that lists no agent has not shown them idle.
+func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	rt.InstancesErr = errors.New("no server running")
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	rt.InstancesErr = nil
+	if left, _ := rt.Instances(t.Context()); len(left) != 1 {
+		t.Errorf("instances = %+v, want the workspace still open", left)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %d, want no save for a shutdown that closed nothing", len(all))
+	}
+	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "could not be read again") || !strings.Contains(foot, "nothing closed") {
+		t.Errorf("screen = %q, want the reason nothing closed", foot)
+	}
+}
+
+// A confirm whose agents are as the plan showed them closes the plan.
+func TestConfirmWithUnchangedAgentsCloses(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") {
+		t.Errorf("rows = %q, want the plan closed", body)
+	}
+	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
+		t.Errorf("instances = %+v, want none", left)
+	}
+}
+
+// A confirm of a plan that already names a busy agent is forced, and is not
+// checked again: the agent, busy still in another way, is closed.
+func TestForcedConfirmClosesAnAgentStillBusy(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	m := fullShutdownPlanned(t, c, projects, stateWith(t, nil))
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shut down anyway: 1 busy agent") {
+		t.Fatalf("rows = %q, want the forced confirm", body)
+	}
+
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "editing"}
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") {
+		t.Errorf("rows = %q, want the plan closed", body)
+	}
+	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
+		t.Errorf("instances = %+v, want none", left)
 	}
 }

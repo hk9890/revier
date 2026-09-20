@@ -392,9 +392,11 @@ the moment before a restart, so it saves the session when it differs from the
 newest one; a second shutdown of the same desktop adds no file. An agent that
 works or waits for an answer would lose its turn, so the CLI refuses before
 the save and `--force` goes on; the TUI's confirm names the busy agents
-instead. `Closer` and `PanelCloser` are optional and polite: a window an
-application keeps open is named as still open, never killed. A project
-shutdown leaves an instance another project also holds.
+instead, and confirming them is the force. A confirm is a decision taken on a
+survey that has aged, so it reads its own steps' agents again before it saves
+or closes anything. `Closer` and `PanelCloser` are optional and polite: a
+window an application keeps open is named as still open, never killed. A
+project shutdown leaves an instance another project also holds.
 
 ### D79 — a project row counts its agents by state, and says nothing else on the right
 
