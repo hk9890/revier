@@ -532,8 +532,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// the time the lookup took means they are already somewhere.
 		if msg.ok && m.start == "" && m.filter == "" && m.dialog == dialogNone && m.focus == focusList && m.plist.Index() == 0 {
 			m.start = msg.name
-			m.selectName(msg.name)
-			m.placing = true
+			m.placing = m.selectName(msg.name)
 		}
 		return m, nil
 	case hiddenMsg:

@@ -2001,7 +2001,13 @@ func projectOrder(t *testing.T, m tui.Model) map[string]int {
 // shows them: the names alone, without the mark, the path line or the counts.
 func visibleProjects(m tui.Model) []string {
 	var out []string
-	for _, line := range lines(m) {
+	body := rows(m)
+	if len(body) > 0 {
+		// The footer is the last line rows keeps, and it names a project
+		// while it carries a question or a failure.
+		body = body[:len(body)-1]
+	}
+	for _, line := range body {
 		// The detail pane names the project it holds, so only what is left
 		// of the border is the list.
 		if left, _, ok := strings.Cut(line, "│"); ok {
@@ -2067,6 +2073,47 @@ func TestASmallScreenPutsTheStartingProjectOnTheLastRow(t *testing.T) {
 	}
 	if last := rows[len(rows)-1]; last != "project-40" {
 		t.Errorf("last row = %q, want the start project-40 on it:\n%s", last, m.View())
+	}
+}
+
+// The placement is spent on the frame that made it and never held over: a
+// refresh that finds no row for the query cannot put the cursor on the
+// starting project, so the frame that has rows again scrolls by the least
+// that keeps the cursor in view, as every other scroll does.
+func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testing.T) {
+	_, _, c, projects := world(t, 60)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
+	m = survey(m)
+
+	for range 3 {
+		m, _ = press(m, "down")
+	}
+	before := visibleProjects(m)
+	if len(before) == 0 || before[0] != "project-30" {
+		t.Fatalf("first row = %v, want project-30 before the query:\n%s", before, m.View())
+	}
+
+	for _, r := range "zzzz" {
+		m, _ = press(m, string(r))
+	}
+	if got := visibleProjects(m); len(got) != 0 {
+		t.Fatalf("rows = %v, want the query to match nothing", got)
+	}
+	m = survey(m)
+	m, _ = press(m, "esc")
+
+	// The least scroll that reaches the cursor again, so its row is the last
+	// one in view. A placement held over from the refresh would have put ten
+	// rows above it instead, with project-33 on the first.
+	got := visibleProjects(m)
+	if len(got) == 0 || got[len(got)-1] != "project-43" {
+		t.Errorf("rows = %v, want project-43 on the last of them:\n%s", got, m.View())
+	}
+	if len(got) > 0 && got[0] == "project-33" {
+		t.Errorf("the list was placed around the cursor, not followed to it:\n%s", m.View())
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-43") {
+		t.Errorf("selected %q, want project-43, the row the cursor was on", row)
 	}
 }
 

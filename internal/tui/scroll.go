@@ -82,7 +82,9 @@ func (m *Model) syncBody() {
 	}
 	l.SetSize(m.listWidth(), n*itemHeight)
 	m.body.SetContent(l.View())
-	if m.placing {
+	// The placement is the project list's. A dialog's rows standing over it
+	// are neither placed nor allowed to spend it.
+	if m.placing && l == &m.plist {
 		m.placing = false
 		m.place(l.Index()*itemHeight, itemHeight)
 		return

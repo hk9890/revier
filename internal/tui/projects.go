@@ -391,6 +391,7 @@ func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
 // a different project while the user was reading it.
 func (m *Model) reload() {
 	was, hadSelection := m.plist.SelectedItem().(projectItem)
+	at := m.plist.Index()
 
 	items := make([]list.Item, 0, len(m.views))
 	for _, v := range m.views {
@@ -415,10 +416,19 @@ func (m *Model) reload() {
 	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
 	switch {
 	case hadSelection && (!was.unsurveyed || moved):
-		m.selectName(was.view.Project.Name)
+		// A project that left the list - deleted here, or its file gone
+		// while the popup was hidden - hands the cursor to the row that
+		// took its place, and the last row when it was the last
+		// (decisions.md D98).
+		if !m.selectName(was.view.Project.Name) {
+			m.plist.Select(clampRow(at, len(m.plist.VisibleItems())))
+		}
 	case m.start != "":
-		m.selectName(m.start)
-		m.placing = true
+		// Only a cursor that landed on the starting project is placed
+		// around it. A filter or an empty list leaves it on the first row,
+		// and placing that row would scroll the list under the user later,
+		// on the frame that finally has rows.
+		m.placing = m.selectName(m.start)
 	default:
 		m.plist.Select(0)
 	}
@@ -433,14 +443,17 @@ func (m Model) selectedName() (revier.ProjectName, bool) {
 	return it.view.Project.Name, true
 }
 
-func (m *Model) selectName(name revier.ProjectName) {
+// selectName puts the cursor on the project, and reports whether the list
+// held it: a name it no longer shows falls back to the first row.
+func (m *Model) selectName(name revier.ProjectName) bool {
 	for i, item := range m.plist.VisibleItems() {
 		if it, ok := item.(projectItem); ok && it.view.Project.Name == name {
 			m.plist.Select(i)
-			return
+			return true
 		}
 	}
 	m.plist.Select(0)
+	return false
 }
 
 // endSearch drops every query once a press has opened what it found, so the
