@@ -82,6 +82,13 @@ func (m *Model) syncBody() {
 	}
 	l.SetSize(m.listWidth(), n*itemHeight)
 	m.body.SetContent(l.View())
+	// The placement is the project list's. A dialog's rows standing over it
+	// are neither placed nor allowed to spend it.
+	if m.placing && l == &m.plist {
+		m.placing = false
+		m.place(l.Index()*itemHeight, itemHeight)
+		return
+	}
 	m.follow(l.Index()*itemHeight, itemHeight)
 }
 
@@ -119,6 +126,20 @@ func (m *Model) follow(top, height int) {
 	case bottom > m.body.YOffset+m.body.Height:
 		m.body.SetYOffset(bottom - m.body.Height)
 	}
+}
+
+// startContext is how many rows above the one the surface opens on it keeps
+// in view (decisions.md D97).
+const startContext = 10
+
+// place positions the list around the row the surface opens on, which follow
+// cannot do: the least scroll that reaches a row far down the list leaves it
+// alone on the last line. The row keeps startContext rows above it, fewer
+// when the list is shorter than that or the screen has no room for them - and
+// then the row is the last one in view, because a row the user was taken to
+// and cannot see is worse than no context at all.
+func (m *Model) place(top, height int) {
+	m.body.SetYOffset(max(top-startContext*height, top+height-m.body.Height, 0))
 }
 
 func newBody() viewport.Model { return viewport.New(0, 0) }
