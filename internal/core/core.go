@@ -1074,8 +1074,9 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 // bindings and no context.
 func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	views := make([]revier.ProjectView, 0, len(projects))
+	probed := probeCache{}
 	for _, p := range projects {
-		views = append(views, c.view(context.Background(), nil, nil, p, nil, nil))
+		views = append(views, c.view(context.Background(), nil, nil, p, nil, nil, probed))
 	}
 	return views
 }
@@ -1091,8 +1092,9 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 	if len(failed) > 0 {
 		r.Failed = failed
 	}
+	probed := probeCache{}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name]))
+		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed))
 	}
 	answers := <-remote
 	tags := c.tags(snap)
@@ -1228,7 +1230,25 @@ func dirExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Project, bound Bindings, attached []revier.TargetRef) revier.ProjectView {
+// probeCache is what the survey has already read of each instance, by ref.
+// One terminal can be a target of one project and an attachment of another,
+// and both views list its agents; reading it once per survey rather than once
+// per view is what keeps the probe cost the instance count and not the
+// project count.
+type probeCache map[string][]revier.AgentView
+
+// agentsOf is the instance's agents, probed on the first view that asks.
+func (c *Core) agentsOf(ctx context.Context, probed probeCache, inst revier.Instance) []revier.AgentView {
+	k := key(inst.Ref)
+	if agents, ok := probed[k]; ok {
+		return agents
+	}
+	agents := c.inspect(ctx, inst)
+	probed[k] = agents
+	return agents
+}
+
+func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Project, bound Bindings, attached []revier.TargetRef, probed probeCache) revier.ProjectView {
 	// A remote project's checkout and agents are its host's word, laid over
 	// this view by merge; the path is in the host's terms, and the pane here
 	// that reaches the project is not the agent in it.
@@ -1242,13 +1262,14 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// user put it - a pane of the workspace, or a target of its own - and a
 	// dashboard that only looked at home would miss exactly the agent that had
 	// been given its own window. One instance can back two targets, or a
-	// target and an attachment; probing it twice would report the same agent
-	// twice, so each is probed once per view.
+	// target and an attachment; listing it twice would report the same agent
+	// twice, so each lands in a view once, and the read behind it is the
+	// survey's, not this view's.
 	seen := map[string]bool{}
 	probeOnce := func(inst revier.Instance) {
 		if k := key(inst.Ref); local && !seen[k] {
 			seen[k] = true
-			v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
+			v.Agents = append(v.Agents, c.agentsOf(ctx, probed, inst)...)
 		}
 	}
 

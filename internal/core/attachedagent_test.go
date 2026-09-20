@@ -155,6 +155,32 @@ func TestSurveyProbesAttachedTerminalsWithoutAPerProjectCost(t *testing.T) {
 	}
 }
 
+// A terminal attached to two projects is read once a survey and listed under
+// both: the cache that spares the second read is the survey's, not one view's.
+func TestSurveyReadsATerminalAttachedToTwoProjectsOnce(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
+	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{probe}}
+	projects := core.Prepare(benchProjects(2))
+	ref := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	attached := map[revier.ProjectName][]revier.TargetRef{
+		projects[0].Name: {ref}, projects[1].Name: {ref},
+	}
+
+	report, err := c.Survey(context.Background(), projects, nil, attached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probe.Reads != 1 {
+		t.Errorf("probe reads = %d, want one for the one terminal", probe.Reads)
+	}
+	for i, v := range report.Views {
+		if len(v.Agents) != 1 || v.Agents[0].Panel != "1" {
+			t.Errorf("view %d agents = %+v, want the agent listed under every project it is attached to", i, v.Agents)
+		}
+	}
+}
+
 // A shutdown of the agents alone ends the agent in a hand-attached terminal
 // too, and leaves the terminal open. An agent is an agent wherever the user
 // put it: the scope is about agents and not about how their instance came to
