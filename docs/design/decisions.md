@@ -727,3 +727,13 @@ one probe that filled it stopped when its listing turned out to say only what
 an agent does now. A field on a port that no surface reads is a field every
 out-of-tree probe author fills for nothing, so it is gone; a product that
 wants an age can add it back with the reader that needs it.
+
+### D103 — the top line's right edge says which revier is running
+
+A released binary and one built from source draw the same surface, and nothing
+on it said which was which. The version stands at the right end of the first
+line: that line already carries what is about the installation rather than
+about the rows (D49), and its right side is the only place no column claims.
+It is not the header D51 removed - that named the program, which the user
+knows - and where less than two columns of air are left it is dropped, because
+the buttons are what the line is for.

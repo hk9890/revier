@@ -163,8 +163,9 @@ func (m Model) top() string {
 // topLine is the whole first line: what the surface or the dialog puts there,
 // and the version at the right edge. The version is the only thing on the
 // screen about the installation rather than about what is on it, so it stands
-// where nothing else claims columns and takes the dim of a key hint. Where the
-// left side leaves it no room it is left off; nothing else moves for it.
+// where nothing else claims columns and takes the dim of a key hint
+// (decisions.md D103). Where the left side leaves it no room it is left off;
+// nothing else moves for it.
 func (m Model) topLine(width int) string {
 	left := clipTo(m.top(), width)
 	version := m.theme.Help.Render(build.Version)
