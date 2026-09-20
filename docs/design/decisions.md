@@ -585,3 +585,13 @@ no panel of it is listed. An agent's own step closes its tab the same way,
 because the tab `revier agent new` opens carries no target mark to be closed
 by; the workspace's own tab is the exception, where the shell a layout declares
 beside the agent stays.
+
+### D95 — an attachment is the window and the terminal inside it
+
+The focused instance of D12 is a window, and a window carries no panels, so a
+survey of a hand-attached terminal probed nothing and a shutdown ended the
+agent in it unasked. `revier attach` and a claim now record the terminal
+beside the window, when the window pairs with one beyond doubt - the pairing
+D63 and D67 already refuse to guess at. An ambiguous window is recorded alone
+and reports no agent, which is the honest answer. The two are one attached row,
+the terminal's, because that is the side that holds the panels.

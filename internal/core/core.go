@@ -866,16 +866,90 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 	return revier.Instance{}, false
 }
 
+// runtimeOf finds the runtime instance that is the terminal inside an OS
+// window. It is osWindowOf read the other way, through the same identity -
+// the title the two listings share, with the pid as a filter - and it refuses
+// as soon as two runtime instances answer to it, because a guess here would
+// attach a project to the wrong terminal (decisions.md D63, D67).
+func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier.Instance, bool) {
+	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows ||
+		w.Ref.Host != c.Window.Name() || w.Title == "" {
+		return revier.Instance{}, false
+	}
+	var found revier.Instance
+	n := 0
+	for _, r := range instances {
+		if r.Ref.Host != c.Runtime.Name() || r.Title != w.Title {
+			continue
+		}
+		if r.PID != 0 && w.PID != 0 && r.PID != w.PID {
+			continue
+		}
+		found, n = r, n+1
+	}
+	return found, n == 1
+}
+
+// Attachment is what attaching an instance records: the ref the user pointed
+// at, and the terminal inside it when that window is one this machine's
+// runtime holds and the two listings pair beyond doubt (decisions.md D95). It
+// takes its own listing; a host that could not answer costs the pairing and
+// not the attachment, so the window alone is recorded (decisions.md D89).
+func (c *Core) Attachment(ctx context.Context, ref revier.TargetRef) []revier.TargetRef {
+	snap, _ := c.listing(ctx)
+	var instances []revier.Instance
+	for _, h := range c.allHosts() {
+		instances = append(instances, snap[h.Name()]...)
+	}
+	return c.attachment(instances, ref)
+}
+
+// attachment is Attachment against a listing already taken.
+func (c *Core) attachment(instances []revier.Instance, ref revier.TargetRef) []revier.TargetRef {
+	refs := []revier.TargetRef{ref}
+	i := slices.IndexFunc(instances, func(in revier.Instance) bool { return key(in.Ref) == key(ref) })
+	if i < 0 {
+		return refs
+	}
+	if rt, ok := c.runtimeOf(instances, instances[i]); ok {
+		refs = append(refs, rt.Ref)
+	}
+	return refs
+}
+
 // bridged reports whether inst lives in an OS window the window host raises:
 // it is the runtime's, and the runtime reports OSWindows.
 func (c *Core) bridged(inst revier.Instance) bool {
 	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.Runtime.Capabilities().OSWindows
 }
 
-// Focus activates a bare ref on the host that produced it. The picker uses it
-// for an attached instance, which has no target to resolve: the ref is all
-// revier knows about it.
+// Focus activates a ref on the host that produced it and raises the OS window
+// a terminal of it lives in. The picker uses it for an attached instance,
+// which has no target to resolve: the ref is all revier knows about it, and
+// since an attachment is the terminal as well as its window (decisions.md
+// D95) that ref can be a terminal that cannot raise itself. A terminal whose
+// window the window host does not list is not focused at all, as an
+// activation of one is not (decisions.md D63).
 func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
+	snap, _ := c.listing(ctx)
+	inst, ok := byRef(snap, ref)
+	if !ok {
+		return c.focus(ctx, ref)
+	}
+	name := revier.TargetName(ref.Title)
+	osw, err := c.raisable(snap, inst, name)
+	if err != nil {
+		return err
+	}
+	if err := c.focus(ctx, ref); err != nil {
+		return err
+	}
+	return c.raise(ctx, osw, name)
+}
+
+// focus activates a bare ref on the host that produced it, and nothing else:
+// the caller has already decided what raising it takes.
+func (c *Core) focus(ctx context.Context, ref revier.TargetRef) error {
 	h, ok := c.hostNamed(ref.Host)
 	if !ok {
 		return fmt.Errorf("%w: no host named %q", ErrNoHost, ref.Host)
@@ -1163,8 +1237,16 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// Probe every matched instance, not only home. An agent is wherever the
 	// user put it - a pane of the workspace, or a target of its own - and a
 	// dashboard that only looked at home would miss exactly the agent that had
-	// been given its own window.
+	// been given its own window. One instance can back two targets, or a
+	// target and an attachment; probing it twice would report the same agent
+	// twice, so each is probed once per view.
 	seen := map[string]bool{}
+	probeOnce := func(inst revier.Instance) {
+		if k := key(inst.Ref); local && !seen[k] {
+			seen[k] = true
+			v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
+		}
+	}
 
 	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
@@ -1175,9 +1257,8 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 		// What this machine serves to a terminal elsewhere is probed whether
 		// or not a host here can realize the target: a machine reached over
 		// ssh alone has no runtime.
-		if inst, ok := c.served(snap, p, i); ok && local && !seen[key(inst.Ref)] {
-			seen[key(inst.Ref)] = true
-			v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
+		if inst, ok := c.served(snap, p, i); ok {
+			probeOnce(inst)
 		}
 		host, _, m, err := c.resolveAt(p, i)
 		// A target no host here can realize is the expected headless result,
@@ -1202,21 +1283,32 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref
 				}
-				// One instance can back two targets; probing it twice would
-				// report the same agent twice.
-				if k := key(inst.Ref); local && !seen[k] {
-					seen[k] = true
-					v.Agents = append(v.Agents, c.inspect(ctx, inst)...)
-				}
+				probeOnce(inst)
 			}
 		}
 		v.Targets = append(v.Targets, tv)
 	}
 	// A gone attachment is left out rather than shown dead: the caller prunes
-	// it from state against this same listing.
+	// it from state against this same listing. A live one is probed like a
+	// target, so a shutdown sees the agent in an attached terminal and keeps
+	// it from ending unasked (decisions.md D78).
+	//
+	// A terminal attached by hand is recorded as the window and the terminal
+	// inside it (decisions.md D95), and is one row here: the terminal's, the
+	// side that holds the panels, so the agents of the row and the close that
+	// ends them are the same instance's.
+	window := map[string]bool{}
 	for _, ref := range attached {
 		if inst, ok := byRef(snap, ref); ok {
+			if osw, ok := c.osWindowOf(snap, inst); ok {
+				window[key(osw.Ref)] = true
+			}
+		}
+	}
+	for _, ref := range attached {
+		if inst, ok := byRef(snap, ref); ok && !window[key(ref)] {
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
+			probeOnce(inst)
 		}
 	}
 	return v

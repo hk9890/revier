@@ -191,7 +191,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// is focused before its tab: on tmux, focusing the session is what brings
 	// a terminal showing another session to the tab.
 	if !opened {
-		if err := c.Focus(ctx, in.Ref); err != nil {
+		if err := c.focus(ctx, in.Ref); err != nil {
 			return Result{}, err
 		}
 	}

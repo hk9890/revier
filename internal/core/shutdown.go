@@ -76,15 +76,18 @@ func (s CloseStep) panels() []revier.PanelID {
 }
 
 // Name is how a step is named to the user: its target, the harness of the
-// agent it ends, the panel when no probe named one, or an attached window's
-// title.
+// agent in the panel it ends, that panel when no probe named one, or an
+// attached window's title. A step that closes a whole instance is named by
+// the instance, not by an agent inside it: two attached terminals each
+// holding a claude would otherwise be one name twice.
 func (s CloseStep) Name() string {
 	switch {
 	case s.Target != "":
 		return string(s.Target)
-	case len(s.Agents) > 0:
-		return s.Agents[0].State.Harness
 	case s.Panel != "":
+		if len(s.Agents) > 0 {
+			return s.Agents[0].State.Harness
+		}
 		return "panel " + s.Panel.String()
 	}
 	return s.Ref.Title
