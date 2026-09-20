@@ -209,7 +209,7 @@ func (m Model) dropPrompt() string {
 func (m *Model) setActions(actions []config.Action) {
 	m.actions = actions
 	m.keys = newKeyMap(actions)
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 }
 
 // actionFormLines is the form, one line per field, and the line the cursor

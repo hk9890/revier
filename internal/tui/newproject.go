@@ -335,7 +335,7 @@ func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool)
 		return core.Project{}, false
 	}
 	m.projects = append(m.projects, p)
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 	// Provisional, until the survey answers: nothing of it is running, and
 	// its directory is the one just checked.
 	m.views = sorted(append(m.views, revier.ProjectView{Project: p.Project, PathExists: exists}))
@@ -560,7 +560,7 @@ func (m Model) newTargets(name revier.ProjectName) string {
 		names[i] = string(t.Name)
 	}
 	with := "the shared targets"
-	if !config.SharedHome(config.Usable(m.shared)) {
+	if !config.SharedHome(m.usable) {
 		with = "its own home and shared targets"
 	}
 	return fmt.Sprintf("%q with %s: %s", name, with, strings.Join(names, ", "))

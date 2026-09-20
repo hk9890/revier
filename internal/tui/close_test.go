@@ -364,3 +364,35 @@ func TestAltDelOnATargetClosedSinceAsks(t *testing.T) {
 		t.Errorf("file = %q, want notes gone; footer %q", body, footer(m))
 	}
 }
+
+// A shared target config.toml refuses reaches no project, so it is in no
+// project's targets either: alt+del on a target of the project's own file
+// asks its question, rather than reading the file against a shared list the
+// loader already threw away (decisions.md D85).
+func TestAltDelOnAnOwnTargetBesideARefusedSharedTarget(t *testing.T) {
+	refused := sharedTargets + "\n[[target]]\nname = \"web\"\nhome = \"yes\"\n  [target.window]\n  launch = [\"firefox\"]\n  match = { class = \"^firefox$\" }\n"
+	own := demoProject + "\n[[target]]\nname = \"notes\"\n  [target.runtime]\n  name = \"notes\"\n  launch = [\"less\"]\n  match = { title = \"^notes$\" }\n"
+	start, file, _ := projectSurfaceOver(t, refused, own, hosttest.NewRuntime("rt"))
+
+	// Which pane row notes is on depends on the shared targets beside it, so
+	// each row is tried from the surface as it opens.
+	var asked tui.Model
+	found := false
+	for row := range 6 {
+		m, _ := press(start, "tab")
+		for range row {
+			m, _ = press(m, "down")
+		}
+		if m, _ = press(m, "alt+delete"); strings.Contains(footer(m), `delete target "notes"`) {
+			asked, found = m, true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no pane row offered to delete the project's own notes target")
+	}
+	m, _ := press(asked, "y")
+	if body := fileText(t, file); strings.Contains(body, "notes") {
+		t.Errorf("file = %q, want notes gone; footer %q", body, footer(m))
+	}
+}

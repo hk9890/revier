@@ -55,7 +55,7 @@ func (m Model) openProject() (tea.Model, tea.Cmd) {
 	if !ok || p.File == "" {
 		return m, nil
 	}
-	text, err := config.ReadProject(p.File, config.Usable(m.shared))
+	text, err := config.ReadProject(p.File, m.usable)
 	if err != nil {
 		m.err = err
 		return m, nil
@@ -181,7 +181,7 @@ func (m *Model) saveProjectField(f projectField, value string) error {
 		return nil
 	}
 	p, _ := m.project(m.proj)
-	written, err := config.SetProjectValue(p.File, config.Usable(m.shared), projectFieldKeys[f], value)
+	written, err := config.SetProjectValue(p.File, m.usable, projectFieldKeys[f], value)
 	if err != nil {
 		return err
 	}
@@ -205,7 +205,7 @@ func (m *Model) renameProject(to revier.ProjectName) error {
 	}
 	var written core.Project
 	err := withConfigRoot(func(root string) (err error) {
-		written, err = config.Rename(root, from, to, config.Usable(m.shared))
+		written, err = config.Rename(root, from, to, m.usable)
 		return err
 	})
 	if err != nil {
@@ -226,7 +226,7 @@ func (m *Model) renameProject(to revier.ProjectName) error {
 func (m *Model) projectWritten(was revier.ProjectName, p core.Project) error {
 	m.replaceProject(was, p)
 	m.proj = p.Name
-	text, err := config.ReadProject(p.File, config.Usable(m.shared))
+	text, err := config.ReadProject(p.File, m.usable)
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (m Model) openProjectTargetForm(i int) (tea.Model, tea.Cmd) {
 // saveProjectTarget writes the form's target to the project file.
 func (m Model) saveProjectTarget(t revier.Target, from []int) (tea.Model, tea.Cmd) {
 	p, _ := m.project(m.proj)
-	written, err := config.SaveProjectTarget(p.File, config.Usable(m.shared), m.tform.was, config.TargetEdit{Target: t, PanelFrom: from})
+	written, err := config.SaveProjectTarget(p.File, m.usable, m.tform.was, config.TargetEdit{Target: t, PanelFrom: from})
 	if err == nil {
 		err = m.projectWritten(m.proj, written)
 	}
@@ -286,7 +286,7 @@ func (m Model) confirmDropProjectTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	p, _ := m.project(m.proj)
-	written, err := config.RemoveProjectTarget(p.File, config.Usable(m.shared), m.ptext.Targets[i].Target.Name)
+	written, err := config.RemoveProjectTarget(p.File, m.usable, m.ptext.Targets[i].Target.Name)
 	if err == nil {
 		err = m.projectWritten(m.proj, written)
 	}

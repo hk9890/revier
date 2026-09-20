@@ -407,7 +407,7 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.projects = append(m.projects, p)
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 	// Provisional, until the survey answers: the host's own view, as the
 	// merge would lay it over a local one with no pane here yet.
 	view := it.view

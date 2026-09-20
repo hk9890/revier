@@ -48,12 +48,18 @@ func pressed(msg tea.KeyMsg) (core.Chord, bool) {
 // means something here: one of the surface's own keys, an action, a query
 // editing key, or a target that declares ctrl+o itself. Then it binds nothing
 // here and stays a desktop key only.
-func targetKeys(projects []core.Project, keys keyMap) map[core.Chord]revier.TargetName {
+//
+// The second return is every chord a target declares as the chord itself,
+// which is what tells a folded binding to yield. It comes back with the
+// vocabulary so that no caller can derive one and forget the other; the footer
+// reads it for each row it draws and must not rescan every project to do so.
+func targetKeys(projects []core.Project, keys keyMap) (map[core.Chord]revier.TargetName, map[core.Chord]bool) {
 	type folded struct {
 		sent core.Chord
 		name revier.TargetName
 	}
 	out := map[core.Chord]revier.TargetName{}
+	declared := map[core.Chord]bool{}
 	var late []folded
 	for _, p := range projects {
 		for i, t := range p.Targets {
@@ -67,6 +73,7 @@ func targetKeys(projects []core.Project, keys keyMap) map[core.Chord]revier.Targ
 			if !ok {
 				continue
 			}
+			declared[c] = true
 			sent, ok := c.Terminal()
 			switch {
 			case !ok || keys.claims(sent):
@@ -82,7 +89,7 @@ func targetKeys(projects []core.Project, keys keyMap) map[core.Chord]revier.Targ
 			out[f.sent] = f.name
 		}
 	}
-	return out
+	return out, declared
 }
 
 // keyLabel is a target's key as the footer spells it, so the row, the pane
@@ -178,15 +185,16 @@ func chordTarget(p core.Project, c core.Chord) (outright, folded revier.TargetNa
 	return "", folded
 }
 
-// declares reports a target of any project that declares c outright.
-func (m Model) declares(c core.Chord) bool {
-	for _, p := range m.projects {
-		if outright, _ := chordTarget(p, c); outright != "" {
-			return true
-		}
-	}
-	return false
+// setKeys derives the key vocabulary from the projects now loaded. Every path
+// that changes the project list calls it: a chord means what the whole list
+// declares, so a project added or dropped can change what a press does in
+// another one.
+func (m *Model) setKeys() {
+	m.tkeys, m.tdeclared = targetKeys(m.projects, m.keys)
 }
+
+// declares reports a target of any project that declares c outright.
+func (m Model) declares(c core.Chord) bool { return m.tdeclared[c] }
 
 // targetKeysOf is the highlighted project's own chords, for the footer. They
 // are the keys that will do something on this row, so a desktop-only key is
