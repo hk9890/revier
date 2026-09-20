@@ -133,6 +133,42 @@ type Tab struct {
 	Panel revier.PanelID
 }
 
+// Open is Fake.Open with the panels a runtime gives what it opens: one per
+// panel spec, and the realization's vars on the first, which is how a real
+// runtime reports back the mark the core set on it. Only a runtime's
+// instances carry panels, so only a runtime's Open makes them.
+func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
+	ref, err := f.Fake.Open(ctx, r)
+	if err != nil || ref.IsZero() {
+		return ref, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.instances {
+		if f.instances[i].Ref.ID != ref.ID {
+			continue
+		}
+		var panels []revier.Panel
+		for n, spec := range r.PanelSpecs() {
+			f.nextID++
+			panel := revier.Panel{
+				ID: revier.PanelID("p" + strconv.Itoa(f.nextID)), Kind: spec.Kind,
+				Title: spec.Title, Command: spec.Command, PID: 2000 + f.nextID,
+			}
+			if n == 0 {
+				panel.Vars = r.Vars
+			}
+			panels = append(panels, panel)
+		}
+		f.instances[i].Panels = panels
+		if f.current == nil {
+			f.current = map[string]revier.PanelID{}
+		}
+		f.current[ref.ID] = panels[0].ID
+	}
+	return ref, nil
+}
+
 // OpenTab adds the tab's panels to the instance, in a tab of their own with
 // vars on the first, and records the call.
 // FakeRuntime implements revier.PanelOpener; a runtime without the capability
@@ -268,6 +304,19 @@ func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef
 	return ref
 }
 
+// FirstPanel is the first panel of an instance, which for one this host
+// opened is the panel it made current, and none when it holds no panels.
+func (f *Fake) FirstPanel(ref revier.TargetRef) revier.PanelID {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, inst := range f.instances {
+		if inst.Ref.ID == ref.ID && len(inst.Panels) > 0 {
+			return inst.Panels[0].ID
+		}
+	}
+	return ""
+}
+
 // AddInstance registers an instance as given, assigning only its id. Tests of
 // the OS-window bridge use it to make a window host report the title and pid
 // a runtime instance carries.
@@ -335,13 +384,6 @@ func (f *Fake) Open(_ context.Context, r revier.Realization) (revier.TargetRef, 
 		title = r.Name
 	}
 	ref := f.Add(title, literal(r.Match.Class))
-	// A new instance has a current panel, as a runtime's does: OpenedPanel.
-	f.mu.Lock()
-	if f.current == nil {
-		f.current = map[string]revier.PanelID{}
-	}
-	f.current[ref.ID] = OpenedPanel
-	f.mu.Unlock()
 	if f.Detached {
 		return revier.TargetRef{}, nil
 	}
@@ -482,7 +524,3 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
-
-// OpenedPanel is the panel FocusedPanel reports for an instance Open made,
-// until another panel is focused.
-const OpenedPanel revier.PanelID = "opened"

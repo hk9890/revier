@@ -457,7 +457,7 @@ func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 		{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}, Dir: project},
 		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: project},
 	})
-	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != hosttest.OpenedPanel {
+	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != rt.FirstPanel(res.Ref) {
 		t.Errorf("panel focuses = %v, want the workspace's current panel last", rt.PanelFocuses)
 	}
 	if want := []core.AgentOutcome{core.AgentResumed, core.AgentResumed, core.AgentEmpty}; !slices.Equal(res.Agents, want) {
@@ -531,7 +531,7 @@ func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
 	if res.AgentErr == nil || !strings.Contains(res.AgentErr.Error(), "kitty went away") {
 		t.Errorf("AgentErr = %v, want the reason", res.AgentErr)
 	}
-	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != hosttest.OpenedPanel {
+	if n := len(rt.PanelFocuses); n == 0 || rt.PanelFocuses[n-1] != rt.FirstPanel(res.Ref) {
 		t.Errorf("panel focuses = %v, want the workspace's current panel again after the failed tab", rt.PanelFocuses)
 	}
 }
