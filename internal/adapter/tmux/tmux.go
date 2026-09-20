@@ -113,7 +113,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	// pane_title is free text and comes last, so SplitN gives it whatever it
 	// contains.
 	format := strings.Join([]string{
-		"#{session_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
+		"#{session_id}", "#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
 		"#{@" + varsOption + "}", "#{pane_title}",
 	}, sep)
 
@@ -130,7 +130,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		// A malformed line is skipped, never fatal. Panes belonging to other
 		// tools share this server, and one odd line must not blank every
 		// project revier knows about.
-		if f := strings.SplitN(line, sep, 6); len(f) == 6 {
+		if f := strings.SplitN(line, sep, 7); len(f) == 7 {
 			lines = append(lines, f)
 		}
 	}
@@ -141,7 +141,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	// name sorts first, and must not take the workspace's panes.
 	owner := map[string]string{}
 	for _, f := range lines {
-		session, pane := f[0], f[1]
+		session, pane := f[0], f[2]
 		if cur, ok := owner[pane]; !ok || owns(named, session, cur) {
 			owner[pane] = session
 		}
@@ -152,7 +152,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		bySession[sessionOf(sessions[i].Ref.ID)] = &sessions[i]
 	}
 	for _, f := range lines {
-		sessionID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5]
+		sessionID, windowID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
 		inst, ok := bySession[sessionID]
 		if !ok || owner[paneID] != sessionID {
 			continue
@@ -165,6 +165,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			Vars:    parseVars(paneVars),
 			PID:     pid,
 			Command: []string{paneCmd},
+			Tab:     windowID,
 		})
 	}
 	return sessions, nil

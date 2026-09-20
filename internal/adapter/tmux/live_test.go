@@ -520,6 +520,42 @@ func TestCloseEndsAPaneThenTheSession(t *testing.T) {
 	}
 }
 
+// A tab's panes carry its window, and the window goes with its last pane:
+// closing both panes of a two-pane window leaves the session's own window,
+// which is how a tab target closes whole without a kill-window.
+func TestTheWindowGoesWithItsLastPane(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	first, err := h.OpenTab(c, ref, revier.Realization{Panels: []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}},
+		{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+	}}, nil)
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil || len(instances) != 1 || len(instances[0].Panels) != 3 {
+		t.Fatalf("instances = %+v, %v, want one session with three panes", instances, err)
+	}
+	home, agent, shell := instances[0].Panels[0], instances[0].Panels[1], instances[0].Panels[2]
+	if want := paneValue(t, h, first, "#{window_id}"); agent.ID != first || agent.Tab != want || shell.Tab != want || home.Tab == want || home.Tab == "" {
+		t.Fatalf("panels = %+v, want the tab's two panes in window %s and the first pane in another", instances[0].Panels, want)
+	}
+
+	for _, pane := range []revier.PanelID{agent.ID, shell.ID} {
+		if err := h.ClosePanel(c, ref, pane); err != nil {
+			t.Fatalf("ClosePanel %s: %v", pane, err)
+		}
+	}
+	instances, err = h.Instances(c)
+	if err != nil || len(instances) != 1 || len(instances[0].Panels) != 1 || instances[0].Panels[0].ID != home.ID {
+		t.Errorf("after the tab = %+v, %v, want the session with its first pane alone", instances, err)
+	}
+}
+
 // refIDOf is an instance id for a session on another server: the pid of the
 // ref, replaced.
 func refIDOf(t *testing.T, serverPID, id string) string {

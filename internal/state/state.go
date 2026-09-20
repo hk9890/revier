@@ -167,12 +167,15 @@ func (s *State) Landed(p revier.ProjectName, t revier.TargetName, ref revier.Tar
 
 // Claim settles the pending launch with the window that appeared for it: bound
 // to the launched target, or attached to the project when an action launched
-// it.
-func (s *State) Claim(t revier.TargetName, ref revier.TargetRef) {
+// it. refs are what the attachment records - the window, and the terminal
+// inside it when the core paired one - of which a binding takes the first.
+func (s *State) Claim(t revier.TargetName, refs ...revier.TargetRef) {
 	if t != "" {
-		s.Bind(s.Launch.Project, t, ref)
+		s.Bind(s.Launch.Project, t, refs[0])
 	} else {
-		s.Attach(s.Launch.Project, ref)
+		for _, ref := range refs {
+			s.Attach(s.Launch.Project, ref)
+		}
 	}
 	s.Launch = nil
 }

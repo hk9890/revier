@@ -78,6 +78,7 @@ type osWindow struct {
 }
 
 type tab struct {
+	ID       int      `json:"id"`
 	IsActive bool     `json:"is_active"`
 	Windows  []window `json:"windows"`
 }
@@ -357,8 +358,18 @@ func (h *Host) decode(l listing) []revier.Instance {
 			PID:   pid,
 		}
 		for _, t := range w.Tabs {
+			// A tab the listing gives no id names no tab. Reporting "0" for
+			// each of them would make the whole OS window one tab, so a tab
+			// target's close would hold every agent in the window and never
+			// count as closed.
+			tab := ""
+			if t.ID != 0 {
+				tab = strconv.Itoa(t.ID)
+			}
 			for _, win := range t.Windows {
-				inst.Panels = append(inst.Panels, panelOf(win, parent))
+				panel := panelOf(win, parent)
+				panel.Tab = tab
+				inst.Panels = append(inst.Panels, panel)
 			}
 		}
 		out = append(out, inst)
@@ -861,7 +872,8 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 }
 
 // ClosePanel closes one kitty window, on the socket of the process the
-// instance lives in.
+// instance lives in. A tab left with no window goes with it, which is how a
+// tab target closes whole.
 func (h *Host) ClosePanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
 	socket, _, err := parseRef(ref.ID)
 	if err != nil {

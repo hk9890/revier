@@ -216,7 +216,7 @@ func (m Model) subtitle() string {
 // the right it carries the totals, standing in the column the rows count
 // their agents in: a state's total sits over that state's counts, so the
 // column reads as one sum and its parts rather than as two tallies that
-// happen to use the same glyphs (decisions.md D94).
+// happen to use the same glyphs (decisions.md D96).
 func (m Model) rule(width int) string {
 	head := clipTo(pad0(m.ruleCount()), width)
 	col, after := lipgloss.Width(head), false

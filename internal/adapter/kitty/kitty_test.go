@@ -850,6 +850,23 @@ func TestClosePanelClosesOneWindow(t *testing.T) {
 	}
 }
 
+// Each panel carries the id of the kitty tab that holds it, so the core can
+// tell a panel group's windows from the other tabs' windows.
+func TestPanelsCarryTheirTab(t *testing.T) {
+	h, _ := host(t, "unix:@kitty-4000")
+	got, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	var tabs []string
+	for _, p := range got[1].Panels {
+		tabs = append(tabs, p.ID.String()+"@"+p.Tab)
+	}
+	if want := []string{"2@2", "3@2", "4@3"}; !slices.Equal(tabs, want) {
+		t.Errorf("panels = %v, want %v", tabs, want)
+	}
+}
+
 // Every foreground process is walked up to its window's root. A parent the
 // walks share is read once per listing, not once per walk.
 func TestInstancesReadsEachParentOncePerListing(t *testing.T) {

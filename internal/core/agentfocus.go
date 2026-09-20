@@ -49,7 +49,7 @@ func (c *Core) FocusAgent(ctx context.Context, ref revier.TargetRef, panel revie
 	if err != nil {
 		return err
 	}
-	if err := c.Focus(ctx, ref); err != nil {
+	if err := c.focus(ctx, ref); err != nil {
 		return err
 	}
 	if opener, ok := c.Runtime.(revier.PanelOpener); ok && ref.Host == c.Runtime.Name() {

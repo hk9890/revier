@@ -46,13 +46,15 @@ type shutdown struct {
 	project revier.ProjectName
 	scope   core.ShutdownScope
 	// planned is whether the plan's survey has answered; report and plan are
-	// what it found.
-	planned bool
-	report  core.Report
-	plan    []core.CloseStep
-	running bool
-	saved   string // what the save before the close came to
-	closed  core.Closed
+	// what it found, over the projects it covered - the ones the recheck on
+	// confirm surveys again.
+	planned  bool
+	projects []core.Project
+	report   core.Report
+	plan     []core.CloseStep
+	running  bool
+	saved    string // what the save before the close came to
+	closed   core.Closed
 
 	// one is a close del or alt+del asked for (close.go): of the project,
 	// or of its row when pick is set. It starts at the confirm step, or runs
@@ -82,11 +84,14 @@ type plannedMsg struct {
 	err     error
 }
 
-// shutdownMsg is a shutdown's answer.
+// shutdownMsg is a shutdown's answer. recheck is set instead when an agent
+// of the plan turned busy after the plan was shown: the plan with its agents
+// as they are now, and nothing closed.
 type shutdownMsg struct {
-	saved  string
-	closed core.Closed
-	err    error
+	saved   string
+	closed  core.Closed
+	recheck []core.CloseStep
+	err     error
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -253,7 +258,7 @@ func (m Model) shutEnter() (tea.Model, tea.Cmd) {
 			m.shutBack()
 			return m, nil
 		}
-		return m.shutRun()
+		return m.shutRun(true)
 	}
 	return m, nil
 }
@@ -264,6 +269,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.step, s.row, s.planned, s.plan = shutConfirm, 0, false, nil
 	c, projects, root := m.core, m.projects, m.stateRoot
+	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
 		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
@@ -304,12 +310,34 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 }
 
 // shutRun saves the session when it changed and closes what the plan names.
-// Confirming a plan with a busy agent is the TUI's --force.
-func (m Model) shutRun() (tea.Model, tea.Cmd) {
+// Confirming a plan with a busy agent is the TUI's --force. Any other plan
+// confirmed was shown from a survey its agents may have moved on from, so it
+// is checked again first and closes nothing when one of them turned busy. The
+// recheck's survey is the fresher one, so the session saved before the close
+// is what is open now, not what was open when the plan was drawn.
+func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, report, plan, saves := m.core, m.stateRoot, s.report, s.plan, s.saves()
+	c, root, projects, report, plan, saves := m.core, m.stateRoot, s.projects, s.report, s.plan, s.saves()
+	recheck := confirmed && len(core.Busy(plan)) == 0
 	return m, func() tea.Msg {
+		if recheck {
+			var unread error
+			fresh, now, err := surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+				steps, err := c.Recheck(r, plan)
+				unread = err
+				return steps
+			})
+			switch {
+			case err != nil:
+				return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
+			case unread != nil:
+				return shutdownMsg{err: fmt.Errorf("the plan's agents could not be read again: %w; nothing closed", unread)}
+			case len(core.Busy(now)) > 0:
+				return shutdownMsg{recheck: now}
+			}
+			report = fresh
+		}
 		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
@@ -341,6 +369,13 @@ func (m Model) shutRun() (tea.Model, tea.Cmd) {
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
+	if msg.recheck != nil {
+		// The cursor lands on Cancel: the close it refused is one keypress
+		// away, and that press is the force, not a second Enter nobody aimed.
+		s.plan, s.row = msg.recheck, 1
+		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+		return m, nil
+	}
 	if s.one {
 		return m.closed(msg)
 	}

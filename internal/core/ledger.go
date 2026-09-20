@@ -97,7 +97,13 @@ func (c *Core) Settle(st, before *state.State, r Report, prev []revier.Instance,
 	l := Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}
 	if claimed, ok := c.Claim(prev, r.Windows, l, now, projects); ok {
 		slog.Info("claim", "project", l.Project.Name, "target", claimed.Target, "ref", claimed.Ref)
-		st.Claim(claimed.Target, claimed.Ref)
+		// An attachment records the terminal inside the window as well
+		// (decisions.md D95); a binding is of the window itself.
+		refs := []revier.TargetRef{claimed.Ref}
+		if claimed.Target == "" {
+			refs = c.attachment(r.Instances, claimed.Ref)
+		}
+		st.Claim(claimed.Target, refs...)
 		return true
 	}
 	if !l.Pending(now) {

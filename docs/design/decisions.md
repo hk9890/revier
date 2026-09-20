@@ -207,7 +207,7 @@ Hover says what a click would do, and it never selects.
 ### D51 — no header and no border; the rule carries the count
 
 The header named the program just started, and the border repeated the
-terminal's edges. What else the rule carries is D94's.
+terminal's edges. What else the rule carries is D96's.
 
 ### D53 — config is a screen, and a change applies as it is made
 
@@ -391,9 +391,11 @@ the moment before a restart, so it saves the session when it differs from the
 newest one; a second shutdown of the same desktop adds no file. An agent that
 works or waits for an answer would lose its turn, so the CLI refuses before
 the save and `--force` goes on; the TUI's confirm names the busy agents
-instead. `Closer` and `PanelCloser` are optional and polite: a window an
-application keeps open is named as still open, never killed. A project
-shutdown leaves an instance another project also holds.
+instead, and confirming them is the force. A confirm is a decision taken on a
+survey that has aged, so it reads its own steps' agents again before it saves
+or closes anything. `Closer` and `PanelCloser` are optional and polite: a
+window an application keeps open is named as still open, never killed. A
+project shutdown leaves an instance another project also holds.
 
 ### D79 — a project row counts its agents by state, and says nothing else on the right
 
@@ -568,7 +570,32 @@ because a refusal only sends the user to close by hand. A target of
 touches no file on the host. ctrl+del is not the key because bubbletea v1
 does not read its sequence.
 
-### D94 — the rule totals the agents on the list, in the rows' own column
+### D94 — a tab closes as every panel in it, and its busy check covers them all
+
+A tab opened with a panel group holds panels that carry no target mark, so
+closing the one panel the target is found by left the others on screen while
+the shutdown said "closed". `Panel` now names the tab that holds it, and a
+close step carries every panel of that tab and closes each through
+`PanelCloser`: kitty ends a tab with its last window and tmux a window with its
+last pane, so no close-a-tab capability is needed and tmux never kills a window
+linked into other sessions. The step holds the agents of all those panels, so a
+busy one beside the marked panel refuses it, and it counts as closed only once
+no panel of it is listed. An agent's own step closes its tab the same way,
+because the tab `revier agent new` opens carries no target mark to be closed
+by; the workspace's own tab is the exception, where the shell a layout declares
+beside the agent stays.
+
+### D95 — an attachment is the window and the terminal inside it
+
+The focused instance of D12 is a window, and a window carries no panels, so a
+survey of a hand-attached terminal probed nothing and a shutdown ended the
+agent in it unasked. `revier attach` and a claim now record the terminal
+beside the window, when the window pairs with one beyond doubt - the pairing
+D63 and D67 already refuse to guess at. An ambiguous window is recorded alone
+and reports no agent, which is the honest answer. The two are one attached row,
+the terminal's, because that is the side that holds the panels.
+
+### D96 — the rule totals the agents on the list, in the rows' own column
 
 Replaces D51's removal of the counts beside the rule's count. The rows show
 each project's state, but ninety of them do not fit on a screen, so "how many
