@@ -28,7 +28,7 @@ func (c *Core) Recheck(r Report, plan []CloseStep) ([]CloseStep, error) {
 		if !surveyed {
 			return nil, fmt.Errorf("%s is no longer surveyed", step.Project)
 		}
-		step.Agents = agentsIn(local, step.Ref, step.Panel)
+		step.Agents = agentsIn(local, step.Ref, step.panels())
 		out[i] = step
 	}
 	return out, nil
