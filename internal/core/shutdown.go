@@ -446,28 +446,34 @@ const ClosePoll = 100 * time.Millisecond
 const CloseWait = 3 * time.Second
 
 // CloseBudget is how long the closes themselves may take, on top of the wait
-// that follows them. It is the close phase's own, and counts from the moment
-// the last thing before it is done.
+// that follows them. It counts from the moment the save is done.
 const CloseBudget = 30 * time.Second
 
-// closeContext is what the closes and the wait after them run on: a deadline
-// of their own, and the caller's cancellation (decisions.md D99).
+// SaveBudget is how long the save before the closes may take. It counts from
+// the moment the recheck is done, and it is the survey's order of magnitude
+// because a save of a desktop holding links asks every link host what its
+// agents are working on.
+const SaveBudget = 30 * time.Second
+
+// phaseContext is what one phase of a shutdown runs on: a budget of its own,
+// and the caller's cancellation (decisions.md D99).
 //
-// It does not inherit the caller's deadline. What runs before the closes -
-// the recheck survey, which waits on every link host, and the save - can take
-// most of a caller's bound on ninety projects, and the closes would then run
-// on a context already done, so steps that would have closed fail instead. A
-// caller that cancels still cancels everything, because a cancel is a
-// decision and a deadline before the closes is not one.
-func closeContext(parent context.Context, wait time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), CloseBudget+wait)
+// It does not inherit the caller's deadline. The recheck survey waits on
+// every link host and can take most of a caller's bound on ninety projects;
+// the save then reaches those hosts again. Whatever runs next would be handed
+// a context already done - a save that fails, closes that fail on steps that
+// would have closed - so each phase counts its own budget from where it
+// starts. A caller that cancels still cancels everything, because a cancel is
+// a decision and a deadline that ran out earlier is not one.
+func phaseContext(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), budget)
 	follow := func() {
 		if errors.Is(parent.Err(), context.Canceled) {
 			cancel()
 		}
 	}
-	// A caller that cancelled while the recheck or the save ran has already
-	// decided, so that is read here rather than waited for.
+	// A caller that cancelled while an earlier phase ran has already decided,
+	// so that is read here rather than waited for.
 	follow()
 	stop := context.AfterFunc(parent, follow)
 	return ctx, func() { stop(); cancel() }
@@ -507,7 +513,11 @@ type ShutdownOpts struct {
 	// busy guard refuses saves nothing either, and the session records what
 	// is open now rather than what was open when the plan was drawn. Its
 	// failure is the shutdown's, and nothing closes.
-	Before func(Report) error
+	//
+	// The context it is handed is the save's own budget (SaveBudget), not
+	// the caller's remains: the recheck has just asked every link host, and
+	// the save asks them again.
+	Before func(context.Context, Report) error
 }
 
 // ErrAgentBusy is a close refused because a step would end an agent that
@@ -543,8 +553,8 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // open now rather than what was open when the plan was drawn.
 //
 // The closes and the wait after them then run on a budget of their own
-// (closeContext), so however long the recheck and the save took, every step
-// is asked to close.
+// (phaseContext), as the save before them does, so however long the recheck
+// took, the save is made and every step is asked to close.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	r := opts.Report
 	if !opts.Force {
@@ -562,11 +572,14 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		plan = CloseLast(plan, r.Instances, opts.Self)
 	}
 	if opts.Before != nil {
-		if err := opts.Before(r); err != nil {
+		saving, stop := phaseContext(ctx, SaveBudget)
+		err := opts.Before(saving, r)
+		stop()
+		if err != nil {
 			return nil, err
 		}
 	}
-	closing, stop := closeContext(ctx, wait)
+	closing, stop := phaseContext(ctx, CloseBudget+wait)
 	defer stop()
 	out := make(Closed, 0, len(plan))
 	for _, s := range plan {

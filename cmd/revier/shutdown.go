@@ -87,9 +87,11 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the
 		// survey the close works from rather than the one the plan was made
-		// from: a window closed by hand since is not saved and restored.
-		opts.Before = func(now core.Report) error {
-			stored, saved, gaps, err := a.core.SaveChanged(ctx, a.stateRoot, now, a.state.Current, time.Now())
+		// from: a window closed by hand since is not saved and restored. It
+		// runs on the budget the shutdown hands it, not on what the two
+		// surveys left of this command's.
+		opts.Before = func(saving context.Context, now core.Report) error {
+			stored, saved, gaps, err := a.core.SaveChanged(saving, a.stateRoot, now, a.state.Current, time.Now())
 			switch {
 			case err != nil:
 				return err

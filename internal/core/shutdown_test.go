@@ -655,7 +655,7 @@ func TestShutdownClosesOnItsOwnBudgetAfterASlowSave(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(core.Report) error {
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(context.Context, core.Report) error {
 		time.Sleep(50 * time.Millisecond)
 		return nil
 	}})
@@ -664,6 +664,32 @@ func TestShutdownClosesOnItsOwnBudgetAfterASlowSave(t *testing.T) {
 	}
 	if closed, _, failed := out.Counts(); closed != 3 || failed != 0 {
 		t.Errorf("counts = %d closed, %d failed; want every step closed past the caller's deadline", closed, failed)
+	}
+}
+
+// The save runs on a budget of its own too. Both surveys reach every link
+// host, and a caller's bound spent on them left the save asking those hosts
+// on a context already done, which failed the save and closed nothing.
+func TestShutdownSavesOnItsOwnBudgetAfterASlowRecheck(t *testing.T) {
+	c, _, _, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	time.Sleep(30 * time.Millisecond) // the caller's bound passes before the save
+
+	var live bool
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(saving context.Context, _ core.Report) error {
+		live = saving.Err() == nil
+		return saving.Err()
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if !live {
+		t.Error("the save was handed a context already done, want its own budget")
+	}
+	if closed, _, _ := out.Counts(); closed != 3 {
+		t.Errorf("counts = %d closed, want every step closed", closed)
 	}
 }
 
@@ -676,7 +702,7 @@ func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(core.Report) error {
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Force: true, Before: func(context.Context, core.Report) error {
 		cancel()
 		return nil
 	}})

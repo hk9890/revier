@@ -632,12 +632,14 @@ are read off it, not off the listing the plan was drawn from. A del on a busy
 row asks rather than closing, and its second press is the force, as a confirm
 already is in the wizard.
 
-Putting the recheck in front of the closes put its survey inside whatever
-bound the caller gave the whole call, and ninety projects with a link host
-that does not answer spend most of one. The closes and the wait after them
-therefore run on a budget of their own, counted from the moment the save is
-done, and carry the caller's cancellation but not its deadline: a cancel is a
-decision, and a bound that ran out before the first close is not one.
+Putting the recheck in front of the save and the closes put its survey inside
+whatever bound the caller gave the whole call, and ninety projects with a link
+host that does not answer spend most of one. The save and the closes therefore
+each run on a budget of their own, counted from where that phase starts: the
+save asks every link host what its agents hold, and the closes follow it, so a
+bound already spent left the save failing and nothing closing. Each budget
+carries the caller's cancellation but not its deadline: a cancel is a decision
+about this shutdown, and a bound that ran out in an earlier phase is not one.
 
 ### D100 — the workspace's own panel is marked, not guessed at
 

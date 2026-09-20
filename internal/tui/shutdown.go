@@ -24,9 +24,9 @@ import (
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
 
-// shutdownTimeout bounds the survey a plan is made from, the recheck survey
-// inside the close, and the save before it. The closes themselves run on
-// core.CloseBudget, which is theirs alone.
+// shutdownTimeout bounds the survey a plan is made from, and the recheck
+// survey inside the close. The save and the closes run on budgets of their
+// own, core.SaveBudget and core.CloseBudget, counted from where each starts.
 const shutdownTimeout = 30 * time.Second
 
 type shutStep int
@@ -341,10 +341,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// leaves no session file behind either, and it records the survey
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
-			opts.Before = func(now core.Report) error {
-				ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-				defer cancel()
-				stored, saved, _, err := c.SaveChanged(ctx, root, now, st.Current, time.Now())
+			opts.Before = func(saving context.Context, now core.Report) error {
+				stored, saved, _, err := c.SaveChanged(saving, root, now, st.Current, time.Now())
 				if err != nil {
 					return err
 				}
