@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
@@ -648,5 +649,42 @@ func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
 	m, _ = press(m, "esc")
 	if now := selectedRow(t, m); now != was {
 		t.Errorf("selected %q after clicks on the new-project screen, want %q", now, was)
+	}
+}
+
+// The version stands at the right end of the bar, dim: it says which revier
+// this is, and nothing else on the screen is about the installation.
+func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	bar := barLine(m)
+	dim := theme.Default().Help.Render(build.Version)
+	at := strings.Index(bar, dim)
+	switch {
+	case at < 0:
+		t.Errorf("bar = %q, want the version on it as %q", bar, dim)
+	case at < strings.LastIndex(bar, "alt+h"):
+		t.Errorf("bar = %q, want the version right of the last button", bar)
+	}
+}
+
+// A terminal with no room for both drops the version. The buttons are what
+// the line is for, and they do not move for it.
+func TestANarrowBarDropsTheVersion(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	wide := resize(m, 120, 20)
+	narrow := resize(m, 60, 20)
+
+	if !strings.HasSuffix(barLine(wide), build.Version) {
+		t.Fatalf("the wide bar %q has no version to drop", barLine(wide))
+	}
+	if strings.HasSuffix(barLine(narrow), build.Version) {
+		t.Errorf("narrow bar = %q, want no version on it", barLine(narrow))
 	}
 }
