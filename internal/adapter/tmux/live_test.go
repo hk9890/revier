@@ -837,6 +837,34 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	}
 }
 
+// The vars the core gives an Open land on the session's first pane and come
+// back from Instances, as a tab's do: that mark is how the panel a return
+// home lands in is found again.
+func TestOpenMarksTheFirstPaneWithItsVars(t *testing.T) {
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Vars: map[string]string{"REVIER_HOME": "home"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}},
+			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}},
+		},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || len(instances[0].Panels) != 2 {
+		t.Fatalf("instances = %+v, want the one session with its two panes", instances)
+	}
+	first, second := instances[0].Panels[0], instances[0].Panels[1]
+	if first.Vars["REVIER_HOME"] != "home" || second.Vars != nil {
+		t.Errorf("vars = %v and %v, want them on the first pane only", first.Vars, second.Vars)
+	}
+}
+
 // Each panel starts in its own directory, which need not be the realization's:
 // the core fills a panel's directory, and the host only follows it.
 func TestOpenStartsAPanelInItsOwnDirectory(t *testing.T) {

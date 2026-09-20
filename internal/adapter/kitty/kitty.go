@@ -35,10 +35,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -554,6 +557,8 @@ func isShell(cmd string) bool {
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
 // opens the OS window and every later one splits into its first tab. With no
 // kitty answering it starts one, on a socket that discovery finds again.
+// r.Vars become user vars of that first window, which ls reports back as the
+// panel's Vars, as OpenTab's do for a tab.
 //
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
@@ -570,6 +575,13 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
+	}
+	if err := h.setVars(ctx, socket, first, r.Vars); err != nil {
+		// The mark is best effort: an unmarked panel falls back to the guess
+		// it replaces (decisions.md D100). Failing here would leave the OS
+		// window open and unnamed to the caller, which pins nothing, and the
+		// next press would open a second one.
+		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", first, "err", err)
 	}
 	for _, p := range panels[1:] {
 		args := []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
@@ -601,6 +613,26 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
 }
+
+// setVars marks a window kitty has already opened with its user vars. A
+// launch takes them as --var, but the kitty process started for the first
+// window of a new OS window takes no such option, so both paths set them
+// here, in the one call set-user-vars takes every pair in.
+func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
+	if len(vars) == 0 {
+		return nil
+	}
+	args := []string{"set-user-vars", "--match", "id:" + strconv.Itoa(id)}
+	for _, name := range varNames(vars) {
+		args = append(args, name+"="+vars[name])
+	}
+	_, err := h.kitten(ctx, socket, args...)
+	return err
+}
+
+// varNames are the variable names in a fixed order, so a launch's arguments
+// and a set-user-vars call are the same from one run to the next.
+func varNames(vars map[string]string) []string { return slices.Sorted(maps.Keys(vars)) }
 
 // title gives a new window its panel title without taking the title away from
 // the program inside. `launch --title` pins a title for good, and a pinned
@@ -774,12 +806,7 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Rea
 	panels := r.PanelSpecs()
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
-	names := make([]string, 0, len(vars))
-	for name := range vars {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range varNames(vars) {
 		args = append(args, "--var", name+"="+vars[name])
 	}
 	first := 0

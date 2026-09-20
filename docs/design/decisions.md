@@ -391,11 +391,10 @@ the moment before a restart, so it saves the session when it differs from the
 newest one; a second shutdown of the same desktop adds no file. An agent that
 works or waits for an answer would lose its turn, so the CLI refuses before
 the save and `--force` goes on; the TUI's confirm names the busy agents
-instead, and confirming them is the force. A confirm is a decision taken on a
-survey that has aged, so it reads its own steps' agents again before it saves
-or closes anything. `Closer` and `PanelCloser` are optional and polite: a
-window an application keeps open is named as still open, never killed. A
-project shutdown leaves an instance another project also holds.
+instead, and confirming them is the force. `Closer` and `PanelCloser` are
+optional and polite: a window an application keeps open is named as still
+open, never killed. A project shutdown leaves an instance another project
+also holds.
 
 ### D79 — a project row counts its agents by state, and says nothing else on the right
 
@@ -619,3 +618,74 @@ restoring a selection by a name the list no longer holds. The cursor keeps its
 position instead, or the last row when the deleted one was last. A close moves
 no row away, so the cursor keeps following its project there: the cursor
 follows what it was on while that is on the list, and the place otherwise.
+
+### D99 — the busy guard is in the close path, not in the surface that asks
+
+The guard lived in the wizard's confirm, so `revier shutdown` and the instant
+del both closed on a plan drawn before the session was saved and before the
+press landed: the race the guard exists to close. `core.Shutdown` now reads
+the plan's agents again and refuses the whole plan while one of them is busy,
+unless forced; the session is saved after that guard, so a refused close
+leaves no file behind. That recheck is the freshest survey there is, so both
+the saved session and the order that closes this process's own terminal last
+are read off it, not off the listing the plan was drawn from. A del on a busy
+row asks rather than closing, and its second press is the force, as a confirm
+already is in the wizard.
+
+Forcing says not to refuse and says nothing else. The reading happens either
+way, and what it finds is what closes, is saved and is ordered: a force that
+skipped it wrote back into the session a window the user had closed by hand
+while the confirm stood, and kept a step marked unread by the refusal before
+it, so a link whose host answered again stayed open although the user had
+just asked for everything.
+
+A busy agent refuses the whole plan, because the user is about to be asked
+about it and the plan is what they read. Not reading a step's agents is a
+different thing, and refuses that step alone (D85): its host did not list, its
+project is no longer surveyed, or its link host did not answer, and it is left
+open and named in the result while the rest of the plan closes. Refusing all
+of it meant one dead remote host stopped eighty-nine healthy projects until
+`--force`, which would have turned the busy guard off everywhere. A shutdown
+left with nothing to close saves nothing either: it changes nothing, so there
+is nothing to record, and the survey that could not read the desktop is not
+the one to write a session from.
+
+Putting the recheck in front of the save and the closes put its survey inside
+whatever bound the caller gave the whole call, and ninety projects with a link
+host that does not answer spend most of one. The save and the closes therefore
+each run on a budget of their own, counted from where that phase starts: the
+save asks every link host what its agents hold, and the closes follow it, so a
+bound already spent left the save failing and nothing closing. Each budget
+carries the caller's cancellation but not its deadline: a cancel is a decision
+about this shutdown, and a bound that ran out in an earlier phase is not one.
+
+### D100 — the workspace's own panel is marked, not guessed at
+
+`ownPanel` took the first panel carrying no tab mark, so in a workspace whose
+tab holds a shell beside the tab target's panel it picked that shell: a return
+home from a tab landed in the wrong pane, and D94's own-tab rule read the same
+guess. revier now marks the first panel of every instance it opens with the
+target the instance was opened for, through `Realization.Vars`, as `OpenTab`
+already marks a tab's. An instance opened before the mark existed carries
+none, so the guess stays as the fallback for those and for nothing else.
+Setting it is best effort: the instance is open by then, and an `Open` that
+failed over the mark would hand the caller nothing to pin, so the next press
+would open a second copy. The host logs the failure and returns the instance.
+A tab's own mark stays fatal, because it is the tab's whole identity (D64).
+
+### D101 — a link's view is the host's agents and this machine's, added together
+
+`local := p.Remote == nil` skipped the probe for a link, and the host's answer
+then replaced the view's agents outright, so a terminal attached to a link by
+hand reported none and a shutdown ended a busy agent in it unasked. An
+attachment is probed for a link too - it is a terminal of this machine - and
+the host's agents are appended to what was read here rather than replacing it.
+The link's own targets stay unprobed: they are panels running an ssh, and what
+the agent on the far side is doing is its host's word (D84).
+
+The two sides can meet on one agent: whether a probe claims a panel running an
+ssh is the probe's business, and the host names that agent under the tag the
+panel gave it, so the same agent arrives twice and the row counts it twice.
+They are told apart by the panel each landed on, not by assuming they cannot
+meet, and the local reading stands: it read the panel itself, while the host's
+word about it crossed a machine.

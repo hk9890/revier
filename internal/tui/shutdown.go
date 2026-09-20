@@ -24,8 +24,9 @@ import (
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
 
-// shutdownTimeout bounds the survey a plan is made from, and the save before
-// the close.
+// shutdownTimeout bounds the survey a plan is made from, and the recheck
+// survey inside the close. The save and the closes run on budgets of their
+// own, core.SaveBudget and core.CloseBudget, counted from where each starts.
 const shutdownTimeout = 30 * time.Second
 
 type shutStep int
@@ -45,12 +46,11 @@ type shutdown struct {
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
-	// planned is whether the plan's survey has answered; report and plan are
-	// what it found, over the projects it covered - the ones the recheck on
-	// confirm surveys again.
+	// planned is whether the plan's survey has answered, and plan is what it
+	// found, over the projects it covered - the ones the recheck inside the
+	// close surveys again.
 	planned  bool
 	projects []core.Project
-	report   core.Report
 	plan     []core.CloseStep
 	running  bool
 	saved    string // what the save before the close came to
@@ -73,13 +73,12 @@ func (s shutdown) saves() bool {
 	return !s.one || (s.pick == core.CloseRow{} && !s.drop)
 }
 
-// plannedMsg is the survey and plan the confirm step shows, for the choice
-// it was asked for.
+// plannedMsg is the plan the confirm step shows, for the choice it was asked
+// for.
 type plannedMsg struct {
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
-	report  core.Report
 	plan    []core.CloseStep
 	err     error
 }
@@ -272,7 +271,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		asked.report, asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
 			return c.ShutdownPlan(r, asked.project, asked.scope)
 		})
 		return asked
@@ -281,15 +280,15 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 
 // surveyPlan surveys what is open now, attachments included, and makes the
 // plan from what it found. It runs off the update loop.
-func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) (core.Report, []core.CloseStep, error) {
+func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) ([]core.CloseStep, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	st := loadedState(root)
 	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
 	if err != nil {
-		return core.Report{}, nil, err
+		return nil, err
 	}
-	return report, plan(report), nil
+	return plan(report), nil
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -305,61 +304,77 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 		m.shutBack()
 		return m, nil
 	}
-	m.shut.planned, m.shut.report, m.shut.plan = true, msg.report, msg.plan
+	m.shut.planned, m.shut.plan = true, msg.plan
 	return m, nil
 }
 
 // shutRun saves the session when it changed and closes what the plan names.
-// Confirming a plan with a busy agent is the TUI's --force. Any other plan
-// confirmed was shown from a survey its agents may have moved on from, so it
-// is checked again first and closes nothing when one of them turned busy. The
-// recheck's survey is the fresher one, so the session saved before the close
-// is what is open now, not what was open when the plan was drawn.
+// Confirming a plan that already names a busy agent is the TUI's --force
+// (decisions.md D78); every other close is refused by core.Shutdown when one
+// of the plan's agents turned busy since the plan was drawn, and the wizard
+// shows the plan again with the agents that refused it.
+//
+// Only the plan the wizard drew goes in. Every close, the forced one too,
+// reads the agents again inside core.Shutdown, and the order and the session
+// it saves come off that reading rather than off the listing the plan was
+// drawn from.
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, report, plan, saves := m.core, m.stateRoot, s.projects, s.report, s.plan, s.saves()
-	recheck := confirmed && len(core.Busy(plan)) == 0
+	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
+	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
-		if recheck {
-			var unread error
-			fresh, now, err := surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
-				steps, err := c.Recheck(r, plan)
-				unread = err
-				return steps
-			})
-			switch {
-			case err != nil:
-				return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
-			case unread != nil:
-				return shutdownMsg{err: fmt.Errorf("the plan's agents could not be read again: %w; nothing closed", unread)}
-			case len(core.Busy(now)) > 0:
-				return shutdownMsg{recheck: now}
-			}
-			report = fresh
+		st := loadedState(root)
+		opts := core.ShutdownOpts{
+			Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached,
+			Self: core.RunsUnder(),
 		}
-		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
+		note := ""
+		if saves {
+			// The save is skipped when the recheck left nothing to close, so
+			// the result says why rather than showing a blank line.
+			note = "nothing closed, so nothing was saved"
+			// The save runs after the busy guard, so a close it refuses
+			// leaves no session file behind either, and it records the survey
+			// the close works from: a window closed by hand while the confirm
+			// was on screen is not saved and reopened by a later restore.
+			opts.Before = func(saving context.Context, now core.Report) error {
+				stored, saved, _, err := c.SaveChanged(saving, root, now, st.Current, time.Now())
+				if err != nil {
+					return err
+				}
+				note = "nothing open to save"
+				switch {
+				case saved:
+					note = "saved as session " + stored.ID
+				case stored.ID != "":
+					note = "session " + stored.ID + " already holds what was open"
+				}
+				return nil
+			}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		if !saves {
-			return shutdownMsg{closed: c.Shutdown(ctx, plan, core.CloseWait)}
+		answer := closeAnswer(c.Shutdown(ctx, plan, core.CloseWait, opts))
+		if answer.err == nil && answer.recheck == nil {
+			answer.saved = note
 		}
-		st := loadedState(root)
-		stored, saved, _, err := c.SaveChanged(ctx, root, report, st.Current, time.Now())
-		if err != nil {
-			return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
-		}
-		note := "nothing open to save"
-		switch {
-		case saved:
-			note = "saved as session " + stored.ID
-		case stored.ID != "":
-			note = "session " + stored.ID + " already holds what was open"
-		}
-		closing, stop := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer stop()
-		return shutdownMsg{saved: note, closed: c.Shutdown(closing, plan, core.CloseWait)}
+		return answer
 	}
+}
+
+// closeAnswer is what a close came to, as the wizard reads it: the refusal
+// carries the rechecked plan, so the surface shows it rather than an error
+// alone.
+func closeAnswer(closed core.Closed, err error) shutdownMsg {
+	var refused *core.BusyRefusal
+	switch {
+	case errors.As(err, &refused):
+		return shutdownMsg{recheck: refused.Plan}
+	case err != nil:
+		return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
+	}
+	return shutdownMsg{closed: closed}
 }
 
 // shutDown takes a shutdown's answer: the result is the pane's, a step that
@@ -370,10 +385,22 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
 	if msg.recheck != nil {
+		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+		// A screen or a delete confirm opened while the close ran is the
+		// user's: nothing closed, so the press is dropped rather than shown
+		// over it, as an answer to a del that a screen has outlived is
+		// dropped (close.go).
+		if m.confirm != "" || (m.dialog != dialogNone && m.dialog != dialogShutdown) {
+			m.shut = shutdown{}
+			return m, nil
+		}
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
-		s.plan, s.row = msg.recheck, 1
-		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+		// A del that closed at once asks here instead, so its second press
+		// is the force too (decisions.md D99). That force surveys again
+		// like any other close, so it carries no listing from here.
+		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
+		m.dialog = dialogShutdown
 		return m, nil
 	}
 	if s.one {
@@ -481,7 +508,7 @@ func (m Model) shutdownDetail() string {
 		for _, r := range s.closed {
 			project = m.shutProjectLine(&b, project, r.Project, w)
 			op, rest := startOp(th, "closed"), ""
-			if r.Err != nil || r.Open || r.Action == core.CloseUnsupported {
+			if r.Err != nil || r.Open || r.Action.Leaves() {
 				op, rest = skipOp(th, "open"), r.Note()
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")
@@ -499,7 +526,13 @@ func (m Model) shutdownDetail() string {
 		for _, step := range s.plan {
 			project = m.shutProjectLine(&b, project, step.Project, w)
 			op, rest := skipOp(th, "close"), ""
-			if step.Action == core.CloseUnsupported {
+			// A plan the busy guard handed back carries the steps its survey
+			// could not read, and those close nothing: the row says so rather
+			// than promising a close (decisions.md D99).
+			switch {
+			case step.Unread != "":
+				op, rest = keepOp(th, "keep"), step.Unread
+			case step.Action == core.CloseUnsupported:
 				op, rest = keepOp(th, "keep"), "its host cannot close it"
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(step.Name()), "", rest, th.PathMissing, w) + "\n")

@@ -20,6 +20,11 @@ const shutdownUsage = "usage: revier shutdown [<project>] [--agents | --targets]
 // waiting for an answer. The agents are printed before it.
 var errShutdownBusy = errors.New("agents are busy; nothing saved and nothing closed. use --force to shut down anyway")
 
+// errShutdownTurnedBusy is a shutdown the close path refused: an agent was
+// idle when the plan was made and is busy now. Nothing was saved and nothing
+// closed.
+var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was made; nothing saved and nothing closed. use --force to shut down anyway")
+
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent (decisions.md D78). It
 // saves the session first when it changed, so a restore brings back what the
@@ -57,13 +62,15 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	plan := core.CloseLast(a.core.ShutdownPlan(report, only, scope), report.Instances, core.RunsUnder())
+	plan := a.core.ShutdownPlan(report, only, scope)
 	if len(plan) == 0 {
 		_, _ = fmt.Fprintln(a.out, "nothing to close")
 		return nil
 	}
 	if *dry {
-		return printClosePlan(a.out, plan)
+		// A dry run prints the order this listing gives. The close takes its
+		// own from the survey it rechecks with.
+		return printClosePlan(a.out, core.CloseLast(plan, report.Instances, core.RunsUnder()))
 	}
 	if busy := core.Busy(plan); len(busy) > 0 && !*force {
 		if err := printClosePlan(a.out, busy); err != nil {
@@ -72,23 +79,46 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return errShutdownBusy
 	}
 
+	opts := core.ShutdownOpts{
+		Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached,
+		Self: core.RunsUnder(),
+	}
 	if !*noSave {
-		stored, saved, gaps, err := a.core.SaveChanged(ctx, a.stateRoot, report, a.state.Current, time.Now())
-		switch {
-		case err != nil:
-			return fmt.Errorf("%w; nothing closed", err)
-		case saved:
-			_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
-				core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
-			for _, note := range gaps.Notes() {
-				_, _ = fmt.Fprintf(a.out, "  %s\n", note)
+		// The save runs after the busy guard, so a shutdown the guard
+		// refuses leaves no session file behind either, and it records the
+		// survey the close works from rather than the one the plan was made
+		// from: a window closed by hand since is not saved and restored. It
+		// runs on the budget the shutdown hands it, not on what the two
+		// surveys left of this command's.
+		opts.Before = func(saving context.Context, now core.Report) error {
+			stored, saved, gaps, err := a.core.SaveChanged(saving, a.stateRoot, now, a.state.Current, time.Now())
+			switch {
+			case err != nil:
+				return err
+			case saved:
+				_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
+					core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
+				for _, note := range gaps.Notes() {
+					_, _ = fmt.Fprintf(a.out, "  %s\n", note)
+				}
+			case stored.ID != "":
+				_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
 			}
-		case stored.ID != "":
-			_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
+			return nil
 		}
 	}
 
-	closed := a.core.Shutdown(ctx, plan, core.CloseWait)
+	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, opts)
+	var refused *core.BusyRefusal
+	switch {
+	case errors.As(err, &refused):
+		if err := printClosePlan(a.out, core.Busy(refused.Plan)); err != nil {
+			return err
+		}
+		return errShutdownTurnedBusy
+	case err != nil:
+		return fmt.Errorf("%w; nothing closed", err)
+	}
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	for _, r := range closed {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Name(), r.Note())
@@ -110,6 +140,8 @@ func printClosePlan(out io.Writer, plan []core.CloseStep) error {
 	for _, s := range plan {
 		note := "close"
 		switch {
+		case s.Unread != "":
+			note = "leave open: " + s.Unread
 		case s.Action == core.CloseUnsupported:
 			note = "leave open: its host cannot close it"
 		case s.Busy():

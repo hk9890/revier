@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -212,9 +213,71 @@ func TestConfirmClosesNothingWhenAnAgentTurnedBusy(t *testing.T) {
 	}
 }
 
+// The session saved before the close is the recheck's survey, not the one
+// the plan was drawn from: a window the user closed by hand while the confirm
+// was on screen is gone, and a restore must not open it again.
+func TestTheSaveBeforeTheCloseRecordsWhatIsOpenAtTheConfirm(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	editor := wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	if plan := pane(m); !strings.Contains(plan, "project-00") {
+		t.Fatalf("pane = %q, want project-00's editor in the plan", plan)
+	}
+
+	wm.Remove(editor)
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("sessions = %+v, %v; want the one saved before the close", all, err)
+	}
+	if names := savedProjects(all[0]); !slices.Equal(names, []revier.ProjectName{"project-01"}) {
+		t.Errorf("saved projects = %v, want project-01 alone: the editor was closed by hand", names)
+	}
+}
+
+// A confirm that forces a busy agent saves from the same fresh survey as any
+// other close: forcing says not to refuse, not to work from the listing the
+// plan was drawn from.
+func TestTheForcedConfirmSavesWhatIsOpenAtTheConfirm(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	editor := wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shut down anyway: 1 busy agent") {
+		t.Fatalf("rows = %q, want the busy agent named, so the confirm is the force", body)
+	}
+
+	wm.Remove(editor)
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("sessions = %+v, %v; want the one saved before the forced close", all, err)
+	}
+	if names := savedProjects(all[0]); !slices.Equal(names, []revier.ProjectName{"project-01"}) {
+		t.Errorf("saved projects = %v, want project-01 alone: the editor was closed by hand", names)
+	}
+}
+
+// savedProjects names the projects a session recorded.
+func savedProjects(s session.Session) []revier.ProjectName {
+	var out []revier.ProjectName
+	for _, p := range s.Projects {
+		out = append(out, p.Name)
+	}
+	return out
+}
+
 // A host that stops answering between the plan and the confirm closes
-// nothing: a survey that lists no agent has not shown them idle.
-func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
+// nothing of its own: a survey that lists no agent has not shown them idle.
+// The result names each step it left and why, and nothing was saved, because
+// a shutdown that closes nothing changes nothing to record.
+func TestConfirmLeavesOpenWhatTheRecheckCannotRead(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
 	root := stateWith(t, nil)
@@ -230,8 +293,11 @@ func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
 	if all, _ := session.List(root); len(all) != 0 {
 		t.Errorf("sessions = %d, want no save for a shutdown that closed nothing", len(all))
 	}
-	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "could not be read again") || !strings.Contains(foot, "nothing closed") {
-		t.Errorf("screen = %q, want the reason nothing closed", foot)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 0, 1 still open") {
+		t.Errorf("rows = %q, want the step left open", body)
+	}
+	if plan := pane(m); !strings.Contains(plan, "no server running") {
+		t.Errorf("pane = %q, want the reason the step was left", plan)
 	}
 }
 

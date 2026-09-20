@@ -129,6 +129,14 @@ type Realization struct {
 	// host cannot see inside a terminal, and ignores it.
 	Panels []PanelSpec `toml:"panels" json:"panels,omitempty"`
 
+	// Vars are the panel variables the host sets on the first panel it
+	// opens, and reports back as Panel.Vars. No project file sets them: the
+	// core fills them, as it fills Dir, so that a panel revier opened is
+	// identified later by the mark rather than guessed at. They are what
+	// PanelOpener.OpenTab takes for a tab, on the instance's own first panel.
+	// A window host has no panels and ignores them.
+	Vars map[string]string `toml:"-" json:"vars,omitempty"`
+
 	// Place is where a newly launched window goes, as four tokens - x, y,
 	// width, height - in the window host's own vocabulary of pixels and
 	// workarea-relative words: "right top 75% 100%". It applies to a launch

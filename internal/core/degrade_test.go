@@ -136,9 +136,12 @@ func TestShutdownJudgesEachStepByItsOwnHost(t *testing.T) {
 	report := survey(t, c, projects, nil)
 	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
 	rt.Refuses = map[string]bool{plan[0].Ref.ID: true}
-	wm.InstancesErr = errors.New("went away")
+	// The window host answers the recheck and goes away as its own window
+	// closes, which is what leaves the shutdown judging each step on what it
+	// can still list.
+	wm.OnClose = func(revier.TargetRef) { wm.SetInstancesErr(errors.New("went away")) }
 
-	out := c.Shutdown(context.Background(), plan, 2*core.ClosePoll)
+	out, _ := c.Shutdown(context.Background(), plan, 2*core.ClosePoll, reading(projects))
 	if !out[0].Open {
 		t.Errorf("%s = %+v, want still open: its own host lists it", out[0].Name(), out[0])
 	}

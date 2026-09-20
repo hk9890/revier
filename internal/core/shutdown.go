@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -40,7 +41,17 @@ const (
 	// CloseUnsupported is a step whose host cannot close it. It is a normal
 	// outcome: the shutdown names it and leaves it open.
 	CloseUnsupported
+	// CloseUnread is a step whose agents the recheck could not read. It is a
+	// normal outcome too: the shutdown names it, leaves it open, and closes
+	// the rest of the plan.
+	CloseUnread
 )
+
+// Leaves reports an action that closes nothing and leaves the step open. It
+// is one predicate rather than a list repeated at every place that counts,
+// waits on, or draws a step, so an action added later cannot be missed at one
+// of them.
+func (a CloseAction) Leaves() bool { return a == CloseUnsupported || a == CloseUnread }
 
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
 // window and for an agent. Panel is set when panels close rather than the
@@ -55,6 +66,11 @@ type CloseStep struct {
 	Panels  []revier.PanelID
 	Action  CloseAction
 	Agents  []revier.AgentView
+
+	// Unread is why the recheck could not read this step's agents. A step
+	// that carries one closes nothing and is named in the result; the rest
+	// of the plan closes (decisions.md D85, D99).
+	Unread string
 }
 
 // closes are the panels the step closes: its tab, or the one panel that
@@ -97,8 +113,15 @@ func (s CloseStep) Name() string {
 // closing it loses the turn it is in.
 func (s CloseStep) Busy() bool { return len(s.BusyAgents()) > 0 }
 
-// BusyAgents are the step's agents that work or wait for an answer.
+// BusyAgents are the step's agents that work or wait for an answer. A step
+// the recheck could not read has none: its Agents are the ones the plan was
+// drawn with, and closing nothing ends nobody's turn. That refusal is the
+// step's alone (decisions.md D85), so the stale reading must not refuse the
+// whole plan.
 func (s CloseStep) BusyAgents() []revier.AgentView {
+	if s.Unread != "" {
+		return nil
+	}
 	var out []revier.AgentView
 	for _, a := range s.Agents {
 		if a.State.Status == revier.StatusRunning || a.State.Status == revier.StatusAttention {
@@ -301,6 +324,10 @@ func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panels []revier.P
 // instance, when it can.
 func (c *Core) closeStep(s CloseStep) CloseStep {
 	s.Action = CloseUnsupported
+	if s.Unread != "" {
+		s.Action = CloseUnread
+		return s
+	}
 	if s.Panel != "" {
 		if _, ok := c.panelCloser(s.Ref); ok {
 			s.Action = ClosePanel
@@ -408,6 +435,8 @@ type CloseResult struct {
 // Note is what a shutdown says about the step.
 func (r CloseResult) Note() string {
 	switch {
+	case r.Action == CloseUnread:
+		return "left open: " + r.Unread
 	case r.Action == CloseUnsupported:
 		return "left open: its host cannot close it"
 	case r.Err != nil:
@@ -428,7 +457,7 @@ func (cs Closed) Counts() (closed, open, failed int) {
 		switch {
 		case r.Err != nil:
 			failed++
-		case r.Open || r.Action == CloseUnsupported:
+		case r.Open || r.Action.Leaves():
 			open++
 		default:
 			closed++
@@ -444,10 +473,141 @@ const ClosePoll = 100 * time.Millisecond
 // CloseWait is how long a shutdown waits for what it closed to go.
 const CloseWait = 3 * time.Second
 
+// CloseBudget is how long the closes themselves may take, on top of the wait
+// that follows them. It counts from the moment the save is done.
+const CloseBudget = 30 * time.Second
+
+// SaveBudget is how long the save before the closes may take. It counts from
+// the moment the recheck is done, and it is the survey's order of magnitude
+// because a save of a desktop holding links asks every link host what its
+// agents are working on.
+const SaveBudget = 30 * time.Second
+
+// phaseContext is what one phase of a shutdown runs on: a budget of its own,
+// and the caller's cancellation (decisions.md D99).
+//
+// It does not inherit the caller's deadline. The recheck survey waits on
+// every link host and can take most of a caller's bound on ninety projects;
+// the save then reaches those hosts again. Whatever runs next would be handed
+// a context already done - a save that fails, closes that fail on steps that
+// would have closed - so each phase counts its own budget from where it
+// starts. A caller that cancels still cancels everything, because a cancel is
+// a decision and a deadline that ran out earlier is not one.
+func phaseContext(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), budget)
+	follow := func() {
+		if errors.Is(parent.Err(), context.Canceled) {
+			cancel()
+		}
+	}
+	// A caller that cancelled while an earlier phase ran has already decided,
+	// so that is read here rather than waited for.
+	follow()
+	stop := context.AfterFunc(parent, follow)
+	return ctx, func() { stop(); cancel() }
+}
+
+// ShutdownOpts is what a close needs beyond its plan: whether a busy agent
+// is closed anyway, and the survey that reads the plan's agents again.
+type ShutdownOpts struct {
+	// Force closes a step whose agent works or waits for an answer. It is
+	// what `--force` sets, and what a confirm means in a surface that named
+	// the busy agents before it asked (decisions.md D78). It says not to
+	// refuse and nothing else: the recheck still runs, and what it reads is
+	// still what closes, is saved and is ordered.
+	Force bool
+
+	// Projects, Bound and Attached are what the recheck surveys, the three
+	// Survey takes. With no projects there is nothing to read the agents
+	// from, so every step is one the recheck could not answer for and the
+	// close leaves them all open rather than closing blind.
+	Projects []Project
+	Bound    map[revier.ProjectName]Bindings
+	Attached map[revier.ProjectName][]revier.TargetRef
+
+	// Self reports a panel the calling process runs under. With it, the
+	// steps that would end that process go last (CloseLast), ordered off the
+	// same survey the agents were read from, so a shutdown run from a
+	// terminal of a workspace closes everything else before its own
+	// terminal. Nil keeps the plan's order.
+	Self func(revier.Panel) bool
+
+	// Before runs once the recheck has let the plan through and before the
+	// first close, handed the survey the agents and the order were read
+	// from. It is where the session a shutdown ends is saved, so a close the
+	// busy guard refuses saves nothing either, and the session records what
+	// is open now rather than what was open when the plan was drawn. Its
+	// failure is the shutdown's, and nothing closes.
+	//
+	// The context it is handed is the save's own budget (SaveBudget), not
+	// the caller's remains: the recheck has just asked every link host, and
+	// the save asks them again.
+	Before func(context.Context, Report) error
+}
+
+// ErrAgentBusy is a close refused because a step would end an agent that
+// works or waits for an answer. Nothing closed.
+var ErrAgentBusy = errors.New("an agent is busy")
+
+// BusyRefusal is ErrAgentBusy with the plan as the recheck read it, so a
+// surface shows the plan again with the agents that refused it. The close
+// forced after it reads its own survey, so it carries no listing of its own.
+type BusyRefusal struct {
+	Plan []CloseStep
+}
+
+func (r *BusyRefusal) Error() string { return ErrAgentBusy.Error() }
+
+func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
+
 // Shutdown closes each step of the plan in order, then lists the hosts until
 // every step it closed is gone or wait has passed. One step's failure is not
 // the shutdown's: the others still close, and the one that did not is named.
-func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration) Closed {
+//
+// Every plan was made from a survey that has aged since - by a confirm the
+// user read, by a session saved before the close - so the agents are read
+// again here, the one place every close goes through, and that happens
+// whether or not the close is forced (decisions.md D99). Forcing says not to
+// refuse a busy agent; it does not say to work from an older listing.
+//
+// A busy agent then closes nothing at all unless forced. A step the recheck
+// could not read closes nothing either, and that one is its own refusal: the
+// rest of the plan still closes.
+//
+// That recheck's survey is the freshest one there is, so the order opts.Self
+// asks for and the session opts.Before saves are both taken from it: a
+// refused close saves nothing, and a saved session holds what is open now
+// rather than what was open when the plan was drawn.
+//
+// The closes and the wait after them then run on a budget of their own
+// (phaseContext), as the save before them does, so however long the recheck
+// took, the save is made and every step is asked to close.
+func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
+	r, plan, err := c.recheck(ctx, plan, opts)
+	if err != nil {
+		return nil, err
+	}
+	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
+		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
+		return nil, &BusyRefusal{Plan: plan}
+	}
+	if opts.Self != nil {
+		plan = CloseLast(plan, r.Instances, opts.Self)
+	}
+	// A shutdown with nothing left to close changes nothing, so there is
+	// nothing to record: the save is skipped rather than writing a session
+	// built from a survey that could not read the desktop.
+	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Unread == "" })
+	if opts.Before != nil && closes {
+		saving, stop := phaseContext(ctx, SaveBudget)
+		err := opts.Before(saving, r)
+		stop()
+		if err != nil {
+			return nil, err
+		}
+	}
+	closing, stop := phaseContext(ctx, CloseBudget+wait)
+	defer stop()
 	out := make(Closed, 0, len(plan))
 	for _, s := range plan {
 		// The plan may come from a core whose hosts have changed since, as the
@@ -456,22 +616,81 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		switch res.Action {
 		case CloseInstance:
 			closer, _ := c.closer(s.Ref)
-			res.Err = closer.Close(ctx, s.Ref)
+			res.Err = closer.Close(closing, s.Ref)
 		case ClosePanel:
 			// A tab closes as its panels: the runtime ends the tab with the
 			// last of them (decisions.md D94).
 			closer, _ := c.panelCloser(s.Ref)
 			for _, p := range res.closes() {
-				res.Err = errors.Join(res.Err, closer.ClosePanel(ctx, s.Ref, p))
+				res.Err = errors.Join(res.Err, closer.ClosePanel(closing, s.Ref, p))
 			}
 		}
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
-			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported, "err", res.Err)
+			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
+			"unread", s.Unread, "err", res.Err)
 		out = append(out, res)
 	}
-	c.awaitClosed(ctx, out, wait)
+	c.awaitClosed(closing, out, wait)
 	closed, open, failed := out.Counts()
 	slog.Info("shutdown", "closed", closed, "open", open, "failed", failed)
+	return out, nil
+}
+
+// recheck surveys again and returns that survey with the plan whose steps
+// carry the agents it found. Everything the close does from here - the order,
+// the session it saves - is read off the returned report, not off the one the
+// plan was drawn from.
+func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep, error) {
+	r, err := c.Survey(ctx, opts.Projects, opts.Bound, opts.Attached)
+	if err != nil {
+		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+	}
+	return r, c.rechecked(r, plan), nil
+}
+
+// rechecked is the plan with each step's agents as a later survey finds them.
+// It adds and drops no step: a plan confirmed is the plan that runs, and only
+// what its agents do now can stop it (decisions.md D78).
+//
+// A step the survey could not answer for - the host that lists its instance
+// did not answer, its project is no longer surveyed, or the link host that
+// knows its agents did not answer - is marked Unread and closes nothing. A
+// degraded survey reports no agents, and no agents read is not idle: taking
+// it as idle would close it in the one case the survey knows least about.
+// The refusal is that step's alone, so one dead remote host does not stop the
+// other projects closing (decisions.md D85).
+func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
+	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
+	unreachable := map[revier.ProjectName]string{}
+	for _, v := range r.Views {
+		here[v.Project.Name] = c.agentsHere(v)
+		if v.Unreachable != "" {
+			unreachable[v.Project.Name] = v.Unreachable
+		}
+	}
+	out := make([]CloseStep, len(plan))
+	for i, step := range plan {
+		local, surveyed := here[step.Project]
+		// What an earlier reading found is dropped, not carried: this survey
+		// is the answer, and a plan handed back by a refusal comes in with
+		// the marks and agents that refusal read.
+		step.Unread, step.Agents = "", nil
+		// A link's agents are its host's word (D84). A host that stopped
+		// answering between the plan and the close reports none, and no
+		// agents read is not idle, so the panel here that shows a busy agent
+		// is not closed on a survey that could not ask about it.
+		switch why, unreached := unreachable[step.Project]; {
+		case r.Failed[step.Ref.Host] != nil:
+			step.Unread = step.Ref.Host + " did not answer: " + r.Failed[step.Ref.Host].Error()
+		case !surveyed:
+			step.Unread = string(step.Project) + " is no longer surveyed"
+		case unreached:
+			step.Unread = string(step.Project) + " did not answer: " + why
+		default:
+			step.Agents = agentsIn(local, step.Ref, step.panels())
+		}
+		out[i] = step
+	}
 	return out
 }
 
@@ -488,7 +707,7 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 		pending := false
 		for i := range out {
 			r := &out[i]
-			if r.Action == CloseUnsupported {
+			if r.Action.Leaves() {
 				continue
 			}
 			if failed[r.Ref.Host] != nil {

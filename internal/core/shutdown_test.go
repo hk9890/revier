@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,13 @@ func openDesktop(t *testing.T, status revier.Status) (*core.Core, *hosttest.Fake
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
 	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{probe}}
 	return c, rt, wm, []core.Project{prepared(t, agentProject())}
+}
+
+// reading is the close every test asks for that is not about the busy guard:
+// the normal path, whose recheck reads these projects again before it closes
+// anything.
+func reading(projects []core.Project) core.ShutdownOpts {
+	return core.ShutdownOpts{Projects: projects}
 }
 
 func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef) core.Report {
@@ -67,7 +75,7 @@ func TestShutdownAllClosesEveryOpenTarget(t *testing.T) {
 		t.Errorf("home step = %+v, want its one idle agent", plan[0])
 	}
 
-	out := c.Shutdown(context.Background(), plan, 0)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, failed := out.Counts(); closed != 3 || open != 0 || failed != 0 {
 		t.Errorf("counts = %d closed, %d open, %d failed; want 3 closed", closed, open, failed)
 	}
@@ -88,7 +96,7 @@ func TestShutdownAgentsClosesOnlyTheAgentPanels(t *testing.T) {
 	if got := stepNames(plan); !slices.Equal(got, []string{"#2"}) || plan[0].Action != core.ClosePanel {
 		t.Fatalf("plan = %+v, want the agent panel alone", plan)
 	}
-	c.Shutdown(context.Background(), plan, 0)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(rt.Closed) != 0 || len(wm.Closed) != 0 || !slices.Equal(rt.ClosedPanels, []revier.PanelID{"2"}) {
 		t.Errorf("closed %v and %v, panels %v; want panel 2 only", rt.Closed, wm.Closed, rt.ClosedPanels)
 	}
@@ -177,7 +185,7 @@ func TestShutdownLeavesOpenWhatItsHostCannotClose(t *testing.T) {
 	c.Window = closeless{wm}
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
-	out := c.Shutdown(context.Background(), plan, 0)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(wm.Closed) != 0 {
 		t.Errorf("window host closed %v, want nothing asked of it", wm.Closed)
 	}
@@ -196,7 +204,7 @@ func TestShutdownNamesAWindowThatStayed(t *testing.T) {
 	report := survey(t, c, projects, nil)
 	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
 
-	out := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 2*core.ClosePoll)
+	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 2*core.ClosePoll, reading(projects))
 	if closed, open, _ := out.Counts(); closed != 2 || open != 1 || out[2].Note() != "still open" {
 		t.Errorf("counts = %d closed, %d open, last %q; want the editor still open", closed, open, out[2].Note())
 	}
@@ -206,7 +214,7 @@ func TestShutdownNamesAWindowThatStayed(t *testing.T) {
 func TestShutdownGoesOnPastAFailedClose(t *testing.T) {
 	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
 	rt.CloseErr = errors.New("socket gone")
-	out := c.Shutdown(context.Background(), c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll), 0)
+	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll), 0, reading(projects))
 	if closed, _, failed := out.Counts(); failed != 2 || closed != 1 {
 		t.Errorf("counts = %d closed, %d failed; want the editor closed past two failures", closed, failed)
 	}
@@ -221,7 +229,7 @@ func TestShutdownCountsAFailedCloseOfWhatIsGoneAsClosed(t *testing.T) {
 	rt.Remove(plan[1].Ref)
 	rt.CloseErr = errors.New("no such window")
 
-	out := c.Shutdown(context.Background(), plan, 0)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, _, failed := out.Counts(); closed != 2 || failed != 1 || out[0].Err == nil {
 		t.Errorf("counts = %d closed, %d failed, home err %v; want home failed, notes and editor closed", closed, failed, out[0].Err)
 	}
@@ -233,7 +241,7 @@ func TestShutdownLeavesOpenWhatAHostThatWentPlanned(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
-	out := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0)
+	out, _ := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, _ := out.Counts(); closed != 1 || open != 2 || len(wm.Closed) != 1 {
 		t.Errorf("counts = %d closed, %d open, window host closed %v; want the editor closed and both workspaces left", closed, open, wm.Closed)
 	}
@@ -270,7 +278,7 @@ func TestClosePlanClosesOneTarget(t *testing.T) {
 	if got := stepNames(plan); !slices.Equal(got, []string{"home"}) || len(plan[0].Agents) != 1 {
 		t.Fatalf("plan = %+v, want home with its agent", plan)
 	}
-	c.Shutdown(context.Background(), plan, 0)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(rt.Closed) != 1 || len(wm.Closed) != 0 {
 		t.Errorf("runtime closed %v, window host closed %v; want the workspace alone", rt.Closed, wm.Closed)
 	}
@@ -332,7 +340,7 @@ func TestShutdownClosesTheWholeTab(t *testing.T) {
 	c, rt, projects := groupTab(t, revier.StatusIdle)
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
 
-	out := c.Shutdown(context.Background(), plan, 0)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, failed := out.Counts(); closed != 1 || open != 0 || failed != 0 {
 		t.Errorf("counts = %d closed, %d open, %d failed; want the tab closed", closed, open, failed)
 	}
@@ -366,7 +374,7 @@ func TestATabIsClosedOnlyWhenNoPanelOfItIsListed(t *testing.T) {
 	c.Runtime = keepsPanel{rt, "3"}
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
 
-	out := c.Shutdown(context.Background(), plan, 0)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"2"}) {
 		t.Errorf("panels closed = %v, want panel 2: panel 3 was left listed", rt.ClosedPanels)
 	}
@@ -415,7 +423,7 @@ func TestClosePlanClosesAnAddedAgentWithItsTab(t *testing.T) {
 	if len(plan) != 1 || plan[0].Action != core.ClosePanel || !slices.Equal(plan[0].Panels, []revier.PanelID{"3", "4"}) {
 		t.Fatalf("plan = %+v, want the agent tab whole", plan)
 	}
-	c.Shutdown(context.Background(), plan, 0)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"3", "4"}) {
 		t.Errorf("panels closed = %v, want the agent and the shell beside it", rt.ClosedPanels)
 	}
@@ -438,7 +446,7 @@ func TestShutdownAgentsClosesAnAddedTabAndKeepsTheDeclaredShell(t *testing.T) {
 	if !slices.Equal(plan[0].Panels, []revier.PanelID{"2"}) || !slices.Equal(plan[1].Panels, []revier.PanelID{"3", "4"}) {
 		t.Fatalf("panels = %v and %v, want the declared agent alone and the added tab whole", plan[0].Panels, plan[1].Panels)
 	}
-	c.Shutdown(context.Background(), plan, 0)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	left := survey(t, c, projects, nil).Instances
 	if len(left) != 1 || len(left[0].Panels) != 1 || left[0].Panels[0].ID != "1" {
 		t.Errorf("instances after = %+v, want the workspace shell alone", left)
@@ -533,5 +541,244 @@ func TestSaveChangedSavesNothingWhenNothingIsOpen(t *testing.T) {
 	root := t.TempDir()
 	if _, saved, _, err := c.SaveChanged(context.Background(), root, survey(t, c, projects, nil), "", time.Now()); saved || err != nil {
 		t.Errorf("save = %v, %v; want none", saved, err)
+	}
+}
+
+// A tab step is rechecked against every panel of its tab, so an agent that
+// turns busy in the panel beside the one that names the step refuses the
+// close.
+func TestShutdownRefusesABusyAgentBesideTheMarkedPanelOfATab(t *testing.T) {
+	c, _, projects := groupTab(t, revier.StatusIdle)
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+	if len(plan) != 1 {
+		t.Fatalf("plan = %+v, want one tab step", plan)
+	}
+
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects})
+	var refused *core.BusyRefusal
+	if !errors.As(err, &refused) || out != nil {
+		t.Fatalf("shutdown = %+v, %v; want a busy refusal", out, err)
+	}
+	if len(refused.Plan) != 1 || !refused.Plan[0].Busy() {
+		t.Errorf("refused plan = %+v, want the busy agent in panel 3", refused.Plan)
+	}
+}
+
+// The same tab closes once the agent beside it is idle again, and the close
+// is not refused for an agent the plan was drawn with.
+func TestShutdownClosesWhenTheRecheckFindsNoBusyAgent(t *testing.T) {
+	c, _, projects := groupTab(t, revier.StatusIdle)
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if closed, _, _ := out.Counts(); closed != 1 {
+		t.Errorf("counts = %d closed, want the tab closed", closed)
+	}
+}
+
+// A step whose agents the recheck could not read closes nothing and says why:
+// a degraded survey reports no agent, and no agent read is not idle.
+func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if len(rt.Closed) != 0 || len(wm.Closed) != 0 {
+		t.Errorf("closed %v and %v, want nothing: no project was surveyed", rt.Closed, wm.Closed)
+	}
+	if closed, open, _ := out.Counts(); closed != 0 || open != len(plan) {
+		t.Errorf("counts = %d closed, %d open; want every step left open", closed, open)
+	}
+	if note := out[0].Note(); !strings.Contains(note, "no longer surveyed") {
+		t.Errorf("note = %q, want the reason the step was left", note)
+	}
+}
+
+// One project the survey could not reach leaves its own steps open and closes
+// every other project's: a refusal disables the smallest thing that is wrong
+// (decisions.md D85).
+func TestShutdownClosesTheProjectsTheRecheckCouldRead(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	other := agentProject()
+	other.Name = "other"
+	other.Targets[0].Runtime.Name = "session:other"
+	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
+	other.Targets = other.Targets[:1]
+	rt.Add("session:other", "kitty")
+	projects = append(projects, prepared(t, other))
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	// Only "other" is surveyed again, so every step of "revier" is unread.
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects[1:]})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if closed, open, _ := out.Counts(); closed != 1 || open != 3 {
+		t.Errorf("counts = %d closed, %d open; want other's workspace closed and revier's three steps left", closed, open)
+	}
+	if len(rt.Closed) != 1 || rt.Closed[0].Title != "session:other" {
+		t.Errorf("runtime closed %v, want other's workspace alone", rt.Closed)
+	}
+}
+
+// A force says not to refuse, and nothing else. The plan a refusal hands back
+// carries the mark of a step its survey could not read, and the force reads
+// everything again rather than carrying that mark: a host answering once more
+// closes the step the user asked for.
+func TestAForcedCloseReadsAStepARefusalCouldNotRead(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusRunning)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	wm.SetInstancesErr(errors.New("went away"))
+
+	_, err := c.Shutdown(context.Background(), plan, 0, reading(projects))
+	var refused *core.BusyRefusal
+	if !errors.As(err, &refused) {
+		t.Fatalf("shutdown err = %v, want the busy agent to refuse it", err)
+	}
+	i := slices.IndexFunc(refused.Plan, func(s core.CloseStep) bool { return s.Target == "editor" })
+	if i < 0 || refused.Plan[i].Unread == "" {
+		t.Fatalf("refused plan = %+v, want the editor marked as unread", refused.Plan)
+	}
+
+	wm.SetInstancesErr(nil)
+	out, err := c.Shutdown(context.Background(), refused.Plan, 0,
+		core.ShutdownOpts{Force: true, Projects: projects})
+	if err != nil {
+		t.Fatalf("forced shutdown: %v", err)
+	}
+	if closed, open, _ := out.Counts(); closed != 3 || open != 0 {
+		t.Errorf("counts = %d closed, %d open; want the busy agent and the editor closed", closed, open)
+	}
+	if len(wm.Closed) != 1 {
+		t.Errorf("window host closed %v, want the editor: its host answers again", wm.Closed)
+	}
+}
+
+// The step that would end the calling process goes last, ordered off the
+// survey the recheck took: a plan-time listing can name an instance that is
+// already gone. A forced close reads that survey too, so it orders the same.
+func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
+	self := func(p revier.Panel) bool { return p.ID == "1" }
+	for _, tc := range []struct {
+		name   string
+		status revier.Status
+		force  bool
+	}{
+		{"unforced", revier.StatusIdle, false},
+		{"forced past a busy agent", revier.StatusRunning, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _, _, projects := openDesktop(t, tc.status)
+			plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+			if got, want := stepNames(plan), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
+				t.Fatalf("plan = %v, want %v", got, want)
+			}
+
+			out, err := c.Shutdown(context.Background(), plan, 0,
+				core.ShutdownOpts{Force: tc.force, Projects: projects, Self: self})
+			if err != nil {
+				t.Fatalf("shutdown: %v", err)
+			}
+			if got, want := closedNames(out), []string{"notes", "editor", "home"}; !slices.Equal(got, want) {
+				t.Errorf("closed in %v, want %v: the workspace this process runs under goes last", got, want)
+			}
+		})
+	}
+}
+
+// closedNames names the steps of a shutdown in the order it walked them.
+func closedNames(out core.Closed) []string {
+	plan := make([]core.CloseStep, len(out))
+	for i, r := range out {
+		plan[i] = r.CloseStep
+	}
+	return stepNames(plan)
+}
+
+// ctxCloser closes only on a live context, as a host that runs a command
+// does: an exec on a context already done fails without reaching the tool.
+type ctxCloser struct{ *hosttest.Fake }
+
+func (h ctxCloser) Close(ctx context.Context, ref revier.TargetRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return h.Fake.Close(ctx, ref)
+}
+
+// The closes have a budget of their own, so whatever the recheck and the save
+// spent of the caller's, every step is still asked to close. Ninety projects
+// and a link host that does not answer is where a caller's bound runs out
+// before the first close.
+func TestShutdownClosesOnItsOwnBudgetAfterASlowSave(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	c.Window = ctxCloser{wm}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(context.Context, core.Report) error {
+		time.Sleep(50 * time.Millisecond)
+		return nil
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if closed, _, failed := out.Counts(); closed != 3 || failed != 0 {
+		t.Errorf("counts = %d closed, %d failed; want every step closed past the caller's deadline", closed, failed)
+	}
+}
+
+// The save runs on a budget of its own too. Both surveys reach every link
+// host, and a caller's bound spent on them left the save asking those hosts
+// on a context already done, which failed the save and closed nothing.
+func TestShutdownSavesOnItsOwnBudgetAfterASlowRecheck(t *testing.T) {
+	c, _, _, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	time.Sleep(30 * time.Millisecond) // the caller's bound passes before the save
+
+	var live bool
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(saving context.Context, _ core.Report) error {
+		live = saving.Err() == nil
+		return saving.Err()
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if !live {
+		t.Error("the save was handed a context already done, want its own budget")
+	}
+	if closed, _, _ := out.Counts(); closed != 3 {
+		t.Errorf("counts = %d closed, want every step closed", closed)
+	}
+}
+
+// A caller that cancels cancels the closes too: a deadline that passed before
+// them is not a decision, and a cancel is.
+func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	c.Window = ctxCloser{wm}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Before: func(context.Context, core.Report) error {
+		cancel()
+		return nil
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if _, _, failed := out.Counts(); failed == 0 {
+		t.Errorf("counts = %d failed, want the cancelled close to fail", failed)
 	}
 }

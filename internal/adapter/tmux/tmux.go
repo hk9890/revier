@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
@@ -268,6 +269,8 @@ func kindOf(cmd string) revier.PanelKind {
 // runs yet, and leaves r.Name on it where Instances reads the title. With
 // panels, the first panel is the session's first pane and every later one is
 // split into it, side by side; without, the session runs r.Launch alone.
+// r.Vars go into the first pane's @revier option, which Instances reports
+// back as the panel's Vars, as OpenTab's do for a tab.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
@@ -286,7 +289,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
 	serverPID, session, window, pane := f[0], f[1], f[2], f[3]
-	if err := h.name(ctx, session, window, pane, r.Name, panels); err != nil {
+	if err := h.name(ctx, session, window, pane, r, panels); err != nil {
 		// Best effort: the error that failed the session is the one worth
 		// reporting. Left running, a session with no name or no shell would be
 		// matched, or would hold its name against the next Open.
@@ -311,9 +314,15 @@ func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSp
 }
 
 // name leaves the realization's name on a new session and fills its window.
-func (h *Host) name(ctx context.Context, session, window, pane, name string, panels []revier.PanelSpec) error {
-	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, name); err != nil {
+func (h *Host) name(ctx context.Context, session, window, pane string, r revier.Realization, panels []revier.PanelSpec) error {
+	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
 		return err
+	}
+	if err := h.setVars(ctx, pane, r.Vars); err != nil {
+		// The mark is best effort: an unmarked panel falls back to the guess
+		// it replaces (decisions.md D100). Failing here would kill a session
+		// whose panes are already running, over a mark nothing depends on.
+		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
 	}
 	return h.fill(ctx, window, pane, panels)
 }
@@ -389,17 +398,28 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 }
 
 func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.PanelSpec, vars map[string]string) error {
-	if len(vars) > 0 {
-		pairs := make([]string, 0, len(vars))
-		for name, value := range vars {
-			pairs = append(pairs, name+"="+value)
-		}
-		sort.Strings(pairs)
-		if _, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " ")); err != nil {
-			return err
-		}
+	// A tab's mark is its whole identity (decisions.md D64): a tab that
+	// carries none is found by nothing, and the next press opens another. It
+	// fails the tab, which OpenTab then kills.
+	if err := h.setVars(ctx, pane, vars); err != nil {
+		return err
 	}
 	return h.fill(ctx, window, pane, panels)
+}
+
+// setVars leaves the variables on the pane, packed into its @revier option,
+// where Instances reads them back.
+func (h *Host) setVars(ctx context.Context, pane string, vars map[string]string) error {
+	if len(vars) == 0 {
+		return nil
+	}
+	pairs := make([]string, 0, len(vars))
+	for name, value := range vars {
+		pairs = append(pairs, name+"="+value)
+	}
+	sort.Strings(pairs)
+	_, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " "))
+	return err
 }
 
 // FocusPanel makes the pane current in its window and its window current in

@@ -119,6 +119,41 @@ func TestDelClosesAnAgentsTab(t *testing.T) {
 	}
 }
 
+// An agent that starts a turn between the press and the close is not ended
+// by a del that would have closed at once: the close is refused, the plan is
+// shown with the agent busy, and the next press closes it (decisions.md D99).
+func TestDelOnAnAgentThatTurnedBusyAsksFirst(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	probeOf(c).State.Status = revier.StatusIdle
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	m, _ = press(m, "tab")
+	m, _ = press(m, "tab")
+	m, cmd := press(m, "delete")
+	m, cmd = deliver(m, cmd)
+	if cmd == nil {
+		t.Fatalf("screen = %q, want the close to run with no confirm", screen(m))
+	}
+	probeOf(c).State.Status = revier.StatusRunning
+	m, _ = deliver(m, cmd)
+	if len(rt.ClosedPanels) != 0 {
+		t.Fatalf("panels closed = %v, want none: the agent turned busy", rt.ClosedPanels)
+	}
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close claude of project-01?") {
+		t.Errorf("subtitle = %q, want the confirm for the agent that turned busy", sub)
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Close anyway: 1 busy agent") {
+		t.Errorf("rows = %q, want the busy agent named", body)
+	}
+
+	m, _ = press(m, "up")
+	m, cmd = press(m, "enter")
+	deliver(m, cmd)
+	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"1"}) {
+		t.Errorf("panels closed = %v, want the agent's panel on the second press", rt.ClosedPanels)
+	}
+}
+
 // del with text right of the query's cursor is the query's forward delete.
 func TestDelInsideTheQueryDeletesACharacter(t *testing.T) {
 	_, _, c, projects := world(t, 2)

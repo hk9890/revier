@@ -339,3 +339,90 @@ func TestServeStartsTheDeclaredPanels(t *testing.T) {
 		t.Errorf("ServeShell = %+v, %v; want zsh -l in %s", shell, err, dir)
 	}
 }
+
+// A terminal attached to a link by hand holds an agent of this machine. It is
+// probed like any attachment, and the host's answer adds to it rather than
+// replacing it, so the view shows both and a shutdown sees the busy one
+// (decisions.md D101).
+func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
+	c, rt, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	term := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	p := linkProject(t)
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
+		map[revier.ProjectName][]revier.TargetRef{p.Name: {term}})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	agents := report.Views[0].Agents
+	if len(agents) != 2 {
+		t.Fatalf("agents = %+v, want the attached terminal's and the host's", agents)
+	}
+	if agents[0].Ref != term || agents[0].State.Status != revier.StatusRunning {
+		t.Errorf("first agent = %+v, want the running one in the attached terminal", agents[0])
+	}
+	if agents[1].Panel != "9" || agents[1].State.Status != revier.StatusIdle {
+		t.Errorf("second agent = %+v, want the host's, on the panel here that shows it", agents[1])
+	}
+
+	s, ok := stepFor(c.ShutdownPlan(report, "", core.ShutdownAll), term)
+	if !ok || !s.Busy() {
+		t.Errorf("step = %+v, %v; want the attached terminal marked busy", s, ok)
+	}
+}
+
+// One agent both sides report is listed once. A probe that claims the panel
+// running the ssh reads it here, and the host names the same agent under the
+// tag that panel gave it, so the two land on one panel: the local reading
+// stands, and the row counts one agent rather than two.
+func TestALinkListsAnAgentBothSidesReportOnce(t *testing.T) {
+	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "fixing",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	p := linkProject(t)
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
+		map[revier.ProjectName][]revier.TargetRef{p.Name: {pane}})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	agents := report.Views[0].Agents
+	if len(agents) != 1 {
+		t.Fatalf("agents = %+v, want the one agent, read here and named by the host", agents)
+	}
+	if agents[0].Ref != pane || agents[0].Panel != "9" || agents[0].State.Status != revier.StatusRunning {
+		t.Errorf("agent = %+v, want panel 9 of %v as the probe here read it", agents[0], pane)
+	}
+	if plan := c.ShutdownPlan(report, "", core.ShutdownAll); len(core.Busy(plan)) != 1 {
+		t.Errorf("busy steps = %d, want the one agent named once", len(core.Busy(plan)))
+	}
+}
+
+// A link whose host stops answering between the plan and the close reports no
+// agent, and no agent read is not idle: its own steps are left open and named,
+// rather than ending a busy agent on the far side unasked.
+func TestShutdownLeavesOpenALinkWhoseHostStoppedAnswering(t *testing.T) {
+	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	p := linkProject(t)
+	projects := []core.Project{p}
+
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	s, ok := stepFor(plan, pane)
+	if !ok || len(s.Agents) != 1 {
+		t.Fatalf("plan = %+v, want the workspace with the host's idle agent", plan)
+	}
+
+	remote.Err = errors.New("connection refused")
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects})
+	if err != nil || len(rt.Closed) != 0 {
+		t.Fatalf("shutdown = %v, closed %v; want the step left open and nothing closed", err, rt.Closed)
+	}
+	if _, open, _ := out.Counts(); open != len(out) {
+		t.Errorf("counts = %d open of %d, want every step of the link left open", open, len(out))
+	}
+	if !strings.Contains(out[0].Note(), "connection refused") {
+		t.Errorf("note = %q, want the host's failure named", out[0].Note())
+	}
+}
