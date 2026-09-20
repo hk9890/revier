@@ -115,8 +115,11 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return printRestored(a.out, preview)
 	}
 	// Each step bounds its own launch and wait. The command's deadline is
-	// one keypress's, and a walk of several cold starts outlasts it.
-	restored, back := a.core.Restore(context.WithoutCancel(ctx), s, report, a.projects, a.ledger())
+	// one keypress's, and a walk of several cold starts outlasts it; the
+	// caller's cancellation still stops the walk, so Ctrl-C reaches it.
+	walk, stop := core.WithoutDeadline(ctx)
+	defer stop()
+	restored, back := a.core.Restore(walk, s, report, a.projects, a.ledger())
 	if err := printRestored(a.out, restored); err != nil {
 		return err
 	}

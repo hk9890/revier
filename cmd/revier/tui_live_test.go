@@ -1,7 +1,8 @@
 //go:build live
 
-// Layer L4 for the surface's working directory: real git and real scripts,
-// started after the directory the surface was started in is gone.
+// Layer L4 for the working directory of the surface and of a command: real
+// git and real scripts, started after the directory the process was started
+// in is gone.
 package main
 
 import (
@@ -108,6 +109,63 @@ func TestTUIRunsAProbeAfterItsStartDirectoryWasRemoved(t *testing.T) {
 	onPath(t, "aider-probe", inHome+"\n"+`echo '{"status":"idle"}'`)
 	startedInRemovedWorktree(t)
 
+	p := execprobe.New("aider", "aider-probe")
+	got, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusIdle {
+		t.Errorf("status = %v, want idle", got.Status)
+	}
+}
+
+// A command is not the surface: it does not outlive its directory, but the
+// shell it was run from may already have lost one. `revier status` in a
+// removed worktree reported every agent unknown, because the listing it runs
+// refuses to start there.
+func TestACommandListsClaudeAgentsAfterItsStartDirectoryWasRemoved(t *testing.T) {
+	onPath(t, "claude", inHome+"\n"+`echo '[{"pid":101,"status":"busy"}]'`)
+	t.Setenv("HOME", t.TempDir())
+	worktree := filepath.Join(t.TempDir(), "worktree")
+	if err := os.Mkdir(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(worktree)
+	if err := os.Remove(worktree); err != nil {
+		t.Fatal(err)
+	}
+
+	// Any command: every one of them goes through run, which leaves a start
+	// directory that is gone before it does anything else.
+	if err := run(io.Discard, []string{"version"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if got.Status != revier.StatusRunning {
+		t.Errorf("status = %v, want running", got.Status)
+	}
+}
+
+// The same for a [[probe]] script, which `revier list` runs for every panel.
+func TestACommandRunsAProbeAfterItsStartDirectoryWasRemoved(t *testing.T) {
+	onPath(t, "aider-probe", inHome+"\n"+`echo '{"status":"idle"}'`)
+	t.Setenv("HOME", t.TempDir())
+	worktree := filepath.Join(t.TempDir(), "worktree")
+	if err := os.Mkdir(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(worktree)
+	if err := os.Remove(worktree); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run(io.Discard, []string{"version"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 	p := execprobe.New("aider", "aider-probe")
 	got, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
 	if err != nil {
