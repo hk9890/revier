@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
 	"sync"
 	"time"
 
@@ -162,8 +161,8 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // it added, which are the only ones the host named and so the only ones
 // localise has a tag for.
 //
-// The agents are copied: two links to one project on one host are handed one
-// answer, and the survey renames each link's agents in place.
+// The append copies the agents: two links to one project on one host are
+// handed one answer, and the survey renames each link's agents in place.
 func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 	if a.err == nil && a.view.Unreachable != "" {
 		a.err = errors.New(a.view.Unreachable)
@@ -174,7 +173,7 @@ func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 	}
 	v.PathExists = a.view.PathExists
 	at := len(v.Agents)
-	v.Agents = append(v.Agents, slices.Clone(a.view.Agents)...)
+	v.Agents = append(v.Agents, a.view.Agents...)
 	added := v.Agents[at:]
 	if a.view.Invalid != "" {
 		if v.Invalid != "" {

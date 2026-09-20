@@ -91,7 +91,11 @@ type shutdownMsg struct {
 	saved   string
 	closed  core.Closed
 	recheck []core.CloseStep
-	err     error
+	// report is the survey the refusal read the plan's agents from. The
+	// wizard keeps it, so the force the next press is closes and saves from
+	// it rather than from the listing the plan was drawn from.
+	report core.Report
+	err    error
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -370,7 +374,7 @@ func closeAnswer(closed core.Closed, err error) shutdownMsg {
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):
-		return shutdownMsg{recheck: refused.Plan}
+		return shutdownMsg{recheck: refused.Plan, report: refused.Report}
 	case err != nil:
 		return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
 	}
@@ -385,11 +389,20 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
 	if msg.recheck != nil {
+		// A screen opened while the close ran is the user's: nothing closed,
+		// so the press is dropped rather than shown over it, as an answer to
+		// a del that a screen has outlived is dropped (close.go).
+		if m.dialog != dialogNone && m.dialog != dialogShutdown {
+			m.shut = shutdown{}
+			m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+			return m, nil
+		}
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
 		// A del that closed at once asks here instead, so its second press
-		// is the force too (decisions.md D97).
-		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
+		// is the force too (decisions.md D97). The refusal's survey is the
+		// fresher one, so the force closes and saves from it.
+		s.plan, s.report, s.row, s.step = msg.recheck, msg.report, 1, shutConfirm
 		m.dialog = dialogShutdown
 		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
 		return m, nil

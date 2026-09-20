@@ -1337,7 +1337,6 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 			}
 		}
 	}
-	//
 	// An attachment is probed for a link too (decisions.md D99): it is a
 	// terminal of this machine, holding an agent no host on the other side
 	// knows about, and taking the host's word as the project's whole answer

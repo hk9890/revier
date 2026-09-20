@@ -486,9 +486,14 @@ type ShutdownOpts struct {
 // works or waits for an answer. Nothing closed.
 var ErrAgentBusy = errors.New("an agent is busy")
 
-// BusyRefusal is ErrAgentBusy with the plan as the recheck read it, so a
-// surface shows the plan again with the agents that refused it.
-type BusyRefusal struct{ Plan []CloseStep }
+// BusyRefusal is ErrAgentBusy with the plan as the recheck read it and the
+// survey it was read from, so a surface shows the plan again with the agents
+// that refused it, and a close forced after it works from that survey rather
+// than from the listing the plan was drawn from.
+type BusyRefusal struct {
+	Plan   []CloseStep
+	Report Report
+}
 
 func (r *BusyRefusal) Error() string { return ErrAgentBusy.Error() }
 
@@ -517,7 +522,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		}
 		if busy := Busy(freshPlan); len(busy) > 0 {
 			slog.Info("shutdown refused", "steps", len(freshPlan), "busy", len(busy))
-			return nil, &BusyRefusal{Plan: freshPlan}
+			return nil, &BusyRefusal{Plan: freshPlan, Report: fresh}
 		}
 		r, plan = fresh, freshPlan
 	}
@@ -582,8 +587,12 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 // it as idle would let the close through in the one case it knows least.
 func (c *Core) rechecked(r Report, plan []CloseStep) ([]CloseStep, error) {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
+	unreachable := map[revier.ProjectName]string{}
 	for _, v := range r.Views {
 		here[v.Project.Name] = c.agentsHere(v)
+		if v.Unreachable != "" {
+			unreachable[v.Project.Name] = v.Unreachable
+		}
 	}
 	out := make([]CloseStep, len(plan))
 	for i, step := range plan {
@@ -593,6 +602,13 @@ func (c *Core) rechecked(r Report, plan []CloseStep) ([]CloseStep, error) {
 		local, surveyed := here[step.Project]
 		if !surveyed {
 			return nil, fmt.Errorf("%s is no longer surveyed", step.Project)
+		}
+		// A link's agents are its host's word (D84). A host that stopped
+		// answering between the plan and the close reports none, and no
+		// agents read is not idle, so the panel here that shows a busy agent
+		// is not closed on a survey that could not ask about it.
+		if why, ok := unreachable[step.Project]; ok {
+			return nil, fmt.Errorf("%s did not answer: %s", step.Project, why)
 		}
 		step.Agents = agentsIn(local, step.Ref, step.panels())
 		out[i] = step

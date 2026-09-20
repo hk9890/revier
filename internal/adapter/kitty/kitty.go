@@ -612,17 +612,23 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // window of a new OS window takes no such option, so both paths set them
 // here, in one call per variable.
 func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
-	names := make([]string, 0, len(vars))
-	for name := range vars {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range varNames(vars) {
 		if _, err := h.kitten(ctx, socket, "set-user-vars", "--match", "id:"+strconv.Itoa(id), name+"="+vars[name]); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// varNames are the variable names in a fixed order, so a launch's arguments
+// and a set-user-vars sequence are the same from one run to the next.
+func varNames(vars map[string]string) []string {
+	names := make([]string, 0, len(vars))
+	for name := range vars {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // title gives a new window its panel title without taking the title away from
@@ -797,12 +803,7 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Rea
 	panels := r.PanelSpecs()
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
-	names := make([]string, 0, len(vars))
-	for name := range vars {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range varNames(vars) {
 		args = append(args, "--var", name+"="+vars[name])
 	}
 	first := 0

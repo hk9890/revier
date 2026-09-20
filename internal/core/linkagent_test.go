@@ -372,3 +372,27 @@ func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 		t.Errorf("step = %+v, %v; want the attached terminal marked busy", s, ok)
 	}
 }
+
+// A link whose host stops answering between the plan and the close reports no
+// agent, and no agent read is not idle: the close is refused rather than
+// ending a busy agent on the far side unasked.
+func TestShutdownRefusesALinkWhoseHostStoppedAnswering(t *testing.T) {
+	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	p := linkProject(t)
+	projects := []core.Project{p}
+
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	s, ok := stepFor(plan, pane)
+	if !ok || len(s.Agents) != 1 {
+		t.Fatalf("plan = %+v, want the workspace with the host's idle agent", plan)
+	}
+
+	remote.Err = errors.New("connection refused")
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects})
+	if err == nil || out != nil || len(rt.Closed) != 0 {
+		t.Fatalf("shutdown = %+v, %v, closed %v; want a refusal with nothing closed", out, err, rt.Closed)
+	}
+	if !strings.Contains(err.Error(), "connection refused") {
+		t.Errorf("err = %v, want the host's failure named", err)
+	}
+}
