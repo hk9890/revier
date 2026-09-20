@@ -146,13 +146,12 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	//
 	// The project column is what the list is for, so it gives way last: the
 	// agent column shrinks first, to one glyph, and then goes, and only then
-	// is a name or a path cut.
-	projectCol := d.projectColumn(m)
-	agentCol := min(maxAgentWidth, width-indent-gridGap-projectCol)
-	if agentCol < 1 {
-		agentCol, projectCol = 0, width-indent
-	} else {
-		projectCol = width - indent - gridGap - agentCol
+	// is a name or a path cut. Where the agent column starts is agentGeometry's
+	// to say, so the rule's totals stand in the same columns as these counts.
+	agentAt, agentCol := d.agentGeometry(m)
+	projectCol := width - indent
+	if agentCol > 0 {
+		projectCol = agentAt - gridGap - indent
 	}
 	cell := func(s string, w int) string {
 		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
@@ -197,10 +196,11 @@ const (
 	maxNameWidth    = 32
 )
 
-// agentGeometry is where a row's agent column starts and how wide it is, for
-// the rule that draws its totals over the same column. It is what Render
-// works out for a row, read off the list rather than off one row: the column
-// sits at the right edge, so its width decides its start.
+// agentGeometry is where a row's agent column starts and how wide it is. It
+// is read off the list rather than off one row, so Render and the rule that
+// draws its totals over the same column both ask it: the column sits at the
+// right edge, so its width decides its start. A start of zero is a list with
+// no room for the column at all.
 func (d projectDelegate) agentGeometry(m list.Model) (start, room int) {
 	indent := rowIndent(d.theme)
 	room = min(maxAgentWidth, m.Width()-indent-gridGap-d.projectColumn(m))
@@ -261,16 +261,9 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 	return b.String()
 }
 
-// agent is the project's agents counted by state, the state closest to
-// needing you first: each state as its glyph and the count, in its colour.
-// Each state has a slot of its own, blank when it has no agent, so a state's
-// count sits in the same column on every row. It is the table's second
-// column, and the part that answers "which of these needs me". What each
-// agent is doing is the pane's.
-//
-// The column gives way in steps as room goes (decisions.md D39): first to the
-// worst state's count alone, then to its glyph alone, then to nothing. The
-// sort and the header's counts still say who needs you.
+// agent is the project's agents counted by state: the table's second column,
+// and the part that answers "which of these needs me". What each agent is
+// doing is the pane's. How the counts are laid out is agentPieces'.
 func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	counts := map[revier.Status]int{}
 	for _, a := range v.Agents {
@@ -335,11 +328,13 @@ func agentPieces(th theme.Theme, counts map[revier.Status]int, room int) []agent
 }
 
 // agentColumn draws the pieces as a row draws them: the space between two
-// counts is the row's background, as every other gap in a row is.
+// counts is the row's background, as every other gap in a row is. A count
+// with more digits than its slot holds takes the space before the next one
+// rather than pushing it out of its column.
 func agentColumn(th theme.Theme, counts map[revier.Status]int, room int, style func(lipgloss.Style) lipgloss.Style) string {
 	out, at := "", 0
 	for _, p := range agentPieces(th, counts, room) {
-		out += style(th.Path).Render(strings.Repeat(" ", p.at-at)) + style(p.style).Render(p.text)
+		out += style(th.Path).Render(strings.Repeat(" ", max(p.at-at, 0))) + style(p.style).Render(p.text)
 		at = p.at + lipgloss.Width(p.text)
 	}
 	return out

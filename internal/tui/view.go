@@ -101,8 +101,10 @@ func (m Model) View() string {
 	// list's column and read as the list's, not the whole screen's
 	// (decisions.md D73). A terminal too narrow for both shows the pane in
 	// the list's place, under a query as wide as the screen.
-	// Beside the pane the rule stops a column short of its border, as every
-	// row does, rather than running into it.
+	// Beside the pane the rule stops a column short of its border rather
+	// than running into it. A row's own columns run to the border, so the
+	// rule can be a column short of a total the rows have the room for; it
+	// leaves that total off and keeps the rest.
 	list, rule := m.listWidth(), m.listWidth()-1
 	if m.paneWidth() == 0 {
 		list, rule = w, w
@@ -214,7 +216,7 @@ func (m Model) subtitle() string {
 // the right it carries the totals, standing in the column the rows count
 // their agents in: a state's total sits over that state's counts, so the
 // column reads as one sum and its parts rather than as two tallies that
-// happen to use the same glyphs.
+// happen to use the same glyphs (decisions.md D94).
 func (m Model) rule(width int) string {
 	head := clipTo(pad0(m.ruleCount()), width)
 	col, after := lipgloss.Width(head), false
@@ -248,13 +250,16 @@ func (m Model) rule(width int) string {
 	for _, p := range pieces {
 		// A state with no agent leaves its slot empty and the rule runs
 		// through it: a gap there would read as something missing, rather
-		// than as a state with nothing in it. Where a total would not fit
-		// its slot - a narrow terminal, a long name - the rule carries the
-		// count alone, because a total out of its slot stands over a state
-		// it does not mean.
+		// than as a state with nothing in it. A total with no room for its
+		// own slot - the rule stops a column short of the pane's border and
+		// a row's counts do not - is left off and the line runs on in its
+		// place, because a total moved out of its slot stands over a state
+		// it does not mean. The totals left of it keep theirs; where the
+		// first one is already short of room the rule is the count alone,
+		// which is what line(width) then draws.
 		start, text := at+p.at, p.style.Render(p.text)
 		if start <= col || start+lipgloss.Width(text) > width {
-			return head + m.theme.Border.Render(strings.Repeat("─", max(width-lipgloss.Width(head), 0)))
+			break
 		}
 		out += line(start) + text
 		col, after = start+lipgloss.Width(text), true

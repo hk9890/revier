@@ -283,6 +283,38 @@ func TestTheRuleCountsEveryAgentByState(t *testing.T) {
 	}
 }
 
+// The rule stops a column short of the pane's border and a row's counts run
+// to the border itself, so a row whose counts fill that column leaves the
+// rule no room for the last of them. The rule leaves that one off and keeps
+// the ones it has room for, in their own columns: a total is dropped, never
+// moved, and never takes the rest with it.
+func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
+	g := theme.Default().Glyphs
+	m := countedWorld(t, "/p/"+strings.Repeat("deeply-nested/", 4)+"checkout",
+		[]revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown})
+	// A list column 77 wide: the project column stands at its cap and the
+	// four counts beside it end in the list's last column.
+	narrow := resize(m, 158, 30)
+	head, row := ruleLine(narrow), rows(narrow)[0]
+	for _, glyph := range []string{g.NeedsYou, g.Working, g.Idle} {
+		if at, over := column(row, glyph), column(head, glyph); over != at {
+			t.Errorf("%q: the row counts at column %d and the rule totals at %d:\n%s\n%s", glyph, at, over, head, row)
+		}
+	}
+	// Every total the rule does carry stands over its own state's counts,
+	// whatever the terminal's width.
+	for w := 100; w <= 200; w++ {
+		wide := resize(m, w, 30)
+		head, row := ruleLine(wide), rows(wide)[0]
+		for _, glyph := range []string{g.NeedsYou, g.Working, g.Idle, g.Unknown} {
+			if over := column(head, glyph); over >= 0 && over != column(row, glyph) {
+				t.Fatalf("%d columns: %q totalled at column %d, counted at %d:\n%s\n%s",
+					w, glyph, over, column(row, glyph), head, row)
+			}
+		}
+	}
+}
+
 // The rows before the first survey are in file order, and the survey re-sorts
 // them. The list component keeps the cursor's index across that, not its
 // project, so a cursor left where it was would land on whatever sorted into
@@ -1697,7 +1729,7 @@ func TestTheRowCountsItsAgentsByState(t *testing.T) {
 			absent:   []string{g.Working, g.Unknown},
 		},
 	} {
-		row, _, _ := strings.Cut(rows(countedWorld(t, tc.statuses))[0], "│")
+		row, _, _ := strings.Cut(rows(countedWorld(t, "/p/duo", tc.statuses))[0], "│")
 		at := -1
 		for _, w := range tc.want {
 			i := strings.Index(row, w)
@@ -1719,7 +1751,7 @@ func TestTheRowCountsItsAgentsByState(t *testing.T) {
 func TestAStateCountKeepsItsColumn(t *testing.T) {
 	g := theme.Default().Glyphs
 	col := func(statuses []revier.Status) int {
-		row := rows(countedWorld(t, statuses))[0]
+		row := rows(countedWorld(t, "/p/duo", statuses))[0]
 		i := strings.Index(row, g.Working+" 1")
 		if i < 0 {
 			t.Fatalf("row = %q, want the working count", row)
@@ -1737,7 +1769,7 @@ func TestAStateCountKeepsItsColumn(t *testing.T) {
 // falls back to the glyph alone.
 func TestANarrowRowKeepsTheWorstCount(t *testing.T) {
 	g := theme.Default().Glyphs
-	m := countedWorld(t, []revier.Status{revier.StatusIdle, revier.StatusAttention, revier.StatusRunning})
+	m := countedWorld(t, "/p/duo", []revier.Status{revier.StatusIdle, revier.StatusAttention, revier.StatusRunning})
 	for _, tc := range []struct {
 		width int
 		all   bool
@@ -1752,9 +1784,11 @@ func TestANarrowRowKeepsTheWorstCount(t *testing.T) {
 	}
 }
 
-// countedWorld is one running project with an agent in each of statuses,
-// surveyed on a terminal wide enough for the pane.
-func countedWorld(t *testing.T, statuses []revier.Status) tui.Model {
+// countedWorld is one running project at path, with an agent in each of
+// statuses, surveyed on a terminal wide enough for the pane. The path is the
+// test's because it sets the project column's width, and with it the room
+// the counts beside it have.
+func countedWorld(t *testing.T, path string, statuses []revier.Status) tui.Model {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	var probes []revier.AgentProbe
@@ -1765,7 +1799,7 @@ func countedWorld(t *testing.T, statuses []revier.Status) tui.Model {
 			State: revier.AgentState{Harness: "claude", Status: s, Activity: marker + " task"}})
 		panels = append(panels, revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelAgent, Title: "claude " + marker})
 	}
-	projects := core.Prepare([]revier.Project{{Name: "duo", Path: "/p/duo", Targets: []revier.Target{
+	projects := core.Prepare([]revier.Project{{Name: "duo", Path: path, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
 	}}})

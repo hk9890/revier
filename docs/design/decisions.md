@@ -207,8 +207,7 @@ Hover says what a click would do, and it never selects.
 ### D51 — no header and no border; the rule carries the count
 
 The header named the program just started, and the border repeated the
-terminal's edges. The agent counts beside the count went when the query moved
-onto the rule (D73): each row already shows its state.
+terminal's edges. What else the rule carries is D94's.
 
 ### D53 — config is a screen, and a change applies as it is made
 
@@ -568,3 +567,12 @@ because a refusal only sends the user to close by hand. A target of
 `config.toml` is every project's, so no project's row deletes it. Unlinking
 touches no file on the host. ctrl+del is not the key because bubbletea v1
 does not read its sequence.
+
+### D94 — the rule totals the agents on the list, in the rows' own column
+
+Replaces D51's removal of the counts beside the rule's count. The rows show
+each project's state, but ninety of them do not fit on a screen, so "how many
+need me now" was a scroll. The totals stand in the column the rows count in,
+one layout placing both, so a state's total sits over that state's counts.
+They count the rows the filter left, and the rule's line runs through the slot
+of a state with no agent.
