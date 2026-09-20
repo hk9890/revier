@@ -66,6 +66,15 @@ func (s CloseStep) closes() []revier.PanelID {
 	return []revier.PanelID{s.Panel}
 }
 
+// panels are the panels whose agents the step ends, and none for a step that
+// closes the whole instance, where every agent in it ends.
+func (s CloseStep) panels() []revier.PanelID {
+	if s.Panel == "" {
+		return nil
+	}
+	return s.closes()
+}
+
 // Name is how a step is named to the user: its target, the harness of the
 // agent it ends, the panel when no probe named one, or an attached window's
 // title.
