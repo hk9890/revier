@@ -301,8 +301,13 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 // The workspace's own tab is the exception: a declared [agent, shell] layout
 // keeps its shell, which is what a shutdown of the agents alone promises
 // (decisions.md D94).
+//
+// An instance that names no own panel is read as the exception too. Taking
+// the tab there is a guess, and the guess that is wrong closes the declared
+// shell beside the agent; the guess the other way leaves one shell of an
+// added tab open, which the next shutdown closes.
 func agentPanels(in revier.Instance, panel revier.PanelID) []revier.PanelID {
-	if ownTab(in, panel) {
+	if own, known := ownTab(in, panel); own || !known {
 		return []revier.PanelID{panel}
 	}
 	return tabAt(in, panel)
@@ -483,29 +488,14 @@ const CloseBudget = 30 * time.Second
 // agents are working on.
 const SaveBudget = 30 * time.Second
 
-// phaseContext is what one phase of a shutdown runs on: a budget of its own,
-// and the caller's cancellation (decisions.md D99).
-//
-// It does not inherit the caller's deadline. The recheck survey waits on
-// every link host and can take most of a caller's bound on ninety projects;
-// the save then reaches those hosts again. Whatever runs next would be handed
-// a context already done - a save that fails, closes that fail on steps that
-// would have closed - so each phase counts its own budget from where it
-// starts. A caller that cancels still cancels everything, because a cancel is
-// a decision and a deadline that ran out earlier is not one.
-func phaseContext(parent context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), budget)
-	follow := func() {
-		if errors.Is(parent.Err(), context.Canceled) {
-			cancel()
-		}
-	}
-	// A caller that cancelled while an earlier phase ran has already decided,
-	// so that is read here rather than waited for.
-	follow()
-	stop := context.AfterFunc(parent, follow)
-	return ctx, func() { stop(); cancel() }
-}
+// RecheckBudget is how long the survey the busy guard takes may run. It is
+// the first phase, and it needs a budget of its own for the reason the
+// others do: the caller's bound also paid for the survey the plan was drawn
+// from, and a recheck handed what is left of it reads no host at all on a
+// desktop with a link that does not answer. Every step would then be one the
+// recheck could not read, and a shutdown that closes nothing is not what a
+// slow host should cost.
+const RecheckBudget = 30 * time.Second
 
 // ShutdownOpts is what a close needs beyond its plan: whether a busy agent
 // is closed anyway, and the survey that reads the plan's agents again.
@@ -596,8 +586,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	}
 	// A shutdown with nothing left to close changes nothing, so there is
 	// nothing to record: the save is skipped rather than writing a session
-	// built from a survey that could not read the desktop.
-	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Unread == "" })
+	// saying the desktop had been shut down. What leaves is read from each
+	// step's action, so a step no host can close counts too - it carries no
+	// reason, and closes nothing all the same.
+	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return !s.Action.Leaves() })
 	if opts.Before != nil && closes {
 		saving, stop := phaseContext(ctx, SaveBudget)
 		err := opts.Before(saving, r)
@@ -641,7 +633,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 // the session it saves - is read off the returned report, not off the one the
 // plan was drawn from.
 func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep, error) {
-	r, err := c.Survey(ctx, opts.Projects, opts.Bound, opts.Attached)
+	reading, stop := phaseContext(ctx, RecheckBudget)
+	defer stop()
+	r, err := c.Survey(reading, opts.Projects, opts.Bound, opts.Attached)
 	if err != nil {
 		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
 	}
@@ -687,11 +681,42 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 		case unreached:
 			step.Unread = string(step.Project) + " did not answer: " + why
 		default:
+			// The panels are read again with the agents. A step that closes
+			// a tab means that tab, not the panels it held when the plan was
+			// drawn: a panel added to it since closes with it, and an agent
+			// working in that panel refuses the close like any other
+			// (decisions.md D94). This adds and drops no step, which is what
+			// D78 holds fixed.
+			step.Panels = c.panelsOf(r.Instances, step)
 			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}
-		out[i] = step
+		// The action is set from what this survey read, so a step the
+		// recheck could not answer for counts as one that leaves, wherever
+		// the close asks.
+		out[i] = c.closeStep(step)
 	}
 	return out
+}
+
+// panelsOf is the step's panels as the recheck's listing reports them. A step
+// that closes a whole instance has none. One that closes a panel takes its
+// tab again, by the rule the plan took it by: a tab target closes the tab,
+// and an agent closes the tab it opened beside the workspace but not the
+// workspace's own (agentPanels). An instance the listing no longer holds
+// keeps what the plan drew - there is nothing newer to read it from, and the
+// close will find it gone.
+func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.PanelID {
+	if s.Panel == "" {
+		return nil
+	}
+	i := slices.IndexFunc(instances, func(in revier.Instance) bool { return key(in.Ref) == key(s.Ref) })
+	if i < 0 {
+		return s.Panels
+	}
+	if s.Target != "" {
+		return tabAt(instances[i], s.Panel)
+	}
+	return agentPanels(instances[i], s.Panel)
 }
 
 // awaitClosed marks every closed step that is still listed once wait has

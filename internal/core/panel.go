@@ -111,9 +111,17 @@ func tabOfPanel(in revier.Instance, panel revier.PanelID) string {
 // that holds ownPanel. A tab the workspace opened beside it - the agent and
 // shell of `revier agent new` - is not it, and closes whole; a runtime with
 // no tabs has only its own.
-func ownTab(in revier.Instance, panel revier.PanelID) bool {
-	own, ok := ownPanel(in)
-	return ok && tabOfPanel(in, own) == tabOfPanel(in, panel)
+//
+// known says whether the instance names its own panel at all. It does not
+// when every panel carries a target mark and none carries the home one, and
+// then neither answer is the truth: the caller decides what to do with an
+// own tab nobody can point at.
+func ownTab(in revier.Instance, panel revier.PanelID) (own, known bool) {
+	p, ok := ownPanel(in)
+	if !ok {
+		return false, false
+	}
+	return tabOfPanel(in, p) == tabOfPanel(in, panel), true
 }
 
 // ownPanel is the instance's own first panel, where a press that returns home

@@ -310,6 +310,21 @@ func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef
 	return ref
 }
 
+// AddPanel adds a panel to a live instance, as a tab opened by hand does. A
+// test that changes the desktop between a plan and the close it runs uses it,
+// which is why it takes the lock: the close may be listing already.
+func (f *Fake) AddPanel(ref revier.TargetRef, panel revier.Panel) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.instances {
+		if f.instances[i].Ref.ID != ref.ID {
+			continue
+		}
+		// A fresh slice: a listing already handed out shares the old one.
+		f.instances[i].Panels = append(append([]revier.Panel(nil), f.instances[i].Panels...), panel)
+	}
+}
+
 // SetInstancesErr makes Instances fail from here on, under the lock a
 // listing reads it with: a test that stops a host mid-shutdown writes it from
 // the close, which another goroutine may be listing against.
@@ -470,9 +485,20 @@ type FakeProbe struct {
 	Marker  string // a panel matches when its title contains this
 	State   revier.AgentState
 	Err     error
-	// Reads counts Inspect calls, so a test can assert that a survey reads a
-	// panel once whatever the project count.
-	Reads int
+
+	mu sync.Mutex
+	// reads counts Inspect calls, so a test can assert that a survey reads a
+	// panel once whatever the project count. A survey dispatches its probes
+	// from more than one goroutine, so the count is kept under the mutex and
+	// read through Reads.
+	reads int
+}
+
+// Reads is how many panels Inspect was asked about.
+func (p *FakeProbe) Reads() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.reads
 }
 
 func (p *FakeProbe) Name() string { return p.Harness }
@@ -482,7 +508,9 @@ func (p *FakeProbe) Match(panel revier.Panel) bool {
 }
 
 func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, error) {
-	p.Reads++
+	p.mu.Lock()
+	p.reads++
+	p.mu.Unlock()
 	if p.Err != nil {
 		return revier.AgentState{}, p.Err
 	}
