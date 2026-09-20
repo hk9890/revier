@@ -96,7 +96,6 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	// No Since: the listing says what the agent does now, not since when.
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status = Status(s.Status)

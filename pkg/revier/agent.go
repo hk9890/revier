@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
 type PanelID string
@@ -99,11 +98,13 @@ type AgentProbe interface {
 	Inspect(ctx context.Context, p Panel) (AgentState, error)
 }
 
+// AgentState is what a probe reports about one panel. It says what the agent
+// is doing now and not since when: no surface shows an age, and a field a
+// probe author fills for nothing is a field to leave out of the contract.
 type AgentState struct {
-	Harness  string    `json:"harness"`
-	Status   Status    `json:"status"`
-	Activity string    `json:"activity,omitempty"`
-	Since    time.Time `json:"since,omitzero"`
+	Harness  string `json:"harness"`
+	Status   Status `json:"status"`
+	Activity string `json:"activity,omitempty"`
 }
 
 // Status is what an agent is doing. StatusAttention is the state the product
