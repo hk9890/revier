@@ -40,6 +40,9 @@ type Fake struct {
 	// window does not exist yet when the process starts, so there is nothing
 	// to name.
 	Detached bool
+	// OnClose runs after a close is recorded and before it takes effect, so
+	// a test can make a host go away in the middle of a shutdown.
+	OnClose func(revier.TargetRef)
 
 	// Opened records every realization passed to Open, in order. A test
 	// asserts on it to prove the core rendered templates before the host saw
@@ -231,8 +234,11 @@ func (f *FakeRuntime) FocusedPanel(_ context.Context, ref revier.TargetRef) (rev
 func (f *Fake) Close(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	f.Closed = append(f.Closed, ref)
-	err, refuses := f.CloseErr, f.Refuses[ref.ID]
+	err, refuses, then := f.CloseErr, f.Refuses[ref.ID], f.OnClose
 	f.mu.Unlock()
+	if then != nil {
+		then(ref)
+	}
 	if err != nil {
 		return err
 	}
@@ -302,6 +308,15 @@ func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef
 		Ref: ref, Title: title, Class: class, PID: 1000 + f.nextID, Panels: panels,
 	})
 	return ref
+}
+
+// SetInstancesErr makes Instances fail from here on, under the lock a
+// listing reads it with: a test that stops a host mid-shutdown writes it from
+// the close, which another goroutine may be listing against.
+func (f *Fake) SetInstancesErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.InstancesErr = err
 }
 
 // FirstPanel is the first panel of an instance, which for one this host

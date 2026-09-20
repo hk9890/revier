@@ -34,9 +34,12 @@ func openDesktop(t *testing.T, status revier.Status) (*core.Core, *hosttest.Fake
 	return c, rt, wm, []core.Project{prepared(t, agentProject())}
 }
 
-// forced is the close a test asks for when the busy guard is not what it
-// tests: the plan as it stands, closed without a recheck.
-var forced = core.ShutdownOpts{Force: true}
+// reading is the close every test asks for that is not about the busy guard:
+// the normal path, whose recheck reads these projects again before it closes
+// anything.
+func reading(projects []core.Project) core.ShutdownOpts {
+	return core.ShutdownOpts{Projects: projects}
+}
 
 func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef) core.Report {
 	t.Helper()
@@ -72,7 +75,7 @@ func TestShutdownAllClosesEveryOpenTarget(t *testing.T) {
 		t.Errorf("home step = %+v, want its one idle agent", plan[0])
 	}
 
-	out, _ := c.Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, failed := out.Counts(); closed != 3 || open != 0 || failed != 0 {
 		t.Errorf("counts = %d closed, %d open, %d failed; want 3 closed", closed, open, failed)
 	}
@@ -93,7 +96,7 @@ func TestShutdownAgentsClosesOnlyTheAgentPanels(t *testing.T) {
 	if got := stepNames(plan); !slices.Equal(got, []string{"#2"}) || plan[0].Action != core.ClosePanel {
 		t.Fatalf("plan = %+v, want the agent panel alone", plan)
 	}
-	_, _ = c.Shutdown(context.Background(), plan, 0, forced)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(rt.Closed) != 0 || len(wm.Closed) != 0 || !slices.Equal(rt.ClosedPanels, []revier.PanelID{"2"}) {
 		t.Errorf("closed %v and %v, panels %v; want panel 2 only", rt.Closed, wm.Closed, rt.ClosedPanels)
 	}
@@ -182,7 +185,7 @@ func TestShutdownLeavesOpenWhatItsHostCannotClose(t *testing.T) {
 	c.Window = closeless{wm}
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
-	out, _ := c.Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(wm.Closed) != 0 {
 		t.Errorf("window host closed %v, want nothing asked of it", wm.Closed)
 	}
@@ -201,7 +204,7 @@ func TestShutdownNamesAWindowThatStayed(t *testing.T) {
 	report := survey(t, c, projects, nil)
 	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
 
-	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 2*core.ClosePoll, forced)
+	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 2*core.ClosePoll, reading(projects))
 	if closed, open, _ := out.Counts(); closed != 2 || open != 1 || out[2].Note() != "still open" {
 		t.Errorf("counts = %d closed, %d open, last %q; want the editor still open", closed, open, out[2].Note())
 	}
@@ -211,7 +214,7 @@ func TestShutdownNamesAWindowThatStayed(t *testing.T) {
 func TestShutdownGoesOnPastAFailedClose(t *testing.T) {
 	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
 	rt.CloseErr = errors.New("socket gone")
-	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll), 0, forced)
+	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll), 0, reading(projects))
 	if closed, _, failed := out.Counts(); failed != 2 || closed != 1 {
 		t.Errorf("counts = %d closed, %d failed; want the editor closed past two failures", closed, failed)
 	}
@@ -226,7 +229,7 @@ func TestShutdownCountsAFailedCloseOfWhatIsGoneAsClosed(t *testing.T) {
 	rt.Remove(plan[1].Ref)
 	rt.CloseErr = errors.New("no such window")
 
-	out, _ := c.Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, _, failed := out.Counts(); closed != 2 || failed != 1 || out[0].Err == nil {
 		t.Errorf("counts = %d closed, %d failed, home err %v; want home failed, notes and editor closed", closed, failed, out[0].Err)
 	}
@@ -238,7 +241,7 @@ func TestShutdownLeavesOpenWhatAHostThatWentPlanned(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
-	out, _ := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, _ := out.Counts(); closed != 1 || open != 2 || len(wm.Closed) != 1 {
 		t.Errorf("counts = %d closed, %d open, window host closed %v; want the editor closed and both workspaces left", closed, open, wm.Closed)
 	}
@@ -275,7 +278,7 @@ func TestClosePlanClosesOneTarget(t *testing.T) {
 	if got := stepNames(plan); !slices.Equal(got, []string{"home"}) || len(plan[0].Agents) != 1 {
 		t.Fatalf("plan = %+v, want home with its agent", plan)
 	}
-	_, _ = c.Shutdown(context.Background(), plan, 0, forced)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if len(rt.Closed) != 1 || len(wm.Closed) != 0 {
 		t.Errorf("runtime closed %v, window host closed %v; want the workspace alone", rt.Closed, wm.Closed)
 	}
@@ -337,7 +340,7 @@ func TestShutdownClosesTheWholeTab(t *testing.T) {
 	c, rt, projects := groupTab(t, revier.StatusIdle)
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
 
-	out, _ := c.Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, failed := out.Counts(); closed != 1 || open != 0 || failed != 0 {
 		t.Errorf("counts = %d closed, %d open, %d failed; want the tab closed", closed, open, failed)
 	}
@@ -371,7 +374,7 @@ func TestATabIsClosedOnlyWhenNoPanelOfItIsListed(t *testing.T) {
 	c.Runtime = keepsPanel{rt, "3"}
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
 
-	out, _ := c.Shutdown(context.Background(), plan, 0, forced)
+	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"2"}) {
 		t.Errorf("panels closed = %v, want panel 2: panel 3 was left listed", rt.ClosedPanels)
 	}
@@ -420,7 +423,7 @@ func TestClosePlanClosesAnAddedAgentWithItsTab(t *testing.T) {
 	if len(plan) != 1 || plan[0].Action != core.ClosePanel || !slices.Equal(plan[0].Panels, []revier.PanelID{"3", "4"}) {
 		t.Fatalf("plan = %+v, want the agent tab whole", plan)
 	}
-	_, _ = c.Shutdown(context.Background(), plan, 0, forced)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"3", "4"}) {
 		t.Errorf("panels closed = %v, want the agent and the shell beside it", rt.ClosedPanels)
 	}
@@ -443,7 +446,7 @@ func TestShutdownAgentsClosesAnAddedTabAndKeepsTheDeclaredShell(t *testing.T) {
 	if !slices.Equal(plan[0].Panels, []revier.PanelID{"2"}) || !slices.Equal(plan[1].Panels, []revier.PanelID{"3", "4"}) {
 		t.Fatalf("panels = %v and %v, want the declared agent alone and the added tab whole", plan[0].Panels, plan[1].Panels)
 	}
-	_, _ = c.Shutdown(context.Background(), plan, 0, forced)
+	_, _ = c.Shutdown(context.Background(), plan, 0, reading(projects))
 	left := survey(t, c, projects, nil).Instances
 	if len(left) != 1 || len(left[0].Panels) != 1 || left[0].Panels[0].ID != "1" {
 		t.Errorf("instances after = %+v, want the workspace shell alone", left)
