@@ -156,10 +156,10 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // mistakes in separate files.
 //
 // The agents add to the ones read here rather than replacing them
-// (decisions.md D101): a terminal attached to the link by hand holds an agent
-// of this machine that the host knows nothing about. merge returns the ones
-// it added, which are the only ones the host named and so the only ones
-// localise has a tag for.
+// (decisions.md D101): a terminal attached to the link by hand can hold an
+// agent this side read for itself. merge returns the ones it added, which are
+// the only ones the host named and so the only ones localise has a tag for;
+// dropDoubles then settles the ones both sides reported.
 //
 // The append copies the agents: two links to one project on one host are
 // handed one answer, and the survey renames each link's agents in place.
@@ -182,4 +182,26 @@ func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 		v.Invalid += a.view.Invalid
 	}
 	return added
+}
+
+// dropDoubles removes an agent the host reported that localise placed on a
+// panel this side already read: one agent seen twice, which would double the
+// row's count and name it twice on a close (decisions.md D101). Whether the
+// probe here claims a panel running an ssh is the probe's business, so the
+// two are told apart by the panel they landed on and not by assuming they
+// cannot meet. The local one stands: it read the panel itself, while the
+// host's word about it crossed a machine. at is where the host's agents
+// begin in v.Agents.
+func dropDoubles(v *revier.ProjectView, at int) {
+	held := make(map[string]bool, at)
+	for _, a := range v.Agents[:at] {
+		held[key(a.Ref)+"\x00"+string(a.Panel)] = true
+	}
+	kept := v.Agents[:at:at]
+	for _, a := range v.Agents[at:] {
+		if !held[key(a.Ref)+"\x00"+string(a.Panel)] {
+			kept = append(kept, a)
+		}
+	}
+	v.Agents = kept
 }

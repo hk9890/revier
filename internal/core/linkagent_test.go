@@ -373,6 +373,33 @@ func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 	}
 }
 
+// One agent both sides report is listed once. A probe that claims the panel
+// running the ssh reads it here, and the host names the same agent under the
+// tag that panel gave it, so the two land on one panel: the local reading
+// stands, and the row counts one agent rather than two.
+func TestALinkListsAnAgentBothSidesReportOnce(t *testing.T) {
+	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "fixing",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	p := linkProject(t)
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
+		map[revier.ProjectName][]revier.TargetRef{p.Name: {pane}})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	agents := report.Views[0].Agents
+	if len(agents) != 1 {
+		t.Fatalf("agents = %+v, want the one agent, read here and named by the host", agents)
+	}
+	if agents[0].Ref != pane || agents[0].Panel != "9" || agents[0].State.Status != revier.StatusRunning {
+		t.Errorf("agent = %+v, want panel 9 of %v as the probe here read it", agents[0], pane)
+	}
+	if plan := c.ShutdownPlan(report, "", core.ShutdownAll); len(core.Busy(plan)) != 1 {
+		t.Errorf("busy steps = %d, want the one agent named once", len(core.Busy(plan)))
+	}
+}
+
 // A link whose host stops answering between the plan and the close reports no
 // agent, and no agent read is not idle: its own steps are left open and named,
 // rather than ending a busy agent on the far side unasked.

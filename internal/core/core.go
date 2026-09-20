@@ -1100,7 +1100,10 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 	tags := c.tags(snap)
 	for i, p := range projects {
 		if a, ok := answers[p.Name]; ok {
-			c.localise(tags, merge(&r.Views[i], a))
+			v := &r.Views[i]
+			at := len(v.Agents)
+			c.localise(tags, merge(v, a))
+			dropDoubles(v, at)
 		}
 	}
 	for _, h := range c.hosts() {
@@ -1338,9 +1341,9 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 		}
 	}
 	// An attachment is probed for a link too (decisions.md D101): it is a
-	// terminal of this machine, holding an agent no host on the other side
-	// knows about, and taking the host's word as the project's whole answer
-	// ended it unasked.
+	// terminal of this machine, and taking the host's word as the project's
+	// whole answer ended an agent in it unasked. An agent both sides report
+	// is dropped to one by dropDoubles, on the panel it landed on.
 	for _, ref := range attached {
 		if inst, ok := byRef(snap, ref); ok && !window[key(ref)] {
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})

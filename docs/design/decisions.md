@@ -671,8 +671,14 @@ A tab's own mark stays fatal, because it is the tab's whole identity (D64).
 `local := p.Remote == nil` skipped the probe for a link, and the host's answer
 then replaced the view's agents outright, so a terminal attached to a link by
 hand reported none and a shutdown ended a busy agent in it unasked. An
-attachment is probed for a link too - it is a terminal of this machine, and no
-host on the other side knows about it - and the host's agents are appended to
-what was read here rather than replacing it. The link's own targets stay
-unprobed: they are panels running an ssh, and what the agent on the far side
-is doing is its host's word (D84).
+attachment is probed for a link too - it is a terminal of this machine - and
+the host's agents are appended to what was read here rather than replacing it.
+The link's own targets stay unprobed: they are panels running an ssh, and what
+the agent on the far side is doing is its host's word (D84).
+
+The two sides can meet on one agent: whether a probe claims a panel running an
+ssh is the probe's business, and the host names that agent under the tag the
+panel gave it, so the same agent arrives twice and the row counts it twice.
+They are told apart by the panel each landed on, not by assuming they cannot
+meet, and the local reading stands: it read the panel itself, while the host's
+word about it crossed a machine.
