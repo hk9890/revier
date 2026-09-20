@@ -36,10 +36,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -615,26 +617,22 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // setVars marks a window kitty has already opened with its user vars. A
 // launch takes them as --var, but the kitty process started for the first
 // window of a new OS window takes no such option, so both paths set them
-// here, in one call per variable.
+// here, in the one call set-user-vars takes every pair in.
 func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
-	for _, name := range varNames(vars) {
-		if _, err := h.kitten(ctx, socket, "set-user-vars", "--match", "id:"+strconv.Itoa(id), name+"="+vars[name]); err != nil {
-			return err
-		}
+	if len(vars) == 0 {
+		return nil
 	}
-	return nil
+	args := []string{"set-user-vars", "--match", "id:" + strconv.Itoa(id)}
+	for _, name := range varNames(vars) {
+		args = append(args, name+"="+vars[name])
+	}
+	_, err := h.kitten(ctx, socket, args...)
+	return err
 }
 
 // varNames are the variable names in a fixed order, so a launch's arguments
-// and a set-user-vars sequence are the same from one run to the next.
-func varNames(vars map[string]string) []string {
-	names := make([]string, 0, len(vars))
-	for name := range vars {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
+// and a set-user-vars call are the same from one run to the next.
+func varNames(vars map[string]string) []string { return slices.Sorted(maps.Keys(vars)) }
 
 // title gives a new window its panel title without taking the title away from
 // the program inside. `launch --title` pins a title for good, and a pinned

@@ -24,8 +24,9 @@ import (
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
 
-// shutdownTimeout bounds the survey a plan is made from, and the save before
-// the close.
+// shutdownTimeout bounds the survey a plan is made from, the recheck survey
+// inside the close, and the save before it. The closes themselves run on
+// core.CloseBudget, which is theirs alone.
 const shutdownTimeout = 30 * time.Second
 
 type shutStep int
@@ -389,12 +390,13 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
 	if msg.recheck != nil {
-		// A screen opened while the close ran is the user's: nothing closed,
-		// so the press is dropped rather than shown over it, as an answer to
-		// a del that a screen has outlived is dropped (close.go).
-		if m.dialog != dialogNone && m.dialog != dialogShutdown {
+		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
+		// A screen or a delete confirm opened while the close ran is the
+		// user's: nothing closed, so the press is dropped rather than shown
+		// over it, as an answer to a del that a screen has outlived is
+		// dropped (close.go).
+		if m.confirm != "" || (m.dialog != dialogNone && m.dialog != dialogShutdown) {
 			m.shut = shutdown{}
-			m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
 			return m, nil
 		}
 		// The cursor lands on Cancel: the close it refused is one keypress
@@ -404,7 +406,6 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		// fresher one, so the force closes and saves from it.
 		s.plan, s.report, s.row, s.step = msg.recheck, msg.report, 1, shutConfirm
 		m.dialog = dialogShutdown
-		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
 		return m, nil
 	}
 	if s.one {
