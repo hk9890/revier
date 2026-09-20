@@ -193,6 +193,12 @@ func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 // host's word about it crossed a machine. at is where the host's agents
 // begin in v.Agents.
 func dropDoubles(v *revier.ProjectView, at int) {
+	if at == 0 {
+		// Nothing was read here, so nothing the host named can be a second
+		// reading of it. The survey is the hot path and this is the ordinary
+		// link, so it keeps the slice it already has.
+		return
+	}
 	held := make(map[string]bool, at)
 	for _, a := range v.Agents[:at] {
 		held[key(a.Ref)+"\x00"+string(a.Panel)] = true

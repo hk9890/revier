@@ -337,6 +337,9 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		}
 		note := ""
 		if saves {
+			// The save is skipped when the recheck left nothing to close, so
+			// the result says why rather than showing a blank line.
+			note = "nothing closed, so nothing was saved"
 			// The save runs after the busy guard, so a close it refuses
 			// leaves no session file behind either, and it records the survey
 			// the close works from: a window closed by hand while the confirm
@@ -511,7 +514,7 @@ func (m Model) shutdownDetail() string {
 		for _, r := range s.closed {
 			project = m.shutProjectLine(&b, project, r.Project, w)
 			op, rest := startOp(th, "closed"), ""
-			if r.Err != nil || r.Open || r.Action == core.CloseUnsupported || r.Action == core.CloseUnread {
+			if r.Err != nil || r.Open || r.Action.Leaves() {
 				op, rest = skipOp(th, "open"), r.Note()
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")
@@ -529,7 +532,13 @@ func (m Model) shutdownDetail() string {
 		for _, step := range s.plan {
 			project = m.shutProjectLine(&b, project, step.Project, w)
 			op, rest := skipOp(th, "close"), ""
-			if step.Action == core.CloseUnsupported {
+			// A plan the busy guard handed back carries the steps its survey
+			// could not read, and those close nothing: the row says so rather
+			// than promising a close (decisions.md D99).
+			switch {
+			case step.Unread != "":
+				op, rest = keepOp(th, "keep"), step.Unread
+			case step.Action == core.CloseUnsupported:
 				op, rest = keepOp(th, "keep"), "its host cannot close it"
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(step.Name()), "", rest, th.PathMissing, w) + "\n")

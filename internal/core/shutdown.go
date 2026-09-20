@@ -47,6 +47,12 @@ const (
 	CloseUnread
 )
 
+// Leaves reports an action that closes nothing and leaves the step open. It
+// is one predicate rather than a list repeated at every place that counts,
+// waits on, or draws a step, so an action added later cannot be missed at one
+// of them.
+func (a CloseAction) Leaves() bool { return a == CloseUnsupported || a == CloseUnread }
+
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
 // window and for an agent. Panel is set when panels close rather than the
 // instance, and names the step; Panels is every panel that closes with it,
@@ -107,8 +113,15 @@ func (s CloseStep) Name() string {
 // closing it loses the turn it is in.
 func (s CloseStep) Busy() bool { return len(s.BusyAgents()) > 0 }
 
-// BusyAgents are the step's agents that work or wait for an answer.
+// BusyAgents are the step's agents that work or wait for an answer. A step
+// the recheck could not read has none: its Agents are the ones the plan was
+// drawn with, and closing nothing ends nobody's turn. That refusal is the
+// step's alone (decisions.md D85), so the stale reading must not refuse the
+// whole plan.
 func (s CloseStep) BusyAgents() []revier.AgentView {
+	if s.Unread != "" {
+		return nil
+	}
 	var out []revier.AgentView
 	for _, a := range s.Agents {
 		if a.State.Status == revier.StatusRunning || a.State.Status == revier.StatusAttention {
@@ -444,7 +457,7 @@ func (cs Closed) Counts() (closed, open, failed int) {
 		switch {
 		case r.Err != nil:
 			failed++
-		case r.Open || r.Action == CloseUnsupported || r.Action == CloseUnread:
+		case r.Open || r.Action.Leaves():
 			open++
 		default:
 			closed++
@@ -695,7 +708,7 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 		pending := false
 		for i := range out {
 			r := &out[i]
-			if r.Action == CloseUnsupported || r.Action == CloseUnread {
+			if r.Action.Leaves() {
 				continue
 			}
 			if failed[r.Ref.Host] != nil {
