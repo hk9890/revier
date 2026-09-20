@@ -1,12 +1,14 @@
 package tui_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -196,11 +198,40 @@ func TestConfirmClosesNothingWhenAnAgentTurnedBusy(t *testing.T) {
 	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "an agent turned busy since the plan was shown") {
 		t.Errorf("screen = %q, want the reason nothing closed", foot)
 	}
+	// The cursor is off the close it refused, so the Enter that forces it is
+	// aimed and not the second half of a double press.
+	if row := rows(m)[1]; !strings.Contains(row, theme.Default().Glyphs.Cursor) || !strings.Contains(row, "Cancel") {
+		t.Errorf("row under the cursor = %q, want Cancel", row)
+	}
 
+	m, _ = press(m, "up")
 	m, cmd = press(m, "enter")
 	run(m, cmd)
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
 		t.Errorf("instances = %+v, want the plan shown busy to close on the next confirm", left)
+	}
+}
+
+// A host that stops answering between the plan and the confirm closes
+// nothing: a survey that lists no agent has not shown them idle.
+func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	rt.InstancesErr = errors.New("no server running")
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	rt.InstancesErr = nil
+	if left, _ := rt.Instances(t.Context()); len(left) != 1 {
+		t.Errorf("instances = %+v, want the workspace still open", left)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %d, want no save for a shutdown that closed nothing", len(all))
+	}
+	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "could not be read again") || !strings.Contains(foot, "nothing closed") {
+		t.Errorf("screen = %q, want the reason nothing closed", foot)
 	}
 }
 
