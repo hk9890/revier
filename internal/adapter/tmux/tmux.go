@@ -268,6 +268,8 @@ func kindOf(cmd string) revier.PanelKind {
 // runs yet, and leaves r.Name on it where Instances reads the title. With
 // panels, the first panel is the session's first pane and every later one is
 // split into it, side by side; without, the session runs r.Launch alone.
+// r.Vars go into the first pane's @revier option, which Instances reports
+// back as the panel's Vars, as OpenTab's do for a tab.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
@@ -286,7 +288,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
 	serverPID, session, window, pane := f[0], f[1], f[2], f[3]
-	if err := h.name(ctx, session, window, pane, r.Name, panels); err != nil {
+	if err := h.name(ctx, session, window, pane, r, panels); err != nil {
 		// Best effort: the error that failed the session is the one worth
 		// reporting. Left running, a session with no name or no shell would be
 		// matched, or would hold its name against the next Open.
@@ -311,11 +313,11 @@ func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSp
 }
 
 // name leaves the realization's name on a new session and fills its window.
-func (h *Host) name(ctx context.Context, session, window, pane, name string, panels []revier.PanelSpec) error {
-	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, name); err != nil {
+func (h *Host) name(ctx context.Context, session, window, pane string, r revier.Realization, panels []revier.PanelSpec) error {
+	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
 		return err
 	}
-	return h.fill(ctx, window, pane, panels)
+	return h.tab(ctx, window, pane, panels, r.Vars)
 }
 
 // start is the part of a new-session, new-window or split-window that starts

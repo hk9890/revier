@@ -554,6 +554,8 @@ func isShell(cmd string) bool {
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
 // opens the OS window and every later one splits into its first tab. With no
 // kitty answering it starts one, on a socket that discovery finds again.
+// r.Vars become user vars of that first window, which ls reports back as the
+// panel's Vars, as OpenTab's do for a tab.
 //
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
@@ -569,6 +571,9 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
+		return revier.TargetRef{}, err
+	}
+	if err := h.setVars(ctx, socket, first, r.Vars); err != nil {
 		return revier.TargetRef{}, err
 	}
 	for _, p := range panels[1:] {
@@ -600,6 +605,24 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		}
 	}
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
+}
+
+// setVars marks a window kitty has already opened with its user vars. A
+// launch takes them as --var, but the kitty process started for the first
+// window of a new OS window takes no such option, so both paths set them
+// here, in one call per variable.
+func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
+	names := make([]string, 0, len(vars))
+	for name := range vars {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if _, err := h.kitten(ctx, socket, "set-user-vars", "--match", "id:"+strconv.Itoa(id), name+"="+vars[name]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // title gives a new window its panel title without taking the title away from

@@ -558,6 +558,10 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// The agent tabs are copies of the realization as declared, not of
 		// the launch the first agents were written into.
 		launch, agents, extra := c.resuming(real, resumes, p.Remote != nil)
+		// The instance's own first panel is marked with the target it was
+		// opened for, so a return home from a tab lands in it rather than in
+		// the first panel that happens to carry no tab mark (decisions.md D98).
+		launch.Vars = map[string]string{PanelHomeVar: string(name)}
 		ref, err := host.Open(ctx, launch)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)

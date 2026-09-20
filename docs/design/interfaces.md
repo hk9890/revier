@@ -47,6 +47,12 @@ type Realization struct {
     Match  Match      // how to recognise an existing instance
     Panels []PanelSpec // runtime hosts only: the layout for a Home target
 
+    // Vars are the panel variables the host sets on the first panel it opens
+    // and reports back as Panel.Vars. The core fills them, as it fills Dir,
+    // so a panel revier opened is identified later rather than guessed at
+    // (D98).
+    Vars map[string]string
+
     // Inside names another target; this one is then a tab of that target's
     // instance, found by its name, and Match and Name are not used (D64).
     Inside TargetName

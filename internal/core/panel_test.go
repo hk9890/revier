@@ -147,6 +147,61 @@ func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 	}
 }
 
+// An instance revier opens is marked at its own first panel with the target
+// it was opened for, so the panel a return home lands in is identified and
+// not guessed at (decisions.md D98).
+func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	c := &core.Core{Runtime: rt}
+
+	if _, err := c.Go(context.Background(), prepared(t, tabProject()), "home", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if len(rt.Opened) != 1 || rt.Opened[0].Vars[core.PanelHomeVar] != "home" {
+		t.Errorf("opened = %+v, want the workspace marked as home's", rt.Opened)
+	}
+}
+
+// A return home from a tab lands in the marked panel, not in the shell that
+// sits beside the tab and carries no target mark of its own.
+func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		home revier.Panel
+		want revier.PanelID
+	}{
+		{"marked", revier.Panel{ID: "3", Tab: "t1", Vars: map[string]string{core.PanelHomeVar: "home"}}, "3"},
+		{"unmarked, the guess stands", revier.Panel{ID: "3", Tab: "t1"}, "2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := hosttest.NewRuntime("kitty")
+			rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+			ref := rt.Add("session:revier", "kitty",
+				revier.Panel{ID: "1", Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
+				revier.Panel{ID: "2", Tab: "t2", Kind: revier.PanelShell},
+				tc.home,
+			)
+			wm := hosttest.New("wm")
+			wm.SetFocus(wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001}))
+			if err := rt.FocusPanel(context.Background(), ref, "1"); err != nil {
+				t.Fatalf("FocusPanel: %v", err)
+			}
+			c := &core.Core{Runtime: rt, Window: wm}
+
+			res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+			if err != nil {
+				t.Fatalf("Go: %v", err)
+			}
+			if res.Target != "home" {
+				t.Fatalf("target = %s, want the press on the current tab to go home", res.Target)
+			}
+			if last := rt.PanelFocuses[len(rt.PanelFocuses)-1]; last != tc.want {
+				t.Errorf("last panel focus = %s, want %s", last, tc.want)
+			}
+		})
+	}
+}
+
 func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("session:revier", "")

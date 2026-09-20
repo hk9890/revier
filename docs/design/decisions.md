@@ -612,3 +612,13 @@ the plan's agents again and refuses the whole plan while one of them is busy,
 unless forced; the session is saved after that guard, so a refused close
 leaves no file behind. A del on a busy row asks rather than closing, and its
 second press is the force, as a confirm already is in the wizard.
+
+### D98 — the workspace's own panel is marked, not guessed at
+
+`ownPanel` took the first panel carrying no tab mark, so in a workspace whose
+tab holds a shell beside the tab target's panel it picked that shell: a return
+home from a tab landed in the wrong pane, and D94's own-tab rule read the same
+guess. revier now marks the first panel of every instance it opens with the
+target the instance was opened for, through `Realization.Vars`, as `OpenTab`
+already marks a tab's. An instance opened before the mark existed carries
+none, so the guess stays as the fallback for those and for nothing else.

@@ -24,6 +24,12 @@ var errTab = errors.New("a tab has no instance of its own")
 // change, and a position is not an identity (decisions.md D64).
 const PanelTargetVar = "revier_target"
 
+// PanelHomeVar is the panel variable that names the target an instance was
+// opened for. It marks the instance's own first panel, the one a press that
+// returns home from a tab lands in, so that panel is identified rather than
+// guessed at (decisions.md D98).
+const PanelHomeVar = "revier_home"
+
 // isTab reports whether the i-th target is a tab inside another target.
 func (p Project) isTab(i int) bool { return tabTarget(p.Targets[i]) }
 
@@ -110,9 +116,18 @@ func ownTab(in revier.Instance, panel revier.PanelID) bool {
 	return ok && tabOfPanel(in, own) == tabOfPanel(in, panel)
 }
 
-// ownPanel is the first panel of an instance that no tab target claims: where
-// a press that returns home from a tab lands.
+// ownPanel is the instance's own first panel, where a press that returns home
+// from a tab lands: the one revier marked when it opened the instance.
+//
+// An instance opened before the mark existed carries none, and falls back to
+// the first panel no tab target claims. That guess can land in a shell inside
+// a tab, which is what the mark exists to stop (decisions.md D98).
 func ownPanel(in revier.Instance) (revier.PanelID, bool) {
+	for _, panel := range in.Panels {
+		if panel.Vars[PanelHomeVar] != "" {
+			return panel.ID, true
+		}
+	}
 	for _, panel := range in.Panels {
 		if panel.Vars[PanelTargetVar] == "" {
 			return panel.ID, true
