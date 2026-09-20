@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
@@ -148,9 +149,9 @@ func TestSurveyProbesAttachedTerminalsWithoutAPerProjectCost(t *testing.T) {
 		if _, err := c.Survey(context.Background(), projects, nil, attached); err != nil {
 			t.Fatal(err)
 		}
-		if rt.InstancesCalls != 1 || probe.Reads != tc.attachedTo {
+		if rt.InstancesCalls != 1 || probe.Reads() != tc.attachedTo {
 			t.Errorf("%d projects, %d attached: %d listings, %d probe reads; want 1 listing and %d reads",
-				tc.projects, tc.attachedTo, rt.InstancesCalls, probe.Reads, tc.attachedTo)
+				tc.projects, tc.attachedTo, rt.InstancesCalls, probe.Reads(), tc.attachedTo)
 		}
 	}
 }
@@ -171,8 +172,8 @@ func TestSurveyReadsATerminalAttachedToTwoProjectsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.Reads != 1 {
-		t.Errorf("probe reads = %d, want one for the one terminal", probe.Reads)
+	if probe.Reads() != 1 {
+		t.Errorf("probe reads = %d, want one for the one terminal", probe.Reads())
 	}
 	for i, v := range report.Views {
 		if len(v.Agents) != 1 || v.Agents[0].Panel != "1" {
@@ -231,5 +232,59 @@ func TestFocusingAnUnraisableTerminalMovesNothing(t *testing.T) {
 	}
 	if len(rt.Focuses) != 0 || len(wm.Focuses) != 0 {
 		t.Errorf("focuses = %v %v, want none", rt.Focuses, wm.Focuses)
+	}
+}
+
+// A second OS window that takes the attached window's title folds nothing
+// away. The window and the terminal are paired by the pairing the attachment
+// was recorded with - the terminal side, which refuses two answers - so a
+// shared title cannot make the survey fold the wrong window and report the
+// attachment as two rows.
+func TestASharedWindowTitleDoesNotDoubleAnAttachedRow(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	term := rt.AddInstance(revier.Instance{
+		Title: "scratch", Class: "kitty", PID: 4242,
+		Panels: []revier.Panel{agent("9", "", "")},
+	})
+	// Listed first, so a pairing read from the window's title alone lands on
+	// this one and leaves the attached window's row standing beside it.
+	wm.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
+	window := wm.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
+
+	refs := c.Attachment(context.Background(), window)
+	if len(refs) != 2 || refs[0] != window || refs[1] != term {
+		t.Fatalf("attachment = %v, want the window %v and the terminal %v", refs, window, term)
+	}
+	report := survey(t, c, projects, map[revier.ProjectName][]revier.TargetRef{"revier": refs})
+
+	var rows []revier.TargetRef
+	for _, tv := range report.Views[0].Targets {
+		if tv.Attached {
+			rows = append(rows, tv.Ref)
+		}
+	}
+	if len(rows) != 1 || rows[0] != term {
+		t.Errorf("attached rows = %v, want the terminal %v alone", rows, term)
+	}
+}
+
+// A window host that did not answer refuses the focus with what went wrong,
+// not with the window being gone: the two read the same to the user and only
+// one of them is true (decisions.md D89).
+func TestFocusNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
+	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
+	term, _ := attachScratch(t, c, rt, wm)
+	wm.SetInstancesErr(errors.New("wctl timed out"))
+
+	err := c.Focus(context.Background(), term)
+	if err == nil {
+		t.Fatal("focus succeeded; want the refusal the window host's silence causes")
+	}
+	if !strings.Contains(err.Error(), "wctl timed out") {
+		t.Errorf("err = %v, want the host's own reason", err)
+	}
+	if errors.Is(err, core.ErrUnraisable) {
+		t.Errorf("err = %v, want it told apart from a window the host does list", err)
 	}
 }

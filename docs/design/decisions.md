@@ -549,7 +549,7 @@ the command line, the surface and a restore all activate through
 expire - is `core.Settle`, the one function the surface and `revier list`
 call.
 
-### D92 — the surface leaves its start directory; a host sets no directory for it
+### D92 — a process leaves a start directory that is gone; a host sets no directory for it
 
 The TUI is often started in a worktree and outlives it. Once the worktree is
 removed, every process it starts inherits a directory that is gone, and git,
@@ -558,6 +558,13 @@ of its own fixed only the adapters that had one, and every new adapter had to
 copy it. The TUI reads its start project and then moves to the home
 directory, or to "/" without one, so no child can inherit a directory that
 vanishes.
+
+A command does not outlive its directory, but the shell it was run from can
+have lost one already, and then every probe and every git call it makes fails
+for a reason that has nothing to do with what was asked. Each command leaves
+a working directory it cannot read, before it does anything else, and keeps
+one that is still there: `new`, `each` and the project of the working
+directory are all read from it.
 
 ### D93 — del closes, alt+del deletes, and a delete closes first
 
@@ -582,7 +589,16 @@ busy one beside the marked panel refuses it, and it counts as closed only once
 no panel of it is listed. An agent's own step closes its tab the same way,
 because the tab `revier agent new` opens carries no target mark to be closed
 by; the workspace's own tab is the exception, where the shell a layout declares
-beside the agent stays.
+beside the agent stays. An instance that names no own panel (D100) is read as
+that exception too: taking the tab there is a guess, and the guess that is
+wrong closes the declared shell, while the guess the other way leaves one
+shell of an added tab for the next shutdown.
+
+The panels are the tab as the close finds it, not as the plan drew it. The
+recheck reads a step's panels again with its agents, so a panel added to the
+tab between the confirm and the close closes with it, and an agent working in
+that panel refuses the close like any other. It adds and drops no step, which
+is what D78 holds fixed.
 
 ### D95 — an attachment is the window and the terminal inside it
 
@@ -593,6 +609,12 @@ beside the window, when the window pairs with one beyond doubt - the pairing
 D63 and D67 already refuse to guess at. An ambiguous window is recorded alone
 and reports no agent, which is the honest answer. The two are one attached row,
 the terminal's, because that is the side that holds the panels.
+
+The row they fold into is chosen by that same pairing, read from the window's
+side, and the terminal it names has to be attached too. Reading it from the
+terminal's side instead asks which window holds this terminal, which is a
+question a shared title answers twice: the survey then folded the wrong window
+away and showed one attachment as two rows, in the pane and in a close plan.
 
 ### D96 — the rule totals the agents on the list, in the rows' own column
 
@@ -652,12 +674,18 @@ the one to write a session from.
 
 Putting the recheck in front of the save and the closes put its survey inside
 whatever bound the caller gave the whole call, and ninety projects with a link
-host that does not answer spend most of one. The save and the closes therefore
-each run on a budget of their own, counted from where that phase starts: the
-save asks every link host what its agents hold, and the closes follow it, so a
-bound already spent left the save failing and nothing closing. Each budget
-carries the caller's cancellation but not its deadline: a cancel is a decision
-about this shutdown, and a bound that ran out in an earlier phase is not one.
+host that does not answer spend most of one. Every phase therefore runs on a
+budget of its own, counted from where that phase starts: the recheck asks
+every link host what its agents hold, the save asks them again, and the closes
+follow both, so a bound already spent left the recheck reading nothing, every
+step marked unread and nothing closing at all. Each budget carries the
+caller's cancellation but not its deadline: a cancel is a decision about this
+shutdown, and a bound that ran out in an earlier phase is not one.
+
+Whether anything closes is read from each step's action and not from the
+reason it carries: a step no host can close carries no reason and closes
+nothing either, and a shutdown of nothing but those would otherwise write a
+session saying the desktop had been shut down.
 
 ### D100 — the workspace's own panel is marked, not guessed at
 
@@ -689,3 +717,13 @@ panel gave it, so the same agent arrives twice and the row counts it twice.
 They are told apart by the panel each landed on, not by assuming they cannot
 meet, and the local reading stands: it read the panel itself, while the host's
 word about it crossed a machine.
+
+### D102 — an agent's state is what it does now, not since when
+
+`AgentState` carried a `Since` for how long the status had held. Nothing ever
+rendered it: no row, no pane and no `--json` consumer in this tree reads one,
+and the probe contract `extending.md` states never asked a script for it. The
+one probe that filled it stopped when its listing turned out to say only what
+an agent does now. A field on a port that no surface reads is a field every
+out-of-tree probe author fills for nothing, so it is gone; a product that
+wants an age can add it back with the reader that needs it.

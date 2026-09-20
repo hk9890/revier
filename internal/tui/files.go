@@ -59,7 +59,7 @@ func (m *Model) replaceProject(name revier.ProjectName, p core.Project) {
 		}
 	}
 	m.projects, m.views = projects, views
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 	m.reload()
 	m.selectName(p.Name)
 }
@@ -149,7 +149,7 @@ func (m Model) askDropTarget(v revier.ProjectView) (tea.Model, tea.Cmd) {
 	if !ok || p.File == "" {
 		return m, nil
 	}
-	text, err := config.ReadProject(p.File, m.shared)
+	text, err := config.ReadProject(p.File, m.usable)
 	if err != nil {
 		m.err = err
 		return m, nil
@@ -167,7 +167,7 @@ func (m Model) askDropTarget(v revier.ProjectView) (tea.Model, tea.Cmd) {
 	default:
 		// Asked before anything closes: a delete the file refuses must not
 		// cost the windows and agents the close ends first.
-		err = config.CheckRemoveProjectTarget(p.File, m.shared, name)
+		err = config.CheckRemoveProjectTarget(p.File, m.usable, name)
 	}
 	if err != nil {
 		m.err = err
@@ -245,7 +245,7 @@ func (m *Model) removeProject(name revier.ProjectName) error {
 	slog.Info("project deleted", "project", name, "path", p.File)
 	m.projects = without(m.projects, name)
 	m.views = m.known(m.views)
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 	m.reload()
 	return nil
 }
@@ -256,7 +256,7 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 	if !ok {
 		return nil
 	}
-	written, err := config.RemoveProjectTarget(p.File, m.shared, target)
+	written, err := config.RemoveProjectTarget(p.File, m.usable, target)
 	if err != nil {
 		return err
 	}

@@ -97,6 +97,7 @@ type Model struct {
 	stateRoot string
 	actions   []config.Action
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
+	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
 	now       func() time.Time // the clock the double-click window is measured on; a test sets it
 	theme     theme.Theme
@@ -177,6 +178,11 @@ type Model struct {
 	press   *press                           // where the left button went down, while it is down
 	sel     selection                        // the box a drag is selecting
 	copied  int                              // the characters the last selection copied, shown until the next press
+	// tdeclared is every chord a target of any project declares as itself.
+	// It comes from targetKeys with the vocabulary, because the footer asks
+	// it for every target of every row it draws.
+	tdeclared map[core.Chord]bool
+
 	// proposed is whether the link's name is still the one offered, which
 	// the first character typed replaces.
 	proposed bool
@@ -209,12 +215,12 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
-		core: c, projects: projects, stateRoot: stateRoot, actions: actions, shared: cfg.Targets,
+		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
 		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
-		tkeys: targetKeys(projects, keys), start: start, input: newPrompt(th, projectPlaceholder),
+		start: start, input: newPrompt(th, projectPlaceholder),
 		tinput: newPrompt(th, targetPlaceholder), ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
 		rinput: newPrompt(th, ""),
@@ -222,6 +228,10 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 		pedit: newFieldInput(th),
 	}
+	// The files go in through the one function that reads them, so what is
+	// derived from them is derived once and the first frame holds the same
+	// thing a reload leaves behind.
+	m.setFiles(cfg.Targets, projects)
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
 	if st, err := state.Load(stateRoot); err == nil {
@@ -231,7 +241,6 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
 	_ = m.input.Focus()
-	m.targets = config.ListTargets(cfg.Targets)
 	m.layout()
 	// The first frame lists every project from its file, before any host
 	// has answered: the survey is a round trip to every linked host, and
@@ -299,11 +308,17 @@ func reloadFiles() tea.Msg {
 
 // setFiles takes the project files as read again: the shared targets for the
 // config screen, and every project loaded with them, for the surface.
+//
+// The two shared lists are both derived here, once. The config screen edits
+// config.toml as it is and needs every entry; a project file gets only the
+// entries config.toml's rules do not refuse, and deriving those costs a TOML
+// round trip per target, which is not a thing to do while drawing a frame.
 func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
 	m.shared = shared
+	m.usable = config.Usable(shared)
 	m.targets = config.ListTargets(shared)
 	m.projects = projects
-	m.tkeys = targetKeys(m.projects, m.keys)
+	m.setKeys()
 }
 
 // reloadViews puts the projects as read again on the screen before the

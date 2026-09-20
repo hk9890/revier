@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"slices"
 	"time"
@@ -74,20 +73,4 @@ func tuiStart(a *app) (start revier.ProjectName, popup bool) {
 	}
 	leaveStartDir()
 	return start, popup
-}
-
-// leaveStartDir moves the surface into the home directory, or into "/" when
-// the home is unset or missing. The start directory is often a worktree, and
-// the surface outlives it: once it is removed, every process the surface
-// starts inherits a directory that no longer exists, and git, claude and a
-// probe script each refuse to run in one.
-func leaveStartDir() {
-	home, err := os.UserHomeDir()
-	if err == nil {
-		err = os.Chdir(home)
-	}
-	if err != nil {
-		slog.Warn("tui: home directory", "err", err)
-		_ = os.Chdir("/")
-	}
 }

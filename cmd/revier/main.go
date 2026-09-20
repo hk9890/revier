@@ -176,6 +176,12 @@ func outcome(err error) (status int, say bool) {
 }
 
 func run(out io.Writer, args []string) error {
+	// Before anything starts a process: a command run in a directory that was
+	// removed under the shell must not fail every probe and every git call
+	// for that reason (decisions.md D92). The surface leaves its start
+	// directory outright, and does it after reading the project there.
+	leaveLostStartDir()
+
 	cmd := ""
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]

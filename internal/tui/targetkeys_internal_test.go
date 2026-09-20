@@ -41,7 +41,7 @@ func TestARefusedTargetBindsNoKey(t *testing.T) {
 		{Name: "pulls", Key: "ctrl-o", Window: &revier.Realization{Launch: []string{"chrome"}, Match: revier.Match{Class: "^chrome$"}}},
 	}})
 	p.Refuse(1, errors.New(`targets "editor" and "pulls" share key "ctrl+o"`))
-	if got := targetKeys([]core.Project{p}, newKeyMap(nil)); got["ctrl+o"] != "editor" {
+	if got, _ := targetKeys([]core.Project{p}, newKeyMap(nil)); got["ctrl+o"] != "editor" {
 		t.Errorf("ctrl+o = %q, want editor, the target that holds the key", got["ctrl+o"])
 	}
 }
@@ -108,8 +108,8 @@ func TestAChordMeansTheHighlightedProjectsOwnTarget(t *testing.T) {
 	c := core.PrepareProject(revier.Project{Name: "c", Path: "/c", Targets: []revier.Target{
 		{Name: "diff", Key: "ctrl-shift-o", Window: window("meld")},
 	}})
-	m := Model{projects: []core.Project{a, b, c}}
-	m.tkeys = targetKeys(m.projects, newKeyMap(nil))
+	m := Model{projects: []core.Project{a, b, c}, keys: newKeyMap(nil)}
+	m.setKeys()
 
 	for _, tc := range []struct {
 		p    core.Project
