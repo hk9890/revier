@@ -4,6 +4,7 @@ package core_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -109,5 +110,38 @@ func TestSettlePrunesClaimsAndExpires(t *testing.T) {
 	st = &state.State{Launch: &state.Launch{Project: "revier", At: now}}
 	if c.Settle(st, nil, survey(), nil, false, projects, now) || st.Launch == nil {
 		t.Error("before the first listing nothing is new: no claim and no expiry")
+	}
+}
+
+// A window claimed for an action's launch is attached with the terminal
+// inside it, exactly as `revier attach` records one, so the agent a launched
+// terminal holds is surveyed from the moment it is claimed (decisions.md
+// D95).
+func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	wm := hosttest.New("wm")
+	c := &core.Core{Runtime: rt, Window: wm}
+	projects := []core.Project{prepared(t, project())}
+	survey := func() core.Report {
+		r, err := c.Survey(context.Background(), projects, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	first := survey()
+	now := time.Now()
+
+	term := rt.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
+	window := wm.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
+	st := &state.State{Launch: &state.Launch{Project: "revier", At: now}}
+
+	if !c.Settle(st, st, survey(), first.Windows, true, projects, now) {
+		t.Fatal("Settle reported no change")
+	}
+	want := []revier.TargetRef{window, term}
+	if !slices.Equal(st.Attached["revier"], want) {
+		t.Errorf("attached = %v, want %v", st.Attached["revier"], want)
 	}
 }

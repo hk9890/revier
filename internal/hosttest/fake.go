@@ -413,6 +413,9 @@ type FakeProbe struct {
 	Marker  string // a panel matches when its title contains this
 	State   revier.AgentState
 	Err     error
+	// Reads counts Inspect calls, so a test can assert that a survey reads a
+	// panel once whatever the project count.
+	Reads int
 }
 
 func (p *FakeProbe) Name() string { return p.Harness }
@@ -422,6 +425,7 @@ func (p *FakeProbe) Match(panel revier.Panel) bool {
 }
 
 func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, error) {
+	p.Reads++
 	if p.Err != nil {
 		return revier.AgentState{}, p.Err
 	}

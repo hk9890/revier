@@ -32,7 +32,15 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	if ref.IsZero() {
 		return fmt.Errorf("no window is focused")
 	}
-	a.commit(p.Name, func(s *state.State) { s.Attach(p.Name, ref) })
+	// The terminal inside the window is attached with it when the two pair
+	// beyond doubt: a window carries no panels, so the window alone leaves a
+	// survey nothing to probe for the agent in it (decisions.md D95).
+	refs := a.core.Attachment(ctx, ref)
+	a.commit(p.Name, func(s *state.State) {
+		for _, r := range refs {
+			s.Attach(p.Name, r)
+		}
+	})
 	_, _ = fmt.Fprintf(a.out, "%s: attached %s\n", p.Name, describe(ref))
 	return nil
 }
