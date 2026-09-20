@@ -310,56 +310,62 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 }
 
 // shutRun saves the session when it changed and closes what the plan names.
-// Confirming a plan with a busy agent is the TUI's --force. Any other plan
-// confirmed was shown from a survey its agents may have moved on from, so it
-// is checked again first and closes nothing when one of them turned busy. The
-// recheck's survey is the fresher one, so the session saved before the close
-// is what is open now, not what was open when the plan was drawn.
+// Confirming a plan that already names a busy agent is the TUI's --force
+// (decisions.md D78); every other close is refused by core.Shutdown when one
+// of the plan's agents turned busy since the plan was drawn, and the wizard
+// shows the plan again with the agents that refused it.
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
 	c, root, projects, report, plan, saves := m.core, m.stateRoot, s.projects, s.report, s.plan, s.saves()
-	recheck := confirmed && len(core.Busy(plan)) == 0
+	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
-		if recheck {
-			var unread error
-			fresh, now, err := surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
-				steps, err := c.Recheck(r, plan)
-				unread = err
-				return steps
-			})
-			switch {
-			case err != nil:
-				return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
-			case unread != nil:
-				return shutdownMsg{err: fmt.Errorf("the plan's agents could not be read again: %w; nothing closed", unread)}
-			case len(core.Busy(now)) > 0:
-				return shutdownMsg{recheck: now}
-			}
-			report = fresh
-		}
 		plan = core.CloseLast(plan, report.Instances, core.RunsUnder())
+		st := loadedState(root)
+		opts := core.ShutdownOpts{Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached}
+		note := ""
+		if saves {
+			// The save runs after the busy guard, so a close it refuses
+			// leaves no session file behind either.
+			opts.Before = func() error {
+				ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+				defer cancel()
+				stored, saved, _, err := c.SaveChanged(ctx, root, report, st.Current, time.Now())
+				if err != nil {
+					return err
+				}
+				note = "nothing open to save"
+				switch {
+				case saved:
+					note = "saved as session " + stored.ID
+				case stored.ID != "":
+					note = "session " + stored.ID + " already holds what was open"
+				}
+				return nil
+			}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		if !saves {
-			return shutdownMsg{closed: c.Shutdown(ctx, plan, core.CloseWait)}
+		answer := closeAnswer(c.Shutdown(ctx, plan, core.CloseWait, opts))
+		if answer.err == nil && answer.recheck == nil {
+			answer.saved = note
 		}
-		st := loadedState(root)
-		stored, saved, _, err := c.SaveChanged(ctx, root, report, st.Current, time.Now())
-		if err != nil {
-			return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
-		}
-		note := "nothing open to save"
-		switch {
-		case saved:
-			note = "saved as session " + stored.ID
-		case stored.ID != "":
-			note = "session " + stored.ID + " already holds what was open"
-		}
-		closing, stop := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer stop()
-		return shutdownMsg{saved: note, closed: c.Shutdown(closing, plan, core.CloseWait)}
+		return answer
 	}
+}
+
+// closeAnswer is what a close came to, as the wizard reads it: the refusal
+// carries the rechecked plan, so the surface shows it rather than an error
+// alone.
+func closeAnswer(closed core.Closed, err error) shutdownMsg {
+	var refused *core.BusyRefusal
+	switch {
+	case errors.As(err, &refused):
+		return shutdownMsg{recheck: refused.Plan}
+	case err != nil:
+		return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
+	}
+	return shutdownMsg{closed: closed}
 }
 
 // shutDown takes a shutdown's answer: the result is the pane's, a step that
@@ -372,7 +378,10 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	if msg.recheck != nil {
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
-		s.plan, s.row = msg.recheck, 1
+		// A del that closed at once asks here instead, so its second press
+		// is the force too (decisions.md D97).
+		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
+		m.dialog = dialogShutdown
 		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
 		return m, nil
 	}

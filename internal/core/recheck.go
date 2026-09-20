@@ -6,7 +6,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Recheck is the plan with each step's agents as a later survey finds them.
+// rechecked is the plan with each step's agents as a later survey finds them.
 // It adds and drops no step: a plan confirmed is the plan that runs, and only
 // what its agents do now can stop it (decisions.md D78).
 //
@@ -14,7 +14,7 @@ import (
 // its instance did not answer, or its project is no longer surveyed. A
 // degraded survey reports no agents, and no agents read is not idle: taking
 // it as idle would let the close through in the one case it knows least.
-func (c *Core) Recheck(r Report, plan []CloseStep) ([]CloseStep, error) {
+func (c *Core) rechecked(r Report, plan []CloseStep) ([]CloseStep, error) {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
 	for _, v := range r.Views {
 		here[v.Project.Name] = c.agentsHere(v)

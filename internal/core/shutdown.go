@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -444,10 +445,69 @@ const ClosePoll = 100 * time.Millisecond
 // CloseWait is how long a shutdown waits for what it closed to go.
 const CloseWait = 3 * time.Second
 
+// ShutdownOpts is what a close needs beyond its plan: whether a busy agent
+// is closed anyway, and the survey that reads the plan's agents again.
+type ShutdownOpts struct {
+	// Force closes a step whose agent works or waits for an answer. It is
+	// what `--force` sets, and what a confirm means in a surface that named
+	// the busy agents before it asked (decisions.md D78).
+	Force bool
+
+	// Projects, Bound and Attached are what the recheck surveys, the three
+	// Survey takes. Without Force and without projects there is nothing to
+	// read the agents from, and the shutdown refuses rather than closing
+	// blind.
+	Projects []Project
+	Bound    map[revier.ProjectName]Bindings
+	Attached map[revier.ProjectName][]revier.TargetRef
+
+	// Before runs once the recheck has let the plan through and before the
+	// first close. It is where the session a shutdown ends is saved, so a
+	// close the busy guard refuses saves nothing either. Its failure is the
+	// shutdown's, and nothing closes.
+	Before func() error
+}
+
+// ErrAgentBusy is a close refused because a step would end an agent that
+// works or waits for an answer. Nothing closed.
+var ErrAgentBusy = errors.New("an agent is busy")
+
+// BusyRefusal is ErrAgentBusy with the plan as the recheck read it, so a
+// surface shows the plan again with the agents that refused it.
+type BusyRefusal struct{ Plan []CloseStep }
+
+func (r *BusyRefusal) Error() string { return ErrAgentBusy.Error() }
+
+func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
+
 // Shutdown closes each step of the plan in order, then lists the hosts until
 // every step it closed is gone or wait has passed. One step's failure is not
 // the shutdown's: the others still close, and the one that did not is named.
-func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration) Closed {
+//
+// It closes nothing at all while an agent of the plan is busy, unless forced
+// (decisions.md D97). Every plan was made from a survey that has aged since -
+// by a confirm the user read, by a session saved before the close - so the
+// agents are read again here, the one place every close goes through. A
+// recheck that cannot be read refuses too: no agents read is not idle. The
+// session is saved by opts.Before, after the guard, so a refused close saves
+// nothing either.
+func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
+	if !opts.Force {
+		fresh, err := c.recheck(ctx, plan, opts)
+		if err != nil {
+			return nil, err
+		}
+		if busy := Busy(fresh); len(busy) > 0 {
+			slog.Info("shutdown refused", "steps", len(fresh), "busy", len(busy))
+			return nil, &BusyRefusal{Plan: fresh}
+		}
+		plan = fresh
+	}
+	if opts.Before != nil {
+		if err := opts.Before(); err != nil {
+			return nil, err
+		}
+	}
 	out := make(Closed, 0, len(plan))
 	for _, s := range plan {
 		// The plan may come from a core whose hosts have changed since, as the
@@ -472,7 +532,21 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	c.awaitClosed(ctx, out, wait)
 	closed, open, failed := out.Counts()
 	slog.Info("shutdown", "closed", closed, "open", open, "failed", failed)
-	return out
+	return out, nil
+}
+
+// recheck surveys again and returns the plan with each step's agents as that
+// survey finds them.
+func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) ([]CloseStep, error) {
+	r, err := c.Survey(ctx, opts.Projects, opts.Bound, opts.Attached)
+	if err != nil {
+		return nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+	}
+	fresh, err := c.rechecked(r, plan)
+	if err != nil {
+		return nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+	}
+	return fresh, nil
 }
 
 // awaitClosed marks every closed step that is still listed once wait has

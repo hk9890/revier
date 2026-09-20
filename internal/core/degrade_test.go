@@ -138,7 +138,7 @@ func TestShutdownJudgesEachStepByItsOwnHost(t *testing.T) {
 	rt.Refuses = map[string]bool{plan[0].Ref.ID: true}
 	wm.InstancesErr = errors.New("went away")
 
-	out := c.Shutdown(context.Background(), plan, 2*core.ClosePoll)
+	out, _ := c.Shutdown(context.Background(), plan, 2*core.ClosePoll, forced)
 	if !out[0].Open {
 		t.Errorf("%s = %+v, want still open: its own host lists it", out[0].Name(), out[0])
 	}

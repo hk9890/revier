@@ -124,11 +124,12 @@ The sessions screen is the three `revier session` commands on the surface: the
 saved sessions, a pane with the restore plan for the one under the cursor, Enter
 to restore it and a save button on its top line (D46, D49). The shutdown wizard
 is `revier shutdown` on the surface: every project or one, then what of it, then
-the plan to confirm, and the result shown with the surface still up (D78). A
-plan that named no busy agent is read again on confirm, its own steps only: one
-busy since saves nothing and closes nothing, and the plan comes back with it
-named, where confirming it is the force. A survey that cannot read a step's
-agents closes nothing either, and says so.
+the plan to confirm, and the result shown with the surface still up (D78).
+Every close reads the plan's agents again first, its own steps only: one busy
+since saves nothing and closes nothing, and the plan comes back with it named,
+where confirming it is the force (D97). A del that would have closed at once
+asks there too. A survey that cannot read a step's agents closes nothing
+either, and says so.
 
 ## Scope
 
