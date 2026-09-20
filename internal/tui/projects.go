@@ -146,13 +146,12 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	//
 	// The project column is what the list is for, so it gives way last: the
 	// agent column shrinks first, to one glyph, and then goes, and only then
-	// is a name or a path cut.
-	projectCol := d.projectColumn(m)
-	agentCol := min(maxAgentWidth, width-indent-gridGap-projectCol)
-	if agentCol < 1 {
-		agentCol, projectCol = 0, width-indent
-	} else {
-		projectCol = width - indent - gridGap - agentCol
+	// is a name or a path cut. Where the agent column starts is agentGeometry's
+	// to say, so the rule's totals stand in the same columns as these counts.
+	agentAt, agentCol := d.agentGeometry(m)
+	projectCol := width - indent
+	if agentCol > 0 {
+		projectCol = agentAt - gridGap - indent
 	}
 	cell := func(s string, w int) string {
 		return s + style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
@@ -197,6 +196,31 @@ const (
 	maxNameWidth    = 32
 )
 
+// agentGeometry is where a row's agent column starts and how wide it is. It
+// is read off the list rather than off one row, so Render and the rule that
+// draws its totals over the same column both ask it: the column sits at the
+// right edge, so its width decides its start. A start of zero is a list with
+// no room for the column at all.
+func (d projectDelegate) agentGeometry(m list.Model) (start, room int) {
+	indent := rowIndent(d.theme)
+	room = min(maxAgentWidth, m.Width()-indent-gridGap-d.projectColumn(m))
+	if room < 1 {
+		return 0, 0
+	}
+	return m.Width() - room, room
+}
+
+// rowIndent is the width of a row's prefix: the selection bar, the state mark
+// and the folder glyph, each followed by a gap. Every glyph that shares a
+// column is one width, so the prefix is as wide for one row as for the next.
+func rowIndent(th theme.Theme) int {
+	indent := 1 + 1 + lipgloss.Width(th.Glyphs.Stopped) + 1
+	if th.Glyphs.Folder != "" {
+		indent += lipgloss.Width(th.Glyphs.Folder) + 1
+	}
+	return indent
+}
+
 // projectColumn is the width the project column asks for: the widest name
 // or path on the list, within its cap. The agent column gets what is left,
 // so a list of short paths gives its agents the room and a list of long ones
@@ -237,65 +261,89 @@ func highlight(text string, matches []int, plain, match lipgloss.Style) string {
 	return b.String()
 }
 
-// agent is the project's agents counted by state, the state closest to
-// needing you first: each state as its glyph and the count, in its colour.
-// Each state has a slot of its own, blank when it has no agent, so a state's
-// count sits in the same column on every row. It is the table's second
-// column, and the part that answers "which of these needs me". What each
-// agent is doing is the pane's.
-//
-// The column gives way in steps as room goes (decisions.md D39): first to the
-// worst state's count alone, then to its glyph alone, then to nothing. The
-// sort and the header's counts still say who needs you.
+// agent is the project's agents counted by state: the table's second column,
+// and the part that answers "which of these needs me". What each agent is
+// doing is the pane's. How the counts are laid out is agentPieces'.
 func (d projectDelegate) agent(v revier.ProjectView, room int, style func(lipgloss.Style) lipgloss.Style) string {
-	th := d.theme
 	counts := map[revier.Status]int{}
 	for _, a := range v.Agents {
 		counts[a.State.Status]++
 	}
-	states := []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown}
+	return agentColumn(d.theme, counts, room, style)
+}
+
+// agentPiece is one state's count and the column it sits in, measured from
+// the agent column's own left edge.
+type agentPiece struct {
+	at    int
+	text  string
+	style lipgloss.Style
+}
+
+// agentPieces lays the agent column out: each state with agents as its glyph
+// and count, in the slot its state owns, so a state reads in the same column
+// on every row and in the rule above them. A state with no agent leaves its
+// slot empty rather than moving the ones after it.
+//
+// The column gives way in steps as room goes (decisions.md D39): the slots,
+// then the worst state's count alone, then its glyph alone, then nothing.
+// Whoever draws the pieces fills what is between them - a row with blanks,
+// the rule with its line.
+func agentPieces(th theme.Theme, counts map[revier.Status]int, room int) []agentPiece {
 	glyphWidth := 0
-	for _, s := range states {
+	for _, s := range statusOrder {
 		glyphWidth = max(glyphWidth, lipgloss.Width(statusGlyph(th, s)))
 	}
-	blank := func(n int) string { return style(th.Path).Render(strings.Repeat(" ", n)) }
-	// A slot is its state's glyph and count, padded to the slot's width. The
-	// last state with agents is not padded, so the counts take no more room
-	// than they show.
-	slots := make([]string, len(states))
-	worst, used := -1, 0
-	for i, s := range states {
+	slot := glyphWidth + 1 + countWidth
+	var full []agentPiece
+	worst := -1
+	for i, s := range statusOrder {
 		if counts[s] > 0 {
-			slots[i] = fmt.Sprintf("%s %d", statusGlyph(th, s), counts[s])
 			if worst < 0 {
 				worst = i
 			}
-			used = i + 1
+			full = append(full, agentPiece{
+				at:    i * (slot + gridGap),
+				text:  fmt.Sprintf("%s %d", statusGlyph(th, s), counts[s]),
+				style: statusStyle(th, s),
+			})
 		}
 	}
 	if worst < 0 {
-		return ""
+		return nil
 	}
-	var full []string
-	for i, s := range states[:used] {
-		text := slots[i]
-		if i < used-1 {
-			text += strings.Repeat(" ", max(glyphWidth+1+countWidth-lipgloss.Width(text), 0))
-		}
-		full = append(full, style(statusStyle(th, s)).Render(text))
+	if last := full[len(full)-1]; last.at+lipgloss.Width(last.text) <= room {
+		return full
 	}
-	worstStyle := style(statusStyle(th, states[worst]))
-	for _, out := range []string{
-		strings.Join(full, blank(gridGap)),
-		worstStyle.Render(slots[worst]),
-		worstStyle.Render(statusGlyph(th, states[worst])),
+	s := statusOrder[worst]
+	for _, text := range []string{
+		fmt.Sprintf("%s %d", statusGlyph(th, s), counts[s]),
+		statusGlyph(th, s),
 	} {
-		if lipgloss.Width(out) <= room {
-			return out
+		if lipgloss.Width(text) <= room {
+			return []agentPiece{{text: text, style: statusStyle(th, s)}}
 		}
 	}
-	return ""
+	return nil
 }
+
+// agentColumn draws the pieces as a row draws them: the space between two
+// counts is the row's background, as every other gap in a row is. A count
+// with more digits than its slot holds takes the space before the next one
+// rather than pushing it out of its column.
+func agentColumn(th theme.Theme, counts map[revier.Status]int, room int, style func(lipgloss.Style) lipgloss.Style) string {
+	out, at := "", 0
+	for _, p := range agentPieces(th, counts, room) {
+		out += style(th.Path).Render(strings.Repeat(" ", max(p.at-at, 0))) + style(p.style).Render(p.text)
+		at = p.at + lipgloss.Width(p.text)
+	}
+	return out
+}
+
+// statusOrder is every agent state, the one closest to needing you first. A
+// row's counts and the rule's totals read in the same order, so a glyph means
+// the same thing wherever it is.
+var statusOrder = []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown}
 
 // statusGlyph is the state's glyph alone, for a row's counts, which have no
 // room for its words.

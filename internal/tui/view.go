@@ -11,6 +11,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The chrome above and below the list: the action bar, a line under it, the
@@ -100,8 +101,10 @@ func (m Model) View() string {
 	// list's column and read as the list's, not the whole screen's
 	// (decisions.md D73). A terminal too narrow for both shows the pane in
 	// the list's place, under a query as wide as the screen.
-	// Beside the pane the rule stops a column short of its border, as every
-	// row does, rather than running into it.
+	// Beside the pane the rule stops a column short of its border rather
+	// than running into it. A row's own columns run to the border, so the
+	// rule can be a column short of a total the rows have the room for; it
+	// leaves that total off and keeps the rest.
 	list, rule := m.listWidth(), m.listWidth()-1
 	if m.paneWidth() == 0 {
 		list, rule = w, w
@@ -209,11 +212,59 @@ func (m Model) subtitle() string {
 }
 
 // rule separates the query from the rows it filters, and says how many of
-// them survive it out of how many there are, the way the picker says it.
+// them survive it out of how many there are, the way the picker says it. To
+// the right it carries the totals, standing in the column the rows count
+// their agents in: a state's total sits over that state's counts, so the
+// column reads as one sum and its parts rather than as two tallies that
+// happen to use the same glyphs (decisions.md D96).
 func (m Model) rule(width int) string {
 	head := clipTo(pad0(m.ruleCount()), width)
-	line := max(width-lipgloss.Width(head), 0)
-	return head + m.theme.Border.Render(strings.Repeat("─", line))
+	col, after := lipgloss.Width(head), false
+	// line runs from where the last thing written ended to where the next one
+	// starts, keeping a space of air on each side of what it meets. The head
+	// brings its own air (pad0), and the right edge wants none.
+	line := func(to int) string {
+		air := 0
+		if after {
+			air++
+		}
+		if to < width {
+			air++
+		}
+		n := max(to-col, 0)
+		if n <= air {
+			return strings.Repeat(" ", n)
+		}
+		out := m.theme.Border.Render(strings.Repeat("─", n-air))
+		if after {
+			out = " " + out
+		}
+		if to < width {
+			out += " "
+		}
+		return out
+	}
+
+	at, pieces := m.ruleTotals()
+	out := head
+	for _, p := range pieces {
+		// A state with no agent leaves its slot empty and the rule runs
+		// through it: a gap there would read as something missing, rather
+		// than as a state with nothing in it. A total with no room for its
+		// own slot - the rule stops a column short of the pane's border and
+		// a row's counts do not - is left off and the line runs on in its
+		// place, because a total moved out of its slot stands over a state
+		// it does not mean. The totals left of it keep theirs; where the
+		// first one is already short of room the rule is the count alone,
+		// which is what line(width) then draws.
+		start, text := at+p.at, p.style.Render(p.text)
+		if start <= col || start+lipgloss.Width(text) > width {
+			break
+		}
+		out += line(start) + text
+		col, after = start+lipgloss.Width(text), true
+	}
+	return out + line(width)
 }
 
 // pad0 puts a space on each side of a rule's head, so its text does not touch
@@ -245,6 +296,30 @@ func (m Model) ruleCount() string {
 		return th.NameDim.Render("surveying")
 	}
 	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
+}
+
+// ruleTotals is every agent on the rows under the rule, counted by state, and
+// the column it stands in. It is drawn as a row's agent column is - the same
+// slots, in the same order, giving way in the same steps - so a state's total
+// sits over that state's counts. It counts what the rule counts: the rows the
+// filter left, not the ones it hid. Before the first survey there is nothing
+// to total.
+func (m Model) ruleTotals() (int, []agentPiece) {
+	if m.dialog != dialogNone || !m.ready() {
+		return 0, nil
+	}
+	counts := map[revier.Status]int{}
+	for _, item := range m.plist.VisibleItems() {
+		row, ok := item.(tableRow)
+		if !ok || row.rowUnsurveyed() {
+			continue
+		}
+		for _, a := range row.rowView().Agents {
+			counts[a.State.Status]++
+		}
+	}
+	start, room := projectDelegate{theme: m.theme}.agentGeometry(m.plist)
+	return start, agentPieces(m.theme, counts, room)
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints

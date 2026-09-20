@@ -207,8 +207,7 @@ Hover says what a click would do, and it never selects.
 ### D51 — no header and no border; the rule carries the count
 
 The header named the program just started, and the border repeated the
-terminal's edges. The agent counts beside the count went when the query moved
-onto the rule (D73): each row already shows its state.
+terminal's edges. What else the rule carries is D96's.
 
 ### D53 — config is a screen, and a change applies as it is made
 
@@ -595,3 +594,12 @@ beside the window, when the window pairs with one beyond doubt - the pairing
 D63 and D67 already refuse to guess at. An ambiguous window is recorded alone
 and reports no agent, which is the honest answer. The two are one attached row,
 the terminal's, because that is the side that holds the panels.
+
+### D96 — the rule totals the agents on the list, in the rows' own column
+
+Replaces D51's removal of the counts beside the rule's count. The rows show
+each project's state, but ninety of them do not fit on a screen, so "how many
+need me now" was a scroll. The totals stand in the column the rows count in,
+one layout placing both, so a state's total sits over that state's counts.
+They count the rows the filter left, and the rule's line runs through the slot
+of a state with no agent.
