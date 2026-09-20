@@ -230,6 +230,59 @@ func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	}
 }
 
+// column is the screen column text sits in, which is not its byte offset: a
+// rule is drawn out of three-byte dashes.
+func column(line, text string) int {
+	at := strings.Index(line, text)
+	if at < 0 {
+		return -1
+	}
+	return lipgloss.Width(line[:at])
+}
+
+// The rule counts the rows, and beside that count it says how many agents
+// there are in each state over all of them: the dashboard's headline, which a
+// list too long to read in one screen otherwise never gives.
+func TestTheRuleCountsEveryAgentByState(t *testing.T) {
+	rt, wm, c, projects := world(t, 4)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	glyphs := theme.Default().Glyphs
+	head := ruleLine(m)
+	if !strings.Contains(head, "4/4") || !strings.Contains(head, glyphs.NeedsYou+" 1") {
+		t.Fatalf("rule = %q, want the row count and one agent needing you", head)
+	}
+	// The total stands over the column the rows count that state in, so the
+	// two read as a sum and its parts.
+	row := rows(m)[0]
+	if at, over := column(row, glyphs.NeedsYou), column(head, glyphs.NeedsYou); at != over {
+		t.Errorf("the total is at column %d and the row's count at %d:\n%s\n%s", over, at, head, row)
+	}
+	// The slot of a state with no agent is not a hole in the rule: the line
+	// runs through it, so nothing reads as missing. The states before idle
+	// are empty here, and the line covers them.
+	idle := &hosttest.FakeProbe{Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Activity: "waiting for a prompt"}}
+	rest := refreshed(t, &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{idle}}, projects, stateWith(t, nil), nil)
+	quiet := ruleLine(rest)
+	if !strings.Contains(quiet, glyphs.Idle+" 1") {
+		t.Fatalf("rule = %q, want one idle agent counted", quiet)
+	}
+	if strings.Contains(strings.TrimSpace(quiet), "  ") {
+		t.Errorf("the rule has a gap where a state has no agent:\n%s", quiet)
+	}
+	if at, over := column(rows(rest)[0], glyphs.Idle), column(quiet, glyphs.Idle); at != over {
+		t.Errorf("the idle total is at column %d and the row's count at %d:\n%s\n%s", over, at, quiet, rows(rest)[0])
+	}
+	// It counts the rows under it: a query that hides the project with the
+	// agent takes its agent out of the totals too.
+	filtered, _ := press(m, "0")
+	filtered, _ = press(filtered, "0")
+	if head := ruleLine(filtered); strings.Contains(head, glyphs.NeedsYou) {
+		t.Errorf("rule = %q, want no agent counted once the query hid the only one", head)
+	}
+}
+
 // The rows before the first survey are in file order, and the survey re-sorts
 // them. The list component keeps the cursor's index across that, not its
 // project, so a cursor left where it was would land on whatever sorted into
