@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -574,7 +575,11 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	if err := h.setVars(ctx, socket, first, r.Vars); err != nil {
-		return revier.TargetRef{}, err
+		// The mark is best effort: an unmarked panel falls back to the guess
+		// it replaces (decisions.md D98). Failing here would leave the OS
+		// window open and unnamed to the caller, which pins nothing, and the
+		// next press would open a second one.
+		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", first, "err", err)
 	}
 	for _, p := range panels[1:] {
 		args := []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}

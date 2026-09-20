@@ -587,6 +587,35 @@ func TestOpenMarksTheFirstWindowWithItsVars(t *testing.T) {
 	}
 }
 
+// A mark that cannot be set does not fail the launch. The OS window is open
+// by then, and an Open that errors hands the caller nothing to pin, so the
+// next press would open a second one; an unmarked panel falls back to the
+// guess the mark replaces.
+func TestOpenReportsTheWindowWhenTheMarkFails(t *testing.T) {
+	h := newHost()
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
+		switch args[0] {
+		case "launch":
+			return []byte("7\n"), nil
+		case "set-user-vars":
+			return nil, errors.New("kitty: no such window")
+		}
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "tickets:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}}}}}})
+	})
+	ref, err := h.Open(context.Background(), revier.Realization{
+		Name: "tickets:demo", Launch: []string{"taskmgr-ui"}, Match: revier.Match{Title: "^tickets:demo$"},
+		Vars: map[string]string{"revier_home": "home"},
+	})
+	if err != nil {
+		t.Fatalf("Open: %v, want the OS window despite the mark", err)
+	}
+	if ref.ID != "@kitty-4000/1" || ref.Title != "tickets:demo" {
+		t.Errorf("ref = %+v, want the OS window the launch landed in", ref)
+	}
+}
+
 // KITTY_LISTEN_ON leads the socket list and outlives its kitty in every
 // process started from it. Open launches into the first socket that answers,
 // not into the first one listed, or every launch fails on the dead one.

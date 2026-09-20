@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
@@ -317,7 +318,13 @@ func (h *Host) name(ctx context.Context, session, window, pane string, r revier.
 	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
 		return err
 	}
-	return h.tab(ctx, window, pane, panels, r.Vars)
+	if err := h.setVars(ctx, pane, r.Vars); err != nil {
+		// The mark is best effort: an unmarked panel falls back to the guess
+		// it replaces (decisions.md D98). Failing here would kill a session
+		// whose panes are already running, over a mark nothing depends on.
+		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
+	}
+	return h.fill(ctx, window, pane, panels)
 }
 
 // start is the part of a new-session, new-window or split-window that starts
@@ -391,17 +398,28 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 }
 
 func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.PanelSpec, vars map[string]string) error {
-	if len(vars) > 0 {
-		pairs := make([]string, 0, len(vars))
-		for name, value := range vars {
-			pairs = append(pairs, name+"="+value)
-		}
-		sort.Strings(pairs)
-		if _, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " ")); err != nil {
-			return err
-		}
+	// A tab's mark is its whole identity (decisions.md D64): a tab that
+	// carries none is found by nothing, and the next press opens another. It
+	// fails the tab, which OpenTab then kills.
+	if err := h.setVars(ctx, pane, vars); err != nil {
+		return err
 	}
 	return h.fill(ctx, window, pane, panels)
+}
+
+// setVars leaves the variables on the pane, packed into its @revier option,
+// where Instances reads them back.
+func (h *Host) setVars(ctx context.Context, pane string, vars map[string]string) error {
+	if len(vars) == 0 {
+		return nil
+	}
+	pairs := make([]string, 0, len(vars))
+	for name, value := range vars {
+		pairs = append(pairs, name+"="+value)
+	}
+	sort.Strings(pairs)
+	_, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " "))
+	return err
 }
 
 // FocusPanel makes the pane current in its window and its window current in

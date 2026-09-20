@@ -625,6 +625,10 @@ guess. revier now marks the first panel of every instance it opens with the
 target the instance was opened for, through `Realization.Vars`, as `OpenTab`
 already marks a tab's. An instance opened before the mark existed carries
 none, so the guess stays as the fallback for those and for nothing else.
+Setting it is best effort: the instance is open by then, and an `Open` that
+failed over the mark would hand the caller nothing to pin, so the next press
+would open a second copy. The host logs the failure and returns the instance.
+A tab's own mark stays fatal, because it is the tab's whole identity (D64).
 
 ### D99 — a link's view is the host's agents and this machine's, added together
 
