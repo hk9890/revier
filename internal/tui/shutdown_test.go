@@ -249,8 +249,10 @@ func savedProjects(s session.Session) []revier.ProjectName {
 }
 
 // A host that stops answering between the plan and the confirm closes
-// nothing: a survey that lists no agent has not shown them idle.
-func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
+// nothing of its own: a survey that lists no agent has not shown them idle.
+// The result names each step it left and why, and nothing was saved, because
+// a shutdown that closes nothing changes nothing to record.
+func TestConfirmLeavesOpenWhatTheRecheckCannotRead(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusIdle}
 	root := stateWith(t, nil)
@@ -266,8 +268,11 @@ func TestConfirmClosesNothingWhenTheRecheckCannotRead(t *testing.T) {
 	if all, _ := session.List(root); len(all) != 0 {
 		t.Errorf("sessions = %d, want no save for a shutdown that closed nothing", len(all))
 	}
-	if foot := strings.Join(lines(m), "\n"); !strings.Contains(foot, "could not be read again") || !strings.Contains(foot, "nothing closed") {
-		t.Errorf("screen = %q, want the reason nothing closed", foot)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 0, 1 still open") {
+		t.Errorf("rows = %q, want the step left open", body)
+	}
+	if plan := pane(m); !strings.Contains(plan, "no server running") {
+		t.Errorf("pane = %q, want the reason the step was left", plan)
 	}
 }
 

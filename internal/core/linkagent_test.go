@@ -374,9 +374,9 @@ func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 }
 
 // A link whose host stops answering between the plan and the close reports no
-// agent, and no agent read is not idle: the close is refused rather than
-// ending a busy agent on the far side unasked.
-func TestShutdownRefusesALinkWhoseHostStoppedAnswering(t *testing.T) {
+// agent, and no agent read is not idle: its own steps are left open and named,
+// rather than ending a busy agent on the far side unasked.
+func TestShutdownLeavesOpenALinkWhoseHostStoppedAnswering(t *testing.T) {
 	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	p := linkProject(t)
 	projects := []core.Project{p}
@@ -389,10 +389,13 @@ func TestShutdownRefusesALinkWhoseHostStoppedAnswering(t *testing.T) {
 
 	remote.Err = errors.New("connection refused")
 	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects})
-	if err == nil || out != nil || len(rt.Closed) != 0 {
-		t.Fatalf("shutdown = %+v, %v, closed %v; want a refusal with nothing closed", out, err, rt.Closed)
+	if err != nil || len(rt.Closed) != 0 {
+		t.Fatalf("shutdown = %v, closed %v; want the step left open and nothing closed", err, rt.Closed)
 	}
-	if !strings.Contains(err.Error(), "connection refused") {
-		t.Errorf("err = %v, want the host's failure named", err)
+	if _, open, _ := out.Counts(); open != len(out) {
+		t.Errorf("counts = %d open of %d, want every step of the link left open", open, len(out))
+	}
+	if !strings.Contains(out[0].Note(), "connection refused") {
+		t.Errorf("note = %q, want the host's failure named", out[0].Note())
 	}
 }

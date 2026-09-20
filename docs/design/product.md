@@ -128,8 +128,10 @@ the plan to confirm, and the result shown with the surface still up (D78).
 Every close reads the plan's agents again first, its own steps only: one busy
 since saves nothing and closes nothing, and the plan comes back with it named,
 where confirming it is the force (D99). A del that would have closed at once
-asks there too. A survey that cannot read a step's agents closes nothing
-either, and says so.
+asks there too. A step whose agents that survey could not read - its host did
+not list, its project is no longer surveyed, its link host did not answer - is
+left open and named in the result, and the rest of the plan closes: one dead
+remote host does not stop the other projects.
 
 ## Scope
 

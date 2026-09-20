@@ -511,7 +511,7 @@ func (m Model) shutdownDetail() string {
 		for _, r := range s.closed {
 			project = m.shutProjectLine(&b, project, r.Project, w)
 			op, rest := startOp(th, "closed"), ""
-			if r.Err != nil || r.Open || r.Action == core.CloseUnsupported {
+			if r.Err != nil || r.Open || r.Action == core.CloseUnsupported || r.Action == core.CloseUnread {
 				op, rest = skipOp(th, "open"), r.Note()
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")

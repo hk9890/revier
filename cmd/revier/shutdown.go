@@ -140,6 +140,8 @@ func printClosePlan(out io.Writer, plan []core.CloseStep) error {
 	for _, s := range plan {
 		note := "close"
 		switch {
+		case s.Unread != "":
+			note = "leave open: " + s.Unread
 		case s.Action == core.CloseUnsupported:
 			note = "leave open: its host cannot close it"
 		case s.Busy():

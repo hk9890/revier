@@ -632,6 +632,17 @@ are read off it, not off the listing the plan was drawn from. A del on a busy
 row asks rather than closing, and its second press is the force, as a confirm
 already is in the wizard.
 
+A busy agent refuses the whole plan, because the user is about to be asked
+about it and the plan is what they read. Not reading a step's agents is a
+different thing, and refuses that step alone (D85): its host did not list, its
+project is no longer surveyed, or its link host did not answer, and it is left
+open and named in the result while the rest of the plan closes. Refusing all
+of it meant one dead remote host stopped eighty-nine healthy projects until
+`--force`, which would have turned the busy guard off everywhere. A shutdown
+left with nothing to close saves nothing either: it changes nothing, so there
+is nothing to record, and the survey that could not read the desktop is not
+the one to write a session from.
+
 Putting the recheck in front of the save and the closes put its survey inside
 whatever bound the caller gave the whole call, and ninety projects with a link
 host that does not answer spend most of one. The save and the closes therefore

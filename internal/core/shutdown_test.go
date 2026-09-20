@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -576,19 +577,51 @@ func TestShutdownClosesWhenTheRecheckFindsNoBusyAgent(t *testing.T) {
 	}
 }
 
-// A shutdown that cannot read the plan's agents again closes nothing: a
-// degraded survey reports no agent, and no agent read is not idle.
-func TestShutdownRefusesWhenTheRecheckCannotBeRead(t *testing.T) {
-	c, _, _, projects := openDesktop(t, revier.StatusIdle)
+// A step whose agents the recheck could not read closes nothing and says why:
+// a degraded survey reports no agent, and no agent read is not idle.
+func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
 	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{})
-	if err == nil || out != nil {
-		t.Fatalf("shutdown = %+v, %v; want a refusal with nothing surveyed", out, err)
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
 	}
-	var refused *core.BusyRefusal
-	if errors.As(err, &refused) {
-		t.Errorf("err = %v, want an unreadable recheck rather than a busy refusal", err)
+	if len(rt.Closed) != 0 || len(wm.Closed) != 0 {
+		t.Errorf("closed %v and %v, want nothing: no project was surveyed", rt.Closed, wm.Closed)
+	}
+	if closed, open, _ := out.Counts(); closed != 0 || open != len(plan) {
+		t.Errorf("counts = %d closed, %d open; want every step left open", closed, open)
+	}
+	if note := out[0].Note(); !strings.Contains(note, "no longer surveyed") {
+		t.Errorf("note = %q, want the reason the step was left", note)
+	}
+}
+
+// One project the survey could not reach leaves its own steps open and closes
+// every other project's: a refusal disables the smallest thing that is wrong
+// (decisions.md D85).
+func TestShutdownClosesTheProjectsTheRecheckCouldRead(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	other := agentProject()
+	other.Name = "other"
+	other.Targets[0].Runtime.Name = "session:other"
+	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
+	other.Targets = other.Targets[:1]
+	rt.Add("session:other", "kitty")
+	projects = append(projects, prepared(t, other))
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	// Only "other" is surveyed again, so every step of "revier" is unread.
+	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects[1:]})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if closed, open, _ := out.Counts(); closed != 1 || open != 3 {
+		t.Errorf("counts = %d closed, %d open; want other's workspace closed and revier's three steps left", closed, open)
+	}
+	if len(rt.Closed) != 1 || rt.Closed[0].Title != "session:other" {
+		t.Errorf("runtime closed %v, want other's workspace alone", rt.Closed)
 	}
 }
 

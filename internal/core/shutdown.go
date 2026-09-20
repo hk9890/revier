@@ -41,6 +41,10 @@ const (
 	// CloseUnsupported is a step whose host cannot close it. It is a normal
 	// outcome: the shutdown names it and leaves it open.
 	CloseUnsupported
+	// CloseUnread is a step whose agents the recheck could not read. It is a
+	// normal outcome too: the shutdown names it, leaves it open, and closes
+	// the rest of the plan.
+	CloseUnread
 )
 
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
@@ -56,6 +60,11 @@ type CloseStep struct {
 	Panels  []revier.PanelID
 	Action  CloseAction
 	Agents  []revier.AgentView
+
+	// Unread is why the recheck could not read this step's agents. A step
+	// that carries one closes nothing and is named in the result; the rest
+	// of the plan closes (decisions.md D85, D99).
+	Unread string
 }
 
 // closes are the panels the step closes: its tab, or the one panel that
@@ -302,6 +311,10 @@ func agentsIn(agents []revier.AgentView, ref revier.TargetRef, panels []revier.P
 // instance, when it can.
 func (c *Core) closeStep(s CloseStep) CloseStep {
 	s.Action = CloseUnsupported
+	if s.Unread != "" {
+		s.Action = CloseUnread
+		return s
+	}
 	if s.Panel != "" {
 		if _, ok := c.panelCloser(s.Ref); ok {
 			s.Action = ClosePanel
@@ -409,6 +422,8 @@ type CloseResult struct {
 // Note is what a shutdown says about the step.
 func (r CloseResult) Note() string {
 	switch {
+	case r.Action == CloseUnread:
+		return "left open: " + r.Unread
 	case r.Action == CloseUnsupported:
 		return "left open: its host cannot close it"
 	case r.Err != nil:
@@ -429,7 +444,7 @@ func (cs Closed) Counts() (closed, open, failed int) {
 		switch {
 		case r.Err != nil:
 			failed++
-		case r.Open || r.Action == CloseUnsupported:
+		case r.Open || r.Action == CloseUnsupported || r.Action == CloseUnread:
 			open++
 		default:
 			closed++
@@ -571,7 +586,11 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	if opts.Self != nil {
 		plan = CloseLast(plan, r.Instances, opts.Self)
 	}
-	if opts.Before != nil {
+	// A shutdown with nothing left to close changes nothing, so there is
+	// nothing to record: the save is skipped rather than writing a session
+	// built from a survey that could not read the desktop.
+	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Unread == "" })
+	if opts.Before != nil && closes {
 		saving, stop := phaseContext(ctx, SaveBudget)
 		err := opts.Before(saving, r)
 		stop()
@@ -599,7 +618,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			}
 		}
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
-			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported, "err", res.Err)
+			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
+			"unread", s.Unread, "err", res.Err)
 		out = append(out, res)
 	}
 	c.awaitClosed(closing, out, wait)
@@ -617,22 +637,21 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 	if err != nil {
 		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
 	}
-	fresh, err := c.rechecked(r, plan)
-	if err != nil {
-		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
-	}
-	return r, fresh, nil
+	return r, c.rechecked(r, plan), nil
 }
 
 // rechecked is the plan with each step's agents as a later survey finds them.
 // It adds and drops no step: a plan confirmed is the plan that runs, and only
 // what its agents do now can stop it (decisions.md D78).
 //
-// It errors on a step the survey could not answer for - the host that lists
-// its instance did not answer, or its project is no longer surveyed. A
+// A step the survey could not answer for - the host that lists its instance
+// did not answer, its project is no longer surveyed, or the link host that
+// knows its agents did not answer - is marked Unread and closes nothing. A
 // degraded survey reports no agents, and no agents read is not idle: taking
-// it as idle would let the close through in the one case it knows least.
-func (c *Core) rechecked(r Report, plan []CloseStep) ([]CloseStep, error) {
+// it as idle would close it in the one case the survey knows least about.
+// The refusal is that step's alone, so one dead remote host does not stop the
+// other projects closing (decisions.md D85).
+func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
 	unreachable := map[revier.ProjectName]string{}
 	for _, v := range r.Views {
@@ -643,24 +662,24 @@ func (c *Core) rechecked(r Report, plan []CloseStep) ([]CloseStep, error) {
 	}
 	out := make([]CloseStep, len(plan))
 	for i, step := range plan {
-		if err := r.Failed[step.Ref.Host]; err != nil {
-			return nil, fmt.Errorf("%s did not answer: %w", step.Ref.Host, err)
-		}
 		local, surveyed := here[step.Project]
-		if !surveyed {
-			return nil, fmt.Errorf("%s is no longer surveyed", step.Project)
-		}
 		// A link's agents are its host's word (D84). A host that stopped
 		// answering between the plan and the close reports none, and no
 		// agents read is not idle, so the panel here that shows a busy agent
 		// is not closed on a survey that could not ask about it.
-		if why, ok := unreachable[step.Project]; ok {
-			return nil, fmt.Errorf("%s did not answer: %s", step.Project, why)
+		switch why, unreached := unreachable[step.Project]; {
+		case r.Failed[step.Ref.Host] != nil:
+			step.Unread = step.Ref.Host + " did not answer: " + r.Failed[step.Ref.Host].Error()
+		case !surveyed:
+			step.Unread = string(step.Project) + " is no longer surveyed"
+		case unreached:
+			step.Unread = string(step.Project) + " did not answer: " + why
+		default:
+			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}
-		step.Agents = agentsIn(local, step.Ref, step.panels())
 		out[i] = step
 	}
-	return out, nil
+	return out
 }
 
 // awaitClosed marks every closed step that is still listed once wait has
@@ -676,7 +695,7 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 		pending := false
 		for i := range out {
 			r := &out[i]
-			if r.Action == CloseUnsupported {
+			if r.Action == CloseUnsupported || r.Action == CloseUnread {
 				continue
 			}
 			if failed[r.Ref.Host] != nil {
