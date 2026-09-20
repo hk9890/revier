@@ -418,6 +418,7 @@ func (m *Model) reload() {
 		m.selectName(was.view.Project.Name)
 	case m.start != "":
 		m.selectName(m.start)
+		m.placing = true
 	default:
 		m.plist.Select(0)
 	}

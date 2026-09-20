@@ -1997,6 +1997,79 @@ func projectOrder(t *testing.T, m tui.Model) map[string]int {
 	return out
 }
 
+// visibleProjects is every project row on the screen, in the order the list
+// shows them: the names alone, without the mark, the path line or the counts.
+func visibleProjects(m tui.Model) []string {
+	var out []string
+	for _, line := range lines(m) {
+		// The detail pane names the project it holds, so only what is left
+		// of the border is the list.
+		if left, _, ok := strings.Cut(line, "│"); ok {
+			line = left
+		}
+		for _, f := range strings.Fields(line) {
+			if strings.HasPrefix(f, "project-") {
+				out = append(out, f)
+			}
+		}
+	}
+	return out
+}
+
+// The surface opens on the starting project with the rows that sort above it
+// in view: the list puts the projects that need the user first, so a start
+// near the bottom drawn on the last line alone says nothing about what else
+// is waiting.
+func TestTheStartingProjectOpensWithTheRowsAboveItInView(t *testing.T) {
+	_, _, c, projects := world(t, 60)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
+	m = survey(m)
+
+	rows := visibleProjects(m)
+	if len(rows) == 0 {
+		t.Fatalf("no project rows on the screen:\n%s", m.View())
+	}
+	// project-59 holds the agent that needs the user, so it sorts first and
+	// every other project keeps its file order under it: ten rows above
+	// project-40 is project-30.
+	if rows[0] != "project-30" {
+		t.Errorf("first row = %q, want project-30, ten rows above the start:\n%s", rows[0], m.View())
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-40") {
+		t.Errorf("selected %q, want project-40", row)
+	}
+}
+
+// The lookup's answer, which arrives after the first frame, is placed the
+// same way: it is the same start, found later.
+func TestTheLookedUpStartOpensWithTheRowsAboveItInView(t *testing.T) {
+	_, _, c, projects := world(t, 60)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-40", true }), 120, 60)
+	m = survey(m)
+
+	m = run(m, m.LookupStart())
+	if rows := visibleProjects(m); len(rows) == 0 || rows[0] != "project-30" {
+		t.Errorf("first row = %v, want project-30, ten rows above the start:\n%s", rows, m.View())
+	}
+}
+
+// A screen with no room for the rows above the start keeps the start itself:
+// it is the last row in view, with as many of the others as fit.
+func TestASmallScreenPutsTheStartingProjectOnTheLastRow(t *testing.T) {
+	_, _, c, projects := world(t, 60)
+	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 16)
+	m = survey(m)
+
+	rows := visibleProjects(m)
+	if len(rows) < 2 {
+		t.Fatalf("want more than the starting project on the screen, got %v:\n%s", rows, m.View())
+	}
+	if last := rows[len(rows)-1]; last != "project-40" {
+		t.Errorf("last row = %q, want the start project-40 on it:\n%s", last, m.View())
+	}
+}
+
 // clickCell is one press and release of the left button on a terminal cell,
 // with the command either returned.
 func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
