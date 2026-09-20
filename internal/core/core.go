@@ -1100,8 +1100,7 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 	tags := c.tags(snap)
 	for i, p := range projects {
 		if a, ok := answers[p.Name]; ok {
-			merge(&r.Views[i], a)
-			c.localise(tags, r.Views[i].Agents)
+			c.localise(tags, merge(&r.Views[i], a))
 		}
 	}
 	for _, h := range c.hosts() {
@@ -1266,10 +1265,18 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// twice, so each lands in a view once, and the read behind it is the
 	// survey's, not this view's.
 	seen := map[string]bool{}
-	probeOnce := func(inst revier.Instance) {
-		if k := key(inst.Ref); local && !seen[k] {
+	probe := func(inst revier.Instance) {
+		if k := key(inst.Ref); !seen[k] {
 			seen[k] = true
 			v.Agents = append(v.Agents, c.agentsOf(ctx, probed, inst)...)
+		}
+	}
+	// A link's targets are panels running an ssh, and what the agent on the
+	// far side is doing is its host's word, added by merge. Probing them
+	// here would read the ssh.
+	probeOnce := func(inst revier.Instance) {
+		if local {
+			probe(inst)
 		}
 	}
 
@@ -1330,10 +1337,15 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 			}
 		}
 	}
+	//
+	// An attachment is probed for a link too (decisions.md D99): it is a
+	// terminal of this machine, holding an agent no host on the other side
+	// knows about, and taking the host's word as the project's whole answer
+	// ended it unasked.
 	for _, ref := range attached {
 		if inst, ok := byRef(snap, ref); ok && !window[key(ref)] {
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
-			probeOnce(inst)
+			probe(inst)
 		}
 	}
 	return v

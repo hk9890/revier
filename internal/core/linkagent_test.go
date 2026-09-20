@@ -339,3 +339,36 @@ func TestServeStartsTheDeclaredPanels(t *testing.T) {
 		t.Errorf("ServeShell = %+v, %v; want zsh -l in %s", shell, err, dir)
 	}
 }
+
+// A terminal attached to a link by hand holds an agent of this machine. It is
+// probed like any attachment, and the host's answer adds to it rather than
+// replacing it, so the view shows both and a shutdown sees the busy one
+// (decisions.md D99).
+func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
+	c, rt, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	term := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	p := linkProject(t)
+
+	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
+		map[revier.ProjectName][]revier.TargetRef{p.Name: {term}})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	agents := report.Views[0].Agents
+	if len(agents) != 2 {
+		t.Fatalf("agents = %+v, want the attached terminal's and the host's", agents)
+	}
+	if agents[0].Ref != term || agents[0].State.Status != revier.StatusRunning {
+		t.Errorf("first agent = %+v, want the running one in the attached terminal", agents[0])
+	}
+	if agents[1].Panel != "9" || agents[1].State.Status != revier.StatusIdle {
+		t.Errorf("second agent = %+v, want the host's, on the panel here that shows it", agents[1])
+	}
+
+	s, ok := stepFor(c.ShutdownPlan(report, "", core.ShutdownAll), term)
+	if !ok || !s.Busy() {
+		t.Errorf("step = %+v, %v; want the attached terminal marked busy", s, ok)
+	}
+}

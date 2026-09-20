@@ -156,22 +156,31 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // what this side's own file was refused for, since the two are separate
 // mistakes in separate files.
 //
+// The agents add to the ones read here rather than replacing them
+// (decisions.md D99): a terminal attached to the link by hand holds an agent
+// of this machine that the host knows nothing about. merge returns the ones
+// it added, which are the only ones the host named and so the only ones
+// localise has a tag for.
+//
 // The agents are copied: two links to one project on one host are handed one
 // answer, and the survey renames each link's agents in place.
-func merge(v *revier.ProjectView, a remoteAnswer) {
+func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 	if a.err == nil && a.view.Unreachable != "" {
 		a.err = errors.New(a.view.Unreachable)
 	}
 	if a.err != nil {
 		v.Unreachable = a.err.Error()
-		return
+		return nil
 	}
 	v.PathExists = a.view.PathExists
-	v.Agents = slices.Clone(a.view.Agents)
+	at := len(v.Agents)
+	v.Agents = append(v.Agents, slices.Clone(a.view.Agents)...)
+	added := v.Agents[at:]
 	if a.view.Invalid != "" {
 		if v.Invalid != "" {
 			v.Invalid += "\n"
 		}
 		v.Invalid += a.view.Invalid
 	}
+	return added
 }

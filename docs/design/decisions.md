@@ -622,3 +622,14 @@ guess. revier now marks the first panel of every instance it opens with the
 target the instance was opened for, through `Realization.Vars`, as `OpenTab`
 already marks a tab's. An instance opened before the mark existed carries
 none, so the guess stays as the fallback for those and for nothing else.
+
+### D99 — a link's view is the host's agents and this machine's, added together
+
+`local := p.Remote == nil` skipped the probe for a link, and the host's answer
+then replaced the view's agents outright, so a terminal attached to a link by
+hand reported none and a shutdown ended a busy agent in it unasked. An
+attachment is probed for a link too - it is a terminal of this machine, and no
+host on the other side knows about it - and the host's agents are appended to
+what was read here rather than replacing it. The link's own targets stay
+unprobed: they are panels running an ssh, and what the agent on the far side
+is doing is its host's word (D84).
