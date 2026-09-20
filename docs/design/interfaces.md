@@ -196,7 +196,9 @@ type Closer interface {
 
 // PanelCloser is an optional capability of a Runtime. ClosePanel closes one
 // panel and leaves the rest of the instance, which is how a shutdown of the
-// agents alone ends an agent without its workspace (D78).
+// agents alone ends an agent without its workspace (D78), and how a tab
+// closes whole: the core closes each panel of it, and the tab goes with the
+// last of them (D94).
 type PanelCloser interface {
     ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }
@@ -283,6 +285,7 @@ type Panel struct {
     Vars    map[string]string // runtime-provided: kitty user vars, tmux options
     PID     int
     Command []string          // foreground argv, when the runtime can see it
+    Tab     string            // the tab that holds it: a kitty tab, a tmux window; empty without tabs
 }
 
 // AgentProbe derives agent state from a panel.

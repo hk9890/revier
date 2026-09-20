@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -72,6 +73,41 @@ func tabOf(in revier.Instance, name revier.TargetName) (revier.PanelID, bool) {
 		}
 	}
 	return "", false
+}
+
+// tabAt is every panel of the tab that holds a panel. On a runtime with no
+// tabs it is the panel alone.
+func tabAt(in revier.Instance, panel revier.PanelID) []revier.PanelID {
+	tab := tabOfPanel(in, panel)
+	if tab == "" {
+		return []revier.PanelID{panel}
+	}
+	var panels []revier.PanelID
+	for _, p := range in.Panels {
+		if p.Tab == tab {
+			panels = append(panels, p.ID)
+		}
+	}
+	return panels
+}
+
+// tabOfPanel is the tab that holds the panel, empty when the instance lists
+// no such panel or its runtime has no tabs.
+func tabOfPanel(in revier.Instance, panel revier.PanelID) string {
+	i := slices.IndexFunc(in.Panels, func(p revier.Panel) bool { return p.ID == panel })
+	if i < 0 {
+		return ""
+	}
+	return in.Panels[i].Tab
+}
+
+// ownTab reports whether the panel sits in the workspace's own tab, the one
+// that holds ownPanel. A tab the workspace opened beside it - the agent and
+// shell of `revier agent new` - is not it, and closes whole; a runtime with
+// no tabs has only its own.
+func ownTab(in revier.Instance, panel revier.PanelID) bool {
+	own, ok := ownPanel(in)
+	return ok && tabOfPanel(in, own) == tabOfPanel(in, panel)
 }
 
 // ownPanel is the first panel of an instance that no tab target claims: where

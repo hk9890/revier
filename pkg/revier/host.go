@@ -186,8 +186,9 @@ type Hider interface {
 // PanelCloser is an optional capability of a Runtime, detected by type
 // assertion. ClosePanel closes one panel of an instance and leaves the rest,
 // which is how a shutdown of the agents alone ends an agent without its
-// workspace. ref names the instance, because a panel id can be one runtime
-// process's.
+// workspace, and how a whole tab ends: the core closes each panel of the tab,
+// and the tab goes with the last of them (decisions.md D94). ref names the
+// instance, because a panel id can be one runtime process's.
 type PanelCloser interface {
 	ClosePanel(ctx context.Context, ref TargetRef, panel PanelID) error
 }

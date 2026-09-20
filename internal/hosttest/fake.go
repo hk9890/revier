@@ -73,7 +73,7 @@ type Fake struct {
 	// its prompt the way a real one does.
 	OnSend func(panel revier.PanelID, text string)
 
-	// Closed records every ref passed to Close, and ClosedPanels every panel
+	// Closed records every ref passed to Close and ClosedPanels every panel
 	// passed to ClosePanel, in order. CloseErr makes both fail. Refuses holds
 	// the instance ids a Close leaves listed.
 	Closed       []revier.TargetRef
@@ -133,8 +133,8 @@ type Tab struct {
 	Panel revier.PanelID
 }
 
-// OpenTab adds the tab's panels to the instance, vars on the first, and
-// records the call.
+// OpenTab adds the tab's panels to the instance, in a tab of their own with
+// vars on the first, and records the call.
 // FakeRuntime implements revier.PanelOpener; a runtime without the capability
 // is a different double.
 func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
@@ -153,9 +153,11 @@ func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.
 		}
 		live := append([]revier.Panel(nil), f.instances[i].Panels...)
 		var first revier.PanelID
+		f.nextID++
+		tab := "tab" + strconv.Itoa(f.nextID)
 		for n, spec := range specs {
 			f.nextID++
-			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: spec.Kind, Title: spec.Title, Command: spec.Command}
+			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: spec.Kind, Title: spec.Title, Command: spec.Command, Tab: tab}
 			if n == 0 {
 				first, panel.Vars = panel.ID, vars
 			}

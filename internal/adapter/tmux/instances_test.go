@@ -23,8 +23,8 @@ func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	var sessions, panes strings.Builder
 	for i := range projects {
 		fmt.Fprintf(&sessions, "4242|$%d|1|project-%d\n", i, i)
-		fmt.Fprintf(&panes, "$%d|%%%d|100|zsh||shell\n", i, 2*i)
-		fmt.Fprintf(&panes, "$%d|%%%d|101|claude||agent\n", i, 2*i+1)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|100|zsh||shell\n", i, i, 2*i)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|101|claude||agent\n", i, i, 2*i+1)
 	}
 	for name, body := range map[string]string{"sessions": sessions.String(), "panes": panes.String()} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
@@ -49,6 +49,9 @@ func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	}
 	if len(got) != projects {
 		t.Fatalf("got %d instances, want %d", len(got), projects)
+	}
+	if p := got[1].Panels; len(p) != 2 || p[0].ID != "%2" || p[0].Tab != "@1" || p[1].Tab != "@1" {
+		t.Errorf("panels = %+v, want %%2 and %%3, both in window @1", p)
 	}
 	calls, err := os.ReadFile(log)
 	if err != nil {
