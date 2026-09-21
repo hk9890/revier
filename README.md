@@ -127,8 +127,9 @@ theme, the glyphs, the trigger key and the runtime host, and adds, changes and
 deletes shared targets and actions, each written to `config.toml` and applied
 as it changes, comments kept, and **help** (alt+h)
 lists every key: the surface's own, the target keys, the configured actions
-and the desktop keys. The rule over the list says how many projects the
-filter leaves.
+and the desktop keys. At the right end of the same line stands the version
+running, where the terminal is wide enough for it and the buttons both. The
+rule over the list says how many projects the filter leaves.
 
 **new** takes one of three things:
 

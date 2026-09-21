@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
@@ -648,5 +649,77 @@ func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
 	m, _ = press(m, "esc")
 	if now := selectedRow(t, m); now != was {
 		t.Errorf("selected %q after clicks on the new-project screen, want %q", now, was)
+	}
+}
+
+// The version stands at the right end of the bar, dim: it says which revier
+// this is, and nothing else on the screen is about the installation.
+func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	bar := barLine(m)
+	dim := theme.Default().Help.Render(build.Version)
+	at := strings.Index(bar, dim)
+	switch {
+	case at < 0:
+		t.Errorf("bar = %q, want the version on it as %q", bar, dim)
+	case at < strings.LastIndex(bar, "alt+h"):
+		t.Errorf("bar = %q, want the version right of the last button", bar)
+	}
+	// The rule under the bar runs the width of the surface, so a bar as wide
+	// as the rule is a bar whose last column is the version's last column.
+	if got, want := lipgloss.Width(bar), lipgloss.Width(lines(m)[1]); got != want {
+		t.Errorf("bar is %d columns wide, want %d: the version is not at the right edge", got, want)
+	}
+}
+
+// A terminal with no room for both drops the version. The buttons are what
+// the line is for, and they do not move for it.
+func TestANarrowBarDropsTheVersion(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+
+	_, _, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	wide := resize(m, 120, 20)
+	narrow := resize(m, 60, 20)
+	dim := theme.Default().Help.Render(build.Version)
+
+	if !strings.Contains(barLine(wide), dim) {
+		t.Fatalf("the wide bar %q has no version to drop", barLine(wide))
+	}
+	if strings.Contains(barLine(narrow), dim) {
+		t.Errorf("narrow bar = %q, want no version on it", barLine(narrow))
+	}
+}
+
+// Two columns of air, or nothing: a version against what stands left of it
+// would read as part of it. A dialog puts its title there and the version
+// keeps its place, so the title is also what the boundary is measured
+// against: the longest version that fits beside it, and one column more.
+func TestTheVersionGivesWayBeforeItTouchesTheTitle(t *testing.T) {
+	was := build.Version
+	t.Cleanup(func() { build.Version = was })
+
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "alt+q")
+
+	build.Version = strings.Repeat("x", 200)
+	room := lipgloss.Width(lines(m)[1]) - lipgloss.Width(barLine(m))
+
+	build.Version = strings.Repeat("x", room-2)
+	if bar := barLine(m); !strings.Contains(bar, build.Version) {
+		t.Errorf("bar = %q, want the %d columns that leave two of air", bar, room-2)
+	}
+	build.Version = strings.Repeat("x", room-1)
+	if bar := barLine(m); strings.Contains(bar, build.Version) {
+		t.Errorf("bar = %q, want no version where one column of air is all there is", bar)
 	}
 }

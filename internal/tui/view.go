@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
@@ -90,7 +91,7 @@ func (m Model) View() string {
 	var b strings.Builder
 	// A line under the top one: what can be done to the installation is not
 	// what is being looked for, and the two should not read as one block.
-	b.WriteString(clipTo(m.top(), w))
+	b.WriteString(m.topLine(w))
 	b.WriteString("\n")
 	b.WriteString(m.thinRule(w))
 	b.WriteString("\n")
@@ -157,6 +158,22 @@ func (m Model) top() string {
 		return m.bar()
 	}
 	return " " + m.theme.Header.Render(name)
+}
+
+// topLine is the whole first line: what the surface or the dialog puts there,
+// and the version at the right edge. The version is the only thing on the
+// screen about the installation rather than about what is on it, so it stands
+// where nothing else claims columns and takes the dim of a key hint
+// (decisions.md D103). Where the left side leaves it no room it is left off;
+// nothing else moves for it.
+func (m Model) topLine(width int) string {
+	left := clipTo(m.top(), width)
+	version := m.theme.Help.Render(build.Version)
+	gap := width - lipgloss.Width(left) - lipgloss.Width(version)
+	if gap < 2 {
+		return left
+	}
+	return left + strings.Repeat(" ", gap) + version
 }
 
 // thinRule closes the top line off. It starts where every other line starts,
