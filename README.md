@@ -101,9 +101,9 @@ In the TUI, projects whose agent is waiting for you sort first. Each project
 row counts its agents by state: needs you, working, idle, unknown. The pane
 beside the list shows the project's targets and agents, and the last message
 of one agent, how long ago it was written, and its end when it is too long to
-fit: the agent that needs you, else one at rest, else one working, else the
-one you move the cursor to. For a project on another machine the last message
-is not shown yet. The list and the agents each have a filter field over their
+fit. That is the agent you moved the cursor to; until you do, the agent that
+needs you, else one with a message to show, one at rest before one working.
+For a project on another machine the last message is not shown yet. The list and the agents each have a filter field over their
 rows. Tab moves the cursor between them, and alt+t moves it to the targets,
 which have no filter; Tab from there goes back to the projects. Typing filters
 the section the cursor is in, and Enter acts on its row: a project opens its

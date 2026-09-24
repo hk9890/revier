@@ -57,11 +57,38 @@ func TestMarkdownSetsEachPartAsItReads(t *testing.T) {
 	}
 }
 
-// A backtick left open is text, not the start of code that swallows the rest
-// of the line.
+// A backtick left open is text: it is shown, and it does not start code that
+// swallows the rest of the line.
 func TestMarkdownLeavesAnUnclosedBacktickAsText(t *testing.T) {
-	if got := plain("run `make` then `test", 40); !slices.Equal(got, []string{"run make then test"}) {
-		t.Errorf("markdown = %q, want the text after the open backtick kept", got)
+	if got := plain("run `make` then `test", 40); !slices.Equal(got, []string{"run make then `test"}) {
+		t.Errorf("markdown = %q, want the open backtick and the text after it kept", got)
+	}
+}
+
+// Markup around and inside code reads as text: a heading's code, bold that
+// holds code, and code that holds what looks like bold.
+func TestMarkdownSetsCodeInsideOtherMarkup(t *testing.T) {
+	for _, tc := range []struct{ text, want string }{
+		{"### `internal/tui/markdown.go`", "internal/tui/markdown.go"},
+		{"**`go test`** passed", "go test passed"},
+		{"see `**not bold**` here", "see **not bold** here"},
+	} {
+		if got := plain(tc.text, 60); !slices.Equal(got, []string{tc.want}) {
+			t.Errorf("markdown(%q) = %q, want %q", tc.text, got, []string{tc.want})
+		}
+	}
+}
+
+// A tab in a table cell - the header's included, which is drawn bold - is set
+// as the spaces it is drawn as, so the columns line up and the padding that
+// does it is never negative.
+func TestMarkdownSetsATableWithATabInItsHeader(t *testing.T) {
+	got := plain("| a\tb | c |\n|---|---|\n| x | y |", 40)
+	if len(got) != 2 {
+		t.Fatalf("lines = %q, want a header and a row", got)
+	}
+	if c, y := strings.Index(got[0], "c"), strings.Index(got[1], "y"); c != y {
+		t.Errorf("columns do not line up: c at %d, y at %d in %q", c, y, got)
 	}
 }
 

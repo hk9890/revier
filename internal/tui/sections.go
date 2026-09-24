@@ -99,6 +99,7 @@ func (m *Model) query(f focus, q string) {
 // chose. They are about one project's rows, and mean nothing over another's.
 func (m *Model) forgetPane() {
 	m.tcursor = 0
+	m.pclick = paneClick{} // a click on the last project's row is not half of a double click on this one's
 	m.query(focusAgents, "")
 }
 
@@ -129,7 +130,7 @@ func (r agentRow) label() string {
 
 // same reports whether two rows are one agent, whatever the query matched.
 func (r agentRow) same(o agentRow) bool {
-	return r.agent.Ref == o.agent.Ref && r.agent.Panel == o.agent.Panel
+	return keyOf(r.agent) == keyOf(o.agent)
 }
 
 func harnessOf(a revier.AgentView) string {

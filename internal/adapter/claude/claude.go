@@ -66,6 +66,10 @@ type Probe struct {
 	err    error
 	at     time.Time
 	stamp  map[string]time.Time // the sessions directory at the last run
+
+	readsMu sync.Mutex
+	reads   map[string]read   // the last read of each transcript, by path
+	found   map[string]string // where a transcript not under its cwd was found, by session
 }
 
 // listedSession is one entry of `claude agents --json`. A background session

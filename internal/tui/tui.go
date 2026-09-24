@@ -174,8 +174,11 @@ type Model struct {
 	last     click                            // the last click on a row, for telling a double click
 	pclick   paneClick                        // the last click on a pane row, the same for the pane's targets and agents
 	aasked   revier.ProjectName               // the project whose agents' details are out, empty with none
+	aseq     int                              // the number of the last ask for details
+	atook    int                              // the number of the ask whose answer the pane holds
 	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
+	amessage setMessage                       // the message the pane last set, as it set it
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
 	copied   int                              // the characters the last selection copied, shown until the next press
@@ -501,11 +504,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	case detailsMsg:
-		// An answer for a project the cursor has since left is dropped: shown,
-		// it would put one project's words under another's agents.
-		if msg.project == m.aasked {
-			m.adetails = msg.said
-		}
+		m.took(msg)
 		return m, nil
 	case surveyMsg:
 		m.surveyErr = msg.err

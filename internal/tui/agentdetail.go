@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -21,19 +20,24 @@ const detailWait = 2 * time.Second
 // is too long to read, and a wider terminal leaves the pane as it was.
 const maxPaneWidth = 100
 
-// agentKey names one agent across surveys. A panel id is unique only within
-// the instance that holds it, so the instance names it too.
+// agentKey names one agent across surveys: the instance that holds it, by
+// host and id as the core names one, and its panel, whose id is unique only
+// within that instance. A ref's title is not part of it: a window host can
+// retitle an instance every survey.
 type agentKey struct {
-	ref   revier.TargetRef
-	panel revier.PanelID
+	host, id string
+	panel    revier.PanelID
 }
 
-func keyOf(a revier.AgentView) agentKey { return agentKey{ref: a.Ref, panel: a.Panel} }
+func keyOf(a revier.AgentView) agentKey {
+	return agentKey{host: a.Ref.Host, id: a.Ref.ID, panel: a.Panel}
+}
 
 // detailsMsg is the answer to askDetails: what each agent of one project said
-// last.
+// last, and which ask it answers.
 type detailsMsg struct {
 	project revier.ProjectName
+	seq     int
 	said    map[agentKey]revier.AgentDetail
 }
 
@@ -44,10 +48,11 @@ type detailsMsg struct {
 // each spoke. The read runs off the update loop, so the screen never waits on
 // it (decisions.md D105).
 func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
-	// Hidden, nobody reads the answer: the popup does no work off the screen.
+	// Nobody reads an answer the pane does not show: the popup hidden, a
+	// terminal too narrow for the pane beside the list, or a screen over it.
 	// A remote project's agents speak on the other machine (agentSaid).
 	v, ok := m.selected()
-	if !ok || len(v.Agents) == 0 || m.hidden || v.Project.Remote != nil {
+	if !ok || len(v.Agents) == 0 || m.hidden || m.paneCols() == 0 || m.dialog != dialogNone || v.Project.Remote != nil {
 		m.aasked = ""
 		return nil
 	}
@@ -55,7 +60,8 @@ func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 	m.aasked = v.Project.Name
-	c, name, agents := m.core, v.Project.Name, slices.Clone(v.Agents)
+	m.aseq++
+	c, name, seq, agents := m.core, v.Project.Name, m.aseq, slices.Clone(v.Agents)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), detailWait)
 		defer cancel()
@@ -63,8 +69,28 @@ func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 		for i, d := range c.Details(ctx, agents) {
 			said[keyOf(agents[i])] = d
 		}
-		return detailsMsg{project: name, said: said}
+		return detailsMsg{project: name, seq: seq, said: said}
 	}
+}
+
+// took takes in an answer to askDetails. One for a project the cursor has
+// since left is dropped, and so is one older than the answer already taken:
+// the asks are not answered in order. An agent the answer has nothing for
+// keeps what it said before, so one read that failed does not blank a message
+// the pane was showing.
+func (m *Model) took(msg detailsMsg) {
+	if msg.project != m.aasked || msg.seq <= m.atook {
+		return
+	}
+	m.atook = msg.seq
+	said := make(map[agentKey]revier.AgentDetail, len(msg.said))
+	for k, d := range msg.said {
+		if before := m.adetails[k]; d == (revier.AgentDetail{}) && before != (revier.AgentDetail{}) {
+			d = before
+		}
+		said[k] = d
+	}
+	m.adetails = said
 }
 
 // pickAgent puts the pane's cursor on an agent row the user moved it to, and
@@ -91,9 +117,10 @@ func (m *Model) chooseAgent() {
 }
 
 // firstAgent is the row most worth a look: an agent that needs the user, then
-// one at rest with something to report, then one still working, then one
-// whose state is unknown. Among equals, the one that spoke last (decisions.md
-// D106).
+// one with a message the pane can show, and among those one at rest, then one
+// still working, then one whose state is unknown. Among equals, the one that
+// spoke last (decisions.md D106). An agent that needs the user comes first
+// with nothing to show, because its row says what matters.
 func (m Model) firstAgent(rows []agentRow) int {
 	rank := map[revier.Status]int{
 		revier.StatusAttention: 0,
@@ -101,11 +128,22 @@ func (m Model) firstAgent(rows []agentRow) int {
 		revier.StatusRunning:   2,
 		revier.StatusUnknown:   3,
 	}
+	worth := func(a revier.AgentView) [3]int {
+		silent := 1
+		if m.adetails[keyOf(a)].Message != "" {
+			silent = 0
+		}
+		if a.State.Status == revier.StatusAttention {
+			return [3]int{0, 0, 0}
+		}
+		return [3]int{1, silent, rank[a.State.Status]}
+	}
 	best := 0
 	for i := range rows {
 		a, b := rows[i].agent, rows[best].agent
-		if by := cmp.Compare(rank[a.State.Status], rank[b.State.Status]); by < 0 ||
-			by == 0 && m.adetails[keyOf(a)].At.After(m.adetails[keyOf(b)].At) {
+		wa, wb := worth(a), worth(b)
+		by := slices.Compare(wa[:], wb[:])
+		if by < 0 || by == 0 && m.adetails[keyOf(a)].At.After(m.adetails[keyOf(b)].At) {
 			best = i
 		}
 	}
@@ -124,14 +162,17 @@ func (m Model) firstAgent(rows []agentRow) int {
 // A remote project's agent says it on the other machine, and asking that
 // revier for it is not built yet: the pane says so rather than stay blank
 // (decisions.md D105).
-func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, rows int) string {
+//
+// The heading runs w wide, as the pane's other headings do; the text is set
+// tw wide.
+func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, tw, rows int) string {
 	th := m.theme
 	room := rows - 2 // the heading and the blank line before it
 	if room < 1 {
 		return ""
 	}
 	note := func(s string) []string {
-		parts := wrap(s, w)
+		parts := wrap(s, tw)
 		for i := range parts {
 			parts[i] = th.Meta.Render(parts[i])
 		}
@@ -150,7 +191,7 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, rows int)
 		if !d.At.IsZero() {
 			head = []string{th.Meta.Render(ago(m.now(), d.At)), ""}
 		}
-		body = markdown(d.Message, w, th)
+		body = m.setMessage(d.Message, tw)
 	}
 	if len(head)+len(body) > room {
 		tail := body[len(body)-max(room-len(head)-1, 0):]
@@ -164,10 +205,27 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, rows int)
 	var b strings.Builder
 	b.WriteString(m.heading("Last message", w))
 	for _, line := range lines {
-		b.WriteString(clipTo(line, w))
+		b.WriteString(clipTo(line, tw))
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// setMessage is a message set as the pane's lines at a width, kept while the
+// message and the width stay: the pane is drawn again for every frame of a
+// working agent's spinner, and a long message costs a wrap of every line.
+func (m *Model) setMessage(text string, w int) []string {
+	if m.amessage.lines == nil || m.amessage.text != text || m.amessage.w != w {
+		m.amessage = setMessage{text: text, w: w, lines: markdown(text, w, m.theme)}
+	}
+	return m.amessage.lines
+}
+
+// setMessage is the last message set, and what it was set from.
+type setMessage struct {
+	text  string
+	w     int
+	lines []string
 }
 
 // ago is how long before now a moment was, in the largest whole unit.

@@ -188,8 +188,9 @@ type Titled interface {
 
 // Detailed is an optional capability of an AgentProbe, detected by type
 // assertion. Detail is the last thing the agent in a panel said, for the pane
-// that shows one agent. It is asked for one panel, when the user looks at it,
-// and never in a survey.
+// that shows one agent. It is asked for every agent of the project the pane
+// shows, each time the surface refreshes, and never in a survey: keep it cheap,
+// and read again only what changed since the last answer.
 //
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so

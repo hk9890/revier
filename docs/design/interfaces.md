@@ -420,8 +420,11 @@ on it, because the one harness that has it keeps it in a format of its own that
 changes between releases. A probe that cannot read it returns an error, and the
 core shows the agent's detail as empty and logs the failure.
 
-`Detail` is asked for one project's agents when the pane shows that project,
-never in a survey, with the panels of the last listing: it costs no host call.
+`Detail` is asked for every agent of the project the pane shows, each time the
+surface refreshes, never in a survey, with the panels of the last listing: it
+costs no host call. So a probe keeps it cheap and reads again only what
+changed; the Claude probe reads a transcript again only when its size or
+modification time did.
 
 ## Core view types
 

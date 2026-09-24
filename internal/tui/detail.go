@@ -154,20 +154,20 @@ func (m *Model) followPane(line int) {
 //
 // A narrow pane stacks them, and the message takes the rows the others leave.
 // A wide pane puts the message beside the rest, so it has the whole height
-// (decisions.md D106). The message is set maxPaneWidth wide on both sides of
-// the switch, so a resize across it moves the message and does not re-wrap
-// it; widePaneWidth is the least pane that holds it that wide beside the
-// facts.
+// (decisions.md D106). The message's text is set maxPaneWidth wide on both
+// sides of the switch, so a resize across it moves the message and does not
+// re-wrap it; widePaneWidth is the least pane that holds it that wide beside
+// the facts. Only the text is held to that width: the facts, the rows and the
+// rules run to the pane's edge.
 func (m *Model) detailContent(v revier.ProjectView) string {
 	w := m.paneCols() - paneChrome
 	rows := m.agentRows()
 	if m.paneCols() < widePaneWidth {
-		w = min(w, maxPaneWidth)
 		facts := m.facts(v, w)
 		if m.acursor >= len(rows) {
 			return facts
 		}
-		return facts + m.agentSaid(v, rows[m.acursor].agent, w, m.detail.Height-strings.Count(facts, "\n"))
+		return facts + m.agentSaid(v, rows[m.acursor].agent, w, min(w, maxPaneWidth), m.detail.Height-strings.Count(facts, "\n"))
 	}
 	facts := m.facts(v, maxFactsWidth)
 	if m.acursor >= len(rows) {
@@ -175,7 +175,8 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	}
 	// The message starts level with the name: its heading's blank line is a
 	// separator from a section above it, and there is none here.
-	said := m.agentSaid(v, rows[m.acursor].agent, min(w-gridGap-maxFactsWidth, maxPaneWidth), m.detail.Height+1)
+	right := w - gridGap - maxFactsWidth
+	said := m.agentSaid(v, rows[m.acursor].agent, right, min(right, maxPaneWidth), m.detail.Height+1)
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),

@@ -12,16 +12,27 @@ import (
 var (
 	mdHeading   = regexp.MustCompile(`^#{1,6}\s+(.*)$`)
 	mdItem      = regexp.MustCompile(`^(\s*)([-*+]|\d+[.)])\s+(.*)$`)
+	mdCode      = regexp.MustCompile("`([^`]+)`")
 	mdBold      = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	mdLink      = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	mdSeparator = regexp.MustCompile(`^:?-+:?$`)
 )
+
+// tabWidth is the columns a tab takes: what lipgloss draws one as.
+const tabWidth = 4
+
+// codeMark is the first of the characters a code span stands in for while the
+// rest of its line is styled: Unicode's last private-use plane, which no font
+// an agent's text is drawn in puts glyphs in.
+const codeMark = 0x100000
 
 // markdown sets the Markdown an agent writes as the pane's lines, at a width:
 // a heading in the heading colour, bold as bold, inline code in the path
 // colour, a list item with a hanging indent, a code block indented and cut
 // rather than wrapped, and a table in aligned columns. It covers what agents
 // write, not the whole of CommonMark: anything else reads as a paragraph.
+//
+// Tabs are made spaces first, so a line is as wide measured as it is drawn.
 func markdown(text string, w int, th theme.Theme) []string {
 	var out []string
 	blank := func() {
@@ -29,6 +40,7 @@ func markdown(text string, w int, th theme.Theme) []string {
 			out = append(out, "")
 		}
 	}
+	text = strings.ReplaceAll(text, "\t", strings.Repeat(" ", tabWidth))
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for i := 0; i < len(lines); i++ {
 		trimmed := strings.TrimSpace(lines[i])
@@ -48,7 +60,7 @@ func markdown(text string, w int, th theme.Theme) []string {
 			out = append(out, table(rows, w, th)...)
 		case mdHeading.MatchString(trimmed):
 			blank()
-			for _, part := range wrap(mdHeading.FindStringSubmatch(trimmed)[1], w) {
+			for _, part := range wrap(inline(mdHeading.FindStringSubmatch(trimmed)[1], th), w) {
 				out = append(out, th.Heading.Render(part))
 			}
 		case mdItem.MatchString(lines[i]):
@@ -68,21 +80,24 @@ func markdown(text string, w int, th theme.Theme) []string {
 	return out
 }
 
-// inline styles the spans of one line: code between backticks in the path
-// colour, and outside it bold as bold and a link as its text.
+// inline styles the spans of one line: code between a pair of backticks in the
+// path colour, bold as bold, and a link as its text. Code is set aside while
+// the rest is styled, so bold can hold code and code keeps what looks like
+// markup; a backtick with no pair is text.
 func inline(s string, th theme.Theme) string {
-	parts := strings.Split(s, "`")
-	for i, p := range parts {
-		if i%2 == 1 && i < len(parts)-1 {
-			parts[i] = th.Path.Render(p)
-			continue
-		}
-		p = mdLink.ReplaceAllString(p, "$1")
-		parts[i] = mdBold.ReplaceAllStringFunc(p, func(b string) string {
-			return lipgloss.NewStyle().Bold(true).Render(b[2 : len(b)-2])
-		})
+	var code []string
+	s = mdCode.ReplaceAllStringFunc(s, func(c string) string {
+		code = append(code, th.Path.Render(c[1:len(c)-1]))
+		return string(rune(codeMark + len(code) - 1))
+	})
+	s = mdLink.ReplaceAllString(s, "$1")
+	s = mdBold.ReplaceAllStringFunc(s, func(b string) string {
+		return lipgloss.NewStyle().Bold(true).Render(b[2 : len(b)-2])
+	})
+	for i, c := range code {
+		s = strings.Replace(s, string(rune(codeMark+i)), c, 1)
 	}
-	return strings.Join(parts, "")
+	return s
 }
 
 // hanging wraps text after a lead, continuing under the text rather than under
@@ -103,15 +118,25 @@ func hanging(lead, text string, w int) []string {
 // table sets a Markdown table's rows in aligned columns, the header in bold,
 // with the separator row dropped. A table wider than the pane is cut on the
 // right: its first columns name the rows, and are the ones worth keeping.
+//
+// Each cell is measured as it is drawn, the header's bold included, so the
+// padding that lines a column up is never counted from another string.
 func table(rows []string, w int, th theme.Theme) []string {
+	bold := lipgloss.NewStyle().Bold(true)
 	var cells [][]string
 	for _, row := range rows {
 		var cols []string
 		for _, c := range strings.Split(strings.Trim(row, "|"), "|") {
-			cols = append(cols, inline(strings.TrimSpace(c), th))
+			cols = append(cols, strings.TrimSpace(c))
 		}
 		if separator(cols) {
 			continue
+		}
+		for j := range cols {
+			cols[j] = inline(cols[j], th)
+			if len(cells) == 0 {
+				cols[j] = bold.Render(cols[j])
+			}
 		}
 		cells = append(cells, cols)
 	}
@@ -124,14 +149,10 @@ func table(rows []string, w int, th theme.Theme) []string {
 			widths[j] = max(widths[j], lipgloss.Width(c))
 		}
 	}
-	bold := lipgloss.NewStyle().Bold(true)
 	out := make([]string, 0, len(cells))
-	for i, cols := range cells {
+	for _, cols := range cells {
 		var b strings.Builder
 		for j, c := range cols {
-			if i == 0 {
-				c = bold.Render(c)
-			}
 			b.WriteString(c)
 			if j < len(cols)-1 {
 				b.WriteString(strings.Repeat(" ", widths[j]-lipgloss.Width(c)+2))

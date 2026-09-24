@@ -17,12 +17,100 @@ import (
 // transcript under a project directory.
 func transcripts(t *testing.T) (*claude.Probe, string) {
 	t.Helper()
-	root := t.TempDir()
+	return transcriptsIn(t, t.TempDir(), "")
+}
+
+// transcriptsIn is transcripts under a given config directory, with the
+// session listed as working in cwd.
+func transcriptsIn(t *testing.T, root, cwd string) (*claude.Probe, string) {
+	t.Helper()
 	p := &claude.Probe{SessionsDir: filepath.Join(root, "sessions")}
 	p.SetAgents(func(context.Context) ([]byte, error) {
-		return []byte(`[{"pid": 101, "kind": "interactive", "sessionId": "s1", "status": "idle"}]`), nil
+		return []byte(`[{"pid": 101, "kind": "interactive", "sessionId": "s1", "status": "idle", "cwd": "` + cwd + `"}]`), nil
 	})
 	return p, root
+}
+
+// said is a transcript line in which the agent says text.
+func said(text string) string {
+	return `{"type":"assistant","message":{"role":"assistant","content":"` + text + `"}}`
+}
+
+// The transcript under the directory Claude Code names from the session's
+// working directory is the one read, though another directory holds a file of
+// the same session written later.
+func TestDetailReadsTheTranscriptUnderTheSessionsWorkingDirectory(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "/home/user/dev/demo.app")
+	writeTranscript(t, root, "-home-user-dev-demo-app", "s1", said("where it works"))
+	writeTranscript(t, root, "-zzz-elsewhere", "s1", said("somewhere else"))
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(root, "projects", "-zzz-elsewhere", "s1.jsonl"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	if err != nil || d.Message != "where it works" {
+		t.Errorf("Detail = %+v, %v; want the transcript under the working directory", d, err)
+	}
+}
+
+// A session not filed under its working directory - one that entered a
+// worktree stays under the directory it started in - is found in any project
+// directory, and where it left a file in two, the one written last is read,
+// whatever the directories are called.
+func TestDetailReadsTheTranscriptWrittenLastWhenItIsNotUnderTheWorkingDirectory(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "/home/user/dev/demo/.claude/worktrees/fix")
+	writeTranscript(t, root, "-a-first-alphabetically", "s1", said("before the move"))
+	writeTranscript(t, root, "-home-user-dev-demo", "s1", said("after the move"))
+	earlier := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(root, "projects", "-a-first-alphabetically", "s1.jsonl"), earlier, earlier); err != nil {
+		t.Fatal(err)
+	}
+	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	if err != nil || d.Message != "after the move" {
+		t.Errorf("Detail = %+v, %v; want the transcript written last", d, err)
+	}
+}
+
+// A character a file pattern would read as syntax, in the config directory's
+// path, is only a character.
+func TestDetailFindsATranscriptUnderAPathWithPatternCharacters(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "claude[work]*?")
+	p, _ := transcriptsIn(t, root, "")
+	writeTranscript(t, root, "-demo", "s1", said("found anyway"))
+	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	if err != nil || d.Message != "found anyway" {
+		t.Errorf("Detail = %+v, %v; want the transcript found", d, err)
+	}
+}
+
+// A transcript whose size and modification time did not change is not read
+// again: the pane asks every refresh, and most refreshes change nothing.
+func TestDetailDoesNotReadAnUnchangedTranscriptAgain(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1", said("first word"))
+	path := filepath.Join(root, "projects", "-demo", "s1.jsonl")
+	if d, _ := p.Detail(context.Background(), revier.Panel{PID: 101}); d.Message != "first word" {
+		t.Fatalf("Detail = %q, want the first word", d.Message)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The same size and time, other bytes: a read would see them.
+	writeTranscript(t, root, "-demo", "s1", said("other word"))
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := p.Detail(context.Background(), revier.Panel{PID: 101}); d.Message != "first word" {
+		t.Errorf("Detail = %q for an unchanged file, want the first read kept", d.Message)
+	}
+	later := info.ModTime().Add(time.Second)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := p.Detail(context.Background(), revier.Panel{PID: 101}); d.Message != "other word" {
+		t.Errorf("Detail = %q for a changed file, want it read again", d.Message)
+	}
 }
 
 // writeTranscript writes a session's transcript, one line per entry, under a
@@ -89,9 +177,8 @@ func TestDetailReadsEveryShapeOfContent(t *testing.T) {
 	}
 }
 
-// The transcript is found under whichever project directory holds it, not
-// under a name spelled from the cwd: an agent that moved with /cd is filed
-// under the directory it moved to.
+// A session the listing gives no working directory for is found under
+// whichever project directory holds its transcript.
 func TestDetailFindsTheTranscriptUnderAnyProjectDirectory(t *testing.T) {
 	p, root := transcripts(t)
 	writeTranscript(t, root, "-somewhere-else-entirely", "s1",

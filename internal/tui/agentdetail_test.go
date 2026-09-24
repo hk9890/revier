@@ -1,12 +1,16 @@
 package tui_test
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -206,5 +210,107 @@ func TestARemoteProjectsAgentSaysTheMessageIsNotImplemented(t *testing.T) {
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 140, 30).Said()
 	if body := strings.Join(strings.Fields(pane(m)), " "); !strings.Contains(body, "on another machine is not implemented yet.") {
 		t.Errorf("pane = %q, want it to say the message is not implemented for a remote agent", body)
+	}
+}
+
+// An agent with a message the pane can show comes before one with none: a
+// working agent's word is worth more than an idle one's silence. One that
+// needs the user still comes first with nothing to show, since its row says
+// what matters.
+func TestAnAgentWithAMessageComesBeforeOneWithNone(t *testing.T) {
+	m, _ := saidWorld(t, 140, 30,
+		saidAgent{status: revier.StatusIdle},
+		saidAgent{status: revier.StatusRunning, said: "halfway through the tests"})
+	if body := pane(m); !strings.Contains(body, "halfway through the tests") {
+		t.Errorf("pane = %q, want the working agent's message before the idle agent's silence", body)
+	}
+
+	m, _ = saidWorld(t, 140, 30,
+		saidAgent{status: revier.StatusIdle, said: "resting now"},
+		saidAgent{status: revier.StatusAttention})
+	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
+		t.Errorf("pane = %q, want the agent that needs the user, though it says nothing", body)
+	}
+}
+
+// A read that fails once does not blank the message the pane was showing.
+func TestAReadThatFailsKeepsTheMessageShown(t *testing.T) {
+	m, fakes := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, said: "all tests pass"})
+	fakes[0].DetailErr = errors.New("claude agents timed out")
+	m = survey(m).Said()
+	if body := pane(m); !strings.Contains(body, "all tests pass") {
+		t.Errorf("pane = %q after a read that failed, want the message it showed", body)
+	}
+}
+
+// Nothing is read for a pane that is not on screen: on a terminal too narrow
+// for it beside the list, with the cursor on the list.
+func TestNoMessageIsReadWithoutAPaneToShowIt(t *testing.T) {
+	_, fakes := saidWorld(t, 80, 30, saidAgent{status: revier.StatusIdle, said: "unseen"})
+	if n := fakes[0].DetailCalls(); n != 0 {
+		t.Errorf("the probe was asked %d times with no pane on screen, want none", n)
+	}
+}
+
+// In a wide pane the message stands beside the rows on the same lines; a
+// click on its text is a click on the message, not on the row it is level
+// with.
+func TestAClickOnTheMessageBesideARowRunsNothing(t *testing.T) {
+	var said []string
+	for i := range 30 {
+		said = append(said, fmt.Sprintf("line %02d", i))
+	}
+	m, _ := saidWorld(t, 300, 40, saidAgent{status: revier.StatusIdle, said: strings.Join(said, "\n")})
+	_, y := paneCell(t, m, "agent-0 task")
+	raw := strings.Split(m.View(), "\n")[y]
+	parts := strings.Split(raw, "│")
+	at := strings.Index(parts[1], "line ")
+	if at < 0 {
+		t.Fatalf("no message text on the agent row's line %q", raw)
+	}
+	x := paneBorder(t, m) + 1 + lipgloss.Width(parts[1][:at])
+	m, _ = clickCell(m, x, y)
+	m, _ = clickCell(m, x, y)
+	if row := paneCursor(m); row != "" {
+		t.Errorf("pane cursor = %q after a double click on the message, want it still on the list", row)
+	}
+}
+
+// A click on one project's pane row and a click on the same cell of another
+// project's are two single clicks, not a double click on the second.
+func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	var raw []revier.Project
+	for _, name := range []string{"alpha", "beta"} {
+		rt.Add("session:"+name, "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude " + name + " work"})
+		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}},
+		}})
+	}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleActivity{}}}
+	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 140, 30)
+
+	x, y := paneCell(t, m, "alpha work")
+	m, _ = clickCell(m, x, y)
+	m, _ = press(m, "esc")
+	m, _ = press(m, "down")
+	if bx, by := paneCell(t, m, "beta work"); bx != x || by != y {
+		t.Fatalf("beta's agent is at %d,%d, alpha's was at %d,%d: the test needs one cell", bx, by, x, y)
+	}
+	_, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Errorf("panel focuses = %v, want none: one click on beta's agent", rt.PanelFocuses)
+	}
+}
+
+// Only the message's text is held to its width: the facts, the rows and the
+// rules of a wide stacked pane run to its edge.
+func TestTheFactsRunToThePanesEdge(t *testing.T) {
+	m, _ := saidWorld(t, 250, 40, saidAgent{status: revier.StatusIdle, said: "short"})
+	rule := strings.Split(pane(m), "\n")[1]
+	if n := utf8.RuneCountInString(rule); n <= 100 {
+		t.Errorf("the rule under the name is %d columns, want it past the message's 100", n)
 	}
 }
