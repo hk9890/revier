@@ -39,7 +39,6 @@ func styleField(in *textinput.Model, th theme.Theme) {
 // What the query line says when it is empty: which rows a keystroke filters.
 const (
 	projectPlaceholder = "filter projects"
-	targetPlaceholder  = "filter targets"
 	agentPlaceholder   = "filter agents"
 )
 

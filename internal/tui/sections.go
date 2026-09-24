@@ -12,15 +12,17 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The cursor stands in one of three sections: the project list, and the
-// pane's Targets and Agents. Each has its own query field over its own rows,
-// so what is typed filters the rows under it, and Enter acts on a row of its
-// own kind: a project opens, a target runs, an agent's tab comes to the front.
-// Tab walks the sections in that order and shift+tab walks back; a section
-// with no rows is passed over (decisions.md D73).
+// The cursor stands in the project list or the pane's Agents, and Tab moves it
+// between the two; shift+tab walks back. Each has its own query field over its
+// own rows, so what is typed filters the rows under it, and Enter acts on a
+// row of its own kind: a project opens, an agent's tab comes to the front. A
+// project with no agents has only the list.
+//
+// The pane's targets take the cursor too, but not by Tab: a click on one, or
+// alt+t, puts it there, and Tab takes it back to the list. They have no
+// query, so typing there filters nothing (decisions.md D104).
 
-// sections are the sections Tab walks, in order, for the project under the
-// cursor.
+// sections are the sections the cursor can be in, for the project under it.
 func (m Model) sections() []focus {
 	v, ok := m.selected()
 	if !ok {
@@ -33,9 +35,13 @@ func (m Model) sections() []focus {
 	return out
 }
 
-// step moves the cursor by sections, forward for 1 and back for -1.
+// step moves the cursor by sections, forward for 1 and back for -1: between
+// the list and the agents, and from the targets back to the list.
 func (m Model) step(by int) (tea.Model, tea.Cmd) {
-	s := m.sections()
+	if m.focus == focusTargets {
+		return m.focusOn(focusList), nil
+	}
+	s := slices.DeleteFunc(m.sections(), func(f focus) bool { return f == focusTargets })
 	i := max(slices.Index(s, m.focus), 0)
 	return m.focusOn(s[(i+by+len(s))%len(s)]), nil
 }
@@ -47,9 +53,10 @@ func (m Model) step(by int) (tea.Model, tea.Cmd) {
 func (m Model) focusOn(f focus) Model {
 	m.focus = f
 	m.input.Blur()
-	m.tinput.Blur()
 	m.ainput.Blur()
-	_ = m.field().Focus()
+	if in := m.field(); in != nil {
+		_ = in.Focus()
+	}
 	return m
 }
 
@@ -59,11 +66,12 @@ func (m *Model) toList() {
 	*m = m.focusOn(focusList)
 }
 
-// field is the query field of the section the cursor is in.
+// field is the query field of the section the cursor is in, or nil in the
+// targets, which have none.
 func (m *Model) field() *textinput.Model {
 	switch m.focus {
 	case focusTargets:
-		return &m.tinput
+		return nil
 	case focusAgents:
 		return &m.ainput
 	}
@@ -71,42 +79,37 @@ func (m *Model) field() *textinput.Model {
 }
 
 // query applies a section's query to its rows. The first match is selected,
-// as the list selects it on a project query.
+// as the list selects it on a project query: typing an agent's name is a
+// choice of that agent. An empty agent query hands the choice back to the
+// pane (chooseAgent).
 func (m *Model) query(f focus, q string) {
 	switch f {
-	case focusTargets:
-		m.tfilter, m.tcursor = q, 0
-		m.tinput.SetValue(q)
 	case focusAgents:
-		m.afilter, m.acursor = q, 0
+		m.afilter, m.achosen = q, agentKey{}
 		m.ainput.SetValue(q)
+		if q != "" {
+			m.pickAgent(0)
+		}
 	default:
 		m.setFilter(q)
 	}
 }
 
-// forgetPane drops the pane's queries and cursors. They are about one
-// project's rows, and mean nothing over another's.
+// forgetPane drops the pane's query and cursors, and the agent the user
+// chose. They are about one project's rows, and mean nothing over another's.
 func (m *Model) forgetPane() {
-	m.query(focusTargets, "")
+	m.tcursor = 0
 	m.query(focusAgents, "")
 }
 
-// endPaneSearch drops the pane's queries over the same project, so each
-// cursor stays on its row rather than going back to the first.
+// endPaneSearch drops the agent query over the same project, so the cursor
+// stays on the agent it reached rather than going back to the pane's choice.
 func (m *Model) endPaneSearch() {
-	if m.tfilter != "" {
-		rows, i := m.targetRows(), m.tcursor
-		m.query(focusTargets, "")
-		if i < len(rows) {
-			m.tcursor = slices.IndexFunc(m.targetRows(), rows[i].same)
-		}
-	}
 	if m.afilter != "" {
 		rows, i := m.agentRows(), m.acursor
 		m.query(focusAgents, "")
 		if i < len(rows) {
-			m.acursor = slices.IndexFunc(m.agentRows(), rows[i].same)
+			m.pickAgent(slices.IndexFunc(m.agentRows(), rows[i].same))
 		}
 	}
 }

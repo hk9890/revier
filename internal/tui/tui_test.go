@@ -459,19 +459,19 @@ func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 	}
 }
 
-// Tab moves the cursor into the pane, onto the project's targets, and the
+// Alt+t moves the cursor into the pane, onto the project's targets, and the
 // list stays on screen beside it; Esc brings the cursor back
-// (decisions.md D73).
-func TestTabMovesTheCursorIntoThePaneAndEscReturns(t *testing.T) {
+// (decisions.md D104).
+func TestAltTMovesTheCursorOntoTheTargetsAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	view := m.View()
 	// The key in the spelling the footer uses, not the configuration's.
 	for _, want := range []string{"3/3", "project-00", "ctrl+shift+o"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("after tab the surface lacks %q:\n%s", want, view)
+			t.Errorf("after alt+t the surface lacks %q:\n%s", want, view)
 		}
 	}
 	if row := paneCursor(m); !strings.Contains(row, "home") {
@@ -534,7 +534,7 @@ func TestHomeEndAndThePageKeysMoveTheListCursor(t *testing.T) {
 func TestHomeEndAndThePageKeysMoveThePaneCursor(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 
 	m, _ = press(m, "end")
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
@@ -577,44 +577,12 @@ func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
 	}
 }
 
-// Each section filters under its own field: with the cursor in Targets,
-// typing filters the targets and leaves the projects and their query alone,
-// and the target query stays while the cursor visits the other sections of
-// the same project (decisions.md D73).
-func TestTypingInTargetsFiltersTheTargets(t *testing.T) {
-	_, _, c, projects := world(t, 12)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-	m, _ = press(m, "1")
-	m, _ = press(m, "tab")
-	if body := pane(m); !strings.Contains(body, "❯ filter targets") {
-		t.Errorf("pane has no target query:\n%s", body)
-	}
-	m, _ = press(m, "e")
-	m, _ = press(m, "d")
-	if body := pane(m); strings.Contains(body, "home ") || !strings.Contains(body, "❯ ed") || !strings.Contains(body, "editor") {
-		t.Errorf("target query 'ed' should leave only the editor:\n%s", body)
-	}
-	if row := paneCursor(m); !strings.Contains(row, "editor") {
-		t.Errorf("pane cursor = %q, want the match", row)
-	}
-	if q := query(m); !strings.Contains(q, "❯ 1") {
-		t.Errorf("query line = %q, want the project query kept", q)
-	}
-	m, _ = press(m, "shift+tab")
-	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q after shift+tab, want the cursor back on the list", row)
-	}
-	if body := pane(m); !strings.Contains(body, "❯ ed") {
-		t.Errorf("the target query was dropped on leaving the section:\n%s", body)
-	}
-}
-
 // A target key acts on the highlighted project wherever the cursor is: it
 // does not read the pane's cursor.
 func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-	m, _ = press(m, "tab") // the cursor is on home
+	m, _ = press(m, "alt+t") // the cursor is on home
 	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO})
 	if cmd == nil {
 		t.Fatal("ctrl+o ran nothing")
@@ -625,22 +593,31 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 	}
 }
 
-// One click on a target row in the pane runs it, as Enter on it does: a
-// target is a thing to do, not a row to choose.
-func TestAClickOnATargetInThePaneRunsIt(t *testing.T) {
+// One click on a target row in the pane puts the cursor on it, and a second
+// runs it as Enter does, as on a project row: del and alt+del then act on the
+// row chosen.
+func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
-	if cmd == nil {
-		t.Fatalf("the click ran nothing:\n%s", m.View())
-	}
-	cmd()
-	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
-		t.Errorf("Opened = %v, want the editor launched", wm.Opened)
+	runAll(cmd)
+	if len(wm.Opened) != 0 {
+		t.Fatalf("Opened = %v after one click, want nothing", wm.Opened)
 	}
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
-		t.Errorf("pane cursor = %q, want it on the row clicked", row)
+		t.Errorf("pane cursor = %q after one click, want it on the row clicked", row)
+	}
+	if f := footer(m); !strings.Contains(f, "enter go") {
+		t.Errorf("footer = %q, want enter to say go", f)
+	}
+	m, cmd = clickCell(m, x, y)
+	runAll(cmd)
+	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
+		t.Errorf("Opened = %v after a second click, want the editor launched", wm.Opened)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want it still on the row clicked", row)
 	}
 }
 
@@ -678,8 +655,8 @@ func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 func TestEnterOnATargetRunsGo(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	m, _ = press(m, "tab")  // project-01, the running one, is first
-	m, _ = press(m, "down") // editor
+	m, _ = press(m, "alt+t") // project-01, the running one, is first
+	m, _ = press(m, "down")  // editor
 	_, cmd := press(m, "enter")
 	if cmd == nil {
 		t.Fatal("enter on a target returned no command")
@@ -724,7 +701,7 @@ func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	ref := wm.Add("Pull requests", "chrome")
 	m := refreshed(t, c, projects, stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}), nil)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	if view := m.View(); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
 		t.Fatalf("attached instance not listed:\n%s", view)
 	}
@@ -777,7 +754,7 @@ func TestPollingClaimsTheWindowThatAppearsAfterALaunch(t *testing.T) {
 	}
 	m, _ = press(m, "0")
 	m, _ = press(m, "0") // project-00; project-01 sorts first, its agent wants the human
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	if view := m.View(); !strings.Contains(view, "Pull requests") {
 		t.Errorf("the claimed window should be listed under the project:\n%s", view)
 	}
@@ -885,7 +862,7 @@ func TestEnterPinsTheTarget(t *testing.T) {
 	wm.Add("Visual Studio Code", "code-project-00")
 	root := stateWith(t, nil)
 	m := refreshed(t, c, projects, root, nil)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	_, cmd := press(m, "enter")
 	m.Update(cmd()) // applies the binding on the update loop
@@ -908,7 +885,7 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 	home := listed[0].Ref
 	root := stateWith(t, nil)
 	m := refreshed(t, c, projects, root, nil)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor
 	_, cmd := press(m, "enter")
 	m.Update(cmd())
@@ -933,7 +910,7 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	c.Window = wm
 	root := stateWith(t, nil)
 	m := refreshed(t, c, projects, root, nil)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor
 	m, cmd := press(m, "enter")
 	// The activation runs whole in its command, the wait for the window
@@ -1477,10 +1454,10 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 		t.Fatal("the raise read nothing")
 	}
 	m = next.(tui.Model)
-	if next, cmd = m.Update(cmd()); cmd == nil {
+	// The raise also asks what the agents said: the reload answers beside it.
+	if m, cmd = deliver(m, cmd); cmd == nil {
 		t.Fatal("the raise started no survey")
 	}
-	m = next.(tui.Model)
 	// The row is on the raised popup before the survey answers, as a row is
 	// on the first frame: the survey is the slow part.
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
@@ -1537,52 +1514,6 @@ func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
 	m, hide := press(m, "esc")
 	if _, cmd := m.Update(hide()); cmd == nil || cmd() != (tea.QuitMsg{}) {
 		t.Error("a hide that failed did not quit")
-	}
-}
-
-// The tree says which checkout this is. Dot entries are not part of that, and
-// a directory that cannot be read is not an error.
-func TestDetailPaneShowsTheProjectTree(t *testing.T) {
-	dir := t.TempDir()
-	for _, p := range []string{"cmd/revier", "docs", ".git/objects"} {
-		if err := os.MkdirAll(filepath.Join(dir, p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	raw := []revier.Project{{Name: "here", Path: dir, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Launch: []string{"x"}, Match: revier.Match{Title: "^session:here$"}}},
-	}}}
-	projects := core.Prepare(raw)
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
-
-	body := pane(m)
-	if !strings.Contains(body, "Project Snapshot") {
-		t.Fatalf("pane = %q, want a tree", body)
-	}
-	for _, want := range []string{"cmd", "revier", "docs", "go.mod"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("tree does not list %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, ".git") {
-		t.Errorf("tree lists a dot entry:\n%s", body)
-	}
-}
-
-// A project whose directory is not here has no tree, and says nothing about
-// one.
-func TestNoTreeForAMissingDirectory(t *testing.T) {
-	_, _, c, projects := world(t, 1) // /p/project-00 does not exist
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
-
-	if body := pane(m); strings.Contains(body, "Project Snapshot") {
-		t.Errorf("pane = %q, want no tree for a missing directory", body)
 	}
 }
 
@@ -1665,26 +1596,6 @@ func TestDetailPaneWrapsALongPathAndActivity(t *testing.T) {
 		if w := lipgloss.Width(line); w > 150 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
-	}
-}
-
-// A tree row is cut, not wrapped: a wrapped row loses the indentation that
-// says where in the tree it is.
-func TestDetailPaneCutsTreeRows(t *testing.T) {
-	dir := t.TempDir()
-	name := "a-file-whose-name-is-long-enough-that-the-tree-row-must-be-cut-rather-than-wrapped.go"
-	if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c, projects := longWorld(t, dir)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 40)
-
-	body := pane(m)
-	if !strings.Contains(body, "└── a-file-whose-name") {
-		t.Fatalf("pane lacks the tree row:\n%s", body)
-	}
-	if strings.Contains(strings.Join(strings.Fields(body), ""), name) {
-		t.Errorf("the tree row was wrapped rather than cut:\n%s", body)
 	}
 }
 
@@ -2114,6 +2025,19 @@ func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testin
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "project-43") {
 		t.Errorf("selected %q, want project-43, the row the cursor was on", row)
+	}
+}
+
+// runAll runs a command and every command a batch of it holds, for what they
+// do to the world; their messages are dropped.
+func runAll(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if batch, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range batch {
+			runAll(c)
+		}
 	}
 }
 

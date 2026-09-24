@@ -79,10 +79,7 @@ func (m Model) paneAt(x, y int) hovered {
 	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
 		return hovered{kind: hoverName}
 	}
-	switch line {
-	case m.tfield:
-		return hovered{kind: hoverField, index: int(focusTargets)}
-	case m.afield:
+	if line == m.afield {
 		return hovered{kind: hoverField, index: int(focusAgents)}
 	}
 	for i, at := range m.tlines {

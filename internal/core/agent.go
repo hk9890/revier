@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -371,4 +372,49 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 		}
 	}
 	return revier.AgentState{}, fmt.Errorf("%w: %s", ErrAgentGone, a.Panel.ID)
+}
+
+// Details is what each agent in the views said last, in the views' order, for
+// the pane that shows one project's agents (revier.Detailed). The panels are
+// the ones the last listing found, so a detail asks no host anything; an
+// agent that listing did not hold has no detail until the next survey.
+//
+// A detail is empty for an agent whose probe does not say, one on another
+// machine, and one whose probe failed: the detail is display, and the failure
+// is logged rather than shown (decisions.md D105).
+func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
+	c.seenMu.Lock()
+	seen := c.seen
+	c.seenMu.Unlock()
+	out := make([]revier.AgentDetail, len(agents))
+	for i, a := range agents {
+		for _, inst := range seen[a.Ref.Host] {
+			if inst.Ref.ID != a.Ref.ID {
+				continue
+			}
+			for _, panel := range inst.Panels {
+				if panel.ID == a.Panel {
+					out[i] = c.detail(ctx, inst.Ref, panel)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (c *Core) detail(ctx context.Context, ref revier.TargetRef, panel revier.Panel) revier.AgentDetail {
+	probe, ok := c.agentProbe(panel)
+	if !ok {
+		return revier.AgentDetail{}
+	}
+	detailed, ok := probe.(revier.Detailed)
+	if !ok {
+		return revier.AgentDetail{}
+	}
+	d, err := detailed.Detail(ctx, panel)
+	logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
+	if err != nil {
+		return revier.AgentDetail{}
+	}
+	return d
 }

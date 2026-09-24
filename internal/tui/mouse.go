@@ -22,11 +22,11 @@ type click struct {
 // screen holds; anywhere else it moves the selection, one row a notch, the
 // way the arrow keys do.
 //
-// A row of the list is chosen with one click and opened with a second, as a
-// row of a file manager is: choosing it costs nothing and opening it opens a
-// window. A target in the pane, the project's name over it and a button on
-// the bar are not rows but things to do, and one click does them, on release,
-// so a drag that begins on one runs nothing (decisions.md D36, D50, D72, D73).
+// A row of the list or of the pane is chosen with one click and opened with a
+// second, as a row of a file manager is: choosing it costs nothing and opening
+// it opens a window. The project's name over the pane and a button on the bar
+// are not rows but things to do, and one click does them, on release, so a
+// drag that begins on one runs nothing (decisions.md D36, D50, D72, D104).
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
 // before they are. A drag selects text instead (selection.go).
@@ -116,15 +116,23 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	case hoverBar:
 		m.err = nil
 		return m.buttons()[m.over.index].run(m)
+	// A pane row is a project row's equal: one click puts the cursor on it,
+	// and a second runs it as Enter does.
 	case hoverTarget:
 		m.err = nil
 		m = m.focusOn(focusTargets)
 		m.tcursor = m.over.index
+		if !m.twice() {
+			return m, nil
+		}
 		return opened(m, m.goRow(m.over.index))
 	case hoverAgent:
 		m.err = nil
 		m = m.focusOn(focusAgents)
-		m.acursor = m.over.index
+		m.pickAgent(m.over.index)
+		if !m.twice() {
+			return m, nil
+		}
 		return opened(m, m.goAgentRow(m.over.index))
 	case hoverField:
 		return m.focusOn(focus(m.over.index)), nil
@@ -132,6 +140,24 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 		return m.openProject()
 	}
 	return m, nil
+}
+
+// paneClick is the last click on a pane row, for telling a double click.
+type paneClick struct {
+	over hovered
+	at   time.Time
+}
+
+// twice records a click on the pane row under the pointer and reports whether
+// it is the second of a double click on that row.
+func (m *Model) twice() bool {
+	last := m.pclick
+	m.pclick = paneClick{over: m.over, at: m.now()}
+	if last.over != m.over || m.pclick.at.Sub(last.at) >= doubleClick {
+		return false
+	}
+	m.pclick = paneClick{}
+	return true
 }
 
 // rowAt is the list row under a terminal cell, if a row is there: the cell is

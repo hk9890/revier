@@ -332,20 +332,6 @@ refreshing. So revier draws the box over the screen as the drag found it, and
 copies with OSC 52. A button or target runs on release, so a drag from one runs
 nothing.
 
-### D73 — projects, targets and agents are sections, each with its own query
-
-Replaces Tab moving into a pane of targets, and one query line that followed
-the cursor. A query far from its rows did not say what it filtered, and the
-agents could be read but not reached. Tab walks projects, targets and agents,
-and shift+tab back, passing over a section with no rows. Each query sits over
-its own rows and is kept while its project is, until a press opens something:
-the query was the way there, so a popup raised again held the last search
-instead of a new one. Then every query ends, each cursor stays on the row it
-found, and a launch that fails later says so in the footer. The pane starts level with the
-project query, so that query stands in the list's column and not over both. Enter opens a project, runs a
-target, and goes to an agent. A pane with no target level stays: Enter on a
-project opens its home.
-
 ### D74 — an agent is reached by making its tab current
 
 `Focus` on the instance and `FocusPanel` already reach a tab target, so going
@@ -737,3 +723,44 @@ about the rows (D49), and its right side is the only place no column claims.
 It is not the header D51 removed - that named the program, which the user
 knows - and where less than two columns of air are left it is dropped, because
 the buttons are what the line is for.
+
+### D104 — Tab walks the projects and the agents; the targets are one chord away
+
+Replaces D73, where Tab walked projects, targets and agents, each under its own
+query. The agents are what the surface exists to reach, and three stops put
+them two presses off; a project has a handful of targets, so their query found
+nothing a glance does not. Tab and shift+tab move between the projects and the
+agents; alt+t puts the cursor on the targets, and Tab from there goes back to
+the projects. The targets have no query, so typing there does nothing. A pane
+row is a row as D36 has it: one click selects it, a second runs it, so del and
+alt+del reach a single target. The project and agent queries sit over their
+own rows and are kept while their project is, until a press opens something;
+then both end and each cursor stays on the row it found. The pane starts level
+with the project query. Enter opens a project, runs a target, and goes to an
+agent; on a project with no home it puts the cursor on the targets.
+
+### D105 — the pane shows what an agent said last, read from its transcript for display only
+
+What an agent did last decides whether to go to it; its title says only what
+it is on. The Claude probe reads the end of the session's transcript, found by
+the session the listing names for the pane's pid (D57). That format is Claude
+Code's internal one, so the read is display only (`Detailed`): nothing
+surveys, matches or resumes on it, and what cannot be read shows as nothing.
+The agent view's own summary was rejected because Claude Code writes it for
+background sessions alone, 3 of 27 when it was measured; `claude -p --resume`
+because it is a model request per agent; a hook because every user would have
+to install it. The read is asked for one project's agents, off the update loop,
+from the panels of the last listing, so it adds no host call to a survey. A
+remote project's agent is not read yet: its host's revier would have to be
+asked, and the pane says so.
+
+### D106 — the pane always shows one agent's message, in place of the project tree
+
+The tree said which checkout this is, which the path above it already says.
+The pane shows the agent most worth a look without a keypress: one waiting for
+the user, then one at rest, then one working, the latest to speak among equals.
+Moving the agent cursor chooses, and the choice holds until another project is
+under the list's cursor. A message that does not fit keeps its end, where an
+agent says what it did and needs. Its text is set no wider than 100 columns,
+and a wide pane puts it beside the facts only once it has all 100, so a resize
+across that switch moves the message and does not re-wrap it.

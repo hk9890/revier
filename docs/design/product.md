@@ -110,10 +110,13 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
-The list and the pane's targets and agents are three sections, each with its
-own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
-a project opens its home target, on a target runs it, and on an agent makes its
-tab current and raises its window (D74). alt+e, or the project's name over the
+The pane ends in what one of the project's agents said last, so the user can
+tell whether to go to it: the one that needs them first, or the one they
+chose (D105, D106). The list and the pane's agents each have a query over
+their rows, and Tab moves between them; alt+t reaches the targets, which have
+none (D104). One click selects a row, a second opens it. Enter on a project
+opens its home target, on a target runs it, and on an agent makes its tab
+current and raises its window (D74). alt+e, or the project's name over the
 pane, opens the project screen: the project file as the config screen is
 `config.toml`, with the shared targets shown beside what the project changes of
 them (D81). del closes the row under the cursor - a project, a target, an

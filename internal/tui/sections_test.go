@@ -95,16 +95,21 @@ func TestThePaneBorderIsTheRulesColour(t *testing.T) {
 	}
 }
 
-// Tab walks projects, targets and agents and comes back round; shift+tab
-// walks the other way (decisions.md D73).
-func TestTabWalksTheSectionsAndShiftTabWalksBack(t *testing.T) {
+// Tab walks the projects and the agents and comes back round; shift+tab walks
+// the other way. Alt+t reaches the targets, and Tab from there goes back to
+// the projects (decisions.md D104).
+func TestTabWalksTheListAndTheAgentsAndAltTReachesTheTargets(t *testing.T) {
 	_, m := agentWorld(t)
 	for _, step := range []struct{ key, want string }{
-		{"tab", "home"},
 		{"tab", "fix-remote-work"},
 		{"tab", ""},
 		{"shift+tab", "fix-remote-work"},
-		{"shift+tab", "home"},
+		{"shift+tab", ""},
+		{"alt+t", "home"},
+		{"tab", ""},
+		{"tab", "fix-remote-work"},
+		{"alt+t", "home"},
+		{"shift+tab", ""},
 	} {
 		m, _ = press(m, step.key)
 		row := paneCursor(m)
@@ -114,31 +119,32 @@ func TestTabWalksTheSectionsAndShiftTabWalksBack(t *testing.T) {
 	}
 }
 
-// A project with no agents has no Agents section, and Tab passes over it.
-func TestTabPassesOverAProjectWithoutAgents(t *testing.T) {
+// A project with no agents has no Agents section, so Tab has nowhere to go;
+// alt+t still reaches its targets.
+func TestTabStaysOnTheListOfAProjectWithoutAgents(t *testing.T) {
 	_, m := agentWorld(t)
 	m, _ = press(m, "down") // solo
 	m, _ = press(m, "tab")
-	if row := paneCursor(m); !strings.Contains(row, "home") {
-		t.Fatalf("pane cursor = %q, want the target", row)
-	}
-	m, _ = press(m, "tab")
 	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q, want the cursor back on the list", row)
+		t.Fatalf("pane cursor = %q, want the cursor still on the list", row)
+	}
+	m, _ = press(m, "alt+t")
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q, want the target", row)
 	}
 }
 
 // Agents that exit take their section with them, and a cursor that was in it
-// goes to the section before, rather than staying where nothing is drawn.
+// goes back to the list, where Tab would have taken it, rather than staying
+// where nothing is drawn.
 func TestTheCursorLeavesAnAgentsSectionThatIsGone(t *testing.T) {
 	rt, m := agentWorld(t)
-	m, _ = press(m, "tab")
 	m, _ = press(m, "tab")
 	rt.Retitle("1", "zsh")
 	rt.Retitle("2", "zsh")
 	m = survey(m)
-	if row := paneCursor(m); !strings.Contains(row, "home") {
-		t.Errorf("pane cursor = %q, want the target once the agents are gone:\n%s", row, m.View())
+	if row := paneCursor(m); row != "" {
+		t.Errorf("pane cursor = %q, want the list once the agents are gone:\n%s", row, m.View())
 	}
 }
 
@@ -146,7 +152,6 @@ func TestTheCursorLeavesAnAgentsSectionThatIsGone(t *testing.T) {
 // brings the one under the cursor to the front.
 func TestTypingInAgentsFiltersThemAndEnterGoesToTheAgent(t *testing.T) {
 	rt, m := agentWorld(t)
-	m, _ = press(m, "tab")
 	m, _ = press(m, "tab")
 	m, _ = press(m, "n")
 	m, _ = press(m, "a")
@@ -171,7 +176,6 @@ func TestTypingInAgentsFiltersThemAndEnterGoesToTheAgent(t *testing.T) {
 func TestEscClearsTheSectionsQueryThenGoesBack(t *testing.T) {
 	_, m := agentWorld(t)
 	m, _ = press(m, "tab")
-	m, _ = press(m, "tab")
 	m, _ = press(m, "u")
 	m, _ = press(m, "esc")
 	if body := pane(m); !strings.Contains(body, "fix-remote-work") || !strings.Contains(body, "❯ filter agents") {
@@ -186,38 +190,45 @@ func TestEscClearsTheSectionsQueryThenGoesBack(t *testing.T) {
 	}
 }
 
-// One click on an agent row goes to the agent, as a click on a target runs
-// it; a click on a section's field puts the cursor there.
-func TestAClickOnAnAgentGoesToItAndOnAFieldTypesThere(t *testing.T) {
+// One click on an agent row puts the cursor on it, and a second goes to the
+// agent, as on a project row; a click on the agents' field puts the cursor
+// there.
+func TestADoubleClickOnAnAgentGoesToItAndOnItsFieldTypesThere(t *testing.T) {
 	rt, m := agentWorld(t)
 	x, y := paneCell(t, m, "UX and naming")
 	m, cmd := clickCell(m, x, y)
-	if cmd == nil {
-		t.Fatalf("the click ran nothing:\n%s", m.View())
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Fatalf("panel focuses = %v after one click, want none", rt.PanelFocuses)
 	}
-	cmd()
+	if row := paneCursor(m); !strings.Contains(row, "UX and naming") {
+		t.Errorf("pane cursor = %q after one click, want the agent clicked", row)
+	}
+	m, cmd = clickCell(m, x, y)
+	runAll(cmd)
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "2" {
 		t.Errorf("panel focuses = %v, want the agent clicked", rt.PanelFocuses)
 	}
 
-	x, y = paneCell(t, m, "filter targets")
+	m, _ = press(m, "shift+tab")
+	x, y = paneCell(t, m, "filter agents")
 	m, _ = clickCell(m, x, y)
 	m, _ = press(m, "z")
-	if body := pane(m); !strings.Contains(body, "❯ z") || strings.Contains(body, "home ") {
-		t.Errorf("typing after a click on the target field did not filter the targets:\n%s", body)
+	if body := pane(m); !strings.Contains(body, "❯ z") || strings.Contains(body, "fix-remote-work") {
+		t.Errorf("typing after a click on the agents' field did not filter the agents:\n%s", body)
 	}
 }
 
-// The pane's queries are about one project's rows: another project under the
-// cursor starts with them empty.
-func TestAnotherProjectStartsWithThePaneQueriesEmpty(t *testing.T) {
+// The agent query is about one project's rows: another project under the
+// cursor starts with it empty.
+func TestAnotherProjectStartsWithThePaneQueryEmpty(t *testing.T) {
 	_, m := agentWorld(t)
 	m, _ = press(m, "tab")
 	m, _ = press(m, "z")
 	m, _ = press(m, "shift+tab")
 	m, _ = press(m, "down")
 	m, _ = press(m, "up")
-	if body := pane(m); !strings.Contains(body, "❯ filter targets") || !strings.Contains(body, "home") {
-		t.Errorf("the target query outlived its project:\n%s", body)
+	if body := pane(m); !strings.Contains(body, "❯ filter agents") || !strings.Contains(body, "fix-remote-work") {
+		t.Errorf("the agent query outlived its project:\n%s", body)
 	}
 }

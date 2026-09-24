@@ -395,6 +395,34 @@ declared layout gets a tab once the instance is open, through `PanelOpener` (D65
 There is no `Runtime` counterpart. Persistence across a reboot is either the
 runtime's already or impossible for it, and in both cases revier adds nothing.
 
+## Detailed
+
+An optional capability of an `AgentProbe`, detected by type assertion. A probe
+that implements it says what the agent in a panel said last, which the pane
+shows so the user can tell whether to go to it (D105). A probe that does not
+leaves the pane saying nothing can be read.
+
+```go
+// AgentDetail is what an agent said last, and when. Either is empty when the
+// harness does not say.
+type AgentDetail struct {
+    Message string
+    At      time.Time
+}
+
+type Detailed interface {
+    Detail(ctx context.Context, p Panel) (AgentDetail, error)
+}
+```
+
+The answer is display and nothing else: no status, match or resume may depend
+on it, because the one harness that has it keeps it in a format of its own that
+changes between releases. A probe that cannot read it returns an error, and the
+core shows the agent's detail as empty and logs the failure.
+
+`Detail` is asked for one project's agents when the pane shows that project,
+never in a survey, with the panels of the last listing: it costs no host call.
+
 ## Core view types
 
 What `internal/core` produces, and what both the TUI and `--json` render.

@@ -559,6 +559,45 @@ func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.Sess
 	return append(cmd, p.Flag, string(id))
 }
 
+// FakeDetailedProbe is a FakeProbe that can also say what the agent in a panel
+// said last, so a test can exercise the pane's message without a transcript.
+// The answer is Said's entry for the panel's id, and the zero detail for a
+// panel it has none for.
+type FakeDetailedProbe struct {
+	*FakeProbe
+	Said map[revier.PanelID]revier.AgentDetail
+	// DetailErr makes Detail fail, for the path where the pane shows nothing.
+	DetailErr error
+
+	calls int
+}
+
+// NewDetailedProbe returns a probe that claims every panel of the harness and
+// has said nothing yet.
+func NewDetailedProbe(harness, marker string) *FakeDetailedProbe {
+	return &FakeDetailedProbe{
+		FakeProbe: &FakeProbe{Harness: harness, Marker: marker},
+		Said:      map[revier.PanelID]revier.AgentDetail{},
+	}
+}
+
+// DetailCalls is how many panels Detail was asked about.
+func (p *FakeDetailedProbe) DetailCalls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls
+}
+
+func (p *FakeDetailedProbe) Detail(_ context.Context, panel revier.Panel) (revier.AgentDetail, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls++
+	if p.DetailErr != nil {
+		return revier.AgentDetail{}, p.DetailErr
+	}
+	return p.Said[panel.ID], nil
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {
