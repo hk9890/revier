@@ -765,3 +765,13 @@ message is what the pane is for, so one is shown before any keypress, and the
 user's choice overrides the pane's. A long message keeps its end, where an
 agent says what it did and needs; its width stays fixed across the wide
 layout's switch, so a resize moves the message and does not re-wrap it.
+
+### D108 — an agent's message is drawn as text, never as instructions to the terminal
+
+A message is whatever the agent wrote, and agents quote what tools print: a
+captured `git diff --color`, a progress line rewritten with a carriage return,
+a title an OSC set. Passed through, each of those repaints the surface that is
+showing it. So every escape and control character comes off before the pane
+measures or styles a line, and the message is set in revier's own colours.
+Rejected: trusting the harness, which does not own what a tool wrote into the
+transcript it keeps.

@@ -413,18 +413,28 @@ type AgentDetail struct {
 type Detailed interface {
     Detail(ctx context.Context, p Panel) (AgentDetail, error)
 }
+
+// ErrNoDetail is Detail's normal outcome: there is nothing to read.
+var ErrNoDetail = errors.New("the probe has no detail for this panel")
 ```
 
 The answer is display and nothing else: no status, match or resume may depend
 on it, because the one harness that has it keeps it in a format of its own that
-changes between releases. A probe that cannot read it returns an error, and the
-core shows the agent's detail as empty and logs the failure.
+changes between releases. A probe with nothing to read - a panel whose harness
+lists no conversation, a conversation that has said nothing yet - answers
+`ErrNoDetail`, and the core shows the detail as empty and says nothing: neither
+is a tool misbehaving, and a daily log with a line per panel per refresh buries
+the format break that is one ([CODING.md](../CODING.md)). Any other error is
+that break, and is logged.
 
 `Detail` is asked for every agent of the project the pane shows, each time the
 surface refreshes, never in a survey, with the panels of the last listing: it
 costs no host call. So a probe keeps it cheap and reads again only what
-changed; the Claude probe reads a transcript again only when its size or
-modification time did.
+changed, and remembers what it looked for and did not find as well as what it
+did. The Claude probe reads a transcript again only when its size or
+modification time did, and looks through every project directory for one filed
+outside the session's working directory once, or once in the listing's MaxAge
+while there is none to find.
 
 ## Core view types
 

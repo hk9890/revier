@@ -117,14 +117,16 @@ func (k keyMap) own() []key.Binding {
 // section - a project opens, a target runs, an agent comes to the front - so
 // the label comes from the focus and not from the binding.
 func (k keyMap) helpFor(f focus) []key.Binding {
-	enter, esc := "open", "clear/quit"
+	enter, esc, tab := "open", "clear/quit", "next section"
 	switch f {
 	case focusTargets:
-		enter, esc = "go", "back"
+		// Tab is not a step through the sections here: the targets are
+		// reached by alt+t and left by Tab (decisions.md D105).
+		enter, esc, tab = "go", "back", "back to projects"
 	case focusAgents:
 		enter, esc = "go to agent", "clear/back"
 	}
-	out := []key.Binding{helpKey("enter", enter), helpKey("tab", "next section")}
+	out := []key.Binding{helpKey("enter", enter), helpKey("tab", tab)}
 	if f != focusTargets {
 		out = append(out, helpKey("type", "filter"))
 	}

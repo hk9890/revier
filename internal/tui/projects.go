@@ -21,6 +21,9 @@ import (
 type projectItem struct {
 	view       revier.ProjectView
 	unsurveyed bool
+	// held is what the surface, not the view alone, says holds the project:
+	// the delegate renders from the item and looks nothing up (Model.held).
+	held bool
 }
 
 // FilterValue is what the fuzzy filter matches. Only the name: a path or an
@@ -32,6 +35,7 @@ func (i projectItem) rowView() revier.ProjectView { return i.view }
 func (i projectItem) rowPath() string             { return contractHome(i.view.Project.Path) }
 func (i projectItem) rowNote() string             { return "" }
 func (i projectItem) rowUnsurveyed() bool         { return i.unsurveyed }
+func (i projectItem) rowHeld() bool               { return i.held }
 
 // tableRow is an item the project table draws: the projects here, and the
 // projects of a host in the link dialog. The two differ in whose home a path
@@ -41,6 +45,11 @@ type tableRow interface {
 	rowPath() string
 	rowNote() string
 	rowUnsurveyed() bool
+	// rowHeld reports the project open, which decides the row's mark. A
+	// project here is held by an attachment the survey was not asked about
+	// too; a host's project in the link dialog is held by what the host said
+	// and nothing of this machine's (decisions.md D104).
+	rowHeld() bool
 }
 
 // newProjectList is the picker. Filtering is on but its own filter bar is
@@ -103,7 +112,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	switch {
 	case it.rowUnsurveyed():
 		mark = strings.Repeat(" ", lipgloss.Width(mark))
-	case v.Held():
+	case it.rowHeld():
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
 	}
 	// A row with a note of its own is one Enter has nothing to do on.
@@ -395,7 +404,7 @@ func (m *Model) reload() {
 
 	items := make([]list.Item, 0, len(m.views))
 	for _, v := range m.views {
-		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed})
+		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v)})
 	}
 	// The command SetItems returns re-runs the filter asynchronously. The
 	// filter is re-applied synchronously below instead, so the list is correct

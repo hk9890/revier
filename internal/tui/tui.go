@@ -5,9 +5,11 @@
 // alt+t to the targets. Enter activates. It is the picker and the monitor at
 // once (docs/design/decisions.md D8, D105, D107).
 //
-// It reads nothing `revier list --json` does not: core.Survey is the only
-// source, refreshed on a timer that never overlaps itself, and every action
-// goes through the same core paths the CLI commands use.
+// Every project, target and agent it draws comes from core.Survey, refreshed
+// on a timer that never overlaps itself, and every action goes through the
+// same core paths the CLI commands use. The one read outside that path is
+// core.Details, what the chosen agent said last, which the pane asks for on
+// its own and no survey carries (decisions.md D106).
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -341,7 +343,7 @@ func (m *Model) reloadViews() {
 			added = append(added, p)
 		}
 	}
-	m.views = sorted(append(m.known(m.views), m.core.Unsurveyed(added)...))
+	m.views = m.sorted(append(m.known(m.views), m.core.Unsurveyed(added)...))
 	m.reload()
 }
 
@@ -513,7 +515,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// failing it: the view stands, and the footer says which host.
 			m.surveyErr = msg.report.HostErr()
 			m.claimByPolling(msg.report, msg.before)
-			m.views = sorted(m.known(m.uncovered(m.core.Shown(msg.report.Views))))
+			m.views = m.sorted(m.known(m.uncovered(m.core.Shown(msg.report.Views))))
 			m.surveyed = true
 			// The window listing stands only when the window host answered:
 			// one it is missing from is not an empty one, and the next diff
@@ -699,14 +701,14 @@ func (m *Model) takeState() {
 // or an agent's state changes. Running above stopped is the picker's order
 // (os_list_json.py sorts on it too): with ninety projects the handful that are
 // open are what a search is almost always for.
-func sorted(views []revier.ProjectView) []revier.ProjectView {
+func (m Model) sorted(views []revier.ProjectView) []revier.ProjectView {
 	out := make([]revier.ProjectView, len(views))
 	copy(out, views)
 	rank := func(v revier.ProjectView) int {
 		switch {
 		case v.Attention():
 			return 0
-		case v.Held():
+		case m.heldHere(v):
 			return 1
 		default:
 			return 2
@@ -904,6 +906,16 @@ func (m Model) agentsOnPage(dir int) int {
 		n++
 	}
 	return max(n, 1)
+}
+
+// heldHere reports anything on this machine holding the project, as every surface
+// over this machine's projects draws it (decisions.md D104). It is
+// ProjectView.Held plus the instances attached by hand: the survey is asked
+// with no attachments, because the surface reads those from state, where a
+// claim writes one between surveys so a claimed window shows at once rather
+// than a refresh later.
+func (m Model) heldHere(v revier.ProjectView) bool {
+	return v.Held() || len(m.attached[v.Project.Name]) > 0
 }
 
 // targetRows is the pane's Targets section: every target, then every

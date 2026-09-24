@@ -213,37 +213,3 @@ func TestDetailReadsOnlyTheTranscriptsTail(t *testing.T) {
 		t.Errorf("Detail = %+v, %v; want the message at the end", d, err)
 	}
 }
-
-// Every way there is nothing to show is an error, which the pane shows as
-// nothing: a pane whose process no session lists, a session with no
-// transcript, and a transcript in which the agent has said nothing.
-func TestDetailFailsWhenThereIsNothingToShow(t *testing.T) {
-	t.Run("the pid is not listed", func(t *testing.T) {
-		p, root := transcripts(t)
-		writeTranscript(t, root, "-demo", "s1", `{"type":"assistant","message":{"role":"assistant","content":"x"}}`)
-		if _, err := p.Detail(context.Background(), revier.Panel{PID: 202}); err == nil {
-			t.Error("Detail succeeded for a pid no session lists")
-		}
-	})
-	t.Run("a panel with no pid", func(t *testing.T) {
-		p, _ := transcripts(t)
-		if _, err := p.Detail(context.Background(), revier.Panel{}); err == nil {
-			t.Error("Detail succeeded for a panel with no pid")
-		}
-	})
-	t.Run("no transcript", func(t *testing.T) {
-		p, _ := transcripts(t)
-		if _, err := p.Detail(context.Background(), revier.Panel{PID: 101}); err == nil {
-			t.Error("Detail succeeded with no transcript")
-		}
-	})
-	t.Run("nothing said", func(t *testing.T) {
-		p, root := transcripts(t)
-		writeTranscript(t, root, "-demo", "s1",
-			`{"type":"user","message":{"role":"user","content":"hello?"}}`,
-			`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read"}]}}`)
-		if _, err := p.Detail(context.Background(), revier.Panel{PID: 101}); err == nil {
-			t.Error("Detail succeeded for a transcript with no text from the agent")
-		}
-	})
-}

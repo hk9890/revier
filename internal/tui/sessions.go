@@ -378,7 +378,7 @@ func (m Model) sessionNameScreen() string {
 	}
 	running := 0
 	for _, v := range m.views {
-		if v.Held() {
+		if m.heldHere(v) {
 			running++
 		}
 	}

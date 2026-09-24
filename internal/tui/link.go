@@ -47,6 +47,7 @@ func (i remoteItem) FilterValue() string         { return string(i.view.Project.
 func (i remoteItem) rowView() revier.ProjectView { return i.view }
 func (i remoteItem) rowPath() string             { return remoteHome(i.view.Project.Path) }
 func (i remoteItem) rowUnsurveyed() bool         { return false }
+func (i remoteItem) rowHeld() bool               { return i.view.Held() }
 
 func (i remoteItem) rowNote() string {
 	if i.linked == "" {
@@ -415,7 +416,7 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 	// (decisions.md D104).
 	view := it.view
 	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
-	m.views = sorted(append(m.views, view))
+	m.views = m.sorted(append(m.views, view))
 	m.dialog = dialogNone
 	m.lname.Blur()
 	m.reload()
