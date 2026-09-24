@@ -60,6 +60,28 @@ func openHere(name string) *hosttest.FakeRuntime {
 	return rt
 }
 
+// A link with nothing open here sorts with the closed projects, however
+// much its host's agent wants the user: that agent is on no row (D104), so
+// it lifts nothing above the projects that are open here.
+func TestALinkNothingHereHoldsSortsBelowTheOpenProjects(t *testing.T) {
+	rt, _, _, local := world(t, 3) // project-02 is open
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
+		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+			Harness: "claude", Marker: "claude",
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning},
+		}}}
+	projects := append(remoteOnDisk(t, "alpha"), local...)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	// Rows are two lines: the name, then the path under it.
+	for i, name := range []string{"project-02", "alpha@buildbox", "project-00", "project-01"} {
+		if row := rows(m)[i*2]; !strings.Contains(row, name) {
+			t.Errorf("row %d = %q, want %s", i, row, name)
+		}
+	}
+}
+
 // A remote project's row shows what its host's agent is doing, read from
 // the host, and the pane names the host. The agent is in a panel here, so
 // the row is one the user can act on.
