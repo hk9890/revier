@@ -41,3 +41,5 @@ Use the `commit-commands:commit` skill for the standard flow.
 - A change to the model is recorded in `docs/design/decisions.md`, as
   [DOCUMENTING.md](DOCUMENTING.md) says.
 - A new host ships the host tests [TESTING.md](TESTING.md) requires.
+- A change to behaviour updates every place that describes it: `README.md`,
+  package doc comments, test comments.
