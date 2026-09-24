@@ -187,6 +187,32 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	}
 }
 
+// An open project stays above a closed one, whatever its agents are doing:
+// a project whose agents are live on another machine needs the user too, but
+// a closed row above the open ones reads as a list that lost its order
+// (decisions.md D104). The ones needing the user lead each group.
+func TestAClosedProjectStaysBelowTheOpenOnes(t *testing.T) {
+	rt, _, _, local := world(t, 3)
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
+	// The open project's own agent is working, so only the closed one needs
+	// the user.
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote},
+		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+			Harness: "claude", Marker: "claude",
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "writing a test"},
+		}}}
+	projects := append(local, remoteOnDisk(t, "alpha")...)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+
+	// Rows are two lines: the name, then the path under it.
+	want := []string{"project-02", "alpha@buildbox", "project-00", "project-01"}
+	for i, name := range want {
+		if row := rows(m)[i*2]; !strings.Contains(row, name) {
+			t.Errorf("row %d = %q, want %s", i, row, name)
+		}
+	}
+}
+
 // bubbletea paints before the first survey answers, and the survey is a
 // round trip to every linked host. Those frames list every project from its
 // file, with no mark and no count, because the names are what the surface

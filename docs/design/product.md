@@ -108,9 +108,10 @@ revier session list    the saved sessions, newest first
 revier shutdown        save the session when it changed, then close (D78)
 ```
 
-The TUI is one surface: a list of projects, sorted so the ones needing
-attention come first, and a pane beside it for the project under the cursor.
-The list and the pane's targets and agents are three sections, each with its
+The TUI is one surface: a list of projects, sorted so the open ones come first
+and the ones needing attention head each group (D104), and a pane beside it for
+the project under the cursor. The list and the pane's targets and agents are
+three sections, each with its
 own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
 a project opens its home target, on a target runs it, and on an agent makes its
 tab current and raises its window (D74). alt+e, or the project's name over the

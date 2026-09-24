@@ -37,8 +37,8 @@ deferred here and is in since D40.
 
 ### D8 — one TUI, not a picker and a dashboard
 
-The picker and the monitor are one surface: projects sorted by who needs you,
-Enter opens.
+The picker and the monitor are one surface: the open projects first, and
+within them the ones needing you (D104), Enter opens.
 
 ### D12 — two tiers of binding
 
@@ -627,9 +627,10 @@ of a state with no agent.
 
 ### D97 — the surface opens with the rows above the starting project in view
 
-The list is sorted with the projects that need the user first, so opening on
-a project resolved from the working directory or the focused window put it
-alone on the last line and said nothing about what else was waiting. It keeps
+The list is sorted with the open projects first and the ones needing the user
+at the head of each group (D104), so opening on a project resolved from the
+working directory or the focused window put it alone on the last line and said
+nothing about what else was waiting. It keeps
 ten rows above it, fewer on a screen with no room, where it is the last row in
 view: a row the user was taken to and cannot see is worse than no context.
 
@@ -737,3 +738,12 @@ about the rows (D49), and its right side is the only place no column claims.
 It is not the header D51 removed - that named the program, which the user
 knows - and where less than two columns of air are left it is dropped, because
 the buttons are what the line is for.
+
+### D104 — the open projects are above the closed ones, whoever needs the user
+
+A project needing the user sorted to the top whether or not it was open, so a
+closed project whose agents are live on another machine stood above every open
+one. The rows are grouped by open first and closed second, and inside each
+group the ones needing the user lead. What a search is almost always for is
+the handful that are open (D8), and a closed row above them reads as a list
+that lost its order rather than as a call for attention.
