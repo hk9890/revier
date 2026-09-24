@@ -409,9 +409,12 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 	m.projects = append(m.projects, p)
 	m.setKeys()
 	// Provisional, until the survey answers: the host's own view, as the
-	// merge would lay it over a local one with no pane here yet.
+	// merge would lay it over a local one with no pane here yet. Its agents
+	// go with its panes: no panel here shows one yet, so the row counts none
+	// rather than counting the host's in a project it draws as closed
+	// (decisions.md D104).
 	view := it.view
-	view.Project, view.Running, view.Home, view.Targets = p.Project, false, revier.TargetRef{}, nil
+	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
 	m.views = sorted(append(m.views, view))
 	m.dialog = dialogNone
 	m.lname.Blur()
@@ -480,7 +483,7 @@ func (m *Model) remoteDetail() string {
 	out += line("Path", v.Project.Path, th.Path)
 	status, style := "stopped", th.NameDim
 	switch {
-	case v.Running:
+	case v.Held():
 		status, style = "running", th.Running
 	case !v.PathExists:
 		status, style = "not cloned", th.PathMissing

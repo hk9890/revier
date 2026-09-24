@@ -89,7 +89,10 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
-	for _, v := range views {
+	// The table is read by a person at this machine, and the JSON above by
+	// the revier on another: the table says only what a panel here shows
+	// (decisions.md D104), and the JSON says everything the survey found.
+	for _, v := range a.core.Shown(views) {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 			v.Project.Label(), runState(v), agentSummary(v), targetSummary(v))
 	}
@@ -102,7 +105,7 @@ func runState(v revier.ProjectView) string {
 		return "invalid"
 	case v.Unreachable != "":
 		return "unreachable"
-	case v.Running:
+	case v.Held():
 		return "running"
 	}
 	return "-"

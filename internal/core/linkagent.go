@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -104,6 +105,32 @@ func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
 		if c.here(a) {
 			out = append(out, a)
 		}
+	}
+	return out
+}
+
+// Shown is the views a surface draws: every agent a panel of this machine's
+// runtime shows, and no other (decisions.md D104). A survey reports more than
+// that, and has to - the host's answer about a link is the only word this
+// machine has on it, and `revier list --json` is what the revier on the other
+// machine reads to learn about the agents its own links started here. What is
+// dropped is what nobody at this screen can reach: an agent of a link that was
+// started on its host or from a third machine, and an agent this machine
+// serves to a terminal elsewhere. Neither can be gone to, typed into or
+// closed from here, and counting them put an agent in a project the same row
+// called closed.
+//
+// The views and their agents are the survey's, so a view that keeps every
+// agent keeps its slice and a filtered one takes a new slice of its own.
+func (c *Core) Shown(views []revier.ProjectView) []revier.ProjectView {
+	out := make([]revier.ProjectView, len(views))
+	copy(out, views)
+	elsewhere := func(a revier.AgentView) bool { return !c.here(a) }
+	for i := range out {
+		if !slices.ContainsFunc(out[i].Agents, elsewhere) {
+			continue
+		}
+		out[i].Agents = c.agentsHere(out[i])
 	}
 	return out
 }
@@ -238,10 +265,15 @@ func linkDir(r Resume) []string {
 // agents holds, one call per host, and answers by link and by the tag the
 // host names the agent with. A host that does not answer is returned as a
 // failure of the save, and its agents are recorded by nothing.
+//
+// A link is asked about while anything here holds it, not while its home
+// target alone runs: a save records every target with a live instance, so a
+// link open on another of its targets would otherwise be recorded with the
+// target and without the agent in it, and the restore would reopen it empty.
 func (c *Core) conversationsThere(ctx context.Context, views []revier.ProjectView) (map[revier.ProjectName]map[revier.PanelID]session.Agent, []error) {
 	byHost := map[string][]revier.ProjectView{}
 	for _, v := range views {
-		if v.Project.Remote != nil && v.Running {
+		if v.Project.Remote != nil && v.Held() {
 			byHost[v.Project.Remote.Host] = append(byHost[v.Project.Remote.Host], v)
 		}
 	}

@@ -203,10 +203,11 @@ func TestTheMessageIsSetFromItsMarkdown(t *testing.T) {
 }
 
 // A remote project's agent speaks on the other machine, and asking that
-// revier is not built: the pane says so, and nothing is read here.
+// revier is not built: the pane says so, and nothing is read here. The agent
+// is in a panel here, so the pane shows it (decisions.md D104).
 func TestARemoteProjectsAgentSaysTheMessageIsNotImplemented(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: openHere("alpha"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 140, 30).Said()
 	if body := strings.Join(strings.Fields(pane(m)), " "); !strings.Contains(body, "on another machine is not implemented yet.") {
 		t.Errorf("pane = %q, want it to say the message is not implemented for a remote agent", body)

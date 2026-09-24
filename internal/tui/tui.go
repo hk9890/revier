@@ -513,7 +513,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// failing it: the view stands, and the footer says which host.
 			m.surveyErr = msg.report.HostErr()
 			m.claimByPolling(msg.report, msg.before)
-			m.views = sorted(m.known(m.uncovered(msg.report.Views)))
+			m.views = sorted(m.known(m.uncovered(m.core.Shown(msg.report.Views))))
 			m.surveyed = true
 			// The window listing stands only when the window host answered:
 			// one it is missing from is not an empty one, and the next diff
@@ -706,7 +706,7 @@ func sorted(views []revier.ProjectView) []revier.ProjectView {
 		switch {
 		case v.Attention():
 			return 0
-		case v.Running:
+		case v.Held():
 			return 1
 		default:
 			return 2

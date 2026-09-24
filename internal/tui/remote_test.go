@@ -40,20 +40,32 @@ func remoteOnDisk(t *testing.T, name string) []core.Project {
 }
 
 // hostSays is what the revier on buildbox answers about a project: the
-// checkout is there, and its one agent is in the given state.
+// checkout is there, and its one agent is in the given state. The agent is
+// named by the tag a panel of machine box on pid 4242 gave it, which is what
+// openHere opens.
 func hostSays(name string, status revier.Status) revier.ProjectView {
 	return revier.ProjectView{
 		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/user/dev/" + name},
 		PathExists: true,
-		Agents:     []revier.AgentView{{Panel: "1", State: revier.AgentState{Harness: "claude", Status: status}}},
+		Agents:     []revier.AgentView{{Panel: "box.4242", State: revier.AgentState{Harness: "claude", Status: status}}},
 	}
 }
 
+// openHere is the link's workspace open on this machine: one panel running
+// the ssh, on the pid the host tags what that panel started with.
+func openHere(name string) *hosttest.FakeRuntime {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:"+name, "kitty", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242,
+		Command: []string{"ssh", "-t", "buildbox"}})
+	return rt
+}
+
 // A remote project's row shows what its host's agent is doing, read from
-// the host, and the pane names the host.
+// the host, and the pane names the host. The agent is in a panel here, so
+// the row is one the user can act on.
 func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: openHere("alpha"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
 
 	if row := rows(m)[0]; !strings.Contains(row, theme.Default().Glyphs.NeedsYou+" 1") {
@@ -61,6 +73,24 @@ func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 	}
 	if body := pane(resize(m, 140, 30)); !strings.Contains(body, "buildbox") {
 		t.Errorf("pane = %q, want the host named", body)
+	}
+}
+
+// A link with nothing open here counts no agents, whatever its host reports.
+// The host lists every agent in its project, including ones opened on that
+// machine, and no panel here shows those: the row would otherwise count an
+// agent that Enter cannot reach, in a project the same row calls closed
+// (decisions.md D104).
+func TestALinkNothingHereHoldsCountsNoAgent(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 80, 20)
+
+	if row := rows(m)[0]; strings.Contains(row, theme.Default().Glyphs.NeedsYou) {
+		t.Errorf("row = %q, want no agent: the project is closed here", row)
+	}
+	if body := pane(resize(m, 140, 30)); strings.Contains(body, "Agents") {
+		t.Errorf("pane = %q, want no agents section", body)
 	}
 }
 

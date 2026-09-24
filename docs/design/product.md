@@ -98,7 +98,9 @@ revier go <target>     run-or-raise a named target in the current project;
 revier popup           run-or-raise the TUI in a kitty window revier places (D76)
 revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
-revier list [--json]   machine-readable inventory
+revier list            what a person here reads: the agents a panel here shows
+revier list --json     the survey whole, which the revier on another machine
+                       reads about its own links (D104)
 revier status          the project for the current directory
 revier doctor          every file that did not load whole, and its fix (D85)
 revier each -- <cmd>   run one command in every project's directory (D32)
@@ -110,7 +112,12 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
-The pane starts level with the project query.
+A row says a project is open while anything here holds it - a target, or a
+terminal attached by hand - and counts the agents a panel here shows, which
+are the agents the surface can go to, type into and close. An agent of a link
+that was opened on its host, and one this machine serves to a terminal
+elsewhere, are in the survey and on no row (D104). The pane starts level with
+the project query.
 
 The pane ends in what one of the project's agents said last, and how long ago
 (D106, D107). Without a keypress it shows the agent that needs the user; else
@@ -128,8 +135,8 @@ alt+t to the targets, which have no query; Tab from the targets goes back to
 the projects (D105). One click selects a row of the list or the pane, and a
 second opens it. Enter on a project opens its home target, or on one with no
 home puts the cursor on its targets; on a target it runs it, and on an agent it
-makes its tab current and raises its window (D74). alt+e, or the project's name over the
-pane, opens the project screen: the project file as the config screen is
+makes its tab current and raises its window (D74). alt+e, or the project's
+name over the pane, opens the project screen: the project file as the config screen is
 `config.toml`, with the shared targets shown beside what the project changes of
 them (D81). del closes the row under the cursor - a project, a target, an
 attached window or an agent's tab - and alt+del deletes what the configuration
