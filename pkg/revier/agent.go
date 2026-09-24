@@ -3,6 +3,7 @@ package revier
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -194,10 +195,18 @@ type Titled interface {
 //
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so
-// a probe that cannot read it returns an error, and the pane shows nothing.
+// a probe that cannot read it returns an error, and the pane shows nothing:
+// ErrNoDetail where there is nothing to read, any other error where reading it
+// failed.
 type Detailed interface {
 	Detail(ctx context.Context, p Panel) (AgentDetail, error)
 }
+
+// ErrNoDetail is Detail's normal outcome: the panel holds no conversation the
+// probe can name, or the one it names has said nothing yet. Neither is a tool
+// misbehaving, so the core shows nothing and logs nothing; any other error is
+// a probe that broke, and is logged (docs/CODING.md, "Errors").
+var ErrNoDetail = errors.New("the probe has no detail for this panel")
 
 // AgentDetail is what an agent said last, and when. Either is empty when the
 // harness does not say.

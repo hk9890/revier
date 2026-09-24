@@ -68,8 +68,8 @@ type Probe struct {
 	stamp  map[string]time.Time // the sessions directory at the last run
 
 	readsMu sync.Mutex
-	reads   map[string]read   // the last read of each transcript, by path
-	found   map[string]string // where a transcript not under its cwd was found, by session
+	reads   map[string]read  // the last read of a session's transcript, by session
+	found   map[string]sweep // what the look for a transcript not under its cwd came to, by session
 }
 
 // listedSession is one entry of `claude agents --json`. A background session
@@ -142,6 +142,9 @@ func (p *Probe) listing(ctx context.Context) (map[int]listedSession, error) {
 	}
 	p.listed, p.err = listed, err
 	p.at, p.stamp = p.now(), stamp
+	if err == nil {
+		p.forget(listed)
+	}
 	return p.listed, p.err
 }
 

@@ -381,20 +381,31 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 //
 // A detail is empty for an agent whose probe does not say, one on another
 // machine, and one whose probe failed: the detail is display, and the failure
-// is logged rather than shown (decisions.md D106).
+// is logged rather than shown (decisions.md D106). A probe with nothing to
+// read (revier.ErrNoDetail) has not failed, and is not logged either.
 func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
 	c.seenMu.Lock()
 	seen := c.seen
 	c.seenMu.Unlock()
-	out := make([]revier.AgentDetail, len(agents))
+	// The agents are indexed first and the listing walked once. Walking the
+	// listing per agent costs the instances of every host times the agents of
+	// one project, on a surface that asks every refresh.
+	wanted := make(map[string][]int, len(agents))
 	for i, a := range agents {
-		for _, inst := range seen[a.Ref.Host] {
-			if inst.Ref.ID != a.Ref.ID {
-				continue
-			}
+		at := key(a.Ref) + "\x00" + string(a.Panel)
+		wanted[at] = append(wanted[at], i)
+	}
+	out := make([]revier.AgentDetail, len(agents))
+	for _, instances := range seen {
+		for _, inst := range instances {
 			for _, panel := range inst.Panels {
-				if panel.ID == a.Panel {
-					out[i] = c.detail(ctx, inst.Ref, panel)
+				at, ok := wanted[key(inst.Ref)+"\x00"+string(panel.ID)]
+				if !ok {
+					continue
+				}
+				d := c.detail(ctx, inst.Ref, panel)
+				for _, i := range at {
+					out[i] = d
 				}
 			}
 		}
@@ -412,6 +423,12 @@ func (c *Core) detail(ctx context.Context, ref revier.TargetRef, panel revier.Pa
 		return revier.AgentDetail{}
 	}
 	d, err := detailed.Detail(ctx, panel)
+	// A probe with nothing to read is a normal outcome and says nothing to
+	// the log: a panel whose harness lists no session, and a session that has
+	// not spoken yet, are both ordinary. Only a probe that broke is logged.
+	if errors.Is(err, revier.ErrNoDetail) {
+		return revier.AgentDetail{}
+	}
 	logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
 	if err != nil {
 		return revier.AgentDetail{}
