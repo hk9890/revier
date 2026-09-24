@@ -726,41 +726,25 @@ the buttons are what the line is for.
 
 ### D104 — Tab walks the projects and the agents; the targets are one chord away
 
-Replaces D73, where Tab walked projects, targets and agents, each under its own
-query. The agents are what the surface exists to reach, and three stops put
-them two presses off; a project has a handful of targets, so their query found
-nothing a glance does not. Tab and shift+tab move between the projects and the
-agents; alt+t puts the cursor on the targets, and Tab from there goes back to
-the projects. The targets have no query, so typing there does nothing. A pane
-row is a row as D36 has it: one click selects it, a second runs it, so del and
-alt+del reach a single target. The project and agent queries sit over their
-own rows and are kept while their project is, until a press opens something;
-then both end and each cursor stays on the row it found. The pane starts level
-with the project query. Enter opens a project, runs a target, and goes to an
-agent; on a project with no home it puts the cursor on the targets.
+Replaces D73, where Tab walked the projects, the targets and the agents, each
+under a query. The agents are what the surface exists to reach, and a third
+stop put them two presses off; a project has a handful of targets, so a query
+over them found nothing a glance does not. The targets have no query, and a
+pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
 ### D105 — the pane shows what an agent said last, read from its transcript for display only
 
-What an agent did last decides whether to go to it; its title says only what
-it is on. The Claude probe reads the end of the session's transcript, found by
-the session the listing names for the pane's pid (D57). That format is Claude
-Code's internal one, so the read is display only (`Detailed`): nothing
-surveys, matches or resumes on it, and what cannot be read shows as nothing.
-The agent view's own summary was rejected because Claude Code writes it for
-background sessions alone, 3 of 27 when it was measured; `claude -p --resume`
-because it is a model request per agent; a hook because every user would have
-to install it. The read is asked for one project's agents, off the update loop,
-from the panels of the last listing, so it adds no host call to a survey. A
-remote project's agent is not read yet: its host's revier would have to be
-asked, and the pane says so.
+What an agent did last decides whether to go to it, and its title says only
+what it is on. The Claude probe reads it from the session's transcript, whose
+format is Claude Code's own and changes between releases, so the read is
+display only (`Detailed`). Rejected: the agent view's summary, which Claude Code
+writes for background sessions alone (3 of 27 when measured); `claude -p
+--resume`, a model request per agent; a hook, which every user would install.
 
 ### D106 — the pane always shows one agent's message, in place of the project tree
 
-The tree said which checkout this is, which the path above it already says.
-The pane shows the agent most worth a look without a keypress: one waiting for
-the user, then one at rest, then one working, the latest to speak among equals.
-Moving the agent cursor chooses, and the choice holds until another project is
-under the list's cursor. A message that does not fit keeps its end, where an
-agent says what it did and needs. Its text is set no wider than 100 columns,
-and a wide pane puts it beside the facts only once it has all 100, so a resize
-across that switch moves the message and does not re-wrap it.
+The tree said which checkout this is, which the path above it says too. A
+message is what the pane is for, so one is shown before any keypress, and the
+user's choice overrides the pane's. A long message keeps its end, where an
+agent says what it did and needs; its width stays fixed across the wide
+layout's switch, so a resize moves the message and does not re-wrap it.

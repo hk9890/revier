@@ -110,13 +110,25 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
-The pane ends in what one of the project's agents said last, so the user can
-tell whether to go to it: the one that needs them first, or the one they
-chose (D105, D106). The list and the pane's agents each have a query over
-their rows, and Tab moves between them; alt+t reaches the targets, which have
-none (D104). One click selects a row, a second opens it. Enter on a project
-opens its home target, on a target runs it, and on an agent makes its tab
-current and raises its window (D74). alt+e, or the project's name over the
+The pane starts level with the project query.
+
+The pane ends in what one of the project's agents said last, and how long ago
+(D105, D106). Without a keypress it shows the agent that needs the user; else
+one with a message to show, at rest before working; the latest to speak among
+equals. Moving the agent cursor chooses, and the choice holds until another
+project is under the list's cursor. A message longer than the room keeps its
+end, under an ellipsis. Its text is set no wider than 100 columns, and a wide
+pane lays it beside the facts, level with the name, once it has all 100. A
+remote project's agent is not read, and the pane says so.
+
+The list and the pane's agents each have a query over their rows, kept while
+their project is, until a press opens something; then both end, and each
+cursor stays on the row it found. Tab and shift+tab move between the two, and
+alt+t to the targets, which have no query; Tab from the targets goes back to
+the projects (D104). One click selects a row of the list or the pane, and a
+second opens it. Enter on a project opens its home target, or on one with no
+home puts the cursor on its targets; on a target it runs it, and on an agent it
+makes its tab current and raises its window (D74). alt+e, or the project's name over the
 pane, opens the project screen: the project file as the config screen is
 `config.toml`, with the shared targets shown beside what the project changes of
 them (D81). del closes the row under the cursor - a project, a target, an
