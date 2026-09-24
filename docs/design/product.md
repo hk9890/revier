@@ -111,28 +111,28 @@ revier shutdown        save the session when it changed, then close (D78)
 The TUI is one surface: a list of projects, sorted so the open ones come first
 and the ones needing attention head each group (D104), and a pane beside it for
 the project under the cursor. The list and the pane's targets and agents are
-three sections, each with its
-own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
-a project opens its home target, on a target runs it, and on an agent makes its
-tab current and raises its window (D74). alt+e, or the project's name over the
-pane, opens the project screen: the project file as the config screen is
-`config.toml`, with the shared targets shown beside what the project changes of
-them (D81). del closes the row under the cursor - a project, a target, an
-attached window or an agent's tab - and alt+del deletes what the configuration
-holds of it: a project's file, which for a link is the link alone, or a target
-the project file declares. What is open closes first (D93).
-The sessions screen is the three `revier session` commands on the surface: the
-saved sessions, a pane with the restore plan for the one under the cursor, Enter
-to restore it and a save button on its top line (D46, D49). The shutdown wizard
-is `revier shutdown` on the surface: every project or one, then what of it, then
-the plan to confirm, and the result shown with the surface still up (D78).
-Every close reads the plan's agents again first, its own steps only, and the
-forced press reads them too: one busy since saves nothing and closes nothing,
-and the plan comes back with it named, where confirming it is the force (D99).
-A del that would have closed at once asks there too. A step whose agents that survey could not read - its host did
-not list, its project is no longer surveyed, its link host did not answer - is
-left open and named in the result, and the rest of the plan closes: one dead
-remote host does not stop the other projects.
+three sections, each with its own query over its rows; Tab walks them and
+shift+tab walks back (D73). Enter on a project opens its home target, on a
+target runs it, and on an agent makes its tab current and raises its window
+(D74). alt+e, or the project's name over the pane, opens the project screen:
+the project file as the config screen is `config.toml`, with the shared targets
+shown beside what the project changes of them (D81). del closes the row under
+the cursor - a project, a target, an attached window or an agent's tab - and
+alt+del deletes what the configuration holds of it: a project's file, which for
+a link is the link alone, or a target the project file declares. What is open
+closes first (D93). The sessions screen is the three `revier session` commands
+on the surface: the saved sessions, a pane with the restore plan for the one
+under the cursor, Enter to restore it and a save button on its top line (D46,
+D49). The shutdown wizard is `revier shutdown` on the surface: every project or
+one, then what of it, then the plan to confirm, and the result shown with the
+surface still up (D78). Every close reads the plan's agents again first, its
+own steps only, and the forced press reads them too: one busy since saves
+nothing and closes nothing, and the plan comes back with it named, where
+confirming it is the force (D99). A del that would have closed at once asks
+there too. A step whose agents that survey could not read - its host did not
+list, its project is no longer surveyed, its link host did not answer - is left
+open and named in the result, and the rest of the plan closes: one dead remote
+host does not stop the other projects.
 
 ## Scope
 

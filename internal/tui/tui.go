@@ -1,8 +1,8 @@
-// Package tui is the one surface: every project with its agent state, sorted
-// so the ones needing attention come first, and beside it a pane with the
-// project's targets, attached instances and agents, which Tab moves the
-// cursor through. Enter activates. It is the picker and the monitor at once
-// (docs/design/decisions.md D8, D73).
+// Package tui is the one surface: every project with its agent state, the
+// open ones above the closed and the ones needing attention first in each,
+// and beside it a pane with the project's targets, attached instances and
+// agents, which Tab moves the cursor through. Enter activates. It is the
+// picker and the monitor at once (docs/design/decisions.md D8, D73, D104).
 //
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action

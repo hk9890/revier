@@ -97,8 +97,9 @@ revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
 ```
 
-In the TUI, projects whose agent is waiting for you sort first. Each project
-row counts its agents by state: needs you, working, idle, unknown. The list, and
+In the TUI, open projects sort above closed ones, and in each group the
+projects whose agent is waiting for you come first. Each project row counts
+its agents by state: needs you, working, idle, unknown. The list, and
 the pane's targets and agents beside it, are three sections, each with its own
 filter field over its rows. Tab moves the cursor to the next section and
 shift+tab to the one before. Typing filters the section the cursor is in, and

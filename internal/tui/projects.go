@@ -410,9 +410,9 @@ func (m *Model) reload() {
 	// moved it. SetItems keeps the cursor's index, not its project, so the
 	// first survey places the cursor itself: on the project the user moved
 	// to, else on the project of the working directory, the way the shell
-	// picker preselects it (os_list_json.py:570), else on the top row, which
-	// is the project that needs the user most. After that the user's own
-	// selection wins.
+	// picker preselects it (os_list_json.py:570), else on the top row: the
+	// first open project, one needing the user if any open one does
+	// (decisions.md D104). After that the user's own selection wins.
 	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
 	switch {
 	case hadSelection && (!was.unsurveyed || moved):

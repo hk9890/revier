@@ -168,9 +168,9 @@ func rows(m tui.Model) []string {
 // the list.
 const chromeLines = 4
 
-// The project the human is waiting on sorts above every other, whatever its
-// config order.
-func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
+// The open project the human is waiting on sorts above every other, whatever
+// its config order.
+func TestAnOpenProjectNeedingAttentionSortsFirst(t *testing.T) {
 	_, _, c, projects := world(t, 4)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 

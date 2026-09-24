@@ -37,8 +37,8 @@ deferred here and is in since D40.
 
 ### D8 — one TUI, not a picker and a dashboard
 
-The picker and the monitor are one surface: the open projects first, and
-within them the ones needing you (D104), Enter opens.
+The picker and the monitor are one surface: projects in the order D104 sets,
+Enter opens.
 
 ### D12 — two tiers of binding
 
@@ -627,12 +627,11 @@ of a state with no agent.
 
 ### D97 — the surface opens with the rows above the starting project in view
 
-The list is sorted with the open projects first and the ones needing the user
-at the head of each group (D104), so opening on a project resolved from the
-working directory or the focused window put it alone on the last line and said
-nothing about what else was waiting. It keeps
-ten rows above it, fewer on a screen with no room, where it is the last row in
-view: a row the user was taken to and cannot see is worse than no context.
+The list is sorted (D104), so opening on a project resolved from the working
+directory or the focused window put it alone on the last line and said nothing
+about the rows above it. It keeps ten rows above it, fewer on a
+screen with no room, where it is the last row in view: a row the user was
+taken to and cannot see is worse than no context.
 
 ### D98 — a deleted row hands the cursor to the row that took its place
 
@@ -744,6 +743,7 @@ the buttons are what the line is for.
 A project needing the user sorted to the top whether or not it was open, so a
 closed project whose agents are live on another machine stood above every open
 one. The rows are grouped by open first and closed second, and inside each
-group the ones needing the user lead. What a search is almost always for is
-the handful that are open (D8), and a closed row above them reads as a list
-that lost its order rather than as a call for attention.
+group the ones needing the user lead. Open is what the row's mark says: the
+home target has an instance here. What a search is almost always for is the
+handful that are open, and a closed row above them reads as a list that lost
+its order rather than as a call for attention.

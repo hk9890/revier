@@ -20,8 +20,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Running projects sort above stopped ones, under the ones that need the
-// human, and each group keeps config order.
+// Running projects sort above stopped ones, under the running ones that need
+// the human, and each group keeps config order.
 func TestRunningProjectsSortAboveStoppedOnes(t *testing.T) {
 	rt, _, c, projects := world(t, 4) // project-03 needs the human
 	rt.Add("session:project-01", "kitty")
