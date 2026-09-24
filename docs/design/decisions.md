@@ -737,3 +737,20 @@ about the rows (D49), and its right side is the only place no column claims.
 It is not the header D51 removed - that named the program, which the user
 knows - and where less than two columns of air are left it is dropped, because
 the buttons are what the line is for.
+
+### D104 — a surface shows the agents a panel here shows, and the survey keeps the rest
+
+A link's host lists every agent in its project, including the ones opened on
+that machine, and the row counted them all: a project drawn as closed, counting
+an agent `ErrAgentElsewhere` refused to reach, and the same on the other side
+for an agent this machine serves to a terminal elsewhere. Every surface over
+this machine's projects draws `Core.Shown`, the agents a panel of this
+machine's runtime shows (`here`, D84); the survey keeps the rest, which
+`revier list --json` owes the revier on the other machine about the agents its
+own links started here (D101) and a shutdown reads to see this machine is busy.
+The link dialog's pane is the host's inventory rather than this machine's
+projects, and draws its word whole. A row's state is `ProjectView.Held` -
+anything here that holds the project, rather than the home target alone, which
+stays what run-or-raise and a restore act on - so every agent a surface shows
+sits in a panel of an instance `Held` counts, and "closed and no agents" is an
+invariant of the row rather than a coincidence of the filter.

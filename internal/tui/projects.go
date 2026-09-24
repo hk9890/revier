@@ -103,7 +103,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	switch {
 	case it.rowUnsurveyed():
 		mark = strings.Repeat(" ", lipgloss.Width(mark))
-	case v.Running:
+	case v.Held():
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
 	}
 	// A row with a note of its own is one Enter has nothing to do on.

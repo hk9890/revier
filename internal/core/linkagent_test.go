@@ -426,3 +426,61 @@ func TestShutdownLeavesOpenALinkWhoseHostStoppedAnswering(t *testing.T) {
 		t.Errorf("note = %q, want the host's failure named", out[0].Note())
 	}
 }
+
+// A surface shows only the agents a panel of this machine's runtime shows. A
+// link's host reports every agent in its project, including ones started on
+// that machine, and those stay in the survey - `revier list --json` is that
+// survey, and the revier on another machine reads it to learn about the agents
+// its own links started here. Shown drops them, so a project nothing here
+// holds counts no agents (decisions.md D104).
+func TestShownDropsTheAgentsNoPanelHereShows(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("elsewhere.7", revier.StatusRunning)}})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+
+	views := survey(t, c, []core.Project{linkProject(t)}, nil).Views
+	if len(views[0].Agents) != 1 || views[0].Held() {
+		t.Fatalf("view = %+v, want the host's agent in a project nothing here holds", views[0])
+	}
+	if agents := c.Shown(views)[0].Agents; len(agents) != 0 {
+		t.Errorf("shown agents = %+v, want none: no panel here shows the one the host reported", agents)
+	}
+	if len(views[0].Agents) != 1 {
+		t.Errorf("surveyed agents = %+v, want the host's answer left whole behind the surface", views[0].Agents)
+	}
+}
+
+// The agent this machine serves to a terminal elsewhere is the same case from
+// the other side: the revier there shows it and can close it, and nothing at
+// this screen can. The survey keeps it, because a shutdown here reads the
+// survey to see that the machine is busy, and the surface leaves it out.
+func TestShownDropsTheAgentServedToAnotherMachine(t *testing.T) {
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", revier.Panel{ID: "box.4242", Kind: revier.PanelTool, Title: "agent", PID: 7})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Served: served,
+		Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "agent",
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}}
+
+	views := survey(t, c, []core.Project{prepared(t, project())}, nil).Views
+	if len(views[0].Agents) != 1 {
+		t.Fatalf("view = %+v, want the served agent surveyed", views[0])
+	}
+	if agents := c.Shown(views)[0].Agents; len(agents) != 0 {
+		t.Errorf("shown agents = %+v, want none: the terminal holding it is on another machine", agents)
+	}
+}
+
+// A link's own agent stays. It runs on the host, and a panel here shows it,
+// so Enter reaches it and the row counting it is a row whose project is open.
+func TestShownKeepsTheAgentAPanelHereShows(t *testing.T) {
+	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusRunning))
+	views := survey(t, c, []core.Project{linkProject(t)}, nil).Views
+
+	shown := c.Shown(views)[0]
+	if !shown.Held() {
+		t.Fatalf("view = %+v, want the link's workspace open here", shown)
+	}
+	if len(shown.Agents) != 1 || shown.Agents[0].Ref != pane || shown.Agents[0].Panel != "9" {
+		t.Errorf("shown agents = %+v, want the host's agent on panel 9 of %v", shown.Agents, pane)
+	}
+}

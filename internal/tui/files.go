@@ -336,10 +336,7 @@ func (m Model) refuseStartedTarget(project revier.ProjectName, target revier.Tar
 // running reports a project with a target running, by the last survey or by
 // where state says a target landed.
 func (m Model) running(v revier.ProjectView) bool {
-	running := v.Running
-	for _, t := range v.Targets {
-		running = running || !t.Ref.IsZero()
-	}
+	running := v.Held()
 	for _, ref := range m.bound[v.Project.Name] {
 		running = running || m.hostHere(ref.Host)
 	}
