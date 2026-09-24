@@ -22,11 +22,24 @@ func (m Model) WithClock(now func() time.Time) Model {
 	return m
 }
 
+// Said is the model once the pane's ask for what the agents of the project
+// under the cursor said has been answered, as the command it sends would
+// answer it: at once, on this goroutine.
+func (m Model) Said() Model {
+	m.aasked = ""
+	cmd := m.askDetails(nil)
+	if cmd == nil {
+		return m
+	}
+	next, _ := m.Update(cmd())
+	return next.(Model)
+}
+
 // StaticCursors stops every text field's cursor from blinking. A blink is a
 // command that sleeps half a second before it answers, and a test that runs
 // the command a focus returns would otherwise wait it out.
 func (m Model) StaticCursors() Model {
-	for _, in := range []*textinput.Model{&m.input, &m.tinput, &m.ainput, &m.path, &m.lname, &m.rinput, &m.sname, &m.chord, &m.pedit} {
+	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.path, &m.lname, &m.rinput, &m.sname, &m.chord, &m.pedit} {
 		in.Cursor.SetMode(bcursor.CursorStatic)
 	}
 	return m

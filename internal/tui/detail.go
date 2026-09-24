@@ -11,20 +11,22 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The list's width bounds, the least the pane needs beside it, and the pane
-// width at which the pane lays its sections side by side (decisions.md D39).
+// The list's width bounds, the least the pane needs beside it, and the widest
+// the pane sets its facts when it lays the message beside them.
 //
 // The list is a table of two columns - the project, and its agent's state -
 // and stops at the width that holds both whole. Past that every column goes
-// to the pane, which is where a wide terminal has something to show. Below
-// the least the two need together, there is no pane.
+// to the pane. Below the least the two need together, there is no pane.
 const (
 	minListWidth  = 56
 	maxListWidth  = 80
 	minPaneWidth  = 44
-	widePaneWidth = 130
 	maxFactsWidth = 80
 )
+
+// widePaneWidth is the pane width at which the pane lays the message beside
+// the facts: the least that holds the facts and a message maxPaneWidth wide.
+const widePaneWidth = paneChrome + maxFactsWidth + gridGap + maxPaneWidth
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
 // narrow to give both the list and the pane their least. The list takes half
@@ -41,7 +43,7 @@ func (m Model) paneWidth() int {
 
 // paneCols is the columns the pane renders in: its share beside the list,
 // or, on a terminal too narrow to split, the whole width while the cursor is
-// on it, where it stands in the list's place (decisions.md D73). Zero is a
+// on it, where it stands in the list's place (decisions.md D105). Zero is a
 // pane not on screen.
 func (m Model) paneCols() int {
 	if pane := m.paneWidth(); pane > 0 {
@@ -79,10 +81,11 @@ func newDetail(th theme.Theme) viewport.Model {
 // changes on a survey. The wheel scrolls the pane; a survey keeps that
 // scroll, and a different project starts at its top. The pane's own cursor
 // is kept on a row that exists, and on the screen, and in a section that
-// exists: an agent that exits takes its section with it.
+// exists: an agent that exits takes its section with it, and the cursor goes
+// back to the list, where Tab would have taken it.
 func (m *Model) syncDetail() {
-	if s := m.sections(); !slices.Contains(s, m.focus) {
-		*m = m.focusOn(s[len(s)-1])
+	if !slices.Contains(m.sections(), m.focus) {
+		*m = m.focusOn(focusList)
 	}
 	cols := m.paneCols()
 	if cols == 0 {
@@ -120,7 +123,7 @@ func (m *Model) syncDetail() {
 		m.forgetPane()
 	}
 	m.tcursor = clampRow(m.tcursor, len(m.targetRows()))
-	m.acursor = clampRow(m.acursor, len(m.agentRows()))
+	m.chooseAgent()
 	m.detail.SetContent(m.detailContent(v))
 	if fresh {
 		m.detail.GotoTop()
@@ -146,30 +149,38 @@ func (m *Model) followPane(line int) {
 	}
 }
 
-// detailContent is what the shell picker's preview shows, in its order
-// (os-fzf.sh:290): what this project is, then what is up, then what the
-// agents are doing, then what the directory holds.
+// detailContent is what this project is, then what is up, then what its agents
+// are doing, then what the agent under the pane's cursor said last.
 //
-// A narrow pane stacks the sections, and the snapshot takes the rows the
-// others leave. A wide pane puts the snapshot beside the rest, so both fill
-// the height and neither waits under the other (decisions.md D39).
+// A narrow pane stacks them, and the message takes the rows the others leave.
+// A wide pane puts the message beside the rest, so it has the whole height
+// (decisions.md D107). The message's text is set maxPaneWidth wide on both
+// sides of the switch, so a resize across it moves the message and does not
+// re-wrap it; widePaneWidth is the least pane that holds it that wide beside
+// the facts. Only the text is held to that width: the facts, the rows and the
+// rules run to the pane's edge.
 func (m *Model) detailContent(v revier.ProjectView) string {
 	w := m.paneCols() - paneChrome
-	h := m.detail.Height
+	rows := m.agentRows()
 	if m.paneCols() < widePaneWidth {
 		facts := m.facts(v, w)
-		return facts + m.snapshot(v, w, h-strings.Count(facts, "\n"))
+		if m.acursor >= len(rows) {
+			return facts
+		}
+		return facts + m.agentSaid(v, rows[m.acursor].agent, w, min(w, maxPaneWidth), m.detail.Height-strings.Count(facts, "\n"))
 	}
-	// The facts take half, up to what a repository URL and an agent's line
-	// need whole; the snapshot takes the rest.
-	left := min((w-gridGap)/2, maxFactsWidth)
-	right := w - gridGap - left
-	// The snapshot starts level with the name: its heading's blank line is a
+	facts := m.facts(v, maxFactsWidth)
+	if m.acursor >= len(rows) {
+		return facts
+	}
+	// The message starts level with the name: its heading's blank line is a
 	// separator from a section above it, and there is none here.
+	right := w - gridGap - maxFactsWidth
+	said := m.agentSaid(v, rows[m.acursor].agent, right, min(right, maxPaneWidth), m.detail.Height+1)
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(left).Render(m.facts(v, left)),
+		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),
-		strings.TrimPrefix(m.snapshot(v, right, h+1), "\n"))
+		strings.TrimPrefix(said, "\n"))
 }
 
 // facts is the pane's first part: what this project is, then what is up,
@@ -260,15 +271,12 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString("\n")
 	}
 
-	// The rows Tab moves the cursor onto, each section under its own query.
-	// Where each lands is recorded, so the cursor can be kept on screen and a
-	// click can find its row.
+	// The rows the pane's cursor stands on: the targets, and the agents under
+	// their query. Where each lands is recorded, so the cursor can be kept on
+	// screen and a click can find its row.
 	lineNow := func() int { return strings.Count(b.String(), "\n") }
-	m.tinput.Width = w - lipgloss.Width(promptMark) - 1
-	m.ainput.Width = m.tinput.Width
+	m.ainput.Width = w - lipgloss.Width(promptMark) - 1
 	b.WriteString(m.heading("Targets", w))
-	m.tfield = lineNow()
-	b.WriteString(m.fieldView(m.tinput, focusTargets) + "\n")
 	m.tlines = m.tlines[:0]
 	for i, row := range m.targetRows() {
 		m.tlines = append(m.tlines, lineNow())
@@ -284,36 +292,10 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString(m.fieldView(m.ainput, focusAgents) + "\n")
 		for i, row := range m.agentRows() {
 			start := lineNow()
-			b.WriteString(m.detailAgent(row, w, m.focus == focusAgents && i == m.acursor, m.over.is(hoverAgent, i)))
+			b.WriteString(m.detailAgent(row, w, i == m.acursor, m.over.is(hoverAgent, i)))
 			b.WriteString("\n")
 			m.alines = append(m.alines, lineSpan{start, lineNow()})
 		}
-	}
-	return b.String()
-}
-
-// snapshot is what the directory holds, in the rows it is given: with ninety
-// near-identical names this is what says which checkout the cursor is on.
-// Tree rows are cut, not wrapped, because a wrapped tree row loses its
-// indentation. rows counts the heading; a listing that does not fit ends in
-// an ellipsis on its last row.
-func (m *Model) snapshot(v revier.ProjectView, w, rows int) string {
-	if !v.PathExists || v.Project.Remote != nil {
-		return ""
-	}
-	tree := m.treeFor(v.Project.Path)
-	room := rows - 2 // the heading and the blank line before it
-	if len(tree) == 0 || room < 1 {
-		return ""
-	}
-	if len(tree) > room {
-		tree = append(tree[:room-1:room-1], "...")
-	}
-	var b strings.Builder
-	b.WriteString(m.heading("Project Snapshot", w))
-	for _, line := range tree {
-		b.WriteString(m.theme.Path.Render(clipTo(line, w)))
-		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -336,7 +318,7 @@ func (m Model) heading(title string, w int) string {
 // where it said "-", which read as a value that failed to load. The row under
 // the pane's cursor carries the list's bar and selection background across its
 // width, so the two cursors read as one; the row under the pointer carries the
-// hover background, because one click runs it.
+// hover background, because a click reaches it.
 func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	th := m.theme
 	style := func(s lipgloss.Style) lipgloss.Style {
@@ -356,8 +338,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	space := style(lipgloss.NewStyle())
 	if ref := row.attached; !ref.IsZero() {
 		head := gridHead(lead, style(th.NameDim).Render("attached"), style(th.Running).Render(th.Glyphs.Running+" running"), space)
-		title := highlight(ref.Title, row.matches, style(th.ProjectName), style(th.Match))
-		return fill(clipTo(head+ellipsis(title, gridRest(w)), w), w, style)
+		return fill(clipTo(head+style(th.ProjectName).Render(ellipsis(ref.Title, gridRest(w))), w), w, style)
 	}
 	t := row.target
 	mark, state, stateStyle, name := th.Glyphs.Stopped, "stopped", th.Count, th.NameDim
@@ -380,9 +361,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	case !t.Ref.IsZero():
 		mark, state, stateStyle, name = th.Glyphs.Running, "running", th.Running, th.ProjectName
 	}
-	head := gridHead(lead,
-		highlight(string(t.Name), row.matches, style(name), style(th.Match)),
-		style(stateStyle).Render(mark+" "+state), space)
+	head := gridHead(lead, style(name).Render(string(t.Name)), style(stateStyle).Render(mark+" "+state), space)
 	return fill(clipTo(head+style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
 }
 
@@ -401,8 +380,10 @@ func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 		}
 		return s
 	}
+	// The agent shown below is marked while the cursor is in the list, so the
+	// message has a row it belongs to; the cursor's bar is the Agents' own.
 	bar := style(th.Path).Render(" ")
-	if sel {
+	if sel && m.focus == focusAgents {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
 	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))

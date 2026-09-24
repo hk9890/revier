@@ -100,7 +100,7 @@ func (m Model) View() string {
 	// pane's sections has its own over its rows. Beside the list the pane
 	// starts level with the query, so the query and the rule stand in the
 	// list's column and read as the list's, not the whole screen's
-	// (decisions.md D73). A terminal too narrow for both shows the pane in
+	// (decisions.md D105). A terminal too narrow for both shows the pane in
 	// the list's place, under a query as wide as the screen.
 	// Beside the pane the rule stops a column short of its border rather
 	// than running into it. A row's own columns run to the border, so the
@@ -438,7 +438,7 @@ func (m Model) footer() string {
 	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Close, m.keys.Edit, m.keys.Delete)
+	keys = append(keys, m.keys.Targets, m.keys.Close, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 

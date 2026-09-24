@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type PanelID string
@@ -183,6 +184,26 @@ type Conversation struct {
 // else does (decisions.md D84). A probe without it shows no activity there.
 type Titled interface {
 	Activity(title string) string
+}
+
+// Detailed is an optional capability of an AgentProbe, detected by type
+// assertion. Detail is the last thing the agent in a panel said, for the pane
+// that shows one agent. It is asked for every agent of the project the pane
+// shows, each time the surface refreshes, and never in a survey: keep it cheap,
+// and read again only what changed since the last answer.
+//
+// The answer is display and nothing else: no status, match or resume may
+// depend on it. A harness keeps its conversation in whatever form it likes, so
+// a probe that cannot read it returns an error, and the pane shows nothing.
+type Detailed interface {
+	Detail(ctx context.Context, p Panel) (AgentDetail, error)
+}
+
+// AgentDetail is what an agent said last, and when. Either is empty when the
+// harness does not say.
+type AgentDetail struct {
+	Message string    `json:"message,omitempty"`
+	At      time.Time `json:"at,omitzero"`
 }
 
 // Resumable is an optional capability of an AgentProbe, detected by type

@@ -79,10 +79,12 @@ func (m Model) paneAt(x, y int) hovered {
 	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
 		return hovered{kind: hoverName}
 	}
-	switch line {
-	case m.tfield:
-		return hovered{kind: hoverField, index: int(focusTargets)}
-	case m.afield:
+	// A wide pane sets the message beside the facts, on the same lines as the
+	// rows: a cell right of the facts is the message, and runs nothing.
+	if m.paneCols() >= widePaneWidth && x-mc-m.listWidth()-paneChrome >= maxFactsWidth {
+		return hovered{}
+	}
+	if line == m.afield {
 		return hovered{kind: hoverField, index: int(focusAgents)}
 	}
 	for i, at := range m.tlines {

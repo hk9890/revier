@@ -29,6 +29,7 @@ type keyMap struct {
 	Edit     key.Binding
 	Close    key.Binding
 	Delete   key.Binding
+	Targets  key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -63,6 +64,9 @@ func newKeyMap(actions []config.Action) keyMap {
 		// its sequence.
 		Close:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "close")),
 		Delete: key.NewBinding(key.WithKeys("alt+delete", "alt+d"), key.WithHelp("alt+del", "delete")),
+		// Tab walks the list and the agents only; the targets are one chord
+		// away instead, so the walk stays two stops long.
+		Targets: key.NewBinding(key.WithKeys("alt+t"), key.WithHelp("alt+t", "targets")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {
@@ -106,7 +110,7 @@ func (k keyMap) claims(c core.Chord) bool {
 
 // own is every binding of the surface's own, the action bar's aside.
 func (k keyMap) own() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete}
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each
@@ -116,17 +120,15 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	enter, esc := "open", "clear/quit"
 	switch f {
 	case focusTargets:
-		enter, esc = "go", "clear/back"
+		enter, esc = "go", "back"
 	case focusAgents:
 		enter, esc = "go to agent", "clear/back"
 	}
-	out := []key.Binding{
-		helpKey("enter", enter),
-		helpKey("tab", "next section"),
-		helpKey("type", "filter"),
-		helpKey("esc", esc),
-		k.Quit,
+	out := []key.Binding{helpKey("enter", enter), helpKey("tab", "next section")}
+	if f != focusTargets {
+		out = append(out, helpKey("type", "filter"))
 	}
+	out = append(out, helpKey("esc", esc), k.Quit)
 	return append(out, k.actions...)
 }
 

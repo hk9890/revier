@@ -64,6 +64,11 @@ type Core struct {
 	NewRemote func(host string) revier.Remote
 	remotesMu sync.Mutex
 
+	// seen is the last listing of every host: where Details finds an agent's
+	// panel, so a detail costs no listing of its own.
+	seen   snapshot
+	seenMu sync.Mutex
+
 	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
 	// provides no instances and takes no part in run-or-raise, and a machine
 	// with no desktop leaves it nil.
@@ -297,6 +302,9 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 		s[h.Name()] = in
 	}
 	c.identify(s)
+	c.seenMu.Lock()
+	c.seen = s
+	c.seenMu.Unlock()
 	return s, failed
 }
 

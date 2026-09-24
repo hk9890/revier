@@ -332,20 +332,6 @@ refreshing. So revier draws the box over the screen as the drag found it, and
 copies with OSC 52. A button or target runs on release, so a drag from one runs
 nothing.
 
-### D73 — projects, targets and agents are sections, each with its own query
-
-Replaces Tab moving into a pane of targets, and one query line that followed
-the cursor. A query far from its rows did not say what it filtered, and the
-agents could be read but not reached. Tab walks projects, targets and agents,
-and shift+tab back, passing over a section with no rows. Each query sits over
-its own rows and is kept while its project is, until a press opens something:
-the query was the way there, so a popup raised again held the last search
-instead of a new one. Then every query ends, each cursor stays on the row it
-found, and a launch that fails later says so in the footer. The pane starts level with the
-project query, so that query stands in the list's column and not over both. Enter opens a project, runs a
-target, and goes to an agent. A pane with no target level stays: Enter on a
-project opens its home.
-
 ### D74 — an agent is reached by making its tab current
 
 `Focus` on the instance and `FocusPanel` already reach a tab target, so going
@@ -754,3 +740,28 @@ anything here that holds the project, rather than the home target alone, which
 stays what run-or-raise and a restore act on - so every agent a surface shows
 sits in a panel of an instance `Held` counts, and "closed and no agents" is an
 invariant of the row rather than a coincidence of the filter.
+
+### D105 — Tab walks the projects and the agents; the targets are one chord away
+
+Replaces D73, where Tab walked the projects, the targets and the agents, each
+under a query. The agents are what the surface exists to reach, and a third
+stop put them two presses off; a project has a handful of targets, so a query
+over them found nothing a glance does not. The targets have no query, and a
+pane row takes D36's clicks, so one target can be chosen for del and alt+del.
+
+### D106 — the pane shows what an agent said last, read from its transcript for display only
+
+What an agent did last decides whether to go to it, and its title says only
+what it is on. The Claude probe reads it from the session's transcript, whose
+format is Claude Code's own and changes between releases, so the read is
+display only (`Detailed`). Rejected: the agent view's summary, which Claude Code
+writes for background sessions alone (3 of 27 when measured); `claude -p
+--resume`, a model request per agent; a hook, which every user would install.
+
+### D107 — the pane always shows one agent's message, in place of the project tree
+
+The tree said which checkout this is, which the path above it says too. A
+message is what the pane is for, so one is shown before any keypress, and the
+user's choice overrides the pane's. A long message keeps its end, where an
+agent says what it did and needs; its width stays fixed across the wide
+layout's switch, so a resize moves the message and does not re-wrap it.

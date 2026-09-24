@@ -21,8 +21,23 @@ import (
 // deliver runs a command and feeds its message back, and returns the command
 // the model answers with: a close that needs no confirm plans, then runs.
 func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
-	next, out := m.Update(cmd())
-	return next.(tui.Model), out
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		next, out := m.Update(msg)
+		return next.(tui.Model), out
+	}
+	// A batch answers one message per command, as the program delivers them.
+	var outs []tea.Cmd
+	for _, c := range batch {
+		if c == nil {
+			continue
+		}
+		var out tea.Cmd
+		m, out = deliver(m, c)
+		outs = append(outs, out)
+	}
+	return m, tea.Batch(outs...)
 }
 
 // del on a project asks first, naming the busy agent, and then closes it as
@@ -61,7 +76,7 @@ func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	root := stateWith(t, nil)
 	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	m, cmd := press(m, "delete")
 	m, cmd = deliver(m, cmd)
@@ -86,7 +101,7 @@ func TestDelOnATargetWithAnAgentAsks(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, cmd := press(m, "delete")
 	m = run(m, cmd)
 	if sub := lines(m)[2]; !strings.Contains(sub, "Close home of project-01?") {
@@ -102,7 +117,6 @@ func TestDelClosesAnAgentsTab(t *testing.T) {
 		c.Probes[0].(*hosttest.FakeProbe).State.Status = status
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 
-		m, _ = press(m, "tab")
 		m, _ = press(m, "tab")
 		m, cmd := press(m, "delete")
 		m, cmd = deliver(m, cmd)
@@ -127,7 +141,6 @@ func TestDelOnAnAgentThatTurnedBusyAsksFirst(t *testing.T) {
 	probeOf(c).State.Status = revier.StatusIdle
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 
-	m, _ = press(m, "tab")
 	m, _ = press(m, "tab")
 	m, cmd := press(m, "delete")
 	m, cmd = deliver(m, cmd)
@@ -193,7 +206,6 @@ func TestAltDelOnAnAgentDeletesNothing(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 
 	m, _ = press(m, "tab")
-	m, _ = press(m, "tab")
 	m, _ = press(m, "alt+delete")
 	if f := footer(m); !strings.Contains(f, "an agent is in no file") {
 		t.Errorf("footer = %q, want the refusal", f)
@@ -205,7 +217,7 @@ func TestAltDelOnAnAgentDeletesNothing(t *testing.T) {
 func TestAltDelRemovesAProjectsOwnTarget(t *testing.T) {
 	m, file := notesProject(t, hosttest.NewRuntime("rt"))
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	m, _ = press(m, "alt+delete")
 	if f := footer(m); !strings.Contains(f, `delete target "notes" of alpha?`) || !strings.Contains(f, "alpha.toml") {
@@ -224,7 +236,7 @@ func TestAltDelClosesARunningTargetFirst(t *testing.T) {
 	rt.Add("notes", "less")
 	m, file := notesProject(t, rt)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	m, cmd := press(m, "alt+delete")
 	if cmd == nil {
@@ -273,7 +285,7 @@ func TestAltDelRefusesASharedTarget(t *testing.T) {
 	m, file, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
 
 	for _, moves := range []int{0, 1} {
-		m, _ = press(m, "tab")
+		m, _ = press(m, "alt+t")
 		for range moves {
 			m, _ = press(m, "down")
 		}
@@ -314,7 +326,7 @@ func TestAltDelRefusesTheHomeTargetBeforeClosingIt(t *testing.T) {
 	m, file := notesProject(t, rt)
 	before := fileText(t, file)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, cmd := press(m, "alt+delete")
 	if cmd != nil {
 		t.Fatalf("footer = %q, want the refusal and no close planned", footer(m))
@@ -352,7 +364,7 @@ func TestAltDelOnATargetClosedSinceAsks(t *testing.T) {
 	m, file := notesProject(t, rt)
 	rt.Remove(notes)
 
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	m, cmd := press(m, "alt+delete")
 	m = run(m, cmd)
@@ -379,7 +391,7 @@ func TestAltDelOnAnOwnTargetBesideARefusedSharedTarget(t *testing.T) {
 	var asked tui.Model
 	found := false
 	for row := range 6 {
-		m, _ := press(start, "tab")
+		m, _ := press(start, "alt+t")
 		for range row {
 			m, _ = press(m, "down")
 		}

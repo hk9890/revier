@@ -32,9 +32,9 @@ type closePlannedMsg struct {
 }
 
 // atEnd reports a query field with nothing right of its cursor, where del has
-// nothing to delete in the query.
+// nothing to delete in the query, or no field at all, as in the targets.
 func atEnd(in *textinput.Model) bool {
-	return in.Position() >= len([]rune(in.Value()))
+	return in == nil || in.Position() >= len([]rune(in.Value()))
 }
 
 // askClose is del on the row under the cursor.

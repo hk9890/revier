@@ -2,9 +2,6 @@ package tui_test
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -92,12 +89,11 @@ func TestEnterClearsTheQueryAndKeepsTheSelection(t *testing.T) {
 	}
 }
 
-// Enter in the pane ends the target search too, and the cursor stays on the
-// target it ran, with a query typed or without one.
+// Enter in the pane leaves the cursor on the target it ran.
 func TestEnterInThePaneKeepsTheCursorOnTheTargetItRan(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
-	m, _ = press(m, "tab")
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor, the second target
 	m, cmd := press(m, "enter")
 	if cmd == nil {
@@ -106,18 +102,24 @@ func TestEnterInThePaneKeepsTheCursorOnTheTargetItRan(t *testing.T) {
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
 		t.Errorf("pane cursor = %q after enter, want the editor it ran", row)
 	}
+}
 
+// Typing with the cursor on the targets filters nothing: they have no query,
+// and a letter is not taken by the project filter behind them either.
+func TestTypingOnTheTargetsFiltersNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ = press(m, "alt+t")
 	m, _ = press(m, "e")
 	m, _ = press(m, "d")
-	m, cmd = press(m, "enter")
-	if cmd == nil {
-		t.Fatal("enter on a matched target returned no command")
+	if body := pane(m); !strings.Contains(body, "home") || !strings.Contains(body, "editor") || strings.Contains(body, "filter targets") {
+		t.Errorf("typing on the targets changed the pane:\n%s", body)
 	}
-	if body := pane(m); !strings.Contains(body, "home") || !strings.Contains(body, "filter targets") {
-		t.Errorf("enter did not end the target query:\n%s", body)
+	if q, _, _ := strings.Cut(query(m), "│"); !strings.Contains(q, "filter projects") {
+		t.Errorf("query = %q, want the project filter untouched", q)
 	}
-	if row := paneCursor(m); !strings.Contains(row, "editor") {
-		t.Errorf("pane cursor = %q after enter, want the editor the query found", row)
+	if row := paneCursor(m); !strings.Contains(row, "home") {
+		t.Errorf("pane cursor = %q, want it still on the first target", row)
 	}
 }
 
@@ -157,15 +159,16 @@ func TestATargetKeyClearsTheQuery(t *testing.T) {
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
 }
 
-// A click on a pane target runs it, so it ends the search, and the pane
-// cursor stays on the row clicked.
-func TestAClickOnAPaneTargetClearsTheQuery(t *testing.T) {
+// A double click on a pane target runs it, so it ends the search, and the
+// pane cursor stays on the row clicked.
+func TestADoubleClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
 	x, y := paneCell(t, m, "editor")
+	m, _ = clickCell(m, x, y)
 	m, cmd := clickCell(m, x, y)
 	if cmd == nil {
-		t.Fatalf("the click ran nothing:\n%s", m.View())
+		t.Fatalf("the double click ran nothing:\n%s", m.View())
 	}
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
@@ -457,79 +460,6 @@ func longNamedWorld(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, *core.
 	}}})
 	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
 	return rt, nil, c, projects
-}
-
-// The snapshot takes the rows the pane has left, and no more: on a tall
-// terminal it lists past the twenty rows it once stopped at, and on a short
-// one it ends in an ellipsis inside the pane.
-func TestTheSnapshotFillsThePaneHeight(t *testing.T) {
-	dir := t.TempDir()
-	for i := range 40 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	_, _, c, projects := world(t, 1)
-	projects[0].Path = dir
-
-	tall := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 80)
-	if body := pane(tall); !strings.Contains(body, "f39") || strings.Contains(body, "...") {
-		t.Errorf("tall pane stops short of its rows:\n%s", body)
-	}
-	// Nineteen rows of pane, from the query line down; the facts and the
-	// target query take ten, the heading two.
-	short := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)
-	body := pane(short)
-	if !strings.Contains(body, "f00") || strings.Contains(body, "f39") || !strings.HasSuffix(strings.TrimSpace(body), "...") {
-		t.Errorf("short pane does not end in an ellipsis inside its rows:\n%s", body)
-	}
-	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n > 19 {
-		t.Errorf("short pane is %d rows, want at most 19", n)
-	}
-}
-
-// A listing that exactly fills the room keeps its last entry: the ellipsis
-// stands in for rows that are missing, and none is.
-func TestASnapshotThatExactlyFitsKeepsItsLastEntry(t *testing.T) {
-	// A short path, so the Path line stays one row at this width.
-	dir, err := os.MkdirTemp("", "fit")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	// Nineteen rows of pane at this height; the facts, the targets and the
-	// agents take fifteen of them, so four entries fit exactly.
-	for i := range 4 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d", i)), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	_, _, c, projects := world(t, 1)
-	projects[0].Path = dir
-
-	body := pane(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24))
-	if !strings.Contains(body, "f03") || strings.Contains(body, "...") {
-		t.Errorf("a listing that exactly fits lost its last entry to an ellipsis:\n%s", body)
-	}
-	if n := strings.Count(strings.TrimSpace(body), "\n") + 1; n != 19 {
-		t.Errorf("pane is %d rows, want the 19 it has", n)
-	}
-}
-
-// A wide pane puts the snapshot beside the facts, level with the name, so
-// both fill the height.
-func TestAWidePaneLaysTheSnapshotBesideTheFacts(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c, projects := longWorld(t, dir)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 260, 30)
-
-	top := strings.Split(pane(m), "\n")[0]
-	if !strings.HasPrefix(top, "Project  long") || !strings.Contains(top, "Project Snapshot") {
-		t.Errorf("pane top = %q, want the name and the snapshot's heading on one line", top)
-	}
 }
 
 // A click on a row selects it, with or without the margin around the frame.

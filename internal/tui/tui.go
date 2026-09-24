@@ -1,8 +1,9 @@
 // Package tui is the one surface: every project with its agent state, sorted
 // so the ones needing attention come first, and beside it a pane with the
-// project's targets, attached instances and agents, which Tab moves the
-// cursor through. Enter activates. It is the picker and the monitor at once
-// (docs/design/decisions.md D8, D73).
+// project's targets, attached instances and agents, and what one of its agents
+// said last. Tab moves the cursor between the projects and the agents, and
+// alt+t to the targets. Enter activates. It is the picker and the monitor at
+// once (docs/design/decisions.md D8, D105, D107).
 //
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action
@@ -119,10 +120,7 @@ type Model struct {
 	surveyErr error
 	focus     focus
 	tcursor   int                // the target row the pane's cursor is on
-	tfilter   string             // the query over the target rows
-	tinput    textinput.Model    // the target query, with its own cursor
 	tlines    []int              // the pane line each target row is on, for the cursor and a click
-	tfield    int                // the pane line the target query is on
 	acursor   int                // the agent row the pane's cursor is on
 	afilter   string             // the query over the agent rows
 	ainput    textinput.Model    // the agent query, with its own cursor
@@ -145,39 +143,45 @@ type Model struct {
 
 	// The project list. Cursor, paging and fuzzy filtering are the
 	// component's; what a row looks like is the delegate's.
-	plist   list.Model
-	hlist   list.Model // the hosts, the link dialog's first step
-	rlist   list.Model // a host's projects, its second
-	slist   list.Model // the saved sessions
-	filter  string     // the query, held here so a refresh can re-apply it
-	keys    keyMap
-	help    help.Model
-	detail  viewport.Model
-	shown   revier.ProjectName               // the project the pane holds, so a new one starts at its top
-	tkeys   map[core.Chord]revier.TargetName // press to target name, over every project
-	start   revier.ProjectName               // the project to open on, from the working directory
-	placing bool                             // the cursor was put on the starting project; the next body sync places the list around it
-	lookup  StartLookup                      // the project to open on when start is none, asked once the surface shows
-	popup   bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	hidden  bool                             // the popup is off the screen; nothing surveys until it is raised
-	idle    bool                             // the survey chain ended while hidden; the raise starts it again
-	trees   map[string]treeEntry             // cached directory listings, by project path
-	input   textinput.Model                  // the filter query, with its own cursor
-	path    textinput.Model                  // the directory field of the new-project screen
-	nstep   newStep                          // the new-project screen's step
-	nrows   []string                         // what the new-project screen lists under the field
-	nrow    int                              // the chosen one of nrows, -1 for none
-	ndir    string                           // the folder the new-project screen asks to create
-	lname   textinput.Model                  // the name field of the link dialog's last step
-	rinput  textinput.Model                  // the query over the link dialog's second step
-	sname   textinput.Model                  // the name field of a session being saved
-	over    hovered                          // what the pointer is on
-	cell    *pointerCell                     // where the pointer last was, nil before it moved
-	body    viewport.Model                   // the scrolling window over the list
-	last    click                            // the last click on a row, for telling a double click
-	press   *press                           // where the left button went down, while it is down
-	sel     selection                        // the box a drag is selecting
-	copied  int                              // the characters the last selection copied, shown until the next press
+	plist    list.Model
+	hlist    list.Model // the hosts, the link dialog's first step
+	rlist    list.Model // a host's projects, its second
+	slist    list.Model // the saved sessions
+	filter   string     // the query, held here so a refresh can re-apply it
+	keys     keyMap
+	help     help.Model
+	detail   viewport.Model
+	shown    revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys    map[core.Chord]revier.TargetName // press to target name, over every project
+	start    revier.ProjectName               // the project to open on, from the working directory
+	placing  bool                             // the cursor was put on the starting project; the next body sync places the list around it
+	lookup   StartLookup                      // the project to open on when start is none, asked once the surface shows
+	popup    bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	hidden   bool                             // the popup is off the screen; nothing surveys until it is raised
+	idle     bool                             // the survey chain ended while hidden; the raise starts it again
+	input    textinput.Model                  // the filter query, with its own cursor
+	path     textinput.Model                  // the directory field of the new-project screen
+	nstep    newStep                          // the new-project screen's step
+	nrows    []string                         // what the new-project screen lists under the field
+	nrow     int                              // the chosen one of nrows, -1 for none
+	ndir     string                           // the folder the new-project screen asks to create
+	lname    textinput.Model                  // the name field of the link dialog's last step
+	rinput   textinput.Model                  // the query over the link dialog's second step
+	sname    textinput.Model                  // the name field of a session being saved
+	over     hovered                          // what the pointer is on
+	cell     *pointerCell                     // where the pointer last was, nil before it moved
+	body     viewport.Model                   // the scrolling window over the list
+	last     click                            // the last click on a row, for telling a double click
+	pclick   paneClick                        // the last click on a pane row, the same for the pane's targets and agents
+	aasked   revier.ProjectName               // the project whose agents' details are out, empty with none
+	aseq     int                              // the number of the last ask for details
+	atook    int                              // the number of the ask whose answer the pane holds
+	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
+	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
+	amessage setMessage                       // the message the pane last set, as it set it
+	press    *press                           // where the left button went down, while it is down
+	sel      selection                        // the box a drag is selecting
+	copied   int                              // the characters the last selection copied, shown until the next press
 	// tdeclared is every chord a target of any project declares as itself.
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.
@@ -221,7 +225,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
-		tinput: newPrompt(th, targetPlaceholder), ainput: newPrompt(th, agentPlaceholder), afield: -1,
+		ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
 		rinput: newPrompt(th, ""),
 		body:   newBody(),
@@ -468,6 +472,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	mm.syncDetail()
 	mm.syncBody()
+	cmd = tea.Batch(cmd, mm.askDetails(msg))
 	// A key, a survey or a screen change can move what is under a pointer
 	// that stayed where it was, so what it is over is asked again.
 	if mm.cell != nil {
@@ -497,6 +502,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
+		return m, nil
+	case detailsMsg:
+		m.took(msg)
 		return m, nil
 	case surveyMsg:
 		m.surveyErr = msg.err
@@ -622,10 +630,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// A blink is a field's own timer message; the field it is not for
 	// ignores it.
-	var cmds [3]tea.Cmd
+	var cmds [2]tea.Cmd
 	m.input, cmds[0] = m.input.Update(msg)
-	m.tinput, cmds[1] = m.tinput.Update(msg)
-	m.ainput, cmds[2] = m.ainput.Update(msg)
+	m.ainput, cmds[1] = m.ainput.Update(msg)
 	return m, tea.Batch(cmds[:]...)
 }
 
@@ -750,7 +757,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		switch {
-		case m.field().Value() != "":
+		case m.field() != nil && m.field().Value() != "":
 			m.query(m.focus, "")
 		case m.focus != focusList:
 			m.toList()
@@ -770,6 +777,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.askClose()
 	case key.Matches(msg, m.keys.Delete):
 		return m.askDelete()
+	case key.Matches(msg, m.keys.Targets):
+		if len(m.targetRows()) > 0 {
+			return m.focusOn(focusTargets), nil
+		}
+		return m, nil
 	}
 	if next, cmd, ok := m.barKey(msg); ok {
 		return next, cmd
@@ -782,7 +794,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.targetKey(msg); ok {
 		return next, cmd
 	}
-	if m.promptKey(msg) {
+	// The targets have no query: a letter typed there filters nothing.
+	if m.focus != focusTargets && m.promptKey(msg) {
 		return m.edit(msg)
 	}
 	return m, nil
@@ -807,27 +820,10 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
-// attached instance, which has a ref and no name. matches are the byte
-// positions of its label the query matched, for the highlight.
+// attached instance, which has a ref and no name.
 type targetRow struct {
 	target   revier.TargetView
 	attached revier.TargetRef
-	matches  []int
-}
-
-// label is what the target query matches: a target's name, or an attached
-// instance's title.
-func (r targetRow) label() string {
-	if !r.attached.IsZero() {
-		return r.attached.Title
-	}
-	return string(r.target.Name)
-}
-
-// same reports whether two rows are one target or one attached instance,
-// whatever the query matched.
-func (r targetRow) same(o targetRow) bool {
-	return r.target.Name == o.target.Name && r.attached == o.attached
 }
 
 // allRows is a move past either end of any section, which the cursor stops
@@ -861,7 +857,7 @@ func (m *Model) moveCursor(by int) {
 	case focusTargets:
 		m.tcursor = clampRow(m.tcursor+by, len(m.targetRows()))
 	case focusAgents:
-		m.acursor = clampRow(m.acursor+by, len(m.agentRows()))
+		m.pickAgent(m.acursor + by)
 	case focusList:
 		moveRow(&m.plist, by)
 	}
@@ -911,8 +907,7 @@ func (m Model) agentsOnPage(dir int) int {
 }
 
 // targetRows is the pane's Targets section: every target, then every
-// attached instance, or, while a target query is typed, the rows it matches
-// ranked as the list ranks projects.
+// attached instance.
 func (m Model) targetRows() []targetRow {
 	v, ok := m.selected()
 	if !ok {
@@ -925,20 +920,7 @@ func (m Model) targetRows() []targetRow {
 	for _, ref := range m.attached[v.Project.Name] {
 		all = append(all, targetRow{attached: ref})
 	}
-	if m.tfilter == "" {
-		return all
-	}
-	labels := make([]string, len(all))
-	for i, r := range all {
-		labels[i] = r.label()
-	}
-	var out []targetRow
-	for _, rank := range list.DefaultFilter(m.tfilter, labels) {
-		r := all[rank.Index]
-		r.matches = rank.MatchedIndexes
-		out = append(out, r)
-	}
-	return out
+	return all
 }
 
 // enter acts on the row under the cursor, by key or by double click.
@@ -949,7 +931,7 @@ func (m Model) enter() (Model, tea.Cmd) {
 // opened ends the search once a press has something to run: Enter, a double
 // click, a click on a pane row, a target key or an action. The query was the
 // way to what now opens, so the surface comes back with empty fields
-// (decisions.md D73). The search ends also when the run fails later; the
+// (decisions.md D105). The search ends also when the run fails later; the
 // failure is said in the footer.
 func opened(m Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	if cmd != nil {

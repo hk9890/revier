@@ -78,15 +78,15 @@ func (m Model) helpSections() []helpSection {
 			{key: k.Quit.Help().Key, desc: "quit"},
 		}},
 		{title: "Sections", entries: []helpEntry{
-			{key: k.Next.Help().Key, desc: "next: projects, targets, agents"},
+			{key: k.Next.Help().Key, desc: "next: projects, agents; from the targets, back to the projects"},
 			{key: k.Prev.Help().Key, desc: "previous"},
+			{key: k.Targets.Help().Key, desc: "to the targets"},
 		}},
 		{title: "Targets", entries: []helpEntry{
 			{key: "enter", desc: "go to the target"},
 			{key: k.Close.Help().Key, desc: "close the target or the attached window; asks first when it holds an agent"},
 			{key: k.Delete.Help().Key, desc: "delete the target from the project file, closing it first; not a target of config.toml"},
-			{key: "type", desc: "filter the targets"},
-			{key: "esc", desc: "clear the filter, or back to the projects"},
+			{key: "esc", desc: "back to the projects"},
 		}},
 		{title: "Agents", entries: []helpEntry{
 			{key: "enter", desc: "go to the agent's tab"},

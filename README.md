@@ -100,15 +100,19 @@ revier each log [run]         past runs, or how each project ended in one
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Each project
-row counts its agents by state: needs you, working, idle, unknown. The list, and
-the pane's targets and agents beside it, are three sections, each with its own
-filter field over its rows. Tab moves the cursor to the next section and
-shift+tab to the one before. Typing filters the section the cursor is in, and
-Enter acts on its row: a project opens its home, a target runs-or-raises, and
-an agent's tab comes to the front, on its host for a project on another
-machine. Esc clears the section's filter, then brings the cursor back to the
-projects. alt+e, or a click on the project's name at the top of the pane,
-opens the project screen: its name, path and git URL, and every target it has,
+row counts its agents by state: needs you, working, idle, unknown. The pane
+beside the list shows the project's targets and agents, and the last message
+of one agent, how long ago it was written, and its end when it is too long to
+fit. That is the agent you moved the cursor to; until you do, the agent that
+needs you, else one with a message to show, one at rest before one working.
+For a project on another machine the last message is not shown yet. The list and the agents each have a filter field over their
+rows. Tab moves the cursor between them, and alt+t moves it to the targets,
+which have no filter; Tab from there goes back to the projects. Typing filters
+the section the cursor is in, and Enter acts on its row: a project opens its
+home, a target runs-or-raises, and an agent's tab comes to the front, on its
+host for a project on another machine. Esc clears the section's filter, then
+brings the cursor back to the projects. alt+e, or a click on the project's
+name at the top of the pane, opens the project screen: its name, path and git URL, and every target it has,
 the ones from `config.toml` included. A change there is written to the
 project's own file at once, and a new name renames the file. del closes the row
 under the cursor: a project, a target, an attached window or an agent's tab. It
@@ -145,8 +149,8 @@ rule over the list says how many projects the filter leaves.
 
 A folder that is not there is created, or cloned into, after asking.
 
-With the mouse, whatever the pointer is over lights up. A click on a project
-selects it and a double click opens it; one click on a target, an agent or a
+With the mouse, whatever the pointer is over lights up. A click on a project,
+a target or an agent selects it and a double click opens it; one click on a
 top-line button runs it, and a click on a filter field moves the cursor
 there. A drag selects a box of the screen, holds the screen still
 while it lasts, and copies the box's text to the clipboard on release; Esc
