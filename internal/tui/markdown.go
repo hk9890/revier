@@ -3,6 +3,7 @@ package tui
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -16,6 +17,9 @@ var (
 	mdBold      = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	mdLink      = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	mdSeparator = regexp.MustCompile(`^:?-+:?$`)
+	// mdEscape is an escape sequence in the text an agent wrote: a CSI with
+	// its parameters, an OSC up to its terminator, or a two-character escape.
+	mdEscape = regexp.MustCompile("\x1b(?:\\[[0-?]*[ -/]*[@-~]|\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?|[@-Z\\\\-_])")
 )
 
 // tabWidth is the columns a tab takes: what lipgloss draws one as.
@@ -32,7 +36,8 @@ const codeMark = 0x100000
 // rather than wrapped, and a table in aligned columns. It covers what agents
 // write, not the whole of CommonMark: anything else reads as a paragraph.
 //
-// Tabs are made spaces first, so a line is as wide measured as it is drawn.
+// The text is made plain first, so a line is as wide measured as it is drawn
+// and carries only what this function styled it with.
 func markdown(text string, w int, th theme.Theme) []string {
 	var out []string
 	blank := func() {
@@ -40,18 +45,19 @@ func markdown(text string, w int, th theme.Theme) []string {
 			out = append(out, "")
 		}
 	}
-	text = strings.ReplaceAll(text, "\t", strings.Repeat(" ", tabWidth))
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	lines := strings.Split(plainText(text), "\n")
 	for i := 0; i < len(lines); i++ {
 		trimmed := strings.TrimSpace(lines[i])
 		switch {
 		case trimmed == "":
 			blank()
 		case strings.HasPrefix(trimmed, "```"):
+			blank()
 			for i++; i < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[i]), "```"); i++ {
 				out = append(out, clipTo(th.Meta.Render("  "+lines[i]), w))
 			}
 		case strings.HasPrefix(trimmed, "|"):
+			blank()
 			var rows []string
 			for ; i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), "|"); i++ {
 				rows = append(rows, strings.TrimSpace(lines[i]))
@@ -80,6 +86,24 @@ func markdown(text string, w int, th theme.Theme) []string {
 	return out
 }
 
+// plainText is an agent's message with nothing in it the pane did not put there:
+// no escape sequence, which would repaint the screen, move the cursor or speak
+// to the emulator from inside a message quoting a tool's output; no other
+// control character but the newlines the lines are split on; and a tab written
+// as the spaces lipgloss draws it as. The pane styles the message itself, so
+// nothing the message carries is styling.
+func plainText(s string) string {
+	s = mdEscape.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\t", strings.Repeat(" ", tabWidth))
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || !unicode.IsControl(r) {
+			return r
+		}
+		return -1
+	}, s)
+}
+
 // inline styles the spans of one line: code between a pair of backticks in the
 // path colour, bold as bold, and a link as its text. Code is set aside while
 // the rest is styled, so bold can hold code and code keeps what looks like
@@ -105,6 +129,12 @@ func inline(s string, th theme.Theme) string {
 func hanging(lead, text string, w int) []string {
 	indent := lipgloss.Width(lead)
 	parts := wrap(text, w-indent)
+	// A lead as wide as the column leaves nothing to wrap in. The item is cut
+	// on the right rather than dropped: a line that vanishes reads as a
+	// message that never held it.
+	if len(parts) == 0 {
+		return []string{clipTo(lead+text, w)}
+	}
 	for i := range parts {
 		if i == 0 {
 			parts[i] = lead + parts[i]

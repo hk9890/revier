@@ -125,8 +125,10 @@ one with a message to show, at rest before working; the latest to speak among
 equals. Moving the agent cursor chooses, and the choice holds until another
 project is under the list's cursor. A message longer than the room keeps its
 end, under an ellipsis. Its text is set no wider than 100 columns, and a wide
-pane lays it beside the facts, level with the name, once it has all 100. A
-remote project's agent is not read, and the pane says so.
+pane lays it beside the facts, level with the name, once it has all 100. It is
+drawn as text and styled in revier's own colours: nothing the message carries
+is styling, and nothing in it speaks to the terminal (D108). A remote project's
+agent is not read, and the pane says so.
 
 The list and the pane's agents each have a query over their rows, kept while
 their project is, until a press opens something; then both end, and each
