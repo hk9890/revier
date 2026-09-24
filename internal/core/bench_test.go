@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -109,8 +110,8 @@ func BenchmarkRender(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := core.Render(p); err != nil {
-			b.Fatal(err)
+		if _, errs := core.Render(p); errors.Join(errs...) != nil {
+			b.Fatal(errors.Join(errs...))
 		}
 	}
 }
