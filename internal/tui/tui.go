@@ -3,7 +3,7 @@
 // project's targets, attached instances and agents, and what one of its agents
 // said last. Tab moves the cursor between the projects and the agents, and
 // alt+t to the targets. Enter activates. It is the picker and the monitor at
-// once (docs/design/decisions.md D8, D104, D106).
+// once (docs/design/decisions.md D8, D105, D107).
 //
 // It reads nothing `revier list --json` does not: core.Survey is the only
 // source, refreshed on a timer that never overlaps itself, and every action
@@ -931,7 +931,7 @@ func (m Model) enter() (Model, tea.Cmd) {
 // opened ends the search once a press has something to run: Enter, a double
 // click, a click on a pane row, a target key or an action. The query was the
 // way to what now opens, so the surface comes back with empty fields
-// (decisions.md D104). The search ends also when the run fails later; the
+// (decisions.md D105). The search ends also when the run fails later; the
 // failure is said in the footer.
 func opened(m Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	if cmd != nil {

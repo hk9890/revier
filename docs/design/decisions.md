@@ -724,7 +724,7 @@ It is not the header D51 removed - that named the program, which the user
 knows - and where less than two columns of air are left it is dropped, because
 the buttons are what the line is for.
 
-### D104 — Tab walks the projects and the agents; the targets are one chord away
+### D105 — Tab walks the projects and the agents; the targets are one chord away
 
 Replaces D73, where Tab walked the projects, the targets and the agents, each
 under a query. The agents are what the surface exists to reach, and a third
@@ -732,7 +732,7 @@ stop put them two presses off; a project has a handful of targets, so a query
 over them found nothing a glance does not. The targets have no query, and a
 pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
-### D105 — the pane shows what an agent said last, read from its transcript for display only
+### D106 — the pane shows what an agent said last, read from its transcript for display only
 
 What an agent did last decides whether to go to it, and its title says only
 what it is on. The Claude probe reads it from the session's transcript, whose
@@ -741,7 +741,7 @@ display only (`Detailed`). Rejected: the agent view's summary, which Claude Code
 writes for background sessions alone (3 of 27 when measured); `claude -p
 --resume`, a model request per agent; a hook, which every user would install.
 
-### D106 — the pane always shows one agent's message, in place of the project tree
+### D107 — the pane always shows one agent's message, in place of the project tree
 
 The tree said which checkout this is, which the path above it says too. A
 message is what the pane is for, so one is shown before any keypress, and the

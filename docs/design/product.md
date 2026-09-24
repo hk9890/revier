@@ -113,7 +113,7 @@ attention come first, and a pane beside it for the project under the cursor.
 The pane starts level with the project query.
 
 The pane ends in what one of the project's agents said last, and how long ago
-(D105, D106). Without a keypress it shows the agent that needs the user; else
+(D106, D107). Without a keypress it shows the agent that needs the user; else
 one with a message to show, at rest before working; the latest to speak among
 equals. Moving the agent cursor chooses, and the choice holds until another
 project is under the list's cursor. A message longer than the room keeps its
@@ -125,7 +125,7 @@ The list and the pane's agents each have a query over their rows, kept while
 their project is, until a press opens something; then both end, and each
 cursor stays on the row it found. Tab and shift+tab move between the two, and
 alt+t to the targets, which have no query; Tab from the targets goes back to
-the projects (D104). One click selects a row of the list or the pane, and a
+the projects (D105). One click selects a row of the list or the pane, and a
 second opens it. Enter on a project opens its home target, or on one with no
 home puts the cursor on its targets; on a target it runs it, and on an agent it
 makes its tab current and raises its window (D74). alt+e, or the project's name over the

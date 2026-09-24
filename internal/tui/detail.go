@@ -43,7 +43,7 @@ func (m Model) paneWidth() int {
 
 // paneCols is the columns the pane renders in: its share beside the list,
 // or, on a terminal too narrow to split, the whole width while the cursor is
-// on it, where it stands in the list's place (decisions.md D104). Zero is a
+// on it, where it stands in the list's place (decisions.md D105). Zero is a
 // pane not on screen.
 func (m Model) paneCols() int {
 	if pane := m.paneWidth(); pane > 0 {
@@ -154,7 +154,7 @@ func (m *Model) followPane(line int) {
 //
 // A narrow pane stacks them, and the message takes the rows the others leave.
 // A wide pane puts the message beside the rest, so it has the whole height
-// (decisions.md D106). The message's text is set maxPaneWidth wide on both
+// (decisions.md D107). The message's text is set maxPaneWidth wide on both
 // sides of the switch, so a resize across it moves the message and does not
 // re-wrap it; widePaneWidth is the least pane that holds it that wide beside
 // the facts. Only the text is held to that width: the facts, the rows and the

@@ -97,7 +97,7 @@ func TestThePaneBorderIsTheRulesColour(t *testing.T) {
 
 // Tab walks the projects and the agents and comes back round; shift+tab walks
 // the other way. Alt+t reaches the targets, and Tab from there goes back to
-// the projects (decisions.md D104).
+// the projects (decisions.md D105).
 func TestTabWalksTheListAndTheAgentsAndAltTReachesTheTargets(t *testing.T) {
 	_, m := agentWorld(t)
 	for _, step := range []struct{ key, want string }{

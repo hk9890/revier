@@ -100,7 +100,7 @@ func (m Model) View() string {
 	// pane's sections has its own over its rows. Beside the list the pane
 	// starts level with the query, so the query and the rule stand in the
 	// list's column and read as the list's, not the whole screen's
-	// (decisions.md D104). A terminal too narrow for both shows the pane in
+	// (decisions.md D105). A terminal too narrow for both shows the pane in
 	// the list's place, under a query as wide as the screen.
 	// Beside the pane the rule stops a column short of its border rather
 	// than running into it. A row's own columns run to the border, so the

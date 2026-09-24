@@ -29,7 +29,7 @@ var errNoMessage = errors.New("no assistant message in the transcript's tail")
 //
 // The transcript's format is Claude Code's internal one, and it changes
 // between releases. So this is display only (revier.Detailed, decisions.md
-// D105): a line that does not parse is passed over, and a transcript with no
+// D106): a line that does not parse is passed over, and a transcript with no
 // line that does is an error, which the pane shows as nothing.
 //
 // The pane asks every refresh, so a transcript is read again only when its

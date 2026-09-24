@@ -46,7 +46,7 @@ type detailsMsg struct {
 // survey, so a turn that ends while it is shown appears. Every agent is read,
 // not only the one shown, because which one is shown first depends on when
 // each spoke. The read runs off the update loop, so the screen never waits on
-// it (decisions.md D105).
+// it (decisions.md D106).
 func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 	// Nobody reads an answer the pane does not show: the popup hidden, a
 	// terminal too narrow for the pane beside the list, or a screen over it.
@@ -119,7 +119,7 @@ func (m *Model) chooseAgent() {
 // firstAgent is the row most worth a look: an agent that needs the user, then
 // one with a message the pane can show, and among those one at rest, then one
 // still working, then one whose state is unknown. Among equals, the one that
-// spoke last (decisions.md D106). An agent that needs the user comes first
+// spoke last (decisions.md D107). An agent that needs the user comes first
 // with nothing to show, because its row says what matters.
 func (m Model) firstAgent(rows []agentRow) int {
 	rank := map[revier.Status]int{
@@ -157,11 +157,11 @@ func (m Model) firstAgent(rows []agentRow) int {
 //
 // A message that does not fit keeps its end, under an ellipsis: an agent ends
 // on what it did and what it needs, which is what the pane is read for
-// (decisions.md D106).
+// (decisions.md D107).
 //
 // A remote project's agent says it on the other machine, and asking that
 // revier for it is not built yet: the pane says so rather than stay blank
-// (decisions.md D105).
+// (decisions.md D106).
 //
 // The heading runs w wide, as the pane's other headings do; the text is set
 // tw wide.

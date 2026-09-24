@@ -381,7 +381,7 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 //
 // A detail is empty for an agent whose probe does not say, one on another
 // machine, and one whose probe failed: the detail is display, and the failure
-// is logged rather than shown (decisions.md D105).
+// is logged rather than shown (decisions.md D106).
 func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
 	c.seenMu.Lock()
 	seen := c.seen

@@ -461,7 +461,7 @@ func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 
 // Alt+t moves the cursor into the pane, onto the project's targets, and the
 // list stays on screen beside it; Esc brings the cursor back
-// (decisions.md D104).
+// (decisions.md D105).
 func TestAltTMovesTheCursorOntoTheTargetsAndEscReturns(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)

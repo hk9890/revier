@@ -399,7 +399,7 @@ runtime's already or impossible for it, and in both cases revier adds nothing.
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe
 that implements it says what the agent in a panel said last, which the pane
-shows so the user can tell whether to go to it (D105). A probe that does not
+shows so the user can tell whether to go to it (D106). A probe that does not
 leaves the pane saying nothing can be read.
 
 ```go
