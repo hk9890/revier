@@ -436,9 +436,14 @@ func (m Model) footer() string {
 	if v, ok := m.selected(); ok {
 		keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
 	}
+	// alt+t is offered only where it does something: a project with no target
+	// row has no Targets section to reach.
+	if len(m.targetRows()) > 0 {
+		keys = append(keys, m.keys.Targets)
+	}
 	// Last, so a narrow footer cuts the file keys and not the row's own
 	// target keys: those change from row to row, and these never do.
-	keys = append(keys, m.keys.Targets, m.keys.Close, m.keys.Edit, m.keys.Delete)
+	keys = append(keys, m.keys.Close, m.keys.Edit, m.keys.Delete)
 	return " " + m.help.ShortHelpView(keys)
 }
 

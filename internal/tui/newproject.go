@@ -338,7 +338,7 @@ func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool)
 	m.setKeys()
 	// Provisional, until the survey answers: nothing of it is running, and
 	// its directory is the one just checked.
-	m.views = sorted(append(m.views, revier.ProjectView{Project: p.Project, PathExists: exists}))
+	m.views = m.sorted(append(m.views, revier.ProjectView{Project: p.Project, PathExists: exists}))
 	m.dialog = dialogNone
 	m.path.Blur()
 	m.reload()

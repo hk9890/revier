@@ -1778,8 +1778,8 @@ func TestTheWheelMovesTheSelection(t *testing.T) {
 // The wheel over the pane scrolls the pane and leaves the selection alone; the
 // next project starts at its own top.
 func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
-	// The snapshot fits the pane by design, so what overflows a fourteen-row
-	// terminal is a project with more targets than the pane has rows.
+	// What overflows a fourteen-row terminal is a project with more targets
+	// than the pane has rows.
 	dir := t.TempDir()
 	targets := func(name string) []revier.Target {
 		out := []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
