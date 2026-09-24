@@ -25,6 +25,24 @@ type ProjectView struct {
 	Agents  []AgentView  `json:"agents,omitempty"`
 }
 
+// Held reports whether anything on this machine holds the project: its home
+// target, any other target, or a terminal attached to it. Running alone is the
+// home target, which is what run-or-raise and a restore act on; a surface
+// draws Held, so a project with an attached terminal and no home reads as
+// open. Every agent a surface shows sits in a panel of an instance this
+// counts, so a project that reads as closed shows no agents (D104).
+func (v ProjectView) Held() bool {
+	if v.Running {
+		return true
+	}
+	for _, t := range v.Targets {
+		if !t.Ref.IsZero() {
+			return true
+		}
+	}
+	return false
+}
+
 // Attention reports whether any agent in the project is waiting for the human.
 // The TUI sorts on it.
 func (v ProjectView) Attention() bool {

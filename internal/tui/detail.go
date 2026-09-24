@@ -205,7 +205,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		status, style = "invalid", th.PathMissing
 	case v.Unreachable != "":
 		status, style = "unreachable", th.PathMissing
-	case v.Running:
+	case v.Held():
 		status, style = "running", th.Running
 	case !v.PathExists:
 		status, style = "not available", th.PathMissing

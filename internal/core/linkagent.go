@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -104,6 +105,31 @@ func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
 		if c.here(a) {
 			out = append(out, a)
 		}
+	}
+	return out
+}
+
+// Shown is the views a surface draws: every agent a panel of this machine's
+// runtime shows, and no other (decisions.md D104). A survey reports more than
+// that, and has to - the host's answer about a link is the only word this
+// machine has on it, and `revier list --json` is what the revier on the other
+// machine reads to learn about the agents its own links started here. What is
+// dropped is what nobody at this screen can reach: an agent of a link that was
+// started on its host or from a third machine, and an agent this machine
+// serves to a terminal elsewhere. Neither can be gone to, typed into or
+// closed from here, and counting them put an agent in a project the same row
+// called closed.
+//
+// The views and their agents are the survey's, so a view that keeps every
+// agent keeps its slice and a filtered one takes a new slice of its own.
+func (c *Core) Shown(views []revier.ProjectView) []revier.ProjectView {
+	out := make([]revier.ProjectView, len(views))
+	copy(out, views)
+	for i := range out {
+		if !slices.ContainsFunc(out[i].Agents, func(a revier.AgentView) bool { return !c.here(a) }) {
+			continue
+		}
+		out[i].Agents = c.agentsHere(out[i])
 	}
 	return out
 }

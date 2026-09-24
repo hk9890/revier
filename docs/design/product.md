@@ -110,6 +110,11 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
+A row says a project is open while anything here holds it - a target, or a
+terminal attached by hand - and counts the agents a panel here shows, which
+are the agents the surface can go to, type into and close. An agent of a link
+that was opened on its host, and one this machine serves to a terminal
+elsewhere, are in the survey and on no row (D104).
 The list and the pane's targets and agents are three sections, each with its
 own query over its rows; Tab walks them and shift+tab walks back (D73). Enter on
 a project opens its home target, on a target runs it, and on an agent makes its
