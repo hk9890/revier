@@ -98,7 +98,9 @@ revier go <target>     run-or-raise a named target in the current project;
 revier popup           run-or-raise the TUI in a kitty window revier places (D76)
 revier run <action>    run a configured action in the current project
 revier attach          bind the focused instance to the current project
-revier list [--json]   machine-readable inventory
+revier list            what a person here reads: the agents a panel here shows
+revier list --json     the survey whole, which the revier on another machine
+                       reads about its own links (D104)
 revier status          the project for the current directory
 revier doctor          every file that did not load whole, and its fix (D85)
 revier each -- <cmd>   run one command in every project's directory (D32)

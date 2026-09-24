@@ -741,20 +741,16 @@ the buttons are what the line is for.
 ### D104 — a surface shows the agents a panel here shows, and the survey keeps the rest
 
 A link's host lists every agent in its project, including the ones opened on
-that machine, and the row counted them all. A project nothing here held read
-as closed and counted an agent, Enter on it refused with `ErrAgentElsewhere`,
-and the same was true on the other side for an agent this machine serves to a
-terminal elsewhere. A count nobody at the screen can act on is worse than no
-count. Every surface - the rows, the pane, the `revier list` table - draws
-`Core.Shown`, which keeps the agents a panel of this machine's runtime shows
-(`here`, D84). The survey keeps the rest, because `revier list --json` is the
-survey and is what the revier on the other machine reads about the agents its
-own links started here (D101), and because a shutdown reads it to see this
-machine is busy.
-
-The state a row draws is `ProjectView.Held`, not `Running`: anything here that
-holds the project - the home target, any other target, a terminal attached by
-hand - rather than the home target alone, which is what run-or-raise and a
-restore act on. Every agent a surface shows sits in a panel of an instance
-`Held` counts, so "closed and no agents" is an invariant of the row and not a
-coincidence of the filter.
+that machine, and the row counted them all: a project drawn as closed, counting
+an agent `ErrAgentElsewhere` refused to reach, and the same on the other side
+for an agent this machine serves to a terminal elsewhere. Every surface over
+this machine's projects draws `Core.Shown`, the agents a panel of this
+machine's runtime shows (`here`, D84); the survey keeps the rest, which
+`revier list --json` owes the revier on the other machine about the agents its
+own links started here (D101) and a shutdown reads to see this machine is busy.
+The link dialog's pane is the host's inventory rather than this machine's
+projects, and draws its word whole. A row's state is `ProjectView.Held` -
+anything here that holds the project, rather than the home target alone, which
+stays what run-or-raise and a restore act on - so every agent a surface shows
+sits in a panel of an instance `Held` counts, and "closed and no agents" is an
+invariant of the row rather than a coincidence of the filter.

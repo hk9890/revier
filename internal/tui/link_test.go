@@ -107,6 +107,29 @@ func TestEnterOnAHostsProjectWritesTheLinkUnderTheOfferedName(t *testing.T) {
 	}
 }
 
+// The row a link gets before the first survey answers counts no agent. The
+// host lists every agent in its project, nothing here holds the link yet, and
+// a row that counts one is a row drawn as closed with an agent Enter cannot
+// reach (decisions.md D104).
+func TestANewLinksRowCountsNoAgentUntilAPanelHereShowsOne(t *testing.T) {
+	m, remote, _ := linkWorld(t, nil, "beta")
+	remote.Views[0].Agents = []revier.AgentView{
+		{Panel: "box.4242", State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention}}}
+
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
+	m = step(m, "enter")
+
+	row := selectedRow(t, m)
+	if !strings.Contains(row, "rs-buildbox-beta@buildbox") {
+		t.Fatalf("selected %q, want the new link", row)
+	}
+	if strings.Contains(row, theme.Default().Glyphs.NeedsYou) {
+		t.Errorf("row = %q, want no agent: no panel here shows the host's", row)
+	}
+}
+
 // The first character typed replaces the offered name, and a name a project
 // here already has is said as it is typed. Enter on it writes nothing, so no
 // project here is overwritten.

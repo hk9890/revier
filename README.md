@@ -53,6 +53,8 @@ To install from source instead, see [Building](#building).
 ```
 revier                        the TUI: every project, its agent state, its targets
 revier list [--json] [name..] the same, printed once, or for the named projects;
+                              --json adds the agents on a link's host that no
+                              terminal here shows, which the table leaves out;
                               --conversations names each agent's conversation
 revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
                               with this terminal on it (tmux)

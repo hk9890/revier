@@ -243,7 +243,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// (decisions.md D40), so Enter is the same answer there.
 	// A file that did not load has no path to be missing and nothing to
 	// clone into: what is wrong with it is the reason printed above.
-	if !v.PathExists && !v.Running && v.Unreachable == "" && v.Invalid == "" {
+	if !v.PathExists && !v.Held() && v.Unreachable == "" && v.Invalid == "" {
 		where, clone := "this machine", "Enter: clone and open"
 		if v.Project.Remote != nil {
 			where, clone = v.Project.Remote.Host, "Enter: clone there and open"

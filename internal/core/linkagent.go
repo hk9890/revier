@@ -125,8 +125,9 @@ func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
 func (c *Core) Shown(views []revier.ProjectView) []revier.ProjectView {
 	out := make([]revier.ProjectView, len(views))
 	copy(out, views)
+	elsewhere := func(a revier.AgentView) bool { return !c.here(a) }
 	for i := range out {
-		if !slices.ContainsFunc(out[i].Agents, func(a revier.AgentView) bool { return !c.here(a) }) {
+		if !slices.ContainsFunc(out[i].Agents, elsewhere) {
 			continue
 		}
 		out[i].Agents = c.agentsHere(out[i])
@@ -264,10 +265,15 @@ func linkDir(r Resume) []string {
 // agents holds, one call per host, and answers by link and by the tag the
 // host names the agent with. A host that does not answer is returned as a
 // failure of the save, and its agents are recorded by nothing.
+//
+// A link is asked about while anything here holds it, not while its home
+// target alone runs: a save records every target with a live instance, so a
+// link open on another of its targets would otherwise be recorded with the
+// target and without the agent in it, and the restore would reopen it empty.
 func (c *Core) conversationsThere(ctx context.Context, views []revier.ProjectView) (map[revier.ProjectName]map[revier.PanelID]session.Agent, []error) {
 	byHost := map[string][]revier.ProjectView{}
 	for _, v := range views {
-		if v.Project.Remote != nil && v.Running {
+		if v.Project.Remote != nil && v.Held() {
 			byHost[v.Project.Remote.Host] = append(byHost[v.Project.Remote.Host], v)
 		}
 	}
