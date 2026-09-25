@@ -431,10 +431,7 @@ that break, and is logged.
 surface refreshes, never in a survey, with the panels of the last listing: it
 costs no host call. So a probe keeps it cheap and reads again only what
 changed, and remembers what it looked for and did not find as well as what it
-did. The Claude probe reads a transcript again only when its size or
-modification time did, and looks through every project directory for one filed
-outside the session's working directory once, or once in the listing's MaxAge
-while there is none to find.
+did.
 
 ## Core view types
 

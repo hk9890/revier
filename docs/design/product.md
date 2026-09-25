@@ -135,25 +135,30 @@ their project is, until a press opens something; then both end, and each
 cursor stays on the row it found. Tab and shift+tab move between the two, and
 alt+t to the targets, which have no query; Tab from the targets goes back to
 the projects (D105). One click selects a row of the list or the pane, and a
-second opens it. Enter on a project opens its home target, or on one with no
-home puts the cursor on its targets; on a target it runs it, and on an agent it
-makes its tab current and raises its window (D74). alt+e, or the project's
-name over the pane, opens the project screen: the project file as the config screen is
-`config.toml`, with the shared targets shown beside what the project changes of
-them (D81). del closes the row under the cursor - a project, a target, an
+second opens it.
+
+Enter on a project opens its home target, or on one with no home puts the
+cursor on its targets; on a target it runs it, and on an agent it makes its tab
+current and raises its window (D74). alt+e, or the project's name over the
+pane, opens the project screen: the project file as the config screen is
+`config.toml`, with the shared targets shown beside what the project changes
+of them (D81). del closes the row under the cursor - a project, a target, an
 attached window or an agent's tab - and alt+del deletes what the configuration
 holds of it: a project's file, which for a link is the link alone, or a target
 the project file declares. What is open closes first (D93).
+
 The sessions screen is the three `revier session` commands on the surface: the
-saved sessions, a pane with the restore plan for the one under the cursor, Enter
-to restore it and a save button on its top line (D46, D49). The shutdown wizard
-is `revier shutdown` on the surface: every project or one, then what of it, then
-the plan to confirm, and the result shown with the surface still up (D78).
-Every close reads the plan's agents again first, its own steps only, and the
-forced press reads them too: one busy since saves nothing and closes nothing,
-and the plan comes back with it named, where confirming it is the force (D99).
-A del that would have closed at once asks there too. A step whose agents that survey could not read - its host did
-not list, its project is no longer surveyed, its link host did not answer - is
+saved sessions, a pane with the restore plan for the one under the cursor,
+Enter to restore it and a save button on its top line (D46, D49).
+
+The shutdown wizard is `revier shutdown` on the surface: every project or one,
+then what of it, then the plan to confirm, and the result shown with the
+surface still up (D78). Every close reads the plan's agents again first, its
+own steps only, and the forced press reads them too: one busy since saves
+nothing and closes nothing, and the plan comes back with it named, where
+confirming it is the force (D99). A del that would have closed at once asks
+there too. A step whose agents that survey could not read - its host did not
+list, its project is no longer surveyed, its link host did not answer - is
 left open and named in the result, and the rest of the plan closes: one dead
 remote host does not stop the other projects.
 
