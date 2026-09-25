@@ -4,39 +4,41 @@
 
 Ports and adapters. The core holds the domain and the orchestration and knows
 nothing about kitty, GNOME, tmux, or Claude. Every tool-specific fact lives
-behind one of three interfaces, defined in [interfaces.md](interfaces.md).
+behind one of the four ports below. [interfaces.md](interfaces.md) holds their
+contracts.
 
 ```
-                    ┌──────────────┐
-                    │     TUI      │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-     config ───────▶│     core     │  match, run-or-raise, toggle-back
-                    └──┬────────┬──┘
-                       │        │
-            ┌──────────┘        └──────────┐
-            │                              │
-      ┌─────▼─────┐                 ┌──────▼──────┐
-      │   Host    │                 │ AgentProbe  │
-      └─────┬─────┘                 └──────┬──────┘
-            │                              │
-    Runtime │ WindowController          claude
-    ────────┼────────────────           opencode*
-    kitty   │ gnome                     aider*
-    tmux*   │
-    wezterm*│ hyprland*
+                        ┌──────────────┐
+                        │     TUI      │
+                        └──────┬───────┘
+                               │
+                        ┌──────▼───────┐
+         config ───────▶│     core     │  match, run-or-raise, toggle-back
+                        └──────┬───────┘
+                               │
+         ┌──────────────┬──────┴───────┬──────────────┐
+         │              │              │              │
+   ┌─────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐
+   │   Host    │ │ AgentProbe │ │   Remote   │ │ KeyBinder  │
+   └─────┬─────┘ └──────┬─────┘ └──────┬─────┘ └──────┬─────┘
+         │              │              │              │
+ Runtime │ Window       claude         ssh            gnome
+ ────────┼───────       opencode
+ kitty   │ gnome        aider*
+ tmux    │ hyprland*
+ wezterm*│
 
-  * not in the first version
+  * not built
 ```
 
-## Three ports
+## Four ports
 
 | Port | Answers | Second implementation |
 |---|---|---|
 | **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter. `Runtime` and `WindowController` are the same interface with different providers behind them. |
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
+| **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a `Host` (decisions.md D26). |
 
 `Remote` is a revier on another machine, not a host: it answers with the view
 the core produces, and lists no instances here (decisions.md D40). The core
@@ -44,7 +46,8 @@ lays its answer over the local view of the projects that live there.
 
 `Host` is one interface because run-or-raise is one operation. A compositor
 provides instances as OS windows; a terminal provides them as panes and
-windows. The core asks the same five questions of both.
+windows. The core asks the same questions of both: the methods of `Host` in
+[interfaces.md](interfaces.md#host).
 
 `Runtime` adds `Capabilities` and is the only host whose instances carry panels,
 because only it can see inside a terminal. `WindowController` adds nothing —
@@ -66,9 +69,9 @@ The core owns everything that is not tool-specific:
 
 - **Template rendering.** A `Realization` is rendered once, at load, before it
   reaches a host, so no adapter ever sees `{{.Path}}` and no refresh renders.
-- **Matching.** Each host returns its instances in one bulk call; the core
-  matches them against every project's realizations locally. This is why the
-  TUI refresh costs one call per host rather than one per project.
+- **Matching.** Each host returns its instances in a number of calls that does
+  not grow with the project count; the core matches them against every
+  project's realizations locally.
 - **Resolution.** When both realizations of a target are available, the core
   picks: the target's `Prefer` field if set, otherwise the window host when a
   `WindowController` is configured. A separate window is what a desktop user
@@ -84,7 +87,8 @@ The core owns everything that is not tool-specific:
   the window host after focusing inside the runtime. A terminal on Wayland
   cannot raise itself.
 
-An adapter implements five methods and holds no policy.
+An adapter implements the methods of `Host` in [interfaces.md](interfaces.md#host)
+and holds no policy.
 
 ## Adapter selection
 

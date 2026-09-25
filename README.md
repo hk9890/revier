@@ -44,15 +44,28 @@ architecture:
 tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin
 ```
 
-`revier version` prints what is installed. Each release ships a signed
-checksums file; [docs/RELEASING.md](docs/RELEASING.md) says how to verify it.
-To install from source instead, see [Building](#building).
+`revier version` prints what is installed. To install from source instead,
+see [Building](#building).
+
+Each release ships a checksums file signed by its release workflow at the
+release's tag. Verify an archive against it:
+
+```bash
+cosign verify-blob \
+  --certificate revier_<version>_checksums.txt.pem \
+  --signature  revier_<version>_checksums.txt.sig \
+  --certificate-identity "https://github.com/hk9890/revier/.github/workflows/release.yml@refs/tags/v<version>" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  revier_<version>_checksums.txt
+sha256sum -c revier_<version>_checksums.txt --ignore-missing
+```
 
 ## Usage
 
 ```
 revier                        the TUI: every project, its agent state, its targets
-revier list [--json] [name..] the same, printed once, or for the named projects;
+revier list [--json [--conversations]] [name..]
+                              the same, printed once, or for the named projects;
                               --json adds the agents on a link's host that no
                               terminal here shows, which the table leaves out;
                               --conversations names each agent's conversation
@@ -61,10 +74,13 @@ revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
 revier new [name]             write a project file for this directory
 revier link [host [project]]  the ssh hosts; a host's projects; or a link to one,
                               written here under --name or the project's own
-revier go <target> [-p name]  run-or-raise a target; pressing it again returns home
+revier go <target> [-p name] [--picker]
+                              run-or-raise a target; pressing it again returns home;
+                              --picker opens the popup when no project resolves
+revier popup                  the TUI in a kitty window of its own, or the one open
 revier run <action> [-p name] run a configured action in the project
 revier attach [-p name]       bind the focused window to a project
-revier status                 which project this directory resolves to
+revier status [-p name]       which project this directory resolves to
 revier doctor                 every project file that did not load whole, with
                               the edit that fixes each problem
 revier keys status [--json]   the desktop keys revier wants, and who holds each
@@ -97,6 +113,7 @@ revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [
                               is open; refuses while an agent is busy
 revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
+revier version                what is installed
 ```
 
 In the TUI, projects whose agent is waiting for you sort first. Each project
@@ -105,37 +122,31 @@ beside the list shows the project's targets and agents, and the last message
 of one agent, how long ago it was written, and its end when it is too long to
 fit. That is the agent you moved the cursor to; until you do, the agent that
 needs you, else one with a message to show, one at rest before one working.
-For a project on another machine the last message is not shown yet. The list and the agents each have a filter field over their
-rows. Tab moves the cursor between them, and alt+t moves it to the targets,
-which have no filter; Tab from there goes back to the projects. Typing filters
-the section the cursor is in, and Enter acts on its row: a project opens its
-home, a target runs-or-raises, and an agent's tab comes to the front, on its
-host for a project on another machine. Esc clears the section's filter, then
-brings the cursor back to the projects. alt+e, or a click on the project's
-name at the top of the pane, opens the project screen: its name, path and git URL, and every target it has,
-the ones from `config.toml` included. A change there is written to the
-project's own file at once, and a new name renames the file. del closes the row
-under the cursor: a project, a target, an attached window or an agent's tab. It
-asks first when the close ends an agent or a whole project. alt+del (or alt+d)
-deletes what the configuration holds of the row, after asking, and closes it
-first when it is open. On a project it deletes the project file. On a link it
-removes only the link and changes nothing on the host. On a target it removes
-the target from the project file; a target from `config.toml` is not deleted.
-A configured action key runs the action against the selected project.
+For a project on another machine the last message is not shown yet.
 
-The top line holds what is not about one project, each with its key: **new**
-(alt+n) adds a project on this machine, **remote** (alt+r)
-links a project on another machine from the hosts `~/.ssh/config` names and the
-projects the revier on the chosen host has, **sessions** (alt+s) saves and
-restores the set of open projects, **shutdown** (alt+q) closes every project
-or one after a confirm, **config** (alt+c) sets the
-theme, the glyphs, the trigger key and the runtime host, and adds, changes and
-deletes shared targets and actions, each written to `config.toml` and applied
-as it changes, comments kept, and **help** (alt+h)
-lists every key: the surface's own, the target keys, the configured actions
-and the desktop keys. At the right end of the same line stands the version
-running, where the terminal is wide enough for it and the buttons both. The
-rule over the list says how many projects the filter leaves.
+The projects and the agents each have a filter field over their rows; the
+targets have none. The rule over the list says how many projects the filter
+leaves. The top line holds a button for each screen that is not about one
+project, and the version running where the terminal is wide enough for it
+beside the buttons.
+
+| Key | Does |
+|---|---|
+| Tab | Move the cursor between the projects and the agents; from the targets, back to the projects. |
+| alt+t | Move the cursor to the targets. |
+| typing | Filter the section the cursor is in. |
+| Enter | Act on the row: a project opens its home, a target runs-or-raises, an agent's tab comes to the front, on its host for a project on another machine. |
+| Esc | Clear the section's filter, then bring the cursor back to the projects. |
+| alt+e, or a click on the project's name atop the pane | The project screen: its name, path and git URL, and every target it has, the ones from `config.toml` included. A change is written to the project's own file at once, and a new name renames the file. |
+| del | Close the row: a project, a target, an attached window or an agent's tab. Asks first when the close ends an agent or a whole project. |
+| alt+del, alt+d | Delete what the configuration holds of the row, after asking, and close it first when it is open. A project loses its file; a link loses only the link, and nothing changes on the host; a target is removed from the project file, and one from `config.toml` is not deleted. |
+| an action key | Run the configured action against the selected project. |
+| alt+n | **new**: add a project on this machine. |
+| alt+r | **remote**: link a project on another machine, from the hosts `~/.ssh/config` names and the projects the revier on the chosen host has. |
+| alt+s | **sessions**: save and restore the set of open projects. |
+| alt+q | **shutdown**: close every project, or one, after a confirm. |
+| alt+c | **config**: set the theme, the glyphs, the trigger key and the runtime host, and add, change and delete shared targets and actions. Each change is written to `config.toml` and applied at once, comments kept. |
+| alt+h | **help**: every key, the surface's own, the target keys, the configured actions and the desktop keys. |
 
 **new** takes one of three things:
 
