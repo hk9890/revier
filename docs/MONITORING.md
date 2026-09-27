@@ -58,7 +58,7 @@ doc reads what it already did.
 ## Queries
 
 ```bash
-L=~/.local/state/revier/logs/revier-$(date +%F).log
+L=${REVIER_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/revier}/logs/revier-$(date +%F).log
 jq -c 'select(.level != "INFO")' "$L"                                  # everything that went wrong
 jq -c 'select(.msg | startswith("restore")) | {time, msg, project, target, session, dir, outcome}' "$L"
 jq -c 'select(.msg == "go") | {time, project, target, launched, duration_ms}' "$L"

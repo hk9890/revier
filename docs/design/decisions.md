@@ -54,8 +54,8 @@ is an app-mode window.
 
 Replaces the earlier model of three ports and a project as a set of OS windows.
 A binding is to a name: "diff viewer" is a Meld window on a desktop and a pane
-in tmux. So there are two ports, `Host` and `AgentProbe`, and matching,
-templates and toggle-back are the core's, so two adapters cannot disagree.
+in tmux. Matching, templates and toggle-back are the core's, so two adapters
+cannot disagree.
 
 ### D15 — `Open` produces what `Match` finds, and the core focuses after it
 

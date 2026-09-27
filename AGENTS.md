@@ -6,7 +6,7 @@ revier is a project-grouped control surface for running coding agents: it shows
 what every agent across every project is doing and reaches the one that needs
 you. Every operation is the same one — run-or-raise a named target, and
 remember where you came from. Go, ports-and-adapters, with the policy in
-`internal/core` and every tool-specific fact behind a `Host` or `AgentProbe`.
+`internal/core` and every tool-specific fact behind a port in `pkg/revier`.
 
 ## Use-case routing
 
@@ -24,9 +24,7 @@ No change is made in the main checkout; the doc says where it is made instead.
 
 **MUST read [docs/OVERVIEW.md](docs/OVERVIEW.md) before your first `rg`, `grep`,
 `ls` or `Glob` of the source tree, and before writing any plan.** Which package
-owns a decision is not guessable from the tree: adapters hold no policy, so the
-behaviour you are looking for is almost never in the adapter named after the
-tool.
+owns a decision is not guessable from the tree.
 
 ### Coding and file changes
 

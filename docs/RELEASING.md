@@ -56,6 +56,9 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
    gh attestation verify revier_X.Y.Z_linux_x64.tar.gz -R hk9890/revier
    ```
 
+   Then check the checksums signature with the `cosign` and `sha256sum` lines
+   in [README.md](../README.md#install).
+
 **The dispatched ref must be the tagged commit.** `workflow_dispatch` reads
 the workflow file from the ref it runs on, and GoReleaser requires the
 checked-out commit to be the tagged one. A `release.yml` change that a release
@@ -100,18 +103,3 @@ This produces binaries and checksums but no signing, SBOMs or provenance. Drop
 interactive Sigstore flow, which the workflow avoids with its OIDC token — and
 drop `--skip=sbom` with `syft` installed. SLSA provenance needs that same OIDC
 token and cannot be produced locally. Verify as in step 6.
-
-## Verifying a downloaded release
-
-The signing identity is the release workflow file at the ref the release was
-dispatched on — a tag ref for the flow above.
-
-```bash
-cosign verify-blob \
-  --certificate revier_<version>_checksums.txt.pem \
-  --signature  revier_<version>_checksums.txt.sig \
-  --certificate-identity "https://github.com/hk9890/revier/.github/workflows/release.yml@refs/tags/v<version>" \
-  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  revier_<version>_checksums.txt
-sha256sum -c revier_<version>_checksums.txt --ignore-missing
-```

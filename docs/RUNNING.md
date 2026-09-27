@@ -39,8 +39,12 @@ name = "home"
 home = true
   [target.runtime]
   name = "home"
-  launch = ["sh", "-c", "sleep 600"]
   match = { title = "^home$" }
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["bash", "-c", "exec -a claude sleep 600"]   # the Claude probe claims a pane named claude
+    [[target.runtime.panels]]
+    kind = "shell"
 EOF
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 
@@ -63,24 +67,24 @@ real application and moves the user's focus.
 Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
-To exercise the agent monitor, launch the pane as `claude`, so the Claude probe
-claims it. Its state is what `claude agents --json` lists for the pane's pid
-(`docs/design/decisions.md` D57), so put a `claude` first on PATH that lists
-the files of a scratch sessions directory, and write the pane's file there:
+To exercise the agent monitor, use the demo's agent panel. Its state is what
+`claude agents --json` lists for the pane's pid (`docs/design/decisions.md`
+D57), so put a `claude` first on PATH that lists the files of a scratch
+sessions directory, and write the pane's file there:
 
 ```bash
-launch = ["bash", "-c", "exec -a claude sleep 600"]   # in the target, instead of sleep
 export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
 printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"; chmod +x "$S/bin/claude"
 export PATH="$S/bin:$PATH"                            # every revier below asks this claude, never the real one
 pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
+pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1}')
 st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
 st busy       # -> running
 st waiting    # -> attention
 st idle       # -> idle
 ./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
 ./bin/revier agent prompt demo 'hello'                    # types into that pane only; warns, as sleep never starts a turn
-tmux capture-pane -p -t agent                             # the text arrived
+tmux capture-pane -p -t "$pane"                           # the text arrived
 ```
 
 `revier agent prompt` types into a pane. Run it only with the scratch
@@ -110,9 +114,8 @@ printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pi
 ```
 
 To run the agents past the layout, open more agents before the save, each in
-its own directory, and list each one's pid the same way. The project's home
-must declare `panels` with a `kind = "agent"` panel. The restore opens each as
-a window of the workspace's session:
+its own directory, and list each one's pid the same way. The restore opens
+each as a window of the workspace's session:
 
 ```bash
 ./bin/revier agent new -p demo --dir "$S/state"
@@ -144,7 +147,7 @@ under a second configuration that plays the host:
 ```bash
 H=$(mktemp -d); mkdir -p "$H/projects" "$H/state"            # the host: no runtime, it is reached over ssh alone
 printf '[hosts]\nruntime = ["none"]\nwindow = ["none"]\n' > "$H/config.toml"
-cp "$S/projects/demo.toml" "$H/projects/demo.toml"           # with `panels`: a `kind = "agent"` panel, launched as claude
+cp "$S/projects/demo.toml" "$H/projects/demo.toml"           # with the demo's agent panel
 printf '[remote]\nhost = "fakehost"\nproject = "demo"\n' > "$S/projects/far.toml"
 printf '#!/bin/sh\nshift\nexec sh -c "$1"\n' > "$S/bin/loginsh"   # a login shell that keeps this PATH
 printf '#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done; shift; shift\nREVIER_CONFIG_HOME=%s REVIER_STATE_HOME=%s/state SHELL=%s/bin/loginsh exec sh -c "$1"\n' "$H" "$H" "$S" > "$S/bin/ssh"
@@ -174,7 +177,7 @@ t kill-server
 ```
 
 Enter on a project runs its home target, so press it only on a scratch project
-whose launch is harmless, such as `sh -c "sleep 600"`.
+whose panels are harmless, such as the demo's.
 
 To see the agent line change without a keypress, write the agent pane's session
 file while the TUI runs, then capture again after a refresh. Start the TUI with
@@ -250,17 +253,20 @@ Every `kitten @` command above addresses the socket of the kitty it runs
 inside. Pass `--to unix:@kitty-<pid>` to reach another process; the pids are
 the kitty entries in `wctl list --json`.
 
-## Verify a keybinding without pressing it
-
-A binding is a command. `revier keys status --json` prints the one each key
-would carry. Run it by hand, with the same login shell the binding uses, and
-watch focus:
+To check a binding's command as the desktop runs it, hand the user the same
+scratch project in the login shell the binding uses:
 
 ```bash
-sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title
-sh -lc 'revier go editor -p demo'; wctl focused --json | jq .title   # back at the workspace
-hyperfine --warmup 3 -N './bin/revier go home -p demo'               # the keypress budget
+sh -lc './bin/revier go editor -p demo'; wctl focused --json | jq .title
+sh -lc './bin/revier go editor -p demo'; wctl focused --json | jq .title   # back at the workspace
+hyperfine --warmup 3 -N './bin/revier go home -p demo'                     # the keypress budget
 ```
+
+## Verify a keybinding without pressing it
+
+A binding is a command. Run `./bin/revier keys status --json` to print the one
+each key would carry; it reads and never binds. Running the command itself is
+the user's step, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).
 
 `revier keys install` and `revier keys uninstall` rewrite the user's desktop
 configuration, so they are the user's step and never a verification step. Their

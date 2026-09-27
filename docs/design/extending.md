@@ -249,24 +249,20 @@ latency path of every keystroke, so it is Go or nothing.
 
 For a new terminal, a new multiplexer, or a new compositor.
 
-1. Implement `Host` in `internal/adapter/<name>/`. Five methods: `Name`,
-   `Probe`, `Instances`, `Open`, `Focus`, plus `Focused`.
+1. Implement `Host` in `internal/adapter/<name>/`: the methods
+   [interfaces.md](interfaces.md#host) lists.
 2. Implement `Capabilities` as well when the adapter is a `Runtime`, and return
    panels on the instances it lists. Only a runtime host can see inside a
    terminal, and the agent monitor reads nothing else.
 3. Make `Probe(ctx)` return nil only when the adapter can genuinely work. It is
    how automatic selection stays correct on a machine that has several.
 4. Add one line to `cmd/revier/adapters.go`.
-5. Ship a test that runs without the tool installed. Adapters are tested against
-   recorded output of the tool's query command, not against the live tool.
+5. Ship the host tests
+   [TESTING.md](../TESTING.md#what-every-host-test-must-cover) requires.
 
-`Instances` is the one to get right. It runs on every TUI refresh, so it must be
-a single bulk query — `kitten @ ls`, `tmux list-panes -a -F`, `wctl list
---json` — never one call per project.
-
-An adapter holds no policy. Matching, template rendering, resolution between
-realizations, and toggle-back all live in the core, so two adapters can never
-disagree about what a match means.
+What an adapter must never decide, and what `Instances` may cost, are in
+[CODING.md](../CODING.md#adapters-hold-no-policy) and its
+[two invariants](../CODING.md#two-invariants).
 
 Report `Capabilities.Layout` as false and open a single pane when the runtime
 cannot arrange panes. The core handles that case rather than the adapter faking

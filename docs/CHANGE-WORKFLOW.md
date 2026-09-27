@@ -11,17 +11,9 @@ a clean `main`: no edit, no commit, no branch switch there.
 - Run every command from inside the worktree.
 - Remove the worktree and its branch once the PR is merged.
 
-## Branch and PR
-
-Push the branch the worktree tool made, under its own name.
-
-```bash
-mise run quality              # must pass before the commit
-git push -u origin HEAD
-gh pr create --fill
-```
-
 ## Commits
+
+Run `mise run quality` before each commit; it must pass.
 
 Use the `commit-commands:commit` skill for the standard flow.
 
@@ -43,3 +35,12 @@ Use the `commit-commands:commit` skill for the standard flow.
 - A new host ships the host tests [TESTING.md](TESTING.md) requires.
 - A change to behaviour updates every place that describes it: `README.md`,
   package doc comments, test comments.
+
+## Push and PR
+
+Push the branch the worktree tool made, under its own name.
+
+```bash
+git push -u origin HEAD
+gh pr create --fill
+```
