@@ -29,16 +29,16 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
    ```bash
    git fetch origin
    git worktree add --detach .claude/worktrees/release-vX.Y.Z origin/main
-   cd .claude/worktrees/release-vX.Y.Z && mise run quality:full
+   mise -C .claude/worktrees/release-vX.Y.Z run quality:full
    ```
 
-4. Tag that commit from the same worktree, push the tag, then remove the
-   worktree:
+4. From the directory step 3 ran in, tag the worktree's commit, push the tag,
+   then remove the worktree:
 
    ```bash
-   git tag -a vX.Y.Z -m "revier vX.Y.Z"
+   git -C .claude/worktrees/release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"
    git push origin vX.Y.Z
-   cd - && git worktree remove .claude/worktrees/release-vX.Y.Z
+   git worktree remove .claude/worktrees/release-vX.Y.Z
    ```
 
 5. Dispatch the workflow and watch it. The run takes a few seconds to

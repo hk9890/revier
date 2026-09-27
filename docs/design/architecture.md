@@ -86,13 +86,13 @@ The core owns everything that is not tool-specific:
   says so (`Capabilities.OSWindows`), and the core raises the window through
   the window host after focusing inside the runtime. A terminal on Wayland
   cannot raise itself.
-- **The working directory.** A process leaves a start directory that is gone
-  before it starts anything, so no host sets a directory for what it launches
-  (D92). The TUI outlives the worktree it is often started in, so it reads its
-  start project and then moves to the home directory, or to `/` without one.
-  A command leaves a working directory it cannot read and keeps one that is
-  still there, because `new`, `each` and the project of the working directory
-  are read from it.
+
+Each process settles its own working directory before it starts anything, so
+no host sets a directory for what it launches (D92). The TUI outlives the
+worktree it is often started in, so it reads its start project and then moves
+to the home directory, or to `/` without one. A command leaves a working
+directory it cannot read and keeps one that is still there, because `new`,
+`each` and the project of the working directory are read from it.
 
 An adapter implements the methods of `Host` in [interfaces.md](interfaces.md#host)
 and holds no policy.

@@ -1,7 +1,7 @@
 # Decisions
 
 Decisions in force, each with the reason that decides it. A missing number was
-replaced; its text is in git history. How an entry is written is
+replaced or withdrawn; its text is in git history. How an entry is written is
 [../DOCUMENTING.md](../DOCUMENTING.md)'s.
 
 ### D2 — the product is agent monitoring, not session management
@@ -561,8 +561,8 @@ remote host stop eighty-nine projects until `--force` turned the guard off.
 
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose
 tab holds a shell beside the tab target's panel it picked that shell: a return
-home from a tab landed in the wrong pane, and D94's own-tab rule read the same
-guess. revier now marks the first panel of every instance it opens with the
+home from a tab landed in the wrong pane, and the own-tab rule of a shutdown
+(D94) read the same guess. revier now marks the first panel of every instance it opens with the
 target it was opened for, through `Realization.Vars`, as `OpenTab` already
 marks a tab's. The guess stays only for an instance opened before the mark.
 

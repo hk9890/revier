@@ -124,19 +124,19 @@ revier shutdown        save the session when it changed, then close (D78)
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
 A row says a project is open while anything here holds it - a target, or a
-terminal attached by hand - and counts the agents a panel here shows, which
-are the agents the surface can go to, type into and close. An agent of a link
-that was opened on its host, and one this machine serves to a terminal
-elsewhere, are in the survey and on no row (D104). Every surface over this
-machine's projects draws those agents alone, `Core.Shown`; the survey keeps
-the rest, which `revier list --json` owes the revier on the other machine
-about the agents its own links started here, and which a shutdown reads to
-see that this machine is busy. The link dialog's pane is the host's inventory
-rather than this machine's projects, and draws the host's word whole. A row's
-open state is `ProjectView.Held`, anything here that holds the project, while
-run-or-raise and a restore act on the home target alone. So every agent a
-surface shows sits in a panel of an instance `Held` counts, and "closed and no
-agents" is an invariant of the row rather than a coincidence of the filter.
+terminal attached by hand - which is `ProjectView.Held`, while run-or-raise
+and a restore act on the home target alone. It counts the agents a panel here
+shows, which are the agents the surface can go to, type into and close. An
+agent of a link that was opened on its host, and one this machine serves to a
+terminal elsewhere, are in the survey and on no row (D104). Every surface over
+this machine's projects draws only the agents a panel here shows,
+`Core.Shown`; the survey keeps the rest, which `revier list --json` owes the
+revier on the other machine about the agents its own links started here, and
+which a shutdown reads to see that this machine is busy. The link dialog's
+pane is the host's inventory rather than this machine's projects, and draws
+the host's word whole. So every agent a surface shows sits in a panel of an
+instance `Held` counts, and "closed and no agents" is an invariant of the row
+rather than a coincidence of the filter.
 The pane starts level with the project query.
 
 A link's agents are the host's and this machine's, added together (D101). A
@@ -214,8 +214,7 @@ remote host does not stop the other projects.
 
 The guard is in `core.Shutdown`, so `revier shutdown`, the wizard and del all
 pass it (D99). A busy agent refuses the whole plan, because the user is about
-to be asked about it and the plan is what they read. The session is saved
-after the guard, so a refused close leaves no file. The recheck is the
+to be asked about it and the plan is what they read. The recheck is the
 freshest survey there is, so what closes, the saved session and the order
 that closes this process's own terminal last are all read off it, not off the
 listing the plan was drawn from. Forcing says not to refuse and nothing else:

@@ -771,9 +771,9 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 	}
 }
 
-// osWindow is a runtime that owns OS windows, as kitty does, with one
-// instance that has no identity of its own - the state a window opened by the
-// shell session tool is in.
+// unnamedRuntime is a runtime that owns OS windows, as kitty does, with one
+// instance that has no identity of its own - the state a window kitty opened
+// from a session file is in.
 func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")

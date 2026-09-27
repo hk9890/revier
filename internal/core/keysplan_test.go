@@ -662,8 +662,8 @@ func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
 // The state left when another program switches its evicted shortcut on again:
 // revier's shortcut is right, and the other one is on beside it, so both fire.
 // The step takes the key from the other one alone - revier's own is never what
-// is in the way - and
-// says revier's own is already right rather than about to be created.
+// is in the way - and says revier's own is already right rather than about to
+// be created.
 func TestAnotherShortcutBesideRevierOwnIsTheOnlyThingInTheWay(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
 		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),

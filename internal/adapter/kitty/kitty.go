@@ -381,7 +381,7 @@ func (h *Host) decode(l listing) []revier.Instance {
 
 // defaultWMName is what kitty calls an OS window that was given no name of
 // its own: `kitty`, the same as its class. Verified with `kitten @ ls` against
-// a window the shell session tool opened.
+// a window kitty opened from a session file.
 const defaultWMName = "kitty"
 
 func refID(socket string, id int) string {
