@@ -17,8 +17,8 @@ const (
 	sessionEditor   = `sh -lc "$HOME/setup/scripts/sessions/os-to-editor.sh"`
 )
 
-// theShellTool is this machine before any switch-over: three custom shortcuts,
-// none of them revier's.
+// theShellTool is a desktop before revier installs a key: three custom
+// shortcuts another program wrote, none of them revier's.
 func theShellTool() *hosttest.FakeWriter {
 	return hosttest.NewWriter("gnome",
 		hosttest.Custom("<Alt>space", sessionSelector, "start-session-selector"),
@@ -67,7 +67,7 @@ func TestInstallWithoutForceTakesNothingFromAnybody(t *testing.T) {
 	if len(w.Calls) != 0 {
 		t.Errorf("the desktop was changed: %v", w.Calls)
 	}
-	// The shell tool's shortcuts are untouched, and still the ones that fire.
+	// The other program's shortcuts are untouched, and still the ones that fire.
 	for _, chord := range []string{"<Alt>space", "<Shift><Control>u", "<Shift><Control>o"} {
 		held := w.Held(chord)
 		if len(held) != 1 || strings.Contains(held[0].Command, "revier") {
@@ -98,7 +98,8 @@ func TestInstallWithoutForceStillTakesTheFreeKeys(t *testing.T) {
 }
 
 // With force the key becomes revier's, and the shortcut that held it stops
-// firing without losing a word of itself: `os init` puts it back.
+// firing without losing a word of itself: whatever wrote it can switch it
+// back on.
 func TestForceTakesTheKeyAndDestroysNothing(t *testing.T) {
 	w := theShellTool()
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
@@ -357,8 +358,8 @@ func TestAnOlderReviersEntriesAreRewrittenInPlace(t *testing.T) {
 }
 
 // Install then uninstall leaves the desktop as it was, except that what was
-// evicted has to be switched back on by whatever wrote it. That is what `os
-// init` is for, and it is why nothing is stored.
+// evicted has to be switched back on by whatever wrote it. revier did not
+// write it, so revier stores nothing to put it back from.
 func TestUninstallDoesNotRestoreWhatItNeverWrote(t *testing.T) {
 	w := theShellTool()
 	c, plan := planInstall(t, w, keyProject(t, "revier"))
@@ -373,7 +374,7 @@ func TestUninstallDoesNotRestoreWhatItNeverWrote(t *testing.T) {
 	if held := w.Held("<Shift><Control>u"); len(held) != 0 {
 		t.Errorf("ctrl+shift+u is held by %+v, want nothing until os init runs", held)
 	}
-	// Every word of the shell tool's shortcut is still there to be switched on.
+	// Every word of the evicted shortcut is still there to be switched on.
 	found := false
 	for _, b := range w.Bindings {
 		if b.Label == "to-session-terminal" && b.Command == sessionTerminal {
@@ -658,9 +659,10 @@ func TestADesktopDefaultBesideRevierOwnShortcutIsNotOK(t *testing.T) {
 	}
 }
 
-// The state `os init` leaves behind: revier's shortcut is right, and the shell
-// tool's is switched on again beside it, so both fire. The step takes the key
-// from the shell tool alone - revier's own is never what is in the way - and
+// The state left when another program switches its evicted shortcut on again:
+// revier's shortcut is right, and the other one is on beside it, so both fire.
+// The step takes the key from the other one alone - revier's own is never what
+// is in the way - and
 // says revier's own is already right rather than about to be created.
 func TestAnotherShortcutBesideRevierOwnIsTheOnlyThingInTheWay(t *testing.T) {
 	w := hosttest.NewWriter("gnome",

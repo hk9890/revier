@@ -786,8 +786,8 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 }
 
 // PlaceWait is how long placement waits for the window host to see the OS
-// window of a runtime instance that was just opened. It matches the wait the
-// shell tool uses for the same purpose.
+// window of a runtime instance that was just opened. A window the compositor
+// never maps holds the keypress this long, so the wait stays short.
 const PlaceWait = 2 * time.Second
 
 // place positions a window a launch has just produced. It applies to a launch

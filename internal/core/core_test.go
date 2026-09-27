@@ -786,9 +786,9 @@ func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
 	return rt
 }
 
-// A window the shell tool opened has kitty's default name, so the runtime
-// reports no title and no rule can match it. The window manager sees the
-// title. The core pairs them by process, and the project reads as running.
+// A window kitty opened from a session file has kitty's default name, so the
+// runtime reports no title and no rule can match it. The window manager sees
+// the title. The core pairs them by process, and the project reads as running.
 func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
 	rt := unnamedRuntime(t, 4242)
 	wm := hosttest.New("wm")
@@ -1015,8 +1015,7 @@ func TestProjectOfFocusedWithNoHostIsQuiet(t *testing.T) {
 	}
 }
 
-// A launched workspace lands where the project says. The shell tool places
-// every new session window at the right of the screen; a compositor rule
+// A launched workspace lands where the project says. A compositor rule
 // cannot express "the window this launch just made", which is why revier
 // places what revier starts.
 func TestALaunchedWindowIsPlacedWhereTheProjectSays(t *testing.T) {

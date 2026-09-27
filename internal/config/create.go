@@ -15,8 +15,9 @@ import (
 )
 
 // NameFor is the project name a directory gets when none is given: its base
-// name, with the spaces and colons the shell tool also replaces
-// (session_get_name) turned into underscores.
+// name, with spaces and colons turned into underscores. ValidateName refuses
+// whitespace, and a colon separates a project from its target in an agent
+// address.
 func NameFor(dir string) revier.ProjectName {
 	return revier.ProjectName(strings.Map(func(r rune) rune {
 		if r == ':' || unicode.IsSpace(r) {

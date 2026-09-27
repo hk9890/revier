@@ -280,8 +280,7 @@ early.
 ## Keybindings
 
 revier is one process per keypress: a desktop binding runs `revier go
-<target> --picker` and exits. These GNOME bindings replace the shell
-implementation's `os-*` shortcuts, on the same keys:
+<target> --picker` and exits. The GNOME bindings are:
 
 | Key | Runs |
 |---|---|
@@ -310,9 +309,7 @@ a GNOME default loses that one key and keeps any other it holds, and the
 `gsettings reset` line that returns it is printed beside the key.
 
 `revier keys uninstall` removes what revier wrote and nothing else. It restores
-no other tool's shortcuts — that tool does. To go back to the shell
-implementation, run `revier keys uninstall` and `os init`, in either order:
-`os init` alone leaves revier's shortcuts firing beside its own.
+no other tool's shortcuts — that tool does.
 
 The key that opens the TUI is `[ui] trigger_key` in `config.toml`, `alt-space`
 by default; the rest are the `key` each target declares.

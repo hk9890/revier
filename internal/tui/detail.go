@@ -30,8 +30,7 @@ const widePaneWidth = paneChrome + maxFactsWidth + gridGap + maxPaneWidth
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
 // narrow to give both the list and the pane their least. The list takes half
-// up to its cap, as the picker split its preview (os-fzf.sh:782), and the
-// pane takes the rest.
+// up to its cap, and the pane takes the rest.
 func (m Model) paneWidth() int {
 	inner, _ := m.inner()
 	if !m.dialog.hasPane() || inner < minListWidth+minPaneWidth {
@@ -186,9 +185,8 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 // facts is the pane's first part: what this project is, then what is up,
 // then what the agents are doing.
 //
-// A path and an activity line wrap, as the preview does (os-fzf.sh:788,
-// --preview-window=...,wrap): they are the fields worth reading whole, and a
-// cut takes exactly the end that says which checkout or which step.
+// A path and an activity line wrap: they are the fields worth reading whole,
+// and a cut takes exactly the end that says which checkout or which step.
 func (m *Model) facts(v revier.ProjectView, w int) string {
 	th := m.theme
 	var b strings.Builder
@@ -261,8 +259,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		}
 		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
-		// What Enter does about it, as the picker's preview says
-		// (os-fzf.sh:326, :338).
+		// What Enter does about it.
 		if v.Project.GitURL != "" {
 			b.WriteString(th.Meta.Render(clipTo(clone, w)))
 		} else {

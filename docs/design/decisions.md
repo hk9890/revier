@@ -4,11 +4,6 @@ Decisions in force, each with the reason that decides it. A missing number was
 replaced; its text is in git history. How an entry is written is
 [../DOCUMENTING.md](../DOCUMENTING.md)'s.
 
-### D1 — revier is a new project, not an extraction
-
-The `os` command in the `setup` repository stays. revier reimplements what it
-needs and ports nothing.
-
 ### D2 — the product is agent monitoring, not session management
 
 The value is seeing every agent and reaching the one that needs you. Windows
@@ -124,9 +119,8 @@ reader cannot write.
 
 Includes the corrections from the first desktop runs. `--force` takes the one
 key revier needs, and leaves the other keys of a desktop default. revier keeps
-no backup of what it displaced. The way back to the shell tool is both
-`revier keys uninstall` and `os init`, because `os init` alone copies its
-shortcuts beside revier's.
+no backup of what it displaced; putting a displaced shortcut back is the job
+of the tool that wrote it.
 
 ### D30 — revier writes project files, and clones a missing checkout
 
@@ -318,11 +312,7 @@ One session held every workspace as a window, so a window was both an instance
 and the only thing a tab could be, and two terminals attached to two workspaces
 shared the session's current window and switched each other. A session per
 instance gives tmux the shape of a kitty OS window: `OpenTab` adds a window,
-and `attach-session` reaches one workspace. The name lives in `@revier-name`,
-because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
-of several terminals is meant, so `Focus` switches only the terminal of the
-pane it runs in, or the one terminal attached, and records the focus in
-`@revier-focus` for `Focused` to report when neither decides.
+and `attach-session` reaches one workspace.
 
 ### D72 — a drag selects a box of the screen and copies it; revier draws it
 
@@ -352,13 +342,9 @@ which is the only side it means anything to.
 
 Replaces the two shipped scripts, `revier-popup` and `revier-go`. revier
 shipped them, bound keys to them, and changed them, so they were product code
-in shell with no test. `revier popup` run-or-raises a kitty window of class
-`revier-popup` and places it under D24: centred at the workarea's full height
-and a fixed 1800 px width, or filling it when the workarea is narrower, decided
-before the launch so the window never resizes. The width is fixed rather than a
-share of the workarea, so that on a wide screen everything stays in one spot.
-`go --picker` falls back to it, and plain `go` keeps its exit status for
-scripts. sway is removed: the popup and the keys are GNOME's.
+in shell with no test. `revier popup` run-or-raises a kitty window that revier
+places before the launch, and `go --picker` falls back to it. sway is removed:
+the popup and the keys are GNOME's.
 
 ### D77 — a shortcut in an entry revier names is revier's, whatever it runs
 
@@ -371,16 +357,11 @@ revier's command stays revier's too.
 
 ### D78 — a shutdown saves the session first, and refuses a busy agent unless forced
 
-`revier shutdown` and the TUI's shutdown wizard close every project, or one
-project whole, or only its agents, or only what holds no agent. A shutdown is
-the moment before a restart, so it saves the session when it differs from the
-newest one; a second shutdown of the same desktop adds no file. An agent that
-works or waits for an answer would lose its turn, so the CLI refuses before
-the save and `--force` goes on; the TUI's confirm names the busy agents
-instead, and confirming them is the force. `Closer` and `PanelCloser` are
-optional and polite: a window an application keeps open is named as still
-open, never killed. A project shutdown leaves an instance another project
-also holds.
+A shutdown is the moment before a restart, so it saves the session when it
+differs from the newest one. An agent that works or waits for an answer would
+lose its turn, so the CLI refuses before the save and `--force` goes on; the
+TUI's confirm names the busy agents instead, and confirming them is the force.
+`Closer` and `PanelCloser` are optional and polite, so nothing is killed.
 
 ### D79 — a project row counts its agents by state, and says nothing else on the right
 
@@ -415,25 +396,18 @@ from a project, because an absent key is the shared value.
 Extends D59, which left a link outside the shared targets. The editor of a
 project on another machine is VS Code over ssh where the local one is IntelliJ
 on a path here, so the two cannot be one realization; two targets instead
-would split the name and the key that must stay one. A target holds
-`[target.window]` and `[target.runtime]` for a local project and
-`[target.remote.*]` for a link, and a shared target with no remote part is
-local-only. A project file writes the part of its own kind, and the other
-part - a realization nothing would read - is refused at load. The derived ssh
-pane fills what a link's home target leaves out, so a placement costs no
-repetition of the launch.
+would split the name and the key that must stay one. So a target carries a
+local part and a remote part, and a link reads the remote one.
 
 ### D83 — a link records what the host says about the project, and an argument that renders to nothing is refused
 
 Replaces "a link has no git_url". A link's targets run here and reach the
 project there, so an editor over ssh renders a path on the host and a page
-renders the repository it is a clone of; neither names anything on this
-machine, and only the host knows them. `revier link` asks the host anyway, so
-it writes both into the file, and a checkout here is still refused. An argv
-element that renders empty refuses its target, whatever left it empty: an
-argument is read by position, so none of them is optional, and an empty one
-reaches the program as the current directory or a missing operand and says so
-nowhere. What that refusal costs is D85's.
+renders the repository it is a clone of. Only the host knows them, so `revier
+link` writes both into the file, and a checkout here is still refused. An argv
+element that renders empty refuses its target: an argument is read by
+position, so none is optional, and an empty one reaches the program as the
+current directory or a missing operand and says so nowhere.
 
 ### D84 — a link's workspace is panels here, each an ssh that becomes the host's panel
 
@@ -442,49 +416,27 @@ workspace on the host. Tabs, scrollback, keys and focus in that pane were
 tmux's inside the terminal's, and every act on an agent was a round trip to
 the host. Each panel here now runs `revier agent exec` or `revier shell exec`
 there, so the runtime here opens, focuses, types into and closes it, and
-`Remote` keeps the questions only. An agent does not outlive its terminal;
-restore resumes it, as it does after a reboot here. The two machines name one
-agent by a tag, this machine's name and the pid of the panel's ssh, which the
-process carries in its environment: nothing is recorded, and a title, `/clear`
-or a resume cannot move it. The host lists such processes from `/proc` as a
-host of its own beside its runtime, because no runtime there holds them. What
-an agent starts inherits the tag, so the panel is the process nearest the one
-started. sshd runs a command in a shell that read no profile, where `claude`
-was not on the PATH and every agent read unknown, so each command runs in the
-login shell.
+`Remote` keeps the questions only. The two machines name the agent by a tag
+its process carries, so nothing is recorded and no title can move it.
 
 ### D85 — a refusal disables the smallest thing that is wrong
 
 Replaces the refusal scope of D17 and D83. One project file whose shared web
-target rendered `{{.GitURL}}` to nothing refused all ninety, so the surface,
-all four desktop chords and `revier popup` were gone until that file was
-fixed: the tool that reaches a broken project is the one thing that must not
-break with it. A rule now refuses the target it names; a rule about the
-project as a whole refuses the project; neither refuses the set. Each is
-loaded and listed carrying its reason - `available: false` with a `Reason`,
-or `Invalid` on the project - because a file that disappears from the surface
-takes with it the one place its reason could be read. Its key still fails
-loudly when pressed, since nothing may run from an argv that did not render.
-A key nothing reads is not a refusal at all. `revier doctor` is where the
-reasons are read in full. An edit revier itself makes is refused for what it
-breaks and not for what was broken before it, so a file is repaired one target
-at a time; what `revier new` and `revier link` write must come out whole.
+target rendered `{{.GitURL}}` to nothing refused all ninety, and the surface,
+the desktop chords and `revier popup` went with it: the tool that reaches a
+broken project must not break with it. A rule refuses the target it names, a
+rule about the project refuses the project, and neither refuses the set. Each
+stays listed with its reason, because a file that leaves the surface takes
+with it the one place its reason could be read.
 
 ### D86 — Esc hides the popup, and the next press raises it
 
 Esc exited the surface, so every press was a cold start: a kitty process, the
 TUI, and a first survey that is a round trip to every linked host - a second
 from the key to the agent states. The popup now minimizes on Esc through the
-window host, and `revier popup` raises it under D76's run-or-raise as it did an
-open one, in tens of milliseconds, with the cursor and the query where they
-were. Hidden, it surveys nothing, since nobody reads the answer and every survey
-reaches every linked host; the terminal's focus report on the raise reads the
-project files again, since a press used to load them, then runs one survey
-and resumes the refresh. The surface knows it is the popup, and which project
-to open on, by the environment its terminal is started with, read and dropped
-at start so nothing it launches inherits it; the project is resolved at the
-keypress, while the focused window is still the user's. In any other terminal,
-and where the host cannot hide, Esc exits as before.
+window host, and `revier popup` raises it under D76's run-or-raise in tens of
+milliseconds, with the cursor and the query where they were. Hidden, it
+surveys nothing, since nobody reads the answer.
 
 ### D87 — claim-on-appear polls; there is no window-event port
 
@@ -529,28 +481,18 @@ The launch rule of D21 was written four times: `ActivateWaiting`, a ledger
 in the command line over its startup state, a ledger in the surface for a
 restore, and the surface's own message chain for a press. A rule copied that
 often breaks silently when one copy is missed. `core.StateLedger` is the one
-ledger, the state file read and written under its lock at every step, and
-the command line, the surface and a restore all activate through
-`ActivateWaiting` with it. What a survey settles in state - prune, claim,
-expire - is `core.Settle`, the one function the surface and `revier list`
-call.
+ledger, the state file under its lock at every step, and every activation
+goes through `ActivateWaiting` with it. What a survey settles in state -
+prune, claim, expire - is `core.Settle`, for the surface and `revier list`.
 
 ### D92 — a process leaves a start directory that is gone; a host sets no directory for it
 
-The TUI is often started in a worktree and outlives it. Once the worktree is
-removed, every process it starts inherits a directory that is gone, and git,
-claude and a probe script each refuse to run. Giving each adapter a directory
-of its own fixed only the adapters that had one, and every new adapter had to
-copy it. The TUI reads its start project and then moves to the home
-directory, or to "/" without one, so no child can inherit a directory that
-vanishes.
-
-A command does not outlive its directory, but the shell it was run from can
-have lost one already, and then every probe and every git call it makes fails
-for a reason that has nothing to do with what was asked. Each command leaves
-a working directory it cannot read, before it does anything else, and keeps
-one that is still there: `new`, `each` and the project of the working
-directory are all read from it.
+The TUI is often started in a worktree and outlives it, and a shell can lose
+its directory under a command; every child then inherits a directory that is
+gone, and git, claude and a probe script each refuse to run. Giving each
+adapter a directory of its own fixed only the adapters that had one, and every
+new adapter had to copy it. So each process settles its own directory before
+it starts anything, and no host sets one.
 
 ### D93 — del closes, alt+del deletes, and a delete closes first
 
@@ -566,41 +508,19 @@ does not read its sequence.
 
 A tab opened with a panel group holds panels that carry no target mark, so
 closing the one panel the target is found by left the others on screen while
-the shutdown said "closed". `Panel` now names the tab that holds it, and a
-close step carries every panel of that tab and closes each through
-`PanelCloser`: kitty ends a tab with its last window and tmux a window with its
-last pane, so no close-a-tab capability is needed and tmux never kills a window
-linked into other sessions. The step holds the agents of all those panels, so a
-busy one beside the marked panel refuses it, and it counts as closed only once
-no panel of it is listed. An agent's own step closes its tab the same way,
-because the tab `revier agent new` opens carries no target mark to be closed
-by; the workspace's own tab is the exception, where the shell a layout declares
-beside the agent stays. An instance that names no own panel (D100) is read as
-that exception too: taking the tab there is a guess, and the guess that is
-wrong closes the declared shell, while the guess the other way leaves one
-shell of an added tab for the next shutdown.
-
-The panels are the tab as the close finds it, not as the plan drew it. The
-recheck reads a step's panels again with its agents, so a panel added to the
-tab between the confirm and the close closes with it, and an agent working in
-that panel refuses the close like any other. It adds and drops no step, which
-is what D78 holds fixed.
+the shutdown said "closed". A close step now carries every panel of the tab
+and closes each through `PanelCloser`; the tab ends with its last panel, so no
+close-a-tab capability is needed and tmux never kills a window linked into
+other sessions. The step's busy check covers every panel it carries.
 
 ### D95 — an attachment is the window and the terminal inside it
 
 The focused instance of D12 is a window, and a window carries no panels, so a
 survey of a hand-attached terminal probed nothing and a shutdown ended the
 agent in it unasked. `revier attach` and a claim now record the terminal
-beside the window, when the window pairs with one beyond doubt - the pairing
-D63 and D67 already refuse to guess at. An ambiguous window is recorded alone
-and reports no agent, which is the honest answer. The two are one attached row,
-the terminal's, because that is the side that holds the panels.
-
-The row they fold into is chosen by that same pairing, read from the window's
-side, and the terminal it names has to be attached too. Reading it from the
-terminal's side instead asks which window holds this terminal, which is a
-question a shared title answers twice: the survey then folded the wrong window
-away and showed one attachment as two rows, in the pane and in a close plan.
+beside the window when the window pairs with one beyond doubt, and the two
+are one row, the terminal's, since that side holds the panels. Rejected:
+folding from the terminal's side, where a shared title names two windows.
 
 ### D96 — the rule totals the agents on the list, in the rows' own column
 
@@ -632,46 +552,10 @@ follows what it was on while that is on the list, and the place otherwise.
 The guard lived in the wizard's confirm, so `revier shutdown` and the instant
 del both closed on a plan drawn before the session was saved and before the
 press landed: the race the guard exists to close. `core.Shutdown` now reads
-the plan's agents again and refuses the whole plan while one of them is busy,
-unless forced; the session is saved after that guard, so a refused close
-leaves no file behind. That recheck is the freshest survey there is, so both
-the saved session and the order that closes this process's own terminal last
-are read off it, not off the listing the plan was drawn from. A del on a busy
-row asks rather than closing, and its second press is the force, as a confirm
-already is in the wizard.
-
-Forcing says not to refuse and says nothing else. The reading happens either
-way, and what it finds is what closes, is saved and is ordered: a force that
-skipped it wrote back into the session a window the user had closed by hand
-while the confirm stood, and kept a step marked unread by the refusal before
-it, so a link whose host answered again stayed open although the user had
-just asked for everything.
-
-A busy agent refuses the whole plan, because the user is about to be asked
-about it and the plan is what they read. Not reading a step's agents is a
-different thing, and refuses that step alone (D85): its host did not list, its
-project is no longer surveyed, or its link host did not answer, and it is left
-open and named in the result while the rest of the plan closes. Refusing all
-of it meant one dead remote host stopped eighty-nine healthy projects until
-`--force`, which would have turned the busy guard off everywhere. A shutdown
-left with nothing to close saves nothing either: it changes nothing, so there
-is nothing to record, and the survey that could not read the desktop is not
-the one to write a session from.
-
-Putting the recheck in front of the save and the closes put its survey inside
-whatever bound the caller gave the whole call, and ninety projects with a link
-host that does not answer spend most of one. Every phase therefore runs on a
-budget of its own, counted from where that phase starts: the recheck asks
-every link host what its agents hold, the save asks them again, and the closes
-follow both, so a bound already spent left the recheck reading nothing, every
-step marked unread and nothing closing at all. Each budget carries the
-caller's cancellation but not its deadline: a cancel is a decision about this
-shutdown, and a bound that ran out in an earlier phase is not one.
-
-Whether anything closes is read from each step's action and not from the
-reason it carries: a step no host can close carries no reason and closes
-nothing either, and a shutdown of nothing but those would otherwise write a
-session saying the desktop had been shut down.
+the plan's agents again and refuses the whole plan while one is busy, unless
+forced; forcing says not to refuse and nothing else. A step whose agents it
+cannot read refuses itself alone, because refusing the plan let one dead
+remote host stop eighty-nine projects until `--force` turned the guard off.
 
 ### D100 — the workspace's own panel is marked, not guessed at
 
@@ -679,30 +563,17 @@ session saying the desktop had been shut down.
 tab holds a shell beside the tab target's panel it picked that shell: a return
 home from a tab landed in the wrong pane, and D94's own-tab rule read the same
 guess. revier now marks the first panel of every instance it opens with the
-target the instance was opened for, through `Realization.Vars`, as `OpenTab`
-already marks a tab's. An instance opened before the mark existed carries
-none, so the guess stays as the fallback for those and for nothing else.
-Setting it is best effort: the instance is open by then, and an `Open` that
-failed over the mark would hand the caller nothing to pin, so the next press
-would open a second copy. The host logs the failure and returns the instance.
-A tab's own mark stays fatal, because it is the tab's whole identity (D64).
+target it was opened for, through `Realization.Vars`, as `OpenTab` already
+marks a tab's. The guess stays only for an instance opened before the mark.
 
 ### D101 — a link's view is the host's agents and this machine's, added together
 
 `local := p.Remote == nil` skipped the probe for a link, and the host's answer
 then replaced the view's agents outright, so a terminal attached to a link by
 hand reported none and a shutdown ended a busy agent in it unasked. An
-attachment is probed for a link too - it is a terminal of this machine - and
-the host's agents are appended to what was read here rather than replacing it.
-The link's own targets stay unprobed: they are panels running an ssh, and what
-the agent on the far side is doing is its host's word (D84).
-
-The two sides can meet on one agent: whether a probe claims a panel running an
-ssh is the probe's business, and the host names that agent under the tag the
-panel gave it, so the same agent arrives twice and the row counts it twice.
-They are told apart by the panel each landed on, not by assuming they cannot
-meet, and the local reading stands: it read the panel itself, while the host's
-word about it crossed a machine.
+attachment is probed for a link too, and the host's agents are added to what
+was read here. Where both name one agent, the local reading stands: it read
+the panel itself, and the host's word crossed a machine.
 
 ### D102 — an agent's state is what it does now, not since when
 
@@ -731,15 +602,8 @@ that machine, and the row counted them all: a project drawn as closed, counting
 an agent `ErrAgentElsewhere` refused to reach, and the same on the other side
 for an agent this machine serves to a terminal elsewhere. Every surface over
 this machine's projects draws `Core.Shown`, the agents a panel of this
-machine's runtime shows (`here`, D84); the survey keeps the rest, which
-`revier list --json` owes the revier on the other machine about the agents its
-own links started here (D101) and a shutdown reads to see this machine is busy.
-The link dialog's pane is the host's inventory rather than this machine's
-projects, and draws its word whole. A row's state is `ProjectView.Held` -
-anything here that holds the project, rather than the home target alone, which
-stays what run-or-raise and a restore act on - so every agent a surface shows
-sits in a panel of an instance `Held` counts, and "closed and no agents" is an
-invariant of the row rather than a coincidence of the filter.
+machine's runtime shows; the survey keeps the rest, which the other machine's
+revier and a shutdown still read.
 
 ### D105 — Tab walks the projects and the agents; the targets are one chord away
 

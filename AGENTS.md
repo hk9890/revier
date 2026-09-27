@@ -49,7 +49,9 @@ machine with no display.
 ### Running revier by hand
 
 **MUST read [docs/RUNNING.md](docs/RUNNING.md) before running anything that
-opens a window, starts a terminal, or talks to a window manager.** This product
+opens a window, starts a terminal, or talks to a window manager** — for
+example `./bin/revier`, `revier`, `go run ./scripts/drive`, or any `tmux`,
+`kitten` or `wctl` command. This product
 manipulates the user's live desktop; the doc carries the substrates that let you
 verify a change without touching it.
 

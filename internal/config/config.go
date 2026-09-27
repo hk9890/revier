@@ -640,11 +640,8 @@ func validateTab(p revier.Project, t revier.Target) []error {
 }
 
 // ValidateGitURL refuses a clone URL that is unsafe to hand to git or to keep
-// in a file shared between machines. The rules are the ones the shell tool
-// revier replaces used, so a URL one of them recorded the other accepts: no
-// whitespace, no control characters, no shell metacharacters, and no
-// credentials in an https URL. revier refuses them in a plain http URL too,
-// which the shell tool lets through.
+// in a file shared between machines: no whitespace, no control characters,
+// no shell metacharacters, and no credentials in an http or https URL.
 //
 // A URL with credentials is not echoed back: the message would print the
 // token the rule exists to keep out of the file.

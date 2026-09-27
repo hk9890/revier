@@ -10,9 +10,8 @@ import (
 	"github.com/hk9890/revier/internal/theme"
 )
 
-// promptMark is what stands in front of the query. The picker being replaced
-// uses a Nerd Font magnifier (os-fzf.sh:777, --prompt="  "); this has to
-// render in any font, so it is an angle bracket.
+// promptMark is what stands in front of the query. It has to render in any
+// font, so it is an angle bracket and not a Nerd Font glyph.
 const promptMark = "❯ "
 
 // newPrompt is the filter input. It owns the query text: the surface used to

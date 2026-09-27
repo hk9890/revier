@@ -57,7 +57,7 @@ waiting for an answer, where the Enter would pick an option in its dialog.
 `
 
 // errWaitTimeout is a wait that ran out of time. It has its own exit status,
-// the one the shell tool used, so a script can tell it from a failure.
+// so a script can tell it from a failure.
 var errWaitTimeout = errors.New("timed out")
 
 // promptTimeout bounds `revier agent prompt` from the host probe to the watch

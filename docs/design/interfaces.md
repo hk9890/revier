@@ -50,7 +50,12 @@ type Realization struct {
     // Vars are the panel variables the host sets on the first panel it opens
     // and reports back as Panel.Vars. The core fills them, as it fills Dir,
     // so a panel revier opened is identified later rather than guessed at
-    // (D100).
+    // (D100). Setting them is best effort: the instance is open by then, and
+    // an Open that failed over them would hand the caller nothing to pin, so
+    // the next press would open a second copy. The host logs the failure and
+    // returns the instance. The core guesses only for an instance that carries
+    // none, one opened before the mark existed. A tab's vars, set by OpenTab,
+    // stay fatal, because they are the tab's whole identity (D64).
     Vars map[string]string
 
     // Inside names another target; this one is then a tab of that target's
@@ -162,6 +167,13 @@ type WorkareaReader interface {
 }
 ```
 
+A multiplexer's instance is a session and its windows are tabs, the shape of a
+kitty OS window (D70). The tmux adapter keeps the name in `@revier-name`,
+because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
+of several attached terminals is meant, so `Focus` switches only the terminal
+of the pane it runs in, or the one terminal attached, and records the focus in
+`@revier-focus` for `Focused` to report when neither decides.
+
 ## PanelOpener
 
 ```go
@@ -261,6 +273,17 @@ type Remote interface {
     PanelCommand(project ProjectName, kind PanelKind) []string
 }
 ```
+
+A panel of a link's workspace is an ssh running `PanelCommand`, so the agent
+in it does not outlive the terminal here; a restore resumes it, as it does
+after a reboot here (D84). The two machines name that agent by a tag - this
+machine's name and the pid of the panel's ssh - which the process carries in
+its environment. Nothing is recorded, so a title, `/clear` or a resume cannot
+move it. What the agent starts inherits the tag, so the host takes the panel
+to be the tagged process nearest the one started, and lists such processes
+from `/proc`, since no runtime there holds them. sshd runs a command in a
+shell that read no profile, where `claude` was not on the PATH and every agent
+read unknown, so each command runs in the login shell.
 
 ## Panels and agent state
 
