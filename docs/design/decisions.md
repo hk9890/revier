@@ -539,14 +539,6 @@ alone on the last line and said nothing about what else was waiting. It keeps
 ten rows above it, fewer on a screen with no room, where it is the last row in
 view: a row the user was taken to and cannot see is worse than no context.
 
-### D98 — a deleted row hands the cursor to the row that took its place
-
-Deleting the project under the cursor left it at the top of the list, from
-restoring a selection by a name the list no longer holds. The cursor keeps its
-position instead, or the last row when the deleted one was last. A close moves
-no row away, so the cursor keeps following its project there: the cursor
-follows what it was on while that is on the list, and the place otherwise.
-
 ### D99 — the busy guard is in the close path, not in the surface that asks
 
 The guard lived in the wizard's confirm, so `revier shutdown` and the instant
@@ -639,3 +631,12 @@ showing it. So every escape and control character comes off before the pane
 measures or styles a line, and the message is set in revier's own colours.
 Rejected: trusting the harness, which does not own what a tool wrote into the
 transcript it keeps.
+
+### D109 — the cursor follows an open project, and keeps its place when the project closes
+
+A refresh restores the cursor by name, so a project that closed took the
+cursor down among the stopped rows, away from the open ones the user works in.
+The place is what the user was at: the cursor stays there, on the row that
+moved up, and a project that left the list hands it on the same way. An open
+project keeps the cursor through every reordering, attention included, so the
+rule has one test: is it still open. Replaces D98.

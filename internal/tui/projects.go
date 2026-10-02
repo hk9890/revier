@@ -397,7 +397,9 @@ func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
 // reload puts the current survey into the project list, keeping the filter and
 // the selected project across the refresh. Selection is restored by name:
 // attention sorting moves rows, so holding the index would move the cursor to
-// a different project while the user was reading it.
+// a different project while the user was reading it. A project that closed is
+// the exception: its row goes down among the stopped ones, and the cursor
+// keeps its place (decisions.md D109).
 func (m *Model) reload() {
 	was, hadSelection := m.plist.SelectedItem().(projectItem)
 	at := m.plist.Index()
@@ -425,11 +427,17 @@ func (m *Model) reload() {
 	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
 	switch {
 	case hadSelection && (!was.unsurveyed || moved):
-		// A project that left the list - deleted here, or its file gone
-		// while the popup was hidden - hands the cursor to the row that
-		// took its place, and the last row when it was the last
-		// (decisions.md D98).
-		if !m.selectName(was.view.Project.Name) {
+		// A project that closed, or that left the list - deleted here, or
+		// its file gone while the popup was hidden - hands the cursor to the
+		// row that took its place, and the last row when it was the last.
+		// The pane's cursor was on a row of that project, so it goes back to
+		// the list (decisions.md D109).
+		name := was.view.Project.Name
+		closed := was.held && !m.holds(name)
+		if closed {
+			m.toList()
+		}
+		if closed || !m.selectName(name) {
 			m.plist.Select(clampRow(at, len(m.plist.VisibleItems())))
 		}
 	case m.start != "":
@@ -441,6 +449,16 @@ func (m *Model) reload() {
 	default:
 		m.plist.Select(0)
 	}
+}
+
+// holds reports a project on the list that something on this machine holds.
+func (m Model) holds(name revier.ProjectName) bool {
+	for _, v := range m.views {
+		if v.Project.Name == name {
+			return m.heldHere(v)
+		}
+	}
+	return false
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.

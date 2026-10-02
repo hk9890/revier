@@ -123,6 +123,10 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
+The cursor follows its project as the rows reorder while the project is open.
+When the project closes or is deleted the cursor keeps its place, on the row
+that moved up or the last row, and comes back from the pane to the list; a
+full shutdown puts it on the first row (D109).
 A row says a project is open while anything here holds it - a target, or a
 terminal attached by hand - which is `ProjectView.Held`, while run-or-raise
 and a restore act on the home target alone. It counts the agents a panel here
