@@ -14,10 +14,10 @@
 //     carries the default name "kitty" and is not recognisable to revier.
 //   - Each kitty process listens on its own socket, and with the documented
 //     `listen_on unix:@kitty` setting that socket is `@kitty-<pid>`. The
-//     windows revier cares about may span several processes - the shell
-//     implementation started one per session - so Instances queries every
-//     `@kitty-<pid>` socket, concurrently. That is one call per kitty process,
-//     which does not grow with the project count.
+//     windows revier cares about may span several processes - every kitty
+//     started from a session file is a process of its own - so Instances
+//     queries every `@kitty-<pid>` socket, concurrently. That is one call per
+//     kitty process, which does not grow with the project count.
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
@@ -25,8 +25,7 @@
 //
 // Layout is built with `kitten @ launch` sequences, never `kitty --session`:
 // a session file handed to a running kitty starts a new process, not a new
-// window. The "Sessions don't start when kitty already running" entry in the
-// shell implementation's README records the day that cost.
+// window.
 package kitty
 
 import (
@@ -382,7 +381,7 @@ func (h *Host) decode(l listing) []revier.Instance {
 
 // defaultWMName is what kitty calls an OS window that was given no name of
 // its own: `kitty`, the same as its class. Verified with `kitten @ ls` against
-// a window the shell session tool opened.
+// a window kitty opened from a session file.
 const defaultWMName = "kitty"
 
 func refID(socket string, id int) string {

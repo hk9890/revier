@@ -8,8 +8,7 @@
 //     repaints it: it read "OpenCode" at the idle prompt and throughout a turn
 //     submitted with send-text. There is no glyph and no level to read.
 //   - Terminal user variables. `kitten @ ls` reported an empty user_vars for
-//     the pane at every point. opencode has no hook that sets one, and the
-//     launcher in the setup repository marks only Claude panes (CS_TAB).
+//     the pane at every point. opencode has no hook that sets one.
 //   - The process. opencode's TUI talks to a server it starts on a private
 //     port, which a panel does not expose; nothing in the foreground process
 //     list changes between idle and working.

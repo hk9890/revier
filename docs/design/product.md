@@ -83,6 +83,17 @@ A keyed target's launch is settled the same way but by the launching process
 itself, which waits for the window and binds it, so it needs no TUI. The TUI
 finishes the binding only when the window took longer than that wait.
 
+A window carries no panels, so an attachment or a claim records the terminal
+inside the window beside it (D95). It does so only when the window pairs with
+one beyond doubt, the pairing D63 and D67 refuse to guess at; an ambiguous
+window is recorded alone and reports no agent, which is the honest answer.
+The two are one attached row, the terminal's, because that side holds the
+panels. The row is chosen from the window's side, and the terminal the window
+names has to be attached too. Asked from the terminal's side, which window
+holds this terminal is a question a shared title answers twice, and the
+survey then folded the wrong window away and showed one attachment as two
+rows, in the pane and in a close plan.
+
 Declared targets live in the project's TOML as match rules. Attachments are
 per-session and live in revier's own state, because instance ids do not survive
 an application restart.
@@ -113,11 +124,29 @@ revier shutdown        save the session when it changed, then close (D78)
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
 A row says a project is open while anything here holds it - a target, or a
-terminal attached by hand - and counts the agents a panel here shows, which
-are the agents the surface can go to, type into and close. An agent of a link
-that was opened on its host, and one this machine serves to a terminal
-elsewhere, are in the survey and on no row (D104). The pane starts level with
-the project query.
+terminal attached by hand - which is `ProjectView.Held`, while run-or-raise
+and a restore act on the home target alone. It counts the agents a panel here
+shows, which are the agents the surface can go to, type into and close. An
+agent of a link that was opened on its host, and one this machine serves to a
+terminal elsewhere, are in the survey and on no row (D104). Every surface over
+this machine's projects draws only the agents a panel here shows,
+`Core.Shown`; the survey keeps the rest, which `revier list --json` owes the
+revier on the other machine about the agents its own links started here, and
+which a shutdown reads to see that this machine is busy. The link dialog's
+pane is the host's inventory rather than this machine's projects, and draws
+the host's word whole. So every agent a surface shows sits in a panel of an
+instance `Held` counts, and "closed and no agents" is an invariant of the row
+rather than a coincidence of the filter.
+The pane starts level with the project query.
+
+A link's agents are the host's and this machine's, added together (D101). A
+terminal attached to a link by hand is a terminal of this machine and is
+probed here. The link's own targets are not: they are panels running an ssh,
+and what the agent on the far side does is its host's word (D84). The two
+sides can still meet on one agent, since whether a probe claims a panel
+running an ssh is the probe's business and the host names that agent under
+the tag the panel gave it. They are told apart by the panel each landed on,
+not by assuming they cannot meet, and the local reading stands.
 
 The pane ends in what one of the project's agents said last, and how long ago
 (D106, D107). Without a keypress it shows the agent that needs the user; else
@@ -147,13 +176,34 @@ attached window or an agent's tab - and alt+del deletes what the configuration
 holds of it: a project's file, which for a link is the link alone, or a target
 the project file declares. What is open closes first (D93).
 
+The popup is the surface in a kitty window of class `revier-popup`, which
+`revier popup` run-or-raises and places under D24 (D76). It is centred at the
+workarea's full height and a fixed 1800 px width, or fills a narrower
+workarea, decided before the launch so the window never resizes. The width is
+fixed rather than a share of the workarea, so that on a wide screen everything
+stays in one spot. `go --picker` falls back to the popup, and plain `go` keeps
+its exit status for scripts.
+
+Esc minimizes the popup through the window host, and the next press raises it
+with the cursor and the query where they were (D86). Hidden, it surveys
+nothing, since every survey reaches every linked host; the terminal's focus
+report on the raise reads the project files again, since a press used to load
+them, then runs one survey and resumes the refresh. The surface knows it is
+the popup, and which project to open on, from the environment its terminal is
+started with, read and dropped at start so nothing it launches inherits it.
+The project is resolved at the keypress, while the focused window is still the
+user's. In any other terminal, and where the host cannot hide, Esc exits.
+
 The sessions screen is the three `revier session` commands on the surface: the
 saved sessions, a pane with the restore plan for the one under the cursor,
 Enter to restore it and a save button on its top line (D46, D49).
 
 The shutdown wizard is `revier shutdown` on the surface: every project or one,
-then what of it, then the plan to confirm, and the result shown with the
-surface still up (D78). Every close reads the plan's agents again first, its
+then what of it - the whole, only its agents, or only what holds no agent -
+then the plan to confirm, and the result shown with the surface still up
+(D78). A window an application keeps open is named as still open, never
+killed, and a project's shutdown leaves an instance another project also
+holds. Every close reads the plan's agents again first, its
 own steps only, and the forced press reads them too: one busy since saves
 nothing and closes nothing, and the plan comes back with it named, where
 confirming it is the force (D99). A del that would have closed at once asks
@@ -161,6 +211,47 @@ there too. A step whose agents that survey could not read - its host did not
 list, its project is no longer surveyed, its link host did not answer - is
 left open and named in the result, and the rest of the plan closes: one dead
 remote host does not stop the other projects.
+
+The guard is in `core.Shutdown`, so `revier shutdown`, the wizard and del all
+pass it (D99). A busy agent refuses the whole plan, because the user is about
+to be asked about it and the plan is what they read. The recheck is the
+freshest survey there is, so what closes, the saved session and the order
+that closes this process's own terminal last are all read off it, not off the
+listing the plan was drawn from. Forcing says not to refuse and nothing else:
+a force that skipped the reading wrote back into the session a window the
+user had closed by hand while the confirm stood, and kept a step marked
+unread by the refusal before it. A shutdown left with nothing to close saves
+nothing, since it changes nothing and a survey that could not read the desktop
+is not the one to write a session from. Whether anything closes is read from
+each step's action and not from the reason it carries: a step no host can
+close carries no reason and closes nothing either, and a shutdown of nothing
+but those would otherwise record the desktop as shut down.
+
+The recheck, the save and the closes each run on a budget of their own,
+counted from where that phase starts (D99). The recheck asks every link host
+what its agents hold and the save asks again, so ninety projects with a host
+that does not answer spend most of one bound, and a bound shared by the whole
+call left the recheck reading nothing, every step unread and nothing closed.
+Each budget carries the caller's cancellation but not its deadline: a cancel
+is a decision about this shutdown, and a bound that ran out in an earlier
+phase is not one.
+
+A step closes a tab as every panel in it (D94). `Panel` names the tab that
+holds it, and the step carries every panel of that tab and closes each
+through `PanelCloser`: kitty ends a tab with its last window and tmux a window
+with its last pane. The step holds the agents of all those panels, so a busy
+one beside the marked panel refuses it, and it counts as closed only once no
+panel of it is listed. An agent's own step closes its tab the same way,
+because the tab `revier agent new` opens carries no target mark to be closed
+by. The workspace's own tab is the exception, where the shell a layout
+declares beside the agent stays. An instance that names no own panel (D100)
+is read as that exception too: taking the tab there is a guess, and the wrong
+guess closes the declared shell, while the guess the other way leaves one
+shell of an added tab for the next shutdown. The panels are the tab as the
+close finds it, not as the plan drew it: the recheck reads a step's panels
+again with its agents, so a panel added between the confirm and the close
+closes with it, and an agent working there refuses the close like any other.
+The recheck adds and drops no step, which is what D78 holds fixed.
 
 ## Scope
 
@@ -176,6 +267,9 @@ remote host does not stop the other projects.
   the detail pane (D76), hidden on Esc and raised by the next press (D86)
 - `--json` output
 - Projects on another machine, surveyed by the revier installed there (D40)
+
+Saved sessions (D46), shutdown (D78), `revier doctor` (D85) and `revier each`
+(D32) extend it.
 
 **Out, deliberately**
 
@@ -209,7 +303,10 @@ so by which realizations it declares.
 
 A mistake in the configuration degrades the same way. What is wrong is
 disabled; nothing above it is (D85). revier is how you reach a broken project,
-so it must not break with one.
+so it must not break with one. An edit revier itself makes is refused for what
+it breaks and not for what was broken before it, so a file is repaired one
+target at a time; what `revier new` and `revier link` write must come out
+whole.
 
 | What is wrong | What it costs |
 |---|---|

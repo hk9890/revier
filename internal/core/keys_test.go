@@ -11,8 +11,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// keyProject is a project shaped like the ones on this machine: a home target
-// and an editor target, each on the chord the shell session tool uses.
+// keyProject is a project with a home target and an editor target, each on a
+// chord that another program's shortcut holds in these tests.
 func keyProject(t *testing.T, name revier.ProjectName) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{
@@ -57,8 +57,8 @@ func row(t *testing.T, report core.KeyReport, chord core.Chord) core.KeyRow {
 	return core.KeyRow{}
 }
 
-// The state on this machine before any switch-over: the shell session tool
-// holds all three chords, and none of them is revier's.
+// A desktop before revier installs a key: another program holds all three
+// chords, and none of them is revier's.
 func TestEveryWantedChordIsReportedTaken(t *testing.T) {
 	binder := hosttest.NewKeys("gnome",
 		hosttest.Custom("<Alt>space", `sh -lc "$HOME/setup/scripts/sessions/os-fzf-popup.sh"`, "start-session-selector"),

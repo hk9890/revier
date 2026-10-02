@@ -29,9 +29,8 @@ import (
 var ErrNoGitURL = errors.New("the project file records no git_url to clone it from")
 
 // Origin is the URL of dir's origin remote, or "" when dir has none. A URL
-// config.ValidateGitURL refuses is dropped too, as the shell tool drops it
-// (session_infer_git_clone_url): a remote with a token in it must not be
-// copied into a file that is shared between machines.
+// config.ValidateGitURL refuses is dropped too: a remote with a token in it
+// must not be copied into a file that is shared between machines.
 //
 // So is the origin of a repository dir is only inside. A clone of it lands at
 // the project's path, so recorded for a subdirectory it would put the whole

@@ -9,6 +9,8 @@ a clean `main`: no edit, no commit, no branch switch there.
   It checks out `origin/main` under `.claude/worktrees/<name>` on branch
   `worktree-<name>`.
 - Run every command from inside the worktree.
+- Tag a release from a detached worktree instead;
+  [RELEASING.md](RELEASING.md) has the commands.
 - Remove the worktree and its branch once the PR is merged.
 
 ## Commits
@@ -44,3 +46,6 @@ Push the branch the worktree tool made, under its own name.
 git push -u origin HEAD
 gh pr create --fill
 ```
+
+Merge only when the user tells you to in that session, with a merge commit:
+`gh pr merge --merge`.

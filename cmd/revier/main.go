@@ -88,8 +88,8 @@ const exitNoProject = 3
 // against the key it belongs to, so this status carries no message of its own.
 const exitKeysIncomplete = 4
 
-// exitTimeout is returned when `revier agent wait` gave up. It is the status
-// the shell tool's wait used, so scripts written against it keep their branch.
+// exitTimeout is returned when `revier agent wait` gave up. It is not 1, so a
+// script can tell a wait that ran out of time from one that failed.
 const exitTimeout = 2
 
 // exitEachFailed is returned when `revier each` ran and the command failed in

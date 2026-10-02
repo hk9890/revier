@@ -723,7 +723,7 @@ func (m Model) sorted(views []revier.ProjectView) []revier.ProjectView {
 // key routes a press. Everything the surface owns is matched here, and only
 // what is left over reaches the list - which is why every printable rune is a
 // filter character and never a list command: the surface filters as you type,
-// the way the picker it replaces does, so no letter can be a shortcut.
+// so no letter can be a shortcut.
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)

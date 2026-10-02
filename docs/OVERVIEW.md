@@ -27,12 +27,12 @@ A findability map: where things live, and how to search for them.
 
 ## The ports
 
-`Host` (`pkg/revier/host.go`) provides instances of targets. `Runtime` is a
-`Host` with `Capabilities`, the only one whose instances carry panels;
-`WindowController` is a `Host` by another name, so the wiring states the role.
-`AgentProbe` (`pkg/revier/agent.go`) reads a panel and reports what an agent is
-doing. `Remote` (`pkg/revier/remote.go`) is the revier on another machine,
-asked about the projects that live there.
+- `Host`, with `Runtime` and `WindowController`: `pkg/revier/host.go`
+- `AgentProbe`: `pkg/revier/agent.go`
+- `Remote`: `pkg/revier/remote.go`
+- `KeyBinder`: `pkg/revier/keys.go`
+
+What each port is: [docs/design/architecture.md](design/architecture.md#four-ports).
 
 ## Finding things
 
@@ -49,7 +49,5 @@ Behaviour is almost never in the adapter named after the tool. Search
 
 ## Outside this repository
 
-- The shell scripts revier replaces are private and not being ported; see
-  `docs/design/decisions.md` D1.
 - `wctl` — <https://github.com/carlo9890/gnome-window-control>, the GNOME window
   host's dependency.

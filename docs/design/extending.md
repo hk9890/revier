@@ -80,7 +80,7 @@ Set `prefer = "runtime"` on a target to override which realization wins when
 both hosts are available.
 
 Set `inside` on a runtime realization to open the target as a tab of another
-target's instance, not as an instance of its own (decisions.md D64). The tab
+target's instance, not as an instance of its own (D64). The tab
 needs a `launch`, and no `match` or `name`: revier marks the tab it opens and
 finds it again by that mark. It needs a runtime with tabs: kitty, where it is
 a tab of the OS window, or tmux, where it is a window of the session (D70). On
@@ -97,7 +97,7 @@ key  = "ctrl-shift-t"
 ```
 
 Targets most projects have in common are declared once, in
-`~/.config/revier/config.toml`, in the same form (decisions.md D59). Every
+`~/.config/revier/config.toml`, in the same form (D59). Every
 project with a realization of its kind in them gets them, and its file then
 holds only what is its own:
 
@@ -134,12 +134,12 @@ A table merges key by key, at any depth. Any other value - a string, a list
 such as `panels` or `launch` - replaces the shared one whole.
 
 A link, in the same directory, is a project on another machine
-(decisions.md D41). It has a `[remote]` table and no directory here:
+(D41). It has a `[remote]` table and no directory here:
 
 ```toml
 # The path and the repository are the host's, as `revier link` recorded them:
 # a target here renders them, and neither names anything on this machine
-# (decisions.md D83). An argument that renders to nothing - a path the file
+# (D83). An argument that renders to nothing - a path the file
 # does not hold - is refused at load rather than launched. The path is
 # written out in full: a local project's "~" is expanded at load against the
 # home directory here, and a link's is not, so a "~" written here reaches the
@@ -165,7 +165,7 @@ key  = "ctrl-shift-o"
 A target reaches a local project and a link with different tools, so it
 carries a realization for each: `[target.window]` and `[target.runtime]` are
 the local project's, `[target.remote.window]` and `[target.remote.runtime]`
-the link's (decisions.md D82). A project file writes the part of its own kind
+the link's (D82). A project file writes the part of its own kind
 and is refused if it writes the other, which is why the editor above is under
 `[target.remote.window]`.
 
@@ -233,10 +233,9 @@ panel per refresh, so a probe stays cheap or it becomes the reason the TUI feels
 slow; the timeout is half a second, and a probe that overruns it is killed with
 everything it started.
 
-The probe runs in revier's working directory. The TUI moves to the home
-directory once it has read its start project, because it outlives the worktree
-it was started in. A relative `exec` resolves against the home directory in
-every command.
+The probe runs in revier's working directory, which
+[architecture.md](architecture.md#where-the-work-happens) sets. A relative
+`exec` resolves against the home directory in every command.
 
 `name` is also the foreground command the probe claims. A probe named `aider`
 reads panels running `aider` and no others, so an unrelated agent pane never

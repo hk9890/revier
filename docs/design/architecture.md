@@ -38,10 +38,10 @@ contracts.
 | **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter. `Runtime` and `WindowController` are the same interface with different providers behind them. |
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
-| **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a `Host` (decisions.md D26). |
+| **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a `Host` (D26). |
 
 `Remote` is a revier on another machine, not a host: it answers with the view
-the core produces, and lists no instances here (decisions.md D40). The core
+the core produces, and lists no instances here (D40). The core
 lays its answer over the local view of the projects that live there.
 
 `Host` is one interface because run-or-raise is one operation. A compositor
@@ -87,6 +87,13 @@ The core owns everything that is not tool-specific:
   the window host after focusing inside the runtime. A terminal on Wayland
   cannot raise itself.
 
+Each process settles its own working directory before it starts anything, so
+no host sets a directory for what it launches (D92). The TUI outlives the
+worktree it is often started in, so it reads its start project and then moves
+to the home directory, or to `/` without one. A command leaves a working
+directory it cannot read and keeps one that is still there, because `new`,
+`each` and the project of the working directory are read from it.
+
 An adapter implements the methods of `Host` in [interfaces.md](interfaces.md#host)
 and holds no policy.
 
@@ -114,7 +121,7 @@ Detection signals the adapters use:
 
 The host that lists what `revier agent exec` started for a terminal on another
 machine is not selected: it is wired beside whichever runtime was, because it
-holds what no runtime does, and no target resolves to it (decisions.md D84).
+holds what no runtime does, and no target resolves to it (D84).
 
 ## Package layout
 

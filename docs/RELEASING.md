@@ -24,13 +24,21 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 1. Pick `vX.Y.Z` and confirm it is free: `git tag --list "v*"`.
 2. Write the `CHANGELOG.md` section (see below) and land it like any other
    change: worktree, PR, merge ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
-3. Fast-forward `main` to the merged commit and run `mise run quality:full`
-   on it.
-4. Tag that commit and push the tag:
+3. Create a worktree detached at the merged commit, and run the gate in it:
 
    ```bash
-   git tag -a vX.Y.Z -m "revier vX.Y.Z"
+   git fetch origin
+   git worktree add --detach .claude/worktrees/release-vX.Y.Z origin/main
+   mise -C .claude/worktrees/release-vX.Y.Z run quality:full
+   ```
+
+4. From the directory step 3 ran in, tag the worktree's commit, push the tag,
+   then remove the worktree:
+
+   ```bash
+   git -C .claude/worktrees/release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"
    git push origin vX.Y.Z
+   git worktree remove .claude/worktrees/release-vX.Y.Z
    ```
 
 5. Dispatch the workflow and watch it. The run takes a few seconds to

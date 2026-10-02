@@ -10,8 +10,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Every form the shell tool recorded in the session files on this machine
-// loads: https, scp-style ssh, and ssh:// with a user and a port.
+// Every form a clone URL commonly takes loads: https, scp-style ssh, ssh://
+// with a user and a port, and a local path.
 func TestGitURLLoads(t *testing.T) {
 	for _, u := range []string{
 		"https://github.com/hk9890/revier.git",
@@ -29,7 +29,7 @@ func TestGitURLLoads(t *testing.T) {
 }
 
 // An unsafe URL is refused at load, and the error names the field, so the
-// line to fix can be found. The rules are the shell tool's.
+// line to fix can be found.
 func TestUnsafeGitURLIsRejectedAtLoad(t *testing.T) {
 	for _, tc := range []struct{ name, url, want string }{
 		{"whitespace", "https://example.com/a b.git", "whitespace"},
