@@ -1,10 +1,14 @@
 package tui_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -66,10 +70,56 @@ func TestTheCursorFollowsAnOpenProjectThatNoLongerNeedsTheUser(t *testing.T) {
 
 	rt.Retitle("1", "zsh")
 	m = survey(m)
-	if got := rows(m); len(got) < 2 || !strings.Contains(got[1], "project-03") {
-		t.Fatalf("rows = %q, want project-03 under project-00 once its agent is gone", got)
+	// A row is two lines, and the pane beside the rows names project-03 too:
+	// the second row's name is the third line, left of the pane.
+	second := ""
+	if got := rows(m); len(got) > 2 {
+		second, _, _ = strings.Cut(got[2], "│")
+	}
+	if !strings.Contains(second, "project-03") {
+		t.Fatalf("second row = %q, want project-03 under project-00 once its agent is gone", second)
 	}
 	wantSelected(t, m, "project-03", "it is still open")
+}
+
+// A host that could not list has not said its projects closed (decisions.md
+// D89): the cursor stays on its project, in the pane too, and is still on it
+// when the host answers again.
+func TestAHostThatCannotListDoesNotTakeTheCursorOffItsProject(t *testing.T) {
+	rt, m, _ := openWorld(t, 4, "project-00", "project-01")
+
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	wantSelected(t, m, "project-01", "the second open row")
+	inPane, _ := press(m, "alt+t")
+
+	rt.SetInstancesErr(errors.New("socket timed out"))
+	m = survey(m)
+	wantSelected(t, m, "project-01", "its host has not said it closed")
+	if paneCursor(survey(inPane)) == "" {
+		t.Errorf("the pane cursor went back to the list, want it kept on a target of project-01")
+	}
+
+	rt.SetInstancesErr(nil)
+	m = survey(m)
+	wantSelected(t, m, "project-01", "it is open, as it was")
+}
+
+// A row no survey has answered for drew nothing as open: an attachment in
+// state whose window is gone makes the first survey no close, and the cursor
+// stays on the project the user moved it to.
+func TestTheFirstSurveyDroppingAStaleAttachmentIsNoClose(t *testing.T) {
+	_, wm, c, projects := world(t, 4)
+	ref := wm.Add("Pull requests", "chrome")
+	wm.Remove(ref)
+	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-01": {ref}})
+	m := resize(tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), ""), 150, 30)
+
+	m, _ = press(m, "down")
+	wantSelected(t, m, "project-01", "the second row in file order")
+
+	m = survey(m)
+	wantSelected(t, m, "project-01", "the user moved the cursor to it before the survey")
 }
 
 // A stopped project was never closed under the cursor, so the cursor follows

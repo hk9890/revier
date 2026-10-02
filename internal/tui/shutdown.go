@@ -413,10 +413,11 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
 	// Every project closed, so no row is the one the cursor was left on: it
 	// goes to the top (decisions.md D109).
-	if s.whole {
+	_, open, failed := msg.closed.Counts()
+	if s.whole && open == 0 && failed == 0 {
 		m.plist.Select(0)
 	}
-	if _, _, failed := msg.closed.Counts(); failed > 0 {
+	if failed > 0 {
 		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}
 	return m, nil

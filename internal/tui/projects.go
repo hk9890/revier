@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -432,12 +433,11 @@ func (m *Model) reload() {
 		// row that took its place, and the last row when it was the last.
 		// The pane's cursor was on a row of that project, so it goes back to
 		// the list (decisions.md D109).
-		name := was.view.Project.Name
-		closed := was.held && !m.holds(name)
+		closed := m.closedSince(was)
 		if closed {
 			m.toList()
 		}
-		if closed || !m.selectName(name) {
+		if closed || !m.selectName(was.view.Project.Name) {
 			m.plist.Select(clampRow(at, len(m.plist.VisibleItems())))
 		}
 	case m.start != "":
@@ -451,14 +451,21 @@ func (m *Model) reload() {
 	}
 }
 
-// holds reports a project on the list that something on this machine holds.
-func (m Model) holds(name revier.ProjectName) bool {
+// closedSince reports a project its row drew as open that nothing on this
+// machine holds now, or that left the list. A row no survey had answered for
+// drew nothing as open, and a host that could not list has not said its
+// targets closed (decisions.md D89).
+func (m Model) closedSince(was projectItem) bool {
+	if was.unsurveyed || !was.held {
+		return false
+	}
 	for _, v := range m.views {
-		if v.Project.Name == name {
-			return m.heldHere(v)
+		if v.Project.Name == was.view.Project.Name {
+			unknown := slices.ContainsFunc(v.Targets, func(t revier.TargetView) bool { return t.Unknown != "" })
+			return !unknown && !m.heldHere(v)
 		}
 	}
-	return false
+	return true
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.
