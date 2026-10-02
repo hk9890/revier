@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -397,7 +398,9 @@ func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
 // reload puts the current survey into the project list, keeping the filter and
 // the selected project across the refresh. Selection is restored by name:
 // attention sorting moves rows, so holding the index would move the cursor to
-// a different project while the user was reading it.
+// a different project while the user was reading it. A project that closed is
+// the exception: its row goes down among the stopped ones, and the cursor
+// keeps its place (decisions.md D109).
 func (m *Model) reload() {
 	was, hadSelection := m.plist.SelectedItem().(projectItem)
 	at := m.plist.Index()
@@ -425,11 +428,16 @@ func (m *Model) reload() {
 	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
 	switch {
 	case hadSelection && (!was.unsurveyed || moved):
-		// A project that left the list - deleted here, or its file gone
-		// while the popup was hidden - hands the cursor to the row that
-		// took its place, and the last row when it was the last
-		// (decisions.md D98).
-		if !m.selectName(was.view.Project.Name) {
+		// A project that closed, or that left the list - deleted here, or
+		// its file gone while the popup was hidden - hands the cursor to the
+		// row that took its place, and the last row when it was the last.
+		// The pane's cursor was on a row of that project, so it goes back to
+		// the list (decisions.md D109).
+		closed := m.closedSince(was)
+		if closed {
+			m.toList()
+		}
+		if closed || !m.selectName(was.view.Project.Name) {
 			m.plist.Select(clampRow(at, len(m.plist.VisibleItems())))
 		}
 	case m.start != "":
@@ -441,6 +449,23 @@ func (m *Model) reload() {
 	default:
 		m.plist.Select(0)
 	}
+}
+
+// closedSince reports a project its row drew as open that nothing on this
+// machine holds now, or that left the list. A row no survey had answered for
+// drew nothing as open, and a host that could not list has not said its
+// targets closed (decisions.md D89).
+func (m Model) closedSince(was projectItem) bool {
+	if was.unsurveyed || !was.held {
+		return false
+	}
+	for _, v := range m.views {
+		if v.Project.Name == was.view.Project.Name {
+			unknown := slices.ContainsFunc(v.Targets, func(t revier.TargetView) bool { return t.Unknown != "" })
+			return !unknown && !m.heldHere(v)
+		}
+	}
+	return true
 }
 
 // selectedName is the highlighted project, for restoring it after a reload.
