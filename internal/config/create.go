@@ -41,6 +41,16 @@ func ValidateName(name revier.ProjectName) error {
 	return nil
 }
 
+// CanAddress is why an agent address cannot name the project, or nil.
+// `revier agent` addresses <project>:<target>, and the address is split at
+// its first colon.
+func CanAddress(name revier.ProjectName) error {
+	if strings.ContainsRune(string(name), ':') {
+		return fmt.Errorf("project name %q contains \":\", which separates a project from its target in an agent address", name)
+	}
+	return nil
+}
+
 // ProjectFile is where the project called name lives under a config root.
 func ProjectFile(root string, name revier.ProjectName) string {
 	return filepath.Join(root, "projects", string(name)+".toml")
@@ -132,8 +142,15 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 
 // writeUnless is write with what the loaded project may not carry: the
 // problems refuse names are the file's, and it goes again.
+//
+// The name is asked before the file is written. The load back refuses a name
+// with a colon too, but a rename is refused only for what it breaks, and a
+// project already refused as a whole would carry the colon across.
 func writeUnless(root string, name revier.ProjectName, body string, shared []map[string]any, refuse func(core.Project) []error) (core.Project, error) {
 	if err := ValidateName(name); err != nil {
+		return core.Project{}, err
+	}
+	if err := CanAddress(name); err != nil {
 		return core.Project{}, err
 	}
 	path := ProjectFile(root, name)

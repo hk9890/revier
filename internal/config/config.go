@@ -448,10 +448,8 @@ func validateProject(p revier.Project) error {
 	if p.Path == "" && p.Remote == nil {
 		errs = append(errs, errors.New("project has no path"))
 	}
-	if strings.ContainsRune(string(p.Name), ':') {
-		// `revier agent` addresses <project>:<target>, and the address is
-		// split at its first colon.
-		errs = append(errs, fmt.Errorf("project name %q contains \":\", which separates a project from its target in an agent address", p.Name))
+	if err := CanAddress(p.Name); err != nil {
+		errs = append(errs, err)
 	}
 	if p.GitURL != "" {
 		if err := ValidateGitURL(p.GitURL); err != nil {

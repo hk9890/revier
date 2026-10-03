@@ -28,8 +28,8 @@ func TestWithoutDeadlineDropsABoundThatIsSpent(t *testing.T) {
 }
 
 // A cancel is a decision about the walk and reaches it, whether it comes
-// before or during: Ctrl-C stops a restore, and a hung host does not hold it
-// forever.
+// before or during: a caller that cancels stops a restore, and a hung host
+// does not hold it forever.
 func TestWithoutDeadlineKeepsTheCancel(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

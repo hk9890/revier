@@ -248,6 +248,97 @@ func TestCloseBuildsTheCommand(t *testing.T) {
 	}
 }
 
+// Hide minimizes with --no-animation, which is what keeps the popup in place
+// on Esc. A wctl without the flag and an extension without the method each
+// refuse it in their own words; Hide then minimizes with the animation and
+// stops asking, so one process pays for the refusal once. An extension that
+// is not running exits as the old one does and is no refusal: it reaches the
+// caller, and the next Hide asks again. So does a refusal that the minimize
+// with the animation fails after, which is how wctl words an extension that
+// is not running where the shell's locale is not English.
+func TestHideSkipsTheAnimationWhereWctlCan(t *testing.T) {
+	const flagged, plain = "minimize 4181121382 --no-animation\n", "minimize 4181121382\n"
+	cases := []struct {
+		name          string
+		refusal       string // wctl's stderr for --no-animation; empty when it accepts
+		always        bool   // the minimize with the animation gets the same answer
+		code          int
+		first, second string // the argv of each of two hides
+		fail          bool
+	}{
+		{name: "supported", first: flagged, second: flagged},
+		{
+			name:    "wctl without the flag",
+			refusal: "Error: Usage: wctl minimize <WINDOW>",
+			code:    1,
+			first:   flagged + plain, second: plain,
+		},
+		{
+			name: "extension without the method",
+			refusal: "Error: No such method “MinimizeNoAnimation”. The extension GNOME Shell" +
+				" has loaded is older than this wctl.",
+			code:  5,
+			first: flagged + plain, second: plain,
+		},
+		{
+			name:    "extension not running",
+			refusal: "Error: Window Control extension is not running. Enable it in GNOME Extensions.",
+			code:    5,
+			first:   flagged, second: flagged,
+			fail: true,
+		},
+		{
+			name: "extension not running, worded as one without the method",
+			refusal: "Error: Objekt existiert nicht am Pfad. The extension GNOME Shell" +
+				" has loaded is older than this wctl.",
+			always: true,
+			code:   5,
+			first:  flagged + plain, second: flagged + plain,
+			fail: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			log := filepath.Join(dir, "argv")
+			refusal := filepath.Join(dir, "refusal")
+			stub := filepath.Join(dir, "wctl")
+			script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + log + "\n"
+			if tc.refusal != "" {
+				if err := os.WriteFile(refusal, []byte(tc.refusal+"\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				refused := "*--no-animation"
+				if tc.always {
+					refused = "*"
+				}
+				script += "case \"$*\" in " + refused + ") cat " + refusal + " >&2; exit " + strconv.Itoa(tc.code) + ";; esac\n"
+			}
+			if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			h := &gnome.Host{Bin: stub}
+			for i, want := range []string{tc.first, tc.second} {
+				err := h.Hide(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"})
+				if (err != nil) != tc.fail {
+					t.Fatalf("hide %d: err = %v, want failure %v", i+1, err, tc.fail)
+				}
+				got, err := os.ReadFile(log)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != want {
+					t.Errorf("hide %d: argv = %q, want %q", i+1, got, want)
+				}
+				if err := os.Remove(log); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 // The popup's size is decided from this width before its launch, so a reply
 // without one must fail rather than read as a zero-wide screen.
 func TestWorkareaWidthReadsTheReply(t *testing.T) {

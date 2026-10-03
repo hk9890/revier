@@ -284,10 +284,7 @@ in it does not outlive the terminal here; a restore resumes it, as it does
 after a reboot here (D84). The two machines name that agent by a tag - this
 machine's name and the pid of the panel's ssh - which the process carries in
 its environment. Nothing is recorded, so a title, `/clear` or a resume cannot
-move it. What the agent starts inherits the tag, so the host takes the panel
-to be the tagged process nearest the one started. sshd runs a command in a
-shell that read no profile, where `claude` was not on the PATH and every agent
-read unknown, so each command runs in the login shell.
+move it.
 
 ## Panels and agent state
 

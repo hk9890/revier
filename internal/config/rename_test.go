@@ -158,3 +158,22 @@ func TestRenameRefusesATakenOrInvalidName(t *testing.T) {
 		t.Errorf("old file: %v, want it kept", err)
 	}
 }
+
+// A name with a colon is refused whatever was wrong before. A project already
+// refused as a whole carries that refusal across the load back, so the load
+// back alone would take the colon for nothing new and move the file.
+func TestRenameRefusesAColonForAProjectAlreadyRefused(t *testing.T) {
+	root := renameRoot(t, "revier", "path = \"/home/user/dev/github/revier\"\n")
+	if p := config.LoadProject(config.ProjectFile(root, "revier"), nil); p.Invalid == nil {
+		t.Fatal("the project loads whole, want it refused for having no home")
+	}
+	if _, err := config.Rename(root, "revier", "a:b", nil); err == nil || !strings.Contains(err.Error(), `contains ":"`) {
+		t.Errorf("err = %v, want the colon refused", err)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "revier")); err != nil {
+		t.Errorf("old file: %v, want it kept", err)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "a:b")); err == nil {
+		t.Error("the refused name was written")
+	}
+}

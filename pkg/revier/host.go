@@ -149,8 +149,8 @@ type PanelOpener interface {
 	// every later panel split into the first, each panel started in its Dir,
 	// and r.Launch in r.Dir. vars are set on the first panel. An OpenTab that
 	// fails closes what it opened, so no half-built tab runs an agent the
-	// core names as not added. It is a tab target's tab (D64) and the agent
-	// tab of `revier agent new` and a restore (D65).
+	// core names as not added. It is a tab target's tab (decisions.md D64)
+	// and the agent tab of `revier agent new` and a restore (D65).
 	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
 
 	// FocusPanel makes the panel current inside its instance, switching tab

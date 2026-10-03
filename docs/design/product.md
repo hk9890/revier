@@ -216,15 +216,16 @@ fixed rather than a share of the workarea, so that on a wide screen everything
 stays in one spot. `go --picker` falls back to the popup, and plain `go` keeps
 its exit status for scripts.
 
-Esc minimizes the popup through the window host, and the next press raises it
-with the cursor and the query where they were (D86), on the projects whichever
-list it was hidden on (D110). A press while the focused window shows the
-surface is typed into its panel as the key that switches the list, because the
-desktop takes the key before the terminal sees it. That window is the popup,
-or a terminal whose current panel runs revier with no command, paired with its
-window as an attachment is (D95); there no popup opens. A runtime that cannot
-type into the panel leaves the press what it was: the popup, raised or opened. Hidden, it surveys
-nothing, since every survey reaches every linked host; the terminal's focus
+Esc minimizes the popup through the window host, with no minimize animation
+where the host can skip it, and the next press raises it with the cursor and
+the query where they were (D86), on the projects whichever list it was hidden
+on (D110). A press while the focused window shows the surface is typed into
+its panel as the key that switches the list, because the desktop takes the key
+before the terminal sees it. That window is the popup, or a terminal whose
+current panel runs revier with no command, paired with its window as an
+attachment is (D95); there no popup opens. A runtime that cannot type into the
+panel leaves the press what it was: the popup, raised or opened. Hidden, it
+surveys nothing, since every survey reaches every linked host; the terminal's focus
 report on the raise reads the project files again, since a press used to load
 them, then runs one survey and resumes the refresh. The surface knows it is
 the popup, and which project to open on, from the environment its terminal is

@@ -54,7 +54,7 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 	}
 }
 
-// An ambiguous window is attached alone, as D63 and D67 demand, and then no
+// An ambiguous window is attached alone (decisions.md D63, D67), and then no
 // agent is reported for it: two terminals of one process with one title
 // cannot be told apart, and attaching the wrong one is worse than attaching
 // no terminal at all.
@@ -221,7 +221,8 @@ func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 }
 
 // A terminal the window host lists no window for is not focused inside the
-// terminal either: that is the "is ready" notice D63 refuses to produce.
+// terminal either: a focus with no raise becomes an "is ready" notice
+// (decisions.md D63).
 func TestFocusingAnUnraisableTerminalMovesNothing(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
