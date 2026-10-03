@@ -9,6 +9,10 @@ tag.
 
 ## v0.11.0
 
+- **Action required: `alt+t` is the surface's own key now.** An `[[action]]`
+  bound to `alt+t` is refused at load and named by `revier doctor`; give it
+  another key. A target bound to it keeps its desktop binding and does nothing
+  inside the surface.
 - **The pane ends in what one of the project's agents said last**, and how
   long ago, in place of the directory tree the path above it already named.
   Without a keypress it shows the agent that needs you, else one with a
