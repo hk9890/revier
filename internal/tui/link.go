@@ -374,6 +374,9 @@ func (m Model) linkNameFault() error {
 	if err := config.ValidateName(name); err != nil {
 		return err
 	}
+	if err := config.CanAddress(name); err != nil {
+		return err
+	}
 	if p, ok := m.project(name); ok {
 		return fmt.Errorf("a project named %q exists here: %s", name, contractHome(p.File))
 	}

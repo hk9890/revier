@@ -166,6 +166,30 @@ func TestATakenLinkNameIsSaidWhileTypedAndNotWritten(t *testing.T) {
 	}
 }
 
+// A name with a colon is said as it is typed, as a taken one is, and Enter on
+// it writes nothing: an agent address is split at the colon, so the link
+// under that name could not be addressed.
+func TestALinkNameWithAColonIsSaidWhileTypedAndNotWritten(t *testing.T) {
+	m, _, root := linkWorld(t, nil, "beta")
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
+
+	m, _ = press(m, "a:b")
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, `contains ":"`) {
+		t.Errorf("rows = %q, want the colon said", rows(m))
+	}
+
+	m = step(m, "enter")
+	if h := barLine(m); !strings.Contains(h, "Name the link") {
+		t.Errorf("header = %q, want the name step still up", h)
+	}
+	files, _ := filepath.Glob(filepath.Join(root, "projects", "*.toml"))
+	if len(files) != 0 {
+		t.Errorf("a refused name wrote %v", files)
+	}
+}
+
 // Esc on the name goes back to the host's projects, with the cursor on the
 // project it left.
 func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
