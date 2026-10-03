@@ -669,10 +669,10 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 		// is the answer, and a plan handed back by a refusal comes in with
 		// the marks and agents that refusal read.
 		step.Unread, step.Agents = "", nil
-		// A link's agents are its host's word (D84). A host that stopped
-		// answering between the plan and the close reports none, and no
-		// agents read is not idle, so the panel here that shows a busy agent
-		// is not closed on a survey that could not ask about it.
+		// A link's agents are its host's word (decisions.md D84). A host that
+		// stopped answering between the plan and the close reports none, and
+		// no agents read is not idle, so the panel here that shows a busy
+		// agent is not closed on a survey that could not ask about it.
 		switch why, unreached := unreachable[step.Project]; {
 		case r.Failed[step.Ref.Host] != nil:
 			step.Unread = step.Ref.Host + " did not answer: " + r.Failed[step.Ref.Host].Error()
@@ -685,8 +685,8 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 			// a tab means that tab, not the panels it held when the plan was
 			// drawn: a panel added to it since closes with it, and an agent
 			// working in that panel refuses the close like any other
-			// (decisions.md D94). This adds and drops no step, which is what
-			// D78 holds fixed.
+			// (decisions.md D94). This adds and drops no step: the plan the
+			// user confirmed is the plan that runs (D78).
 			step.Panels = c.panelsOf(r.Instances, step)
 			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}

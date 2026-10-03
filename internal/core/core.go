@@ -319,11 +319,11 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // exactly one unnamed window on the runtime side and exactly one window on the
 // window host's side that no named runtime window already claims by title, and
 // every named runtime window of the process is found there by its title, one
-// window per named window, so two named windows of one title need two. D19
-// rejected the process id for pairing a pane to a window, because every OS
-// window of one kitty process shares its pid; that objection is exactly this
-// refusal, so an ambiguous process is left as it was rather than guessed at
-// (decisions.md D63, D67). A named window the window host does not list could
+// window per named window, so two named windows of one title need two. The
+// process id was rejected for pairing a pane to a window, because every OS
+// window of one kitty process shares its pid (D19); that objection is exactly
+// this refusal, so an ambiguous process is left as it was rather than guessed
+// at (D63, D67). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
@@ -477,9 +477,8 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 // be noticed.
 //
 // Only the class is re-checked, never the title. The whole point of a binding
-// is to survive a title the rule no longer matches, which is what D21 exists
-// for: an editor window is bound while its title still says the file it opened
-// with. A target that declares no class is trusted as before, and so is a
+// is to survive a title the rule no longer matches (decisions.md D21): an
+// editor window is bound while its title still says the file it opened with. A target that declares no class is trusted as before, and so is a
 // runtime binding: a runtime id is never handed back out, because the kitty
 // and the tmux host put the process or the server that assigned it into it.
 func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {

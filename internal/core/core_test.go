@@ -465,8 +465,9 @@ func TestToggleBackThroughTheOSWindow(t *testing.T) {
 	}
 }
 
-// The false positive D16 refuses: the runtime target exists but the user is
-// looking at the editor, so the key goes to the target and never home.
+// The false positive the focus authority exists to refuse (decisions.md D16):
+// the runtime target exists but the user is looking at the editor, so the key
+// goes to the target and never home.
 func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	editor := revier.TargetRef{Host: "wm", ID: "3"}
@@ -485,8 +486,9 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 	}
 }
 
-// A runtime that does not report OSWindows - a multiplexer - keeps the D16
-// behaviour: its refs are never judged by the window host, and never raised.
+// A runtime that does not report OSWindows - a multiplexer - gets no bridge
+// to the window host: its refs are never judged by it, and never raised
+// (decisions.md D16).
 func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	rt.SetCapabilities(revier.Capabilities{Layout: true})
@@ -553,8 +555,8 @@ func TestAnUnidentifiedOSWindowIsNotFocusedInsideTheTerminal(t *testing.T) {
 func TestGoPrefersTheBoundRef(t *testing.T) {
 	wm := hosttest.New("wm")
 	// The editor's title no longer matches the rule - it opened on the
-	// project and now names a file. The class is what D21 binds by and what
-	// a binding is re-checked against, so it still holds.
+	// project and now names a file. The class is what a binding is made by
+	// (decisions.md D21) and re-checked against, so it still holds.
 	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
@@ -837,9 +839,10 @@ func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
 	}
 }
 
-// D19 rejected the process id for pairing a pane to a window, because one
-// kitty process can own several OS windows. That case is refused here rather
-// than guessed at: a wrong title would send a keypress to the wrong window.
+// The process id was rejected for pairing a pane to a window, because one
+// kitty process can own several OS windows (decisions.md D19). That case is
+// refused here rather than guessed at: a wrong title would send a keypress to
+// the wrong window.
 func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})

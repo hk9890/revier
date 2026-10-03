@@ -408,7 +408,8 @@ func TestNewAgentRaisesTheOSWindow(t *testing.T) {
 }
 
 // With no OS window to raise, nothing opens: the tab would come up behind, and
-// its focus would be the notice D63 refuses.
+// its focus would be the notice a focus with no raise becomes
+// (decisions.md D63).
 func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
 	rt, _, _, _ := osWindowHosts()
 	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
