@@ -676,6 +676,17 @@ func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.Pa
 	return err
 }
 
+// ReadPanel is what a pane shows, with its colours (-e), and with its history
+// when asked (-S -). A pane id is unique across the server, so the instance
+// is not needed (revier.PanelReader).
+func (h *Host) ReadPanel(ctx context.Context, _ revier.TargetRef, panel revier.PanelID, scrollback bool) (string, error) {
+	args := []string{"capture-pane", "-p", "-e", "-t", panel.String()}
+	if scrollback {
+		args = append(args, "-S", "-")
+	}
+	return h.run(ctx, args...)
+}
+
 // Close kills the session and every pane in it. The server that assigned the
 // id has to be the server answering now: tmux numbers sessions per server
 // from $0, so after a restart the same id names an unrelated session, and a

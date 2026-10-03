@@ -59,9 +59,10 @@ func (m Model) promptKey(msg tea.KeyMsg) bool {
 
 // altRune reports an alt chord of a printable key. It is a key of the
 // surface's, or of nothing, and never text: a field that took it would type
-// its letter, so alt+h on the new-project screen wrote an h into the path.
+// its letter, so alt+h on the new-project screen wrote an h into the path,
+// and the popup's own key pressed over a screen would write a space.
 func altRune(msg tea.KeyMsg) bool {
-	return msg.Type == tea.KeyRunes && msg.Alt
+	return (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) && msg.Alt
 }
 
 // queryKeys are word and line editing, the readline keys a query field is

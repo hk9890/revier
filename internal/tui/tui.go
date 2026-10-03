@@ -3,13 +3,15 @@
 // project's targets, attached instances and agents, and what one of its agents
 // said last. Tab moves the cursor between the projects and the agents, and
 // alt+t to the targets. Enter activates. It is the picker and the monitor at
-// once (decisions.md D8, D105, D107).
+// once (decisions.md D8, D105, D107). The key that opens it puts a second list
+// in the first one's place: every agent of every project, with the terminal of
+// the one under the cursor mirrored beside it (D110, D111).
 //
 // Every project, target and agent it draws comes from core.Survey, refreshed
 // on a timer that never overlaps itself, and every action goes through the
-// same core paths the CLI commands use. The one read outside that path is
-// core.Details, what the chosen agent said last, which the pane asks for on
-// its own and no survey carries (decisions.md D106).
+// same core paths the CLI commands use. The two reads outside that path are
+// core.Details, what an agent said last, which the surface asks for on its
+// own and no survey carries (D106), and core.Screen, the mirror's.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -181,6 +183,13 @@ type Model struct {
 	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
 	amessage setMessage                       // the message the pane last set, as it set it
+	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
+	agents   bool                             // the surface shows the agent list in the project list's place (agentlist.go)
+	aglist   list.Model                       // the agent list's rows
+	aginput  textinput.Model                  // the agent list's query, with its own cursor
+	agfilter string                           // that query, held here so a refresh can re-apply it
+	agtop    bool                             // the agent list opened and the user has not acted on it: the cursor is on the first row whatever agent that is
+	mirror   mirror                           // the screen of the agent under the agent list's cursor (mirror.go)
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
 	copied   int                              // the characters the last selection copied, shown until the next press
@@ -228,6 +237,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
+		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
 		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
 		rinput: newPrompt(th, ""),
 		body:   newBody(),
@@ -472,9 +482,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.redrawSpin()
 		return mm, cmd
 	}
+	// The mirror is asked for before the pane is drawn: an agent that came
+	// under the cursor is drawn with its own screen pending, and not over the
+	// screen of the agent the cursor left.
+	read := mm.askMirror(msg)
 	mm.syncDetail()
 	mm.syncBody()
-	cmd = tea.Batch(cmd, mm.askDetails(msg))
+	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
 	// A key, a survey or a screen change can move what is under a pointer
 	// that stayed where it was, so what it is over is asked again.
 	if mm.cell != nil {
@@ -508,6 +522,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailsMsg:
 		m.took(msg)
 		return m, nil
+	case mirroredMsg:
+		m.tookScreen(msg)
+		return m, nil
+	case mirrorTickMsg:
+		// The tick ends with the mirror off the screen, and askMirror starts
+		// it again when the mirror comes back; the read it is for is
+		// askMirror's too.
+		if !m.mirroring() {
+			m.mirror.ticking = false
+			return m, nil
+		}
+		return m, mirrorTick()
 	case surveyMsg:
 		m.surveyErr = msg.err
 		if msg.err == nil {
@@ -575,7 +601,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.hidden {
 			return m, nil
 		}
-		m.hidden = false
+		// The surface opens on the projects, a raise included: the press that
+		// raises it is the one that opened it (decisions.md D110).
+		m.hidden, m.agents = false, false
 		return m, reloadFiles
 	case reloadedMsg:
 		if msg.err != nil {
@@ -632,9 +660,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// A blink is a field's own timer message; the field it is not for
 	// ignores it.
-	var cmds [2]tea.Cmd
+	var cmds [3]tea.Cmd
 	m.input, cmds[0] = m.input.Update(msg)
 	m.ainput, cmds[1] = m.ainput.Update(msg)
+	m.aginput, cmds[2] = m.aginput.Update(msg)
 	return m, tea.Batch(cmds[:]...)
 }
 
@@ -749,6 +778,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.dialog != dialogNone {
 		return m.dialogKey(msg)
 	}
+	if m.agents {
+		return m.agentsKey(msg)
+	}
 	m.err = nil
 	if by, ok := m.keys.move(msg, m.page); ok {
 		m.moveCursor(by)
@@ -757,6 +789,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
+	case switches(msg):
+		return m.switchList()
 	case key.Matches(msg, m.keys.Back):
 		switch {
 		case m.field() != nil && m.field().Value() != "":
@@ -937,6 +971,9 @@ func (m Model) targetRows() []targetRow {
 
 // enter acts on the row under the cursor, by key or by double click.
 func (m Model) enter() (Model, tea.Cmd) {
+	if m.agents {
+		return m.goListed()
+	}
 	return opened(m.act())
 }
 
@@ -1119,6 +1156,20 @@ func working(v revier.ProjectView) bool {
 // one. A frame comes eight times a second, and a working agent behind the
 // filter or a dialog would otherwise rebuild the whole surface for no glyph.
 func (m *Model) redrawSpin() {
+	// Every working agent on the agent list is a row with the spinner, and
+	// the pane's head carries it for the one under the cursor.
+	if m.agents && m.dialog == dialogNone {
+		for _, item := range m.aglist.VisibleItems() {
+			if it, ok := item.(agentItem); ok && it.agent.State.Status == revier.StatusRunning {
+				m.syncBody()
+				break
+			}
+		}
+		if it, ok := m.listedAgent(); ok && it.agent.State.Status == revier.StatusRunning {
+			m.syncDetail()
+		}
+		return
+	}
 	if m.dialog.hasRows() {
 		for _, item := range m.bodyList().VisibleItems() {
 			if row, ok := item.(tableRow); ok && working(row.rowView()) {

@@ -449,6 +449,7 @@ func (m *Model) reload() {
 	default:
 		m.plist.Select(0)
 	}
+	m.reloadAgents()
 }
 
 // closedSince reports a project its row drew as open that nothing on this

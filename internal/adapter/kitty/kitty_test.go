@@ -746,6 +746,38 @@ func TestSendTextGoesThroughStdinToTheWindow(t *testing.T) {
 	}
 }
 
+// A panel's screen is read from one window of the kitty process the instance
+// lives in, with its colours, and with its scrollback only when asked.
+func TestReadPanelReadsTheWindowsScreenWithItsColours(t *testing.T) {
+	h := newHost()
+	var got []call
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+		got = append(got, call{socket, args})
+		return []byte("\x1b[32mgreen\x1b[39m\n"), nil
+	})
+	var r revier.PanelReader = h
+	ref := revier.TargetRef{Host: "kitty", ID: "@kitty-4001/2"}
+	for _, scrollback := range []bool{false, true} {
+		text, err := r.ReadPanel(context.Background(), ref, "7", scrollback)
+		if err != nil || text != "\x1b[32mgreen\x1b[39m\n" {
+			t.Fatalf("ReadPanel = %q, %v; want what kitten printed", text, err)
+		}
+	}
+	want := []string{
+		"get-text --match id:7 --ansi --extent screen",
+		"get-text --match id:7 --ansi --extent all",
+	}
+	for i, c := range got {
+		if args := strings.Join(c.args, " "); args != want[i] || c.socket != "unix:@kitty-4001" {
+			t.Errorf("call %d = %s %q, want %q on the instance's own socket unix:@kitty-4001", i, c.socket, args, want[i])
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("kitten invoked %d times, want %d: %+v", len(got), len(want), got)
+	}
+}
+
 // A tab opens after the OS window's tabs, carries the vars the core gives it
 // as user vars, and runs the launch argv in the directory given.
 func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {

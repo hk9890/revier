@@ -99,6 +99,14 @@ func (m Model) helpSections() []helpSection {
 			{key: k.Close.Help().Key, desc: "close what is open of it, after a confirm"},
 			{key: k.Delete.Help().Key + " / alt+d", desc: "delete its project file, closing it first; for a link, unlink it and change nothing on its host"},
 		}},
+		{title: "Agent list", entries: []helpEntry{
+			{key: m.switchKey(), desc: "switch between the projects and the agents of every project"},
+			{key: "enter", desc: "go to the agent's tab"},
+			{key: k.Close.Help().Key, desc: "close the agent's tab; asks first when it works or waits for you"},
+			{key: "type", desc: "filter the agents, by what each is on and by its project"},
+			{key: "wheel", desc: "over the agent's screen, scroll back through it"},
+			{key: "esc", desc: "clear the filter, or " + m.leaveWord()},
+		}},
 		{title: "Top bar", entries: barHelpEntries()},
 		{title: "Sessions", entries: []helpEntry{
 			{key: "enter", desc: "restore the session: open what it recorded and is not running"},

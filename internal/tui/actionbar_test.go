@@ -19,23 +19,27 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// barCell is a terminal cell inside the first button of the action bar: the
-// bar is the surface's first line, and its first label starts one column into
-// the content.
+// barCell is a terminal cell inside the "new" button of the action bar: the
+// bar is the surface's first line, and "new" is the first button after the
+// switch between the two lists.
 func barCell(t *testing.T, m tui.Model) (x, y int) {
 	t.Helper()
-	mr, mc := margins(m)
-	return mc + 1, mr
+	mr, _ := margins(m)
+	x = column(barLine(m), "new")
+	if x < 0 {
+		t.Fatalf("bar = %q, want the new button on it", barLine(m))
+	}
+	return x, mr
 }
 
 // The bar is the top line, and every button says its key: the bar is
 // a second way to what the keyboard already reaches.
 func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	bar := barLine(m)
-	for _, want := range []string{"new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
+	for _, want := range []string{"agents", "alt+space", "new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("bar = %q, want it to name %q", bar, want)
 		}
@@ -473,7 +477,7 @@ func TestAFolderThatIsAProjectIsRefused(t *testing.T) {
 func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 80)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 100)
 
 	m, _ = press(m, "alt+h")
 	if head := barLine(m); !strings.Contains(head, "Keyboard shortcuts") {
@@ -484,7 +488,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 		"alt+n", "alt+r", "alt+c", "alt+h", "alt+e", "alt+d", "ctrl+w", "ctrl+c",
 		"ctrl+y", "sync",
 		"ctrl+shift+u", "go to home",
-		"alt+space", "open revier",
+		"alt+space", "open revier", "switch between the projects and the agents",
 	} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("help screen does not name %q:\n%s", want, screen)
@@ -497,6 +501,51 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	}
 }
 
+// A terminal too narrow for every button ends its bar in the burger, with
+// every button before it whole. A click on the burger turns the bar to the
+// rest, a click on one of those opens its screen, and the bar it comes back
+// to is the first again.
+func TestANarrowBarKeepsItsLastButtonsBehindTheBurger(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20)
+	mr, _ := margins(m)
+
+	bar := barLine(m)
+	if !strings.Contains(bar, "new alt+n") || !strings.HasSuffix(strings.TrimRight(strings.Split(bar, "dev")[0], " "), "≡") {
+		t.Fatalf("bar = %q, want its first buttons and the burger after them", bar)
+	}
+	if strings.Contains(bar, "help") || strings.Contains(bar, "config") {
+		t.Errorf("bar = %q, want the buttons with no room behind the burger", bar)
+	}
+
+	m = clickAt(m, column(bar, "≡"), mr)
+	bar = barLine(m)
+	if !strings.Contains(bar, "help alt+h") || !strings.Contains(bar, "config alt+c") || strings.Contains(bar, "new alt+n") {
+		t.Fatalf("bar = %q after the burger, want the remaining buttons", bar)
+	}
+	if column(bar, "≡") > column(bar, "config") {
+		t.Errorf("bar = %q, want the burger first on the second page, where the pointer is", bar)
+	}
+
+	m = clickAt(m, column(bar, "help"), mr)
+	if head := barLine(m); !strings.Contains(head, "Keyboard shortcuts") {
+		t.Fatalf("top line = %q after a click on help, want its screen", head)
+	}
+	m, _ = press(m, "esc")
+	if bar := barLine(m); !strings.Contains(bar, "new alt+n") {
+		t.Errorf("bar = %q after the screen, want the first buttons again", bar)
+	}
+}
+
+// A terminal with room for every button has no burger.
+func TestAWideBarHasNoBurger(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
+	if bar := barLine(m); strings.Contains(bar, "≡") || !strings.Contains(bar, "help alt+h") {
+		t.Errorf("bar = %q, want every button and no burger", bar)
+	}
+}
+
 // The key that opens the help screen closes it, and a letter typed on it
 // does not reach the filter behind it.
 func TestAltHClosesTheHelpScreenAndFiltersNothing(t *testing.T) {
@@ -506,7 +555,7 @@ func TestAltHClosesTheHelpScreenAndFiltersNothing(t *testing.T) {
 	m, _ = press(m, "alt+h")
 	m, _ = press(m, "x")
 	m, _ = press(m, "alt+h")
-	if head := barLine(m); !strings.Contains(head, "help") {
+	if head := barLine(m); !strings.Contains(head, "new alt+n") {
 		t.Fatalf("top line = %q after alt+h twice, want the bar back", head)
 	}
 	if q := query(m); strings.Contains(q, "x") {
@@ -660,7 +709,7 @@ func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
 	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
 
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	bar := barLine(m)
 	dim := theme.Default().Help.Render(build.Version)
@@ -687,8 +736,10 @@ func TestANarrowBarDropsTheVersion(t *testing.T) {
 
 	_, _, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	wide := resize(m, 120, 20)
-	narrow := resize(m, 60, 20)
+	wide := resize(m, 140, 20)
+	// The buttons that fit in 58 columns, and the burger after them, end
+	// three columns short of the edge: less than the version and its air.
+	narrow := resize(m, 58, 20)
 	dim := theme.Default().Help.Render(build.Version)
 
 	if !strings.Contains(barLine(wide), dim) {

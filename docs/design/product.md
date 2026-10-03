@@ -163,6 +163,34 @@ drawn as text and styled in revier's own colours: nothing the message carries
 is styling, and nothing in it speaks to the terminal (D108). A remote project's
 agent is not read, and the pane says so.
 
+The key that opens the surface, pressed on it, puts the agent list in the
+project list's place, and pressed again the projects; the bar's first button
+does the same and names where it goes (D110). A terminal too narrow for every
+button of the bar shows the first ones whole and ends in a burger, which turns
+the bar to the rest; it has no key, since each button behind it has its own
+(D49). The agent list is every agent a
+panel here shows, one row each: its state, what it is on, and how long ago it
+spoke, over its project and the directory it works in when that is not the
+project's own. An agent with no activity line yet shows the first line of what
+it said last. The rows stand by state - waiting for the user, working, at rest,
+unknown - and those waiting and at rest by when each spoke, the latest first;
+the working and the unknown stand by project. The cursor stays on its agent
+through every reordering, and the rule totals the rows by state. Typing filters
+them, Enter goes to the agent, and del closes its tab. The list opens on its
+first row, and the project list keeps its cursor and query across the switch.
+An agent the transcript says nothing about - another harness, a link's - has no
+age and stands last in its state.
+
+Beside the agent list the pane names the agent as it names a project - the
+agent's activity as the title, then its state, project, path, git URL, harness
+and when it spoke - and under that mirrors the agent's panel (D111): the end of
+what its terminal shows, read once a second, in the terminal's own colours. A
+line wider than the pane continues on the next. The wheel scrolls back into the
+panel's scrollback, which is read only while the view is scrolled into it, and
+the view holds its lines as more are written under them. A link's agent is
+mirrored as any other, since the panel is here. A panel no runtime here can
+read leaves a note in the mirror's place.
+
 The list and the pane's agents each have a query over their rows, kept while
 their project is, until a press opens something; then both end, and each
 cursor stays on the row it found. Tab and shift+tab move between the two, and
@@ -190,8 +218,14 @@ its exit status for scripts.
 
 Esc minimizes the popup through the window host, with no minimize animation
 where the host can skip it, and the next press raises it with the cursor and
-the query where they were (D86). Hidden, it surveys
-nothing, since every survey reaches every linked host; the terminal's focus
+the query where they were (D86), on the projects whichever list it was hidden
+on (D110). A press while the focused window shows the surface is typed into
+its panel as the key that switches the list, because the desktop takes the key
+before the terminal sees it. That window is the popup, or a terminal whose
+current panel runs revier with no command, paired with its window as an
+attachment is (D95); there no popup opens. A runtime that cannot type into the
+panel leaves the press what it was: the popup, raised or opened. Hidden, it
+surveys nothing, since every survey reaches every linked host; the terminal's focus
 report on the raise reads the project files again, since a press used to load
 them, then runs one survey and resumes the refresh. The surface knows it is
 the popup, and which project to open on, from the environment its terminal is

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -1256,6 +1257,29 @@ func dirExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
+// elsewhere is the directory an agent works in as its project's view carries
+// it: the directory when it is not the project's own, and nothing when it is
+// (decisions.md D110). The two are compared where both are paths of one
+// machine, the one that read the agent, and with symbolic links resolved: a
+// project reached through a link and an agent that reports the physical
+// directory are in the same place. A path that cannot be resolved is compared
+// as written.
+func elsewhere(project, dir string) string {
+	if dir == "" || sameDir(project, dir) {
+		return ""
+	}
+	return dir
+}
+
+func sameDir(a, b string) bool {
+	if a, b = filepath.Clean(a), filepath.Clean(b); a == b {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && ra == rb
+}
+
 // probeCache is what the survey has already read of each instance, by ref.
 // One terminal can be a target of one project and an attachment of another,
 // and both views list its agents; reading it once per survey rather than once
@@ -1295,7 +1319,10 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	probe := func(inst revier.Instance) {
 		if k := key(inst.Ref); !seen[k] {
 			seen[k] = true
-			v.Agents = append(v.Agents, c.agentsOf(ctx, probed, inst)...)
+			for _, a := range c.agentsOf(ctx, probed, inst) {
+				a.State.Dir = elsewhere(p.Path, a.State.Dir)
+				v.Agents = append(v.Agents, a)
+			}
 		}
 	}
 	// A link's targets are panels running an ssh, and what the agent on the

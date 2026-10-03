@@ -101,12 +101,24 @@ type AgentProbe interface {
 }
 
 // AgentState is what a probe reports about one panel. It says what the agent
-// is doing now and not since when: no surface shows an age, and a field a
-// probe author fills for nothing is a field to leave out of the contract.
+// is doing now and not since when: a field a probe author fills for nothing
+// is a field to leave out of the contract, and the one surface that shows an
+// age reads it from Detailed (decisions.md D102).
 type AgentState struct {
 	Harness  string `json:"harness"`
 	Status   Status `json:"status"`
 	Activity string `json:"activity,omitempty"`
+
+	// Dir is the directory the agent works in, empty when the harness does
+	// not say. It is the agent's and not the panel's: an agent started in a
+	// project can work in one of its worktrees, which is what tells two
+	// agents of one project apart on the agent list (decisions.md D110).
+	//
+	// A probe reports the directory as the harness names it. A project's
+	// view keeps it only when it is not the project's own directory, which
+	// the core decides on the machine that read the agent, where both are
+	// paths of one file system.
+	Dir string `json:"dir,omitempty"`
 }
 
 // Status is what an agent is doing. StatusAttention is the state the product
@@ -189,9 +201,11 @@ type Titled interface {
 
 // Detailed is an optional capability of an AgentProbe, detected by type
 // assertion. Detail is the last thing the agent in a panel said, for the pane
-// that shows one agent. It is asked for every agent of the project the pane
-// shows, each time the surface refreshes, and never in a survey: keep it cheap,
-// and read again only what changed since the last answer.
+// that shows one agent and for the agent list, which orders its rows by when
+// each spoke. It is asked for every agent the surface shows - one project's
+// beside the project list, every project's on the agent list - each time the
+// surface refreshes, and never in a survey: keep it cheap, and read again only
+// what changed since the last answer.
 //
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so

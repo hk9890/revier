@@ -47,21 +47,21 @@ type detailsMsg struct {
 // not only the one shown, because which one is shown first depends on when
 // each spoke. The read runs off the update loop, so the screen never waits on
 // it (decisions.md D106).
+//
+// The agent list asks for every agent on the surface instead: its rows stand
+// in the order the agents spoke in (D110).
 func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
-	// Nobody reads an answer the pane does not show: the popup hidden, a
-	// terminal too narrow for the pane beside the list, or a screen over it.
-	// A remote project's agents speak on the other machine (agentSaid).
-	v, ok := m.selected()
-	if !ok || len(v.Agents) == 0 || m.hidden || m.paneCols() == 0 || m.dialog != dialogNone || v.Project.Remote != nil {
+	name, agents := m.detailsWanted()
+	if len(agents) == 0 {
 		m.aasked = ""
 		return nil
 	}
-	if _, survey := msg.(surveyMsg); v.Project.Name == m.aasked && !survey {
+	if _, survey := msg.(surveyMsg); name == m.aasked && !survey {
 		return nil
 	}
-	m.aasked = v.Project.Name
+	m.aasked = name
 	m.aseq++
-	c, name, seq, agents := m.core, v.Project.Name, m.aseq, slices.Clone(v.Agents)
+	c, seq := m.core, m.aseq
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), detailWait)
 		defer cancel()
@@ -71,6 +71,36 @@ func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 		}
 		return detailsMsg{project: name, seq: seq, said: said}
 	}
+}
+
+// everyAgent stands for the agent list where an ask for details names a
+// project. No project has the name: a project's name is a file's.
+const everyAgent revier.ProjectName = "\x00agents"
+
+// detailsWanted is the agents whose last word the surface shows now, and the
+// project they are asked for under: one project's beside the project list,
+// every project's on the agent list. None is nothing to ask.
+func (m Model) detailsWanted() (revier.ProjectName, []revier.AgentView) {
+	// Nobody reads an answer the surface does not show: the popup hidden, or
+	// a screen over the list.
+	if m.hidden || m.dialog != dialogNone {
+		return "", nil
+	}
+	if m.agents {
+		var all []revier.AgentView
+		for _, v := range m.views {
+			all = append(all, v.Agents...)
+		}
+		return everyAgent, all
+	}
+	// Beside the project list the pane alone reads it: not on a terminal too
+	// narrow for the pane, and not for a remote project, whose agents speak
+	// on the other machine (agentSaid).
+	v, ok := m.selected()
+	if !ok || m.paneCols() == 0 || v.Project.Remote != nil {
+		return "", nil
+	}
+	return v.Project.Name, slices.Clone(v.Agents)
 }
 
 // took takes in an answer to askDetails. One for a project the cursor has
@@ -91,6 +121,14 @@ func (m *Model) took(msg detailsMsg) {
 		said[k] = d
 	}
 	m.adetails = said
+	m.reloadAgents()
+	// The agent list opened before this answer, on the first row of an order
+	// that did not know when each agent spoke. The first row of the order
+	// that does is the one it opens on (switchList).
+	if m.agents && m.agtop {
+		m.agtop = false
+		m.aglist.Select(0)
+	}
 }
 
 // pickAgent puts the pane's cursor on an agent row the user moved it to, and

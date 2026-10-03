@@ -52,7 +52,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	case msg.Action != tea.MouseActionPress:
 		return m, nil
 	}
-	m.copied = 0
+	// A press is the user's: the agent list's cursor is theirs from here
+	// (switchList).
+	m.copied, m.agtop = 0, false
 	if msg.Button == tea.MouseButtonLeft {
 		m.press = &press{at: *m.cell, over: m.over}
 	}
@@ -74,6 +76,17 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
+		// The wheel over the agent list's pane scrolls the mirror through
+		// the panel's scrollback; its head stays.
+		if m.agents && m.dialog == dialogNone {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				return m, m.scrollMirror(mirrorNotch)
+			case tea.MouseButtonWheelDown:
+				return m, m.scrollMirror(-mirrorNotch)
+			}
+			return m, nil
+		}
 		m.detail, _ = m.detail.Update(msg)
 		return m, nil
 	}
@@ -115,7 +128,17 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	switch m.over.kind {
 	case hoverBar:
 		m.err = nil
-		return m.buttons()[m.over.index].run(m)
+		cells := m.barCells()
+		if m.over.index >= len(cells) {
+			return m, nil
+		}
+		// A button of the bar's second page runs from it, and the bar it
+		// leaves behind is the first again.
+		action := cells[m.over.index].action
+		if action.label != burgerLabel {
+			m.barMore = false
+		}
+		return action.run(m)
 	// A pane row is a project row's equal: one click puts the cursor on it,
 	// and a second runs it as Enter does.
 	case hoverTarget:

@@ -867,6 +867,23 @@ func (h *Host) SendText(ctx context.Context, ref revier.TargetRef, panel revier.
 	return err
 }
 
+// ReadPanel is what one kitty window shows, with its colours (--ansi), and
+// with its scrollback when asked, on the socket of the process the instance
+// lives in. kitty writes a hyperlink as an OSC 8 beside the SGR sequences;
+// what of that is drawn is the surface's to decide (revier.PanelReader).
+func (h *Host) ReadPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, scrollback bool) (string, error) {
+	socket, _, err := parseRef(ref.ID)
+	if err != nil {
+		return "", err
+	}
+	extent := "screen"
+	if scrollback {
+		extent = "all"
+	}
+	out, err := h.kitten(ctx, socket, "get-text", "--match", "id:"+panel.String(), "--ansi", "--extent", extent)
+	return string(out), err
+}
+
 // Close closes every kitty window of the OS window, across its tabs, in one
 // call; kitty closes an OS window whose last window closed. kitten has no
 // command that names an OS window, so its windows are read from ls first.

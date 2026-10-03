@@ -102,7 +102,7 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	}
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
-		state.Status = Status(s.Status)
+		state.Status, state.Dir = Status(s.Status), s.Cwd
 	}
 	return state, nil
 }
