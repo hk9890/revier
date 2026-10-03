@@ -17,9 +17,11 @@ describing something absent from `internal/` is intent, not documentation drift.
 `docs/design/decisions.md` holds only decisions in force:
 
 - Write an entry as the choice and the reason that decides it, in at most
-  8 lines under its heading. Put the behaviour it produces in the design doc
-  that owns it, tagged `(Dnn)`, and cut an entry that grows past 8 lines
-  rather than extend the limit.
+  8 lines under its heading. Cut an entry that grows past 8 lines rather than
+  extend the limit.
+- Put the behaviour a decision produces in the design doc that owns it, tagged
+  `(Dnn)`. Leave what describes an adapter or the core from the inside in the
+  Go comment beside it: no design doc owns it.
 - Name a rejected alternative only where it would otherwise be proposed again.
 - When a decision replaces another, delete the old entry, say "Replaces ..."
   in the new one, and repoint every `Dnn` citation in the tree. Git history

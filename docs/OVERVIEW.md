@@ -42,6 +42,7 @@ rg 'revier\.Host' --type go               # what implements or consumes the port
 rg -l '//go:build live'                   # tests needing a real substrate
 rg 'ErrNo' pkg internal                   # the normal-outcome sentinels
 rg 'func cmd' cmd/revier                  # every CLI command
+rg 'Dnn\b' docs/design                    # a decision a comment cites: its entry, and the design text tagged (Dnn)
 ```
 
 Behaviour is almost never in the adapter named after the tool. Search

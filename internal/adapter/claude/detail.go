@@ -31,11 +31,12 @@ var errNoMessage = fmt.Errorf("%w: no assistant message in the transcript's tail
 // named for the panel's pid by the listing Inspect keeps.
 //
 // The transcript's format is Claude Code's internal one, and it changes
-// between releases. So this is display only (revier.Detailed, decisions.md
-// D106): a line that does not parse is passed over, and a transcript with no
-// line that does is an error, which the pane shows as nothing. A panel the
-// listing does not hold, and a session with no transcript yet, are ordinary
-// and answer revier.ErrNoDetail; only a read that failed is a failure.
+// between releases. So this is display only, as revier.Detailed says
+// (decisions.md D106): a line that does not parse is passed over, and a
+// transcript with no line that does is an error, which the pane shows as
+// nothing. A panel the listing does not hold, and a session with no
+// transcript yet, are ordinary and answer revier.ErrNoDetail; only a read
+// that failed is a failure.
 //
 // The pane asks every refresh, so a transcript is read again only when its
 // size or modification time changed since the last read.

@@ -15,8 +15,14 @@ import (
 // spent most of what the caller allowed, so a context that carried the
 // caller's deadline would be done before the first step. Dropping the
 // cancellation with it, as context.WithoutCancel alone does, makes the
-// operation unstoppable instead, which is worse: Ctrl-C would not reach it and
-// a hung host would hold it forever.
+// operation unstoppable instead, which is worse: a caller that cancels would
+// not reach it and a hung host would hold it forever.
+//
+// The cancel is followed only until the parent's deadline passes. A context
+// that is done reports one reason and hears nothing more from the context it
+// was made from, so a cancel that comes after the deadline is not seen, and
+// the operation runs to its own bound. A caller with a source of cancellation
+// passes it with no deadline laid over it.
 func WithoutDeadline(parent context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	follow := func() {
@@ -32,7 +38,7 @@ func WithoutDeadline(parent context.Context) (context.Context, context.CancelFun
 }
 
 // phaseContext is what one phase of a shutdown runs on: a budget of its own,
-// and the caller's cancellation.
+// and the caller's cancellation as WithoutDeadline follows it.
 //
 // It does not inherit the caller's deadline. The recheck survey waits on
 // every link host and can take most of a caller's bound on ninety projects;
