@@ -86,9 +86,11 @@ func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled b
 
 // where is the row's second line: the project, and the directory the agent
 // works in when it is not the project's own, which is how a worktree shows.
+// Whether it is the project's own is the core's to say, on the machine that
+// read the agent: a view carries the directory only when it is not.
 func (i agentItem) where() string {
 	out := i.project.Label()
-	if dir := i.agent.State.Dir; dir != "" && filepath.Clean(dir) != filepath.Clean(i.project.Path) {
+	if dir := i.agent.State.Dir; dir != "" {
 		out += " · " + filepath.Base(dir)
 	}
 	return out

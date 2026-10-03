@@ -338,6 +338,15 @@ type AgentState struct {
     Activity string // one-line live summary the agent set itself
     Dir      string // the directory the agent works in, empty when the harness does not say (D110)
 }
+```
+
+A probe reports `Dir` as the harness names it. A project's view keeps it only
+when it is not the project's own directory. The core decides that on the
+machine that read the agent, with symbolic links resolved on both paths, so a
+link's view takes the host's answer and never compares a path of one machine
+with a path of another.
+
+```go
 
 type Status uint8
 

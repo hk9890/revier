@@ -113,6 +113,11 @@ type AgentState struct {
 	// not say. It is the agent's and not the panel's: an agent started in a
 	// project can work in one of its worktrees, which is what tells two
 	// agents of one project apart on the agent list (decisions.md D110).
+	//
+	// A probe reports the directory as the harness names it. A project's
+	// view keeps it only when it is not the project's own directory, which
+	// the core decides on the machine that read the agent, where both are
+	// paths of one file system.
 	Dir string `json:"dir,omitempty"`
 }
 
