@@ -478,9 +478,10 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 //
 // Only the class is re-checked, never the title. The whole point of a binding
 // is to survive a title the rule no longer matches (decisions.md D21): an
-// editor window is bound while its title still says the file it opened with. A target that declares no class is trusted as before, and so is a
-// runtime binding: a runtime id is never handed back out, because the kitty
-// and the tmux host put the process or the server that assigned it into it.
+// editor window is bound while its title still says the file it opened with.
+// A target that declares no class is trusted as before, and so is a runtime
+// binding: a runtime id is never handed back out, because the kitty and the
+// tmux host put the process or the server that assigned it into it.
 func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {
 	if c.Window == nil || host.Name() != c.Window.Name() {
 		return true

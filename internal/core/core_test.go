@@ -488,7 +488,7 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 
 // A runtime that does not report OSWindows - a multiplexer - gets no bridge
 // to the window host: its refs are never judged by it, and never raised
-// (decisions.md D16).
+// (decisions.md D16, D19).
 func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	rt.SetCapabilities(revier.Capabilities{Layout: true})

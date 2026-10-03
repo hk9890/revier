@@ -190,6 +190,25 @@ func TestALinkNameWithAColonIsSaidWhileTypedAndNotWritten(t *testing.T) {
 	}
 }
 
+// Why a name is refused is on screen to its last word, beside the pane too:
+// the reason is a sentence, and what the name breaks comes at its end.
+func TestALinkNameRefusalIsShownWhole(t *testing.T) {
+	m, _, _ := linkWorld(t, nil, "beta")
+	m = resize(m, 120, 20)
+	m = step(m, "alt+r")
+	m = step(m, "enter")
+	m = step(m, "enter")
+
+	m, _ = press(m, "a:b")
+	body := strings.Join(rows(m), "\n")
+	if !strings.Contains(body, "address") {
+		t.Errorf("rows = %q, want the reason to its end", rows(m))
+	}
+	if strings.Contains(body, "is free") {
+		t.Errorf("rows = %q, want no word of a taken name: this one is free", rows(m))
+	}
+}
+
 // Esc on the name goes back to the host's projects, with the cursor on the
 // project it left.
 func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {

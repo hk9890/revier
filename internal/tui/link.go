@@ -365,7 +365,8 @@ func (m Model) linkNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // linkNameFault is why the name in the field cannot be written, or nil. It
-// is asked on every frame, so a name that is taken says so as it is typed.
+// is asked on every frame, so a name that is taken, or that no agent address
+// can carry, says so as it is typed.
 func (m Model) linkNameFault() error {
 	name := m.linkNameValue()
 	if name == "" {
@@ -428,7 +429,9 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 }
 
 // linkNameScreen is what stands in the list's place while the link is
-// named: what Enter writes, or why it writes nothing.
+// named: what Enter writes, or why it writes nothing. The reason is wrapped
+// where every other line is clipped: it is a sentence, and what the name
+// breaks comes at its end.
 func (m Model) linkNameScreen() string {
 	th := m.theme
 	w := m.listWidth()
@@ -440,8 +443,8 @@ func (m Model) linkNameScreen() string {
 		return ""
 	}
 	if err := m.linkNameFault(); err != nil {
-		return say(th.Attention, err.Error()) + "\n" +
-			say(th.Meta, "Enter writes nothing until the name is free")
+		return th.Attention.PaddingLeft(2).Width(w).Render(err.Error()) + "\n" +
+			say(th.Meta, "Enter writes nothing until the name changes")
 	}
 	root, err := config.Root()
 	if err != nil {
