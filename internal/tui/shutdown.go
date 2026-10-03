@@ -24,9 +24,10 @@ import (
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
 
-// shutdownTimeout bounds the survey a plan is made from, and the recheck
-// survey inside the close. The save and the closes run on budgets of their
-// own, core.SaveBudget and core.CloseBudget, counted from where each starts.
+// shutdownTimeout bounds the survey a plan is made from. The close keeps none
+// of it: the recheck, the save and the closes each run on a budget of their
+// own, core.RecheckBudget, core.SaveBudget and core.CloseBudget, counted from
+// where each starts.
 const shutdownTimeout = 30 * time.Second
 
 type shutStep int

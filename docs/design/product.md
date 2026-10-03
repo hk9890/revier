@@ -231,15 +231,6 @@ each step's action and not from the reason it carries: a step no host can
 close carries no reason and closes nothing either, and a shutdown of nothing
 but those would otherwise record the desktop as shut down.
 
-The recheck, the save and the closes each run on a budget of their own,
-counted from where that phase starts (D99). The recheck asks every link host
-what its agents hold and the save asks again, so ninety projects with a host
-that does not answer spend most of one bound, and a bound shared by the whole
-call left the recheck reading nothing, every step unread and nothing closed.
-Each budget carries the caller's cancellation but not its deadline: a cancel
-is a decision about this shutdown, and a bound that ran out in an earlier
-phase is not one.
-
 A step closes a tab as every panel in it (D94). `Panel` names the tab that
 holds it, and the step carries every panel of that tab and closes each
 through `PanelCloser`: kitty ends a tab with its last window and tmux a window

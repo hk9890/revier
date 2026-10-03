@@ -89,8 +89,8 @@ func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
 	switch {
 	case errors.Is(err, core.ErrNoKeyBinder):
 		// A machine with no desktop is a normal outcome, not a failure
-		// (docs/design/decisions.md D26). Reporting it as an error would
-		// leave a --json caller with an exit status and no JSON at all.
+		// (decisions.md D26). Reporting it as an error would leave a --json
+		// caller with an exit status and no JSON at all.
 		report = core.KeyReport{Rows: []core.KeyRow{}}
 		if !*asJSON {
 			fmt.Fprintln(os.Stderr, "revier:", err)

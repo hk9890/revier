@@ -30,7 +30,8 @@ type ProjectView struct {
 // home target, which is what run-or-raise and a restore act on; a surface
 // draws Held, so a project with an attached terminal and no home reads as
 // open. Every agent a surface shows sits in a panel of an instance this
-// counts, so a project that reads as closed shows no agents (D104).
+// counts, so a project that reads as closed shows no agents
+// (decisions.md D104).
 func (v ProjectView) Held() bool {
 	if v.Running {
 		return true

@@ -3,7 +3,7 @@
 // project's targets, attached instances and agents, and what one of its agents
 // said last. Tab moves the cursor between the projects and the agents, and
 // alt+t to the targets. Enter activates. It is the picker and the monitor at
-// once (docs/design/decisions.md D8, D105, D107).
+// once (decisions.md D8, D105, D107).
 //
 // Every project, target and agent it draws comes from core.Survey, refreshed
 // on a timer that never overlaps itself, and every action goes through the

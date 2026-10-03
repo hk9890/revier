@@ -23,7 +23,7 @@ const (
 // refused is neither cloned nor opened: the reason is the one thing to do
 // about it, and a git_url the load refused must not reach git (D85). One with
 // no home target is refused with ErrNoHome. A link is its host's to clone
-// (D84), and a checkout that is here is gone to. One that is missing is
+// (D83), and a checkout that is here is gone to. One that is missing is
 // cloned when the file records where from; else the home target is raised
 // when it runs, since raising touches no directory, and a fresh start is
 // refused rather than made in whatever directory the runtime falls back to.

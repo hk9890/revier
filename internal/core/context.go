@@ -32,7 +32,7 @@ func WithoutDeadline(parent context.Context) (context.Context, context.CancelFun
 }
 
 // phaseContext is what one phase of a shutdown runs on: a budget of its own,
-// and the caller's cancellation (decisions.md D99).
+// and the caller's cancellation.
 //
 // It does not inherit the caller's deadline. The recheck survey waits on
 // every link host and can take most of a caller's bound on ninety projects;

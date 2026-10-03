@@ -66,3 +66,14 @@ refuses the set. Add a rule to `config.validateTargets` unless it is about the
 project as a whole, in which case `config.validateProject`. Both keep the
 project loaded and listed, so every reason stays readable in the surface and in
 `revier doctor`.
+
+## Citing a decision
+
+- Cite a decision from a Go comment as `(decisions.md Dnn)`, several together
+  as `(decisions.md Dnn, Dnn)`, and a later one in the same comment as `(Dnn)`.
+- A number names the entry in `docs/design/decisions.md`, which holds the
+  choice, and the design text tagged `(Dnn)`, which holds the behaviour. Not
+  every decision has tagged text. Find what there is with
+  `rg 'Dnn\b' docs/design`.
+- Give no number to a fact that neither place carries: state it in the
+  comment's own words.

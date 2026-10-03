@@ -168,11 +168,7 @@ type WorkareaReader interface {
 ```
 
 A multiplexer's instance is a session and its windows are tabs, the shape of a
-kitty OS window (D70). The tmux adapter keeps the name in `@revier-name`,
-because tmux 3.4 rewrites `:` and `.` in a session name. tmux cannot say which
-of several attached terminals is meant, so `Focus` switches only the terminal
-of the pane it runs in, or the one terminal attached, and records the focus in
-`@revier-focus` for `Focused` to report when neither decides.
+kitty OS window (D70).
 
 ## PanelOpener
 
@@ -280,8 +276,7 @@ after a reboot here (D84). The two machines name that agent by a tag - this
 machine's name and the pid of the panel's ssh - which the process carries in
 its environment. Nothing is recorded, so a title, `/clear` or a resume cannot
 move it. What the agent starts inherits the tag, so the host takes the panel
-to be the tagged process nearest the one started, and lists such processes
-from `/proc`, since no runtime there holds them. sshd runs a command in a
+to be the tagged process nearest the one started. sshd runs a command in a
 shell that read no profile, where `claude` was not on the PATH and every agent
 read unknown, so each command runs in the login shell.
 
