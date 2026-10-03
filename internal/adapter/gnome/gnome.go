@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -30,6 +31,9 @@ import (
 type Host struct {
 	// Bin overrides the wctl binary, for tests.
 	Bin string
+
+	// animatedHide is set once wctl has refused to hide without the animation.
+	animatedHide atomic.Bool
 }
 
 func (h *Host) Name() string { return "gnome" }
@@ -229,14 +233,41 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
-// Hide minimizes the window. activate restores a minimized window, so Focus
-// brings it back.
+// Hide minimizes the window without the shell's minimize animation, so it
+// leaves in place instead of shrinking into a corner. activate restores a
+// minimized window, so Focus brings it back.
+//
+// --no-animation needs wctl 0.13.0 and the extension it ships with. Where
+// either refuses it, Hide minimizes with the animation, and goes on doing so:
+// a process pays for the refusal once, not on every hide.
 func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot hide a zero ref")
 	}
+	if !h.animatedHide.Load() {
+		_, err := h.run(ctx, "minimize", ref.ID, "--no-animation")
+		if !refusesNoAnimation(err) {
+			return err
+		}
+		h.animatedHide.Store(true)
+	}
 	_, err := h.run(ctx, "minimize", ref.ID)
 	return err
+}
+
+// refusesNoAnimation reports whether a minimize failed because nothing knows
+// --no-animation: a wctl without the flag answers with its usage, and one with
+// it says so when the extension the shell has loaded lacks the method. The
+// text decides, because wctl exits the same way when the extension is not
+// running at all, and that failure is the caller's to see. The method error
+// is matched on wctl's own words: the D-Bus detail in front of them is in the
+// shell's locale.
+func refusesNoAnimation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Usage: wctl minimize") || strings.Contains(msg, "older than this wctl")
 }
 
 // Place positions a window through the extension. `--settled` makes wctl hold

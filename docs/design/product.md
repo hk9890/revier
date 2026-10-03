@@ -188,8 +188,9 @@ fixed rather than a share of the workarea, so that on a wide screen everything
 stays in one spot. `go --picker` falls back to the popup, and plain `go` keeps
 its exit status for scripts.
 
-Esc minimizes the popup through the window host, and the next press raises it
-with the cursor and the query where they were (D86). Hidden, it surveys
+Esc minimizes the popup through the window host, with no minimize animation
+where the host can skip it, and the next press raises it with the cursor and
+the query where they were (D86). Hidden, it surveys
 nothing, since every survey reaches every linked host; the terminal's focus
 report on the raise reads the project files again, since a press used to load
 them, then runs one survey and resumes the refresh. The surface knows it is
