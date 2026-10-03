@@ -71,9 +71,6 @@ project loaded and listed, so every reason stays readable in the surface and in
 
 - Cite a decision from a Go comment as `(decisions.md Dnn)`, several together
   as `(decisions.md Dnn, Dnn)`, and a later one in the same comment as `(Dnn)`.
-- A number names the entry in `docs/design/decisions.md`, which holds the
-  choice, and the design text tagged `(Dnn)`, which holds the behaviour. Not
-  every decision has tagged text. Find what there is with
-  `rg 'Dnn\b' docs/design`.
-- Give no number to a fact that neither place carries: state it in the
-  comment's own words.
+- Give a number only to a fact that its entry or the design text tagged
+  `(Dnn)` carries; [OVERVIEW.md](OVERVIEW.md#finding-things) has the search.
+  State any other fact in the comment's own words.
