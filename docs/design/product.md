@@ -165,7 +165,10 @@ agent is not read, and the pane says so.
 
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button
-does the same and names where it goes (D110). The agent list is every agent a
+does the same and names where it goes (D110). A terminal too narrow for every
+button of the bar shows the first ones whole and ends in a burger, which turns
+the bar to the rest; it has no key, since each button behind it has its own
+(D49). The agent list is every agent a
 panel here shows, one row each: its state, what it is on, and how long ago it
 spoke, over its project and the directory it works in when that is not the
 project's own. An agent with no activity line yet shows the first line of what
@@ -215,10 +218,12 @@ its exit status for scripts.
 
 Esc minimizes the popup through the window host, and the next press raises it
 with the cursor and the query where they were (D86), on the projects whichever
-list it was hidden on (D110). A press on the popup while it is the focused
-window is typed into its panel as the key that switches the list, because the
-desktop takes the key before the terminal sees it; a runtime that cannot type
-into the popup leaves that press a raise. Hidden, it surveys
+list it was hidden on (D110). A press while the focused window shows the
+surface is typed into its panel as the key that switches the list, because the
+desktop takes the key before the terminal sees it. That window is the popup,
+or a terminal whose current panel runs revier with no command, paired with its
+window as an attachment is (D95); there no popup opens. A runtime that cannot
+type into the panel leaves the press what it was: the popup, raised or opened. Hidden, it surveys
 nothing, since every survey reaches every linked host; the terminal's focus
 report on the raise reads the project files again, since a press used to load
 them, then runs one survey and resumes the refresh. The surface knows it is

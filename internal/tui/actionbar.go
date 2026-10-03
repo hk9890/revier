@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -80,16 +81,71 @@ func (m Model) barLead() string {
 	return ""
 }
 
+// burgerLabel is the button a bar too narrow for its buttons ends in: three
+// lines, which every font draws.
+const burgerLabel = "≡"
+
+// barPage is the buttons on the bar now. A terminal wide enough has them
+// all. A narrower one has the first of them and the burger, which turns the
+// bar to the rest: a button cut at the edge cannot be pressed, and a line cut
+// in the middle of a label reads as broken. The burger has no key, because it
+// only leads to buttons that have theirs (decisions.md D49).
+func (m Model) barPage() []barAction {
+	all := m.buttons()
+	w, _ := m.inner()
+	room := w - lipgloss.Width(m.barLead())
+	if barWidth(all) <= room {
+		return all
+	}
+	burger := barAction{label: burgerLabel, run: Model.turnBar}
+	n := 0
+	for n < len(all) && barWidth(all[:n+1])+lipgloss.Width(barSeparator)+barWidth([]barAction{burger}) <= room {
+		n++
+	}
+	if m.barMore {
+		return append([]barAction{burger}, all[n:]...)
+	}
+	return append(slices.Clone(all[:n]), burger)
+}
+
+// turnBar is the burger: the bar shows its other buttons.
+func (m Model) turnBar() (tea.Model, tea.Cmd) {
+	m.barMore = !m.barMore
+	return m, nil
+}
+
+// barText is a button's two runs as they are drawn: the label, and the key
+// after it where it has one.
+func barText(a barAction) (label, key string) {
+	if a.key == "" {
+		return " " + a.label + " ", ""
+	}
+	return " " + a.label + " ", a.key + " "
+}
+
+// barWidth is the columns buttons take side by side.
+func barWidth(buttons []barAction) int {
+	w := 0
+	for i, a := range buttons {
+		if i > 0 {
+			w += lipgloss.Width(barSeparator)
+		}
+		label, key := barText(a)
+		w += lipgloss.Width(label + key)
+	}
+	return w
+}
+
 func (m Model) barCells() []barCell {
-	buttons := m.buttons()
+	buttons := m.barPage()
 	out := make([]barCell, 0, len(buttons))
 	// A button's own leading space is the line's gutter, so the first label
 	// starts in the column every other line starts in.
 	x := lipgloss.Width(m.barLead())
 	for _, a := range buttons {
-		text := " " + a.label + " " + a.key + " "
-		w := lipgloss.Width(text)
-		out = append(out, barCell{action: a, text: text, x0: x, x1: x + w})
+		label, key := barText(a)
+		w := lipgloss.Width(label + key)
+		out = append(out, barCell{action: a, text: label + key, x0: x, x1: x + w})
 		x += w + lipgloss.Width(barSeparator)
 	}
 	return out
@@ -111,7 +167,11 @@ func (m Model) bar() string {
 		if m.over.is(hoverBar, i) {
 			label, key = th.OnHover(label).Bold(true), th.OnHover(key)
 		}
-		b.WriteString(label.Render(" "+c.action.label+" ") + key.Render(c.action.key+" "))
+		text, hint := barText(c.action)
+		b.WriteString(label.Render(text))
+		if hint != "" {
+			b.WriteString(key.Render(hint))
+		}
 	}
 	return b.String()
 }

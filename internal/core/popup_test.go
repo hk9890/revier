@@ -173,6 +173,66 @@ func TestPopupRaisesAFocusedPopupTheRuntimeDoesNotHold(t *testing.T) {
 	}
 }
 
+// surfaceTerminal is a window host and a runtime that pair one window with
+// one terminal, as kitty and GNOME do: the terminal's panels are the given
+// ones, and the second is the current one.
+func surfaceTerminal(panels ...revier.Panel) (*hosttest.Fake, *hosttest.FakeRuntime, revier.TargetRef, revier.TargetRef) {
+	wm := hosttest.New("wm")
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	window := wm.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000})
+	terminal := rt.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000, Panels: panels})
+	wm.SetFocus(window)
+	_ = rt.FocusPanel(context.Background(), terminal, panels[len(panels)-1].ID)
+	rt.PanelFocuses = nil
+	return wm, rt, window, terminal
+}
+
+// A revier the user runs in a terminal of their own is a surface too, and the
+// desktop takes the key from it as it does from the popup. A press with that
+// terminal focused, and the surface current in it, switches its list: no
+// popup opens over it.
+func TestPopupSwitchesTheSurfaceInAFocusedTerminal(t *testing.T) {
+	wm, rt, window, terminal := surfaceTerminal(
+		revier.Panel{ID: "1", Command: []string{"zsh"}},
+		revier.Panel{ID: "2", Command: []string{"/usr/local/bin/revier"}})
+	wm.Workarea = 5120
+	c := &core.Core{Window: wm, Runtime: rt}
+
+	ref, err := c.Popup(context.Background(), popupArgv)
+	if err != nil || ref != window {
+		t.Fatalf("Popup = %v, %v; want the focused terminal", ref, err)
+	}
+	want := []hosttest.Sent{{Ref: terminal, Panel: "2", Text: core.SwitchKey}}
+	if !slices.Equal(rt.Sent, want) {
+		t.Errorf("sent = %+v, want the switch key typed into the surface's panel", rt.Sent)
+	}
+	if len(wm.Opened) != 0 || len(wm.Focuses) != 0 {
+		t.Errorf("opened = %v, focuses = %v; want no popup", wm.Opened, wm.Focuses)
+	}
+}
+
+// A focused terminal opens the popup as before when the panel current in it
+// is not the surface: a shell, a revier command that is not the TUI, or the
+// surface in a tab the user is not looking at.
+func TestPopupOpensOverATerminalWhoseCurrentPanelIsNoSurface(t *testing.T) {
+	for name, panels := range map[string][]revier.Panel{
+		"a shell":                    {{ID: "1", Command: []string{"zsh"}}},
+		"a revier command":           {{ID: "1", Command: []string{"revier", "agent", "wait", "demo"}}},
+		"the surface in another tab": {{ID: "1", Command: []string{"revier"}}, {ID: "2", Command: []string{"zsh"}}},
+	} {
+		wm, rt, _, _ := surfaceTerminal(panels...)
+		wm.Workarea = 5120
+		c := &core.Core{Window: wm, Runtime: rt}
+		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+			t.Fatalf("%s: Popup: %v", name, err)
+		}
+		if len(rt.Sent) != 0 || len(wm.Opened) != 1 {
+			t.Errorf("%s: sent = %+v, opened = %v; want nothing typed and the popup launched", name, rt.Sent, wm.Opened)
+		}
+	}
+}
+
 // The popup needs a window host that can measure and place a window. Without
 // one nothing is launched, so a key does not open a window in the wrong place.
 func TestPopupRefusesAHostThatCannotPlace(t *testing.T) {

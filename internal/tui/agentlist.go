@@ -45,11 +45,14 @@ func switches(msg tea.KeyMsg) bool {
 
 // agentItem is one row of the agent list: an agent, the project a panel of
 // which shows it, and what it said last. It is carried whole, so the delegate
-// renders from the item and looks nothing up.
+// renders from the item and looks nothing up: a row is drawn on every frame,
+// and the summary of an agent with no title is read out of its whole message.
 type agentItem struct {
 	agent   revier.AgentView
 	project revier.Project
 	detail  revier.AgentDetail
+	text    string // what it is on (summary)
+	titled  bool   // whether the agent said so itself
 	age     string // how long ago it spoke, as the row says it
 }
 
@@ -65,20 +68,20 @@ func (i agentItem) key() listedKey {
 	return listedKey{project: i.project.Name, agent: keyOf(i.agent)}
 }
 
-// summary is what the agent is on, and whether the agent said so itself: its
+// summary is what an agent is on, and whether the agent said so itself: its
 // activity line, which a harness writes as its panel's title. An agent with
 // none yet shows the first line of what it said last, and one that has said
 // nothing its harness, so no row is blank.
-func (i agentItem) summary() (text string, titled bool) {
-	if i.agent.State.Activity != "" {
-		return i.agent.State.Activity, true
+func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled bool) {
+	if a.State.Activity != "" {
+		return a.State.Activity, true
 	}
-	for _, line := range strings.Split(plainText(i.detail.Message), "\n") {
+	for _, line := range strings.Split(plainText(said.Message), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			return line, false
 		}
 	}
-	return harnessOf(i.agent), false
+	return harnessOf(a), false
 }
 
 // where is the row's second line: the project, and the directory the agent
@@ -93,8 +96,7 @@ func (i agentItem) where() string {
 
 // FilterValue is what the query matches: what the agent is on, then where.
 func (i agentItem) FilterValue() string {
-	text, _ := i.summary()
-	return text + " " + i.where()
+	return i.text + " " + i.where()
 }
 
 func newAgentList(th theme.Theme) list.Model {
@@ -159,20 +161,19 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	room := width - indent - lipgloss.Width(age)
 
 	matches := m.MatchesForItem(index)
-	text, titled := it.summary()
 	name := th.ProjectName
-	if !titled {
+	if !it.titled {
 		name = th.NameDim
 	}
 	if sel {
 		name = name.Bold(true)
 	}
-	shown := ellipsis(text, room)
+	shown := ellipsis(it.text, room)
 	first := prefix + state + cell(highlight(shown, within(matches, 0, len(shown)), style(name), style(th.Match)), room) + age
 
 	where := ellipsis(it.where(), width-indent)
 	second := bar + space(indent-1) +
-		highlight(where, within(matches, len(text)+1, len(where)), style(th.Path), style(th.Match))
+		highlight(where, within(matches, len(it.text)+1, len(where)), style(th.Path), style(th.Match))
 
 	// The list renders into a strings.Builder, which cannot fail.
 	_, _ = fmt.Fprint(w, fill(first, width, style)+"\n"+fill(second, width, style))
@@ -199,7 +200,8 @@ func (m Model) agentItems() []list.Item {
 	for _, v := range m.views {
 		for _, a := range v.Agents {
 			d := m.adetails[keyOf(a)]
-			items = append(items, agentItem{agent: a, project: v.Project, detail: d, age: shortAgo(m.now(), d.At)})
+			text, titled := summary(a, d)
+			items = append(items, agentItem{agent: a, project: v.Project, detail: d, text: text, titled: titled, age: shortAgo(m.now(), d.At)})
 		}
 	}
 	timed := func(s revier.Status) bool { return s == revier.StatusAttention || s == revier.StatusIdle }
@@ -279,6 +281,10 @@ func (m *Model) selectListed(key listedKey) bool {
 // switchList is the switch key and its button: the other list takes the
 // surface. The agent list opens on its first row, the agent that asked for
 // the user last, and with no query; the project list is as it was left.
+//
+// Which row is the first is known once every agent's last word is read, and
+// that answer comes after the list is drawn. The cursor stays on the first
+// row until it has come, unless the user moves it before (took).
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.toList()
@@ -289,6 +295,7 @@ func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.setAgentFilter("")
 	m.reloadAgents()
 	m.aglist.Select(0)
+	m.agtop = true
 	m.body.SetYOffset(0)
 	return m, m.aginput.Focus()
 }
@@ -319,7 +326,7 @@ func (m Model) switchKey() string {
 // goes to one and del closes one; the keys that act on a project - its
 // screen, its targets, the actions - have no row to act on here.
 func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.err = nil
+	m.err, m.agtop = nil, false
 	if by, ok := m.keys.move(msg, func(int) int { return m.listPage() }); ok {
 		moveRow(&m.aglist, by)
 		return m, nil
@@ -440,8 +447,7 @@ func (m *Model) agentFacts(it agentItem, w int) string {
 		b.WriteString("\n")
 	}
 
-	text, _ := it.summary()
-	b.WriteString(clipTo(th.Meta.Render(pad("Agent", detailLabelWidth))+th.Header.Render(text), w))
+	b.WriteString(clipTo(th.Meta.Render(pad("Agent", detailLabelWidth))+th.Header.Render(it.text), w))
 	b.WriteString("\n")
 	b.WriteString(th.Border.Render(strings.Repeat("─", w)))
 	b.WriteString("\n")

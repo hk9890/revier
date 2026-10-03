@@ -50,10 +50,11 @@ type mirror struct {
 	ticking  bool      // whether a tick is out, so a switch starts no second one
 
 	// The lines text was last set as, and the width they were set at: the
-	// pane is drawn again on every message, and a scrollback is long.
+	// pane is drawn again on every message, and a scrollback is long. A read
+	// that brings another text drops them; one that brings the same text, as
+	// every read of an agent at rest does, keeps them.
 	lines  []string
 	linesW int
-	linesN int // took, when lines was set
 }
 
 // mirroredMsg is one read of an agent's screen.
@@ -78,7 +79,8 @@ func (m Model) mirroring() bool {
 }
 
 // askMirror sends for the screen of the agent under the cursor: at once when
-// another agent comes under it, and on every tick after. It starts the tick
+// another agent comes under it, and when the mirror comes back into view with
+// a screen read before it left, and on every tick after. It starts the tick
 // when the mirror comes into view, and the tick ends itself when it leaves.
 func (m *Model) askMirror(msg tea.Msg) tea.Cmd {
 	if !m.mirroring() {
@@ -90,14 +92,15 @@ func (m *Model) askMirror(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 	var cmds []tea.Cmd
-	if !m.mirror.ticking {
+	back := !m.mirror.ticking
+	if back {
 		m.mirror.ticking = true
 		cmds = append(cmds, mirrorTick())
 	}
 	_, tick := msg.(mirrorTickMsg)
 	if key := it.key(); key != m.mirror.key {
 		m.mirror = mirror{key: key, ticking: true, seq: m.mirror.seq}
-	} else if !tick {
+	} else if !tick && !back {
 		return tea.Batch(cmds...)
 	}
 	return tea.Batch(append(cmds, m.readScreen(it.agent))...)
@@ -125,7 +128,11 @@ func (m *Model) tookScreen(msg mirroredMsg) {
 		return
 	}
 	if !errors.Is(msg.err, core.ErrNoScreen) {
-		logging.Repeat("mirror", "mirror", msg.err, "panel", msg.key.agent.panel)
+		// One line per panel that fails: a key for them all would log again
+		// each time the cursor went from a panel that reads to one that does
+		// not.
+		at := msg.key.agent
+		logging.Repeat("mirror\x00"+at.host+"\x00"+at.id+"\x00"+string(at.panel), "mirror", msg.err, "panel", at.panel)
 	}
 	before := len(m.screenLines())
 	m.mirror.took, m.mirror.read, m.mirror.err = msg.seq, true, msg.err
@@ -136,10 +143,14 @@ func (m *Model) tookScreen(msg mirroredMsg) {
 	// view counted from the end does not move for; a later one adds them
 	// under it.
 	grew := msg.deep && m.mirror.textDeep
-	m.mirror.text, m.mirror.textDeep = msg.text, msg.deep
+	if msg.text != m.mirror.text {
+		m.mirror.text, m.mirror.lines = msg.text, nil
+	}
+	m.mirror.textDeep = msg.deep
 	if m.mirror.off > 0 && grew {
 		m.mirror.off += max(len(m.screenLines())-before, 0)
 	}
+	m.boundScroll()
 }
 
 // scrollMirror moves the mirror's view by lines, up for a positive count.
@@ -157,21 +168,29 @@ func (m *Model) scrollMirror(by int) tea.Cmd {
 		return m.readScreen(it.agent)
 	}
 	m.mirror.off = max(m.mirror.off+by, 0)
+	m.boundScroll()
+	return nil
+}
+
+// boundScroll keeps the view within the scrollback once it is here, and has
+// the mirror follow the end again when the view is at it: a scrollback with
+// nothing above the pane leaves no line to hold, and a view that held one
+// would stand still while the panel wrote on under it.
+func (m *Model) boundScroll() {
 	if m.mirror.textDeep {
 		m.mirror.off = min(m.mirror.off, max(len(m.screenLines())-m.mirror.room, 0))
 	}
 	if m.mirror.off == 0 {
 		m.mirror.deep = false
 	}
-	return nil
 }
 
 // screenLines is the mirror's text as the pane's lines, at the pane's width,
 // kept while the text and the width stay.
 func (m *Model) screenLines() []string {
 	w := m.paneCols() - paneChrome
-	if m.mirror.lines == nil || m.mirror.linesW != w || m.mirror.linesN != m.mirror.took {
-		m.mirror.lines, m.mirror.linesW, m.mirror.linesN = screenLines(m.mirror.text, w), w, m.mirror.took
+	if m.mirror.lines == nil || m.mirror.linesW != w {
+		m.mirror.lines, m.mirror.linesW = screenLines(m.mirror.text, w), w
 	}
 	return m.mirror.lines
 }
@@ -237,16 +256,12 @@ func screenLines(text string, w int) []string {
 		out = append(out, line.String())
 		start()
 	}
-	put := func(r rune) {
-		rw := 1
-		if r >= utf8.RuneSelf {
-			rw = ansi.StringWidth(string(r))
-		}
-		if width+rw > w {
+	put := func(s string, cells int) {
+		if width+cells > w {
 			flush()
 		}
-		line.WriteRune(r)
-		width += rw
+		line.WriteString(s)
+		width += cells
 	}
 	for i := 0; i < len(text); {
 		r, size := utf8.DecodeRuneInString(text[i:])
@@ -264,10 +279,20 @@ func screenLines(text string, w int) []string {
 			flush()
 		case r == '\t':
 			for range tabWidth {
-				put(' ')
+				put(" ", 1)
 			}
-		case !unicode.IsControl(r):
-			put(r)
+		case r == utf8.RuneError && size == 1:
+			put(string(r), 1)
+		case unicode.IsControl(r):
+		case r < utf8.RuneSelf && (i+1 == len(text) || text[i+1] < utf8.RuneSelf):
+			put(text[i:i+1], 1)
+		default:
+			// A character is measured with what joins it, as the terminal
+			// draws it: an emoji and its variation selector are one, two
+			// cells wide, where the two measured apart come to one.
+			cluster, cells := ansi.FirstGraphemeCluster(text[i:], ansi.GraphemeWidth)
+			put(cluster, cells)
+			size = len(cluster)
 		}
 		i += size
 	}

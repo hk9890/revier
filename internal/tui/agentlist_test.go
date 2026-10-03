@@ -28,11 +28,19 @@ type listed struct {
 	screen  string
 }
 
-// listedWorld is the given agents in running projects, one probe to each,
-// surveyed, with the agent list in view and its asks answered. The projects
-// are named as given and stand in that order in the configuration. Agent i is
-// panel i+1 of its project's workspace.
+// listedWorld is listedSurface with the agent list in view and its asks
+// answered.
 func listedWorld(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
+	m, rt, fakes := listedSurface(t, width, height, agents...)
+	return switched(m).Said().Mirrored(), rt, fakes
+}
+
+// listedSurface is the given agents in running projects, one probe to each,
+// surveyed, with the project list in view and nothing read of what an agent
+// said. The projects are named as given and stand in that order in the
+// configuration. Agent i is panel i+1 of its project's workspace.
+func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Screens = map[revier.PanelID]string{}
@@ -61,8 +69,7 @@ func listedWorld(t *testing.T, width, height int, agents ...listed) (tui.Model, 
 		rt.Add("session:"+name, "kitty", panels[name]...)
 	}
 	c := &core.Core{Runtime: rt, Probes: probes}
-	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height)
-	return switched(m).Said().Mirrored(), rt, fakes
+	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
 }
 
 // switched is the model after the key that switches between the two lists.
@@ -225,6 +232,40 @@ func TestTheCursorFollowsItsAgentThroughAReordering(t *testing.T) {
 	}
 }
 
+// The list opens before it knows when each agent spoke, and the answer
+// reorders it. The cursor is on the first row of the order that knows: the
+// agent that asked for the user last. A cursor the user moved before the
+// answer stays on its agent.
+func TestTheAgentListOpensOnTheAgentThatSpokeLast(t *testing.T) {
+	now := time.Now()
+	agents := []listed{
+		{project: "alpha", status: revier.StatusAttention, on: "asks-old", at: now.Add(-2 * time.Hour)},
+		{project: "beta", status: revier.StatusAttention, on: "asks-new", at: now.Add(-5 * time.Minute)},
+		{project: "gamma", status: revier.StatusAttention, on: "asks-between", at: now.Add(-time.Hour)},
+	}
+	m, _, _ := listedSurface(t, 140, 30, agents...)
+	m = switched(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "asks-old") {
+		t.Fatalf("selected = %q before the answer, want the first row by project", row)
+	}
+	m = m.Said()
+	if rows := listedRows(m); len(rows) != 3 || !strings.Contains(rows[0], "asks-new") {
+		t.Fatalf("rows = %q, want the latest to speak first", rows)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "asks-new") {
+		t.Errorf("selected = %q, want the first row, the agent that spoke last", row)
+	}
+
+	m, _, _ = listedSurface(t, 140, 30, agents...)
+	m = switched(m)
+	m, _ = press(m, "down")
+	m, _ = press(m, "down")
+	m = m.Said()
+	if row := selectedRow(t, m); !strings.Contains(row, "asks-between") {
+		t.Errorf("selected = %q, want the cursor still on the agent the user moved it to", row)
+	}
+}
+
 // The agent list opens on its first row every time, the project list keeps
 // its cursor and its query across the switch, and a raise of the popup opens
 // on the projects.
@@ -373,6 +414,60 @@ func TestThePaneMirrorsTheAgentsPanel(t *testing.T) {
 	}
 }
 
+// An agent that comes under the cursor is drawn with its own screen pending,
+// and not over the screen of the agent the cursor left.
+func TestTheScreenOfTheAgentTheCursorLeftIsNotShownUnderTheNext(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "one", screen: "first screen"},
+		listed{project: "alpha", status: revier.StatusRunning, on: "two", screen: "the other panel"})
+	m, _ = press(m, "down")
+	body := pane(m)
+	if !strings.Contains(body, "Agent    two") || strings.Contains(body, "first screen") || !strings.Contains(body, "reading...") {
+		t.Errorf("pane shows another agent's screen under this one's head:\n%s", body)
+	}
+}
+
+// A mirror that comes back into view holds a screen read before it left: it
+// is read again at once, and not a tick later.
+func TestTheMirrorIsReadAgainWhenItComesBackIntoView(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "one", screen: "first screen"})
+	m, _ = press(m, "alt+h")
+	m = m.MirrorTicked()
+	asked := m.MirrorAsked()
+	m, _ = press(m, "esc")
+	if got := m.MirrorAsked(); got != asked+1 {
+		t.Errorf("reads asked for = %d after the screen over the mirror left, want %d", got, asked+1)
+	}
+}
+
+// A wheel up over a screen with nothing above it has no line to hold: the
+// mirror follows the end again, and reads the scrollback no more.
+func TestAWheelWithNothingAboveTheScreenLeavesTheMirrorFollowing(t *testing.T) {
+	m, rt, _ := listedWorld(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "one", screen: "only line"})
+	border := paneBorder(t, m)
+	next, cmd := m.Update(tea.MouseMsg{X: border + 4, Y: 12, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if cmd == nil {
+		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
+	}
+	next, _ = next.Update(cmd())
+	m = next.(tui.Model)
+
+	var screen []string
+	for i := range 80 {
+		screen = append(screen, fmt.Sprintf("row %02d", i))
+	}
+	rt.Screens["1"] = strings.Join(screen, "\n")
+	m = m.Mirrored()
+	if last := rt.ScreenReads[len(rt.ScreenReads)-1]; last.Scrollback {
+		t.Errorf("last read = %+v, want the screen alone once nothing is above it", last)
+	}
+	if body := pane(m); !strings.Contains(body, "row 79") {
+		t.Errorf("pane does not follow the end of the screen:\n%s", body)
+	}
+}
+
 // A screen longer than the pane shows its end; the wheel scrolls back into
 // the panel's scrollback, which is read only then.
 func TestTheWheelScrollsTheMirrorIntoTheScrollback(t *testing.T) {
@@ -440,5 +535,16 @@ func TestScreenLinesKeepColourAndNothingElse(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("lines = %q\nwant    %q", got, want)
+	}
+}
+
+// A character is as wide as the terminal draws it with what joins it: an
+// emoji and its variation selector take two cells together, and the line is
+// cut for two.
+func TestScreenLinesMeasureACharacterWithWhatJoinsIt(t *testing.T) {
+	got := tui.ScreenLines("⚠️ab", 3)
+	want := []string{"⚠️a", "b"}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q, want %q", got, want)
 	}
 }

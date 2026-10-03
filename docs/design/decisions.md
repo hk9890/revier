@@ -648,8 +648,8 @@ project list answers it one project at a time. The second list orders every
 agent by need: waiting for the user, working, at rest, unknown. The first and
 third stand by when each spoke, the latest first, read through `Detailed`; a
 working agent speaks all the time, so those stand by project. The surface
-always opens on the projects. The desktop takes its key before the popup's
-terminal does, so `revier popup` types it into a popup already focused.
+always opens on the projects. The desktop takes its key before any terminal
+does, so `revier popup` types it into the surface the focused window shows.
 Rejected: a mode of the project list, which hides the projects it is for.
 
 ### D111 — the agent list's pane mirrors the agent's panel, with its colour and nothing else

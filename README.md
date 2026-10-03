@@ -128,7 +128,8 @@ The projects and the agents each have a filter field over their rows; the
 targets have none. The rule over the list says how many projects the filter
 leaves. The top line holds a button for each screen that is not about one
 project, and the version running where the terminal is wide enough for it
-beside the buttons.
+beside the buttons. A terminal too narrow for every button ends the line in
+`≡`; a click on it shows the remaining buttons.
 
 The key that opens revier, pressed again on it, shows the agent list in the
 project list's place: every agent of every open project, the ones that need
@@ -142,7 +143,7 @@ projects.
 
 | Key | Does |
 |---|---|
-| alt+space, or the trigger key on the popup | Switch between the projects and the agent list. An `[[action]]` cannot take alt+space. |
+| alt+space, or the trigger key | Switch between the projects and the agent list, on the popup and on a revier in a terminal of your own. An `[[action]]` cannot take alt+space. |
 | Tab | Move the cursor between the projects and the agents; from the targets, back to the projects. |
 | alt+t | Move the cursor to the targets. |
 | typing | Filter the section the cursor is in. |
@@ -295,7 +296,7 @@ revier is one process per keypress: a desktop binding runs `revier go
 
 | Key | Runs |
 |---|---|
-| `Alt+Space` | `revier popup`: the TUI in a kitty window of class `revier-popup`, or the one already open; pressed on the open popup, it switches between the projects and the agent list |
+| `Alt+Space` | `revier popup`: the TUI in a kitty window of class `revier-popup`, or the one already open; pressed while the focused window shows revier, the popup or a terminal of your own, it switches between the projects and the agent list |
 | `Ctrl+Shift+U` | `revier go home --picker` |
 | `Ctrl+Shift+O` | `revier go editor --picker` |
 | `Ctrl+Shift+I` | `revier go web --picker` |

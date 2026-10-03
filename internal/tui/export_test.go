@@ -49,6 +49,15 @@ func (m Model) Mirrored() Model {
 	return next.(Model)
 }
 
+// MirrorTicked is the model after one tick of the mirror's timer.
+func (m Model) MirrorTicked() Model {
+	next, _ := m.Update(mirrorTickMsg{})
+	return next.(Model)
+}
+
+// MirrorAsked is how many reads of a panel the mirror has sent for.
+func (m Model) MirrorAsked() int { return m.mirror.seq }
+
 // ScreenLines exposes the mirror's setting of a panel's screen.
 func ScreenLines(text string, w int) []string { return screenLines(text, w) }
 

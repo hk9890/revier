@@ -5,14 +5,13 @@
 // alt+t to the targets. Enter activates. It is the picker and the monitor at
 // once (decisions.md D8, D105, D107). The key that opens it puts a second list
 // in the first one's place: every agent of every project, with the terminal of
-// the one under the cursor mirrored beside it (decisions.md D110, D111).
+// the one under the cursor mirrored beside it (D110, D111).
 //
 // Every project, target and agent it draws comes from core.Survey, refreshed
 // on a timer that never overlaps itself, and every action goes through the
 // same core paths the CLI commands use. The two reads outside that path are
 // core.Details, what an agent said last, which the surface asks for on its
-// own and no survey carries (decisions.md D106), and core.Screen, the
-// mirror's.
+// own and no survey carries (D106), and core.Screen, the mirror's.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -184,10 +183,12 @@ type Model struct {
 	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
 	amessage setMessage                       // the message the pane last set, as it set it
+	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
 	agents   bool                             // the surface shows the agent list in the project list's place (agentlist.go)
 	aglist   list.Model                       // the agent list's rows
 	aginput  textinput.Model                  // the agent list's query, with its own cursor
 	agfilter string                           // that query, held here so a refresh can re-apply it
+	agtop    bool                             // the agent list opened and the user has not acted on it: the cursor is on the first row whatever agent that is
 	mirror   mirror                           // the screen of the agent under the agent list's cursor (mirror.go)
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
@@ -481,9 +482,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.redrawSpin()
 		return mm, cmd
 	}
+	// The mirror is asked for before the pane is drawn: an agent that came
+	// under the cursor is drawn with its own screen pending, and not over the
+	// screen of the agent the cursor left.
+	read := mm.askMirror(msg)
 	mm.syncDetail()
 	mm.syncBody()
-	cmd = tea.Batch(cmd, mm.askDetails(msg), mm.askMirror(msg))
+	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
 	// A key, a survey or a screen change can move what is under a pointer
 	// that stayed where it was, so what it is over is asked again.
 	if mm.cell != nil {
@@ -1154,7 +1159,12 @@ func (m *Model) redrawSpin() {
 	// Every working agent on the agent list is a row with the spinner, and
 	// the pane's head carries it for the one under the cursor.
 	if m.agents && m.dialog == dialogNone {
-		m.syncBody()
+		for _, item := range m.aglist.VisibleItems() {
+			if it, ok := item.(agentItem); ok && it.agent.State.Status == revier.StatusRunning {
+				m.syncBody()
+				break
+			}
+		}
 		if it, ok := m.listedAgent(); ok && it.agent.State.Status == revier.StatusRunning {
 			m.syncDetail()
 		}
