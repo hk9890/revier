@@ -914,7 +914,7 @@ func (c ctxRuntime) Instances(ctx context.Context) ([]revier.Instance, error) {
 // was drawn from is paid for out of the same bound, and on ninety projects
 // with a link host that does not answer it spends most of it; a recheck
 // handed the remains reads no host, marks every step unread and closes
-// nothing (decisions.md D99).
+// nothing.
 func TestShutdownRechecksOnItsOwnBudgetAfterASlowPlan(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)

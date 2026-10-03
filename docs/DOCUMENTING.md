@@ -18,8 +18,8 @@ describing something absent from `internal/` is intent, not documentation drift.
 
 - Write an entry as the choice and the reason that decides it, in at most
   8 lines under its heading. Put the behaviour it produces in the design doc
-  that owns it, and cut an entry that grows past 8 lines rather than extend
-  the limit.
+  that owns it, tagged `(Dnn)`, and cut an entry that grows past 8 lines
+  rather than extend the limit.
 - Name a rejected alternative only where it would otherwise be proposed again.
 - When a decision replaces another, delete the old entry, say "Replaces ..."
   in the new one, and repoint every `Dnn` citation in the tree. Git history
@@ -28,8 +28,9 @@ describing something absent from `internal/` is intent, not documentation drift.
 
 ## Conventions
 
-- Cite a decision as `` `docs/design/decisions.md` Dnn `` from `docs/`, and
-  as `(Dnn)` inside `docs/design/`.
+- Cite a decision as `` `docs/design/decisions.md` Dnn `` from `docs/`, as
+  `(Dnn)` inside `docs/design/`, and from a Go comment as
+  [CODING.md](CODING.md#citing-a-decision) says.
 - No check runs on Markdown: `mise run quality` and CI test only Go. Check
   links and anchors by hand.
 
