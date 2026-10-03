@@ -69,10 +69,11 @@ project loaded and listed, so every reason stays readable in the surface and in
 
 ## Citing a decision
 
-- Cite a decision from a Go comment as `(decisions.md Dnn)`, and as `(Dnn)`
-  for a further one in the same comment.
-- A number names two places: the entry in `docs/design/decisions.md` holds the
-  choice, and the design doc tagged `(Dnn)` holds the behaviour. Find both
-  with `rg 'D99\b' docs/design`.
-- State a fact neither place carries in the comment's own words, with no
-  number.
+- Cite a decision from a Go comment as `(decisions.md Dnn)`, several together
+  as `(decisions.md Dnn, Dnn)`, and a later one in the same comment as `(Dnn)`.
+- A number names the entry in `docs/design/decisions.md`, which holds the
+  choice, and the design text tagged `(Dnn)`, which holds the behaviour. Not
+  every decision has tagged text. Find what there is with
+  `rg 'Dnn\b' docs/design`.
+- Give no number to a fact that neither place carries: state it in the
+  comment's own words.

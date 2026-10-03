@@ -61,8 +61,9 @@ func openHere(name string) *hosttest.FakeRuntime {
 }
 
 // A link with nothing open here sorts with the closed projects, however
-// much its host's agent wants the user: that agent is on no row (D104), so
-// it lifts nothing above the projects that are open here.
+// much its host's agent wants the user: that agent is on no row
+// (decisions.md D104), so it lifts nothing above the projects that are open
+// here.
 func TestALinkNothingHereHoldsSortsBelowTheOpenProjects(t *testing.T) {
 	rt, _, _, local := world(t, 3) // project-02 is open
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))

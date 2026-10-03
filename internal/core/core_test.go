@@ -653,7 +653,8 @@ func TestBindTakesTheOneNewWindowOfTheClass(t *testing.T) {
 // A survey reports a bound instance as the target's, ahead of the rule.
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")
-	// A title that moved, which is what a binding exists to survive (D21).
+	// A title that moved, which is what a binding exists to survive
+	// (decisions.md D21).
 	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())},
