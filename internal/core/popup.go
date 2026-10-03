@@ -36,7 +36,15 @@ const (
 	popupPoll = 20 * time.Millisecond
 )
 
-// Popup raises the popup when it is open. Otherwise it launches what argv
+// SwitchKey is the press the popup's surface switches its list on, as a
+// terminal delivers alt+space. The desktop takes the trigger key before the
+// popup's terminal sees it, so a press on the focused popup is typed into its
+// panel instead (decisions.md D110).
+const SwitchKey = "\x1b "
+
+// Popup raises the popup when it is open, and switches its list when it is
+// the focused window already: the second press of the key that opened it
+// (decisions.md D110). Otherwise it launches what argv
 // returns, which must start a terminal of class PopupClass running the
 // surface, then raises the new window and places it (decisions.md D76). The
 // size is decided before the launch, so the window moves once and is never
@@ -56,6 +64,10 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return revier.TargetRef{}, err
 	}
 	if w, ok := popupWindow(before); ok {
+		if focused, err := c.Window.Focused(ctx); err == nil && focused.ID == w.Ref.ID && c.switchPopup(ctx) {
+			slog.Info("popup: switch", "ref", w.Ref)
+			return w.Ref, nil
+		}
 		slog.Info("popup: raise", "ref", w.Ref)
 		return w.Ref, c.Window.Focus(ctx, w.Ref)
 	}
@@ -89,6 +101,33 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	c.place(ctx, revier.Realization{Place: geometry}, ref)
 	return ref, nil
+}
+
+// switchPopup types SwitchKey into the popup's panel, and reports whether it
+// did. The panel is the runtime's to find and to type into: a runtime that
+// cannot type, or that does not hold the popup's terminal, leaves the press a
+// raise, which is what it was before the surface had a second list.
+func (c *Core) switchPopup(ctx context.Context) bool {
+	w, ok := c.Runtime.(revier.PanelWriter)
+	if !ok {
+		return false
+	}
+	instances, err := c.Runtime.Instances(ctx)
+	if err != nil {
+		slog.Warn("popup: switch", "err", err)
+		return false
+	}
+	for _, inst := range instances {
+		if inst.Class != PopupClass || len(inst.Panels) == 0 {
+			continue
+		}
+		if err := w.SendText(ctx, inst.Ref, inst.Panels[0].ID, SwitchKey); err != nil {
+			slog.Warn("popup: switch", "ref", inst.Ref, "err", err)
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // HidePopup takes the open popup off the screen and keeps it, for the next

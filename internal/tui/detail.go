@@ -111,6 +111,13 @@ func (m *Model) syncDetail() {
 		m.detail.SetContent(m.shutdownDetail())
 		return
 	}
+	// The agent list's pane scrolls its mirror itself, under a head that
+	// stays (mirror.go).
+	if m.agents {
+		m.detail.SetContent(m.agentPane())
+		m.detail.GotoTop()
+		return
+	}
 	v, ok := m.selected()
 	if !ok {
 		m.detail.SetContent("")

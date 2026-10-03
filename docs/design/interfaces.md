@@ -195,6 +195,15 @@ type PanelOpener interface {
 type PanelFinder interface {
     FindPanel(instances []Instance, panel PanelID) (TargetRef, error)
 }
+
+// PanelReader is an optional capability of a Runtime. ReadPanel is what one
+// panel shows, a line per row, with the style of each run as SGR sequences,
+// and with the lines above the screen when scrollback is asked for: how the
+// agent list mirrors the agent under its cursor (D111). What of it is drawn
+// is the surface's decision.
+type PanelReader interface {
+    ReadPanel(ctx context.Context, ref TargetRef, panel PanelID, scrollback bool) (string, error)
+}
 ```
 
 ## Closer
@@ -327,6 +336,7 @@ type AgentState struct {
     Harness  string // "claude", "opencode"
     Status   Status
     Activity string // one-line live summary the agent set itself
+    Dir      string // the directory the agent works in, empty when the harness does not say (D110)
 }
 
 type Status uint8
@@ -445,9 +455,10 @@ is a tool misbehaving, and a daily log with a line per panel per refresh buries
 the format break that is one ([CODING.md](../CODING.md)). Any other error is
 that break, and is logged.
 
-`Detail` is asked for every agent of the project the pane shows, each time the
-surface refreshes, never in a survey, with the panels of the last listing: it
-costs no host call. So a probe keeps it cheap and reads again only what
+`Detail` is asked for every agent the surface shows - one project's beside the
+project list, every project's on the agent list, whose rows stand in the order
+the agents spoke in (D110) - each time the surface refreshes, never in a
+survey, with the panels of the last listing: it costs no host call. So a probe keeps it cheap and reads again only what
 changed, and remembers what it looked for and did not find as well as what it
 did.
 

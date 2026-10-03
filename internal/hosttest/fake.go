@@ -64,6 +64,11 @@ type Fake struct {
 
 	// Sent records every text a FakeRuntime was asked to type, in order.
 	Sent []Sent
+	// Screens is what a FakeRuntime's ReadPanel answers, by panel, and
+	// ScreenErr makes it fail. ScreenReads records every call, in order.
+	Screens     map[revier.PanelID]string
+	ScreenErr   error
+	ScreenReads []ScreenRead
 	// Tabs records every tab a FakeRuntime was asked to open, and
 	// PanelFocuses every panel it was asked to focus, in order.
 	Tabs         []Tab
@@ -126,6 +131,22 @@ func (f *FakeRuntime) SendText(_ context.Context, ref revier.TargetRef, panel re
 		on(panel, text)
 	}
 	return nil
+}
+
+// ReadPanel reports Screens for the panel, or ScreenErr. FakeRuntime
+// implements revier.PanelReader; the scrollback asked for is recorded in
+// ScreenReads, so a test can tell a read of the screen from one of all of it.
+func (f *FakeRuntime) ReadPanel(_ context.Context, _ revier.TargetRef, panel revier.PanelID, scrollback bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ScreenReads = append(f.ScreenReads, ScreenRead{Panel: panel, Scrollback: scrollback})
+	return f.Screens[panel], f.ScreenErr
+}
+
+// ScreenRead is one ReadPanel call.
+type ScreenRead struct {
+	Panel      revier.PanelID
+	Scrollback bool
 }
 
 // Tab is one OpenTab call.

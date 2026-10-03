@@ -72,6 +72,7 @@ func (m *Model) syncBody() {
 	}
 	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
 	m.rlist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
+	m.aglist.SetDelegate(agentDelegate{theme: m.spun(), hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())
@@ -93,7 +94,8 @@ func (m *Model) syncBody() {
 }
 
 // bodyList is the list the body scrolls: the link dialog's rows while it is
-// up, the projects otherwise. It is a pointer because the cursor moves on it.
+// up, and otherwise the list the surface shows, the projects or the agents.
+// It is a pointer because the cursor moves on it.
 func (m *Model) bodyList() *list.Model {
 	switch m.dialog {
 	case dialogHosts:
@@ -102,6 +104,9 @@ func (m *Model) bodyList() *list.Model {
 		return &m.rlist
 	case dialogSessions:
 		return &m.slist
+	}
+	if m.agents {
+		return &m.aglist
 	}
 	return &m.plist
 }

@@ -74,6 +74,17 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
+		// The wheel over the agent list's pane scrolls the mirror through
+		// the panel's scrollback; its head stays.
+		if m.agents && m.dialog == dialogNone {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				return m, m.scrollMirror(mirrorNotch)
+			case tea.MouseButtonWheelDown:
+				return m, m.scrollMirror(-mirrorNotch)
+			}
+			return m, nil
+		}
 		m.detail, _ = m.detail.Update(msg)
 		return m, nil
 	}

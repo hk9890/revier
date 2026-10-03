@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"context"
 	"slices"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -179,13 +177,7 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	c, root, agent := m.core, m.stateRoot, rows[i].agent
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
-		defer cancel()
-		_, err := c.ActivateAgentWaiting(ctx, p, agent, core.StateLedger{Root: root})
-		return actedMsg{err: err}
-	}
+	return m.goAgent(p, rows[i].agent)
 }
 
 // lineSpan is the pane lines a row takes, start inclusive and end exclusive:

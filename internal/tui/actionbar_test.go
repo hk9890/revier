@@ -19,23 +19,27 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// barCell is a terminal cell inside the first button of the action bar: the
-// bar is the surface's first line, and its first label starts one column into
-// the content.
+// barCell is a terminal cell inside the "new" button of the action bar: the
+// bar is the surface's first line, and "new" is the first button after the
+// switch between the two lists.
 func barCell(t *testing.T, m tui.Model) (x, y int) {
 	t.Helper()
-	mr, mc := margins(m)
-	return mc + 1, mr
+	mr, _ := margins(m)
+	x = column(barLine(m), "new")
+	if x < 0 {
+		t.Fatalf("bar = %q, want the new button on it", barLine(m))
+	}
+	return x, mr
 }
 
 // The bar is the top line, and every button says its key: the bar is
 // a second way to what the keyboard already reaches.
 func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	bar := barLine(m)
-	for _, want := range []string{"new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
+	for _, want := range []string{"agents", "alt+space", "new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("bar = %q, want it to name %q", bar, want)
 		}
@@ -473,7 +477,7 @@ func TestAFolderThatIsAProjectIsRefused(t *testing.T) {
 func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 80)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 120, 100)
 
 	m, _ = press(m, "alt+h")
 	if head := barLine(m); !strings.Contains(head, "Keyboard shortcuts") {
@@ -484,7 +488,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 		"alt+n", "alt+r", "alt+c", "alt+h", "alt+e", "alt+d", "ctrl+w", "ctrl+c",
 		"ctrl+y", "sync",
 		"ctrl+shift+u", "go to home",
-		"alt+space", "open revier",
+		"alt+space", "open revier", "switch between the projects and the agents",
 	} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("help screen does not name %q:\n%s", want, screen)
@@ -660,7 +664,7 @@ func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
 	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
 
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	bar := barLine(m)
 	dim := theme.Default().Help.Render(build.Version)
@@ -687,7 +691,7 @@ func TestANarrowBarDropsTheVersion(t *testing.T) {
 
 	_, _, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	wide := resize(m, 120, 20)
+	wide := resize(m, 140, 20)
 	narrow := resize(m, 60, 20)
 	dim := theme.Default().Help.Render(build.Version)
 

@@ -106,6 +106,73 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	}
 }
 
+// A press on the popup that is the focused window already is the second
+// press of its key: it is typed into the popup's panel as the key that
+// switches its list, and nothing is raised.
+func TestPopupSwitchesItsListWhenItIsFocusedAlready(t *testing.T) {
+	wm := hosttest.New("wm")
+	open := wm.Add("revier", core.PopupClass)
+	wm.SetFocus(open)
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "kitty", revier.Panel{ID: "1"})
+	surface := rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
+	c := &core.Core{Window: wm, Runtime: rt}
+
+	ref, err := c.Popup(context.Background(), popupArgv)
+	if err != nil || ref != open {
+		t.Fatalf("Popup = %v, %v; want the open popup", ref, err)
+	}
+	want := []hosttest.Sent{{Ref: surface, Panel: "9", Text: core.SwitchKey}}
+	if !slices.Equal(rt.Sent, want) {
+		t.Errorf("sent = %+v, want the switch key typed into the popup's panel", rt.Sent)
+	}
+	if len(wm.Focuses) != 0 || len(wm.Opened) != 0 {
+		t.Errorf("focuses = %v, opened = %v; want neither", wm.Focuses, wm.Opened)
+	}
+}
+
+// A press with the popup open and another window focused raises it, and types
+// nothing: the popup opens on what it showed, and its first press is no
+// switch.
+func TestPopupTypesNothingWhenItIsNotFocused(t *testing.T) {
+	wm := hosttest.New("wm")
+	open := wm.Add("revier", core.PopupClass)
+	wm.SetFocus(wm.Add("session:demo", "kitty"))
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
+	c := &core.Core{Window: wm, Runtime: rt}
+
+	if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+		t.Fatalf("Popup: %v", err)
+	}
+	if len(rt.Sent) != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
+		t.Errorf("sent = %+v, focuses = %v; want the popup raised and nothing typed", rt.Sent, wm.Focuses)
+	}
+}
+
+// A focused popup no runtime here holds a panel of cannot be typed into: the
+// press stays the raise it was before the surface had a second list.
+func TestPopupRaisesAFocusedPopupTheRuntimeDoesNotHold(t *testing.T) {
+	wm := hosttest.New("wm")
+	open := wm.Add("revier", core.PopupClass)
+	wm.SetFocus(open)
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "kitty", revier.Panel{ID: "1"})
+
+	for name, c := range map[string]*core.Core{
+		"no runtime":                  {Window: wm},
+		"a runtime without the popup": {Window: wm, Runtime: rt},
+	} {
+		wm.Focuses = nil
+		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+			t.Fatalf("%s: Popup: %v", name, err)
+		}
+		if len(rt.Sent) != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
+			t.Errorf("%s: sent = %+v, focuses = %v; want the popup raised", name, rt.Sent, wm.Focuses)
+		}
+	}
+}
+
 // The popup needs a window host that can measure and place a window. Without
 // one nothing is launched, so a key does not open a window in the wrong place.
 func TestPopupRefusesAHostThatCannotPlace(t *testing.T) {

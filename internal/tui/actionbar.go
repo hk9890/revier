@@ -62,7 +62,9 @@ func (m Model) buttons() []barAction {
 	case m.confirm != "":
 		return nil
 	case m.dialog == dialogNone:
-		return barActions
+		// The switch to the other list leads: it is the one button about
+		// what the surface shows, and its label changes with it.
+		return append([]barAction{m.switchButton()}, barActions...)
 	case m.dialog == dialogSessions:
 		return sessionActions
 	}

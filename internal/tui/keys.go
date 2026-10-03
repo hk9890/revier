@@ -30,6 +30,7 @@ type keyMap struct {
 	Close    key.Binding
 	Delete   key.Binding
 	Targets  key.Binding
+	Switch   key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -67,6 +68,10 @@ func newKeyMap(actions []config.Action) keyMap {
 		// Tab walks the list and the agents only; the targets are one chord
 		// away instead, so the walk stays two stops long.
 		Targets: key.NewBinding(key.WithKeys("alt+t"), key.WithHelp("alt+t", "targets")),
+		// The key that opens the surface, pressed on it: the other list. It
+		// is declared as a chord and matched as one (switches), because a
+		// press of space has no name a binding can spell.
+		Switch: key.NewBinding(key.WithKeys(string(switchChord)), key.WithHelp(string(switchChord), "agents/projects")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {
@@ -110,7 +115,7 @@ func (k keyMap) claims(c core.Chord) bool {
 
 // own is every binding of the surface's own, the action bar's aside.
 func (k keyMap) own() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets}
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets, k.Switch}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each

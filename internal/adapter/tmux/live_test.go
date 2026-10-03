@@ -904,6 +904,47 @@ func paneValue(t *testing.T, h *tmux.Host, pane revier.PanelID, format string) s
 	return strings.TrimSpace(string(out))
 }
 
+// A pane's screen is read as it is drawn, colour included, and its history
+// only when asked: a line scrolled off the screen is in the second read and
+// not in the first.
+func TestReadPanelReadsThePanesScreenWithItsColours(t *testing.T) {
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "agent", Match: revier.Match{Title: "^agent$"},
+		Launch: []string{"sh", "-c", `printf 'scrolled off\n'; i=0; while [ $i -lt 200 ]; do echo filler; i=$((i+1)); done; printf '\033[31mred words\033[0m\n'; sleep 30`},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil || len(instances) != 1 {
+		t.Fatalf("Instances = %+v, %v", instances, err)
+	}
+	inst := instances[0]
+
+	var r revier.PanelReader = h
+	deadline := time.Now().Add(5 * time.Second)
+	var screen string
+	for !strings.Contains(screen, "red words") {
+		if time.Now().After(deadline) {
+			t.Fatalf("screen = %q, want the pane's last line within 5s", screen)
+		}
+		if screen, err = r.ReadPanel(c, inst.Ref, inst.Panels[0].ID, false); err != nil {
+			t.Fatalf("ReadPanel: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(screen, "\x1b[31mred words") {
+		t.Errorf("screen = %q, want the colour kept as an SGR sequence", screen)
+	}
+	if strings.Contains(screen, "scrolled off") {
+		t.Errorf("screen = %q, want no line of the history in it", screen)
+	}
+	all, err := r.ReadPanel(c, inst.Ref, inst.Panels[0].ID, true)
+	if err != nil || !strings.Contains(all, "scrolled off") || !strings.Contains(all, "red words") {
+		t.Errorf("with the scrollback: %q, %v; want the history and the screen", all, err)
+	}
+}
+
 // Text arrives in the pane as typed, whatever it holds: a leading dash that
 // send-keys would read as a flag, a word that is a tmux key name, quotes, a
 // backslash, the format separator. The "\r" sent after it is the Enter that

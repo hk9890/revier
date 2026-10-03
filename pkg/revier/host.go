@@ -121,6 +121,19 @@ type PanelWriter interface {
 	SendText(ctx context.Context, ref TargetRef, panel PanelID, text string) error
 }
 
+// PanelReader is an optional capability of a Runtime, detected by type
+// assertion. A runtime that implements it can say what one of its panels
+// shows, which is how the agent list mirrors the agent under its cursor
+// (decisions.md D111). One that does not leaves the mirror empty.
+//
+// ReadPanel is the panel's screen as text, a line per row, with the colour
+// and style of each run as SGR sequences and nothing else of the terminal's.
+// scrollback asks for the lines above the screen too. What of it is drawn is
+// the surface's decision; the runtime hands it over as the terminal holds it.
+type PanelReader interface {
+	ReadPanel(ctx context.Context, ref TargetRef, panel PanelID, scrollback bool) (string, error)
+}
+
 // PanelOpener is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can open a tab in an instance it
 // already holds and focus one panel of it, which is how a target declared

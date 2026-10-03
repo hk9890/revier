@@ -96,6 +96,21 @@ func TestInspectReadsTheListing(t *testing.T) {
 	}
 }
 
+// The directory is the one the listing gives the session, which is the
+// agent's and not its panel's: an agent that entered a worktree works there.
+// A panel the listing does not hold has none.
+func TestInspectReportsTheDirectoryTheAgentWorksIn(t *testing.T) {
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents(`[{"pid": 101, "sessionId": "a", "status": "idle", "cwd": "/p/demo/.claude/worktrees/fix"}]`, nil))
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil || got.Dir != "/p/demo/.claude/worktrees/fix" {
+		t.Errorf("Dir = %q, %v; want the session's working directory", got.Dir, err)
+	}
+	if got, _ := p.Inspect(context.Background(), revier.Panel{PID: 999}); got.Dir != "" {
+		t.Errorf("Dir = %q for a panel Claude does not list, want none", got.Dir)
+	}
+}
+
 func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
 	p := &claude.Probe{SessionsDir: t.TempDir()}
 	p.SetAgents(agents(statusJSON, nil))

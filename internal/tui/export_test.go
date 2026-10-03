@@ -35,11 +35,36 @@ func (m Model) Said() Model {
 	return next.(Model)
 }
 
+// Mirrored is the model once the mirror's read of the agent under the agent
+// list's cursor has answered, as the command its tick sends would answer it:
+// at once, on this goroutine.
+func (m Model) Mirrored() Model {
+	next, _ := m.Update(mirrorTickMsg{})
+	m = next.(Model)
+	it, ok := m.listedAgent()
+	if !ok {
+		return m
+	}
+	next, _ = m.Update(m.readScreen(it.agent)())
+	return next.(Model)
+}
+
+// ScreenLines exposes the mirror's setting of a panel's screen.
+func ScreenLines(text string, w int) []string { return screenLines(text, w) }
+
+// Raised is the popup hidden and raised again, without the window host.
+func (m Model) Raised() Model {
+	m.popup = true
+	next, _ := m.Update(hiddenMsg{})
+	next, _ = next.Update(tea.FocusMsg{})
+	return next.(Model)
+}
+
 // StaticCursors stops every text field's cursor from blinking. A blink is a
 // command that sleeps half a second before it answers, and a test that runs
 // the command a focus returns would otherwise wait it out.
 func (m Model) StaticCursors() Model {
-	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.path, &m.lname, &m.rinput, &m.sname, &m.chord, &m.pedit} {
+	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.aginput, &m.path, &m.lname, &m.rinput, &m.sname, &m.chord, &m.pedit} {
 		in.Cursor.SetMode(bcursor.CursorStatic)
 	}
 	return m

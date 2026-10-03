@@ -640,3 +640,25 @@ The place is what the user was at: the cursor stays there, on the row that
 moved up, and a project that left the list hands it on the same way. An open
 project keeps the cursor through every reordering, attention included, so the
 rule has one test: is it still open. Replaces D98.
+
+### D110 — the agents of every project are a second list, behind the key that opens the surface
+
+With thirty agents in ten projects the question is which agent, and the
+project list answers it one project at a time. The second list orders every
+agent by need: waiting for the user, working, at rest, unknown. The first and
+third stand by when each spoke, the latest first, read through `Detailed`; a
+working agent speaks all the time, so those stand by project. The surface
+always opens on the projects. The desktop takes its key before the popup's
+terminal does, so `revier popup` types it into a popup already focused.
+Rejected: a mode of the project list, which hides the projects it is for.
+
+### D111 — the agent list's pane mirrors the agent's panel, with its colour and nothing else
+
+No harness renders a running session for another process, and a transcript is
+one harness's format (D106). The panel is what every harness draws and what a
+link's ssh carries, so the pane reads it from the runtime (`PanelReader`) once
+a second, and its scrollback only while the user is scrolled into it. The
+screen is laid out for the agent's window, wider than the pane, so a long line
+continues on the next. Only SGR sequences pass, and every line is closed: a
+screen holds whatever a tool printed (D108). Rejected: cutting a long line,
+which loses the end of every sentence.
