@@ -32,7 +32,8 @@ type Host struct {
 	// Bin overrides the wctl binary, for tests.
 	Bin string
 
-	// animatedHide is set once wctl has refused to hide without the animation.
+	// animatedHide is set once wctl has refused to hide without the animation
+	// and has then hidden with it.
 	animatedHide atomic.Bool
 }
 
@@ -240,6 +241,10 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 // --no-animation needs wctl 0.13.0 and the extension it ships with. Where
 // either refuses it, Hide minimizes with the animation, and goes on doing so:
 // a process pays for the refusal once, not on every hide.
+//
+// The refusal is remembered only when the minimize with the animation then
+// works. Where the shell's locale is not English, wctl words an extension
+// that is not running as one without the method, and that is no refusal.
 func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot hide a zero ref")
@@ -249,9 +254,11 @@ func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 		if !refusesNoAnimation(err) {
 			return err
 		}
-		h.animatedHide.Store(true)
 	}
 	_, err := h.run(ctx, "minimize", ref.ID)
+	if err == nil {
+		h.animatedHide.Store(true)
+	}
 	return err
 }
 

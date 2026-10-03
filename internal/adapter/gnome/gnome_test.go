@@ -253,12 +253,15 @@ func TestCloseBuildsTheCommand(t *testing.T) {
 // refuse it in their own words; Hide then minimizes with the animation and
 // stops asking, so one process pays for the refusal once. An extension that
 // is not running exits as the old one does and is no refusal: it reaches the
-// caller, and the next Hide asks again.
+// caller, and the next Hide asks again. So does a refusal that the minimize
+// with the animation fails after, which is how wctl words an extension that
+// is not running where the shell's locale is not English.
 func TestHideSkipsTheAnimationWhereWctlCan(t *testing.T) {
 	const flagged, plain = "minimize 4181121382 --no-animation\n", "minimize 4181121382\n"
 	cases := []struct {
 		name          string
 		refusal       string // wctl's stderr for --no-animation; empty when it accepts
+		always        bool   // the minimize with the animation gets the same answer
 		code          int
 		first, second string // the argv of each of two hides
 		fail          bool
@@ -284,6 +287,15 @@ func TestHideSkipsTheAnimationWhereWctlCan(t *testing.T) {
 			first:   flagged, second: flagged,
 			fail: true,
 		},
+		{
+			name: "extension not running, worded as one without the method",
+			refusal: "Error: Objekt existiert nicht am Pfad. The extension GNOME Shell" +
+				" has loaded is older than this wctl.",
+			always: true,
+			code:   5,
+			first:  flagged + plain, second: flagged + plain,
+			fail: true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -296,7 +308,11 @@ func TestHideSkipsTheAnimationWhereWctlCan(t *testing.T) {
 				if err := os.WriteFile(refusal, []byte(tc.refusal+"\n"), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				script += "case \"$*\" in *--no-animation) cat " + refusal + " >&2; exit " + strconv.Itoa(tc.code) + ";; esac\n"
+				refused := "*--no-animation"
+				if tc.always {
+					refused = "*"
+				}
+				script += "case \"$*\" in " + refused + ") cat " + refusal + " >&2; exit " + strconv.Itoa(tc.code) + ";; esac\n"
 			}
 			if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
 				t.Fatal(err)
