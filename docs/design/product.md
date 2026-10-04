@@ -218,8 +218,8 @@ its exit status for scripts.
 
 Esc minimizes the popup through the window host, and the next press raises it
 with the cursor and the query where they were (D86), on the projects whichever
-list it was hidden on (D110). Neither plays the shell's minimize animation
-where the host can skip it. A press while the focused window shows the surface is typed into
+list it was hidden on (D110). Neither plays the shell's animation where the
+host can skip it. A press while the focused window shows the surface is typed into
 its panel as the key that switches the list, because the desktop takes the key
 before the terminal sees it. That window is the popup, or a terminal whose
 current panel runs revier with no command, paired with its window as an

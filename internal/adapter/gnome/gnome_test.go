@@ -252,11 +252,13 @@ func TestCloseBuildsTheCommand(t *testing.T) {
 // on Esc, and Focus activates with it, which brings the popup back in place.
 // A wctl without the flag and an extension without the method each refuse it
 // in their own words; the call is then made with the animation and the flag
-// is not asked for again, so one process pays for the refusal once. An
-// extension that is not running exits as the old one does and is no refusal:
-// it reaches the caller, and the next call asks again. So does a refusal that
-// the call with the animation fails after, which is how wctl words an
-// extension that is not running where the shell's locale is not English.
+// is not asked for again, so one process pays for the refusal once. A wctl
+// without the flag answers minimize with its usage, and activate, which has
+// its own parser, with the option it does not know. An extension that is not
+// running exits as the old one does and is no refusal: it reaches the caller,
+// and the next call asks again. So does a refusal that the call with the
+// animation fails after, which is how wctl words an extension that is not
+// running where the shell's locale is not English.
 func TestHideAndFocusSkipTheAnimationWhereWctlCan(t *testing.T) {
 	ref := revier.TargetRef{Host: "gnome", ID: "4181121382"}
 	t.Run("hide", func(t *testing.T) {
@@ -264,13 +266,13 @@ func TestHideAndFocusSkipTheAnimationWhereWctlCan(t *testing.T) {
 			func(h *gnome.Host) error { return h.Hide(context.Background(), ref) })
 	})
 	t.Run("focus", func(t *testing.T) {
-		testSkipsTheAnimation(t, "activate", "Usage: wctl activate <ID> or wctl activate -t|-s|-c|-p <value>", "ActivateNoAnimation",
+		testSkipsTheAnimation(t, "activate", "Unknown option: --no-animation", "ActivateNoAnimation",
 			func(h *gnome.Host) error { return h.Focus(context.Background(), ref) })
 	})
 }
 
-// The two flags came in different wctl releases, so a refusal of one is not
-// remembered for the other.
+// A wctl and an extension can each have one flag and not the other, so a
+// refusal of one is not remembered for the other.
 func TestARefusedHideLeavesFocusWithoutTheAnimation(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv")
@@ -299,7 +301,7 @@ func TestARefusedHideLeavesFocusWithoutTheAnimation(t *testing.T) {
 	}
 }
 
-func testSkipsTheAnimation(t *testing.T, command, usage, method string, call func(*gnome.Host) error) {
+func testSkipsTheAnimation(t *testing.T, command, flagUnknown, method string, call func(*gnome.Host) error) {
 	flagged, plain := command+" 4181121382 --no-animation\n", command+" 4181121382\n"
 	cases := []struct {
 		name          string
@@ -312,7 +314,7 @@ func testSkipsTheAnimation(t *testing.T, command, usage, method string, call fun
 		{name: "supported", first: flagged, second: flagged},
 		{
 			name:    "wctl without the flag",
-			refusal: "Error: " + usage,
+			refusal: "Error: " + flagUnknown,
 			code:    1,
 			first:   flagged + plain, second: plain,
 		},

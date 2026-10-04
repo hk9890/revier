@@ -275,18 +275,21 @@ func (h *Host) withoutAnimation(ctx context.Context, animated *atomic.Bool, comm
 }
 
 // refusesNoAnimation reports whether a command failed because nothing knows
-// its --no-animation: a wctl without the flag answers with the command's
-// usage, and one with it says so when the extension the shell has loaded
-// lacks the method. The text decides, because wctl exits the same way when
-// the extension is not running at all, and that failure is the caller's to
-// see. The method error is matched on wctl's own words: the D-Bus detail in
-// front of them is in the shell's locale.
+// its --no-animation. A wctl without the flag answers minimize with the
+// command's usage, and activate, which has its own parser, with the option it
+// does not know. A wctl with the flag says so when the extension the shell
+// has loaded lacks the method. The text decides, because wctl exits the same
+// way when the extension is not running at all, and that failure is the
+// caller's to see. The method error is matched on wctl's own words: the D-Bus
+// detail in front of them is in the shell's locale.
 func refusesNoAnimation(err error, command string) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "Usage: wctl "+command) || strings.Contains(msg, "older than this wctl")
+	return strings.Contains(msg, "Usage: wctl "+command) ||
+		strings.Contains(msg, "Unknown option: --no-animation") ||
+		strings.Contains(msg, "older than this wctl")
 }
 
 // Place positions a window through the extension. `--settled` makes wctl hold
