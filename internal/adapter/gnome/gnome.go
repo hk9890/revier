@@ -32,9 +32,9 @@ type Host struct {
 	// Bin overrides the wctl binary, for tests.
 	Bin string
 
-	// animatedHide is set once wctl has refused to hide without the animation
-	// and has then hidden with it.
-	animatedHide atomic.Bool
+	// animatedHide and animatedFocus are each set once wctl has refused to
+	// hide or to activate without the animation, and has then done it with it.
+	animatedHide, animatedFocus atomic.Bool
 }
 
 func (h *Host) Name() string { return "gnome" }
@@ -216,12 +216,16 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // Focus activates the window, raising it. wctl also has `focus`, which sets
 // keyboard focus without raising; revier wants the window in front, so this
 // uses activate.
+//
+// --no-animation restores a minimized window without the shell's animation,
+// in the same call, so a hidden popup comes back in place. It needs a wctl
+// and an extension with the 'activate-no-animation' capability. Where either
+// refuses it, Focus activates with the animation, under the rules of Hide.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot focus a zero ref")
 	}
-	_, err := h.run(ctx, "activate", ref.ID)
-	return err
+	return h.withoutAnimation(ctx, &h.animatedFocus, "activate", ref.ID)
 }
 
 // Close asks the window to close, as its close button does: an application
@@ -238,9 +242,10 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 // leaves in place instead of shrinking into a corner. activate restores a
 // minimized window, so Focus brings it back.
 //
-// --no-animation needs wctl 0.13.0 and the extension it ships with. Where
-// either refuses it, Hide minimizes with the animation, and goes on doing so:
-// a process pays for the refusal once, not on every hide.
+// --no-animation needs a wctl and an extension with the 'no-animation'
+// capability, wctl 0.13.0 at the earliest. Where either refuses it, Hide
+// minimizes with the animation, and goes on doing so: a process pays for the
+// refusal once, not on every hide.
 //
 // The refusal is remembered only when the minimize with the animation then
 // works. Where the shell's locale is not English, wctl words an extension
@@ -249,32 +254,39 @@ func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot hide a zero ref")
 	}
-	if !h.animatedHide.Load() {
-		_, err := h.run(ctx, "minimize", ref.ID, "--no-animation")
-		if !refusesNoAnimation(err) {
+	return h.withoutAnimation(ctx, &h.animatedHide, "minimize", ref.ID)
+}
+
+// withoutAnimation runs a wctl command on a window with --no-animation, and
+// without the flag where wctl refuses it. animated is that command's memory
+// of a refusal.
+func (h *Host) withoutAnimation(ctx context.Context, animated *atomic.Bool, command, id string) error {
+	if !animated.Load() {
+		_, err := h.run(ctx, command, id, "--no-animation")
+		if !refusesNoAnimation(err, command) {
 			return err
 		}
 	}
-	_, err := h.run(ctx, "minimize", ref.ID)
+	_, err := h.run(ctx, command, id)
 	if err == nil {
-		h.animatedHide.Store(true)
+		animated.Store(true)
 	}
 	return err
 }
 
-// refusesNoAnimation reports whether a minimize failed because nothing knows
-// --no-animation: a wctl without the flag answers with its usage, and one with
-// it says so when the extension the shell has loaded lacks the method. The
-// text decides, because wctl exits the same way when the extension is not
-// running at all, and that failure is the caller's to see. The method error
-// is matched on wctl's own words: the D-Bus detail in front of them is in the
-// shell's locale.
-func refusesNoAnimation(err error) bool {
+// refusesNoAnimation reports whether a command failed because nothing knows
+// its --no-animation: a wctl without the flag answers with the command's
+// usage, and one with it says so when the extension the shell has loaded
+// lacks the method. The text decides, because wctl exits the same way when
+// the extension is not running at all, and that failure is the caller's to
+// see. The method error is matched on wctl's own words: the D-Bus detail in
+// front of them is in the shell's locale.
+func refusesNoAnimation(err error, command string) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "Usage: wctl minimize") || strings.Contains(msg, "older than this wctl")
+	return strings.Contains(msg, "Usage: wctl "+command) || strings.Contains(msg, "older than this wctl")
 }
 
 // Place positions a window through the extension. `--settled` makes wctl hold
