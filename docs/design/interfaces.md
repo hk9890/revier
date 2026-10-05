@@ -306,7 +306,7 @@ type Event struct {
     Target   TargetName  // where a go landed, or the workspace a tab opened in
     Launched bool        // a go that started its target
     Action   string
-    Agent    string      // the harness of an agent session
+    Agent    string      // the harness of the agent a go agent or an agent session is of
     Session  SessionID
     Dir      string      // where the agent works, or a tab started
 }

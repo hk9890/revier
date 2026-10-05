@@ -257,10 +257,15 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 		if err != nil {
 			return err
 		}
-		events.Record(revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Session: resume, Dir: dir})
-		if resume != "" && outcome != core.AgentResumed {
+		// The event names the conversation the tab holds: one that was not
+		// resumed is not it.
+		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Dir: dir}
+		if outcome == core.AgentResumed {
+			e.Session = resume
+		} else if resume != "" {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
 		}
+		events.Record(e)
 		return nil
 	}
 	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, here)

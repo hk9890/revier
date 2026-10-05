@@ -106,6 +106,28 @@ func TestALineThatIsNotAnEventIsSkipped(t *testing.T) {
 	}
 }
 
+// A line is skipped whatever its length: megabytes of what is no event cost
+// that line, not the read.
+func TestALineOfAnyLengthThatIsNotAnEventIsSkipped(t *testing.T) {
+	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	root := scratch(t, &at)
+	events.Record(revier.Event{Kind: revier.EventGo, Project: "a"})
+	f, err := os.OpenFile(events.Path(root), os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(strings.Repeat("x", 2<<20) + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	events.Record(revier.Event{Kind: revier.EventGo, Project: "b"})
+
+	got := read(t, root, time.Time{})
+	if len(got) != 2 || got[0].Project != "a" || got[1].Project != "b" {
+		t.Errorf("events = %+v, want a and b", got)
+	}
+}
+
 // A process that never called Setup records nothing, and fails nothing.
 func TestWithoutSetupNothingIsRecorded(t *testing.T) {
 	t.Chdir(t.TempDir())

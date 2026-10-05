@@ -9,7 +9,6 @@
 package events
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -28,6 +27,9 @@ func Path(stateRoot string) string { return filepath.Join(stateRoot, "events.jso
 var (
 	mu   sync.Mutex
 	file string
+	// seen is the conversations recorded on day. It starts empty on each new
+	// day, so a surface left open for months holds one day of them.
+	day  string
 	seen = map[sighting]bool{}
 	now  = time.Now
 )
@@ -37,7 +39,7 @@ var (
 func Setup(stateRoot string) {
 	mu.Lock()
 	defer mu.Unlock()
-	file, seen = "", map[sighting]bool{}
+	file, day, seen = "", "", map[sighting]bool{}
 	if stateRoot != "" {
 		file = Path(stateRoot)
 	}
@@ -81,9 +83,8 @@ func appendLine(path string, e revier.Event) error {
 	return errors.Join(err, f.Close())
 }
 
-// sighting is one conversation seen on one day.
+// sighting is one conversation seen in one project.
 type sighting struct {
-	day     string
 	project revier.ProjectName
 	session revier.SessionID
 }
@@ -103,13 +104,15 @@ func Sessions(views []revier.ProjectView) {
 		return
 	}
 	at := now()
-	day := at.Format(time.DateOnly)
+	if today := at.Format(time.DateOnly); today != day {
+		day, seen = today, map[sighting]bool{}
+	}
 	for _, v := range views {
 		for _, a := range v.Agents {
 			if a.State.Session == "" {
 				continue
 			}
-			key := sighting{day: day, project: v.Project.Name, session: a.State.Session}
+			key := sighting{project: v.Project.Name, session: a.State.Session}
 			if seen[key] {
 				continue
 			}
@@ -126,10 +129,10 @@ func Sessions(views []revier.ProjectView) {
 	}
 }
 
-// Read returns the events recorded at since or later, oldest first. No file
-// is no events. A line that is not an event is skipped and logged: the file
-// is appended to by every process, for years, and one bad line must not cost
-// the rest.
+// Read returns the events recorded at since or later, in the order they were
+// written. No file is no events. A line that is not an event, of whatever
+// length, is skipped and logged: the file is appended to by every process,
+// for years, and one bad line must not cost the rest.
 func Read(stateRoot string, since time.Time) ([]revier.Event, error) {
 	data, err := os.ReadFile(Path(stateRoot))
 	if errors.Is(err, os.ErrNotExist) {
@@ -139,10 +142,10 @@ func Read(stateRoot string, since time.Time) ([]revier.Event, error) {
 		return nil, err
 	}
 	var out []revier.Event
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(nil, 1<<20)
-	for n := 1; sc.Scan(); n++ {
-		line := bytes.TrimSpace(sc.Bytes())
+	n := 0
+	for line := range bytes.Lines(data) {
+		n++
+		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
@@ -155,5 +158,5 @@ func Read(stateRoot string, since time.Time) ([]revier.Event, error) {
 			out = append(out, e)
 		}
 	}
-	return out, sc.Err()
+	return out, nil
 }

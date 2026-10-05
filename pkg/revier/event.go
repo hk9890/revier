@@ -37,8 +37,9 @@ type Event struct {
 	Launched bool `json:"launched,omitempty"`
 	// Action is the name of the action an EventAction ran.
 	Action string `json:"action,omitempty"`
-	// Agent is the harness of an EventAgentSession, and Session the
-	// conversation, which a tab started with --resume names too.
+	// Agent is the harness of the agent an EventGoAgent or an
+	// EventAgentSession is of, and Session the conversation it holds, which
+	// a tab resumed with --resume names too.
 	Agent   string    `json:"agent,omitempty"`
 	Session SessionID `json:"session,omitempty"`
 	// Dir is the directory an agent works in or a tab started in. For a link

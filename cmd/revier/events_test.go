@@ -72,6 +72,39 @@ func TestEventsRefusesADayCountBelowOneAndAnArgument(t *testing.T) {
 	}
 }
 
+// A day count past what a Duration holds wraps, and the read then starts in
+// the future and prints nothing. It is refused by its number.
+func TestEventsRefusesADayCountADurationCannotHold(t *testing.T) {
+	recordingTo(t, t.TempDir())
+	err := run(&bytes.Buffer{}, []string{"events", "--local", "--days", "106752"})
+	if err == nil || !strings.Contains(err.Error(), "--days 106752") {
+		t.Errorf("err = %v, want the day count refused", err)
+	}
+	if err := run(&bytes.Buffer{}, []string{"events", "--local", "--days", "106751"}); err != nil {
+		t.Errorf("the most days a Duration holds: %v", err)
+	}
+}
+
+// The file is in the order it was written. A clock set back writes an earlier
+// time after a later one, and the lines are printed by time all the same.
+func TestEventsLocalPrintsByTimeWhateverTheOrderOfTheFile(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	now := time.Now()
+	events.Record(revier.Event{Time: now.Add(-time.Hour), Kind: revier.EventGo, Project: "later"})
+	events.Record(revier.Event{Time: now.Add(-2 * time.Hour), Kind: revier.EventGo, Project: "earlier"})
+
+	var out bytes.Buffer
+	if err := run(&out, []string{"events", "--local"}); err != nil {
+		t.Fatalf("events: %v", err)
+	}
+
+	got := lines(t, out.String())
+	if len(got) != 2 || got[0].Project != "earlier" || got[1].Project != "later" {
+		t.Errorf("printed %q, want earlier before later", out.String())
+	}
+}
+
 // What a linked host recorded is printed among what this machine did, in the
 // order it happened, under the host's name.
 func TestEventsMergesWhatALinkedHostRecordedByTime(t *testing.T) {
@@ -111,6 +144,32 @@ func TestEventsPrintsTheLocalOnesWhenAHostDoesNotAnswer(t *testing.T) {
 	}
 	if got := lines(t, out.String()); len(got) != 1 || got[0].Project != "demo" {
 		t.Errorf("printed %q, want demo's event", out.String())
+	}
+}
+
+// A tab whose agent was not resumed holds a conversation of its own, so its
+// event names none: no probe here resumes anything.
+func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelAgent})
+	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Match: revier.Match{Title: "^home$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
+	}})
+	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: &state.State{}, stateRoot: root, core: &core.Core{Runtime: rt}}
+
+	if err := a.newAgent(context.Background(), "demo", "", "", "abc-123"); err != nil {
+		t.Fatalf("agent new: %v", err)
+	}
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != revier.EventAgentNew || got[0].Target != "home" || got[0].Session != "" {
+		t.Errorf("events = %+v, want one agent new in home with no conversation", got)
 	}
 }
 
