@@ -38,6 +38,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
@@ -448,6 +449,9 @@ func (m Model) Survey() tea.Cmd {
 		// updates between surveys, so a claimed window shows at once rather
 		// than a refresh later.
 		report, err := c.Survey(ctx, projects, bound, nil)
+		if err == nil {
+			events.Sessions(report.Views)
+		}
 		return surveyMsg{report: report, before: before, err: err}
 	}
 }
@@ -1124,6 +1128,9 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
+			if err == nil {
+				events.Record(revier.Event{Kind: revier.EventAction, Project: project, Action: act.Name})
+			}
 			return actedMsg{err: err}
 		}), true
 	}

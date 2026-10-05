@@ -23,6 +23,12 @@ type Remote interface {
 	// the remote a process a survey does not pay for.
 	Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
+	// Events is what the remote revier recorded in the last days, about every
+	// project it has, as `revier events --local` prints it there
+	// (decisions.md D112). The answer is that machine's alone: it asks no
+	// host of its own.
+	Events(ctx context.Context, days int) ([]Event, error)
+
 	// RunCommand is the argv that runs `revier run <action> -p <project>`
 	// on the remote, for the caller to run here with the terminal: an
 	// action takes the terminal it is given, so it is not run and read back

@@ -111,6 +111,20 @@ func TestInspectReportsTheDirectoryTheAgentWorksIn(t *testing.T) {
 	}
 }
 
+// The conversation costs a survey nothing: it is in the listing the status
+// came from. It is what the event file records an agent by.
+func TestInspectNamesTheConversationTheListingGives(t *testing.T) {
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents(statusJSON, nil))
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 102})
+	if err != nil || got.Session != "b" {
+		t.Errorf("Session = %q, %v; want b", got.Session, err)
+	}
+	if got, _ := p.Inspect(context.Background(), revier.Panel{PID: 999}); got.Session != "" {
+		t.Errorf("Session = %q for a panel Claude does not list, want none", got.Session)
+	}
+}
+
 func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
 	p := &claude.Probe{SessionsDir: t.TempDir()}
 	p.SetAgents(agents(statusJSON, nil))

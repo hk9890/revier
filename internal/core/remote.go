@@ -211,3 +211,48 @@ func dropDoubles(v *revier.ProjectView, at int) {
 	}
 	v.Agents = kept
 }
+
+// RemoteEvents asks the revier on every host the projects name for what it
+// recorded in the last days, every host at once, and marks each event with
+// its host (decisions.md D112). A host that fails costs its own events and is
+// returned by name with why; the others answer.
+func (c *Core) RemoteEvents(ctx context.Context, projects []Project, days int) ([]revier.Event, map[string]error) {
+	hosts := map[string]bool{}
+	for _, p := range projects {
+		if p.Remote != nil {
+			hosts[p.Remote.Host] = true
+		}
+	}
+	var out []revier.Event
+	failed := map[string]error{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for host := range hosts {
+		wg.Go(func() {
+			recorded, err := c.eventsOn(ctx, host, days)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failed[host] = err
+				return
+			}
+			for _, e := range recorded {
+				e.Host = host
+				out = append(out, e)
+			}
+		})
+	}
+	wg.Wait()
+	return out, failed
+}
+
+func (c *Core) eventsOn(ctx context.Context, host string, days int) ([]revier.Event, error) {
+	start := time.Now()
+	r, err := c.remote(host)
+	if err != nil {
+		return nil, err
+	}
+	recorded, err := r.Events(ctx, days)
+	logging.Op("remote events", start, err, "host", host, "days", days, "events", len(recorded))
+	return recorded, err
+}

@@ -662,3 +662,13 @@ screen is laid out for the agent's window, wider than the pane, so a long line
 continues on the next. Only SGR sequences pass, and every line is closed: a
 screen holds whatever a tool printed (D108). Rejected: cutting a long line,
 which loses the end of every sentence.
+
+### D112 — what revier did in a project is an event, kept apart from the log
+
+How a project was used is asked over weeks, and the log is pruned after two
+and worded for diagnosis. So a short fixed list of operations, and the
+conversation each agent holds, are appended to one file that is never pruned.
+`revier events` prints the lines and counts nothing: what "used" means is the
+reader's. A linked host is asked for its own lines, one hop. A line names what
+happened and where, never what was said. Rejected: agents writing their own
+entries, which a forge or the transcript already records better.

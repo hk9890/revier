@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -79,5 +80,6 @@ func runAction(out io.Writer, project revier.ProjectName, name string, argv []st
 	if err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}
+	events.Record(revier.Event{Kind: revier.EventAction, Project: project, Action: name})
 	return nil
 }

@@ -15,6 +15,7 @@ A findability map: where things live, and how to search for them.
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/fsutil/` | The atomic file write every store uses. |
 | `internal/logging/` | The daily log file every process appends to, and the helpers that time an operation. |
+| `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
 | `internal/hosttest/` | The fake host, probe, key binder and remote that layer L2 runs against. |

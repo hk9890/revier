@@ -21,6 +21,7 @@ import (
 
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 )
@@ -72,6 +73,11 @@ usage:
                                 --force
   revier each -- <cmd>          run one command in every project's directory
   revier each log [run]         past runs of it, or one run's results
+  revier events [--days n] [--local]
+                                what revier did in each project in the last n
+                                days (7), one JSON line per event, with what
+                                the revier on every linked host recorded;
+                                --local asks no host
   revier version
 
 flags:
@@ -132,6 +138,7 @@ func openLog(args []string) {
 	}
 	root, err := state.Root()
 	if err == nil {
+		events.Setup(root)
 		err = logging.Setup(root, cmd, level)
 	}
 	if err != nil {
@@ -201,6 +208,10 @@ func run(out io.Writer, args []string) error {
 		// files, and probing the desktop for hosts would be a second way for
 		// the command that diagnoses failures to fail.
 		return cmdDoctor(out, args)
+	case "events":
+		// No app, for the reason each has none: the file and the hosts the
+		// project files name are all it reads.
+		return cmdEvents(out, args)
 	case "each":
 		// No app: a run in every project needs the project list and the state
 		// root, and no host. Probing the desktop would be work, and a way to

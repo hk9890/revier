@@ -115,6 +115,8 @@ revier list --json     the survey whole, which the revier on another machine
 revier status          the project for the current directory
 revier doctor          every file that did not load whole, and its fix (D85)
 revier each -- <cmd>   run one command in every project's directory (D32)
+revier events          what revier did in each project, one JSON line per
+                       event, with what each linked host recorded (D112)
 revier session save    record the projects that are open now (D46)
 revier session restore open what a saved session recorded
 revier session list    the saved sessions, newest first
@@ -298,8 +300,8 @@ The recheck adds and drops no step, which is what D78 holds fixed.
 - `--json` output
 - Projects on another machine, surveyed by the revier installed there (D40)
 
-Saved sessions (D46), shutdown (D78), `revier doctor` (D85) and `revier each`
-(D32) extend it.
+Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
+(D32) and `revier events` (D112) extend it.
 
 **Out, deliberately**
 

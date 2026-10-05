@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -256,6 +257,7 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 		if err != nil {
 			return err
 		}
+		events.Record(revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Session: resume, Dir: dir})
 		if resume != "" && outcome != core.AgentResumed {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
 		}

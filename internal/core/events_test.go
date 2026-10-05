@@ -1,0 +1,151 @@
+package core_test
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// recording gives the test an event file of its own, and returns what is in
+// it when called.
+func recording(t *testing.T) func() []revier.Event {
+	t.Helper()
+	root := t.TempDir()
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+	return func() []revier.Event {
+		t.Helper()
+		got, err := events.Read(root, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range got {
+			got[i].Time = time.Time{}
+		}
+		return got
+	}
+}
+
+func TestAPressThatLaunchesIsAGoEventThatSaysSo(t *testing.T) {
+	recorded := recording(t)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+
+	if _, err := c.Activate(context.Background(), prepared(t, project()), "editor", nil, false, nil); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	want := []revier.Event{{Kind: revier.EventGo, Project: "revier", Target: "editor", Launched: true}}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+// A toggle back is one press that runs Go twice, and writes two lines to the
+// log. It is one event, of the target the press landed on.
+func TestAToggleBackIsOneEventOfWhereItLanded(t *testing.T) {
+	recorded := recording(t)
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty")
+	diff := rt.Add("diff:revier", "kitty")
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, revier.Project{Name: "revier", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
+		{Name: "diff", Runtime: &revier.Realization{
+			Name: "diff", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
+	}})
+	rt.SetFocus(diff)
+
+	if _, err := c.Activate(context.Background(), p, "diff", nil, false, nil); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	want := []revier.Event{{Kind: revier.EventGo, Project: "revier", Target: "home"}}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+func TestAPressThatFailsOrOnlyWaitsIsNoEvent(t *testing.T) {
+	recorded := recording(t)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	p := prepared(t, project())
+
+	if _, err := c.Activate(context.Background(), p, "nope", nil, false, nil); err == nil {
+		t.Fatal("Activate of an unknown target succeeded")
+	}
+	if res, err := c.Activate(context.Background(), p, "editor", nil, true, nil); err != nil || !res.ComingUp {
+		t.Fatalf("Activate = %+v, %v; want the launch still coming up", res, err)
+	}
+
+	if got := recorded(); len(got) != 0 {
+		t.Errorf("events = %+v, want none", got)
+	}
+}
+
+func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
+	recorded := recording(t)
+	rt := hosttest.NewRuntime("rt")
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	c := &core.Core{Runtime: rt}
+	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "claude", Session: "abc"}}
+
+	if _, err := c.ActivateAgent(context.Background(), prepared(t, project()), a, nil, false); err != nil {
+		t.Fatalf("ActivateAgent: %v", err)
+	}
+
+	want := []revier.Event{{Kind: revier.EventGoAgent, Project: "revier", Agent: "claude", Session: "abc"}}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+// Each host is asked once, whatever the number of links to it, and its
+// events come back under its name.
+func TestRemoteEventsAsksEachHostOnceAndNamesIt(t *testing.T) {
+	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	box := hosttest.NewRemote("buildbox")
+	box.Recorded = []revier.Event{{Time: at, Kind: revier.EventGo, Project: "far"}}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": box}}
+	projects := []core.Project{
+		prepared(t, project()),
+		prepared(t, remoteProject("far")),
+		prepared(t, remoteProject("other")),
+	}
+
+	got, failed := c.RemoteEvents(context.Background(), projects, 3)
+
+	want := []revier.Event{{Time: at, Kind: revier.EventGo, Host: "buildbox", Project: "far"}}
+	if !slices.Equal(got, want) || len(failed) != 0 {
+		t.Errorf("events = %+v, failed = %v; want %+v", got, failed, want)
+	}
+	if !slices.Equal(box.Days, []int{3}) {
+		t.Errorf("asked for days %v, want one ask for 3", box.Days)
+	}
+}
+
+func TestAHostThatFailsCostsItsOwnEventsAndIsNamed(t *testing.T) {
+	down := hosttest.NewRemote("buildbox")
+	down.Err = errors.New("connection refused")
+	up := hosttest.NewRemote("laptop")
+	up.Recorded = []revier.Event{{Kind: revier.EventGo, Project: "near"}}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": down, "laptop": up}}
+	near := remoteProject("near")
+	near.Remote.Host = "laptop"
+
+	got, failed := c.RemoteEvents(context.Background(), []core.Project{prepared(t, remoteProject("far")), prepared(t, near)}, 7)
+
+	if len(got) != 1 || got[0].Host != "laptop" {
+		t.Errorf("events = %+v, want the laptop's one", got)
+	}
+	if len(failed) != 1 || !errors.Is(failed["buildbox"], down.Err) {
+		t.Errorf("failed = %v, want buildbox with its error", failed)
+	}
+}

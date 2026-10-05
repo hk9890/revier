@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -28,7 +29,13 @@ func (c *Core) Activate(ctx context.Context, p Project, name revier.TargetName, 
 	if coming, err := c.comingUp(ctx, p, name, bound, pending); err != nil || coming {
 		return Result{Target: name, ComingUp: coming}, err
 	}
-	return c.GoResuming(ctx, p, name, bound, resumes)
+	res, err := c.GoResuming(ctx, p, name, bound, resumes)
+	if err == nil {
+		// Here and not in Go: a toggle back and a tab are each one press that
+		// calls Go twice, and an event is the press.
+		events.Record(revier.Event{Kind: revier.EventGo, Project: p.Name, Target: res.Target, Launched: res.Launched})
+	}
+	return res, err
 }
 
 // ActivateAgent is Activate for an agent: GoAgent, unless the project is a
@@ -40,7 +47,11 @@ func (c *Core) ActivateAgent(ctx context.Context, p Project, a revier.AgentView,
 			return Result{Target: home.Name, ComingUp: coming}, err
 		}
 	}
-	return c.GoAgent(ctx, p, a, bound)
+	res, err := c.GoAgent(ctx, p, a, bound)
+	if err == nil {
+		events.Record(revier.Event{Kind: revier.EventGoAgent, Project: p.Name, Agent: a.State.Harness, Session: a.State.Session})
+	}
+	return res, err
 }
 
 func (c *Core) comingUp(ctx context.Context, p Project, name revier.TargetName, bound Bindings, pending bool) (bool, error) {
