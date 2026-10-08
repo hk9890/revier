@@ -253,7 +253,9 @@ func (m *Model) reloadAgents() {
 	}
 	was, had := m.listedAgent()
 	at := m.aglist.Index()
-	_ = m.aglist.SetItems(m.agentItems())
+	items := m.agentItems()
+	m.aglist.Filter = ranked(func(i int) int { return listedRank[items[i].(agentItem).agent.State.Status] })
+	_ = m.aglist.SetItems(items)
 	if m.agfilter != "" {
 		m.aglist.SetFilterText(m.agfilter)
 	}

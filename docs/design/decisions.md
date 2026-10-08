@@ -94,7 +94,7 @@ seconds, and never for a window that is ambiguous or that a target matches.
 kitty windows opened from a session file carry no name. The core pairs such a
 window with the one window of the same process on the window host.
 
-### D23 — the list component ranks and filters; the scrolling is ours
+### D23 — the list component filters; the scrolling is ours
 
 `bubbles/list` paginates, and a held arrow key flickers through pages. It
 renders one page, and a viewport scrolls it.
@@ -662,3 +662,11 @@ screen is laid out for the agent's window, wider than the pane, so a long line
 continues on the next. Only SGR sequences pass, and every line is closed: a
 screen holds whatever a tool printed (D108). Rejected: cutting a long line,
 which loses the end of every sentence.
+
+### D112 — a query keeps the list's order, and the fuzzy score ranks only within it
+
+The fuzzy scorer alone put a stopped project above an open one, because it
+gives a letter after a separator more than a letter beside the last. A query
+is a view over the list (D44), so its rows stay in the groups the list sorts
+them into. Within a group a row that holds the query whole stands above one
+that holds its letters apart, and then the score decides.

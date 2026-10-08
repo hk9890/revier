@@ -10,7 +10,7 @@ import (
 // a held-down arrow key that is the normal way through the list, so the rows
 // flicker through unrelated names on the way to a neighbour.
 //
-// The list keeps what it is good at - fuzzy ranking, the filter, which item is
+// The list keeps what it is good at - the filter, which item is
 // selected - and is given room for every row it holds, so it renders one page.
 // A viewport clips that page to the screen and scrolls it by one line at a
 // time (decisions.md D23).

@@ -1044,7 +1044,7 @@ func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
 }
 
 // The filter is fuzzy, not a substring test: the characters have to appear in
-// order, and nothing more. This is the ranking fzf uses.
+// order, and nothing more.
 func TestFilterMatchesNonAdjacentCharacters(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)

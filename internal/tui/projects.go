@@ -64,6 +64,7 @@ func newProjectList(th theme.Theme) list.Model {
 	l.SetShowFilter(false)
 	l.SetShowPagination(false)
 	l.SetFilteringEnabled(true)
+	l.Filter = ranked(ungrouped)
 	l.DisableQuitKeybindings()
 	return l
 }
@@ -406,9 +407,12 @@ func (m *Model) reload() {
 	at := m.plist.Index()
 
 	items := make([]list.Item, 0, len(m.views))
+	groups := make([]int, 0, len(m.views))
 	for _, v := range m.views {
 		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v)})
+		groups = append(groups, m.need(v))
 	}
+	m.plist.Filter = ranked(func(i int) int { return groups[i] })
 	// The command SetItems returns re-runs the filter asynchronously. The
 	// filter is re-applied synchronously below instead, so the list is correct
 	// before this function returns - which is what makes it testable.

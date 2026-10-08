@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -85,7 +84,7 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	upper := lipgloss.NewStyle().Transform(strings.ToUpper)
 	label := "✳ fix remote"
-	ranks := list.DefaultFilter("fix", []string{label})
+	ranks := ranked(ungrouped)("fix", []string{label})
 	if len(ranks) != 1 {
 		t.Fatalf("filter ranks = %v, want one match", ranks)
 	}
@@ -96,8 +95,22 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = upper
 	row := agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}}
-	row.matches = list.DefaultFilter("then", []string{row.label()})[0].MatchedIndexes
+	row.matches = ranked(ungrouped)("then", []string{row.label()})[0].MatchedIndexes
 	if got := ansi.Strip(m.detailAgent(row, 60, false, false)); !strings.Contains(got, "THEN words") {
 		t.Errorf("agent row = %q, want the letters of then lit", got)
+	}
+}
+
+// A name that holds the query whole has those letters lit, not the scattered
+// ones the scorer prefers: it gives the p after the dash more than the p
+// beside the a.
+func TestAWholeMatchLightsItsOwnLetters(t *testing.T) {
+	upper := lipgloss.NewStyle().Transform(strings.ToUpper)
+	ranks := ranked(ungrouped)("cap", []string{"Cap-pool"})
+	if len(ranks) != 1 {
+		t.Fatalf("filter ranks = %v, want one match", ranks)
+	}
+	if got := highlight("Cap-pool", ranks[0].MatchedIndexes, lipgloss.NewStyle(), upper); got != "CAP-pool" {
+		t.Errorf("highlight = %q, want the letters of cap lit together", got)
 	}
 }
