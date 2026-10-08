@@ -170,6 +170,7 @@ type Model struct {
 	local    core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers  core.RemoteAnswers               // what the linked hosts said last
 	polling  []string                         // the linked hosts that are being asked
+	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input    textinput.Model                  // the filter query, with its own cursor
 	path     textinput.Model                  // the directory field of the new-project screen
 	nstep    newStep                          // the new-project screen's step
@@ -673,7 +674,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The user's own cursor wins: a keystroke, a query or a dialog in
 		// the time the lookup took means they are already somewhere.
 		if msg.ok && m.start == "" && m.filter == "" && m.dialog == dialogNone && m.focus == focusList && m.plist.Index() == 0 {
-			m.start = msg.name
+			m.start, m.onTop = msg.name, false
 			m.placing = m.selectName(msg.name)
 		}
 		return m, nil

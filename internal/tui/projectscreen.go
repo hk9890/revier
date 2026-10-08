@@ -218,6 +218,10 @@ func (m *Model) renameProject(to revier.ProjectName) error {
 	if err := session.Rename(m.stateRoot, from, to); err != nil {
 		slog.Warn("rename: the saved sessions keep the old name", "from", from, "to", to, "err", err)
 	}
+	// What a link's host said last is laid over the row at every refresh, so
+	// it follows the name: the row would otherwise lose its agents until the
+	// host answers again.
+	m.answers = m.answers.Renamed(from, to)
 	return m.projectWritten(from, written)
 }
 

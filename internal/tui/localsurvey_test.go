@@ -121,6 +121,39 @@ func TestAHostsAnswerKeepsAProjectAsItWasJustWritten(t *testing.T) {
 	}
 }
 
+// A link renamed on the project screen keeps what its host said last: the
+// next survey of this machine lays it over the row under the new name, and
+// the pane does not go back to waiting for the host.
+func TestARenamedLinkKeepsWhatItsHostSaid(t *testing.T) {
+	root := configRoot(t, sharedTargets)
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "far.toml"), []byte(remoteFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := hosttest.NewRemote("buildbox", hostSays("far", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
+	m = resize(survey(m), 140, 60)
+
+	m, _ = press(m, "alt+e")
+	m, _ = press(m, "enter")
+	m = typeInto(clearField(m), "farther")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "esc")
+	m, _ = surveyedHere(m)
+
+	if body := pane(m); !strings.Contains(body, "farther") || strings.Contains(body, "surveying") {
+		t.Errorf("pane = %q, want farther with its host's last answer", body)
+	}
+}
+
 // The linked hosts are asked one round at a time: a survey that answers
 // while a round runs starts no second one, and the first survey after it
 // starts the next.
@@ -179,5 +212,56 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 	deliver(m, rounds)
 	if len(slow.Asked) != 1 {
 		t.Errorf("asked slowbox %d times, want its one round", len(slow.Asked))
+	}
+}
+
+// linkOpenHere is the world of one open project above a link to buildbox
+// whose workspace is open here, and whose agent there needs the user. The
+// survey of this machine alone leaves the local project first.
+func linkOpenHere(t *testing.T) tui.Model {
+	t.Helper()
+	rt := openHere("alpha")
+	rt.Add("session:local", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
+		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+			Harness: "claude", Marker: "claude",
+			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning},
+		}}}
+	local := core.Prepare([]revier.Project{{Name: "local", Path: "/p/local", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:local", Launch: []string{"x"}, Match: revier.Match{Title: "^session:local$"}}},
+	}}})
+	projects := append(local, remoteOnDisk(t, "alpha")...)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	return resize(m, 150, 30)
+}
+
+// The top row is the project that needs the user most only once the linked
+// hosts have answered: a cursor nobody moved goes to the link an answer put
+// first, as it did when one survey asked everybody. After that the user's own
+// selection wins.
+func TestACursorNobodyMovedGoesToTheLinkItsHostPutsFirst(t *testing.T) {
+	m, _ := surveyedHere(linkOpenHere(t))
+	wantSelected(t, m, "local", "the first row before the host answers")
+
+	m = run(m, m.AskRemotes())
+	wantSelected(t, m, "alpha", "its agent needs the user, and nobody chose the row the cursor was on")
+
+	m, _ = press(m, "down")
+	m = survey(m)
+	wantSelected(t, m, "local", "the user moved to it")
+}
+
+// A cursor the user moved before a host answered stays on its project.
+func TestACursorTheUserMovedStaysWhenAHostAnswers(t *testing.T) {
+	m, _ := surveyedHere(linkOpenHere(t))
+	m, _ = press(m, "down")
+	wantSelected(t, m, "alpha", "the second row, before its host answers")
+
+	m = run(m, m.AskRemotes())
+	wantSelected(t, m, "alpha", "the user moved to it")
+	if row := rows(m)[0]; !strings.Contains(row, "alpha") {
+		t.Errorf("first row = %q, want alpha once its agent needs the user", row)
 	}
 }

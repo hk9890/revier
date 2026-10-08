@@ -106,6 +106,17 @@ func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
 	return RemoteAnswers{by: by}
 }
 
+// Renamed returns the answers with the one for the link called from under to:
+// the file moved, and what its host said of the project stands.
+func (a RemoteAnswers) Renamed(from, to revier.ProjectName) RemoteAnswers {
+	by := maps.Clone(a.by)
+	if answer, ok := by[from]; ok {
+		delete(by, from)
+		by[to] = answer
+	}
+	return RemoteAnswers{by: by}
+}
+
 // hosts are the hosts that were asked, sorted, for the log line of the
 // survey that asked them.
 func (a RemoteAnswers) hosts() []string {
