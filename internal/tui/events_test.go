@@ -39,3 +39,28 @@ func TestASurveyRecordsTheConversationEachAgentHoldsOnce(t *testing.T) {
 		t.Errorf("events = %+v, want one session abc-123 of demo in /p/demo", got)
 	}
 }
+
+// A link's agent is its host's to report, so the conversation it holds is
+// recorded when the host answers, under the link's name here, and once.
+func TestAHostsAnswerRecordsTheConversationALinksAgentHolds(t *testing.T) {
+	root := t.TempDir()
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+	said := hostSays("alpha", revier.StatusIdle)
+	said.Agents[0].State.Session = "abc-123"
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{
+		"buildbox": hosttest.NewRemote("buildbox", said),
+	}}
+
+	m := refreshed(t, c, remoteOnDisk(t, "alpha"), root, nil)
+	survey(m)
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != revier.EventAgentSession || got[0].Project != "alpha" ||
+		got[0].Agent != "claude" || got[0].Session != "abc-123" {
+		t.Errorf("events = %+v, want one session abc-123 of alpha", got)
+	}
+}

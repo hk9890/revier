@@ -381,3 +381,31 @@ func TestAnAnswerIsForTheLinkThatWasAsked(t *testing.T) {
 		t.Errorf("view = %+v, want nothing laid over a link the answer is not for", v)
 	}
 }
+
+// One host answers by itself: its answer takes the place of what it said
+// last, and what another host said stands.
+func TestAnAnswerOfOneHostLeavesTheOthersStanding(t *testing.T) {
+	near, far := remoteProject("near"), remoteProject("far")
+	far.Remote.Host = "farbox"
+	nearbox := hosttest.NewRemote("buildbox", answer("near", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{
+		"buildbox": nearbox, "farbox": hosttest.NewRemote("farbox", answer("far", revier.StatusIdle)),
+	}}
+	projects := []core.Project{prepared(t, near), prepared(t, far)}
+	all := c.AskRemotes(context.Background(), projects)
+
+	nearbox.Err = errors.New("buildbox: connection refused")
+	all = all.With([]string{"buildbox"}, c.AskRemotes(context.Background(), projects[:1]))
+
+	local, err := c.SurveyLocal(context.Background(), projects, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	views := c.Lay(local, all).Views
+	if !strings.Contains(views[0].Unreachable, "connection refused") {
+		t.Errorf("near = %+v, want what buildbox said last", views[0])
+	}
+	if views[1].Unreachable != "" || len(views[1].Agents) != 1 {
+		t.Errorf("far = %+v, want what farbox said standing", views[1])
+	}
+}

@@ -685,8 +685,8 @@ that holds its letters apart, and then the score decides.
 
 One survey that waited for every linked host held each local row for the
 slowest of them: a host that did not answer kept a closed project listed as
-open for many seconds. So a refresh lists this machine alone, the hosts are
-asked beside it, one round at a time, and their last answer is laid over each
-new listing. A command that runs once still takes both parts as one survey.
+open for many seconds. So a refresh lists this machine alone, each host is
+asked beside it by itself, one round at a time, and its last answer is laid
+over each new listing. A command that runs once still takes it all as one.
 Rejected: painting a close from its own result, which mends one operation and
 leaves every other row waiting on the host.

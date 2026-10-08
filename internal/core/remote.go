@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -82,6 +83,19 @@ type RemoteAnswers struct {
 func (a RemoteAnswers) Has(p revier.Project) bool {
 	_, ok := a.of(p)
 	return ok
+}
+
+// With returns the answers with what the hosts named said replaced by got:
+// one host answers by itself, and what the others said last stands.
+func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
+	by := make(map[revier.ProjectName]remoteAnswer, len(a.by)+len(got.by))
+	for name, answer := range a.by {
+		if !slices.Contains(hosts, answer.link.Host) {
+			by[name] = answer
+		}
+	}
+	maps.Copy(by, got.by)
+	return RemoteAnswers{by: by}
 }
 
 // of is the answer for a link. One asked for before the file was pointed at

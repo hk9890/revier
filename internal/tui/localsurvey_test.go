@@ -2,6 +2,8 @@ package tui_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +84,43 @@ func TestALinkSaysSurveyingUntilItsHostAnswers(t *testing.T) {
 	}
 }
 
+// A project written on the project screen stays as written when a linked host
+// answers: the answer is laid over the last survey of this machine, which
+// takes the change as the rows do.
+func TestAHostsAnswerKeepsAProjectAsItWasJustWritten(t *testing.T) {
+	root := configRoot(t, sharedTargets)
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"demo.toml": demoProject, "far.toml": remoteFile} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := hosttest.NewRemote("buildbox", hostSays("far", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
+	m = resize(survey(m), 140, 60)
+	asked := m.AskRemotes() // a round that answers after the file is written
+
+	m, _ = press(m, "alt+e")
+	m = downs(m, 2) // git url
+	m, _ = press(m, "enter")
+	m = typeInto(m, "git@github.com:me/demo.git")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "esc")
+	m = run(m, asked)
+
+	if body := pane(m); !strings.Contains(body, "git@github.com:me/demo.git") {
+		t.Errorf("pane = %q, want the git url the screen just wrote", body)
+	}
+}
+
 // The linked hosts are asked one round at a time: a survey that answers
 // while a round runs starts no second one, and the first survey after it
 // starts the next.
@@ -100,5 +139,45 @@ func TestTheLinkedHostsAreAskedOneRoundAtATime(t *testing.T) {
 	deliver(m, third)
 	if len(remote.Asked) != 2 {
 		t.Errorf("the host was asked %d times, want a second round once the first answered", len(remote.Asked))
+	}
+}
+
+// Each linked host is asked by itself: one that has not answered holds
+// neither the rows of a link on another host nor that host's next round.
+func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
+	dir := t.TempDir()
+	for name, host := range map[string]string{"alpha": "buildbox", "beta": "slowbox"} {
+		body := strings.ReplaceAll(remoteFile, "buildbox", host)
+		if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	projects, err := config.LoadProjects(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fast := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
+	slow := hosttest.NewRemote("slowbox", hostSays("beta", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": fast, "slowbox": slow}}
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
+
+	// The survey starts a round of each host; only buildbox answers.
+	m, rounds := surveyedHere(resize(m, 140, 30))
+	m = run(m, m.AskRemotes("buildbox"))
+	if body := pane(m); strings.Contains(body, "surveying") {
+		t.Errorf("pane of alpha = %q, want what buildbox said", body)
+	}
+	if body := pane(downs(m, 1)); !strings.Contains(body, "surveying") {
+		t.Errorf("pane of beta = %q, want surveying: slowbox has not answered", body)
+	}
+
+	m, next := surveyedHere(m)
+	deliver(m, next)
+	if len(fast.Asked) != 2 || len(slow.Asked) != 0 {
+		t.Errorf("asked buildbox %d times and slowbox %d, want a second round of buildbox alone", len(fast.Asked), len(slow.Asked))
+	}
+	deliver(m, rounds)
+	if len(slow.Asked) != 1 {
+		t.Errorf("asked slowbox %d times, want its one round", len(slow.Asked))
 	}
 }

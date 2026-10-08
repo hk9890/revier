@@ -7,11 +7,13 @@
 // in the first one's place: every agent of every project, with the terminal of
 // the one under the cursor mirrored beside it (D110, D111).
 //
-// Every project, target and agent it draws comes from core.Survey, refreshed
-// on a timer that never overlaps itself, and every action goes through the
-// same core paths the CLI commands use. The two reads outside that path are
-// core.Details, what an agent said last, which the surface asks for on its
-// own and no survey carries (D106), and core.Screen, the mirror's.
+// Every project, target and agent it draws comes from core.SurveyLocal,
+// refreshed on a timer that never overlaps itself, with what core.AskRemotes
+// last brought from the linked hosts laid over it (D114), and every action
+// goes through the same core paths the CLI commands use. The two reads
+// outside that path are core.Details, what an agent said last, which the
+// surface asks for on its own and no survey carries (D106), and core.Screen,
+// the mirror's.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -167,7 +169,7 @@ type Model struct {
 	idle     bool                             // the survey chain ended while hidden; the raise starts it again
 	local    core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers  core.RemoteAnswers               // what the linked hosts said last
-	polling  bool                             // the linked hosts are being asked
+	polling  []string                         // the linked hosts that are being asked
 	input    textinput.Model                  // the filter query, with its own cursor
 	path     textinput.Model                  // the directory field of the new-project screen
 	nstep    newStep                          // the new-project screen's step
@@ -370,8 +372,11 @@ type surveyMsg struct {
 	err    error
 }
 
-// remotesMsg is what the linked hosts said, each about its projects.
-type remotesMsg struct{ answers core.RemoteAnswers }
+// remotesMsg is what the hosts asked said, each about its projects.
+type remotesMsg struct {
+	hosts   []string
+	answers core.RemoteAnswers
+}
 
 type tickMsg struct{}
 
@@ -448,7 +453,7 @@ const hostTimeout = 10 * time.Second
 // is a command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects, bound, root, answers := m.core, m.projects, m.bound, m.stateRoot, m.answers
+	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
@@ -459,30 +464,48 @@ func (m Model) Survey() tea.Cmd {
 		// than a refresh later.
 		report, err := c.SurveyLocal(ctx, projects, bound, nil)
 		if err == nil {
-			events.Sessions(c.Lay(report, answers).Views)
+			// The agents here. A link's are recorded when its host answers.
+			events.Sessions(report.Views)
 		}
 		return surveyMsg{report: report, before: before, err: err}
 	}
 }
 
-// AskRemotes asks every linked host about its projects, every host at once.
-// One round runs at a time: the survey that answers while none runs starts
-// the next, so the hosts are asked as often as they answer and never faster
-// than the refresh.
-func (m Model) AskRemotes() tea.Cmd {
-	c, projects, local := m.core, m.projects, m.local
+// AskRemotes asks the hosts named about their projects, or every linked host
+// when none is named. The surface asks each host by itself, one round at a
+// time: the survey that answers while a host has no round running starts its
+// next, so a host is asked as often as it answers, never faster than the
+// refresh, and a host that is slow holds no other host's rows up.
+func (m Model) AskRemotes(hosts ...string) tea.Cmd {
+	if len(hosts) == 0 {
+		hosts = m.linkedHosts()
+	}
+	var links []core.Project
+	for _, p := range m.projects {
+		if p.Remote != nil && slices.Contains(hosts, p.Remote.Host) {
+			links = append(links, p)
+		}
+	}
+	c, local := m.core, m.local
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
-		answers := c.AskRemotes(ctx, projects)
+		answers := c.AskRemotes(ctx, links)
 		events.Sessions(c.Lay(local, answers).Views)
-		return remotesMsg{answers: answers}
+		return remotesMsg{hosts: hosts, answers: answers}
 	}
 }
 
-// linked reports a project that lives on another host.
-func (m Model) linked() bool {
-	return slices.ContainsFunc(m.projects, func(p core.Project) bool { return p.Remote != nil })
+// linkedHosts is every host a project lives on, each once, in the projects'
+// order.
+func (m Model) linkedHosts() []string {
+	var hosts []string
+	for _, p := range m.projects {
+		if p.Remote != nil && !slices.Contains(hosts, p.Remote.Host) {
+			hosts = append(hosts, p.Remote.Host)
+		}
+	}
+	return hosts
 }
 
 // answered reports a view that says all a survey can say of its project: a
@@ -552,7 +575,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // loggedAlready reports a message whose error the operation behind it has
 // logged: a Go, a bind, a focus or an action. Every other error set on m.err -
 // a form refused, a file that did not load, a clone - is logged by Update. A
-// failed survey is shown from m.surveyErr and logged by core.Survey.
+// failed survey is shown from m.surveyErr and logged by core.SurveyLocal.
 func loggedAlready(msg tea.Msg) bool {
 	switch msg.(type) {
 	case actedMsg, restoredMsg, savedMsg, shutdownMsg:
@@ -606,9 +629,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		var cmds []tea.Cmd
-		if !m.polling && m.linked() {
-			m.polling = true
-			cmds = append(cmds, m.AskRemotes())
+		for _, host := range m.linkedHosts() {
+			if !slices.Contains(m.polling, host) {
+				// A new slice: the rounds that run hold the old one.
+				m.polling = append(slices.Clone(m.polling), host)
+				cmds = append(cmds, m.AskRemotes(host))
+			}
 		}
 		if !m.spinning && m.anyWorking() {
 			m.spinning = true
@@ -616,7 +642,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(append(cmds, tick(m.refresh))...)
 	case remotesMsg:
-		m.polling, m.answers = false, msg.answers
+		m.polling = slices.DeleteFunc(slices.Clone(m.polling), func(host string) bool { return slices.Contains(msg.hosts, host) })
+		m.answers = m.answers.With(msg.hosts, msg.answers)
 		if !m.surveyed {
 			return m, nil
 		}
