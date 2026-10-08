@@ -1106,56 +1106,42 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 }
 
 // SurveyToClose is the survey a close draws its plan from: this machine
-// listed, then only the linked hosts the close is about asked - the links
-// with something open here, and of those the one named when only is set
-// (decisions.md D115). A link with nothing open here has nothing a close
-// could end, so its host is not waited for, and a host that is gone costs a
-// close of something else nothing.
-func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, only revier.ProjectName) (Report, error) {
+// listed, then only the linked hosts the close is about asked (decisions.md
+// D115). A close of one project asks that project's host. A close of every
+// project asks the hosts of the links with something open here: a link with
+// nothing open has nothing a close could end, so its host is not waited for,
+// and a host that is gone costs a close of something else nothing.
+//
+// An agent of a link in a panel of an instance the link no longer holds - its
+// tab moved to another window - is therefore missing from a plan of every
+// project. A close of its own project still finds it.
+func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, only revier.ProjectName) Report {
 	start := time.Now()
-	r, asked := c.surveyAsking(ctx, projects, bound, attached, func(v revier.ProjectView) bool {
-		return v.Held() && (only == "" || v.Project.Name == only)
+	r, answers := c.surveyAsking(ctx, projects, bound, attached, func(v revier.ProjectView) bool {
+		if only != "" {
+			return v.Project.Name == only
+		}
+		return v.Held()
 	})
-	logging.Op("shutdown survey", start, nil, "project", only, "asked", asked, "unreachable", unreachable(r, asked))
-	return r, nil
+	logging.Op("shutdown survey", start, nil, "project", only, "asked", answers.hosts(), "unanswered", answers.failures())
+	return r
 }
 
 // surveyAsking is a survey that asks only the hosts of the links ask picks
-// from the listing of this machine, and names the hosts it asked. The other
-// links keep the view of the window that reaches them, as SurveyLocal leaves
-// it. The hosts asked have HostWait to answer.
-func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, ask func(revier.ProjectView) bool) (Report, []string) {
+// from the listing of this machine, and returns what they said beside it.
+// The other links keep the view of the window that reaches them, as
+// SurveyLocal leaves it.
+func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, ask func(revier.ProjectView) bool) (Report, RemoteAnswers) {
 	r := c.listed(ctx, projects, bound, attached)
 	var links []Project
-	var hosts []string
 	for i, p := range projects {
-		if p.Remote == nil || !ask(r.Views[i]) {
-			continue
-		}
-		links = append(links, p)
-		if !slices.Contains(hosts, p.Remote.Host) {
-			hosts = append(hosts, p.Remote.Host)
+		if p.Remote != nil && ask(r.Views[i]) {
+			links = append(links, p)
 		}
 	}
-	asking, stop := context.WithTimeout(ctx, HostWait)
-	defer stop()
-	c.lay(&r, c.AskRemotes(asking, links))
-	return r, hosts
-}
-
-// unreachable is why each of the hosts asked did not answer, for the log
-// line of the survey that asked them.
-func unreachable(r Report, asked []string) []string {
-	var out []string
-	for _, v := range r.Views {
-		if v.Unreachable == "" || v.Project.Remote == nil || !slices.Contains(asked, v.Project.Remote.Host) {
-			continue
-		}
-		if why := v.Project.Remote.Host + ": " + v.Unreachable; !slices.Contains(out, why) {
-			out = append(out, why)
-		}
-	}
-	return out
+	answers := c.AskRemotes(ctx, links)
+	c.lay(&r, answers)
+	return r, answers
 }
 
 // SurveyLocal is the part of a survey this machine answers by itself: the

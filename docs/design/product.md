@@ -258,12 +258,13 @@ there too. A step whose agents that survey could not read - its host did not
 list, its project is no longer surveyed, its link host did not answer - is
 left open and named in the result, and the rest of the plan closes: one dead
 remote host does not stop the other projects. Neither survey of a close waits
-for a linked host the close is not about: the plan's asks the hosts of the
-links open here, the recheck the hosts its plan has a step for, so a close of
-a project on this machine costs nothing for a host that is gone. A host that
-is asked - by either survey, or by the save for what the agents of an open
-link are working on - has ten seconds to answer, and the agents on this
-machine are asked on what is left of the save's bound (D115).
+for a linked host the close is not about: the plan's asks the host of the
+project being closed, or of every link open here when all close, and the
+recheck the hosts its plan has a step for, so a close of
+a project on this machine costs nothing for a host that is gone. A save
+gives the hosts of the links open here ten seconds to say what their agents
+are working on, and asks the agents on this machine on what is left of its
+bound (D115).
 
 The guard is in `core.Shutdown`, so `revier shutdown`, the wizard and del all
 pass it (D99). A busy agent refuses the whole plan, because the user is about

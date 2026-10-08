@@ -697,7 +697,7 @@ Every close surveyed twice and each survey waited for every linked host, so
 a host that was gone cost a close on this machine two waits with nothing of a
 link open, and a third in the save when one was. A link with nothing open
 here has nothing a close could end. The plan's survey asks the hosts of the
-links open here, of those only the one being closed, the recheck the hosts
-its plan has a step for, and each ask of a close or a save has ten seconds.
+links open here, or the one project's being closed, the recheck the hosts
+its plan has a step for, and a save's ask of the hosts has ten seconds.
 Rejected: shorter phase budgets, which cut a slow desktop short and still
 waited once a phase.

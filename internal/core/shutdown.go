@@ -483,9 +483,9 @@ const CloseWait = 3 * time.Second
 const CloseBudget = 30 * time.Second
 
 // SaveBudget is how long the save before the closes may take. It counts from
-// the moment the recheck is done, and it is the survey's order of magnitude
-// because a save of a desktop holding links asks every link host what its
-// agents are working on.
+// the moment the recheck is done. Within it the hosts of the links open
+// here have HostWait to say what their agents are working on, and the agents
+// on this machine are asked on the rest.
 const SaveBudget = 30 * time.Second
 
 // RecheckBudget is how long the survey the busy guard takes may run. It is
@@ -530,8 +530,8 @@ type ShutdownOpts struct {
 	// failure is the shutdown's, and nothing closes.
 	//
 	// The context it is handed is the save's own budget (SaveBudget), not
-	// the caller's remains: the recheck has just asked every link host, and
-	// the save asks them again.
+	// the caller's remains: the recheck may have waited for the hosts its
+	// plan names, and the save asks the host of every link open here.
 	Before func(context.Context, Report) error
 }
 
@@ -641,7 +641,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 	reading, stop := phaseContext(ctx, RecheckBudget)
 	defer stop()
 	start := time.Now()
-	r, asked := c.surveyAsking(reading, opts.Projects, opts.Bound, opts.Attached, func(v revier.ProjectView) bool {
+	r, answers := c.surveyAsking(reading, opts.Projects, opts.Bound, opts.Attached, func(v revier.ProjectView) bool {
 		return slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Project == v.Project.Name })
 	})
 	plan = c.rechecked(r, plan)
@@ -651,7 +651,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 			unread++
 		}
 	}
-	logging.Op("shutdown recheck", start, nil, "steps", len(plan), "unread", unread, "asked", asked, "unreachable", unreachable(r, asked))
+	logging.Op("shutdown recheck", start, nil, "steps", len(plan), "unread", unread, "asked", answers.hosts(), "unanswered", answers.failures())
 	return r, plan
 }
 
