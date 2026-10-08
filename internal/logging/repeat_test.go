@@ -15,7 +15,7 @@ import (
 func capture(now func() time.Time) (*repeats, *bytes.Buffer) {
 	var buf bytes.Buffer
 	l := slog.New(slog.NewJSONHandler(&buf, nil))
-	r := &repeats{log: func() *slog.Logger { return l }, now: now, failing: map[string]*failure{}, slow: map[string]time.Time{}}
+	r := &repeats{log: func() *slog.Logger { return l }, now: now, failing: map[string]failure{}, slow: map[string]time.Time{}}
 	return r, &buf
 }
 
@@ -62,11 +62,12 @@ func TestARepeatedFailureIsLoggedOnceAndItsRecoveryOnce(t *testing.T) {
 
 // A host that fails three ways in turn, as one whose sshd drops connections
 // after a refused key does, is in one failure: each cause is one line, and the
-// recovery names the last.
+// recovery names the one it failed with last, which is not the last one
+// written.
 func TestAFailureThatAlternatesLogsEachCauseOnce(t *testing.T) {
 	r, buf := capture(time.Now)
 	reset, closed, refused := errors.New("connection reset"), errors.New("connection closed"), errors.New("key refused")
-	for _, err := range []error{reset, closed, reset, refused, closed, reset, refused, nil, reset} {
+	for _, err := range []error{reset, closed, reset, refused, closed, refused, reset, nil, reset} {
 		r.repeat("remote a", "remote survey", err, nil)
 	}
 
@@ -75,7 +76,7 @@ func TestAFailureThatAlternatesLogsEachCauseOnce(t *testing.T) {
 		{"WARN", "remote survey", "err", "connection reset"},
 		{"WARN", "remote survey", "err", "connection closed"},
 		{"WARN", "remote survey", "err", "key refused"},
-		{"INFO", "remote survey: recovered", "was", "key refused"},
+		{"INFO", "remote survey: recovered", "was", "connection reset"},
 		{"WARN", "remote survey", "err", "connection reset"},
 	}
 	if len(got) != len(want) {

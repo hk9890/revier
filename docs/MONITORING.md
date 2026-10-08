@@ -31,7 +31,7 @@ doc reads what it already did.
 - `INFO` — an operation that succeeded.
 - `ERROR` — an operation that failed. An error the TUI showed in its footer that no operation logged has `msg` `tui`.
 - `WARN` — an error revier carried on past: a state file it could not read or save, a probe that reported unknown, a window it could not place or bind.
-- A failure that recurs every refresh — a probe, a survey, a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` whose `was` is the last one (`logging.Repeat`). Silence after a `WARN` means still failing, per process, with an `err` already written.
+- A failure that recurs every refresh — a probe, a survey, a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` whose `was` is the `err` of the last failed refresh (`logging.Repeat`). Silence after a `WARN` means still failing, per process, with an `err` already written.
 
 ## Operations
 

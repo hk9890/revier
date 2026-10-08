@@ -684,7 +684,7 @@ func (m *Model) claimByPolling(report core.Report, before *state.State) {
 // loadState reads state for a survey to start from. A state file that cannot
 // be read or written costs the next keypress a fallback, not the surface, so
 // it is logged and not shown; the surface does both every refresh, so a
-// failure that lasts is one line (logging.Repeat).
+// failure that lasts is one line per cause (logging.Repeat).
 func loadState(root string) (*state.State, error) {
 	st, err := state.Load(root)
 	logging.Repeat("state load", "state load", err, "root", root)

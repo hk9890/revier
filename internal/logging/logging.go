@@ -83,21 +83,21 @@ func Repeat(key, op string, err error, attrs ...any) {
 	recurring.repeat(key, op, err, attrs)
 }
 
-var recurring = &repeats{log: slog.Default, now: time.Now, failing: map[string]*failure{}, slow: map[string]time.Time{}}
+var recurring = &repeats{log: slog.Default, now: time.Now, failing: map[string]failure{}, slow: map[string]time.Time{}}
 
-// repeats is what this process last logged about each recurring key.
+// repeats is what this process has seen and logged of each recurring key.
 type repeats struct {
 	mu      sync.Mutex
 	log     func() *slog.Logger
 	now     func() time.Time
-	failing map[string]*failure  // the failure a key is in, by key
+	failing map[string]failure   // the failure a key is in, by key
 	slow    map[string]time.Time // when a slow poll was last logged, by key
 }
 
 // failure is one key's run of errors since its last success.
 type failure struct {
-	last   string              // the error of the latest poll
-	logged map[string]struct{} // every error the run has logged
+	last   string          // the error of the latest poll
+	logged map[string]bool // every error the run has logged
 }
 
 func (r *repeats) poll(key, op string, took time.Duration, err error, attrs []any) {
@@ -126,14 +126,12 @@ func (r *repeats) repeat(key, op string, err error, attrs []any) {
 		delete(r.failing, key)
 	} else {
 		if !was {
-			f = &failure{logged: map[string]struct{}{}}
-			r.failing[key] = f
+			f.logged = map[string]bool{}
 		}
 		f.last = err.Error()
-		if _, logged := f.logged[f.last]; !logged {
-			f.logged[f.last] = struct{}{}
-			fresh = true
-		}
+		fresh = !f.logged[f.last]
+		f.logged[f.last] = true
+		r.failing[key] = f
 	}
 	r.mu.Unlock()
 	switch {
