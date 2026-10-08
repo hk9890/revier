@@ -28,7 +28,7 @@ func ranked(group func(i int) int) list.FilterFunc {
 			score int
 		}
 		var matches []match
-		for _, f := range fuzzy.Find(term, targets) {
+		for _, f := range fuzzy.FindNoSort(term, targets) {
 			m := match{
 				rank:  list.Rank{Index: f.Index, MatchedIndexes: f.MatchedIndexes},
 				group: group(f.Index),
@@ -41,7 +41,7 @@ func ranked(group func(i int) int) list.FilterFunc {
 			matches = append(matches, m)
 		}
 		// Rows the three measures cannot tell apart keep the list's own
-		// order, which the scorer does not hand them back in.
+		// order.
 		slices.SortFunc(matches, func(a, b match) int {
 			return cmp.Or(
 				cmp.Compare(a.group, b.group),

@@ -44,13 +44,6 @@ func namedOrder(m tui.Model, names ...string) []string {
 	return out
 }
 
-func filtered(m tui.Model, query string) tui.Model {
-	for _, r := range query {
-		m, _ = press(m, string(r))
-	}
-	return m
-}
-
 // A query is a view over the list, so its rows keep the list's order: an open
 // project that matches stands above a stopped one, whatever the fuzzy scorer
 // makes of the two names. The scorer alone puts claude-code-podman first for
@@ -59,7 +52,7 @@ func TestAFilteredListKeepsOpenProjectsAboveStoppedOnes(t *testing.T) {
 	names := []string{"claude-code-podman", "cap-data-intelligence", "claude-plugins-official"}
 	rt, c, projects := named(t, names...)
 	rt.Add("session:cap-data-intelligence", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "sh"})
-	m := filtered(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
 
 	want := []string{"cap-data-intelligence", "claude-code-podman", "claude-plugins-official"}
 	if got := namedOrder(m, names...); !slices.Equal(got, want) {
@@ -72,7 +65,7 @@ func TestAFilteredListKeepsOpenProjectsAboveStoppedOnes(t *testing.T) {
 func TestAFilteredListPutsAWholeMatchAboveAScatteredOne(t *testing.T) {
 	names := []string{"claude-code-podman", "escape-data"}
 	_, c, projects := named(t, names...)
-	m := filtered(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
 
 	want := []string{"escape-data", "claude-code-podman"}
 	if got := namedOrder(m, names...); !slices.Equal(got, want) {
@@ -91,7 +84,7 @@ func TestAFilteredListKeepsAProjectThatNeedsYouFirst(t *testing.T) {
 	}}
 	rt.Add("session:cap-data-intelligence", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "sh"})
 	rt.Add("session:decay-maps", "kitty", revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
-	m := filtered(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
+	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
 
 	want := []string{"decay-maps", "cap-data-intelligence"}
 	if got := namedOrder(m, names...); !slices.Equal(got, want) {
@@ -105,7 +98,7 @@ func TestAFilteredAgentListKeepsItsStatesInOrder(t *testing.T) {
 	m, _, _ := listedWorld(t, 140, 30,
 		listed{project: "beta", status: revier.StatusIdle, on: "cap sizes"},
 		listed{project: "beta", status: revier.StatusRunning, on: "decay maps"})
-	m = filtered(m, "cap")
+	m = typeInto(m, "cap")
 
 	rows := listedRows(m)
 	if len(rows) != 2 || !strings.Contains(rows[0], "decay maps") || !strings.Contains(rows[1], "cap sizes") {

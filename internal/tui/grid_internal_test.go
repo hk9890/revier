@@ -84,12 +84,16 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	upper := lipgloss.NewStyle().Transform(strings.ToUpper)
 	label := "✳ fix remote"
-	ranks := ranked(ungrouped)("fix", []string{label})
-	if len(ranks) != 1 {
-		t.Fatalf("filter ranks = %v, want one match", ranks)
-	}
-	if got := highlight(label, ranks[0].MatchedIndexes, lipgloss.NewStyle(), upper); got != "✳ FIX remote" {
-		t.Errorf("highlight = %q, want the letters of fix lit", got)
+	// The label holds fix whole and fre apart: the positions of the first are
+	// wholeMatch's, and those of the second the scorer's.
+	for query, want := range map[string]string{"fix": "✳ FIX remote", "fre": "✳ Fix REmote"} {
+		ranks := ranked(ungrouped)(query, []string{label})
+		if len(ranks) != 1 {
+			t.Fatalf("filter ranks for %s = %v, want one match", query, ranks)
+		}
+		if got := highlight(label, ranks[0].MatchedIndexes, lipgloss.NewStyle(), upper); got != want {
+			t.Errorf("highlight = %q, want the letters of %s lit: %q", got, query, want)
+		}
 	}
 
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
