@@ -212,8 +212,11 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 
 	// Before the first survey the view is the files' alone, and says nothing
 	// about what runs: the pane says so, as the rows do by carrying no mark.
+	// A link's view says nothing about its checkout until its host has
+	// answered, which is after the survey of this machine (decisions.md D114).
+	answered := m.answered(v)
 	status, style := "stopped", th.NameDim
-	if !m.ready() {
+	if !m.ready() || !answered {
 		status, style = "surveying", th.Meta
 	}
 	switch {
@@ -223,7 +226,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		status, style = "unreachable", th.PathMissing
 	case m.heldHere(v):
 		status, style = "running", th.Running
-	case !v.PathExists:
+	case !v.PathExists && answered:
 		status, style = "not available", th.PathMissing
 	}
 	line("Status", status, style)
@@ -233,7 +236,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 
 	// A host that did not answer has said nothing about the checkout.
 	pathStyle := th.Path
-	if !v.PathExists && v.Unreachable == "" {
+	if !v.PathExists && v.Unreachable == "" && answered {
 		pathStyle = th.PathMissing
 	}
 	line("Path", contractHome(v.Project.Path), pathStyle)
@@ -259,7 +262,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// (decisions.md D40), so Enter is the same answer there.
 	// A file that did not load has no path to be missing and nothing to
 	// clone into: what is wrong with it is the reason printed above.
-	if !v.PathExists && !m.heldHere(v) && v.Unreachable == "" && v.Invalid == "" {
+	if !v.PathExists && !m.heldHere(v) && v.Unreachable == "" && v.Invalid == "" && answered {
 		where, clone := "this machine", "Enter: clone and open"
 		if v.Project.Remote != nil {
 			where, clone = v.Project.Remote.Host, "Enter: clone there and open"

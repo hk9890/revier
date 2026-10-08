@@ -1065,6 +1065,9 @@ type Report struct {
 	// Failed is why each host that could not list is missing, by host name.
 	// Its targets are in the views marked Unknown (decisions.md D89).
 	Failed map[string]error
+	// tags is where the runtime here shows each panel a linked host can name:
+	// what places a host's agents, whenever its answer is laid over.
+	tags map[revier.PanelID]shown
 }
 
 // HostErr is every failure a survey degraded over, joined, or nil: what a
@@ -1072,10 +1075,11 @@ type Report struct {
 func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
-// local matching for every project. bound is where each project's targets
-// last landed; a bound instance that is still listed is its target. attached
-// is what was bound to each project by hand or by a claim; an attachment that
-// is still listed follows the project's targets, marked Attached.
+// local matching for every project, with what each linked host says laid over
+// its projects. bound is where each project's targets last landed; a bound
+// instance that is still listed is its target. attached is what was bound to
+// each project by hand or by a claim; an attachment that is still listed
+// follows the project's targets, marked Attached.
 //
 // Every project here is already rendered and compiled, so the survey does no
 // work that a previous refresh did not also have to do. What could not be
@@ -1083,22 +1087,75 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 // and a refused target each carry their reason into the view, because the
 // survey is the one place a user reads why something is not there.
 //
-// The TUI surveys every refresh, so a survey is logged only when it failed or
-// was slow, and a failure that repeats only once (logging.Poll).
+// It answers when the slowest linked host has. A surface that refreshes takes
+// the two parts apart instead, SurveyLocal and AskRemotes, and lays one over
+// the other with Lay (decisions.md D114).
 func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (r Report, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Poll("survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
 	}()
-	return c.buildReport(ctx, projects, bound, attached)
+	// The remote hosts are asked while the local ones are listed and the
+	// local agents probed: a round trip to another machine is the slow part,
+	// and nothing local waits for it.
+	remote := make(chan RemoteAnswers, 1)
+	go func() { remote <- c.AskRemotes(ctx, projects) }()
+	r = c.listed(ctx, projects, bound, attached)
+	c.lay(&r, <-remote)
+	return r, nil
+}
+
+// SurveyLocal is the part of a survey this machine answers by itself: the
+// hosts here listed, every project matched, the agents here probed. A linked
+// project's view is the one of the window that reaches it, with nothing of
+// its host's yet. No linked host is asked, so it costs what the hosts here
+// cost however a host elsewhere answers (decisions.md D114).
+//
+// The TUI surveys every refresh, so a survey is logged only when it failed or
+// was slow, and a failure that repeats only once (logging.Poll).
+func (c *Core) SurveyLocal(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (r Report, err error) {
+	start := time.Now()
+	defer func() {
+		logging.Poll("local survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
+	}()
+	return c.listed(ctx, projects, bound, attached), nil
+}
+
+// Lay returns the report with what the linked hosts said laid over their
+// projects. The report is left as it was, so answers that arrive later are
+// laid over the same listing again.
+func (c *Core) Lay(r Report, answers RemoteAnswers) Report {
+	views := make([]revier.ProjectView, len(r.Views))
+	copy(views, r.Views)
+	for i := range views {
+		// An agent appended into room the listing left would be written into
+		// the listing's own slice.
+		views[i].Agents = slices.Clip(views[i].Agents)
+	}
+	r.Views = views
+	c.lay(&r, answers)
+	return r
+}
+
+// lay lays each answer over the view of the link it is for, in place.
+func (c *Core) lay(r *Report, answers RemoteAnswers) {
+	for i := range r.Views {
+		v := &r.Views[i]
+		a, ok := answers.of(v.Project)
+		if !ok {
+			continue
+		}
+		at := len(v.Agents)
+		c.localise(r.tags, merge(v, a))
+		dropDoubles(v, at)
+	}
 }
 
 // Unsurveyed is the view of every project before any host has answered:
 // what the files alone say - the name, the path and whether it is here,
 // each target and whether a host here could realize it - with nothing
 // running and no agent. The TUI draws its first frame from it, so the names
-// are on the screen while the hosts are listed and a remote host is asked,
-// which is the slow part of a survey. It lists nothing and asks nobody: with
+// are on the screen while the hosts are listed. It lists nothing and asks nobody: with
 // no listing there is no instance to bind to or to probe, so it takes no
 // bindings and no context.
 func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
@@ -1110,30 +1167,16 @@ func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	return views
 }
 
-func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (Report, error) {
-	// The remote hosts are asked while the local ones are listed and the
-	// local agents probed: a round trip to another machine is the slow part,
-	// and nothing local waits for it.
-	remote := make(chan map[revier.ProjectName]remoteAnswer, 1)
-	go func() { remote <- c.surveyRemotes(ctx, projects) }()
+// listed is the local part of a survey.
+func (c *Core) listed(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) Report {
 	snap, failed := c.listing(ctx)
-	r := Report{Views: make([]revier.ProjectView, 0, len(projects))}
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap)}
 	if len(failed) > 0 {
 		r.Failed = failed
 	}
 	probed := probeCache{}
 	for _, p := range projects {
 		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed))
-	}
-	answers := <-remote
-	tags := c.tags(snap)
-	for i, p := range projects {
-		if a, ok := answers[p.Name]; ok {
-			v := &r.Views[i]
-			at := len(v.Agents)
-			c.localise(tags, merge(v, a))
-			dropDoubles(v, at)
-		}
 	}
 	for _, h := range c.hosts() {
 		if failed[h.Name()] != nil {
@@ -1148,7 +1191,7 @@ func (c *Core) buildReport(ctx context.Context, projects []Project, bound map[re
 	if c.Window != nil {
 		r.Windows = snap[c.Window.Name()]
 	}
-	return r, nil
+	return r
 }
 
 // Launch is what a window that appears is attributed to: the project that

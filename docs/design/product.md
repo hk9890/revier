@@ -145,6 +145,10 @@ pane is the host's inventory rather than this machine's projects, and draws
 the host's word whole. So every agent a surface shows sits in a panel of an
 instance `Held` counts, and "closed and no agents" is an invariant of the row
 rather than a coincidence of the filter.
+The rows refresh from this machine alone, and what a linked host says is laid
+over them when it answers: a project closed here is off its row within a
+refresh however long a host takes, and a link's pane says `surveying` until
+its host has answered once (D114).
 The pane starts level with the project query.
 
 A link's agents are the host's and this machine's, added together (D101). A
@@ -229,9 +233,9 @@ before the terminal sees it. That window is the popup, or a terminal whose
 current panel runs revier with no command, paired with its window as an
 attachment is (D95); there no popup opens. A runtime that cannot type into the
 panel leaves the press what it was: the popup, raised or opened. Hidden, it
-surveys nothing, since every survey reaches every linked host; the terminal's focus
-report on the raise reads the project files again, since a press used to load
-them, then runs one survey and resumes the refresh. The surface knows it is
+surveys nothing and asks no linked host, since nobody reads the answer; the
+terminal's focus report on the raise reads the project files again, since a
+press used to load them, then runs one survey and resumes the refresh. The surface knows it is
 the popup, and which project to open on, from the environment its terminal is
 started with, read and dropped at start so nothing it launches inherits it.
 The project is resolved at the keypress, while the focused window is still the

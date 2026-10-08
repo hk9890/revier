@@ -66,8 +66,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
 	m := tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors()
-	next, _ := m.Update(m.Survey()())
-	return next.(tui.Model)
+	return survey(m)
 }
 
 // clocked gives the model a clock a test advances by hand, and returns the
@@ -77,8 +76,11 @@ func clocked(m tui.Model) (tui.Model, *time.Time) {
 	return m.WithClock(func() time.Time { return now }), &now
 }
 
+// survey applies one whole refresh: the survey of this machine, then what
+// the linked hosts say.
 func survey(m tui.Model) tui.Model {
 	next, _ := m.Update(m.Survey()())
+	next, _ = next.Update(next.(tui.Model).AskRemotes()())
 	return next.(tui.Model)
 }
 
@@ -187,8 +189,8 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 	}
 }
 
-// bubbletea paints before the first survey answers, and the survey is a
-// round trip to every linked host. Those frames list every project from its
+// bubbletea paints before the first survey answers, and the survey lists
+// every host here. Those frames list every project from its
 // file, with no mark and no count, because the names are what the surface
 // is opened for; the rule says the survey is pending rather than counting
 // what is not known yet, and nothing says there are no projects when there
