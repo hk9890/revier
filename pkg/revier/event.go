@@ -5,9 +5,11 @@ import "time"
 // The kinds of Event. They are a contract with whatever reads `revier
 // events`: a kind is added, never renamed (decisions.md D112).
 const (
-	// EventGo is one press of a target that ran or raised it.
+	// EventGo is one press of a target that ran or raised it. A step of a
+	// restore is not one.
 	EventGo = "go"
-	// EventGoAgent is one press of an agent that brought it to the front.
+	// EventGoAgent is one press of an agent that brought it to the front, in
+	// the surface or by `revier agent focus`.
 	EventGoAgent = "go agent"
 	// EventAgentNew is an agent tab added to an open workspace.
 	EventAgentNew = "agent new"
@@ -31,7 +33,8 @@ type Event struct {
 	// that asked the host.
 	Host    string      `json:"host,omitempty"`
 	Project ProjectName `json:"project"`
-	// Target is where an EventGo landed, and the workspace a new tab opened in.
+	// Target is where an EventGo landed - the tab it made current, else the
+	// target - and the workspace a new tab opened in.
 	Target TargetName `json:"target,omitempty"`
 	// Launched reports that an EventGo started the target, not raised it.
 	Launched bool `json:"launched,omitempty"`

@@ -10,6 +10,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -37,11 +38,11 @@ func TestAPressThatLaunchesIsAGoEventThatSaysSo(t *testing.T) {
 	recorded := recording(t)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 
-	if _, err := c.Activate(context.Background(), prepared(t, project()), "editor", nil, false, nil); err != nil {
-		t.Fatalf("Activate: %v", err)
+	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "home", nil, &ledger{}); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 
-	want := []revier.Event{{Kind: revier.EventGo, Project: "revier", Target: "editor", Launched: true}}
+	want := []revier.Event{{Kind: revier.EventGo, Project: "revier", Target: "home", Launched: true}}
 	if got := recorded(); !slices.Equal(got, want) {
 		t.Errorf("events = %+v, want %+v", got, want)
 	}
@@ -63,8 +64,8 @@ func TestAToggleBackIsOneEventOfWhereItLanded(t *testing.T) {
 	}})
 	rt.SetFocus(diff)
 
-	if _, err := c.Activate(context.Background(), p, "diff", nil, false, nil); err != nil {
-		t.Fatalf("Activate: %v", err)
+	if _, _, err := c.ActivateWaiting(context.Background(), p, "diff", nil, &ledger{}); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 
 	want := []revier.Event{{Kind: revier.EventGo, Project: "revier", Target: "home"}}
@@ -78,13 +79,63 @@ func TestAPressThatFailsOrOnlyWaitsIsNoEvent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	p := prepared(t, project())
 
-	if _, err := c.Activate(context.Background(), p, "nope", nil, false, nil); err == nil {
-		t.Fatal("Activate of an unknown target succeeded")
+	if _, _, err := c.ActivateWaiting(context.Background(), p, "nope", nil, &ledger{}); err == nil {
+		t.Fatal("a press of an unknown target succeeded")
 	}
-	if res, err := c.Activate(context.Background(), p, "editor", nil, true, nil); err != nil || !res.ComingUp {
-		t.Fatalf("Activate = %+v, %v; want the launch still coming up", res, err)
+	if _, res, err := c.ActivateWaiting(context.Background(), p, "editor", nil, pendingLedger{&ledger{}}); err != nil || !res.ComingUp {
+		t.Fatalf("press = %+v, %v; want the launch still coming up", res, err)
 	}
 
+	if got := recorded(); len(got) != 0 {
+		t.Errorf("events = %+v, want none", got)
+	}
+}
+
+// pendingLedger has a launch of every target on record.
+type pendingLedger struct{ *ledger }
+
+func (pendingLedger) Pending(revier.ProjectName, revier.TargetName) bool { return true }
+
+// A tab is reached through the workspace that holds it, and the result names
+// the workspace for the binding. The event names the tab, and says launched
+// for the tab alone: the workspace was up. The press after it, on the tab now
+// current, is the toggle back, and reads as the workspace.
+func TestAPressOfATabIsAnEventOfTheTab(t *testing.T) {
+	recorded := recording(t)
+	rt, wm, _ := tabHosts(t)
+	c := &core.Core{Runtime: rt, Window: wm}
+	p := prepared(t, tabProject())
+	l := &ledger{}
+
+	for range 2 {
+		if _, _, err := c.ActivateWaiting(context.Background(), p, "tickets", nil, l); err != nil {
+			t.Fatalf("ActivateWaiting: %v", err)
+		}
+	}
+
+	want := []revier.Event{
+		{Kind: revier.EventGo, Project: "revier", Target: "tickets", Launched: true},
+		{Kind: revier.EventGo, Project: "revier", Target: "home"},
+	}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+// A restore opens what was open before a reboot. It is nobody's use of the
+// project, so a count of presses must not see it.
+func TestARestoreIsNoGoEvent(t *testing.T) {
+	recorded := recording(t)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
+		{Name: "home"}, {Name: "notes"},
+	}}}}
+
+	out, _, _ := restoreOf(t, c, s)
+
+	if opened, _, _ := out.Counts(); opened != 2 {
+		t.Fatalf("restore opened %d, want home and notes", opened)
+	}
 	if got := recorded(); len(got) != 0 {
 		t.Errorf("events = %+v, want none", got)
 	}

@@ -196,7 +196,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// The ref is the instance that holds the tab, so the result names that
 	// instance's target: a caller binds the two, and a tab bound to it would
 	// keep raising the instance after inside is removed from the file.
-	res := Result{Target: t.Runtime.Inside, Ref: in.Ref}
+	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref}
 	// An instance this press opened is reported with a failure after it, as
 	// Go reports one it could not focus, so the caller still pins it.
 	var failed Result

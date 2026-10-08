@@ -500,7 +500,11 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 // each recorded agent. ComingUp reports an Activate that did nothing because
 // the target's earlier launch has not produced its window yet.
 type Result struct {
-	Target   revier.TargetName
+	Target revier.TargetName
+	// Tab is the tab target the press made current inside Target. Target
+	// stays the instance's, which is what a caller binds; Tab is what the
+	// user pressed and reached, and Launched then says the tab was opened.
+	Tab      revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
 	ComingUp bool

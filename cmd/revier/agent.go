@@ -199,6 +199,8 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	start := time.Now()
 	var ref revier.TargetRef
 	var panel revier.PanelID
+	name, _, _ := strings.Cut(address, ":")
+	focused := revier.Event{Kind: revier.EventGoAgent, Project: revier.ProjectName(name)}
 	switch {
 	case *instance == "":
 		ag, err := a.agent(ctx, address)
@@ -206,6 +208,7 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 			return err
 		}
 		ref, panel = ag.Ref, ag.Panel.ID
+		focused.Agent, focused.Session = ag.State.Harness, ag.State.Session
 	case a.core.Runtime == nil:
 		return fmt.Errorf("%w: no runtime holds panels", core.ErrNoHost)
 	default:
@@ -214,6 +217,9 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	}
 	err = a.core.FocusAgent(ctx, ref, panel)
 	logging.Op("agent focus", start, err, "address", address, "ref", ref, "panel", panel)
+	if err == nil {
+		events.Record(focused)
+	}
 	return err
 }
 

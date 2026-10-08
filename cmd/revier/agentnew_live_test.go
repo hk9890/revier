@@ -78,6 +78,27 @@ func TestANewAgentAndANewShellAreEvents(t *testing.T) {
 	}
 }
 
+// Bringing an agent to the front from the command line is the event a press
+// on it in the surface is.
+func TestAnAgentFocusIsAGoAgentEvent(t *testing.T) {
+	work(t)
+	root := os.Getenv("REVIER_STATE_HOME")
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+
+	if err := run(io.Discard, []string{"agent", "focus", "work"}); err != nil {
+		t.Fatalf("agent focus: %v", err)
+	}
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != revier.EventGoAgent || got[0].Project != "work" {
+		t.Errorf("events = %+v, want one go agent of work", got)
+	}
+}
+
 // A panel no workspace holds is named, whatever the runtime.
 func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 	work(t)

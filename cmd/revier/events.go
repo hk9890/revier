@@ -35,7 +35,8 @@ One JSON line per event, oldest first:
   event     go, go agent, agent new, shell new, action, agent session
   project   the project, by its name on the machine that recorded it
   host      the linked host that recorded it; absent for this machine
-  target    where a go landed, or the workspace a tab opened in
+  target    where a go landed: the tab, the target, or home on a press
+            back; for a new tab, the workspace it opened in
   launched  true when a go started its target instead of raising it
   action    the action that ran
   agent     the harness of the agent a go agent or an agent session is of
@@ -43,7 +44,8 @@ One JSON line per event, oldest first:
   dir       the directory the agent works in, or a tab started in
 
 An agent session is written when the surface first sees an agent hold a
-conversation, and once on each later day it still does. A host that does not
+conversation, and once on each later day it still does. A session restore
+writes no go. A host that does not
 answer is named on stderr, and the events of the others are printed.
 `
 

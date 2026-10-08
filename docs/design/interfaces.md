@@ -314,7 +314,9 @@ type Event struct {
 
 A kind is added, never renamed: a reader counts by it. Only an operation that
 succeeded is an event, and a press is one event however many times it ran
-`Go`. An agent session is written by the surface, the one process that surveys
+`Go`: of the tab it made current, else of the target it landed on. A step of a
+restore is no event, since it opens what was open and is nobody's use of the
+project. An agent session is written by the surface, the one process that surveys
 all day: when it first sees the conversation, and once on each later day it
 still does, so a read of the last days holds every conversation alive in
 them. A link's agent is recorded here under the link's name, and its

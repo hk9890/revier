@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -143,7 +144,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l Ledger) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
-	ref, res, err := c.ActivateWaiting(ctx, p, step.Target, step.Resumes, l)
+	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes, l)
 	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
 }
 
@@ -155,7 +156,25 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l
 // its title since. A zero ref with no error is a target launched and not yet
 // up. The Result is returned also when the wait failed: the launch ran, and
 // its agents came to Result.Agents.
+//
+// It is one press, and a press that ran or raised something is one EventGo of
+// where it landed: the tab it made current, else the target. It is recorded
+// here and not in Go, which a toggle back and a tab each run twice, and not
+// for a step of a restore, which opens what was open and is nobody's use of
+// the project (decisions.md D112).
 func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, l Ledger) (revier.TargetRef, Result, error) {
+	ref, res, err := c.activateWaiting(ctx, p, name, resumes, l)
+	if err == nil && !res.ComingUp {
+		landed := res.Target
+		if res.Tab != "" {
+			landed = res.Tab
+		}
+		events.Record(revier.Event{Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
+	}
+	return ref, res, err
+}
+
+func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, l Ledger) (revier.TargetRef, Result, error) {
 	res, err := c.Activate(ctx, p, name, l.Bound(p.Name), l.Pending(p.Name, name), resumes)
 	ref := res.Ref
 	if res.Launched && ref.IsZero() && err == nil {
