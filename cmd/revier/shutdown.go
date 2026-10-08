@@ -58,7 +58,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		scope = core.ShutdownTargets
 	}
 
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
+	report, err := a.core.SurveyToClose(ctx, a.projects, a.state.Bound, a.state.Attached, only)
 	if err != nil {
 		return err
 	}

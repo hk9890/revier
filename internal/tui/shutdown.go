@@ -272,7 +272,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan, asked.err = surveyPlan(c, root, projects, asked.project, func(r core.Report) []core.CloseStep {
 			return c.ShutdownPlan(r, asked.project, asked.scope)
 		})
 		return asked
@@ -280,12 +280,13 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 }
 
 // surveyPlan surveys what is open now, attachments included, and makes the
-// plan from what it found. It runs off the update loop.
-func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) ([]core.CloseStep, error) {
+// plan from what it found. Of the linked hosts it waits only for the ones the
+// close is about (core.SurveyToClose). It runs off the update loop.
+func surveyPlan(c *core.Core, root string, projects []core.Project, only revier.ProjectName, plan func(core.Report) []core.CloseStep) ([]core.CloseStep, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	st := loadedState(root)
-	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
+	report, err := c.SurveyToClose(ctx, projects, st.Bound, st.Attached, only)
 	if err != nil {
 		return nil, err
 	}

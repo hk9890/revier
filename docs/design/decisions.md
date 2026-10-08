@@ -690,3 +690,13 @@ asked beside it by itself, one round at a time, and its last answer is laid
 over each new listing. A command that runs once still takes it all as one.
 Rejected: painting a close from its own result, which mends one operation and
 leaves every other row waiting on the host.
+
+### D115 — a close asks only the linked hosts it is about
+
+Every close surveyed twice, and each survey waited for every linked host, so
+one host that was gone cost a close of a project on this machine two waits
+for it with nothing of a link open. A link with nothing open here has nothing
+a close could end. The plan's survey now asks the hosts of the links open
+here, of those only the one being closed, and the recheck the hosts the plan
+has a step for. Rejected: shorter phase budgets, which cut a slow desktop
+short and still waited once a phase.

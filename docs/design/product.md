@@ -257,7 +257,10 @@ confirming it is the force (D99). A del that would have closed at once asks
 there too. A step whose agents that survey could not read - its host did not
 list, its project is no longer surveyed, its link host did not answer - is
 left open and named in the result, and the rest of the plan closes: one dead
-remote host does not stop the other projects.
+remote host does not stop the other projects. Neither survey of a close waits
+for a linked host the close is not about: the plan's asks the hosts of the
+links open here, the recheck the hosts its plan has a step for, so a close of
+a project on this machine costs nothing for a host that is gone (D115).
 
 The guard is in `core.Shutdown`, so `revier shutdown`, the wizard and del all
 pass it (D99). A busy agent refuses the whole plan, because the user is about

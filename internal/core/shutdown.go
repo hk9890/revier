@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -573,10 +573,8 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // (phaseContext), as the save before them does, so however long the recheck
 // took, the save is made and every step is asked to close.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
-	r, plan, err := c.recheck(ctx, plan, opts)
-	if err != nil {
-		return nil, err
-	}
+	start := time.Now()
+	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		return nil, &BusyRefusal{Plan: plan}
@@ -592,8 +590,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return !s.Action.Leaves() })
 	if opts.Before != nil && closes {
 		saving, stop := phaseContext(ctx, SaveBudget)
+		saved := time.Now()
 		err := opts.Before(saving, r)
 		stop()
+		logging.Op("shutdown save", saved, err)
 		if err != nil {
 			return nil, err
 		}
@@ -624,7 +624,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	}
 	c.awaitClosed(closing, out, wait)
 	closed, open, failed := out.Counts()
-	slog.Info("shutdown", "closed", closed, "open", open, "failed", failed)
+	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	return out, nil
 }
 
@@ -632,14 +632,27 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 // carry the agents it found. Everything the close does from here - the order,
 // the session it saves - is read off the returned report, not off the one the
 // plan was drawn from.
-func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep, error) {
+//
+// Only the linked hosts the plan has a step for are asked (decisions.md
+// D115): a step's agents are its own project's host's word, and no other
+// host's answer changes what closes. The session saved off this survey asks
+// each open link's host for its conversations itself.
+func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep) {
 	reading, stop := phaseContext(ctx, RecheckBudget)
 	defer stop()
-	r, err := c.Survey(reading, opts.Projects, opts.Bound, opts.Attached)
-	if err != nil {
-		return Report{}, nil, fmt.Errorf("the plan's agents could not be read again: %w", err)
+	start := time.Now()
+	r, asked := c.surveyAsking(reading, opts.Projects, opts.Bound, opts.Attached, func(v revier.ProjectView) bool {
+		return slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Project == v.Project.Name })
+	})
+	plan = c.rechecked(r, plan)
+	unread := 0
+	for _, s := range plan {
+		if s.Unread != "" {
+			unread++
+		}
 	}
-	return r, c.rechecked(r, plan), nil
+	logging.Op("shutdown recheck", start, nil, "steps", len(plan), "unread", unread, "asked", asked, "unreachable", unreachable(r, asked))
+	return r, plan
 }
 
 // rechecked is the plan with each step's agents as a later survey finds them.

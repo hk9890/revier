@@ -100,7 +100,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	c, root := m.core, m.stateRoot
 	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects}
 	return m, func() tea.Msg {
-		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan, asked.err = surveyPlan(c, root, projects, project, func(r core.Report) []core.CloseStep {
 			if whole {
 				return c.ShutdownPlan(r, project, core.ShutdownAll)
 			}
