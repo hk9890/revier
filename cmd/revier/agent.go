@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
@@ -24,7 +27,9 @@ const agentUsage = `revier agent - drive one agent from a script
 usage:
   revier agent wait <agent> --until <status> [--timeout <seconds>]
   revier agent prompt <agent> [--] <text>
-  revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]
+  revier agent read <agent> [--screen [--lines <n>]]
+  revier agent send-keys <agent> [--] <key>..
+  revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
   revier agent focus <agent> [--ref <instance>]
   revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]
 
@@ -32,17 +37,25 @@ usage:
              or <project>:<panel> for one of several
   --until    idle, running, attention, or stopped (idle or attention)
   --timeout  give up after this many seconds and exit 2; 0 waits for good
+  --screen   print what the agent's panel shows, not what the agent said
+  --lines    with --screen, the last <n> lines of the panel and its
+             scrollback
+  <key>      esc, enter, tab, shift+tab, space, backspace, up, down, left,
+             right, ctrl+c, or one character
   --panel    the open workspace that holds this panel; kitty's
              @active-kitty-window-id is the window a key was pressed in
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project
+  --no-focus leave the focus where it is, and print the new agent's address
   --ref      the instance holding <project>:<panel>, as the survey reports
              it: a panel id is unique only within one kitty process
 
 new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace.
 Without -p or --panel the project is the one --dir is in, else the one this
-directory resolves to.
+directory resolves to. It goes to the new agent and raises its window; with
+--no-focus it does neither, and prints the address a script reaches the
+agent by, which names an agent once the harness in the tab has started.
 
 focus makes the agent's tab current and raises the window that holds it.
 
@@ -55,6 +68,14 @@ and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
 waits for that turn. It refuses a panel that is not an agent's, and an agent
 waiting for an answer, where the Enter would pick an option in its dialog.
+
+read prints the last thing the agent said, where its harness keeps a
+conversation revier can read: Claude Code's does. --screen prints the text
+of the agent's panel, which every harness has, and the agent of a link too.
+
+send-keys types the keys in order, whatever the agent is doing: it is how a
+dialog is answered and a turn interrupted. Read the screen first; a key
+lands on whatever the panel shows.
 `
 
 // errWaitTimeout is a wait that ran out of time. It has its own exit status,
@@ -79,6 +100,10 @@ func cmdAgent(out io.Writer, args []string) error {
 		return cmdAgentWait(out, args)
 	case "prompt":
 		return cmdAgentPrompt(out, args)
+	case "read":
+		return cmdAgentRead(out, args)
+	case "send-keys":
+		return cmdAgentKeys(out, args)
 	case "new":
 		return cmdAgentNew(out, args)
 	case "focus":
@@ -176,6 +201,107 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 	return nil
 }
 
+// cmdAgentRead prints what an agent said last, or with --screen what its
+// panel shows (decisions.md D116). Either is printed as text: what an agent
+// wrote and what a tool printed are not instructions to the terminal that
+// reads this (D108).
+func cmdAgentRead(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("agent read", flag.ContinueOnError)
+	screen := fs.Bool("screen", false, "what the agent's panel shows")
+	lines := fs.Int("lines", 0, "with --screen, the last lines of the panel and its scrollback")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 || *lines < 0 || (*lines > 0 && !*screen) {
+		return errors.New("usage: revier agent read <agent> [--screen [--lines <n>]]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	a, err := newApp(ctx, out)
+	if err != nil {
+		return err
+	}
+	ag, err := a.agent(ctx, pos[0])
+	if err != nil {
+		return err
+	}
+	if !*screen {
+		said, err := a.core.Said(ctx, ag)
+		if errors.Is(err, core.ErrNoMessage) {
+			return fmt.Errorf("%s: %w; --screen prints what its panel shows", pos[0], err)
+		}
+		if err != nil {
+			return fmt.Errorf("%s: %w", pos[0], err)
+		}
+		_, _ = fmt.Fprintln(out, strings.TrimRight(plainText(said.Message), "\n"))
+		return nil
+	}
+	text, err := a.core.Screen(ctx, revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID}, *lines > 0)
+	if err != nil {
+		return fmt.Errorf("%s: %w", pos[0], err)
+	}
+	for _, line := range screenLines(text, *lines) {
+		_, _ = fmt.Fprintln(out, line)
+	}
+	return nil
+}
+
+// plainText is s with every escape sequence and every control character but
+// the newline and the tab taken off.
+func plainText(s string) string {
+	s = strings.ReplaceAll(ansi.Strip(s), "\r\n", "\n")
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' || !unicode.IsControl(r) {
+			return r
+		}
+		return -1
+	}, s)
+}
+
+// screenLines is a panel's text as lines of plain text, without the space a
+// terminal pads a row with and without the empty rows under the last line:
+// all of them, or the last n.
+func screenLines(text string, n int) []string {
+	lines := strings.Split(plainText(text), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if n > 0 && len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
+}
+
+// cmdAgentKeys types named keys into an agent's panel (decisions.md D117).
+func cmdAgentKeys(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("agent send-keys", flag.ContinueOnError)
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 2 {
+		return errors.New("usage: revier agent send-keys <agent> [--] <key> [<key> ..]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
+	defer cancel()
+	a, err := newApp(ctx, out)
+	if err != nil {
+		return err
+	}
+	ag, err := a.agent(ctx, pos[0])
+	if err != nil {
+		return err
+	}
+	if err := a.core.SendKeys(ctx, ag, pos[1:], core.KeyGap); err != nil {
+		return fmt.Errorf("%s: %w", pos[0], err)
+	}
+	return nil
+}
+
 // cmdAgentFocus brings one agent to the front.
 // With --ref the address names a panel of that instance, so a panel id two
 // kitty processes share still names one agent.
@@ -225,19 +351,20 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 
 // cmdAgentNew adds an agent tab to an open workspace. It is what the kitty
 // hotkey runs, so it prints nothing on success: there is no terminal to read
-// it in.
+// it in. With --no-focus the caller is a script, and reads the address.
 func cmdAgentNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent new", flag.ContinueOnError)
 	project := projectFlag(fs)
 	panel := fs.String("panel", "", "the open workspace holding this panel")
 	resume := fs.String("resume", "", "the conversation to start the agent on")
 	dir := fs.String("dir", "", "the directory the agent starts in")
+	noFocus := fs.Bool("no-focus", false, "leave the focus where it is, and print the agent's address")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 0 || (*project != "" && *panel != "") {
-		return errors.New("usage: revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>]")
+		return errors.New("usage: revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]")
 	}
 	if *dir != "" {
 		if *dir, err = filepath.Abs(*dir); err != nil {
@@ -251,14 +378,38 @@ func cmdAgentNew(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
+	if *noFocus {
+		return a.addAgent(ctx, *project, *panel, *dir, revier.SessionID(*resume))
+	}
 	return a.newAgent(ctx, *project, *panel, *dir, revier.SessionID(*resume))
 }
 
-// newAgent opens the agent tab where newTab puts it.
+// newAgent opens the agent tab where newTab puts it, and goes to it.
 func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
+	return a.agentTab(ctx, project, panel, dir, resume, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
+		return a.core.NewAgent(ctx, w, r)
+	})
+}
+
+// addAgent opens the agent tab where newTab puts it, leaves the focus where
+// it is, and prints the address the new agent answers to: the caller is a
+// script, which has nothing else to find it by (decisions.md D118).
+func (a *app) addAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
+	return a.agentTab(ctx, project, panel, dir, resume, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
+		added, outcome, err := a.core.AddAgent(ctx, w, r)
+		if added != "" {
+			_, _ = fmt.Fprintf(a.out, "%s:%s\n", w.Project.Name, added)
+		}
+		return outcome, err
+	})
+}
+
+// agentTab opens an agent tab through open in the workspace newTab places it
+// in, and records it.
+func (a *app) agentTab(ctx context.Context, project, panel, dir string, resume revier.SessionID, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
 	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
-		outcome, err := a.core.NewAgent(ctx, w, core.Resume{Session: resume, Dir: dir})
+		outcome, err := open(w, core.Resume{Session: resume, Dir: dir})
 		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
 		if err != nil {
 			return err

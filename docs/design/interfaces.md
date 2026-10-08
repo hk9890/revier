@@ -179,7 +179,8 @@ kitty OS window (D70).
 // and how an agent is opened beside a workspace (D65). OpenTab opens the tab
 // last, running r.Launch or holding r.Panels with every later panel split
 // into the first, each panel in its own Dir. An OpenTab that fails closes
-// what it opened. Which tab belongs to which target is the core's: the
+// what it opened, and one that succeeds leaves the keyboard focus where it
+// was (D118). Which tab belongs to which target is the core's: the
 // runtime sets vars on the first panel and reports them back in Panel.Vars.
 type PanelOpener interface {
     OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
@@ -199,8 +200,9 @@ type PanelFinder interface {
 // PanelReader is an optional capability of a Runtime. ReadPanel is what one
 // panel shows, a line per row, with the style of each run as SGR sequences,
 // and with the lines above the screen when scrollback is asked for: how the
-// agent list mirrors the agent under its cursor (D111). What of it is drawn
-// is the surface's decision.
+// agent list mirrors the agent under its cursor (D111), and what `revier
+// agent read --screen` prints (D116). What of it is drawn is the surface's
+// decision.
 type PanelReader interface {
     ReadPanel(ctx context.Context, ref TargetRef, panel PanelID, scrollback bool) (string, error)
 }

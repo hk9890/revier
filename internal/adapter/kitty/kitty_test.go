@@ -390,8 +390,8 @@ func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
 		}
 	}
 	want := []string{
-		"launch --type=tab --location=last --match window_id:4 --hold --cwd /home/user/dev/demo/wt claude --resume b",
-		"launch --type=window --match window_id:9 --hold --cwd /home/user/dev/demo/wt",
+		"launch --type=tab --location=last --keep-focus --match window_id:4 --hold --cwd /home/user/dev/demo/wt claude --resume b",
+		"launch --type=window --keep-focus --match window_id:9 --hold --cwd /home/user/dev/demo/wt",
 	}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
@@ -793,7 +793,7 @@ func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	}
 	calls := rec.all()
 	last := calls[len(calls)-1]
-	want := "launch --type=tab --location=last --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
+	want := "launch --type=tab --location=last --keep-focus --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
 	if got := strings.Join(last.args, " "); got != want || last.socket != "unix:@kitty-4000" {
 		t.Errorf("last call = %s %q, want %q on unix:@kitty-4000", last.socket, got, want)
 	}

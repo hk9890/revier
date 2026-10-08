@@ -121,7 +121,17 @@ revier session save    record the projects that are open now (D46)
 revier session restore open what a saved session recorded
 revier session list    the saved sessions, newest first
 revier shutdown        save the session when it changed, then close (D78)
+revier agent ..        one agent, driven by a script (D31, D116, D117, D118)
 ```
+
+A script drives an agent in five steps, and each leaves every window where it
+is: `agent wait` blocks until the agent reaches a state, `agent prompt` types
+one line and submits it (D31), `agent read` prints what the agent said last,
+or with `--screen` what its panel shows (D116), `agent send-keys` types named
+keys whatever the agent is doing (D117), and `agent new --no-focus` adds an
+agent beside the workspace and prints its address (D118). The script is
+another agent as often as not: one session that asks the others and reads
+their answers.
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.

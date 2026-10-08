@@ -91,9 +91,16 @@ revier agent wait <project>[:<target>] --until <status> [--timeout s]
                               or stopped; exit 2 on timeout
 revier agent prompt <project>[:<target>] <text>
                               type one line into the agent and submit it
-revier agent new [-p <project> | --panel <id>] [--resume <id>] [--dir <path>]
+revier agent read <project>[:<target>] [--screen [--lines n]]
+                              print what the agent said last, or with
+                              --screen the text of its panel
+revier agent send-keys <project>[:<target>] <key>..
+                              type keys into the agent, whatever it is doing:
+                              esc, enter, up, down, ctrl+c, one character, ..
+revier agent new [-p <project> | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
                               add an agent tab to an open workspace: the
-                              project's agent panel and its shell
+                              project's agent panel and its shell; --no-focus
+                              leaves the focus and prints the agent's address
 revier agent focus <project>[:<target>]
                               switch to the agent's tab and raise its window
 revier shell new [-p <project> | --panel <id>] [--dir <path>]
@@ -126,6 +133,22 @@ of one agent, how long ago it was written, and its end when it is too long to
 fit. That is the agent you moved the cursor to; until you do, the agent that
 needs you, else one with a message to show, one at rest before one working.
 For a project on another machine the last message is not shown yet.
+
+A script, or one agent that directs the others, drives an agent with `revier
+agent`. No command of this round trip moves a window or the focus:
+
+```
+revier agent prompt demo 'run the tests and say what failed'
+revier agent wait demo --until stopped --timeout 600    # idle, or attention
+revier agent read demo                                  # the answer
+revier agent read demo --screen --lines 40              # what its panel shows
+revier agent send-keys demo esc                         # interrupt, or answer a dialog
+worker=$(revier agent new -p demo --no-focus)           # another agent: demo:<panel>
+```
+
+`read` prints the last message where the harness keeps a conversation revier
+can read, which Claude Code does; `--screen` works for every harness.
+`send-keys` types into whatever the panel shows, so read the screen first.
 
 The projects and the agents each have a filter field over their rows; the
 targets have none. The rule over the list says how many projects the filter
@@ -294,8 +317,10 @@ file under its `~/.config/revier/projects/`; it needs no tmux there. The list
 shows the link as `far@buildbox` with what each agent there is doing, read
 from the revier there. Enter opens the workspace. Its tabs are tabs of your
 terminal: `revier agent new`, `revier shell new`, `revier agent prompt`,
-`revier agent wait`, a shutdown and the two keys above work as they do in a
-local workspace, and `--dir`, a path on this machine, is dropped. An agent
+`revier agent wait`, `revier agent send-keys`, a shutdown and the two keys
+above work as they do in a local workspace, and `--dir`, a path on this
+machine, is dropped. `revier agent read` needs `--screen` there, since the
+conversation is on the host. An agent
 ends with its tab or its connection; a saved session resumes it on the host.
 An agent started on the host from another machine is counted, and cannot be
 reached from here. `revier run <action> -p far` runs on the host, so an action

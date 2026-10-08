@@ -151,6 +151,9 @@ type PanelOpener interface {
 	// fails closes what it opened, so no half-built tab runs an agent the
 	// core names as not added. It is a tab target's tab (decisions.md D64)
 	// and the agent tab of `revier agent new` and a restore (D65).
+	//
+	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
+	// and a tab a script opens is gone to by nobody (D118).
 	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
 
 	// FocusPanel makes the panel current inside its instance, switching tab

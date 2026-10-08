@@ -297,19 +297,33 @@ func holdsPanel(inst revier.Instance, panel revier.PanelID) bool {
 // opens, as Go refuses it: a focus with no raise is a GNOME "is ready" notice
 // (decisions.md D63).
 func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcome, error) {
+	_, outcome, err := c.newAgent(ctx, w, r, true)
+	return outcome, err
+}
+
+// AddAgent opens the tab NewAgent opens and leaves the focus where it is:
+// what a script asks for, whose user is typing in another window. Nothing is
+// made current and nothing is raised, so a workspace whose OS window cannot
+// be raised takes the tab too. The panel is the new agent's, which is all
+// the caller has to find it by (decisions.md D118).
+func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.PanelID, AgentOutcome, error) {
+	return c.newAgent(ctx, w, r, false)
+}
+
+func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
 	t, err := c.tabRuntime(w)
 	if err != nil {
-		return AgentNotAdded, err
+		return "", AgentNotAdded, err
 	}
 	tab, outcome := c.agentTab(t.real, r, w.Project.Remote != nil)
 	if outcome == AgentDropped {
-		return AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
+		return "", AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
 	}
-	opened, err := c.openTab(ctx, w, t, tab, "agent tab")
-	if !opened {
-		return AgentNotAdded, err
+	panel, err := c.openTab(ctx, w, t, tab, "agent tab", focus)
+	if panel == "" {
+		return "", AgentNotAdded, err
 	}
-	return outcome, err
+	return panel, outcome, err
 }
 
 // NewShell opens a shell tab in an open workspace, makes it current, and
@@ -328,7 +342,7 @@ func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
 	if dir != "" {
 		shell.Dir = dir
 	}
-	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, "shell tab")
+	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, "shell tab", true)
 	return err
 }
 
@@ -356,22 +370,31 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 	return tabRuntime{host: host, opener: opener, real: real}, nil
 }
 
-// openTab refuses an OS window it cannot raise, then opens the tab in the
-// workspace, focuses its first panel and raises the OS window. opened reports
-// whether the tab is running, so an error after it is told from one before.
-func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, what string) (opened bool, err error) {
+// openTab opens the tab in the workspace and returns its first panel, which
+// is empty while no tab is running, so an error after the tab opened is told
+// from one before. With focus it refuses an OS window it cannot raise, then
+// focuses the panel and raises the OS window; without, the focus stays where
+// OpenTab left it.
+func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, what string, focus bool) (revier.PanelID, error) {
 	host, opener := t.host, t.opener
+	if !focus {
+		panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
+		if err != nil {
+			return "", fmt.Errorf("%s: %s: %w", host.Name(), what, err)
+		}
+		return panel, nil
+	}
 	inst, _ := byRef(w.snap, w.Ref)
 	osw, err := c.raisable(w.snap, inst, w.Target)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
 	if err != nil {
-		return false, fmt.Errorf("%s: %s: %w", host.Name(), what, err)
+		return "", fmt.Errorf("%s: %s: %w", host.Name(), what, err)
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, panel); err != nil {
-		return true, fmt.Errorf("%s: focus the %s: %w", host.Name(), what, err)
+		return panel, fmt.Errorf("%s: focus the %s: %w", host.Name(), what, err)
 	}
-	return true, c.raise(ctx, osw, w.Target)
+	return panel, c.raise(ctx, osw, w.Target)
 }

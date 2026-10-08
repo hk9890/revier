@@ -777,7 +777,9 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, e
 // --match` names the OS window through the window current in it, and the tab
 // goes last so the panels keep their order in the listing a save records
 // agents by. The vars become user vars of the tab's first window, which ls
-// reports back as the panel's Vars.
+// reports back as the panel's Vars. Every launch keeps the focus
+// (--keep-focus), which is what revier.PanelOpener asks: kitty would
+// otherwise put the keyboard in the new window.
 //
 // A launch or a title that fails closes the windows the tab already opened:
 // the core names the agent of a failed tab as not added, and it must not be
@@ -804,14 +806,14 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
 	panels := r.PanelSpecs()
 
-	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
+	args := []string{"--type=tab", "--location=last", "--keep-focus", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
 	for _, name := range varNames(vars) {
 		args = append(args, "--var", name+"="+vars[name])
 	}
 	first := 0
 	for i, p := range panels {
 		if i > 0 {
-			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+			args = []string{"--type=window", "--keep-focus", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
 		}
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
