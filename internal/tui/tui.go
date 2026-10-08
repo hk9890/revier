@@ -146,8 +146,9 @@ type Model struct {
 	width     int
 	height    int
 
-	// The project list. Cursor, paging and fuzzy filtering are the
-	// component's; what a row looks like is the delegate's.
+	// The project list. Cursor, paging and filtering are the component's;
+	// the order of the rows a query leaves is ranked's, and what a row looks
+	// like is the delegate's.
 	plist    list.Model
 	hlist    list.Model // the hosts, the link dialog's first step
 	rlist    list.Model // a host's projects, its second
@@ -737,20 +738,23 @@ func (m *Model) takeState() {
 func (m Model) sorted(views []revier.ProjectView) []revier.ProjectView {
 	out := make([]revier.ProjectView, len(views))
 	copy(out, views)
-	rank := func(v revier.ProjectView) int {
-		switch {
-		case v.Attention():
-			return 0
-		case m.heldHere(v):
-			return 1
-		default:
-			return 2
-		}
-	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return rank(out[i]) < rank(out[j])
+		return m.need(out[i]) < m.need(out[j])
 	})
 	return out
+}
+
+// need is the group sorted puts a project in, the one that needs the user
+// most first. A query keeps its rows in these groups too (ranked).
+func (m Model) need(v revier.ProjectView) int {
+	switch {
+	case v.Attention():
+		return 0
+	case m.heldHere(v):
+		return 1
+	default:
+		return 2
+	}
 }
 
 // key routes a press. Everything the surface owns is matched here, and only

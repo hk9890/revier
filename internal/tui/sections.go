@@ -3,7 +3,6 @@ package tui
 import (
 	"slices"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -139,8 +138,9 @@ func harnessOf(a revier.AgentView) string {
 }
 
 // agentRows is the pane's Agents section: every agent of the project under
-// the cursor, or, while an agent query is typed, the ones it matches, ranked
-// as the list ranks projects.
+// the cursor, or, while an agent query is typed, the ones it matches. The
+// section sorts its rows into no groups, so a whole match and then the score
+// order them (ranked).
 func (m Model) agentRows() []agentRow {
 	v, ok := m.selected()
 	if !ok {
@@ -156,7 +156,7 @@ func (m Model) agentRows() []agentRow {
 		return all
 	}
 	var out []agentRow
-	for _, rank := range list.DefaultFilter(m.afilter, labels) {
+	for _, rank := range ranked(ungrouped)(m.afilter, labels) {
 		r := all[rank.Index]
 		r.matches = rank.MatchedIndexes
 		out = append(out, r)

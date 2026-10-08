@@ -125,6 +125,8 @@ revier shutdown        save the session when it changed, then close (D78)
 
 The TUI is one surface: a list of projects, sorted so the ones needing
 attention come first, and a pane beside it for the project under the cursor.
+A query keeps that order: the rows it matches stay in their groups, and
+within a group the name that holds the query whole comes first (D113).
 The cursor follows its project as the rows reorder while the project is open.
 When the project closes or is deleted the cursor keeps its place, on the row
 that moved up or the last row, and comes back from the pane to the list; a
@@ -178,7 +180,7 @@ it said last. The rows stand by state - waiting for the user, working, at rest,
 unknown - and those waiting and at rest by when each spoke, the latest first;
 the working and the unknown stand by project. The cursor stays on its agent
 through every reordering, and the rule totals the rows by state. Typing filters
-them, Enter goes to the agent, and del closes its tab. The list opens on its
+them within their states (D113), Enter goes to the agent, and del closes its tab. The list opens on its
 first row, and the project list keeps its cursor and query across the switch.
 An agent the transcript says nothing about - another harness, a link's - has no
 age and stands last in its state.
