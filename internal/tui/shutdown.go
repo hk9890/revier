@@ -81,7 +81,6 @@ type plannedMsg struct {
 	project revier.ProjectName
 	scope   core.ShutdownScope
 	plan    []core.CloseStep
-	err     error
 }
 
 // shutdownMsg is a shutdown's answer. recheck is set instead when an agent
@@ -272,7 +271,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan = surveyPlan(c, root, projects, asked.project, func(r core.Report) []core.CloseStep {
 			return c.ShutdownPlan(r, asked.project, asked.scope)
 		})
 		return asked
@@ -280,16 +279,13 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 }
 
 // surveyPlan surveys what is open now, attachments included, and makes the
-// plan from what it found. It runs off the update loop.
-func surveyPlan(c *core.Core, root string, projects []core.Project, plan func(core.Report) []core.CloseStep) ([]core.CloseStep, error) {
+// plan from what it found. Of the linked hosts it waits only for the ones the
+// close is about (core.SurveyToClose). It runs off the update loop.
+func surveyPlan(c *core.Core, root string, projects []core.Project, only revier.ProjectName, plan func(core.Report) []core.CloseStep) []core.CloseStep {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	st := loadedState(root)
-	report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
-	if err != nil {
-		return nil, err
-	}
-	return plan(report), nil
+	return plan(c.SurveyToClose(ctx, projects, st.Bound, st.Attached, only))
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -298,11 +294,6 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 	s := m.shut
 	if m.dialog != dialogShutdown || s.step != shutConfirm || s.planned ||
 		msg.whole != s.whole || msg.project != s.project || msg.scope != s.scope {
-		return m, nil
-	}
-	if msg.err != nil {
-		m.err = msg.err
-		m.shutBack()
 		return m, nil
 	}
 	m.shut.planned, m.shut.plan = true, msg.plan

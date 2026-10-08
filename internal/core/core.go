@@ -1105,6 +1105,45 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 	return r, nil
 }
 
+// SurveyToClose is the survey a close draws its plan from: this machine
+// listed, then only the linked hosts the close is about asked (decisions.md
+// D115). A close of one project asks that project's host. A close of every
+// project asks the hosts of the links with something open here: a link with
+// nothing open has nothing a close could end, so its host is not waited for,
+// and a host that is gone costs a close of something else nothing.
+//
+// An agent of a link in a panel of an instance the link no longer holds - its
+// tab moved to another window - is therefore missing from a plan of every
+// project. A close of its own project still finds it.
+func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, only revier.ProjectName) Report {
+	start := time.Now()
+	r, answers := c.surveyAsking(ctx, projects, bound, attached, func(v revier.ProjectView) bool {
+		if only != "" {
+			return v.Project.Name == only
+		}
+		return v.Held()
+	})
+	logging.Op("shutdown survey", start, nil, "project", only, "asked", answers.hosts(), "unanswered", answers.failures())
+	return r
+}
+
+// surveyAsking is a survey that asks only the hosts of the links ask picks
+// from the listing of this machine, and returns what they said beside it.
+// The other links keep the view of the window that reaches them, as
+// SurveyLocal leaves it.
+func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, ask func(revier.ProjectView) bool) (Report, RemoteAnswers) {
+	r := c.listed(ctx, projects, bound, attached)
+	var links []Project
+	for i, p := range projects {
+		if p.Remote != nil && ask(r.Views[i]) {
+			links = append(links, p)
+		}
+	}
+	answers := c.AskRemotes(ctx, links)
+	c.lay(&r, answers)
+	return r, answers
+}
+
 // SurveyLocal is the part of a survey this machine answers by itself: the
 // hosts here listed, every project matched, the agents here probed. A linked
 // project's view is the one of the window that reaches it, with nothing of

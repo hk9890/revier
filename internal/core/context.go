@@ -41,8 +41,8 @@ func WithoutDeadline(parent context.Context) (context.Context, context.CancelFun
 // and the caller's cancellation as WithoutDeadline follows it.
 //
 // It does not inherit the caller's deadline. The recheck survey waits on
-// every link host and can take most of a caller's bound on ninety projects;
-// the save then reaches those hosts again. Whatever runs next would be handed
+// the host of every link its plan names and can take most of a caller's
+// bound; the save then asks the host of every link open here. Whatever runs next would be handed
 // a context already done - a save that fails, closes that fail on steps that
 // would have closed - so each phase counts its own budget from where it
 // starts.

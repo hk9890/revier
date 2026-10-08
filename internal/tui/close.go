@@ -28,7 +28,6 @@ type closePlannedMsg struct {
 	drop     bool
 	projects []core.Project // what the survey covered, for the recheck inside the close
 	plan     []core.CloseStep
-	err      error
 }
 
 // atEnd reports a query field with nothing right of its cursor, where del has
@@ -100,7 +99,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	c, root := m.core, m.stateRoot
 	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects}
 	return m, func() tea.Msg {
-		asked.plan, asked.err = surveyPlan(c, root, projects, func(r core.Report) []core.CloseStep {
+		asked.plan = surveyPlan(c, root, projects, project, func(r core.Report) []core.CloseStep {
 			if whole {
 				return c.ShutdownPlan(r, project, core.ShutdownAll)
 			}
@@ -114,10 +113,6 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 // close started since, drops it: the press it answers is no longer the last.
 func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	if m.dialog != dialogNone || m.shut.running || m.confirm != "" {
-		return m, nil
-	}
-	if msg.err != nil {
-		m.err = msg.err
 		return m, nil
 	}
 	if len(msg.plan) == 0 && msg.drop {

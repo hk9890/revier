@@ -140,7 +140,12 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 	// One instance can back two targets. Its agents are recorded once, under
 	// the first, or a restore would resume each of them twice.
 	recorded := map[string]bool{}
-	there, failed := c.conversationsThere(ctx, r.Views)
+	// The hosts have HostWait and not the whole of the save's bound: the
+	// agents on this machine are asked after them, on what is left of it
+	// (decisions.md D115).
+	asking, stop := context.WithTimeout(ctx, HostWait)
+	there, failed := c.conversationsThere(asking, r.Views)
+	stop()
 	gaps.Failed = failed
 	var agents []agentPanel
 	for _, v := range r.Views {

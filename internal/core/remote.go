@@ -64,6 +64,14 @@ func LinkedAs(projects []Project, host string, project revier.ProjectName) revie
 	return ""
 }
 
+// HostWait is how long a save waits for the linked hosts to say what the
+// agents of the links open here are working on. A host that takes a
+// connection and then says nothing would otherwise hold the save for its
+// whole bound, and the agents on this machine, asked after it, would be asked
+// on a bound already spent (decisions.md D115). A variable so a test can
+// shorten it.
+var HostWait = 10 * time.Second
+
 // remoteAnswer is what a host said about one of its projects, or why it
 // said nothing. link is the host and the project the question named.
 type remoteAnswer struct {
@@ -96,6 +104,32 @@ func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
 	}
 	maps.Copy(by, got.by)
 	return RemoteAnswers{by: by}
+}
+
+// hosts are the hosts that were asked, sorted, for the log line of the
+// survey that asked them.
+func (a RemoteAnswers) hosts() []string {
+	var out []string
+	for _, answer := range a.by {
+		if !slices.Contains(out, answer.link.Host) {
+			out = append(out, answer.link.Host)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// failures is why a host gave no answer for a link, each reason once and
+// sorted. The reason names its host.
+func (a RemoteAnswers) failures() []string {
+	var out []string
+	for _, answer := range a.by {
+		if answer.err != nil && !slices.Contains(out, answer.err.Error()) {
+			out = append(out, answer.err.Error())
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // of is the answer for a link. One asked for before the file was pointed at
