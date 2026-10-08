@@ -302,9 +302,9 @@ The standard library carries levels, fields and JSON, so no logging dependency
 is added. Every process appends to one daily file, because a keypress is its own
 process; `O_APPEND` keeps concurrent lines whole, which a size-rotating library
 does not promise. Logging is not a port: it names no tool, so the core logs
-directly. A poll that recurs logs a failure once until it changes or recovers,
-and a slow run once a minute, so a host down for an hour does not bury the
-operations.
+directly. A poll that recurs logs each cause of a failure once until it
+recovers, and a slow run once a minute, so a host down for an hour does not
+bury the operations, whether it fails one way or three in turn.
 
 ### D70 — a tmux instance is a session, and its windows are tabs
 

@@ -15,7 +15,7 @@ import (
 func capture(now func() time.Time) (*repeats, *bytes.Buffer) {
 	var buf bytes.Buffer
 	l := slog.New(slog.NewJSONHandler(&buf, nil))
-	r := &repeats{log: func() *slog.Logger { return l }, now: now, failing: map[string]string{}, slow: map[string]time.Time{}}
+	r := &repeats{log: func() *slog.Logger { return l }, now: now, failing: map[string]failure{}, slow: map[string]time.Time{}}
 	return r, &buf
 }
 
@@ -55,6 +55,35 @@ func TestARepeatedFailureIsLoggedOnceAndItsRecoveryOnce(t *testing.T) {
 	}
 	for i, w := range want {
 		if got[i]["level"] != w.level || got[i]["msg"] != w.msg || (w.err != "" && got[i]["err"] != w.err) {
+			t.Errorf("line %d = %v, want %+v", i, got[i], w)
+		}
+	}
+}
+
+// A host that fails three ways in turn, as one whose sshd drops connections
+// after a refused key does, is in one failure: each cause is one line, and the
+// recovery names the one it failed with last, which is not the last one
+// written.
+func TestAFailureThatAlternatesLogsEachCauseOnce(t *testing.T) {
+	r, buf := capture(time.Now)
+	reset, closed, refused := errors.New("connection reset"), errors.New("connection closed"), errors.New("key refused")
+	for _, err := range []error{reset, closed, reset, refused, closed, refused, reset, nil, reset} {
+		r.repeat("remote a", "remote survey", err, nil)
+	}
+
+	got := lines(t, buf)
+	want := []struct{ level, msg, key, text string }{
+		{"WARN", "remote survey", "err", "connection reset"},
+		{"WARN", "remote survey", "err", "connection closed"},
+		{"WARN", "remote survey", "err", "key refused"},
+		{"INFO", "remote survey: recovered", "was", "connection reset"},
+		{"WARN", "remote survey", "err", "connection reset"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("%d lines, want %d:\n%s", len(got), len(want), buf)
+	}
+	for i, w := range want {
+		if got[i]["level"] != w.level || got[i]["msg"] != w.msg || got[i][w.key] != w.text {
 			t.Errorf("line %d = %v, want %+v", i, got[i], w)
 		}
 	}

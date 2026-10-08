@@ -278,8 +278,8 @@ func (e hostErrs) err() error {
 // left out and their failures returned beside it. A host that cannot answer
 // costs its own targets and no other's (decisions.md D89): a survey over the
 // other hosts still stands, and a press on a target of the failed host is
-// refused with its reason. The failure is logged here, once per host until
-// it changes (logging.Repeat): a survey that degraded is not a survey that
+// refused with its reason. The failure is logged here, once per host and
+// cause (logging.Repeat): a survey that degraded is not a survey that
 // failed, so nothing above logs it. The hosts are independent and listed at
 // once, so a listing costs the slowest host and not the sum of them.
 func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
@@ -1456,7 +1456,7 @@ func (c *Core) probeFor(panel revier.Panel) (revier.AgentProbe, bool) {
 // read runs a probe over a panel. A probe that fails reports unknown rather
 // than failing the survey: one broken harness must not blank the dashboard.
 //
-// A failure is logged once per panel until it changes. A panel id is unique
+// A failure is logged once per panel and cause. A panel id is unique
 // only within its instance - a kitty window id within one kitty process - so
 // the instance names the panel too.
 func (c *Core) read(ctx context.Context, probe revier.AgentProbe, ref revier.TargetRef, panel revier.Panel) revier.AgentState {
