@@ -54,7 +54,18 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	if p.Remote == nil {
 		a.launchedAction(p.Name)
 	}
-	return runAction(a.out, p.Name, name, argv, dir)
+	start := time.Now()
+	if err := runAction(a.out, p.Name, name, argv, dir); err != nil {
+		return err
+	}
+	// A link's action is the event of the revier that ran it on its host,
+	// which `revier events` prints with that host: a second one here would
+	// count it twice. The event is stamped with the start: an action runs as
+	// long as it runs, and it was asked for when it began.
+	if p.Remote == nil {
+		events.Record(revier.Event{Time: start, Kind: revier.EventAction, Project: p.Name, Action: name})
+	}
+	return nil
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
@@ -80,6 +91,5 @@ func runAction(out io.Writer, project revier.ProjectName, name string, argv []st
 	if err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}
-	events.Record(revier.Event{Kind: revier.EventAction, Project: project, Action: name})
 	return nil
 }

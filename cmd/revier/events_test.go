@@ -173,20 +173,28 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	}
 }
 
+// acting is the app over one project and the actions it can run.
+func acting(root string, p core.Project, c *core.Core, actions ...config.Action) *app {
+	return &app{cfg: &config.Config{Actions: actions}, projects: []core.Project{p}, state: &state.State{}, stateRoot: root, core: c, out: &bytes.Buffer{}}
+}
+
+// localProject is a project on this machine, in a directory that exists.
+func localProject(t *testing.T) core.Project {
+	t.Helper()
+	return core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir()})
+}
+
 // An action that ran is an event; one that failed is the log's alone.
 func TestAnActionThatRanIsAnEvent(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	remote := hosttest.NewRemote("buildbox")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: root, core: c, out: &bytes.Buffer{}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
+	a := acting(root, localProject(t), c, config.Action{Name: "broken", Run: []string{"false"}}, config.Action{Name: "sync", Run: []string{"true"}})
 
-	remote.RunArgv = []string{"false"}
-	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); !errors.Is(err, errActionFailed) {
+	if err := cmdRun(context.Background(), a, []string{"broken", "-p", "demo"}); !errors.Is(err, errActionFailed) {
 		t.Fatalf("run = %v, want the action's failure", err)
 	}
-	remote.RunArgv = []string{"true"}
-	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); err != nil {
+	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "demo"}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -194,7 +202,51 @@ func TestAnActionThatRanIsAnEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Kind != revier.EventAction || got[0].Project != "far" || got[0].Action != "sync" {
-		t.Errorf("events = %+v, want one action sync of far", got)
+	if len(got) != 1 || got[0].Kind != revier.EventAction || got[0].Project != "demo" || got[0].Action != "sync" {
+		t.Errorf("events = %+v, want one action sync of demo", got)
+	}
+}
+
+// A link's action runs as a `revier run` on its host, which records it there:
+// one here as well would be a second line of `revier events` for one action.
+func TestALinksActionIsNoEventHere(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	remote := hosttest.NewRemote("buildbox")
+	remote.RunArgv = []string{"true"}
+	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+
+	if err := cmdRun(context.Background(), acting(root, remoteProject(t), c), []string{"sync", "-p", "far"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("events = %+v, want none: the host recorded it", got)
+	}
+}
+
+// An action is stamped when it started: an editor exits hours after the press
+// that opened it.
+func TestAnActionsEventCarriesTheTimeItStarted(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	const ran = 100 * time.Millisecond
+	a := acting(root, localProject(t), &core.Core{Runtime: hosttest.NewRuntime("tmux")}, config.Action{Name: "wait", Run: []string{"sleep", "0.1"}})
+
+	if err := cmdRun(context.Background(), a, []string{"wait", "-p", "demo"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	exited := time.Now()
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || exited.Sub(got[0].Time) < ran {
+		t.Errorf("events = %+v, want one action stamped before the %s it ran, which ended at %s", got, ran, exited)
 	}
 }

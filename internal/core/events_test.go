@@ -48,6 +48,31 @@ func TestAPressThatLaunchesIsAGoEventThatSaysSo(t *testing.T) {
 	}
 }
 
+// A go is stamped when it was pressed, not when the wait for its window ended:
+// an editor that takes its time must not stand behind a press made while it
+// came up.
+func TestAGoEventCarriesTheTimeOfThePress(t *testing.T) {
+	defer func(w time.Duration) { core.BindWait = w }(core.BindWait)
+	core.BindWait = 50 * time.Millisecond
+	root := t.TempDir()
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm")}
+
+	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "editor", nil, &ledger{}); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	waited := time.Now()
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || waited.Sub(got[0].Time) < core.BindWait {
+		t.Errorf("events = %+v, want one go stamped before the wait of %s that ended at %s", got, core.BindWait, waited)
+	}
+}
+
 // A toggle back is one press that runs Go twice, and writes two lines to the
 // log. It is one event, of the target the press landed on.
 func TestAToggleBackIsOneEventOfWhereItLanded(t *testing.T) {

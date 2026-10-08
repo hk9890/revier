@@ -45,7 +45,7 @@ One JSON line per event, oldest first:
 
 An agent session is written when the surface first sees an agent hold a
 conversation, and once on each later day it still does. A session restore
-writes no go. A host that does not
+writes no go. An action on a link is its host's event. A host that does not
 answer is named on stderr, and the events of the others are printed.
 `
 

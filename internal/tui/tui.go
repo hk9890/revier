@@ -1206,20 +1206,24 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Dir = dir
-		project := p.Name
+		project, here := p.Name, p.Remote == nil
 		start := time.Now()
 		// An action may open anything; the window that appears next is the
 		// project's (claim-on-appear). The launch is recorded now, as the
 		// CLI records it, so core.ClaimWindow runs from the action's start
 		// and not from its exit, which for an editor is hours later. A
 		// remote project's action runs on its host and opens no window here.
-		if p.Remote == nil {
+		if here {
 			m.apply(state.Launch{Project: project, At: start})
 		}
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
-			if err == nil {
-				events.Record(revier.Event{Kind: revier.EventAction, Project: project, Action: act.Name})
+			// A link's action is the event of the revier that ran it on its
+			// host, so it is no second one here.
+			if err == nil && here {
+				// Stamped with the start, as the launch above is: the exit
+				// of an editor is hours after the press.
+				events.Record(revier.Event{Time: start, Kind: revier.EventAction, Project: project, Action: act.Name})
 			}
 			return actedMsg{err: err}
 		}), true

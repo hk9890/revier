@@ -161,15 +161,17 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l
 // where it landed: the tab it made current, else the target. It is recorded
 // here and not in Go, which a toggle back and a tab each run twice, and not
 // for a step of a restore, which opens what was open and is nobody's use of
-// the project (decisions.md D112).
+// the project (decisions.md D112). Its time is the press's: the wait for a
+// window comes after it, and a press made during that wait happened later.
 func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, l Ledger) (revier.TargetRef, Result, error) {
+	pressed := time.Now()
 	ref, res, err := c.activateWaiting(ctx, p, name, resumes, l)
 	if err == nil && !res.ComingUp {
 		landed := res.Target
 		if res.Tab != "" {
 			landed = res.Tab
 		}
-		events.Record(revier.Event{Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
+		events.Record(revier.Event{Time: pressed, Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
 	}
 	return ref, res, err
 }

@@ -320,7 +320,9 @@ project. An agent session is written by the surface, the one process that survey
 all day: when it first sees the conversation, and once on each later day it
 still does, so a read of the last days holds every conversation alive in
 them. A link's agent is recorded here under the link's name, and its
-conversation and directory are its host's.
+conversation and directory are its host's. An action on a link is run by the
+revier on its host and is that host's event alone: one here as well would be
+a second line for one action.
 
 ## Panels and agent state
 
