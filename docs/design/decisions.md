@@ -725,7 +725,9 @@ another key is alt and that key.
 ### D118 — a script's agent tab opens without the focus
 
 `revier agent new --no-focus` is for a script whose user types in another
-window. The tab opens, nothing is made current or raised, and the address of
-the new agent is printed, since the script has nothing else to find it by. It
+window. The tab opens, nothing is focused or raised, and the address of the
+new agent is printed, since the script has nothing else to find it by. It
 needs no window that can be raised (D63). So `OpenTab` leaves the keyboard
-focus where it is on every runtime, and going to a tab is `FocusPanel`'s.
+where it is on every runtime, and going to a tab is `FocusPanel`'s. A kitty
+OS window without the keyboard still shows the tab it was given: putting the
+old one back asks the desktop for the focus, which is what the flag avoids.

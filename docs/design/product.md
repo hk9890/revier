@@ -124,8 +124,8 @@ revier shutdown        save the session when it changed, then close (D78)
 revier agent ..        one agent, driven by a script (D31, D116, D117, D118)
 ```
 
-A script drives an agent in five steps, and each leaves every window where it
-is: `agent wait` blocks until the agent reaches a state, `agent prompt` types
+A script drives an agent in five steps, and none of them moves the keyboard
+or raises a window: `agent wait` blocks until the agent reaches a state, `agent prompt` types
 one line and submits it (D31), `agent read` prints what the agent said last,
 or with `--screen` what its panel shows (D116), `agent send-keys` types named
 keys whatever the agent is doing (D117), and `agent new --no-focus` adds an

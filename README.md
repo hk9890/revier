@@ -135,7 +135,7 @@ needs you, else one with a message to show, one at rest before one working.
 For a project on another machine the last message is not shown yet.
 
 A script, or one agent that directs the others, drives an agent with `revier
-agent`. No command of this round trip moves a window or the focus:
+agent`. No command of this round trip raises a window or moves the keyboard:
 
 ```
 revier agent prompt demo 'run the tests and say what failed'

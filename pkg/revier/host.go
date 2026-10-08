@@ -109,8 +109,9 @@ type WorkareaReader interface {
 
 // PanelWriter is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can type into one of its panels,
-// which is how `revier agent prompt` reaches an agent (decisions.md D31). One
-// that does not cannot be prompted through revier.
+// which is how `revier agent prompt` and `revier agent send-keys` reach an
+// agent (decisions.md D31, D117). One that does not cannot be typed into
+// through revier.
 //
 // SendText delivers text to the panel's input as given, as if typed: no escape
 // is interpreted and no key is added, so a submit is a "\r" of its own.
@@ -124,7 +125,8 @@ type PanelWriter interface {
 // PanelReader is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can say what one of its panels
 // shows, which is how the agent list mirrors the agent under its cursor
-// (decisions.md D111). One that does not leaves the mirror empty.
+// (decisions.md D111) and what `revier agent read --screen` prints (D116).
+// One that does not leaves the mirror empty and the screen unread.
 //
 // ReadPanel is the panel's screen as text, a line per row, with the colour
 // and style of each run as SGR sequences and nothing else of the terminal's.

@@ -301,11 +301,12 @@ func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcom
 	return outcome, err
 }
 
-// AddAgent opens the tab NewAgent opens and leaves the focus where it is:
+// AddAgent opens the tab NewAgent opens and leaves the keyboard where it is:
 // what a script asks for, whose user is typing in another window. Nothing is
-// made current and nothing is raised, so a workspace whose OS window cannot
-// be raised takes the tab too. The panel is the new agent's, which is all
-// the caller has to find it by (decisions.md D118).
+// focused and nothing is raised, so a workspace whose OS window cannot be
+// raised takes the tab too; which tab that workspace shows afterwards is its
+// runtime's (PanelOpener). The panel is the new agent's, which is all the
+// caller has to find it by (decisions.md D118).
 func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.PanelID, AgentOutcome, error) {
 	return c.newAgent(ctx, w, r, false)
 }
@@ -377,21 +378,20 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 // OpenTab left it.
 func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, what string, focus bool) (revier.PanelID, error) {
 	host, opener := t.host, t.opener
-	if !focus {
-		panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
-		if err != nil {
-			return "", fmt.Errorf("%s: %s: %w", host.Name(), what, err)
+	var osw revier.TargetRef
+	if focus {
+		inst, _ := byRef(w.snap, w.Ref)
+		var err error
+		if osw, err = c.raisable(w.snap, inst, w.Target); err != nil {
+			return "", err
 		}
-		return panel, nil
-	}
-	inst, _ := byRef(w.snap, w.Ref)
-	osw, err := c.raisable(w.snap, inst, w.Target)
-	if err != nil {
-		return "", err
 	}
 	panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
 	if err != nil {
 		return "", fmt.Errorf("%s: %s: %w", host.Name(), what, err)
+	}
+	if !focus {
+		return panel, nil
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, panel); err != nil {
 		return panel, fmt.Errorf("%s: focus the %s: %w", host.Name(), what, err)
