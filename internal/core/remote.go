@@ -64,6 +64,13 @@ func LinkedAs(projects []Project, host string, project revier.ProjectName) revie
 	return ""
 }
 
+// HostWait is how long a close or a save waits for the linked hosts it asks,
+// each time it asks them. A host that takes a connection and then says
+// nothing would otherwise hold the phase that asked it for the whole of that
+// phase's budget, which is sized for a desktop of slow hosts and not for one
+// that is gone (decisions.md D115). A variable so a test can shorten it.
+var HostWait = 10 * time.Second
+
 // remoteAnswer is what a host said about one of its projects, or why it
 // said nothing. link is the host and the project the question named.
 type remoteAnswer struct {

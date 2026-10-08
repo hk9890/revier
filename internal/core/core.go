@@ -1123,7 +1123,7 @@ func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[
 // surveyAsking is a survey that asks only the hosts of the links ask picks
 // from the listing of this machine, and names the hosts it asked. The other
 // links keep the view of the window that reaches them, as SurveyLocal leaves
-// it.
+// it. The hosts asked have HostWait to answer.
 func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, ask func(revier.ProjectView) bool) (Report, []string) {
 	r := c.listed(ctx, projects, bound, attached)
 	var links []Project
@@ -1137,7 +1137,9 @@ func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[r
 			hosts = append(hosts, p.Remote.Host)
 		}
 	}
-	c.lay(&r, c.AskRemotes(ctx, links))
+	asking, stop := context.WithTimeout(ctx, HostWait)
+	defer stop()
+	c.lay(&r, c.AskRemotes(asking, links))
 	return r, hosts
 }
 
