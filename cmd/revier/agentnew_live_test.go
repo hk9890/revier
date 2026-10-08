@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hk9890/revier/internal/events"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The agent opens in a new window of the workspace, on the conversation and in
@@ -40,6 +43,59 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
 	if len(windows) != 2 || windows[1] != "2 1" {
 		t.Errorf("windows (panes, active) = %q, want the layout and a current second window of agent and shell", windows)
+	}
+}
+
+// A tab that opened is an event of the project and the workspace it opened in,
+// with the conversation and the directory it was started on.
+func TestANewAgentAndANewShellAreEvents(t *testing.T) {
+	work(t)
+	root := os.Getenv("REVIER_STATE_HOME")
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+	dir := t.TempDir()
+
+	if err := run(io.Discard, []string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
+		t.Fatalf("agent new: %v", err)
+	}
+	if err := run(io.Discard, []string{"shell", "new", "-p", "work"}); err != nil {
+		t.Fatalf("shell new: %v", err)
+	}
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range got {
+		got[i].Time = time.Time{}
+	}
+	want := []revier.Event{
+		{Kind: revier.EventAgentNew, Project: "work", Target: "home", Session: "abc-123", Dir: dir},
+		{Kind: revier.EventShellNew, Project: "work", Target: "home"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+// Bringing an agent to the front from the command line is the event a press
+// on it in the surface is.
+func TestAnAgentFocusIsAGoAgentEvent(t *testing.T) {
+	work(t)
+	root := os.Getenv("REVIER_STATE_HOME")
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+
+	if err := run(io.Discard, []string{"agent", "focus", "work"}); err != nil {
+		t.Fatalf("agent focus: %v", err)
+	}
+
+	got, err := events.Read(root, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != revier.EventGoAgent || got[0].Project != "work" {
+		t.Errorf("events = %+v, want one go agent of work", got)
 	}
 }
 

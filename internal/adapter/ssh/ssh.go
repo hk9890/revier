@@ -2,7 +2,8 @@
 // another machine is run there, and its answers read back.
 //
 // It is the only adapter that speaks to another revier, and the JSON that
-// `revier list --json` prints is the whole contract between the two. Nothing
+// `revier list --json` and `revier events` print is the whole contract
+// between the two. Nothing
 // about the remote machine's terminal, its tmux or its agents is interpreted
 // here; the revier there did that.
 package ssh
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -183,6 +185,24 @@ func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revi
 // Conversations is the survey with `--conversations`.
 func (r *Remote) Conversations(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
 	return r.list(ctx, names, "--conversations")
+}
+
+// Events asks the remote revier for what it recorded itself.
+func (r *Remote) Events(ctx context.Context, days int) ([]revier.Event, error) {
+	out, _, err := r.run(ctx, "revier", "events", "--local", "--days", strconv.Itoa(days))
+	if err != nil {
+		return nil, err
+	}
+	var recorded []revier.Event
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var e revier.Event
+		if err := dec.Decode(&e); err != nil {
+			return nil, fmt.Errorf("%s: revier events: %w", r.host, err)
+		}
+		recorded = append(recorded, e)
+	}
+	return recorded, nil
 }
 
 func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...string) ([]revier.ProjectView, error) {

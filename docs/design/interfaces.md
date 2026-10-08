@@ -267,6 +267,11 @@ type Remote interface {
     // a save. Naming them costs the remote a process a survey does not pay.
     Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
+    // Events is what the remote revier recorded in the last days, as
+    // `revier events --local` prints it there: its own, from no further
+    // host (D112).
+    Events(ctx context.Context, days int) ([]Event, error)
+
     // RunCommand is the argv that runs `revier run <action> -p <project>`
     // there, for the caller to run here with the terminal. The action is
     // the remote's configuration's to define.
@@ -285,6 +290,37 @@ after a reboot here (D84). The two machines name that agent by a tag - this
 machine's name and the pid of the panel's ssh - which the process carries in
 its environment. Nothing is recorded, so a title, `/clear` or a resume cannot
 move it.
+
+## Events
+
+An event is one thing revier did in a project, or one conversation it saw an
+agent hold there (D112). It is a line of `events.jsonl` under the state root
+and of `revier events`, and it crosses the `Remote` port as it is.
+
+```go
+type Event struct {
+    Time     time.Time
+    Kind     string      // "go", "go agent", "agent new", "shell new", "action", "agent session"
+    Host     string      // the linked host that recorded it; empty for this machine
+    Project  ProjectName
+    Target   TargetName  // where a go landed, or the workspace a tab opened in
+    Launched bool        // a go that started its target
+    Action   string
+    Agent    string      // the harness of the agent a go agent or an agent session is of
+    Session  SessionID
+    Dir      string      // where the agent works, or a tab started
+}
+```
+
+A kind is added, never renamed: a reader counts by it. Only an operation that
+succeeded is an event, and a press is one event however many times it ran
+`Go`: of the tab it made current, else of the target it landed on. A step of a
+restore is no event, since it opens what was open and is nobody's use of the
+project. An agent session is written by the surface, the one process that surveys
+all day: when it first sees the conversation, and once on each later day it
+still does, so a read of the last days holds every conversation alive in
+them. A link's agent is recorded here under the link's name, and its
+conversation and directory are its host's.
 
 ## Panels and agent state
 
@@ -334,6 +370,7 @@ type AgentState struct {
     Status   Status
     Activity string // one-line live summary the agent set itself
     Dir      string // the directory the agent works in, empty when the harness does not say (D110)
+    Session  SessionID // the conversation it holds, empty when the harness does not say or asking costs a process (D112)
 }
 ```
 

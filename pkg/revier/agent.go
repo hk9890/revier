@@ -119,6 +119,13 @@ type AgentState struct {
 	// the core decides on the machine that read the agent, where both are
 	// paths of one file system.
 	Dir string `json:"dir,omitempty"`
+
+	// Session is the conversation the agent holds, empty when the harness
+	// does not say or the probe would pay a process to learn it: a survey
+	// reads it every refresh. It is what the event file records an agent by
+	// (decisions.md D112); a save asks Resumable instead, which answers for
+	// that moment.
+	Session SessionID `json:"session,omitempty"`
 }
 
 // Status is what an agent is doing. StatusAttention is the state the product

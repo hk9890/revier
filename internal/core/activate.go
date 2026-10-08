@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -40,7 +41,11 @@ func (c *Core) ActivateAgent(ctx context.Context, p Project, a revier.AgentView,
 			return Result{Target: home.Name, ComingUp: coming}, err
 		}
 	}
-	return c.GoAgent(ctx, p, a, bound)
+	res, err := c.GoAgent(ctx, p, a, bound)
+	if err == nil {
+		events.Record(revier.Event{Kind: revier.EventGoAgent, Project: p.Name, Agent: a.State.Harness, Session: a.State.Session})
+	}
+	return res, err
 }
 
 func (c *Core) comingUp(ctx context.Context, p Project, name revier.TargetName, bound Bindings, pending bool) (bool, error) {

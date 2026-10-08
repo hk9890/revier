@@ -43,6 +43,9 @@ doc reads what it already did.
 | `bind` | the wait for a launched window ends |
 | `claim` | the TUI binds or attaches a window that appeared |
 | `instances` | a `host` could not list; its targets show unknown and a press on one is refused, while the other hosts' go on (`docs/design/decisions.md` D89) |
+| `remote events` | `revier events` asked a `host` for its events, with the `events` count |
+| `event` | one `WARN` when an event could not be appended; the operation went on |
+| `event line skipped` | one `WARN` per line of the event file that is not an event, with `line` |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
 | `probe` | an agent probe failed, and the agent shows unknown |
 | `panel mark` | one `WARN` per launch whose first panel could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
@@ -54,6 +57,17 @@ doc reads what it already did.
 | `state load`, `state update` | the TUI could not read the state file, or a process could not update it |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
 | `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |
+
+## The event file
+
+- `$STATE/events.jsonl` holds one JSON line per operation that succeeded in a
+  project, and is never pruned (`docs/design/decisions.md` D112).
+- Read it with `revier events --days <n>`; `revier events --help` lists the
+  fields. `--local` leaves out the linked hosts.
+- A press is in the log and in the event file. Explain a failure from the
+  log: a failed operation writes no event.
+- `agent session` lines come from the TUI alone, so none are written while no
+  surface runs.
 
 ## Queries
 
