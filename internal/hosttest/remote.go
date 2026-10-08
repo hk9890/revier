@@ -27,6 +27,9 @@ type FakeRemote struct {
 	Runs    []Run
 	// Named is what Conversations answers with.
 	Named []revier.ProjectView
+	// Recorded is what Events answers with; Days records every ask.
+	Recorded []revier.Event
+	Days     []int
 }
 
 // Run is one action asked for on one project.
@@ -72,6 +75,16 @@ func (f *FakeRemote) Conversations(context.Context, []revier.ProjectName) ([]rev
 		return nil, f.Err
 	}
 	return answer(f.Named), nil
+}
+
+func (f *FakeRemote) Events(_ context.Context, days int) ([]revier.Event, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Days = append(f.Days, days)
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	return append([]revier.Event(nil), f.Recorded...), nil
 }
 
 // answer is a copy of the views down to their agents, as an answer decoded

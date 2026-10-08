@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -198,6 +199,8 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	start := time.Now()
 	var ref revier.TargetRef
 	var panel revier.PanelID
+	name, _, _ := strings.Cut(address, ":")
+	focused := revier.Event{Kind: revier.EventGoAgent, Project: revier.ProjectName(name)}
 	switch {
 	case *instance == "":
 		ag, err := a.agent(ctx, address)
@@ -205,6 +208,7 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 			return err
 		}
 		ref, panel = ag.Ref, ag.Panel.ID
+		focused.Agent, focused.Session = ag.State.Harness, ag.State.Session
 	case a.core.Runtime == nil:
 		return fmt.Errorf("%w: no runtime holds panels", core.ErrNoHost)
 	default:
@@ -213,6 +217,9 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	}
 	err = a.core.FocusAgent(ctx, ref, panel)
 	logging.Op("agent focus", start, err, "address", address, "ref", ref, "panel", panel)
+	if err == nil {
+		events.Record(focused)
+	}
 	return err
 }
 
@@ -256,9 +263,15 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 		if err != nil {
 			return err
 		}
-		if resume != "" && outcome != core.AgentResumed {
+		// The event names the conversation the tab holds: one that was not
+		// resumed is not it.
+		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Dir: dir}
+		if outcome == core.AgentResumed {
+			e.Session = resume
+		} else if resume != "" {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
 		}
+		events.Record(e)
 		return nil
 	}
 	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, here)

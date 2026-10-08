@@ -11,7 +11,7 @@ import (
 
 // ranked is the filter under every list that takes a query. The fuzzy scorer
 // says which rows match and is the last word on their order, not the first:
-// a query is a view over the list (decisions.md D112), so a row stays in the
+// a query is a view over the list (decisions.md D113), so a row stays in the
 // group the list sorted it into, and within a group a row that holds the
 // query whole stands above one that holds its letters apart. The scorer alone
 // does neither: it gives a letter after a separator four times what it gives

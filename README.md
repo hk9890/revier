@@ -113,6 +113,9 @@ revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [
                               is open; refuses while an agent is busy
 revier each -- <cmd>          run one command in every project's directory
 revier each log [run]         past runs, or how each project ended in one
+revier events [--days n] [--local]
+                              what revier did in each project, one JSON line
+                              per event
 revier version                what is installed
 ```
 
@@ -186,6 +189,19 @@ passes, and `--dry-run` prints the selection and runs nothing. Each project's
 output is kept under `~/.local/state/revier/runs/<run>/`; `revier each log`
 lists past runs, and `revier each log <run> <project>` prints one project's
 output. A run in which any project failed exits 5.
+
+`revier events --days 3` prints what revier did in the last three days, one
+JSON line per event: a target run or raised, an agent or shell tab opened, an
+action run, and the conversation each agent held, with its directory. It counts
+nothing, so `jq` or a script decides what "most used" means:
+
+```bash
+revier events --days 7 | jq -r .project | sort | uniq -c | sort -rn
+```
+
+The events are kept in `~/.local/state/revier/events.jsonl`, which revier never
+prunes. What the revier on a linked host recorded is printed with its `host`;
+`--local` asks no host.
 
 `revier session save` writes down which projects are open and which of their
 targets, so `revier session restore` can open them again after a restart. It

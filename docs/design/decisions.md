@@ -663,7 +663,17 @@ continues on the next. Only SGR sequences pass, and every line is closed: a
 screen holds whatever a tool printed (D108). Rejected: cutting a long line,
 which loses the end of every sentence.
 
-### D112 — a query keeps the list's order, and the fuzzy score ranks only within it
+### D112 — what revier did in a project is an event, kept apart from the log
+
+How a project was used is asked over weeks, and the log is pruned after two
+and worded for diagnosis. So a short fixed list of operations, and the
+conversation each agent holds, are appended to one file that is never pruned.
+`revier events` prints the lines and counts nothing: what "used" means is the
+reader's. A linked host is asked for its own lines, one hop. A line names what
+happened and where, never what was said. Rejected: agents writing their own
+entries, which a forge or the transcript already records better.
+
+### D113 — a query keeps the list's order, and the fuzzy score ranks only within it
 
 The fuzzy scorer alone put a stopped project above an open one, because it
 gives a letter after a separator more than a letter beside the last. A query

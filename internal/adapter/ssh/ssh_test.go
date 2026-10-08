@@ -59,6 +59,43 @@ func TestConversationsAsksTheSurveyForTheConversations(t *testing.T) {
 	}
 }
 
+// The host is asked for its own events alone: with --local it asks no host of
+// its own, so a chain of links is one hop.
+func TestEventsAsksForTheHostsOwnAndReadsALinePerEvent(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, `{"time":"2026-10-05T09:00:00Z","event":"go","project":"demo","target":"home","launched":true}
+{"time":"2026-10-05T09:01:00Z","event":"agent session","project":"demo","agent":"claude","session":"abc","dir":"/x"}
+`, nil)
+
+	got, err := r.Events(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	want := []string{"revier", "events", "--local", "--days", "3"}
+	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
+		t.Errorf("ran %v, want one call %v", *calls, want)
+	}
+	if len(got) != 2 || got[0].Kind != revier.EventGo || !got[0].Launched || got[1].Session != "abc" || got[1].Dir != "/x" {
+		t.Errorf("events = %+v, want the go and the session", got)
+	}
+}
+
+func TestEventsOfAHostThatRecordedNothingIsNone(t *testing.T) {
+	r := ssh.New("buildbox")
+	record(r, "", nil)
+	if got, err := r.Events(context.Background(), 3); err != nil || len(got) != 0 {
+		t.Errorf("events = %+v, %v; want none", got, err)
+	}
+}
+
+func TestEventsReportsTheHostOnALineThatIsNotAnEvent(t *testing.T) {
+	r := ssh.New("buildbox")
+	record(r, "welcome to buildbox\n", nil)
+	if _, err := r.Events(context.Background(), 3); err == nil || !strings.Contains(err.Error(), "buildbox") {
+		t.Errorf("err = %v, want the host named", err)
+	}
+}
+
 func TestSurveyReportsTheHostOnBadJSON(t *testing.T) {
 	r := ssh.New("buildbox")
 	record(r, "not json", nil)
