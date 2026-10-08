@@ -430,7 +430,16 @@ func (m *Model) reload() {
 	// is the project that needs the user most. After that the user's own
 	// selection wins.
 	moved := hadSelection && was.unsurveyed && m.plist.Index() != 0 && was.view.Project.Name != m.start
+	// The top row is the project that needs the user most only once every
+	// linked host has said what its links hold: an answer can put a link
+	// above the row the survey of this machine put first. So a cursor nobody
+	// moved off the top row stays on the top row until the last host answers.
+	waiting := slices.ContainsFunc(m.views, func(v revier.ProjectView) bool { return !m.answered(v) })
+	m.onTop = m.onTop && at == 0 && m.filter == "" && m.focus == focusList
 	switch {
+	case m.onTop:
+		m.plist.Select(0)
+		m.onTop = waiting
 	case hadSelection && (!was.unsurveyed || moved):
 		// A project that closed, or that left the list - deleted here, or
 		// its file gone while the popup was hidden - hands the cursor to the
@@ -452,6 +461,7 @@ func (m *Model) reload() {
 		m.placing = m.selectName(m.start)
 	default:
 		m.plist.Select(0)
+		m.onTop = m.surveyed && waiting && m.filter == ""
 	}
 	m.reloadAgents()
 }

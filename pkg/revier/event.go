@@ -26,6 +26,8 @@ const (
 // agent hold there: a line of the event file, and of `revier events`. It names
 // what happened and where, never what was said (decisions.md D112).
 type Event struct {
+	// Time is when it was asked for: the press of a go, the start of an
+	// action, and for an EventAgentSession the survey that saw it.
 	Time time.Time `json:"time"`
 	Kind string    `json:"event"`
 	// Host is the machine whose revier recorded the event, as a project file

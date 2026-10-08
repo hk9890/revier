@@ -148,7 +148,8 @@ rather than a coincidence of the filter.
 The rows refresh from this machine alone, and what a linked host says is laid
 over them when it answers: a project closed here is off its row within a
 refresh however long a host takes, and a link's pane says `surveying` until
-its host has answered once (D114).
+its host has answered once (D114). A cursor nobody moved stays on the top row
+until the last host has answered, since an answer can put a link first.
 The pane starts level with the project query.
 
 A link's agents are the host's and this machine's, added together (D101). A
