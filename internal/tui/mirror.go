@@ -28,8 +28,8 @@ import (
 // screen holds cannot repaint the surface that shows it.
 
 // mirrorInterval is how often the mirror reads the panel. It has its own
-// timer: a survey is a round trip to every linked host, and the mirror must
-// not wait for one.
+// timer: a survey lists every host here, and the mirror must not wait for
+// one.
 const mirrorInterval = time.Second
 
 // mirrorNotch is the lines one notch of the wheel scrolls the mirror by.

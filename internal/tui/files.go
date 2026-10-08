@@ -52,16 +52,25 @@ func (m *Model) replaceProject(name revier.ProjectName, p core.Project) {
 			projects[i] = p
 		}
 	}
-	views := slices.Clone(m.views)
-	for i := range views {
-		if views[i].Project.Name == name {
-			views[i] = provisional(views[i], p)
-		}
-	}
-	m.projects, m.views = projects, views
+	// The last survey of this machine takes the change as the rows do: the
+	// next answer of the linked hosts is laid over it, and would otherwise
+	// put the project back as it was before its file was written.
+	m.projects, m.views, m.local.Views = projects, rewritten(m.views, name, p), rewritten(m.local.Views, name, p)
 	m.setKeys()
 	m.reload()
 	m.selectName(p.Name)
+}
+
+// rewritten is the views with the one of the project called name as its file
+// was just written.
+func rewritten(views []revier.ProjectView, name revier.ProjectName, p core.Project) []revier.ProjectView {
+	out := slices.Clone(views)
+	for i := range out {
+		if out[i].Project.Name == name {
+			out[i] = provisional(out[i], p)
+		}
+	}
+	return out
 }
 
 // provisional is the view of a project as its file was just written, until

@@ -318,3 +318,94 @@ func TestRemoteProjectLaunchesStartWhereRevierRuns(t *testing.T) {
 		t.Errorf("a local project's launch starts in its path, got %q", dir)
 	}
 }
+
+// The survey of this machine asks no linked host, so it costs what the hosts
+// here cost. A link's view is the one of the window that reaches it, and the
+// host's answer is laid over it whenever it arrives, the same listing as often
+// as answers do (decisions.md D114).
+func TestSurveyLocalAsksNoHostAndLayPutsItsAnswerOver(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:demo", "kitty")
+	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusAttention))
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	projects := []core.Project{prepared(t, remoteProject("demo"))}
+
+	local, err := c.SurveyLocal(context.Background(), projects, nil, nil)
+	if err != nil {
+		t.Fatalf("SurveyLocal: %v", err)
+	}
+	if len(remote.Asked) != 0 {
+		t.Fatalf("the host was asked %d times, want none", len(remote.Asked))
+	}
+	if v := local.Views[0]; !v.Running || len(v.Agents) != 0 || v.PathExists || v.Unreachable != "" {
+		t.Errorf("local view = %+v, want the window here and nothing of the host's", v)
+	}
+
+	answers := c.AskRemotes(context.Background(), projects)
+	for range 2 {
+		v := c.Lay(local, answers).Views[0]
+		if !v.Attention() || len(v.Agents) != 1 || !v.PathExists || !v.Running {
+			t.Errorf("laid view = %+v, want the host's one agent and checkout over the window here", v)
+		}
+	}
+	if v := local.Views[0]; len(v.Agents) != 0 || v.PathExists {
+		t.Errorf("local view after the lay = %+v, want it as it was listed", v)
+	}
+}
+
+// An answer is for the link as its file named it when the host was asked: a
+// local project has none, and a link pointed at another project since has
+// none until that one is asked for.
+func TestAnAnswerIsForTheLinkThatWasAsked(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	link := prepared(t, remoteProject("demo"))
+	answers := c.AskRemotes(context.Background(), []core.Project{link, prepared(t, project())})
+
+	if !answers.Has(link.Project) {
+		t.Error("the link has no answer, want its host's")
+	}
+	if answers.Has(project()) {
+		t.Error("a local project has an answer, want none")
+	}
+	moved := remoteProject("demo")
+	moved.Remote.Project = "other"
+	if answers.Has(moved) {
+		t.Error("a link pointed at another project has the old one's answer")
+	}
+	local, err := c.SurveyLocal(context.Background(), []core.Project{prepared(t, moved)}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := c.Lay(local, answers).Views[0]; v.PathExists || len(v.Agents) != 0 {
+		t.Errorf("view = %+v, want nothing laid over a link the answer is not for", v)
+	}
+}
+
+// One host answers by itself: its answer takes the place of what it said
+// last, and what another host said stands.
+func TestAnAnswerOfOneHostLeavesTheOthersStanding(t *testing.T) {
+	near, far := remoteProject("near"), remoteProject("far")
+	far.Remote.Host = "farbox"
+	nearbox := hosttest.NewRemote("buildbox", answer("near", revier.StatusIdle))
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{
+		"buildbox": nearbox, "farbox": hosttest.NewRemote("farbox", answer("far", revier.StatusIdle)),
+	}}
+	projects := []core.Project{prepared(t, near), prepared(t, far)}
+	all := c.AskRemotes(context.Background(), projects)
+
+	nearbox.Err = errors.New("buildbox: connection refused")
+	all = all.With([]string{"buildbox"}, c.AskRemotes(context.Background(), projects[:1]))
+
+	local, err := c.SurveyLocal(context.Background(), projects, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	views := c.Lay(local, all).Views
+	if !strings.Contains(views[0].Unreachable, "connection refused") {
+		t.Errorf("near = %+v, want what buildbox said last", views[0])
+	}
+	if views[1].Unreachable != "" || len(views[1].Agents) != 1 {
+		t.Errorf("far = %+v, want what farbox said standing", views[1])
+	}
+}

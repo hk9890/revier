@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -64,17 +65,54 @@ func LinkedAs(projects []Project, host string, project revier.ProjectName) revie
 }
 
 // remoteAnswer is what a host said about one of its projects, or why it
-// said nothing.
+// said nothing. link is the host and the project the question named.
 type remoteAnswer struct {
+	link revier.Link
 	view revier.ProjectView
 	err  error
 }
 
-// surveyRemotes asks every host named by the projects for its projects, one
-// call per host and every host at once, so a survey costs one round trip
-// however many hosts and projects there are. It returns an answer for every
-// remote project, and nothing for a local one.
-func (c *Core) surveyRemotes(ctx context.Context, projects []Project) map[revier.ProjectName]remoteAnswer {
+// RemoteAnswers is what the linked hosts said, by the name each link has
+// here. The zero value holds no answer.
+type RemoteAnswers struct {
+	by map[revier.ProjectName]remoteAnswer
+}
+
+// Has reports an answer for the project: a local one has none, and a link
+// has none until its host was asked about it as the file names it now.
+func (a RemoteAnswers) Has(p revier.Project) bool {
+	_, ok := a.of(p)
+	return ok
+}
+
+// With returns the answers with what the hosts named said replaced by got:
+// one host answers by itself, and what the others said last stands.
+func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
+	by := make(map[revier.ProjectName]remoteAnswer, len(a.by)+len(got.by))
+	for name, answer := range a.by {
+		if !slices.Contains(hosts, answer.link.Host) {
+			by[name] = answer
+		}
+	}
+	maps.Copy(by, got.by)
+	return RemoteAnswers{by: by}
+}
+
+// of is the answer for a link. One asked for before the file was pointed at
+// another host or project is no answer for it.
+func (a RemoteAnswers) of(p revier.Project) (remoteAnswer, bool) {
+	if p.Remote == nil {
+		return remoteAnswer{}, false
+	}
+	got, ok := a.by[p.Name]
+	return got, ok && got.link == *p.Remote
+}
+
+// AskRemotes asks every host named by the projects for its projects, one
+// call per host and every host at once, so it costs one round trip however
+// many hosts and projects there are. It returns an answer for every remote
+// project, and nothing for a local one.
+func (c *Core) AskRemotes(ctx context.Context, projects []Project) RemoteAnswers {
 	byHost := map[string][]Project{}
 	for _, p := range projects {
 		if p.Remote != nil {
@@ -95,7 +133,7 @@ func (c *Core) surveyRemotes(ctx context.Context, projects []Project) map[revier
 		}()
 	}
 	wg.Wait()
-	return out
+	return RemoteAnswers{by: out}
 }
 
 // askRemote surveys one host's projects, by the names they have there, and
@@ -113,7 +151,7 @@ func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[
 	logging.Poll("remote survey "+host, "remote survey", start, err, "host", host, "projects", len(names))
 	if err != nil {
 		for _, p := range links {
-			out[p.Name] = remoteAnswer{err: err}
+			out[p.Name] = remoteAnswer{link: *p.Remote, err: err}
 		}
 		return out
 	}
@@ -123,9 +161,9 @@ func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[
 	}
 	for _, p := range links {
 		if v, ok := listed[p.Remote.Project]; ok {
-			out[p.Name] = remoteAnswer{view: v}
+			out[p.Name] = remoteAnswer{link: *p.Remote, view: v}
 		} else {
-			out[p.Name] = remoteAnswer{err: fmt.Errorf("%s did not list project %q", host, p.Remote.Project)}
+			out[p.Name] = remoteAnswer{link: *p.Remote, err: fmt.Errorf("%s did not list project %q", host, p.Remote.Project)}
 		}
 	}
 	return out
