@@ -191,25 +191,16 @@ type Model struct {
 	// it for every target of every row it draws.
 	tdeclared map[core.Chord]bool
 
-	// The config screen.
-	ui        config.UI       // [ui] as config.toml holds it
-	runtime   []string        // [hosts] runtime as config.toml holds it
-	runtimes  []string        // the runtime hosts the screen offers besides auto
-	pick      RuntimeSelector // probes a runtime choice, as startup does
-	switching string          // the runtime choice being probed
-	refused   string          // the last runtime choice that did not probe, stepped from next
-	crow      int             // the row the screen's cursor is on
-	chord     textinput.Model // the trigger key, while it is typed
-	aform     actionForm      // the action being added or changed, while its form is up
-	targets   []revier.Target // the shared targets, typed, as config.toml holds them
-	tform     targetForm      // the shared target being added or changed, while its form is up
-	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
+	targets []revier.Target // the shared targets, typed, as config.toml holds them
+	config  configScreen    // the config screen (configscreen.go)
 
-	// The project screen. Its target form is tform.
-	proj  revier.ProjectName // the project the screen edits
-	ptext config.ProjectText // its file as written
-	prow  int                // the row the screen's cursor is on
-	pedit textinput.Model    // a field's value, while it is typed
+	// The project screen.
+	tform    targetForm         // the target being added or changed, while its form is up
+	dropping bool               // whether the target under the cursor waits on a y to be deleted
+	proj     revier.ProjectName // the project the screen edits
+	ptext    config.ProjectText // its file as written
+	prow     int                // the row the screen's cursor is on
+	pedit    textinput.Model    // a field's value, while it is typed
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -232,8 +223,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
 		create: newCreateScreen(th),
 		body:   newBody(),
-		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
-		pedit: newFieldInput(th),
+		config: newConfigScreen(th, cfg),
+		pedit:  newFieldInput(th),
 	}
 	// The files go in through the one function that reads them, so what is
 	// derived from them is derived once and the first frame holds the same

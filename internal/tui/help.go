@@ -193,7 +193,7 @@ func (m Model) desktopHelpEntries() []helpEntry {
 	// Read from [ui] as it is now: the config screen changes the trigger key
 	// while the surface runs. config.Load and the screen both refuse a key
 	// that does not parse.
-	trigger, _ := (&config.Config{UI: m.ui}).TriggerKey()
+	trigger, _ := (&config.Config{UI: m.config.ui}).TriggerKey()
 	return append([]helpEntry{{key: string(trigger), desc: "open revier"}}, targets...)
 }
 

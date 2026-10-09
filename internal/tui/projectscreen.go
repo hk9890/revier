@@ -62,7 +62,6 @@ func (m Model) openProject() (tea.Model, tea.Cmd) {
 	m.toList()
 	m.proj, m.ptext, m.prow = p.Name, text, 0
 	m.pedit.Blur()
-	m.aform = actionForm{}
 	m.tform = targetForm{}
 	m.dropping = false
 	m.body.SetYOffset(0)
@@ -107,7 +106,12 @@ func (m Model) projectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.pedit.Focused():
 		return m.projectEditKey(msg)
 	case m.tform.open:
-		return m.targetFormKey(msg)
+		form, cmd := m.tform.key(m.surface(), msg)
+		m.err = form.err
+		if form.save != nil {
+			return m.saveProjectTarget(form.save.Target, form.save.PanelFrom)
+		}
+		return m, cmd
 	case m.dropping:
 		return m.confirmDropProjectTarget(msg)
 	}
@@ -234,10 +238,10 @@ func (m *Model) projectWritten(was revier.ProjectName, p core.Project) error {
 // new one when i is past the last. A derived target is not in the file, so
 // saving it declares one.
 func (m Model) openProjectTargetForm(i int) (tea.Model, tea.Cmd) {
-	f := m.newTargetForm(i, nil)
+	f := newTargetForm(m.theme, i, nil)
 	if i < len(m.ptext.Targets) {
 		pt := m.ptext.Targets[i]
-		f = m.newTargetForm(i, &pt.Target)
+		f = newTargetForm(m.theme, i, &pt.Target)
 		if pt.Source != config.Derived {
 			f.was = pt.Target.Name
 		}
@@ -316,7 +320,7 @@ func (m Model) projectHelp() []key.Binding {
 	case m.pedit.Focused():
 		return k.helpForConfig(configTyping)
 	case m.tform.open:
-		return k.helpForConfig(m.configHelp())
+		return k.helpForConfig(m.tform.helpKind())
 	case onTarget:
 		return k.helpForConfig(configOnAction)
 	case m.prow == m.addProjectTargetRow():
@@ -385,7 +389,7 @@ func (m Model) projectScreen() (string, int) {
 	b.WriteString(heading(m.theme, "Targets", w))
 	base := len(m.projectFields())
 	form := func() {
-		lines, line := m.targetFormLines(w)
+		lines, line := m.tform.lines(th, w)
 		at = strings.Count(b.String(), "\n") + line
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}

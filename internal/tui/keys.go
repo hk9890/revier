@@ -167,34 +167,6 @@ const (
 	configInTargetForm
 )
 
-func (m Model) configHelp() configHelp {
-	_, onAction := m.actionRow()
-	_, onTarget := m.targetRow()
-	switch {
-	case m.chord.Focused():
-		return configTyping
-	case m.aform.open:
-		return configInForm
-	case m.tform.panel.open:
-		return configInPanelForm
-	case m.tform.open:
-		switch m.tform.rows()[m.tform.cursor].kind {
-		case rowPanel:
-			return configOnFormPanel
-		case rowAddPanel:
-			return configOnAdd
-		case rowHome:
-			return configOnFormHome
-		}
-		return configInTargetForm
-	case onAction, onTarget:
-		return configOnAction
-	case m.crow == m.addRow(), m.crow == m.addTargetRow():
-		return configOnAdd
-	}
-	return configOnSetting
-}
-
 // helpForConfig is the footer on the config screen.
 func (k keyMap) helpForConfig(h configHelp) []key.Binding {
 	switch h {

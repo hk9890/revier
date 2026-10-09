@@ -319,7 +319,7 @@ func (m Model) switchButton() barAction {
 // desktop's trigger key in the popup, and alt+space in any other terminal.
 func (m Model) switchKey() string {
 	if m.popup {
-		if trigger, err := (&config.Config{UI: m.ui}).TriggerKey(); err == nil {
+		if trigger, err := (&config.Config{UI: m.config.ui}).TriggerKey(); err == nil {
 			return string(trigger)
 		}
 	}

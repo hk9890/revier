@@ -384,8 +384,8 @@ func (m Model) footer() string {
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
-	if m.dialog == dialogConfig && m.dropping {
-		return m.dropPrompt()
+	if m.dialog == dialogConfig && m.config.dropping {
+		return m.config.dropPrompt(m.surface())
 	}
 	if m.dialog == dialogProject && m.dropping {
 		return m.dropProjectPrompt()
@@ -419,7 +419,7 @@ func (m Model) footer() string {
 		return m.theme.NameDim.Render(fmt.Sprintf(" Copied %d %s.", m.copied, unit))
 	}
 	if m.dialog == dialogConfig {
-		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
+		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.config.helpKind(m.surface())))
 	}
 	if m.dialog == dialogProject {
 		return " " + m.help.ShortHelpView(m.projectHelp())

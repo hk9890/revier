@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -137,13 +138,73 @@ type panelForm struct {
 var panelKinds = []string{string(revier.PanelAgent), string(revier.PanelShell), string(revier.PanelTool)}
 
 // targetRow is the shared target the config screen's cursor is on, if any.
-func (m Model) targetRow() (int, bool) {
-	i := m.crow - int(configRows)
-	return i, i >= 0 && i < len(m.targets)
+func (cs *configScreen) targetRow(sf surface) (int, bool) {
+	i := cs.row - int(configRows)
+	return i, i >= 0 && i < len(sf.targets)
 }
 
 // addTargetRow is the row that adds a shared target.
-func (m Model) addTargetRow() int { return int(configRows) + len(m.targets) }
+func (cs *configScreen) addTargetRow(sf surface) int { return int(configRows) + len(sf.targets) }
+
+// openTargetForm opens the form for shared target i, or for a new one when i
+// is past the last.
+func (cs *configScreen) openTargetForm(sf surface, i int) tea.Cmd {
+	var t *revier.Target
+	if i < len(sf.targets) {
+		t = &sf.targets[i]
+	}
+	cs.tform = newTargetForm(sf.theme, i, t)
+	return cs.tform.fields[tfName].Focus()
+}
+
+// saveTarget writes the form's target, and hands back the shared targets and
+// the projects loaded again with it.
+func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configResult {
+	i, t := cs.tform.index, edit.Target
+	for j, other := range sf.targets {
+		if j != i && other.Name == t.Name {
+			return configResult{err: fmt.Errorf("a shared target named %q exists already", t.Name)}
+		}
+	}
+	var written config.TargetsWritten
+	err := withConfigRoot(func(root string) (err error) {
+		if i == len(sf.targets) {
+			written, err = config.AddTarget(root, sf.shared, t)
+			return err
+		}
+		written, err = config.ReplaceTarget(root, i, sf.shared, edit)
+		return err
+	})
+	if err != nil {
+		return configResult{err: err}
+	}
+	cs.tform = targetForm{}
+	cs.row = int(configRows) + i
+	return configResult{targets: &written}
+}
+
+// dropTarget takes the key that answers the delete question for a shared
+// target. Only y deletes, and a delete a project would not load without is
+// refused and named.
+func (cs *configScreen) dropTarget(sf surface, msg tea.KeyMsg) configResult {
+	res := configResult{err: sf.err}
+	cs.dropping = false
+	i, ok := cs.targetRow(sf)
+	if msg.String() != "y" || !ok {
+		return res
+	}
+	var written config.TargetsWritten
+	err := withConfigRoot(func(root string) (err error) {
+		written, err = config.RemoveTarget(root, i, sf.shared)
+		return err
+	})
+	if err != nil {
+		res.err = err
+		return res
+	}
+	res.targets = &written
+	return res
+}
 
 // rows is the target form's rows, in the order the cursor walks them.
 func (f targetForm) rows() []formRow {
@@ -171,24 +232,12 @@ func (f targetForm) rows() []formRow {
 	return out
 }
 
-// openTargetForm opens the form for shared target i, or for a new one when i
-// is past the last.
-func (m Model) openTargetForm(i int) (tea.Model, tea.Cmd) {
-	var t *revier.Target
-	if i < len(m.targets) {
-		t = &m.targets[i]
-	}
-	m.err = nil
-	m.tform = m.newTargetForm(i, t)
-	return m, m.tform.fields[tfName].Focus()
-}
-
 // newTargetForm is the form at index for t, or for a new target when t is
 // nil.
-func (m Model) newTargetForm(index int, t *revier.Target) targetForm {
+func newTargetForm(th theme.Theme, index int, t *revier.Target) targetForm {
 	f := targetForm{open: true, index: index}
 	for j := range f.fields {
-		f.fields[j] = m.formInput("")
+		f.fields[j] = formInput(th, "")
 	}
 	if t == nil {
 		return f
@@ -205,105 +254,93 @@ func (m Model) newTargetForm(index int, t *revier.Target) targetForm {
 	return f
 }
 
-func (m Model) formInput(placeholder string) textinput.Model {
+// formInput is a field of a form: no prompt, and a placeholder.
+func formInput(th theme.Theme, placeholder string) textinput.Model {
 	in := textinput.New()
-	styleField(&in, m.theme)
+	styleField(&in, th)
 	in.Prompt = ""
 	in.Placeholder = placeholder
 	return in
 }
 
-// targetFormKey is a press while the target form is up.
-func (m Model) targetFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.tform.panel.open {
-		return m.panelFormKey(msg)
+// formResult is what a press in the target form leaves for the screen it is
+// on.
+type formResult struct {
+	err  error              // the footer's
+	save *config.TargetEdit // Enter: the target to write, which the screen does
+}
+
+// key is a press while the target form is up. Esc closes it; Enter hands the
+// target to the screen, which writes it and closes the form.
+func (f *targetForm) key(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
+	if f.panel.open {
+		return f.panelKey(sf, msg)
 	}
-	rows := m.tform.rows()
-	row := rows[m.tform.cursor]
+	res := formResult{err: sf.err}
+	rows := f.rows()
+	row := rows[f.cursor]
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.tform = targetForm{}
-		return m, nil
-	case key.Matches(msg, m.keys.Next, m.keys.Down):
-		return m.moveTargetCursor(+1)
-	case msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
-		return m.moveTargetCursor(-1)
-	case row.kind == rowPanel && key.Matches(msg, m.keys.Delete):
-		m.tform.panels = slices.Delete(slices.Clone(m.tform.panels), row.field, row.field+1)
-		return m, nil
-	case row.kind == rowPanel && key.Matches(msg, m.keys.Enter):
-		return m.openPanelForm(row.field)
-	case row.kind == rowAddPanel && key.Matches(msg, m.keys.Enter):
-		return m.openPanelForm(len(m.tform.panels))
-	case key.Matches(msg, m.keys.Enter):
-		return m.saveTarget()
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		*f = targetForm{}
+		return formResult{}, nil
+	case key.Matches(msg, sf.keys.Next, sf.keys.Down):
+		return res, f.move(+1)
+	case msg.Type == tea.KeyShiftTab, key.Matches(msg, sf.keys.Up):
+		return res, f.move(-1)
+	case row.kind == rowPanel && key.Matches(msg, sf.keys.Delete):
+		f.panels = slices.Delete(slices.Clone(f.panels), row.field, row.field+1)
+	case row.kind == rowPanel && key.Matches(msg, sf.keys.Enter):
+		f.openPanel(sf.theme, row.field)
+	case row.kind == rowAddPanel && key.Matches(msg, sf.keys.Enter):
+		f.openPanel(sf.theme, len(f.panels))
+	case key.Matches(msg, sf.keys.Enter):
+		t, from, err := f.target()
+		if err != nil {
+			res.err = err
+			return res, nil
+		}
+		res.save = &config.TargetEdit{Target: t, PanelFrom: from}
 	case row.kind == rowHome && (msg.Type == tea.KeyLeft || msg.Type == tea.KeyRight || msg.Type == tea.KeySpace):
-		m.tform.home = !m.tform.home
-		return m, nil
-	case row.kind == rowField && row.field == tfName && m.tform.shared != nil:
+		f.home = !f.home
+	case row.kind == rowField && row.field == tfName && f.shared != nil:
 		// A shared target is found by its name; renamed, it would be another.
 	case row.kind == rowField && !altRune(msg):
-		in, cmd := m.tform.fields[row.field].Update(msg)
-		m.tform.fields[row.field] = in
-		return m, cmd
+		in, cmd := f.fields[row.field].Update(msg)
+		f.fields[row.field] = in
+		return res, cmd
 	}
-	return m, nil
+	return res, nil
 }
 
-// moveTargetCursor moves the form's cursor a row, and the typing with it.
-func (m Model) moveTargetCursor(step int) (tea.Model, tea.Cmd) {
-	rows := m.tform.rows()
-	if r := rows[m.tform.cursor]; r.kind == rowField {
-		m.tform.fields[r.field].Blur()
+// move moves the form's cursor a row, and the typing with it.
+func (f *targetForm) move(step int) tea.Cmd {
+	rows := f.rows()
+	if r := rows[f.cursor]; r.kind == rowField {
+		f.fields[r.field].Blur()
 	}
-	m.tform.cursor = min(max(m.tform.cursor+step, 0), len(rows)-1)
-	if r := rows[m.tform.cursor]; r.kind == rowField {
-		return m, m.tform.fields[r.field].Focus()
+	f.cursor = min(max(f.cursor+step, 0), len(rows)-1)
+	if r := rows[f.cursor]; r.kind == rowField {
+		return f.fields[r.field].Focus()
 	}
-	return m, nil
+	return nil
 }
 
-// saveTarget writes the form's target, and loads the projects again with it.
-func (m Model) saveTarget() (tea.Model, tea.Cmd) {
-	t, from, err := m.tform.target()
-	if err != nil {
-		m.err = err
-		return m, nil
+// helpKind is what the form's cursor is on, which decides the footer.
+func (f targetForm) helpKind() configHelp {
+	if f.panel.open {
+		return configInPanelForm
 	}
-	if m.dialog == dialogProject {
-		return m.saveProjectTarget(t, from)
+	switch f.rows()[f.cursor].kind {
+	case rowPanel:
+		return configOnFormPanel
+	case rowAddPanel:
+		return configOnAdd
+	case rowHome:
+		return configOnFormHome
 	}
-	i := m.tform.index
-	for j, other := range m.targets {
-		if j != i && other.Name == t.Name {
-			m.err = fmt.Errorf("a shared target named %q exists already", t.Name)
-			return m, nil
-		}
-	}
-	var written config.TargetsWritten
-	if i == len(m.targets) {
-		err = withConfigRoot(func(root string) (err error) {
-			written, err = config.AddTarget(root, m.shared, t)
-			return err
-		})
-	} else {
-		err = withConfigRoot(func(root string) (err error) {
-			written, err = config.ReplaceTarget(root, i, m.shared, config.TargetEdit{Target: t, PanelFrom: from})
-			return err
-		})
-	}
-	if err != nil {
-		m.err = err
-		return m, nil
-	}
-	m.err = nil
-	m.tform = targetForm{}
-	m.setTargets(written)
-	m.crow = int(configRows) + i
-	return m, nil
+	return configInTargetForm
 }
 
 // target is the target the form holds, built on the one it was opened with,
@@ -355,34 +392,33 @@ func (f targetForm) realization(old *revier.Realization, first int, panels []rev
 	return &r, nil
 }
 
-// openPanelForm opens the form for panel i of the target form, or for a new
+// openPanel opens the form for panel i of the target form, or for a new
 // panel when i is past the last.
-func (m Model) openPanelForm(i int) (tea.Model, tea.Cmd) {
-	p := panelForm{open: true, index: i, kind: revier.PanelShell, title: m.formInput("shell"), command: m.formInput("empty for a shell")}
-	if i < len(m.tform.panels) {
-		spec := m.tform.panels[i].spec
+func (f *targetForm) openPanel(th theme.Theme, i int) {
+	p := panelForm{open: true, index: i, kind: revier.PanelShell, title: formInput(th, "shell"), command: formInput(th, "empty for a shell")}
+	if i < len(f.panels) {
+		spec := f.panels[i].spec
 		p.kind = spec.Kind
 		p.title.SetValue(spec.Title)
 		p.command.SetValue(joinCommand(spec.Command))
 	}
-	m.tform.panel = p
-	return m, nil
+	f.panel = p
 }
 
-// panelFormKey is a press while a panel is edited. Enter keeps the panel in
-// the target form, which is written when the target is saved.
-func (m Model) panelFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	p := &m.tform.panel
+// panelKey is a press while a panel is edited. Enter keeps the panel in the
+// target form, which is written when the target is saved.
+func (f *targetForm) panelKey(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
+	res := formResult{err: sf.err}
+	p := &f.panel
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.tform.panel = panelForm{}
-		return m, nil
-	case key.Matches(msg, m.keys.Next, m.keys.Down), msg.Type == tea.KeyShiftTab, key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		f.panel = panelForm{}
+		return formResult{}, nil
+	case key.Matches(msg, sf.keys.Next, sf.keys.Down), msg.Type == tea.KeyShiftTab, key.Matches(msg, sf.keys.Up):
 		step := 1
-		if msg.Type == tea.KeyShiftTab || key.Matches(msg, m.keys.Up) {
+		if msg.Type == tea.KeyShiftTab || key.Matches(msg, sf.keys.Up) {
 			step = -1
 		}
 		p.title.Blur()
@@ -390,28 +426,26 @@ func (m Model) panelFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.field = (p.field + step + panelFields) % panelFields
 		switch p.field {
 		case pfTitle:
-			return m, p.title.Focus()
+			return res, p.title.Focus()
 		case pfCommand:
-			return m, p.command.Focus()
+			return res, p.command.Focus()
 		}
-		return m, nil
-	case key.Matches(msg, m.keys.Enter):
+		return res, nil
+	case key.Matches(msg, sf.keys.Enter):
 		command, err := splitCommand(p.command.Value())
 		if err != nil {
-			m.err = err
-			return m, nil
+			return formResult{err: err}, nil
 		}
 		spec := revier.PanelSpec{Kind: p.kind, Title: strings.TrimSpace(p.title.Value()), Command: command}
-		panels := slices.Clone(m.tform.panels)
+		panels := slices.Clone(f.panels)
 		if p.index < len(panels) {
 			panels[p.index].spec = spec
 		} else {
 			panels = append(panels, panelDraft{spec: spec, from: -1})
 		}
-		m.err = nil
-		m.tform.panels = panels
-		m.tform.panel = panelForm{}
-		return m, nil
+		f.panels = panels
+		f.panel = panelForm{}
+		return formResult{}, nil
 	case p.field == pfKind && (msg.Type == tea.KeyLeft || msg.Type == tea.KeySpace):
 		p.kind = revier.PanelKind(cycle(panelKinds, string(p.kind), -1))
 	case p.field == pfKind && msg.Type == tea.KeyRight:
@@ -420,40 +454,13 @@ func (m Model) panelFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case p.field == pfTitle:
 		var cmd tea.Cmd
 		p.title, cmd = p.title.Update(msg)
-		return m, cmd
+		return res, cmd
 	case p.field == pfCommand:
 		var cmd tea.Cmd
 		p.command, cmd = p.command.Update(msg)
-		return m, cmd
+		return res, cmd
 	}
-	return m, nil
-}
-
-// confirmDropTarget takes the key that answers the delete question for a
-// shared target. Only y deletes, and a delete a project would not load
-// without is refused and named.
-func (m Model) confirmDropTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.dropping = false
-	i, ok := m.targetRow()
-	if msg.String() != "y" || !ok {
-		return m, nil
-	}
-	var written config.TargetsWritten
-	err := withConfigRoot(func(root string) (err error) {
-		written, err = config.RemoveTarget(root, i, m.shared)
-		return err
-	})
-	if err != nil {
-		m.err = err
-		return m, nil
-	}
-	m.setTargets(written)
-	return m, nil
-}
-
-// setTargets takes what a change to the shared targets left.
-func (m *Model) setTargets(w config.TargetsWritten) {
-	m.setFiles(w.Shared, w.Projects)
+	return res, nil
 }
 
 // describeTarget is a target's row note, on either screen: where it opens.
@@ -478,11 +485,9 @@ func describeTarget(t revier.Target) string {
 	return strings.Join(parts, " · ")
 }
 
-// targetFormLines is the target form, one line a row with a heading above
-// each section, and the line the cursor is on.
-func (m Model) targetFormLines(w int) ([]string, int) {
-	th := m.theme
-	f := m.tform
+// lines is the target form, one line a row with a heading above each
+// section, and the line the cursor is on.
+func (f targetForm) lines(th theme.Theme, w int) ([]string, int) {
 	var out []string
 	at := 0
 	for r, row := range f.rows() {
@@ -495,7 +500,7 @@ func (m Model) targetFormLines(w int) ([]string, int) {
 		}
 		if row.kind == rowPanel && f.panel.open && f.panel.index == row.field ||
 			row.kind == rowAddPanel && f.panel.open && f.panel.index == len(f.panels) {
-			lines, field := m.panelFormLines(w)
+			lines, field := f.panel.lines(th, w)
 			at = len(out) + field
 			out = append(out, lines...)
 			continue
@@ -577,10 +582,8 @@ func (f targetForm) note(row formRow) string {
 	return "config.toml: " + value
 }
 
-// panelFormLines is the panel form, and the line the cursor is on.
-func (m Model) panelFormLines(w int) ([]string, int) {
-	th := m.theme
-	p := m.tform.panel
+// lines is the panel form, and the line the cursor is on.
+func (p panelForm) lines(th theme.Theme, w int) ([]string, int) {
 	values := []string{th.ProjectName.Render("‹ " + string(p.kind) + " ›"), p.title.View(), p.command.View()}
 	labels := []string{"kind", "title", "command"}
 	out := make([]string, panelFields)
