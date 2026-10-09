@@ -119,7 +119,7 @@ func TestSettlePrunesClaimsAndExpires(t *testing.T) {
 // D95).
 func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: rt, Window: wm}
 	projects := []core.Project{prepared(t, project())}

@@ -109,7 +109,7 @@ type Fake struct {
 
 // New returns a fake host with the given name.
 func New(name string) *Fake {
-	return &Fake{name: name, caps: revier.Capabilities{Layout: true}}
+	return &Fake{name: name}
 }
 
 // NewRuntime returns a fake that satisfies revier.Runtime.
@@ -120,8 +120,8 @@ type FakeRuntime struct{ *Fake }
 
 func (f *FakeRuntime) Capabilities() revier.Capabilities { return f.caps }
 
-// SetCapabilities changes what the runtime reports, for tests that assert on
-// the no-layout path.
+// SetCapabilities changes what the runtime reports, for tests of a runtime
+// whose instances are OS windows.
 func (f *FakeRuntime) SetCapabilities(c revier.Capabilities) { f.caps = c }
 
 // Sent is one SendText call.

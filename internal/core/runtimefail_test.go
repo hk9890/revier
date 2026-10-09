@@ -232,7 +232,7 @@ func TestANewAgentThatCannotBeFocusedIsStillAdded(t *testing.T) {
 // come up showing another tab.
 func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})

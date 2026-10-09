@@ -65,7 +65,7 @@ type Host struct {
 func (h *Host) Name() string { return "tmux" }
 
 func (h *Host) Capabilities() revier.Capabilities {
-	return revier.Capabilities{Layout: true, Persistent: true}
+	return revier.Capabilities{}
 }
 
 // cmd runs tmux with -u. Without it tmux decides from LANG and LC_* whether
@@ -253,13 +253,9 @@ func parseVars(s string) map[string]string {
 	return out
 }
 
-// kindOf classifies a pane by its foreground command. The agent kind is what
-// the survey probes; everything else is a shell or a tool.
+// kindOf classifies a pane by its foreground command: a shell or a tool.
 func kindOf(cmd string) revier.PanelKind {
-	switch cmd {
-	case "claude", "claude-code", "opencode", "aider":
-		return revier.PanelAgent
-	case "bash", "zsh", "sh", "fish":
+	if revier.IsShell(cmd) {
 		return revier.PanelShell
 	}
 	return revier.PanelTool

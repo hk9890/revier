@@ -17,7 +17,7 @@ import (
 // (decisions.md D95).
 func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	term := rt.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
 	wm := hosttest.New("gnome")
 	window := wm.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
@@ -46,7 +46,7 @@ func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 // wrong one is worse than attaching none (decisions.md D63, D67).
 func TestAttachRecordsAnAmbiguousWindowAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	for range 2 {
 		rt.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
 	}

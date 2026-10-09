@@ -49,13 +49,8 @@ type WindowController interface {
 	Host
 }
 
-// Capabilities describes what a runtime can do. A runtime that cannot arrange
-// panes reports Layout false and opens a single pane; the core handles that
-// case rather than the adapter faking it.
+// Capabilities describes what a runtime can do.
 type Capabilities struct {
-	Layout     bool // can arrange panels from a PanelSpec list
-	Persistent bool // an instance survives its client exiting
-
 	// OSWindows reports that every instance is an OS window, and that the
 	// host gives it the same title a WindowController reports for it. The
 	// core then treats the two listings as one window seen from two sides:
