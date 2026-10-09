@@ -105,8 +105,8 @@ func (m *Model) syncDetail() {
 	case dialogLink:
 		m.detail.SetContent(m.link.detail(m.surface()))
 		return
-	case dialogSessions, dialogSessionName:
-		m.detail.SetContent(m.sessionDetail())
+	case dialogSessions:
+		m.detail.SetContent(m.sessions.detail(m.surface()))
 		return
 	case dialogShutdown:
 		m.detail.SetContent(m.shutdownDetail())

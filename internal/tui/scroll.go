@@ -34,10 +34,12 @@ func (m *Model) syncBody() {
 			m.body.SetYOffset(0)
 			return
 		}
-	case dialogSessionName:
-		m.body.SetContent(m.sessionNameScreen())
-		m.body.SetYOffset(0)
-		return
+	case dialogSessions:
+		if m.sessions.naming {
+			m.body.SetContent(m.sessions.nameScreen(m.surface()))
+			m.body.SetYOffset(0)
+			return
+		}
 	case dialogShutdown:
 		m.body.SetContent(m.shutdownScreen())
 		m.body.SetYOffset(0)
@@ -103,7 +105,7 @@ func (m *Model) bodyList() *list.Model {
 	case dialogLink:
 		return m.link.list()
 	case dialogSessions:
-		return &m.slist
+		return &m.sessions.list
 	}
 	if m.agents {
 		return &m.aglist

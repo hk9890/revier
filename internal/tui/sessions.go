@@ -36,7 +36,7 @@ const sessionsBarKey = "alt+s"
 
 // sessionActions are the screen's own buttons.
 var sessionActions = []barAction{
-	{label: "save", key: sessionsBarKey, run: Model.openSessionName},
+	{label: "save", key: sessionsBarKey, run: Model.nameSession},
 }
 
 // saveWait bounds a save: one survey, and one ask of each agent probe.
@@ -134,27 +134,82 @@ func newSessionNameInput(th theme.Theme) textinput.Model {
 	return in
 }
 
+// sessionsScreen is the sessions screen, and the save or the restore it
+// started, which outlives the visit.
+type sessionsScreen struct {
+	naming    bool            // the step that asks a new session's name
+	list      list.Model      // the saved sessions
+	name      textinput.Model // the name field of a session being saved
+	saving    bool            // whether a save is out
+	restoring string          // the session a restore is walking, while it is
+	outcome   sessionOutcome  // what the last save or restore came to
+}
+
+func newSessionsScreen(th theme.Theme) sessionsScreen {
+	return sessionsScreen{list: newSessionList(th), name: newSessionNameInput(th)}
+}
+
+// sessionsResult is what a press on the screen leaves for the surface.
+type sessionsResult struct {
+	err    error // the footer's
+	closed bool  // Esc on the sessions: back to the surface
+}
+
 // openSessions is the "sessions" button and alt+s. The cursor comes back to
 // the list first, so the surface the screen stands over is the one it is left
 // on.
 func (m Model) openSessions() (tea.Model, tea.Cmd) {
-	m.err = nil
 	m.toList()
 	m.dialog = dialogSessions
-	// What the last save or restore came to is about that visit, and the
-	// plan is what a new visit is for.
-	m.outcome = sessionOutcome{}
-	m.loadSessions("")
+	m.err = m.sessions.open(m.stateRoot, m.theme)
 	return m, nil
 }
 
-// loadSessions reads the saved sessions into the screen's rows, with the
-// cursor on the session of that id, or on the newest.
-func (m *Model) loadSessions(id string) {
-	all, err := session.List(m.stateRoot)
-	if err != nil {
+// sessionsKey is every press on the screen, and what it left for the surface.
+func (m Model) sessionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	res, cmd := m.sessions.key(m.surface(), msg)
+	m.err = res.err
+	if res.closed {
+		m.dialog = dialogNone
+	}
+	return m, cmd
+}
+
+// nameSession is the screen's save button.
+func (m Model) nameSession() (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	cmd, m.err = m.sessions.openName()
+	return m, cmd
+}
+
+// saved takes a save's answer.
+func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
+	if err := m.sessions.saved(m.stateRoot, m.theme, msg); err != nil {
 		m.err = err
 	}
+	return m, nil
+}
+
+// restored takes a restore's answer.
+func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
+	if err := m.sessions.restored(msg); err != nil {
+		m.err = err
+	}
+	return m, nil
+}
+
+// open is a new visit. What the last save or restore came to is about the
+// visit before, and the plan is what a new visit is for.
+func (sc *sessionsScreen) open(root string, th theme.Theme) error {
+	sc.naming = false
+	sc.outcome = sessionOutcome{}
+	return sc.load(root, th, "")
+}
+
+// load reads the saved sessions under root into the screen's rows, with the
+// cursor on the session of that id, or on the newest.
+func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
+	all, err := session.List(root)
 	items := make([]list.Item, 0, len(all))
 	at := 0
 	for i, s := range all {
@@ -163,89 +218,92 @@ func (m *Model) loadSessions(id string) {
 			at = i
 		}
 	}
-	d := sessionDelegate{theme: m.theme, nameWidth: lipgloss.Width(unnamed)}
+	d := sessionDelegate{theme: th, nameWidth: lipgloss.Width(unnamed)}
 	for _, s := range all {
 		d.idWidth = max(d.idWidth, len(s.ID))
 		d.nameWidth = max(d.nameWidth, lipgloss.Width(s.Name))
 	}
 	d.nameWidth = min(d.nameWidth, maxSessionName)
-	m.slist.SetDelegate(d)
-	_ = m.slist.SetItems(items)
-	m.slist.Select(at)
+	sc.list.SetDelegate(d)
+	_ = sc.list.SetItems(items)
+	sc.list.Select(at)
+	return err
 }
 
-// sessionsKey is every press on the screen: up and down walk the sessions,
-// Enter restores the one under the cursor, the save key names a new one, and
-// Esc leaves.
-func (m Model) sessionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.err = nil
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.dialog = dialogNone
-	case key.Matches(msg, m.keys.Up):
-		m.slist.CursorUp()
-	case key.Matches(msg, m.keys.Down):
-		m.slist.CursorDown()
-	case key.Matches(msg, m.keys.Enter):
-		return m.restoreSession()
-	case msg.String() == sessionsBarKey:
-		return m.openSessionName()
+// key is every press on the screen: up and down walk the sessions, Enter
+// restores the one under the cursor, the save key names a new one, and Esc
+// leaves.
+func (sc *sessionsScreen) key(sf surface, msg tea.KeyMsg) (sessionsResult, tea.Cmd) {
+	if sc.naming {
+		return sc.nameKey(sf, msg)
 	}
-	return m, nil
+	var res sessionsResult
+	var cmd tea.Cmd
+	switch {
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		res.closed = true
+	case key.Matches(msg, sf.keys.Up):
+		sc.list.CursorUp()
+	case key.Matches(msg, sf.keys.Down):
+		sc.list.CursorDown()
+	case key.Matches(msg, sf.keys.Enter):
+		cmd, res.err = sc.restore(sf)
+	case msg.String() == sessionsBarKey:
+		cmd, res.err = sc.openName()
+	}
+	return res, cmd
 }
 
-// openSessionName is the save button: the step that asks for a name.
-func (m Model) openSessionName() (tea.Model, tea.Cmd) {
-	m.err = nil
-	if m.saving {
-		m.err = errors.New("a save is still running")
-		return m, nil
+// openName is the save button: the step that asks for a name.
+func (sc *sessionsScreen) openName() (tea.Cmd, error) {
+	if sc.saving {
+		return nil, errors.New("a save is still running")
 	}
 	// A save during a restore records a desktop half restored, and it would
 	// be the newest session, the one a plain restore opens.
-	if m.restoring != "" {
-		m.err = fmt.Errorf("the restore of %s is still running; save once it is done", m.restoring)
-		return m, nil
+	if sc.restoring != "" {
+		return nil, fmt.Errorf("the restore of %s is still running; save once it is done", sc.restoring)
 	}
-	m.sname.SetValue("")
-	m.dialog = dialogSessionName
-	return m, m.sname.Focus()
+	sc.name.SetValue("")
+	sc.naming = true
+	return sc.name.Focus(), nil
 }
 
-// sessionNameKey is every press while the name is typed. Enter saves, Esc
-// goes back to the sessions, and everything else is the field's.
-func (m Model) sessionNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// nameKey is every press while the name is typed. Enter saves, Esc goes back
+// to the sessions, and everything else is the field's.
+func (sc *sessionsScreen) nameKey(sf surface, msg tea.KeyMsg) (sessionsResult, tea.Cmd) {
+	res := sessionsResult{err: sf.err}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.dialog = dialogSessions
-		m.sname.Blur()
-		return m, nil
-	case key.Matches(msg, m.keys.Enter):
-		return m.saveSession()
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		res.err = nil
+		sc.naming = false
+		sc.name.Blur()
+		return res, nil
+	case key.Matches(msg, sf.keys.Enter):
+		return res, sc.save(sf)
 	}
 	if altRune(msg) {
-		return m, nil
+		return res, nil
 	}
-	m.err = nil
-	in, cmd := m.sname.Update(msg)
-	m.sname = in
-	return m, cmd
+	res.err = nil
+	in, cmd := sc.name.Update(msg)
+	sc.name = in
+	return res, cmd
 }
 
-// saveSession records every project open now, as `revier session save` does,
-// off the terminal: the save asks each agent probe for its conversations.
-func (m Model) saveSession() (tea.Model, tea.Cmd) {
-	name := strings.TrimSpace(m.sname.Value())
-	m.dialog = dialogSessions
-	m.sname.Blur()
-	m.saving = true
-	c, projects, root := m.core, m.projects, m.stateRoot
-	return m, func() tea.Msg {
+// save records every project open now, as `revier session save` does, off
+// the terminal: the save asks each agent probe for its conversations.
+func (sc *sessionsScreen) save(sf surface) tea.Cmd {
+	name := strings.TrimSpace(sc.name.Value())
+	sc.naming = false
+	sc.name.Blur()
+	sc.saving = true
+	c, projects, root := sf.core, sf.projects, sf.stateRoot
+	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), saveWait)
 		defer cancel()
 		report, err := c.Survey(ctx, projects)
@@ -262,42 +320,39 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 
 // saved takes a save's answer: the new session is a row, under the cursor,
 // and its pane says what the save could not record.
-func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
-	m.saving = false
+func (sc *sessionsScreen) saved(root string, th theme.Theme, msg savedMsg) error {
+	sc.saving = false
 	switch {
 	case errors.Is(msg.err, core.ErrNothingOpen):
 		// A normal outcome, as the CLI prints it, and not a failure.
 		slog.Info("session save: nothing open")
-		m.err = msg.err
-		return m, nil
+		return msg.err
 	case msg.err != nil:
 		slog.Error("session save", "err", msg.err)
-		m.err = msg.err
-		return m, nil
+		return msg.err
 	}
-	m.loadSessions(msg.stored.ID)
-	m.outcome = sessionOutcome{id: msg.stored.ID, saved: true, notes: msg.gaps.Notes()}
-	return m, nil
+	err := sc.load(root, th, msg.stored.ID)
+	sc.outcome = sessionOutcome{id: msg.stored.ID, saved: true, notes: msg.gaps.Notes()}
+	return err
 }
 
-// restoreSession is Enter on a session: it opens what the session recorded,
-// as `revier session restore` does, off the terminal. The restore walks one
+// restore is Enter on a session: it opens what the session recorded, as
+// `revier session restore` does, off the terminal. The restore walks one
 // target at a time and waits for each window, so it can take a while, and a
 // second one is refused while it runs.
-func (m Model) restoreSession() (tea.Model, tea.Cmd) {
-	it, ok := m.slist.SelectedItem().(sessionItem)
+func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
+	it, ok := sc.list.SelectedItem().(sessionItem)
 	if !ok {
-		return m, nil
+		return nil, nil
 	}
-	if m.restoring != "" {
-		m.err = fmt.Errorf("the restore of %s is still running", m.restoring)
-		return m, nil
+	if sc.restoring != "" {
+		return nil, fmt.Errorf("the restore of %s is still running", sc.restoring)
 	}
-	m.restoring = it.session.ID
-	projects, s := m.projects, it.session
+	sc.restoring = it.session.ID
+	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
 	// The restore's own ledger, on the same state: it says when it wrote.
-	c := m.core.WithLedger(ledger.File{Root: m.stateRoot, Written: written})
+	c := sf.core.WithLedger(ledger.File{Root: sf.stateRoot, Written: written})
 	walk := func() tea.Msg {
 		defer close(written)
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
@@ -310,7 +365,39 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 		out, back := c.Restore(context.Background(), s, report, projects)
 		return restoredMsg{id: s.ID, restored: out, back: back}
 	}
-	return m, tea.Batch(walk, waitLedger(written))
+	return tea.Batch(walk, waitLedger(written)), nil
+}
+
+// restored takes a restore's answer. What each target came to is the pane's;
+// a target that did not open, or a failure to return to the saved project, is
+// the footer's too.
+func (sc *sessionsScreen) restored(msg restoredMsg) error {
+	sc.restoring = ""
+	if msg.err != nil {
+		return msg.err
+	}
+	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back}
+	if _, _, failed := msg.restored.Counts(); failed > 0 {
+		return fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
+	}
+	return msg.back
+}
+
+// help is the footer of the step in view.
+func (sc *sessionsScreen) help(k keyMap) []key.Binding {
+	if sc.naming {
+		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "back"), k.Quit}
+	}
+	return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey("esc", "back"), k.Quit}
+}
+
+// subtitle is the line over the rule: where the sessions are, or the name
+// field.
+func (sc *sessionsScreen) subtitle(sf surface) string {
+	if sc.naming {
+		return " " + sc.name.View()
+	}
+	return " " + sf.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(sf.stateRoot))+", newest first")
 }
 
 // ledgerMsg says a restore wrote a launch or a landing to state, on the
@@ -342,35 +429,17 @@ func (m Model) ledgerWritten(msg ledgerMsg) (tea.Model, tea.Cmd) {
 	return m, waitLedger(msg.written)
 }
 
-// restored takes a restore's answer. What each target came to is the pane's;
-// a target that did not open, or a failure to return to the saved project, is
-// the footer's too.
-func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
-	m.restoring = ""
-	if msg.err != nil {
-		m.err = msg.err
-		return m, nil
-	}
-	m.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back}
-	if _, _, failed := msg.restored.Counts(); failed > 0 {
-		m.err = fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
-	} else if msg.back != nil {
-		m.err = msg.back
-	}
-	return m, nil
-}
-
-// sessionNameScreen is what stands in the list's place while the name is
-// typed: what Enter records.
-func (m Model) sessionNameScreen() string {
-	th := m.theme
-	w := m.listWidth()
+// nameScreen is what stands in the list's place while the name is typed:
+// what Enter records.
+func (sc *sessionsScreen) nameScreen(sf surface) string {
+	th := sf.theme
+	w := sf.list
 	say := func(s lipgloss.Style, text string) string {
 		return s.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
 	}
 	running := 0
-	for _, v := range m.views {
-		if m.heldHere(v) {
+	for _, v := range sf.views {
+		if heldHere(sf.attached, v) {
 			running++
 		}
 	}
@@ -379,16 +448,16 @@ func (m Model) sessionNameScreen() string {
 		say(th.Meta, "a restore finds the session by its name too")
 }
 
-// sessionDetail is the pane on the screen: what the session under the cursor
+// detail is the pane on the screen: what the session under the cursor
 // holds, what the save that wrote it could not record, and what restoring it
 // would do here now, or what the restore of it came to.
-func (m *Model) sessionDetail() string {
-	it, ok := m.slist.SelectedItem().(sessionItem)
+func (sc *sessionsScreen) detail(sf surface) string {
+	it, ok := sc.list.SelectedItem().(sessionItem)
 	if !ok {
 		return ""
 	}
-	th, s := m.theme, it.session
-	w := m.paneCols() - paneChrome
+	th, s := sf.theme, it.session
+	w := sf.pane
 	var b strings.Builder
 	line := func(label, value string, style lipgloss.Style) {
 		b.WriteString(hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style) + "\n")
@@ -406,12 +475,12 @@ func (m *Model) sessionDetail() string {
 	if s.Current != "" {
 		line("Ends on", string(s.Current), th.ProjectName)
 	}
-	line("File", config.ContractHome(filepath.Join(session.Dir(m.stateRoot), s.ID+".toml")), th.Path)
+	line("File", config.ContractHome(filepath.Join(session.Dir(sf.stateRoot), s.ID+".toml")), th.Path)
 	line("Holds", sessionCounts(s), th.Path)
 
-	out := m.outcome
+	out := sc.outcome
 	if out.id == s.ID && out.saved {
-		b.WriteString(heading(m.theme, "Saved", w))
+		b.WriteString(heading(th, "Saved", w))
 		if len(out.notes) == 0 {
 			say(th.Running, "every open target and agent conversation was recorded")
 		}
@@ -420,12 +489,12 @@ func (m *Model) sessionDetail() string {
 		}
 	}
 	switch {
-	case m.restoring == s.ID:
-		b.WriteString(heading(m.theme, "Restore", w))
+	case sc.restoring == s.ID:
+		b.WriteString(heading(th, "Restore", w))
 		say(th.Meta, "restoring, one target at a time…")
 	case out.id == s.ID && out.restored != nil:
-		b.WriteString(heading(m.theme, "Restored", w))
-		m.restoreSteps(&b, out.restored, w)
+		b.WriteString(heading(th, "Restored", w))
+		restoreSteps(sf, &b, out.restored, w)
 		opened, pending, failed := out.restored.Counts()
 		summary := fmt.Sprintf("opened %d", opened)
 		if pending > 0 {
@@ -438,12 +507,12 @@ func (m *Model) sessionDetail() string {
 		if out.back != nil {
 			say(th.Attention, out.back.Error())
 		}
-	case !m.surveyed:
-		b.WriteString(heading(m.theme, "Restore plan", w))
+	case !sf.surveyed:
+		b.WriteString(heading(th, "Restore plan", w))
 		say(th.Meta, "surveying")
 	default:
-		b.WriteString(heading(m.theme, "Restore plan", w))
-		m.restoreSteps(&b, m.core.RestorePreview(s, core.Report{Views: m.views}, m.projects), w)
+		b.WriteString(heading(th, "Restore plan", w))
+		restoreSteps(sf, &b, sf.core.RestorePreview(s, core.Report{Views: sf.views}, sf.projects), w)
 		say(th.Meta, "\nEnter: restore")
 	}
 	return b.String()
@@ -453,8 +522,8 @@ func (m *Model) sessionDetail() string {
 // the pane's grid: each recorded target as the Targets section draws it, and
 // under it each agent it held as the Agents section draws it, each behind the
 // operation the restore makes of it - start it, keep the one open, or skip it.
-func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
-	th := m.spun()
+func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
+	th := sf.spun
 	var project revier.ProjectName
 	for _, r := range steps {
 		if r.Project != project {
@@ -464,7 +533,7 @@ func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
 			project = r.Project
 			b.WriteString(th.ProjectName.Bold(true).Render(clipTo(string(r.Project), w)) + "\n")
 		}
-		tv, _ := m.targetView(r.Project, r.Target)
+		tv, _ := targetView(sf.views, r.Project, r.Target)
 		mark, markStyle := th.Glyphs.Stopped+" stopped", th.Count
 		switch {
 		case !tv.Ref.IsZero():
@@ -477,9 +546,9 @@ func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
 		op, reason := targetOp(th, r)
 		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), markStyle.Render(mark),
 			reason, th.PathMissing, w) + "\n")
-		live := m.liveAgents(r.Project, tv.Ref)
+		live := liveAgents(sf.views, r.Project, tv.Ref)
 		for i, a := range r.Resumes {
-			b.WriteString(m.planAgent(th, r, i, a, live, w) + "\n")
+			b.WriteString(planAgent(sf.projects, th, r, i, a, live, w) + "\n")
 		}
 	}
 }
@@ -487,7 +556,7 @@ func (m Model) restoreSteps(b *strings.Builder, steps core.Restored, w int) {
 // planAgent is one recorded agent of a step: its operation, then the harness,
 // state and activity of the agent now running in its place, or, where none
 // runs, what the restore said about it or the conversation it holds.
-func (m Model) planAgent(th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int) string {
+func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int) string {
 	op, reason := agentOp(th, r, i)
 	harness := a.Harness
 	if harness == "" {
@@ -509,7 +578,7 @@ func (m Model) planAgent(th theme.Theme, r core.RestoreResult, i int, a core.Res
 		if text == "" {
 			text = "no conversation recorded"
 		}
-		if p, ok := m.project(r.Project); ok && a.Dir != "" && a.Dir != p.Path {
+		if p, ok := projectNamed(projects, r.Project); ok && a.Dir != "" && a.Dir != p.Path {
 			text += " in " + config.ContractHome(a.Dir)
 		}
 	}
@@ -607,8 +676,8 @@ func skipOp(th theme.Theme, word string) string {
 }
 
 // targetView is the survey's view of one target of a project.
-func (m Model) targetView(project revier.ProjectName, target revier.TargetName) (revier.TargetView, bool) {
-	for _, v := range m.views {
+func targetView(views []revier.ProjectView, project revier.ProjectName, target revier.TargetName) (revier.TargetView, bool) {
+	for _, v := range views {
 		if v.Project.Name != project {
 			continue
 		}
@@ -623,12 +692,12 @@ func (m Model) targetView(project revier.ProjectName, target revier.TargetName) 
 
 // liveAgents are the agents running in an instance of a project now, in the
 // order the runtime lists them, which is the order a session records them in.
-func (m Model) liveAgents(project revier.ProjectName, ref revier.TargetRef) []revier.AgentView {
+func liveAgents(views []revier.ProjectView, project revier.ProjectName, ref revier.TargetRef) []revier.AgentView {
 	if ref.IsZero() {
 		return nil
 	}
 	var out []revier.AgentView
-	for _, v := range m.views {
+	for _, v := range views {
 		if v.Project.Name != project {
 			continue
 		}
@@ -642,9 +711,9 @@ func (m Model) liveAgents(project revier.ProjectName, ref revier.TargetRef) []re
 }
 
 // progressLine is the footer while a save or a restore runs.
-func (m Model) progressLine() string {
-	if m.restoring != "" {
-		return m.theme.Meta.Render(fmt.Sprintf(" restoring %s…", m.restoring))
+func (sc *sessionsScreen) progressLine(th theme.Theme) string {
+	if sc.restoring != "" {
+		return th.Meta.Render(fmt.Sprintf(" restoring %s…", sc.restoring))
 	}
-	return m.theme.Meta.Render(" saving the projects open now…")
+	return th.Meta.Render(" saving the projects open now…")
 }

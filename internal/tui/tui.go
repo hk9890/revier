@@ -74,7 +74,6 @@ const (
 	dialogConfig
 	dialogHelp
 	dialogSessions
-	dialogSessionName
 	dialogShutdown
 	dialogProject
 )
@@ -84,8 +83,10 @@ const (
 // with text of its own, and a press must not reach a row nobody can see.
 func (m Model) hasRows() bool {
 	switch m.dialog {
-	case dialogNone, dialogSessions:
+	case dialogNone:
 		return true
+	case dialogSessions:
+		return !m.sessions.naming
 	case dialogLink:
 		return m.link.list() != nil
 	}
@@ -137,9 +138,7 @@ type Model struct {
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
 	dialog    dialog             // the screen standing over the surface
 	link      linkScreen         // the link dialog (link.go)
-	saving    bool               // whether a session save is out
-	restoring string             // the session a restore is walking, while it is
-	outcome   sessionOutcome     // what the last save or restore came to
+	sessions  sessionsScreen     // the sessions screen, and its save or restore (sessions.go)
 	shut      shutdown           // the shutdown wizard, while it is up
 	width     int
 	height    int
@@ -148,8 +147,7 @@ type Model struct {
 	// the order of the rows a query leaves is ranked's, and what a row looks
 	// like is the delegate's.
 	plist    list.Model
-	slist    list.Model // the saved sessions
-	filter   string     // the query, held here so a refresh can re-apply it
+	filter   string // the query, held here so a refresh can re-apply it
 	keys     keyMap
 	help     help.Model
 	detail   viewport.Model
@@ -167,7 +165,6 @@ type Model struct {
 	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input    textinput.Model                  // the filter query, with its own cursor
 	create   createScreen                     // the new-project screen (newproject.go)
-	sname    textinput.Model                  // the name field of a session being saved
 	over     hovered                          // what the pointer is on
 	cell     *pointerCell                     // where the pointer last was, nil before it moved
 	body     viewport.Model                   // the scrolling window over the list
@@ -228,14 +225,14 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		link:  newLinkScreen(th), slist: newSessionList(th),
+		link:  newLinkScreen(th), sessions: newSessionsScreen(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
-		create: newCreateScreen(th), sname: newSessionNameInput(th),
-		body: newBody(),
-		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
+		create: newCreateScreen(th),
+		body:   newBody(),
+		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 		pedit: newFieldInput(th),
 	}
 	// The files go in through the one function that reads them, so what is
@@ -796,8 +793,6 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.helpScreenKey(msg)
 	case dialogSessions:
 		return m.sessionsKey(msg)
-	case dialogSessionName:
-		return m.sessionNameKey(msg)
 	case dialogShutdown:
 		return m.shutdownKey(msg)
 	}
@@ -967,7 +962,11 @@ func (m Model) agentsOnPage(dir int) int {
 // claim writes one between surveys so a claimed window shows at once rather
 // than a refresh later.
 func (m Model) heldHere(v revier.ProjectView) bool {
-	return v.Held() || len(m.attached[v.Project.Name]) > 0
+	return heldHere(m.attached, v)
+}
+
+func heldHere(attached map[revier.ProjectName][]revier.TargetRef, v revier.ProjectView) bool {
+	return v.Held() || len(attached[v.Project.Name]) > 0
 }
 
 // targetRows is the pane's Targets section: every target, then every

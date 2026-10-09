@@ -10,7 +10,6 @@ import (
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -143,7 +142,10 @@ func (m Model) top() string {
 		name = "Project " + string(m.proj)
 	case dialogHelp:
 		name = "Keyboard shortcuts"
-	case dialogSessionName:
+	case dialogSessions:
+		if !m.sessions.naming {
+			return m.bar()
+		}
 		name = "Save the projects open now"
 	case dialogShutdown:
 		name = "Shutdown"
@@ -206,9 +208,7 @@ func (m Model) subtitle() string {
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
 	case dialogSessions:
-		return " " + m.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(m.stateRoot))+", newest first")
-	case dialogSessionName:
-		return " " + m.sname.View()
+		return m.sessions.subtitle(m.surface())
 	case dialogShutdown:
 		return " " + m.theme.Meta.Render(m.shutdownTitle())
 	}
@@ -291,9 +291,9 @@ func (m Model) ruleCount() string {
 	switch {
 	case m.dialog == dialogLink:
 		return m.link.count(th)
-	case m.dialog == dialogSessions:
-		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
+	case m.dialog == dialogSessions && !m.sessions.naming:
+		return th.NameDim.Render(core.Count(len(m.sessions.list.Items()), "session"))
+	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessions, m.dialog == dialogShutdown:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -402,8 +402,8 @@ func (m Model) footer() string {
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
-	if m.restoring != "" || m.saving {
-		return m.progressLine()
+	if m.sessions.restoring != "" || m.sessions.saving {
+		return m.sessions.progressLine(m.theme)
 	}
 	if m.shut.running && m.shut.saves() {
 		return m.theme.Meta.Render(" saving the session when it changed, and closing…")
@@ -429,6 +429,9 @@ func (m Model) footer() string {
 	}
 	if m.dialog == dialogLink {
 		return " " + m.help.ShortHelpView(m.link.help(m.keys))
+	}
+	if m.dialog == dialogSessions {
+		return " " + m.help.ShortHelpView(m.sessions.help(m.keys))
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))

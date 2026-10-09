@@ -145,10 +145,6 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	switch d {
 	case dialogHelp:
 		return []key.Binding{helpKey("↑↓", "scroll"), helpKey("esc", "back"), k.Quit}
-	case dialogSessions:
-		return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey("esc", "back"), k.Quit}
-	case dialogSessionName:
-		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "back"), k.Quit}
 	case dialogShutdown:
 		return []key.Binding{helpKey("↑↓", "choose"), helpKey("enter", "next"), helpKey("esc", "back"), k.Quit}
 	}
