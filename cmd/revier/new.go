@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/hk9890/revier/internal/checkout"
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -41,26 +41,17 @@ func cmdNew(out io.Writer, args []string) error {
 	return err
 }
 
-// createProject writes the project for the working directory and trusts the
-// directory's mise configuration, as `os open` does for a session it creates.
-// An empty name is the directory's own. What config.CanCreate refuses is
-// refused here.
+// createProject writes the project for the working directory, as
+// app.CreateProject writes it. An empty name is the directory's own.
 func createProject(out io.Writer, root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return core.Project{}, err
 	}
-	if name == "" {
-		name = config.NameFor(dir)
-	}
-	if err := config.CanCreate(projects, name, dir); err != nil {
-		return core.Project{}, err
-	}
-	p, err := config.Create(root, name, dir, checkout.Origin(dir))
+	p, err := usecase.CreateProject(root, projects, name, dir, "", os.Stderr)
 	if err != nil {
 		return core.Project{}, err
 	}
-	checkout.Trust(dir, os.Stderr)
 	_, _ = fmt.Fprintf(out, "created %s\n", p.File)
 	return p, nil
 }

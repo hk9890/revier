@@ -38,6 +38,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
@@ -749,28 +750,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds[:]...)
 }
 
-// updateState is every write of state the surface makes itself: it goes
-// through the core's ledger, and the surface keeps the result. A state file
-// that cannot be read or written costs the next keypress a fallback, not the
-// surface, so the ledger logs it and nothing is shown.
-func (m *Model) updateState(apply func(st *state.State) bool) {
-	m.keep(m.core.Ledger.Update(apply))
-}
-
-// keep holds the parts of state the surface reads between refreshes.
+// keep holds the parts of state the surface reads between refreshes. The
+// surface writes no state itself: the core and internal/app write it through
+// the ledger. A state file that cannot be read or written costs the next
+// keypress a fallback, not the surface, so the ledger logs it and nothing is
+// shown.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
-}
-
-// apply writes an action's launch, which makes its project the current one,
-// as a CLI command makes it: a desktop key pressed next on a window no rule
-// names falls back to it. It is written on the update loop, so it never
-// races the claim path.
-func (m *Model) apply(l state.Launch) {
-	m.updateState(func(st *state.State) bool {
-		st.Launched(l.Project, l.Target, l.At)
-		return true
-	})
 }
 
 // takeState takes the ledger's state into the surface: what an activation
@@ -1162,32 +1148,18 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		if !ok {
 			return nil, true
 		}
-		argv, dir, err := m.core.ActionCommand(p, act.Name, act.Run)
+		// The plan writes the action's launch, which makes its project the
+		// current one, as a command makes it: a desktop key pressed next on a
+		// window no rule names falls back to it.
+		run, err := app.PlanAction(m.core, p, act.Name, act.Run)
 		if err != nil {
 			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
 			return func() tea.Msg { return actedMsg{err: err} }, true
 		}
-		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Dir = dir
-		project, here := p.Name, p.Remote == nil
-		start := time.Now()
-		// An action may open anything; the window that appears next is the
-		// project's (claim-on-appear). The launch is recorded now, as the
-		// CLI records it, so its claim window runs from the action's start
-		// and not from its exit, which for an editor is hours later. A
-		// remote project's action runs on its host and opens no window here.
-		if here {
-			m.apply(state.Launch{Project: project, At: start})
-		}
+		cmd := exec.Command(run.Argv[0], run.Argv[1:]...)
+		cmd.Dir = run.Dir
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
-			logging.Op("action", start, err, "project", project, "action", act.Name, "argv", argv)
-			// A link's action is the event of the revier that ran it on its
-			// host, so it is no second one here.
-			if err == nil && here {
-				// Stamped with the start, as the launch above is: the exit
-				// of an editor is hours after the press.
-				events.Record(revier.Event{Time: start, Kind: revier.EventAction, Project: project, Action: act.Name})
-			}
+			run.Done(err)
 			return actedMsg{err: err}
 		}), true
 	}

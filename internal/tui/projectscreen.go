@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log/slog"
 	"sort"
 	"strings"
 
@@ -11,10 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -205,19 +203,13 @@ func (m *Model) renameProject(to revier.ProjectName) error {
 	}
 	var written core.Project
 	err := withConfigRoot(func(root string) (err error) {
-		written, err = config.Rename(root, from, to, m.usable)
+		written, err = app.RenameProject(root, m.stateRoot, m.core.Ledger, from, to, m.usable)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	m.updateState(func(st *state.State) bool {
-		st.Rename(from, to)
-		return true
-	})
-	if err := session.Rename(m.stateRoot, from, to); err != nil {
-		slog.Warn("rename: the saved sessions keep the old name", "from", from, "to", to, "err", err)
-	}
+	m.takeState()
 	// What a link's host said last is laid over the row at every refresh, so
 	// it follows the name: the row would otherwise lose its agents until the
 	// host answers again.

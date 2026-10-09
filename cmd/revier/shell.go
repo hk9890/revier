@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -89,9 +88,6 @@ func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 		start := time.Now()
 		err := a.core.NewShell(ctx, w, dir)
 		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
-		if err == nil {
-			events.Record(revier.Event{Kind: revier.EventShellNew, Project: w.Project.Name, Target: w.Target, Dir: dir})
-		}
 		return err
 	}
 	return a.newTab(ctx, "shell new", project, panel, dir, homeTarget, here)

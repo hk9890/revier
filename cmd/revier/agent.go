@@ -17,7 +17,6 @@ import (
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -323,29 +322,24 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	}
 	address := pos[0]
 	start := time.Now()
-	var ref revier.TargetRef
-	var panel revier.PanelID
-	name, _, _ := strings.Cut(address, ":")
-	focused := revier.Event{Kind: revier.EventGoAgent, Project: revier.ProjectName(name)}
+	// The agent as the survey names one: with --ref its harness and its
+	// conversation are not known, and the event carries neither.
+	var agent revier.AgentView
+	name, sel, _ := strings.Cut(address, ":")
 	switch {
 	case *instance == "":
 		ag, err := a.agent(ctx, address)
 		if err != nil {
 			return err
 		}
-		ref, panel = ag.Ref, ag.Panel.ID
-		focused.Agent, focused.Session = ag.State.Harness, ag.State.Session
+		agent = revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID, State: ag.State}
 	case a.core.Runtime == nil:
 		return fmt.Errorf("%w: no runtime holds panels", core.ErrNoHost)
 	default:
-		_, sel, _ := strings.Cut(address, ":")
-		ref, panel = revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}, revier.PanelID(sel)
+		agent = revier.AgentView{Ref: revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}, Panel: revier.PanelID(sel)}
 	}
-	err = a.core.FocusAgent(ctx, ref, panel)
-	logging.Op("agent focus", start, err, "address", address, "ref", ref, "panel", panel)
-	if err == nil {
-		events.Record(focused)
-	}
+	err = a.core.FocusAgent(ctx, revier.ProjectName(name), agent)
+	logging.Op("agent focus", start, err, "address", address, "ref", agent.Ref, "panel", agent.Panel)
 	return err
 }
 
@@ -405,7 +399,7 @@ func (a *app) addAgent(ctx context.Context, project, panel, dir string, resume r
 }
 
 // agentTab opens an agent tab through open in the workspace newTab places it
-// in, and records it.
+// in.
 func (a *app) agentTab(ctx context.Context, project, panel, dir string, resume revier.SessionID, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
 	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
@@ -414,15 +408,9 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, resume r
 		if err != nil {
 			return err
 		}
-		// The event names the conversation the tab holds: one that was not
-		// resumed is not it.
-		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Dir: dir}
-		if outcome == core.AgentResumed {
-			e.Session = resume
-		} else if resume != "" {
+		if outcome != core.AgentResumed && resume != "" {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
 		}
-		events.Record(e)
 		return nil
 	}
 	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, here)

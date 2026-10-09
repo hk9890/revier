@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/sshconfig"
@@ -406,7 +407,7 @@ func (m Model) writeLink() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	p, err := config.CreateLink(root, m.linkNameValue(), m.host, it.view.Project)
+	p, err := app.LinkProject(root, m.linkNameValue(), m.host, it.view.Project)
 	if err != nil {
 		m.err = err
 		return m, nil

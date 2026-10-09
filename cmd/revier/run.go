@@ -8,11 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"time"
 
-	"github.com/hk9890/revier/internal/events"
-	"github.com/hk9890/revier/internal/logging"
-	"github.com/hk9890/revier/pkg/revier"
+	usecase "github.com/hk9890/revier/internal/app"
 )
 
 func cmdRun(ctx context.Context, a *app, args []string) error {
@@ -45,27 +42,13 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 		// A key bound to nothing must say so, not do nothing.
 		return fmt.Errorf("no action named %q", name)
 	}
-	argv, dir, err := a.core.ActionCommand(p, name, run)
+	act, err := usecase.PlanAction(a.core, p, name, run)
 	if err != nil {
 		return err
 	}
-	// A remote project's action runs on its host and opens no window here,
-	// so no window that appears is its to claim.
-	if p.Remote == nil {
-		a.launchedAction(p.Name)
-	}
-	start := time.Now()
-	if err := runAction(a.out, p.Name, name, argv, dir); err != nil {
-		return err
-	}
-	// A link's action is the event of the revier that ran it on its host,
-	// which `revier events` prints with that host: a second one here would
-	// count it twice. The event is stamped with the start: an action runs as
-	// long as it runs, and it was asked for when it began.
-	if p.Remote == nil {
-		events.Record(revier.Event{Time: start, Kind: revier.EventAction, Project: p.Name, Action: name})
-	}
-	return nil
+	err = runAction(a.out, act.Argv, act.Dir)
+	act.Done(err)
+	return err
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
@@ -81,14 +64,11 @@ var errActionFailed = errors.New("the action failed")
 // No shell: the argv is a list, so there is nothing to quote and nothing to
 // inject into. No context either: the command's 30s deadline is for host
 // calls, and an action - an editor, a long pull - runs as long as it runs.
-func runAction(out io.Writer, project revier.ProjectName, name string, argv []string, dir string) error {
+func runAction(out io.Writer, argv []string, dir string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, out, os.Stderr
-	start := time.Now()
-	err := c.Run()
-	logging.Op("action", start, err, "project", project, "action", name, "argv", argv)
-	if err != nil {
+	if err := c.Run(); err != nil {
 		return fmt.Errorf("%w: %w", errActionFailed, err)
 	}
 	return nil

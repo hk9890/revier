@@ -313,7 +313,21 @@ func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.Pane
 	return c.newAgent(ctx, w, r, false)
 }
 
+// newAgent records the tab it opened as one EventAgentNew. The event names
+// the conversation the tab holds: one that was not resumed is not it.
 func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
+	panel, outcome, err := c.openAgent(ctx, w, r, focus)
+	if err == nil {
+		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Dir: r.Dir}
+		if outcome == AgentResumed {
+			e.Session = r.Session
+		}
+		c.record(e)
+	}
+	return panel, outcome, err
+}
+
+func (c *Core) openAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
 	t, err := c.tabRuntime(w)
 	if err != nil {
 		return "", AgentNotAdded, err
@@ -332,7 +346,7 @@ func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) 
 // NewShell opens a shell tab in an open workspace, makes it current, and
 // raises the OS window around it: a copy of the first shell panel the target
 // declares, or the runtime's own shell where it declares none, started in dir
-// or else where the panel starts.
+// or else where the panel starts. A tab that opened is one EventShellNew.
 func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
 	t, err := c.tabRuntime(w)
 	if err != nil {
@@ -346,6 +360,9 @@ func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
 		shell.Dir = dir
 	}
 	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, "shell tab", true)
+	if err == nil {
+		c.record(revier.Event{Kind: revier.EventShellNew, Project: w.Project.Name, Target: w.Target, Dir: dir})
+	}
 	return err
 }
 
