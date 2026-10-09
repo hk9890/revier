@@ -8,34 +8,44 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **The pane shows the turn an agent is in, above its last message:** your
+  last prompt, the tools the agent called since with the failures counted,
+  and the call it is running or waits on you for. The section is headed
+  `Last turn`. A Claude Code agent that has called tools and said nothing yet
+  now shows them, where the pane said nothing could be read.
+- **Action required for an out-of-tree probe that compares an `AgentDetail`
+  with `==`:** the type holds a slice now, so the comparison no longer
+  builds. Call `IsZero` in its place.
 - **`revier agent read` prints what an agent said last.** With `--screen` it
-  prints the text of the agent's panel, and `--lines <n>` limits that to the
-  last n lines. Both are plain text, with no escape sequence in it. The last
-  message needs a harness whose conversation revier can read, which Claude
-  Code is, on this machine; `--screen` works for every harness and for a
-  linked project.
+  prints the text of the agent's panel, and `--screen --lines <n>` prints the
+  last n lines of the panel and its scrollback. Both print plain text, with
+  no escape sequence in it. The last message needs an agent on this machine
+  whose harness keeps a conversation revier can read, which Claude Code
+  does; `--screen` works for every harness and for a linked project.
 - **`revier agent send-keys` types named keys into an agent, whatever it is
   doing.** It answers the dialog that `revier agent prompt` refuses, and `esc`
   interrupts a turn. The keys are `esc`, `enter`, `tab`, `shift+tab`, `space`,
-  `backspace`, the four arrows, `ctrl+c`, or one character. One unknown name
-  types none of them.
+  `backspace`, `up`, `down`, `left`, `right`, `ctrl+c`, or one character. One
+  unknown name types none of them.
 - **`revier agent new --no-focus` adds an agent and leaves the focus where it
   is.** It raises no window and prints the address of the new agent,
   `<project>:<panel>`, which `agent wait`, `prompt`, `read` and `send-keys`
-  take. Under kitty, a kitty window that does not hold the keyboard still
-  shows the new tab.
+  take once the harness in the tab has started. Under kitty, a kitty OS
+  window that does not hold the keyboard still shows the new tab.
 - **Action required when `XDG_RUNTIME_DIR` is not set, under kitty:** revier
   starts no kitty for a workspace and says so. It started one. Set
   `XDG_RUNTIME_DIR` to an absolute path, which a login session does. A
-  workspace in a kitty that runs already still opens, and so does the popup.
+  workspace in a kitty that revier already reaches still opens, and so does
+  the popup.
 - **Action required for a script that reaches a kitty revier started:** the
   control socket is `unix:$XDG_RUNTIME_DIR/kitty-<pid>`. It was
   `unix:@kitty-<pid>`, and for the popup's kitty the one `listen_on` in
   `kitty.conf` names. Pass the new address to `kitten @ --to`.
 - **A kitty that revier starts listens on a socket file only you can reach.**
-  Every user of the machine can connect to the abstract socket
-  `@kitty-<pid>`, and through it read and type into each kitty window. The
-  popup's kitty gets the same socket file.
+  It listened on the abstract socket `@kitty-<pid>`, which every user of the
+  machine can connect to, and through it read and type into each kitty
+  window. The popup's kitty gets a socket file of its own, and without
+  `XDG_RUNTIME_DIR` it listens where `kitty.conf` says.
 - **revier finds a kitty that `kitty.conf` puts on a socket file.** Set
   `listen_on unix:${XDG_RUNTIME_DIR}/kitty` to close the kitty windows you
   start yourself to other users too. A kitty on `@kitty-<pid>` is still found
@@ -58,9 +68,9 @@ Each section is also the text of its release on the
   fields from what it returns.
 - **Action required for a `[[probe]]` script that reads `kind`:** under tmux,
   a pane that runs claude, opencode or aider reaches the script with the kind
-  `tool`, as it does under kitty. It was `agent`. Match on `command` in its
-  place. A pane that holds a `dash`, a `ksh` or a login shell alone has the
-  kind `shell`. It was `tool`.
+  `tool`, as it does under kitty. It was `agent`. A pane that holds a `dash`,
+  a `ksh` or a login shell alone has the kind `shell`. It was `tool`. Match on
+  `command` in its place.
 - **An agent started from a login shell, a `dash` or a `ksh` is found under
   kitty.** The shell was taken for the pane's program, so the agent was not
   listed, saved or counted by a close.
