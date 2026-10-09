@@ -136,7 +136,7 @@ func TestSendKeysTypesNothingWhenAKeyIsUnknown(t *testing.T) {
 func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
 	if err != nil {
 		t.Fatal(err)

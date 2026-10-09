@@ -29,7 +29,7 @@ func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
 	wm := hosttest.New("wm")
 	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[1], nil); err != nil {
@@ -56,7 +56,7 @@ func TestGoAgentRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 4242})
 	own := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {
@@ -111,7 +111,7 @@ func TestGoAgentRefusesAnAgentThatIsGone(t *testing.T) {
 func TestGoAgentWithoutTabsFocusesTheInstance(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", agentPanel("2", "idle"))
-	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {
