@@ -62,7 +62,7 @@ func TestInspectFailures(t *testing.T) {
 
 // A hanging probe is cut off well under the refresh interval.
 func TestInspectEnforcesTheTimeout(t *testing.T) {
-	p := execprobe.New("aider", script(t, `sleep 5; echo '{"status":"idle"}'`)).WithTimeout(100 * time.Millisecond)
+	p := execprobe.New("aider", script(t, `sleep 5; echo '{"status":"idle"}'`)).WithWait(100 * time.Millisecond)
 	start := time.Now()
 	_, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
 	if err == nil {
@@ -81,7 +81,7 @@ func TestInspectReturnsWhenAnEscapedGrandchildHoldsThePipe(t *testing.T) {
 		t.Skip("setsid is not installed")
 	}
 	pidFile := filepath.Join(t.TempDir(), "pid")
-	p := execprobe.New("aider", script(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 30' & echo '{"status":"idle"}'`)).WithTimeout(time.Second)
+	p := execprobe.New("aider", script(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 30' & echo '{"status":"idle"}'`)).WithWait(time.Second)
 	t.Cleanup(func() {
 		if b, err := os.ReadFile(pidFile); err == nil {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
