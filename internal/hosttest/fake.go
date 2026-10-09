@@ -191,7 +191,7 @@ func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.Ta
 		for n, spec := range r.PanelSpecs() {
 			f.nextID++
 			panel := revier.Panel{
-				ID: revier.PanelID("p" + strconv.Itoa(f.nextID)), Kind: spec.Kind,
+				ID: revier.PanelID("p" + strconv.Itoa(f.nextID)), Kind: liveKind(spec),
 				Title: spec.Title, Command: spec.Command, PID: 2000 + f.nextID,
 			}
 			if n == 0 {
@@ -206,6 +206,16 @@ func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.Ta
 		f.current[ref.ID] = panels[0].ID
 	}
 	return ref, nil
+}
+
+// liveKind is the kind a host reports for the panel it started from spec: a
+// shell for a declared shell, and a tool for anything else. No host says
+// agent of a live panel (decisions.md D119).
+func liveKind(spec revier.PanelSpec) revier.PanelKind {
+	if spec.Kind == revier.PanelShell {
+		return revier.PanelShell
+	}
+	return revier.PanelTool
 }
 
 // OpenTab adds the tab's panels to the instance, in a tab of their own with
@@ -232,7 +242,7 @@ func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.
 		tab := "tab" + strconv.Itoa(f.nextID)
 		for n, spec := range specs {
 			f.nextID++
-			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: spec.Kind, Title: spec.Title, Command: spec.Command, Tab: tab}
+			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: liveKind(spec), Title: spec.Title, Command: spec.Command, Tab: tab}
 			if n == 0 {
 				first, panel.Vars = panel.ID, vars
 			}
