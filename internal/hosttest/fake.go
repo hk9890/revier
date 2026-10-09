@@ -80,8 +80,9 @@ type Fake struct {
 	// OnSend runs after each SendText, so a test can make the agent react to
 	// its prompt the way a real one does.
 	OnSend func(panel revier.PanelID, text string)
-	// SendErr makes SendText fail once SendsBeforeErr calls have gone
-	// through, so a test can lose the Enter after the text arrived. A call
+	// SendErr makes SendText fail once Sent holds SendsBeforeErr calls, so a
+	// test can lose the Enter after the text arrived. The count is of every
+	// call in Sent, the ones from before SendErr was set included. A call
 	// that fails types nothing: it is not in Sent and OnSend does not run.
 	SendErr        error
 	SendsBeforeErr int

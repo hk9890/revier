@@ -311,9 +311,14 @@ func each(cmd tea.Cmd, do func(tea.Msg)) {
 
 // deliver runs a command and feeds what it answers back, and returns the
 // commands the model answers with: a close that needs no confirm plans, then
-// runs. It is the one way a test delivers a command; run, step and runAll are
-// deliver for a caller that wants less back.
+// runs. run and step are deliver for a caller that wants less back; runAll
+// walks the same commands and feeds nothing back.
 func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
+	if cmd == nil {
+		// A test that delivers a command expects one: with none, what it
+		// asserts next would pass without the message ever arriving.
+		panic("deliver: the model returned no command")
+	}
 	var outs []tea.Cmd
 	each(cmd, func(msg tea.Msg) {
 		next, out := m.Update(msg)
@@ -329,9 +334,14 @@ func run(m tui.Model, cmd tea.Cmd) tui.Model {
 	return m
 }
 
-// step presses a key and delivers the command it returns.
+// step presses a key and delivers the command it returns, when it returns
+// one.
 func step(m tui.Model, key string) tui.Model {
-	return run(press(m, key))
+	m, cmd := press(m, key)
+	if cmd == nil {
+		return m
+	}
+	return run(m, cmd)
 }
 
 // runAll runs a command for what it does to the world; its messages are

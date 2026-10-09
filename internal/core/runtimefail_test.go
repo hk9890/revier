@@ -60,6 +60,25 @@ func TestAPromptThatTypesNothingIsThePlainFailure(t *testing.T) {
 	}
 }
 
+// Two of three keys arrived. The error says how many, because a caller that
+// sends them all again types those two a second time.
+func TestSendKeysThatStopPartWaySayHowManyArrived(t *testing.T) {
+	c, rt := agentCore(agentPanel("1", "idle"))
+	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.SendErr, rt.SendsBeforeErr = errRuntimeGone, 2
+
+	err = c.SendKeys(context.Background(), a, []string{"down", "2", "enter"}, time.Millisecond)
+	if !errors.Is(err, errRuntimeGone) || !strings.Contains(err.Error(), "2 of 3 keys reached the panel") {
+		t.Fatalf("err = %v, want the runtime's failure, with the two keys that arrived counted", err)
+	}
+	if len(rt.Sent) != 2 {
+		t.Errorf("sent = %+v, want the first two keys", rt.Sent)
+	}
+}
+
 // A workspace this press opened for a tab is reported when the tab cannot be
 // focused, as it is when the tab cannot be opened: the caller pins it and the
 // next press does not open another.
@@ -94,6 +113,31 @@ func TestATabThatCannotBeFocusedInAnOpenWorkspaceReportsNothing(t *testing.T) {
 	}
 	if len(wm.Focuses) != 0 {
 		t.Errorf("window focuses = %v, want none", wm.Focuses)
+	}
+}
+
+// The second press on a tab goes home by making the workspace's own panel
+// current. When that fails the press is a failure and reports nothing: the
+// tab is still the one showing.
+func TestAReturnHomeFromATabThatCannotBeFocusedIsAFailure(t *testing.T) {
+	rt, wm, osw := tabHosts(t)
+	c := &core.Core{Runtime: rt, Window: wm}
+	p := prepared(t, tabProject())
+	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	wm.SetFocus(osw)
+	rt.FocusPanelErr = errRuntimeGone
+
+	res, err := c.Go(context.Background(), p, "tickets", nil)
+	if !errors.Is(err, errRuntimeGone) || !strings.Contains(err.Error(), "focus home") {
+		t.Fatalf("err = %v, want the failure to focus home", err)
+	}
+	if res.Target != "" || !res.Ref.IsZero() {
+		t.Errorf("result = %+v, want nothing: the press did not land on home", res)
+	}
+	if last := rt.PanelFocuses[len(rt.PanelFocuses)-1]; last != "1" {
+		t.Errorf("last panel focus = %s, want the workspace's own panel asked for", last)
 	}
 }
 
@@ -152,6 +196,23 @@ func TestARestoreThatCannotFocusTheWorkspaceAgainKeepsItsAgents(t *testing.T) {
 	}
 }
 
+// A tab that did not open and a workspace that could not be made current
+// again are two failures. The second does not replace the first, which is why
+// the agents are named as not added.
+func TestARestoreTellsTheTabFailureWithTheFocusFailureAfterIt(t *testing.T) {
+	errNoTab := errors.New("the tab did not open")
+	res, _ := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) {
+		rt.OpenTabErr, rt.FocusPanelErr = errNoTab, errRuntimeGone
+	})
+
+	if !errors.Is(res.AgentErr, errNoTab) || !errors.Is(res.AgentErr, errRuntimeGone) {
+		t.Errorf("AgentErr = %v, want the tab's failure and the focus failure", res.AgentErr)
+	}
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentNotAdded, core.AgentNotAdded}; !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
+	}
+}
+
 // The tab runs although it could not be shown. The outcome says the agent was
 // added, so the caller does not open it a second time.
 func TestANewAgentThatCannotBeFocusedIsStillAdded(t *testing.T) {
@@ -175,7 +236,7 @@ func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, Window: wm}
 	rt.FocusPanelErr = errRuntimeGone
 
 	err := c.FocusAgent(context.Background(), workspace, "2")
@@ -231,13 +292,13 @@ func TestATerminalWhoseCurrentPanelCannotBeReadIsNoSurface(t *testing.T) {
 func TestActivateAgentWaitingFocusesTheAgentAndWritesNothing(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
+	ref := rt.Add("diff:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
 	c := &core.Core{Runtime: rt}
 	a := revier.AgentView{Panel: "2", Ref: ref, State: revier.AgentState{Harness: "agent", Session: "abc"}}
 	l := &ledger{}
 
 	// A pending launch of a project on this machine does not hold its agent:
-	// the agent is in an instance that is up.
+	// home is not up, and the agent is in the diff window, which is.
 	res, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a, pendingLedger{l})
 	if err != nil || res.ComingUp {
 		t.Fatalf("ActivateAgentWaiting = %+v, %v; want the agent reached", res, err)
@@ -272,6 +333,25 @@ func TestActivateAgentWaitingLeavesALinkThatIsComingUp(t *testing.T) {
 	}
 	if got := recorded(); len(got) != 0 {
 		t.Errorf("events = %+v, want none", got)
+	}
+}
+
+// A link's workspace that landed is up by its binding, whatever its title
+// says now. The press reads the binding from the ledger, so a launch of home
+// still on record does not hold the agent.
+func TestActivateAgentWaitingFindsALinksWorkspaceByItsBinding(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	ref := rt.Add("renamed", "kitty", agentPanel("9", "idle"))
+	c := &core.Core{Runtime: rt, Machine: "box"}
+	a := revier.AgentView{Panel: "9", Ref: ref, State: revier.AgentState{Harness: "claude"}}
+	l := &ledger{bound: map[revier.ProjectName]core.Bindings{"far": {"home": ref}}}
+
+	res, err := c.ActivateAgentWaiting(context.Background(), linkProject(t), a, pendingLedger{l})
+	if err != nil || res.ComingUp {
+		t.Fatalf("ActivateAgentWaiting = %+v, %v; want the agent reached", res, err)
+	}
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"9"}) {
+		t.Errorf("panel focuses = %v, want panel 9", rt.PanelFocuses)
 	}
 }
 
