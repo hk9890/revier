@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -234,13 +233,6 @@ func (a *app) update(apply func(s *state.State)) {
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
 	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil)
 	return ref, err
-}
-
-// launchedAction records that an action ran, so a window that appears within
-// the claim window and matches no declared target is attached to the project:
-// the link opened from the terminal that claim-on-appear exists for.
-func (a *app) launchedAction(p revier.ProjectName) {
-	a.update(func(s *state.State) { s.Launched(p, "", time.Now()) })
 }
 
 // configRootForMessage is the config root, for a message that has nowhere to

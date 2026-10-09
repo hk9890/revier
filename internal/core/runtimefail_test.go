@@ -240,7 +240,7 @@ func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm}
 	rt.FocusPanelErr = errRuntimeGone
 
-	err := c.FocusAgent(context.Background(), workspace, "2")
+	err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: workspace, Panel: "2"})
 	if !errors.Is(err, errRuntimeGone) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}

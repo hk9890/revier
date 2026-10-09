@@ -25,7 +25,7 @@ func (c *Core) goAgent(ctx context.Context, p Project, a revier.AgentView) (res 
 	if !c.here(a) {
 		return Result{}, fmt.Errorf("agent %s: %w", a.Panel, ErrAgentElsewhere)
 	}
-	return Result{}, c.FocusAgent(ctx, a.Ref, a.Panel)
+	return Result{}, c.FocusAgent(ctx, p.Name, a)
 }
 
 // FocusAgent focuses the instance that holds the panel, makes the panel
@@ -35,7 +35,18 @@ func (c *Core) goAgent(ctx context.Context, p Project, a revier.AgentView) (res 
 // cannot focus a panel stops at the instance, which is as near the agent as it
 // can bring the user. An instance or a panel gone since it was reported is
 // ErrAgentGone.
-func (c *Core) FocusAgent(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+//
+// An agent that was reached is one EventGoAgent of the project, recorded here
+// and nowhere else, so every way to an agent records it.
+func (c *Core) FocusAgent(ctx context.Context, project revier.ProjectName, a revier.AgentView) error {
+	err := c.focusAgent(ctx, a.Ref, a.Panel)
+	if err == nil {
+		c.record(revier.Event{Kind: revier.EventGoAgent, Project: project, Agent: a.State.Harness, Session: a.State.Session})
+	}
+	return err
+}
+
+func (c *Core) focusAgent(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
 	snap, err := c.answered(ctx, ref.Host)
 	if err != nil {
 		return err

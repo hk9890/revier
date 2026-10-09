@@ -16,7 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hk9890/revier/internal/checkout"
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
@@ -293,12 +293,11 @@ func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
 // next machine. A clone URL that is not that origin is not recorded, and the
 // footer says so.
 func (m *Model) addFolder(dir string) {
-	origin := checkout.Origin(dir)
-	if _, ok := m.addProject(dir, origin, true); !ok {
+	p, ok := m.addProject(dir, "", true)
+	if !ok {
 		return
 	}
-	checkout.Trust(dir, io.Discard)
-	if url := m.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(origin) {
+	if url := m.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(p.GitURL) {
 		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", config.ContractHome(dir), url)
 	}
 }
@@ -316,8 +315,10 @@ func (m Model) nameFree(name revier.ProjectName) error {
 	return nil
 }
 
-// addProject writes the project file for dir and makes it the selected row.
-// It reports false, with the reason in m.err, when nothing was written.
+// addProject writes the project file for dir, as app.CreateProject writes it,
+// and makes it the selected row. gitURL is the repository a folder that is not
+// there is cloned from. It reports false, with the reason in m.err, when
+// nothing was written.
 func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool) {
 	name := config.NameFor(dir)
 	if err := m.nameFree(name); err != nil {
@@ -329,7 +330,7 @@ func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool)
 		m.err = err
 		return core.Project{}, false
 	}
-	p, err := config.Create(root, name, dir, gitURL)
+	p, err := app.CreateProject(root, m.projects, name, dir, gitURL, io.Discard)
 	if err != nil {
 		m.err = err
 		return core.Project{}, false

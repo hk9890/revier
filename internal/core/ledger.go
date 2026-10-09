@@ -57,7 +57,7 @@ func (c *Core) record(e revier.Event) {
 // front, unless the project is a link whose workspace is still coming up from
 // an earlier press. Nothing is written to state: an agent is focused where
 // the survey saw it, and a workspace still coming up is left to the press
-// that launched it. A press that reached the agent is one EventGoAgent.
+// that launched it.
 func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.AgentView) (Result, error) {
 	if home, ok := p.Home(); ok && p.Remote != nil {
 		st := c.state()
@@ -66,11 +66,7 @@ func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.Age
 			return Result{Target: home.Name, ComingUp: coming}, err
 		}
 	}
-	res, err := c.goAgent(ctx, p, a)
-	if err == nil {
-		c.record(revier.Event{Kind: revier.EventGoAgent, Project: p.Name, Agent: a.State.Harness, Session: a.State.Session})
-	}
-	return res, err
+	return c.goAgent(ctx, p, a)
 }
 
 // Settle is what a survey settles in state, under one write: refs to windows

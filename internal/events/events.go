@@ -4,8 +4,10 @@
 // is gone after two weeks; this file is what `revier events` prints, and what
 // a count of how a project was used is made from.
 //
-// Like the log it is process-wide: a package that has an event calls Record,
-// and a process that never called Setup records nothing.
+// Like the log it is process-wide. The ledger calls Record for the operation
+// that did the thing (decisions.md D121), a surface calls Sessions for the
+// conversations its survey saw, and a process that never called Setup records
+// nothing.
 package events
 
 import (

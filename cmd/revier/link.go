@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	"github.com/hk9890/revier/internal/config"
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/sshconfig"
 	"github.com/hk9890/revier/pkg/revier"
@@ -99,7 +99,7 @@ func (a *app) link(ctx context.Context, host string, project, name revier.Projec
 	if !found {
 		return core.Project{}, fmt.Errorf("%s has no project named %q; `revier link %s` lists what it has", host, project, host)
 	}
-	p, err := config.CreateLink(a.cfgRoot, name, host, on)
+	p, err := usecase.LinkProject(a.cfgRoot, name, host, on)
 	if err != nil {
 		return core.Project{}, err
 	}

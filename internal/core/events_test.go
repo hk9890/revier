@@ -184,6 +184,82 @@ func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
 	}
 }
 
+// A tab opened in a workspace is one event, whoever asked for it: the core
+// records it, so a new entry point cannot leave it out.
+func TestATabOpenedInAWorkspaceIsOneEvent(t *testing.T) {
+	recorded := recording(t)
+	c, _, p, _ := openWorkspace(t)
+	c.Ledger = &ledger{}
+	w, err := c.AgentWorkspace(context.Background(), p, "home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+
+	// The event names the conversation the tab holds: one that was resumed,
+	// and none for an agent that started empty.
+	if _, err := c.NewAgent(context.Background(), w, core.Resume{Session: "abc-123", Dir: dir}); err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if _, _, err := c.AddAgent(context.Background(), w, core.Resume{}); err != nil {
+		t.Fatalf("AddAgent: %v", err)
+	}
+	if err := c.NewShell(context.Background(), w, dir); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+
+	want := []revier.Event{
+		{Kind: revier.EventAgentNew, Project: "revier", Target: "home", Session: "abc-123", Dir: dir},
+		{Kind: revier.EventAgentNew, Project: "revier", Target: "home"},
+		{Kind: revier.EventShellNew, Project: "revier", Target: "home", Dir: dir},
+	}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+func TestATabThatDidNotOpenIsNoEvent(t *testing.T) {
+	recorded := recording(t)
+	c, rt, p, _ := openWorkspace(t)
+	c.Ledger = &ledger{}
+	rt.OpenTabErr = errors.New("no room")
+	w, err := c.AgentWorkspace(context.Background(), p, "home")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.NewAgent(context.Background(), w, core.Resume{}); err == nil {
+		t.Fatal("NewAgent: no error for a tab that did not open")
+	}
+	if err := c.NewShell(context.Background(), w, ""); err == nil {
+		t.Fatal("NewShell: no error for a tab that did not open")
+	}
+	if got := recorded(); len(got) != 0 {
+		t.Errorf("events = %+v, want none", got)
+	}
+}
+
+// An agent focused by its instance and its panel, as `revier agent focus
+// --ref` names one, is the same event a press of it is.
+func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
+	recorded := recording(t)
+	rt := hosttest.NewRuntime("rt")
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
+
+	if err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "1"}); err != nil {
+		t.Fatalf("FocusAgent: %v", err)
+	}
+	if err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "9"}); !errors.Is(err, core.ErrAgentGone) {
+		t.Fatalf("err = %v, want ErrAgentGone for a panel that is not there", err)
+	}
+
+	want := []revier.Event{{Kind: revier.EventGoAgent, Project: "revier"}}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
 // Each host is asked once, whatever the number of links to it, and its
 // events come back under its name.
 func TestRemoteEventsAsksEachHostOnceAndNamesIt(t *testing.T) {
