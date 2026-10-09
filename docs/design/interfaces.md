@@ -471,15 +471,28 @@ runtime's already or impossible for it, and in both cases revier adds nothing.
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe
 that implements it says what the agent in a panel said last, which the pane
-shows so the user can tell whether to go to it (D106). A probe that does not
-leaves the pane saying nothing can be read.
+shows so the user can tell whether to go to it (D106), with the turn the agent
+is in (D122). A probe that does not leaves the pane saying nothing can be
+read.
 
 ```go
-// AgentDetail is what an agent said last, and when. Either is empty when the
-// harness does not say.
+// AgentDetail is what an agent said last, and when, with the turn it is in:
+// what the user asked, and the tools the agent called since. Any of them is
+// empty when the harness does not say.
 type AgentDetail struct {
     Message string
     At      time.Time
+    Prompt  string
+    Tools   []ToolCall
+}
+
+// ToolCall is one tool an agent called, under the harness's own name, and
+// what it was called on. Pending is a call with no result yet.
+type ToolCall struct {
+    Name    string
+    Input   string
+    Pending bool
+    Failed  bool
 }
 
 type Detailed interface {

@@ -182,6 +182,13 @@ drawn as text and styled in revier's own colours: nothing the message carries
 is styling, and nothing in it speaks to the terminal (D108). A remote project's
 agent is not read, and the pane says so.
 
+Above the message stands the turn the agent is in, a line each (D122): what
+the user asked last; the tools the agent called since, counted by name with
+the most called first, and how many failed; and the call with no result yet,
+worded `waiting on` for an agent that needs the user and `running` for any
+other. A line the harness gives nothing for is left out, and the three are
+drawn as text, as the message is.
+
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button
 does the same and names where it goes (D110). A terminal too narrow for every

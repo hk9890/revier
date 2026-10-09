@@ -753,3 +753,13 @@ the events; a surface takes the input and shows the result. The core stays
 free of files, so the sequences are not there. The event of a use is recorded
 by the operation that did the thing, through the ledger (D120); a surface
 records only the conversations its survey saw.
+
+### D122 — the pane shows the turn an agent is in, above what it said
+
+A message says what an agent did and not what it was asked, what it ran, or
+what it waits for, which is what decides whether to go to it. `Detailed` also
+answers the last prompt and the tool calls since; the pane counts the calls by
+name and names the one with no result. It is display, as D106 holds, and one
+turn: the pane reads and never answers, and the conversation stays in the
+harness. Rejected: drawing the whole conversation, a second interface for
+every harness; a typed event stream, which means running the agent.

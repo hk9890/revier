@@ -23,6 +23,8 @@ type saidAgent struct {
 	status revier.Status
 	said   string
 	at     time.Time
+	prompt string
+	tools  []revier.ToolCall
 }
 
 // saidWorld is one running project whose agents are in the given states and
@@ -39,7 +41,7 @@ func saidWorld(t *testing.T, width, height int, agents ...saidAgent) (tui.Model,
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: marker + " task"}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
+		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at, Prompt: a.prompt, Tools: a.tools}
 		probes, fakes = append(probes, p), append(fakes, p)
 		panels = append(panels, revier.Panel{ID: id, Kind: revier.PanelAgent, Title: "claude " + marker})
 	}
@@ -60,7 +62,7 @@ func TestTheAgentThatNeedsYouIsShownFirst(t *testing.T) {
 		saidAgent{status: revier.StatusRunning, said: "still at it"},
 		saidAgent{status: revier.StatusAttention, said: "merge now or wait?"})
 	body := pane(m)
-	if !strings.Contains(body, "Last message") || !strings.Contains(body, "merge now or wait?") {
+	if !strings.Contains(body, "Last turn") || !strings.Contains(body, "merge now or wait?") {
 		t.Errorf("pane shows no message of the agent that needs the user:\n%s", body)
 	}
 	if strings.Contains(body, "resting now") || strings.Contains(body, "still at it") {
@@ -150,11 +152,11 @@ func TestAWidePaneLaysTheMessageBesideTheFactsWrappedAlike(t *testing.T) {
 
 	wide, _ := saidWorld(t, 300, 40, agent)
 	top := strings.Split(pane(wide), "\n")[0]
-	if !strings.HasPrefix(top, "Project  duo") || !strings.Contains(top, "Last message") {
+	if !strings.HasPrefix(top, "Project  duo") || !strings.Contains(top, "Last turn") {
 		t.Errorf("pane top = %q, want the name and the message's heading on one line", top)
 	}
 	stacked, _ := saidWorld(t, 250, 40, agent)
-	if top := strings.Split(pane(stacked), "\n")[0]; strings.Contains(top, "Last message") {
+	if top := strings.Split(pane(stacked), "\n")[0]; strings.Contains(top, "Last turn") {
 		t.Fatalf("pane top = %q at 250 columns, want the message under the facts", top)
 	}
 	if w, s := messageLines(wide), messageLines(stacked); len(w) < 2 || !slices.Equal(w, s) {
@@ -181,6 +183,34 @@ func TestAnAgentWithNothingReadableSaysSo(t *testing.T) {
 	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle})
 	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
 		t.Errorf("pane = %q, want it to say nothing can be read", body)
+	}
+}
+
+// Above the message the pane shows the turn: what the user asked, the tools
+// called since with the most called first and the failures counted, and the
+// call that is open, worded by the agent's state. Nothing a prompt or a
+// command carries reaches the terminal.
+func TestThePaneShowsTheTurnAboveTheMessage(t *testing.T) {
+	tools := []revier.ToolCall{
+		{Name: "Read", Input: "/src/a.go"},
+		{Name: "Bash", Input: "go test ./...", Failed: true},
+		{Name: "Bash", Input: "go vet ./..."},
+		{Name: "Bash", Input: "git push \x1b[31morigin", Pending: true},
+	}
+	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusAttention, said: "pushing next", prompt: "make it \x1b]0;x\x07green", tools: tools})
+	body := pane(m)
+	for _, want := range []string{"> make it green", "Bash ×3 · Read · 1 failed", "waiting on Bash git push origin", "pushing next"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("pane has no %q:\n%s", want, body)
+		}
+	}
+	if strings.Index(body, "waiting on") > strings.Index(body, "pushing next") {
+		t.Errorf("the turn is not above the message:\n%s", body)
+	}
+
+	m, _ = saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, tools: tools[3:]})
+	if body := pane(m); !strings.Contains(body, "running Bash git push origin") || strings.Contains(body, "Nothing this agent said") {
+		t.Errorf("pane = %q, want the open call of a working agent that has said nothing", body)
 	}
 }
 

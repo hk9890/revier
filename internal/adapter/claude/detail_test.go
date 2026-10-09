@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -202,8 +203,8 @@ func TestDetailReadsOnlyTheTranscriptsTail(t *testing.T) {
 		lines = append(lines, padding)
 	}
 	writeTranscript(t, root, "-demo", "s1", lines...)
-	if d, err := p.Detail(context.Background(), revier.Panel{PID: 101}); err == nil {
-		t.Errorf("Detail = %+v, want an error: the only message is before the window", d)
+	if d, err := p.Detail(context.Background(), revier.Panel{PID: 101}); err != nil || d.Message != "" {
+		t.Errorf("Detail = %+v, %v; want no message: the only one is before the window", d, err)
 	}
 
 	lines = append(lines, `{"type":"assistant","message":{"role":"assistant","content":"said just now"}}`)
@@ -211,5 +212,67 @@ func TestDetailReadsOnlyTheTranscriptsTail(t *testing.T) {
 	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
 	if err != nil || d.Message != "said just now" {
 		t.Errorf("Detail = %+v, %v; want the message at the end", d, err)
+	}
+}
+
+// The turn is what the user asked last and every tool the agent called since,
+// in order: a call whose result is an error failed, and one with no result is
+// still open. A call before the prompt is an earlier turn's, a subagent's call
+// is its own work, and a line Claude Code wrote for itself is not a prompt.
+func TestDetailIsTheTurnTheAgentIsIn(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t0","name":"Read","input":{"file_path":"/old"}}]}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"the earlier answer"}}`,
+		`{"type":"user","message":{"role":"user","content":"make the  tests\ngreen"}}`,
+		`{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill"}]}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go test ./...","description":"Run the tests"}}]}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"FAIL"}]}}`,
+		`{"type":"assistant","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"s1","name":"Grep","input":{"pattern":"x"}}]}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"/src/a.go"}},{"type":"tool_use","id":"t3","name":"AskUserQuestion","input":{"questions":[{"question":"Merge now?"}]}}]}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]}}`,
+	)
+	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Prompt != "make the tests green" {
+		t.Errorf("Prompt = %q, want the user's last prompt on one line", d.Prompt)
+	}
+	want := []revier.ToolCall{
+		{Name: "Bash", Input: "go test ./...", Failed: true},
+		{Name: "Edit", Input: "/src/a.go"},
+		{Name: "AskUserQuestion", Input: "Merge now?", Pending: true},
+	}
+	if !slices.Equal(d.Tools, want) {
+		t.Errorf("Tools = %+v, want %+v", d.Tools, want)
+	}
+	if d.Message != "the earlier answer" {
+		t.Errorf("Message = %q, want the last text, though it is older than the turn", d.Message)
+	}
+}
+
+// A slash command is filed as tags and reads as it was typed; what a command
+// printed for the user alone, and an interrupt, start no turn.
+func TestDetailReadsAPromptAsItWasTyped(t *testing.T) {
+	typed := `{"type":"user","message":{"role":"user","content":"typed"}}`
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{"a slash command", []string{`{"type":"user","message":{"role":"user","content":"<command-message>ship</command-message>\n<command-name>/ship</command-name>\n<command-args>the fix</command-args>"}}`}, "/ship the fix"},
+		{"a command's own output", []string{typed, `{"type":"user","message":{"role":"user","content":"<local-command-stdout>renamed</local-command-stdout>"}}`}, "typed"},
+		{"an interrupt", []string{typed, `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}`}, "typed"},
+		{"a pasted file", []string{`{"type":"user","message":{"role":"user","content":"` + strings.Repeat("x", 5000) + `"}}`}, strings.Repeat("x", 300)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, root := transcripts(t)
+			writeTranscript(t, root, "-demo", "s1", tc.lines...)
+			d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+			if err != nil || d.Prompt != tc.want {
+				t.Errorf("Prompt = %q, %v; want %q", d.Prompt, err, tc.want)
+			}
+		})
 	}
 }
