@@ -35,6 +35,10 @@ type Event struct {
 	// that asked the host.
 	Host    string      `json:"host,omitempty"`
 	Project ProjectName `json:"project"`
+	// Link is the project here that links to Project on Host: the first by
+	// name where several do. It is empty where none does, and set only by
+	// the read that asked the host.
+	Link ProjectName `json:"link,omitempty"`
 	// Target is where an EventGo landed - the tab it made current, else the
 	// target - and the workspace a new tab opened in.
 	Target TargetName `json:"target,omitempty"`

@@ -19,7 +19,7 @@ import (
 func saidCore(t *testing.T, probe revier.AgentProbe) (*core.Core, core.Agent) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {

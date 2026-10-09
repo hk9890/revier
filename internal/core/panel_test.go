@@ -30,7 +30,7 @@ func tabHosts(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, revier.Targe
 	t.Helper()
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
-	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	wm := hosttest.New("wm")
 	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	return rt, wm, osw

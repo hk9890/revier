@@ -142,7 +142,7 @@ func TestSurveyProbesAttachedTerminalsWithoutAPerProjectCost(t *testing.T) {
 		for i := range tc.attachedTo {
 			name := projects[i].Name
 			attached[name] = []revier.TargetRef{rt.Add(fmt.Sprintf("scratch-%d", i), "kitty",
-				revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"},
+				revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"},
 				revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"},
 			)}
 		}
@@ -164,7 +164,7 @@ func TestSurveyReadsATerminalAttachedToTwoProjectsOnce(t *testing.T) {
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
 	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{probe}}
 	projects := core.Prepare(benchProjects(2))
-	ref := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	ref := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	attached := map[revier.ProjectName][]revier.TargetRef{
 		projects[0].Name: {ref}, projects[1].Name: {ref},
 	}

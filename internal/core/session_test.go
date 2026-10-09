@@ -64,7 +64,7 @@ func agent(panel revier.PanelID, id, dir string) revier.Panel {
 	if dir != "" {
 		vars["dir"] = dir
 	}
-	return revier.Panel{ID: panel, Kind: revier.PanelAgent, Title: "claude", Vars: vars}
+	return revier.Panel{ID: panel, Kind: revier.PanelTool, Title: "claude", Vars: vars}
 }
 
 // launched restores one target from a recording and returns the panels the

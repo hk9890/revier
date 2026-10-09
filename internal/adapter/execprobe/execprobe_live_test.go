@@ -5,6 +5,7 @@ package execprobe_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +35,7 @@ func script(t *testing.T, body string) string {
 func TestInspectRoundTrip(t *testing.T) {
 	path := script(t, `read -r panel; printf '{"harness":"aider","status":"running","activity":"got %s"}' "$(printf %s "$panel" | sed 's/.*"title":"\([^"]*\)".*/\1/')"`)
 	p := execprobe.New("aider", path)
-	got, err := p.Inspect(context.Background(), revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "refactoring", Command: []string{"aider"}})
+	got, err := p.Inspect(context.Background(), revier.Panel{ID: "3", Kind: revier.PanelTool, Title: "refactoring", Command: []string{"aider"}})
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestInspectFailures(t *testing.T) {
 
 // A hanging probe is cut off well under the refresh interval.
 func TestInspectEnforcesTheTimeout(t *testing.T) {
-	p := execprobe.New("aider", script(t, `sleep 5; echo '{"status":"idle"}'`)).WithTimeout(100 * time.Millisecond)
+	p := execprobe.New("aider", script(t, `sleep 5; echo '{"status":"idle"}'`)).WithWait(100 * time.Millisecond)
 	start := time.Now()
 	_, err := p.Inspect(context.Background(), revier.Panel{Command: []string{"aider"}})
 	if err == nil {
@@ -70,6 +71,21 @@ func TestInspectEnforcesTheTimeout(t *testing.T) {
 	}
 	if took := time.Since(start); took > time.Second {
 		t.Errorf("Inspect took %s, want the 100ms bound to hold", took)
+	}
+	if !strings.Contains(err.Error(), "timed out after 100ms") {
+		t.Errorf("err = %v, want the bound that was reached", err)
+	}
+}
+
+// A read that the caller ended is not a probe that was slow: the error names
+// what ended it, so the log sends nobody to the probe.
+func TestInspectSaysThatTheCallerEndedTheRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	p := execprobe.New("aider", script(t, `echo '{"status":"idle"}'`))
+	_, err := p.Inspect(ctx, revier.Panel{Command: []string{"aider"}})
+	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "timed out") {
+		t.Errorf("err = %v, want the cancellation and no timeout", err)
 	}
 }
 
@@ -81,7 +97,7 @@ func TestInspectReturnsWhenAnEscapedGrandchildHoldsThePipe(t *testing.T) {
 		t.Skip("setsid is not installed")
 	}
 	pidFile := filepath.Join(t.TempDir(), "pid")
-	p := execprobe.New("aider", script(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 30' & echo '{"status":"idle"}'`)).WithTimeout(time.Second)
+	p := execprobe.New("aider", script(t, `setsid sh -c 'echo $$ > `+pidFile+`; exec sleep 30' & echo '{"status":"idle"}'`)).WithWait(time.Second)
 	t.Cleanup(func() {
 		if b, err := os.ReadFile(pidFile); err == nil {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
@@ -103,8 +119,8 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	broken := execprobe.New("goose", script(t, `exit 2`))
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:p", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "x", Command: []string{"aider"}},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "y", Command: []string{"goose"}},
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "x", Command: []string{"aider"}},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "y", Command: []string{"goose"}},
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{good, broken}}
 	p := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,

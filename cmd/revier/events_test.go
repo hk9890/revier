@@ -128,6 +128,42 @@ func TestEventsMergesWhatALinkedHostRecordedByTime(t *testing.T) {
 	}
 }
 
+// A host line carries the name the project has there, so it is printed with
+// the project here that links to it: the first by name where two do, and no
+// link where none does. A line this machine recorded has none.
+func TestEventsNamesTheLinkOfWhatAHostRecorded(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	events.Record(revier.Event{Kind: revier.EventGo, Project: "far"})
+	remote := hosttest.NewRemote("buildbox")
+	remote.Recorded = []revier.Event{
+		{Kind: revier.EventGo, Project: "app"},
+		{Kind: revier.EventGo, Project: "unlinked"},
+	}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": remote}}
+	linkToApp := func(name revier.ProjectName) core.Project {
+		return core.PrepareProject(revier.Project{Name: name, Remote: &revier.Link{Host: "buildbox", Project: "app"}})
+	}
+
+	var out bytes.Buffer
+	if err := writeEvents(context.Background(), &out, root, 1, c, []core.Project{linkToApp("far2"), linkToApp("far")}); err != nil {
+		t.Fatalf("writeEvents: %v", err)
+	}
+
+	for _, want := range []string{
+		`"host":"buildbox","project":"app","link":"far"`,
+		`"host":"buildbox","project":"unlinked"}`,
+		`"project":"far"}`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("printed %q, want a line with %s", out.String(), want)
+		}
+	}
+	if n := strings.Count(out.String(), `"link"`); n != 1 {
+		t.Errorf("printed %q, want one line with a link", out.String())
+	}
+}
+
 // A host that is down costs its own events: the command prints the rest and
 // succeeds.
 func TestEventsPrintsTheLocalOnesWhenAHostDoesNotAnswer(t *testing.T) {
@@ -153,7 +189,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
 	rt := hosttest.NewRuntime("tmux")
-	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelAgent})
+	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Match: revier.Match{Title: "^home$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},

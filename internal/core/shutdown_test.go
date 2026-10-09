@@ -824,7 +824,7 @@ func TestTheRecheckReadsTheTabAgainAndRefusesAnAgentAddedToIt(t *testing.T) {
 		Harness: "aider", Marker: "aider",
 		State: revier.AgentState{Harness: "aider", Status: revier.StatusRunning},
 	})
-	rt.AddPanel(report.Instances[0].Ref, revier.Panel{ID: "4", Kind: revier.PanelAgent, Title: "aider", Tab: "t2"})
+	rt.AddPanel(report.Instances[0].Ref, revier.Panel{ID: "4", Kind: revier.PanelTool, Title: "aider", Tab: "t2"})
 
 	out, err := c.Shutdown(context.Background(), plan, 0, reading(projects))
 	var refused *core.BusyRefusal

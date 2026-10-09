@@ -27,9 +27,9 @@ const DefaultWait = 500 * time.Millisecond
 
 // Probe runs a declared binary. Construct it with New.
 type Probe struct {
-	name    string
-	exec    string
-	timeout time.Duration
+	name string
+	exec string
+	wait time.Duration
 }
 
 // New returns a probe for the harness named name, run as exec. The name is
@@ -37,13 +37,13 @@ type Probe struct {
 // reads panels whose command is aider, and no others, so an unrelated agent
 // pane never costs a process.
 func New(name, exec string) *Probe {
-	return &Probe{name: name, exec: exec, timeout: DefaultWait}
+	return &Probe{name: name, exec: exec, wait: DefaultWait}
 }
 
-// WithTimeout returns the probe with a different bound, for tests.
-func (p *Probe) WithTimeout(d time.Duration) *Probe {
+// WithWait returns the probe with a different bound, for tests.
+func (p *Probe) WithWait(d time.Duration) *Probe {
 	out := *p
-	out.timeout = d
+	out.wait = d
 	return &out
 }
 
@@ -54,14 +54,16 @@ func (p *Probe) Match(panel revier.Panel) bool { return panel.Runs(p.name) }
 
 // Inspect runs the binary once. A non-zero exit, malformed output, or the
 // timeout is an error, which the core turns into StatusUnknown for this
-// panel and nothing else: one broken probe cannot blank the dashboard.
+// panel and nothing else: one broken probe cannot blank the dashboard. A read
+// that the caller ended is an error too, and says so: it is no timeout of the
+// probe.
 func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentState, error) {
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
+	bounded, cancel := context.WithTimeout(ctx, p.wait)
 	defer cancel()
 
 	in, _ := json.Marshal(panel) // strings, ints, and a map: cannot fail
 	var out, errb bytes.Buffer
-	c := exec.CommandContext(ctx, p.exec)
+	c := exec.CommandContext(bounded, p.exec)
 	c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(in), &out, &errb
 	// The timeout must end the whole process tree, not only the script: a
 	// child it started holds the output pipe open, and Run would otherwise
@@ -73,7 +75,10 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	c.WaitDelay = 50 * time.Millisecond
 	if err := c.Run(); err != nil {
 		if ctx.Err() != nil {
-			return revier.AgentState{}, fmt.Errorf("probe %s: timed out after %s", p.name, p.timeout)
+			return revier.AgentState{}, fmt.Errorf("probe %s: %w", p.name, ctx.Err())
+		}
+		if bounded.Err() != nil {
+			return revier.AgentState{}, fmt.Errorf("probe %s: timed out after %s", p.name, p.wait)
 		}
 		return revier.AgentState{}, fmt.Errorf("probe %s: %w: %s", p.name, err, strings.TrimSpace(errb.String()))
 	}

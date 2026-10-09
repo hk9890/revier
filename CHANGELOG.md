@@ -77,6 +77,13 @@ Each section is also the text of its release on the
 - **`revier agent prompt` says that a pane holds a shell for `dash`, `ksh` and
   a login shell too.** It refused such a pane with `no probe recognises what
   runs in it`, which sent the reader to the probes.
+- **revier knows `ash`, `mksh`, `tcsh`, `csh`, `nu`, `elvish`, `xonsh` and
+  `pwsh` as shells.** What the three entries above say of a `dash` and a
+  `ksh` holds for each of them.
+- **`revier events` prints a line that a linked host recorded with `link`,**
+  the project here that links to the host's project. The line's `project` is
+  the name on the host, so a reader had to ask `revier list --json` to join
+  the two. Where two projects link to one, `link` is the first by name.
 
 ## v0.13.0
 

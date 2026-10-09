@@ -226,7 +226,8 @@ revier events --days 7 | jq -r .project | sort | uniq -c | sort -rn
 
 The events are kept in `~/.local/state/revier/events.jsonl`, which revier never
 prunes. What the revier on a linked host recorded is printed with its `host`,
-an action run on a link among it; `--local` asks no host.
+an action run on a link among it. Where a project here links to the project
+of such a line, the line has it as `link`. `--local` asks no host.
 
 `revier session save` writes down which projects are open and which of their
 targets, so `revier session restore` can open them again after a restart. It

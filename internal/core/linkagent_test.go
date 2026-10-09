@@ -348,7 +348,7 @@ func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 	c, rt, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
-	term := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	term := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	p := linkProject(t)
 
 	c.Ledger = attachments(map[revier.ProjectName][]revier.TargetRef{p.Name: {term}})

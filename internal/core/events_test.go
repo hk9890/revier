@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -170,7 +171,7 @@ func TestARestoreIsNoGoEvent(t *testing.T) {
 func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "claude", Session: "abc"}}
 
@@ -244,7 +245,7 @@ func TestATabThatDidNotOpenIsNoEvent(t *testing.T) {
 func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
 
 	if err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "1"}); err != nil {
@@ -261,7 +262,7 @@ func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
 }
 
 // Each host is asked once, whatever the number of links to it, and its
-// events come back under its name.
+// events come back under its name and under the link's.
 func TestRemoteEventsAsksEachHostOnceAndNamesIt(t *testing.T) {
 	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	box := hosttest.NewRemote("buildbox")
@@ -275,12 +276,71 @@ func TestRemoteEventsAsksEachHostOnceAndNamesIt(t *testing.T) {
 
 	got, failed := c.RemoteEvents(context.Background(), projects, 3)
 
-	want := []revier.Event{{Time: at, Kind: revier.EventGo, Host: "buildbox", Project: "far"}}
+	want := []revier.Event{{Time: at, Kind: revier.EventGo, Host: "buildbox", Project: "far", Link: "far"}}
 	if !slices.Equal(got, want) || len(failed) != 0 {
 		t.Errorf("events = %+v, failed = %v; want %+v", got, failed, want)
 	}
 	if !slices.Equal(box.Days, []int{3}) {
 		t.Errorf("asked for days %v, want one ask for 3", box.Days)
+	}
+}
+
+// A host line names the project here that links to its project there, which
+// has a name of its own: the first by name where two link to one, and none
+// where no project links to it or the link is to another host.
+func TestAHostEventNamesTheProjectThatLinksToIt(t *testing.T) {
+	box := hosttest.NewRemote("buildbox")
+	box.Recorded = []revier.Event{
+		{Kind: revier.EventGo, Project: "app"},
+		{Kind: revier.EventGo, Project: "unlinked"},
+		{Kind: revier.EventGo, Project: "elsewhere", Link: "stale"},
+	}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": box, "laptop": hosttest.NewRemote("laptop")}}
+	link := func(name, host, project string) core.Project {
+		p := remoteProject(name)
+		p.Remote = &revier.Link{Host: host, Project: revier.ProjectName(project)}
+		return prepared(t, p)
+	}
+	projects := []core.Project{
+		link("far2", "buildbox", "app"),
+		link("far", "buildbox", "app"),
+		link("other", "laptop", "elsewhere"),
+	}
+
+	got, failed := c.RemoteEvents(context.Background(), projects, 7)
+
+	links := map[revier.ProjectName]revier.ProjectName{}
+	for _, e := range got {
+		links[e.Project] = e.Link
+	}
+	want := map[revier.ProjectName]revier.ProjectName{"app": "far", "unlinked": "", "elsewhere": ""}
+	if !maps.Equal(links, want) || len(failed) != 0 {
+		t.Errorf("links = %v, failed = %v; want %v", links, failed, want)
+	}
+}
+
+// The link that `revier link` and the link dialog name for a host's project
+// is the one its event lines name. The projects are in the order of their
+// files, where `far-2.toml` stands before `far.toml`.
+func TestLinkedAsIsTheLinkAHostEventNames(t *testing.T) {
+	box := hosttest.NewRemote("buildbox")
+	box.Recorded = []revier.Event{{Kind: revier.EventGo, Project: "app"}}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": box}}
+	var projects []core.Project
+	for _, name := range []string{"far-2", "far"} {
+		p := remoteProject(name)
+		p.Remote.Project = "app"
+		projects = append(projects, prepared(t, p))
+	}
+
+	got, _ := c.RemoteEvents(context.Background(), projects, 7)
+
+	linked := core.LinkedAs(projects, "buildbox", "app")
+	if linked != "far" || len(got) != 1 || got[0].Link != linked {
+		t.Errorf("LinkedAs = %q, events = %+v; want far for both", linked, got)
+	}
+	if unlinked := core.LinkedAs(projects, "buildbox", "far"); unlinked != "" {
+		t.Errorf("LinkedAs = %q for a project nothing links to, want none", unlinked)
 	}
 }
 

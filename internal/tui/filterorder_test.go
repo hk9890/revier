@@ -83,7 +83,7 @@ func TestAFilteredListKeepsAProjectThatNeedsYouFirst(t *testing.T) {
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention},
 	}}
 	rt.Add("session:cap-data-intelligence", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "sh"})
-	rt.Add("session:decay-maps", "kitty", revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:decay-maps", "kitty", revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude"})
 	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "cap")
 
 	want := []string{"decay-maps", "cap-data-intelligence"}
