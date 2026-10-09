@@ -10,8 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -44,6 +46,25 @@ type State struct {
 	// process that launches may exit before the window appears; the TUI
 	// reads this and finishes the job.
 	Launch *Launch `json:"launch,omitempty"`
+}
+
+// Clone is a copy that shares nothing with s.
+func (s *State) Clone() *State {
+	c := &State{Current: s.Current, Attached: make(map[revier.ProjectName][]revier.TargetRef, len(s.Attached))}
+	for p, refs := range s.Attached {
+		c.Attached[p] = slices.Clone(refs)
+	}
+	if s.Bound != nil {
+		c.Bound = make(map[revier.ProjectName]map[revier.TargetName]revier.TargetRef, len(s.Bound))
+		for p, targets := range s.Bound {
+			c.Bound[p] = maps.Clone(targets)
+		}
+	}
+	if s.Launch != nil {
+		l := *s.Launch
+		c.Launch = &l
+	}
+	return c
 }
 
 // Launch is one detached launch: which project, which target if any, when.

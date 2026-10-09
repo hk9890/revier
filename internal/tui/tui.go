@@ -718,9 +718,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // keep holds the parts of state the surface reads between refreshes. The
 // surface writes no state itself: the core and internal/app write it through
-// the ledger. A state file that cannot be read or written costs the next
-// keypress a fallback, not the surface, so the ledger logs it and nothing is
-// shown.
+// the ledger. A state file that cannot be read is the state the ledger read
+// last, and one that cannot be written costs the next keypress a fallback,
+// not the surface, so the ledger logs it and nothing is shown.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 }

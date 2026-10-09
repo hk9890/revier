@@ -114,6 +114,44 @@ func TestFileHandsBackTheStateOnDiskWhenAWriteCouldNotStart(t *testing.T) {
 	}
 }
 
+// A state file that cannot be read is the state read last: a surface reads it
+// every refresh, and one failed read must not take its bindings off the
+// screen. What a caller did to the state it was handed is not in it.
+func TestFileHandsBackTheStateReadLastWhenTheFileCannotBeRead(t *testing.T) {
+	root := t.TempDir()
+	ref := revier.TargetRef{Host: "rt", ID: "1"}
+	l := ledger.File{Root: root}
+	l.Update(func(st *state.State) bool {
+		st.Landed("work", "home", ref)
+		st.Attach("work", ref)
+		return true
+	})
+	l.State().Bound["work"]["home"] = revier.TargetRef{Host: "rt", ID: "the caller's own"}
+
+	// The file is a directory, so it is there and cannot be read.
+	file := filepath.Join(root, "state.json")
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(file, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Another ledger on the same root in this process read the same file.
+	st := ledger.File{Root: root}.State()
+	if st.Bound["work"]["home"] != ref || len(st.Attached["work"]) != 1 || st.Current != "work" {
+		t.Errorf("state = %+v, want the one read last", st)
+	}
+	// A root this process never read has nothing to hand back.
+	other := t.TempDir()
+	if err := os.Mkdir(filepath.Join(other, "state.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if st := (ledger.File{Root: other}).State(); st == nil || st.Current != "" || len(st.Bound) != 0 {
+		t.Errorf("state = %+v, want an empty one", st)
+	}
+}
+
 // An event recorded through the ledger is in the event file of the process.
 func TestFileRecordsAnEvent(t *testing.T) {
 	root := t.TempDir()
