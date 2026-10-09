@@ -208,8 +208,9 @@ type Titled interface {
 
 // Detailed is an optional capability of an AgentProbe, detected by type
 // assertion. Detail is the last thing the agent in a panel said, for the pane
-// that shows one agent and for the agent list, which orders its rows by when
-// each spoke. It is asked for every agent the surface shows - one project's
+// that shows one agent, for the agent list, which orders its rows by when
+// each spoke, and for `revier agent read`, which prints it (decisions.md
+// D116). It is asked for every agent the surface shows - one project's
 // beside the project list, every project's on the agent list - each time the
 // surface refreshes, and never in a survey: keep it cheap, and read again only
 // what changed since the last answer.

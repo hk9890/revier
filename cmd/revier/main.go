@@ -52,10 +52,16 @@ usage:
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
                                 type one line into an agent and submit it
-  revier agent new [-p name | --panel id] [--resume id] [--dir path]
+  revier agent read <agent> [--screen [--lines n]]
+                                print what an agent said last, or what its
+                                panel shows
+  revier agent send-keys <agent> <key>..
+                                type keys into an agent, whatever it is doing
+  revier agent new [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open
                                 workspace; for a link, the tab's agent runs
-                                on the host and --dir is dropped
+                                on the host and --dir is dropped; --no-focus
+                                leaves the focus and prints the agent's address
   revier shell new [-p name | --panel id] [--dir path]
                                 add a shell tab to an open workspace; for a
                                 link, the tab's shell runs on the host

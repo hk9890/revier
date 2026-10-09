@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
@@ -40,6 +42,12 @@ var (
 
 	// ErrNoWriter means the runtime holding the agent cannot type into a panel.
 	ErrNoWriter = errors.New("runtime cannot type into a panel")
+
+	// ErrNoMessage means nothing here can say what the agent said last: its
+	// probe reads no conversation, the conversation is on another machine, or
+	// it has said nothing yet. It is a normal outcome, and what the agent's
+	// panel shows can still be read (Screen).
+	ErrNoMessage = errors.New("the agent's last message cannot be read")
 )
 
 // AgentPoll is how often Wait and Prompt read an agent again. LinkPoll is
@@ -48,6 +56,11 @@ const (
 	AgentPoll = 500 * time.Millisecond
 	LinkPoll  = 2 * time.Second
 )
+
+// KeyGap is the pause between two keys of one SendKeys call. Two keys that reach
+// a terminal program in one read are one key to it: an Esc directly before a
+// letter is alt and that letter.
+const KeyGap = 50 * time.Millisecond
 
 // PromptConfirmPolls is how many polls Prompt watches an idle agent for the
 // turn it asked for. A runtime reports that text was delivered, never that it
@@ -299,9 +312,9 @@ func (c *Core) Wait(ctx context.Context, a Agent, until []revier.Status, poll ti
 // An agent that was already working queues the prompt, and nothing marks its
 // arrival, so Prompt returns at once.
 func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Duration) (revier.AgentState, error) {
-	w, ok := c.Runtime.(revier.PanelWriter)
-	if !ok || a.Ref.Host != c.Runtime.Name() {
-		return a.State, fmt.Errorf("%w: %s", ErrNoWriter, a.Ref.Host)
+	w, err := c.writer(a)
+	if err != nil {
+		return a.State, err
 	}
 	switch a.State.Status {
 	case revier.StatusAttention:
@@ -338,6 +351,102 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 		}
 	}
 	return a.State, nil
+}
+
+// writer is the runtime as it types into the agent's panel.
+func (c *Core) writer(a Agent) (revier.PanelWriter, error) {
+	w, ok := c.Runtime.(revier.PanelWriter)
+	if !ok || a.Ref.Host != c.Runtime.Name() {
+		return nil, fmt.Errorf("%w: %s", ErrNoWriter, a.Ref.Host)
+	}
+	return w, nil
+}
+
+// typedKeys are the keys SendKeys types by name, each as the bytes a terminal sends
+// for it.
+var typedKeys = map[string]string{
+	"esc":       "\x1b",
+	"enter":     "\r",
+	"tab":       "\t",
+	"shift+tab": "\x1b[Z",
+	"space":     " ",
+	"backspace": "\x7f",
+	"up":        "\x1b[A",
+	"down":      "\x1b[B",
+	"right":     "\x1b[C",
+	"left":      "\x1b[D",
+	"ctrl+c":    "\x03",
+}
+
+// keyBytes is what a terminal sends for the key name names: one of typedKeys, or
+// one printable character, which stands for itself.
+func keyBytes(name string) (string, error) {
+	if b, ok := typedKeys[strings.ToLower(name)]; ok {
+		return b, nil
+	}
+	if r := []rune(name); len(r) == 1 && unicode.IsPrint(r[0]) {
+		return name, nil
+	}
+	names := slices.Sorted(maps.Keys(typedKeys))
+	return "", fmt.Errorf("unknown key %q: want one character, or one of %s", name, strings.Join(names, ", "))
+}
+
+// SendKeys types the named keys into an agent's panel, in order, gap apart. It
+// asks nothing of the agent's state, where Prompt refuses two of them: a key
+// is how a dialog is answered and how a working agent is interrupted, and
+// the caller named each one (decisions.md D117). A name that is no key
+// refuses them all, so nothing is typed up to a mistake.
+//
+// An error after the first key says how many keys arrived: sending them again
+// would type those twice.
+func (c *Core) SendKeys(ctx context.Context, a Agent, names []string, gap time.Duration) error {
+	w, err := c.writer(a)
+	if err != nil {
+		return err
+	}
+	typed := make([]string, len(names))
+	for i, name := range names {
+		if typed[i], err = keyBytes(name); err != nil {
+			return err
+		}
+	}
+	for i, b := range typed {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("%d of %d keys reached the panel: %w", i, len(typed), ctx.Err())
+			case <-time.After(gap):
+			}
+		}
+		if err := w.SendText(ctx, a.Ref, a.Panel.ID, b); err != nil {
+			return fmt.Errorf("%d of %d keys reached the panel: %w", i, len(typed), err)
+		}
+	}
+	return nil
+}
+
+// Said is the last thing the agent said, as its probe reads it
+// (revier.Detailed): what `revier agent read` prints. The read is display,
+// as it is in the pane, and nothing is decided by it (decisions.md D106,
+// D116). An agent with no message to read answers ErrNoMessage; any other
+// error is a probe that broke.
+func (c *Core) Said(ctx context.Context, a Agent) (revier.AgentDetail, error) {
+	if a.link != nil {
+		return revier.AgentDetail{}, fmt.Errorf("%w: its conversation is on %s", ErrNoMessage, a.link.Remote.Host)
+	}
+	probe, ok := c.agentProbe(a.Panel)
+	if !ok {
+		return revier.AgentDetail{}, fmt.Errorf("%s is %w: %s", a.Panel.ID, ErrNotAgent, notAgentReason(a.Panel))
+	}
+	detailed, ok := probe.(revier.Detailed)
+	if !ok {
+		return revier.AgentDetail{}, fmt.Errorf("%w: the %s probe reads no conversation", ErrNoMessage, probe.Name())
+	}
+	d, err := detailed.Detail(ctx, a.Panel)
+	if errors.Is(err, revier.ErrNoDetail) || (err == nil && d.Message == "") {
+		return revier.AgentDetail{}, fmt.Errorf("%w: it has said nothing yet, or its harness lists no conversation for it", ErrNoMessage)
+	}
+	return d, err
 }
 
 // reread reads the agent's panel again, from one listing of its host.

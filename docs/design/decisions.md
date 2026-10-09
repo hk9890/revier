@@ -129,9 +129,10 @@ is the only write outside revier's own files, and never happens in a survey.
 
 ### D31 — a runtime can type into a panel; whether it may is the core's
 
-`PanelWriter` is optional. The core refuses a panel with no agent, a shell in
-the foreground, an attention or unknown state, or text of more than one line.
-Each would type into the wrong thing.
+`PanelWriter` is optional. The core refuses a panel with no agent and a shell
+in the foreground, and for a prompt an attention or unknown state and text of
+more than one line. Each would type into the wrong thing. A named key is
+D117's.
 
 ### D32 — a command in every project is revier's
 
@@ -701,3 +702,32 @@ links open here, or the one project's being closed, the recheck the hosts
 its plan has a step for, and a save's ask of the hosts has ten seconds.
 Rejected: shorter phase budgets, which cut a slow desktop short and still
 waited once a phase.
+
+### D116 — a script reads what an agent said last, and its panel on request
+
+A script that prompted an agent saw the turn end and never the answer.
+`revier agent read` prints the probe's `Detailed` message, the clean text.
+D106 holds: revier prints it and decides nothing by it, and a message that
+cannot be read is a refusal that names `--screen`. `--screen` is the panel
+through `PanelReader`, which every harness and a link's panel have, as text
+alone (D108). Rejected: the screen as the default, which hands the caller a
+harness's chrome to parse.
+
+### D117 — a named key is typed into an agent whatever its state
+
+`revier agent send-keys` answers the dialog D31 keeps a prompt out of and
+interrupts a working agent, so the states that refuse a prompt cannot refuse a
+key. The caller names every key, so nothing is typed that it did not choose,
+and reading the panel first is the caller's. The panel is still an agent's
+(D31). The keys go one at a time with a pause, because an Esc directly before
+another key is alt and that key.
+
+### D118 — a script's agent tab opens without the focus
+
+`revier agent new --no-focus` is for a script whose user types in another
+window. The tab opens, nothing is focused or raised, and the address of the
+new agent is printed, since the script has nothing else to find it by. It
+needs no window that can be raised (D63). So `OpenTab` leaves the keyboard
+where it is on every runtime, and going to a tab is `FocusPanel`'s. A kitty
+OS window without the keyboard still shows the tab it was given: putting the
+old one back asks the desktop for the focus, which is what the flag avoids.

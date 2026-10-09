@@ -363,8 +363,8 @@ func TestFocusSelectsTheActiveWindow(t *testing.T) {
 // An agent tab is a group of panels: the first opens the tab, last among the
 // OS window's tabs so a save records its agents in the same order, and every
 // later one splits into it by the id the tab's launch reported. Each panel
-// starts in its own directory and gets its title. No launch keeps kitty's
-// focus: the core focuses the panel it wants after.
+// starts in its own directory and gets its title. An OS window of the kitty
+// holds the keyboard, so every launch is told to leave it there.
 func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
 	panel, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
@@ -390,14 +390,53 @@ func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
 		}
 	}
 	want := []string{
-		"launch --type=tab --location=last --match window_id:4 --hold --cwd /home/user/dev/demo/wt claude --resume b",
-		"launch --type=window --match window_id:9 --hold --cwd /home/user/dev/demo/wt",
+		"launch --type=tab --location=last --match window_id:4 --hold --keep-focus --cwd /home/user/dev/demo/wt claude --resume b",
+		"launch --type=window --match window_id:9 --hold --keep-focus --cwd /home/user/dev/demo/wt",
 	}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
 	}
 	if len(titles) != 2 || !strings.HasSuffix(titles[0], "Claude Code") || !strings.HasSuffix(titles[1], "shell") {
 		t.Errorf("titles = %q, want each panel's own", titles)
+	}
+}
+
+// While no OS window of the kitty holds the keyboard, a launch moves none, and
+// --keep-focus would have kitty ask the desktop to focus its last OS window:
+// the tab opens without it.
+func TestOpenTabAsksForNoFocusWhileKittyHoldsNoKeyboard(t *testing.T) {
+	h := newHost()
+	rec := &recorder{}
+	unfocused := []byte(strings.ReplaceAll(string(fixture(t)), `"is_focused": true`, `"is_focused": false`))
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+		rec.add(socket, args)
+		if args[0] == "ls" {
+			return unfocused, nil
+		}
+		return []byte("9\n"), nil
+	})
+	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude"}},
+			{Kind: revier.PanelShell},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	launches := 0
+	for _, c := range rec.all() {
+		if c.args[0] != "launch" {
+			continue
+		}
+		launches++
+		if slices.Contains(c.args, "--keep-focus") {
+			t.Errorf("launch %q carries --keep-focus, want none while kitty is unfocused", strings.Join(c.args, " "))
+		}
+	}
+	if launches != 2 {
+		t.Errorf("launches = %d, want the tab and its split", launches)
 	}
 }
 
@@ -793,7 +832,7 @@ func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	}
 	calls := rec.all()
 	last := calls[len(calls)-1]
-	want := "launch --type=tab --location=last --match window_id:4 --hold --var revier_target=tickets --cwd /p taskmgr-ui"
+	want := "launch --type=tab --location=last --match window_id:4 --hold --var revier_target=tickets --keep-focus --cwd /p taskmgr-ui"
 	if got := strings.Join(last.args, " "); got != want || last.socket != "unix:@kitty-4000" {
 		t.Errorf("last call = %s %q, want %q on unix:@kitty-4000", last.socket, got, want)
 	}

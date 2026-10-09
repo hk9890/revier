@@ -109,8 +109,9 @@ type WorkareaReader interface {
 
 // PanelWriter is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can type into one of its panels,
-// which is how `revier agent prompt` reaches an agent (decisions.md D31). One
-// that does not cannot be prompted through revier.
+// which is how `revier agent prompt` and `revier agent send-keys` reach an
+// agent (decisions.md D31, D117). One that does not cannot be typed into
+// through revier.
 //
 // SendText delivers text to the panel's input as given, as if typed: no escape
 // is interpreted and no key is added, so a submit is a "\r" of its own.
@@ -124,7 +125,8 @@ type PanelWriter interface {
 // PanelReader is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can say what one of its panels
 // shows, which is how the agent list mirrors the agent under its cursor
-// (decisions.md D111). One that does not leaves the mirror empty.
+// (decisions.md D111) and what `revier agent read --screen` prints (D116).
+// One that does not leaves the mirror empty and the screen unread.
 //
 // ReadPanel is the panel's screen as text, a line per row, with the colour
 // and style of each run as SGR sequences and nothing else of the terminal's.
@@ -151,6 +153,9 @@ type PanelOpener interface {
 	// fails closes what it opened, so no half-built tab runs an agent the
 	// core names as not added. It is a tab target's tab (decisions.md D64)
 	// and the agent tab of `revier agent new` and a restore (D65).
+	//
+	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
+	// and a tab a script opens is gone to by nobody (D118).
 	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
 
 	// FocusPanel makes the panel current inside its instance, switching tab

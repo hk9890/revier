@@ -741,7 +741,7 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 // on Wayland this does not raise the OS window; the core raises it through the
 // window host.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
-	socket, win, err := h.active(ctx, ref)
+	socket, win, _, err := h.active(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -749,15 +749,19 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	return err
 }
 
-// active finds the socket an instance lives on and the window current in it.
-func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, error) {
+// active finds the socket an instance lives on and the window current in it,
+// and reports whether an OS window of that kitty process holds the keyboard.
+func (h *Host) active(ctx context.Context, ref revier.TargetRef) (socket string, win int, focused bool, err error) {
 	socket, id, err := parseRef(ref.ID)
 	if err != nil {
-		return "", 0, err
+		return "", 0, false, err
 	}
 	windows, err := h.ls(ctx, socket)
 	if err != nil {
-		return "", 0, err
+		return "", 0, false, err
+	}
+	for _, w := range windows {
+		focused = focused || w.IsFocused
 	}
 	for _, w := range windows {
 		if w.ID != id {
@@ -765,11 +769,11 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, e
 		}
 		win, ok := activeWindow(w)
 		if !ok {
-			return "", 0, fmt.Errorf("kitty: os window %s has no windows", ref.ID)
+			return "", 0, false, fmt.Errorf("kitty: os window %s has no windows", ref.ID)
 		}
-		return socket, win, nil
+		return socket, win, focused, nil
 	}
-	return "", 0, fmt.Errorf("kitty: os window %s not found", ref.ID)
+	return "", 0, false, fmt.Errorf("kitty: os window %s not found", ref.ID)
 }
 
 // OpenTab opens a new last tab of the OS window: r.Launch alone, or r.Panels
@@ -779,16 +783,26 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (string, int, e
 // agents by. The vars become user vars of the tab's first window, which ls
 // reports back as the panel's Vars.
 //
+// The keyboard stays where it is, which is what revier.PanelOpener asks.
+// While an OS window of this kitty holds it, every launch carries
+// --keep-focus: kitty would otherwise put the keyboard in the new window when
+// the tab opens in the focused OS window. While none does, a launch moves no
+// keyboard, and --keep-focus is left off: kitty answers it by asking the
+// desktop to focus its last OS window, which is the request to avoid (read
+// from kitty 0.49's launch; not run against a live kitty). Either way the OS
+// window the tab opens in shows the new tab, where it is not the focused one:
+// kitty has no command that puts a tab back without asking for the focus.
+//
 // A launch or a title that fails closes the windows the tab already opened:
 // the core names the agent of a failed tab as not added, and it must not be
 // running in a tab without its shell.
 func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
-	socket, win, err := h.active(ctx, ref)
+	socket, win, focused, err := h.active(ctx, ref)
 	if err != nil {
 		return "", err
 	}
 	var opened []int
-	panel, err := h.openTab(ctx, socket, win, r, vars, &opened)
+	panel, err := h.openTab(ctx, socket, win, focused, r, vars, &opened)
 	if err != nil {
 		for _, id := range opened {
 			// Best effort: the launch error is the one worth reporting.
@@ -800,8 +814,9 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 }
 
 // openTab is OpenTab's launches into the OS window whose current window is
-// win, with every window it opens added to opened.
-func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
+// win, with every window it opens added to opened. keepFocus says kitty holds
+// the keyboard, and has to be told to leave it where it is.
+func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bool, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
 	panels := r.PanelSpecs()
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
@@ -812,6 +827,9 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, r revier.Rea
 	for i, p := range panels {
 		if i > 0 {
 			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+		}
+		if keepFocus {
+			args = append(args, "--keep-focus")
 		}
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
@@ -846,7 +864,7 @@ func (h *Host) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revie
 // FocusedPanel reports the window current in the OS window: the active window
 // of its active tab.
 func (h *Host) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
-	_, win, err := h.active(ctx, ref)
+	_, win, _, err := h.active(ctx, ref)
 	if err != nil {
 		return "", err
 	}

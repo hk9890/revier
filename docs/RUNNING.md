@@ -85,10 +85,16 @@ st idle       # -> idle
 ./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
 ./bin/revier agent prompt demo 'hello'                    # types into that pane only; warns, as sleep never starts a turn
 tmux capture-pane -p -t "$pane"                           # the text arrived
+./bin/revier agent send-keys demo x enter                 # typed in any state, st waiting included
+./bin/revier agent read demo --screen --lines 5           # the pane's last lines, as plain text
+./bin/revier agent read demo                              # refused: the session file names no conversation
+./bin/revier agent new -p demo --no-focus                 # prints demo:<pane>
+tmux list-windows -t home -F '#{window_index} #{window_active}'   # the new window is not the current one
 ```
 
-`revier agent prompt` types into a pane. Run it only with the scratch
-configuration above: without it, it reaches the user's real agent.
+`revier agent prompt` and `revier agent send-keys` type into a pane. Run them
+only with the scratch configuration above: without it, they reach the user's
+real agent.
 
 ## Drive save and restore across a reboot
 
