@@ -241,7 +241,7 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, tw, rows 
 	lines := append(head, body...)
 	lines = lines[max(len(lines)-room, 0):]
 	var b strings.Builder
-	b.WriteString(m.heading("Last message", w))
+	b.WriteString(heading(m.theme, "Last message", w))
 	for _, line := range lines {
 		b.WriteString(clipTo(line, tw))
 		b.WriteString("\n")

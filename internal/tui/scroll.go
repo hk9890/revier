@@ -28,10 +28,12 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		m.follow(at, 1)
 		return
-	case dialogLinkName:
-		m.body.SetContent(m.linkNameScreen())
-		m.body.SetYOffset(0)
-		return
+	case dialogLink:
+		if m.link.list() == nil {
+			m.body.SetContent(m.link.nameScreen(m.surface()))
+			m.body.SetYOffset(0)
+			return
+		}
 	case dialogSessionName:
 		m.body.SetContent(m.sessionNameScreen())
 		m.body.SetYOffset(0)
@@ -71,7 +73,7 @@ func (m *Model) syncBody() {
 		row = m.over.index
 	}
 	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
-	m.rlist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
+	m.link.light(m.spun(), row)
 	m.aglist.SetDelegate(agentDelegate{theme: m.spun(), hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
@@ -98,10 +100,8 @@ func (m *Model) syncBody() {
 // It is a pointer because the cursor moves on it.
 func (m *Model) bodyList() *list.Model {
 	switch m.dialog {
-	case dialogHosts:
-		return &m.hlist
-	case dialogRemote:
-		return &m.rlist
+	case dialogLink:
+		return m.link.list()
 	case dialogSessions:
 		return &m.slist
 	}
@@ -113,8 +113,8 @@ func (m *Model) bodyList() *list.Model {
 
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
-	switch m.dialog {
-	case dialogHosts, dialogSessions:
+	switch {
+	case m.dialog == dialogSessions, m.dialog == dialogLink && m.link.step == linkHosts:
 		return 1 // a host is its name alone, a session one line of counts
 	}
 	return projectDelegate{}.Height()

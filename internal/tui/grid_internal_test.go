@@ -39,9 +39,9 @@ func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
 	attached := m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: "Pull requests"}}, w, false, false)
 
 	for _, harness := range []string{"claude", "gemini-cli", "cursor-agent-with-a-long-name"} {
-		agent := m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{
+		agent := detailAgent(m.spun(), agentRow{agent: revier.AgentView{State: revier.AgentState{
 			Harness: harness, Status: revier.StatusAttention, Activity: "needs a decision",
-		}}}, w, false, false)
+		}}}, w, false, false, false)
 		name := harness[:min(len(harness), detailNameWidth-1)]
 		if a, b := column(t, target, "home"), column(t, agent, name); a != b {
 			t.Errorf("%s: target name at %d, harness at %d", harness, a, b)
@@ -67,7 +67,7 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 		rows := []string{
 			m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: title}}, w, false, false),
 			m.detailRow(targetRow{target: revier.TargetView{Name: "a-long-target-name", Key: "ctrl+shift+alt+u"}}, w, false, false),
-			m.detailAgent(agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}}, w, false, false),
+			detailAgent(m.spun(), agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}}, w, false, false, false),
 		}
 		for _, row := range rows {
 			for _, line := range strings.Split(row, "\n") {
@@ -100,7 +100,7 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	m.theme.Match = upper
 	row := agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}}
 	row.matches = ranked(ungrouped)("then", []string{row.label()})[0].MatchedIndexes
-	if got := ansi.Strip(m.detailAgent(row, 60, false, false)); !strings.Contains(got, "THEN words") {
+	if got := ansi.Strip(detailAgent(m.spun(), row, 60, false, false, false)); !strings.Contains(got, "THEN words") {
 		t.Errorf("agent row = %q, want the letters of then lit", got)
 	}
 }

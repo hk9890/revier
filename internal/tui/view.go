@@ -71,7 +71,7 @@ func (m *Model) layout() {
 		query = m.listWidth()
 	}
 	m.input.Width = query - lipgloss.Width(promptMark) - 2
-	m.rinput.Width = m.input.Width
+	m.link.query.Width = m.input.Width
 	m.aginput.Width = m.input.Width
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
@@ -133,15 +133,8 @@ func (m Model) View() string {
 func (m Model) top() string {
 	name := ""
 	switch m.dialog {
-	case dialogHosts:
-		name = "Link a project on another machine"
-	case dialogRemote:
-		name = m.host
-	case dialogLinkName:
-		name = "Name the link"
-		if it, ok := m.rlist.SelectedItem().(remoteItem); ok {
-			name += " to " + string(it.view.Project.Name) + " on " + m.host
-		}
+	case dialogLink:
+		name = m.link.title()
 	case dialogNew:
 		name = "Add a project on this machine"
 	case dialogConfig:
@@ -191,17 +184,11 @@ func (m Model) thinRule(width int) string {
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or
-// what the dialog's rows are. The hosts step says nothing there - the title
-// over it already says what the rows are, and the rule under it counts them -
-// but it keeps the line, so the rows do not move as the step changes.
+// what the dialog's rows are.
 func (m Model) subtitle() string {
 	switch m.dialog {
-	case dialogHosts:
-		return ""
-	case dialogRemote:
-		return " " + m.rinput.View()
-	case dialogLinkName:
-		return m.linkNameView()
+	case dialogLink:
+		return m.link.subtitle(m.theme)
 	case dialogNew:
 		return " " + m.path.View()
 	case dialogConfig:
@@ -302,15 +289,11 @@ func pad0(head string) string {
 func (m Model) ruleCount() string {
 	th := m.theme
 	switch {
-	case m.dialog == dialogHosts:
-		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
-	case m.dialog == dialogRemote && m.rfilter != "":
-		return th.NameDim.Render(fmt.Sprintf("%d/%d projects", len(m.rlist.VisibleItems()), len(m.rlist.Items())))
-	case m.dialog == dialogRemote:
-		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
+	case m.dialog == dialogLink:
+		return m.link.count(th)
 	case m.dialog == dialogSessions:
 		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
+	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -375,8 +358,8 @@ func (m Model) empty() string {
 	switch {
 	case m.dialog == dialogSessions:
 		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
-	case m.dialog == dialogRemote && m.rfilter != "":
-		return say(th.NameDim, fmt.Sprintf("No project on %s matches %q.", m.host, m.rfilter))
+	case m.dialog == dialogLink && m.link.empty() != "":
+		return say(th.NameDim, m.link.empty())
 	case m.dialog != dialogNone:
 		return ""
 	case m.agents && m.agfilter != "":
@@ -407,8 +390,8 @@ func (m Model) footer() string {
 	if m.dialog == dialogProject && m.dropping {
 		return m.dropProjectPrompt()
 	}
-	if m.asking != "" {
-		return m.askingLine()
+	if m.link.asking != "" {
+		return m.link.askingLine(m.theme)
 	}
 	err := m.err
 	if err == nil {
@@ -443,6 +426,9 @@ func (m Model) footer() string {
 	}
 	if m.dialog == dialogNew {
 		return " " + m.help.ShortHelpView(m.newHelp())
+	}
+	if m.dialog == dialogLink {
+		return " " + m.help.ShortHelpView(m.link.help(m.keys))
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))

@@ -354,7 +354,7 @@ func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.barKey(msg); ok {
 		return next, cmd
 	}
-	if m.promptKey(msg) {
+	if promptKey(msg) {
 		next, cmd := m.aginput.Update(msg)
 		m.aginput = next
 		if next.Value() != m.agfilter {

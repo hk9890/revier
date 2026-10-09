@@ -69,7 +69,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if !m.dialog.hasRows() {
+	if !m.hasRows() {
 		return m, nil
 	}
 	if msg.Button == tea.MouseButtonLeft && m.over.kind != hoverRow && m.over.kind != hoverNone {
@@ -109,8 +109,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.last = click{index: index, at: m.now()}
 		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
 			m.last = click{}
+			// A second click on a screen's row is its Enter.
 			if m.dialog != dialogNone {
-				return m.dialogEnter()
+				return m.key(tea.KeyMsg{Type: tea.KeyEnter})
 			}
 			return m.enter()
 		}
@@ -122,7 +123,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // it is still the one the press landed on: a survey between the two can move
 // another target under the pointer.
 func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
-	if !m.dialog.hasRows() || m.over != p.over {
+	if !m.hasRows() || m.over != p.over {
 		return m, nil
 	}
 	switch m.over.kind {
@@ -187,7 +188,7 @@ func (m *Model) twice() bool {
 // inside the list, and not on the header, the footer or the space below the
 // last row.
 func (m Model) rowAt(x, y int) (int, bool) {
-	if !m.dialog.hasRows() {
+	if !m.hasRows() {
 		return 0, false
 	}
 	_, mc := m.margins()

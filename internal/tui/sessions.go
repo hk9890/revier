@@ -411,7 +411,7 @@ func (m *Model) sessionDetail() string {
 
 	out := m.outcome
 	if out.id == s.ID && out.saved {
-		b.WriteString(m.heading("Saved", w))
+		b.WriteString(heading(m.theme, "Saved", w))
 		if len(out.notes) == 0 {
 			say(th.Running, "every open target and agent conversation was recorded")
 		}
@@ -421,10 +421,10 @@ func (m *Model) sessionDetail() string {
 	}
 	switch {
 	case m.restoring == s.ID:
-		b.WriteString(m.heading("Restore", w))
+		b.WriteString(heading(m.theme, "Restore", w))
 		say(th.Meta, "restoring, one target at a time…")
 	case out.id == s.ID && out.restored != nil:
-		b.WriteString(m.heading("Restored", w))
+		b.WriteString(heading(m.theme, "Restored", w))
 		m.restoreSteps(&b, out.restored, w)
 		opened, pending, failed := out.restored.Counts()
 		summary := fmt.Sprintf("opened %d", opened)
@@ -439,10 +439,10 @@ func (m *Model) sessionDetail() string {
 			say(th.Attention, out.back.Error())
 		}
 	case !m.surveyed:
-		b.WriteString(m.heading("Restore plan", w))
+		b.WriteString(heading(m.theme, "Restore plan", w))
 		say(th.Meta, "surveying")
 	default:
-		b.WriteString(m.heading("Restore plan", w))
+		b.WriteString(heading(m.theme, "Restore plan", w))
 		m.restoreSteps(&b, m.core.RestorePreview(s, core.Report{Views: m.views}, m.projects), w)
 		say(th.Meta, "\nEnter: restore")
 	}

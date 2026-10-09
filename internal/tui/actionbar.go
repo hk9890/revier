@@ -28,7 +28,7 @@ type barAction struct {
 
 var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openNew},
-	{label: "remote", key: "alt+r", run: Model.openHosts},
+	{label: "remote", key: "alt+r", run: Model.openLink},
 	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
 	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 	{label: "config", key: "alt+c", run: Model.openConfig},

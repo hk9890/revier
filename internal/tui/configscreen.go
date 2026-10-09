@@ -264,11 +264,10 @@ func (m Model) runtimeChoice() string {
 func (m *Model) applyTheme(th theme.Theme) {
 	m.theme = th
 	m.amessage = setMessage{} // set in the old theme's colours
-	m.hlist.SetDelegate(hostDelegate{theme: th})
-	m.rlist.SetDelegate(projectDelegate{theme: th, hover: -1})
+	m.link.restyle(th)
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.path, &m.lname, &m.rinput, &m.chord, &m.pedit} {
+	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.path, &m.chord, &m.pedit} {
 		styleField(in, th)
 	}
 	m.layout()
@@ -329,7 +328,7 @@ func (m Model) configScreen() (string, int) {
 		b.WriteString(clipTo(line, w) + "\n")
 	}
 
-	b.WriteString(m.heading("Appearance", w))
+	b.WriteString(heading(m.theme, "Appearance", w))
 	row(int(rowTheme), "theme", "‹ "+orDefault(m.ui.Theme, theme.DefaultTheme)+" ›", "")
 	row(int(rowGlyphs), "glyphs", "‹ "+orDefault(m.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")
 	trigger := orDefault(m.ui.TriggerKey, config.DefaultTriggerKey)
@@ -338,7 +337,7 @@ func (m Model) configScreen() (string, int) {
 	}
 	row(int(rowTrigger), "trigger key", trigger, "the desktop key that opens revier")
 
-	b.WriteString(m.heading("Hosts", w))
+	b.WriteString(heading(m.theme, "Hosts", w))
 	note := "in use: " + hostName(m.core.Runtime)
 	if m.switching != "" {
 		note = "checking " + m.switching + "…"
@@ -346,7 +345,7 @@ func (m Model) configScreen() (string, int) {
 	row(int(rowRuntime), "runtime", "‹ "+m.runtimeChoice()+" ›", note)
 	info("window", hostName(m.core.Window), "detected at start")
 
-	b.WriteString(m.heading("Targets", w))
+	b.WriteString(heading(m.theme, "Targets", w))
 	tform := func() {
 		lines, line := m.targetFormLines(w)
 		at = strings.Count(b.String(), "\n") + line
@@ -363,7 +362,7 @@ func (m Model) configScreen() (string, int) {
 		tform()
 	}
 
-	b.WriteString(m.heading("Actions", w))
+	b.WriteString(heading(m.theme, "Actions", w))
 	form := func() {
 		lines, field := m.actionFormLines(w)
 		at = strings.Count(b.String(), "\n") + field

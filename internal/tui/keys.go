@@ -139,16 +139,10 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	return append(out, k.actions...)
 }
 
-// helpForDialog is the footer while the link dialog is up. Its two steps
-// take the same keys and mean different things by them, and none of the
-// surface's own keys act under it.
+// helpForDialog is the footer while a screen with no footer of its own is
+// up. None of the surface's own keys act under it.
 func (k keyMap) helpForDialog(d dialog) []key.Binding {
-	enter := "link"
 	switch d {
-	case dialogHosts:
-		enter = "list its projects"
-	case dialogRemote:
-		return []key.Binding{helpKey("enter", "name the link"), helpKey("type", "filter"), helpKey("esc", "clear/back"), k.Quit}
 	case dialogHelp:
 		return []key.Binding{helpKey("↑↓", "scroll"), helpKey("esc", "back"), k.Quit}
 	case dialogSessions:
@@ -158,7 +152,7 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 	case dialogShutdown:
 		return []key.Binding{helpKey("↑↓", "choose"), helpKey("enter", "next"), helpKey("esc", "back"), k.Quit}
 	}
-	return []key.Binding{helpKey("enter", enter), helpKey("esc", "back"), k.Quit}
+	return nil
 }
 
 // configHelp is what the config screen's cursor is on, which decides its

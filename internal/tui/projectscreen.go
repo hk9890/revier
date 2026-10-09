@@ -357,7 +357,7 @@ func (m Model) projectScreen() (string, int) {
 		b.WriteString(clipTo(th.Path.Render("  ")+th.Meta.Render(pad(label, configLabelWidth))+th.NameDim.Render(value), w) + "\n")
 	}
 
-	b.WriteString(m.heading("Project", w))
+	b.WriteString(heading(m.theme, "Project", w))
 	labels := map[projectField]string{projName: "name", projPath: "path", projGitURL: "git url"}
 	notes := map[projectField]string{
 		projName:   "the file's name; renaming moves the file",
@@ -382,7 +382,7 @@ func (m Model) projectScreen() (string, int) {
 		}
 	}
 
-	b.WriteString(m.heading("Targets", w))
+	b.WriteString(heading(m.theme, "Targets", w))
 	base := len(m.projectFields())
 	form := func() {
 		lines, line := m.targetFormLines(w)
@@ -401,7 +401,7 @@ func (m Model) projectScreen() (string, int) {
 	}
 
 	if len(m.ptext.Vars) > 0 {
-		b.WriteString(m.heading("Vars", w))
+		b.WriteString(heading(m.theme, "Vars", w))
 		names := make([]string, 0, len(m.ptext.Vars))
 		for name := range m.ptext.Vars {
 			names = append(names, name)

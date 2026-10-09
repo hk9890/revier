@@ -61,18 +61,15 @@ const (
 	focusAgents
 )
 
-// dialog is a screen standing over the surface: the link dialog's three steps
-// - which host, which of its projects (decisions.md D45), and the link's name -
-// the new-project field, the sessions screen and its name step, the config
+// dialog is a screen standing over the surface: the link dialog (decisions.md
+// D45), the new-project field, the sessions screen and its name step, the config
 // screen, or the project screen. dialogNone is the surface itself, which is
 // where it is nearly always.
 type dialog int
 
 const (
 	dialogNone dialog = iota
-	dialogHosts
-	dialogRemote
-	dialogLinkName
+	dialogLink
 	dialogNew
 	dialogConfig
 	dialogHelp
@@ -85,10 +82,12 @@ const (
 // hasRows reports a screen whose body is list rows: what a click selects and
 // the wheel moves through. Every other screen stands over the project list
 // with text of its own, and a press must not reach a row nobody can see.
-func (d dialog) hasRows() bool {
-	switch d {
-	case dialogNone, dialogHosts, dialogRemote, dialogSessions:
+func (m Model) hasRows() bool {
+	switch m.dialog {
+	case dialogNone, dialogSessions:
 		return true
+	case dialogLink:
+		return m.link.list() != nil
 	}
 	return false
 }
@@ -136,11 +135,8 @@ type Model struct {
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
-	dialog    dialog             // the link dialog, while it is up
-	host      string             // the host the dialog's second step shows
-	rfilter   string             // the query over the host's projects
-	rbefore   revier.ProjectName // the host's project the cursor was on when its query began
-	asking    string             // the host an ask is out to, while it is
+	dialog    dialog             // the screen standing over the surface
+	link      linkScreen         // the link dialog (link.go)
 	saving    bool               // whether a session save is out
 	restoring string             // the session a restore is walking, while it is
 	outcome   sessionOutcome     // what the last save or restore came to
@@ -152,8 +148,6 @@ type Model struct {
 	// the order of the rows a query leaves is ranked's, and what a row looks
 	// like is the delegate's.
 	plist    list.Model
-	hlist    list.Model // the hosts, the link dialog's first step
-	rlist    list.Model // a host's projects, its second
 	slist    list.Model // the saved sessions
 	filter   string     // the query, held here so a refresh can re-apply it
 	keys     keyMap
@@ -177,8 +171,6 @@ type Model struct {
 	nrows    []string                         // what the new-project screen lists under the field
 	nrow     int                              // the chosen one of nrows, -1 for none
 	ndir     string                           // the folder the new-project screen asks to create
-	lname    textinput.Model                  // the name field of the link dialog's last step
-	rinput   textinput.Model                  // the query over the link dialog's second step
 	sname    textinput.Model                  // the name field of a session being saved
 	over     hovered                          // what the pointer is on
 	cell     *pointerCell                     // where the pointer last was, nil before it moved
@@ -205,10 +197,6 @@ type Model struct {
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.
 	tdeclared map[core.Chord]bool
-
-	// proposed is whether the link's name is still the one offered, which
-	// the first character typed replaces.
-	proposed bool
 
 	// The config screen.
 	ui        config.UI       // [ui] as config.toml holds it
@@ -244,15 +232,14 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
+		link:  newLinkScreen(th), slist: newSessionList(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
-		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
-		rinput: newPrompt(th, ""),
-		body:   newBody(),
-		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
+		path: newPathInput(th), sname: newSessionNameInput(th),
+		body: newBody(),
+		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 		pedit: newFieldInput(th),
 	}
 	// The files go in through the one function that reads them, so what is
@@ -803,8 +790,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.dialog {
 	case dialogNew:
 		return m.newKey(msg)
-	case dialogLinkName:
-		return m.linkNameKey(msg)
+	case dialogLink:
+		return m.linkKey(msg)
 	case dialogConfig:
 		return m.configKey(msg)
 	case dialogProject:
@@ -817,9 +804,6 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.sessionNameKey(msg)
 	case dialogShutdown:
 		return m.shutdownKey(msg)
-	}
-	if m.dialog != dialogNone {
-		return m.dialogKey(msg)
 	}
 	if m.agents {
 		return m.agentsKey(msg)
@@ -874,7 +858,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 	// The targets have no query: a letter typed there filters nothing.
-	if m.focus != focusTargets && m.promptKey(msg) {
+	if m.focus != focusTargets && promptKey(msg) {
 		return m.edit(msg)
 	}
 	return m, nil
@@ -890,12 +874,7 @@ func (m Model) selected() (revier.ProjectView, bool) {
 }
 
 func (m Model) project(name revier.ProjectName) (core.Project, bool) {
-	for _, p := range m.projects {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return core.Project{}, false
+	return projectNamed(m.projects, name)
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
@@ -1206,7 +1185,7 @@ func (m *Model) redrawSpin() {
 		}
 		return
 	}
-	if m.dialog.hasRows() {
+	if m.hasRows() {
 		for _, item := range m.bodyList().VisibleItems() {
 			if row, ok := item.(tableRow); ok && working(row.rowView()) {
 				m.syncBody()
