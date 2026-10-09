@@ -28,11 +28,7 @@ func fileScratch(t *testing.T) (root, workdir string) {
 	}
 	t.Setenv("MISE_STATE_DIR", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexec sleep 300\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	onPath(t, "claude", "exec sleep 300")
 	return os.Getenv("REVIER_CONFIG_HOME"), workdir
 }
 

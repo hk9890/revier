@@ -9,6 +9,10 @@
 //
 // The host lists and does nothing else. What it lists is shown in a terminal
 // elsewhere, so there is nothing here to open or to focus.
+//
+// The package is also the one reader of a process's parent on this machine:
+// Parent, which the kitty host walks a window's processes with, and
+// RunsUnder, the panels a shutdown closes last.
 package proc
 
 import (
@@ -21,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -138,10 +143,8 @@ func (h *Host) read(pid int) (process, bool) {
 	if err != nil {
 		return process{}, false
 	}
-	// The command name in parentheses may hold spaces and parentheses of its
-	// own; the fields after its last ')' are fixed: state, ppid, pgrp,
-	// session, tty, tpgid.
-	fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
+	// state, ppid, pgrp, session, tty, tpgid.
+	fields := statFields(stat)
 	if len(fields) < 6 {
 		return process{}, false
 	}
@@ -237,3 +240,43 @@ func (h *Host) Focus(context.Context, revier.TargetRef) error { return ErrListsO
 
 // Focused is never one of these: focus is in a terminal on another machine.
 func (h *Host) Focused(context.Context) (revier.TargetRef, error) { return revier.TargetRef{}, nil }
+
+// statFields is the fields of a /proc stat line after the command name. The
+// name is in parentheses and may hold spaces and parentheses of its own, so
+// the fields are counted from its last closing one: state, then ppid.
+func statFields(stat []byte) []string {
+	return strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
+}
+
+// Parent reads a process's parent from this machine's /proc.
+func Parent(pid int) (int, bool) {
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, false
+	}
+	fields := statFields(stat)
+	if len(fields) < 2 {
+		return 0, false
+	}
+	ppid, err := strconv.Atoi(fields[1])
+	return ppid, err == nil
+}
+
+// RunsUnder reports a panel the calling process runs under: the panel's
+// process is this process or one of its ancestors. The ancestors are read on
+// the first ask, so a command that closes nothing reads none.
+func RunsUnder() func(revier.Panel) bool {
+	ancestors := sync.OnceValue(func() map[int]bool {
+		mine := map[int]bool{}
+		for pid := os.Getpid(); pid > 1 && !mine[pid]; {
+			mine[pid] = true
+			ppid, ok := Parent(pid)
+			if !ok {
+				break
+			}
+			pid = ppid
+		}
+		return mine
+	})
+	return func(p revier.Panel) bool { return p.PID > 0 && ancestors()[p.PID] }
+}

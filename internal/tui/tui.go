@@ -443,10 +443,10 @@ func (m Model) leaveWord() string {
 	return "quit"
 }
 
-// hostTimeout bounds one round of host calls - a survey, one focus, or the
+// localHostWait bounds one round of host calls - a survey, one focus, or the
 // probe of a runtime host - so a hung wctl or kitty socket costs one refresh
 // and not the surface.
-const hostTimeout = 10 * time.Second
+const localHostWait = 10 * time.Second
 
 // Survey is one refresh of what this machine answers by itself: one bulk
 // listing per host here, matched locally. The linked hosts are AskRemotes's,
@@ -456,7 +456,7 @@ const hostTimeout = 10 * time.Second
 func (m Model) Survey() tea.Cmd {
 	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
 		// A state that cannot be read is nil, which lets nothing be pruned.
 		before, _ := loadState(root)
@@ -489,7 +489,7 @@ func (m Model) AskRemotes(hosts ...string) tea.Cmd {
 	}
 	c, local := m.core, m.local
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
 		answers := c.AskRemotes(ctx, links)
 		events.Sessions(c.Lay(local, answers).Views)
@@ -1147,7 +1147,7 @@ func (m Model) goRow(i int) tea.Cmd {
 	if ref := row.attached; !ref.IsZero() {
 		c := m.core
 		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)

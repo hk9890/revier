@@ -96,7 +96,7 @@ func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 	m, _ = press(m, "enter")
 
 	want := strings.Replace(sharedTargets, `launch = ["idea", "{{.Path}}"] # IntelliJ`, `launch = ["code", "{{.Path}}"] # IntelliJ`, 1)
-	if got := configText(t, root); got != want {
+	if got := fileText(t, config.File(root)); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
 	if !strings.Contains(screen(m), "window: code {{.Path}}") {
@@ -119,7 +119,7 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 	m, _ = press(m, "tab")
 	m = typeInto(m, "mise watch")
 	m, _ = press(m, "enter")
-	if got := configText(t, root); got != sharedTargets {
+	if got := fileText(t, config.File(root)); got != sharedTargets {
 		t.Fatalf("config.toml changed before the target was saved:\n%s", got)
 	}
 	m, _ = press(m, "up")
@@ -146,7 +146,7 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
     title = "tests"
     command = ["mise", "watch"]
 `, 1)
-	if got := configText(t, root); got != want {
+	if got := fileText(t, config.File(root)); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -163,7 +163,7 @@ func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	m, _ = press(m, "enter")
 
 	want := sharedTargets + "\n[[target]]\nname = \"notes\"\n  [target.window]\n  launch = [\"gedit\"]\n  match = { class = \"^gedit$\" }\n"
-	if got := configText(t, root); got != want {
+	if got := fileText(t, config.File(root)); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
 	if !strings.Contains(screen(m), "window: gedit") {
@@ -183,14 +183,14 @@ func TestTheConfigScreenDeletesASharedTarget(t *testing.T) {
 	if f := footer(m); !strings.Contains(f, "it would break") {
 		t.Errorf("footer = %q, want the refusal", f)
 	}
-	if got := configText(t, root); got != sharedTargets {
+	if got := fileText(t, config.File(root)); got != sharedTargets {
 		t.Errorf("config.toml changed:\n%s", got)
 	}
 
 	m, _ = press(m, "down")
 	m, _ = press(m, "alt+d")
 	m, _ = press(m, "y")
-	if got := configText(t, root); strings.Contains(got, "editor") || !strings.Contains(got, "# IntelliJ") {
+	if got := fileText(t, config.File(root)); strings.Contains(got, "editor") || !strings.Contains(got, "# IntelliJ") {
 		t.Errorf("config.toml =\n%s\nwant editor gone and its comment kept", got)
 	}
 	if strings.Contains(screen(m), "window: idea") {

@@ -16,9 +16,9 @@ func TestSelectRuntimeFallsThroughThePreferenceList(t *testing.T) {
 	working := hosttest.NewRuntime("working")
 	adapters := map[string]revier.Runtime{"broken": broken, "working": working}
 
-	got, err := selectRuntime(context.Background(), []string{"broken", "working"}, adapters)
+	got, err := selectHost(context.Background(), "runtime", []string{"broken", "working"}, defaultRuntimeOrder, adapters)
 	if err != nil {
-		t.Fatalf("selectRuntime: %v", err)
+		t.Fatalf("selectHost: %v", err)
 	}
 	if got == nil || got.Name() != "working" {
 		t.Fatalf("selected %v, want the second entry: a list is a preference order", got)
@@ -34,7 +34,7 @@ func TestSelectRuntimeReportsEveryFailure(t *testing.T) {
 	b.ProbeErr = errors.New("b is down")
 	adapters := map[string]revier.Runtime{"a": a, "b": b}
 
-	_, err := selectRuntime(context.Background(), []string{"a", "b"}, adapters)
+	_, err := selectHost(context.Background(), "runtime", []string{"a", "b"}, defaultRuntimeOrder, adapters)
 	if err == nil {
 		t.Fatal("want an error when no configured host is usable")
 	}
@@ -46,7 +46,7 @@ func TestSelectRuntimeReportsEveryFailure(t *testing.T) {
 }
 
 func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
-	_, err := selectRuntime(context.Background(), []string{"nosuch"}, map[string]revier.Runtime{})
+	_, err := selectHost(context.Background(), "runtime", []string{"nosuch"}, defaultRuntimeOrder, map[string]revier.Runtime{})
 	if err == nil || !strings.Contains(err.Error(), "nosuch") {
 		t.Fatalf("err = %v, want it to name the unknown host", err)
 	}
@@ -58,9 +58,9 @@ func TestHostNoneDisablesTheClass(t *testing.T) {
 	working := hosttest.New("gnome")
 	adapters := map[string]revier.WindowController{"gnome": working}
 
-	got, err := selectWindow(context.Background(), []string{hostNone, "gnome"}, adapters)
+	got, err := selectHost(context.Background(), "window", []string{hostNone, "gnome"}, defaultWindowOrder, adapters)
 	if err != nil {
-		t.Fatalf("selectWindow: %v", err)
+		t.Fatalf("selectHost: %v", err)
 	}
 	if got != nil {
 		t.Fatalf("selected %v, want none", got)
@@ -70,9 +70,9 @@ func TestHostNoneDisablesTheClass(t *testing.T) {
 // No configured list and nothing usable is survivable: window-only targets
 // report unavailable rather than the command failing.
 func TestSelectWindowWithNoDefaultsAvailable(t *testing.T) {
-	got, err := selectWindow(context.Background(), nil, map[string]revier.WindowController{})
+	got, err := selectHost(context.Background(), "window", nil, defaultWindowOrder, map[string]revier.WindowController{})
 	if err != nil {
-		t.Fatalf("selectWindow: %v", err)
+		t.Fatalf("selectHost: %v", err)
 	}
 	if got != nil {
 		t.Fatalf("selected %v, want nil", got)

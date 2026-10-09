@@ -52,7 +52,7 @@ func TestTheConfigScreenAddsAnAction(t *testing.T) {
 	m, _ = press(m, "enter")
 
 	want := "[[action]]\nkey = \"ctrl+y\"\nname = \"copy path\"\nrun = [\"wl-copy\", \"{{ .Path }}\"]\n"
-	if got := configText(t, root); got != want {
+	if got := fileText(t, config.File(root)); got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 	if !strings.Contains(screen(m), "copy path") {
@@ -77,7 +77,7 @@ func TestTheConfigScreenChangesAnAction(t *testing.T) {
 	m = typeInto(clearField(m), "alt+y")
 	m, _ = press(m, "enter")
 
-	if got, want := configText(t, root), strings.Replace(syncConfig, `"ctrl+g"`, `"alt+y"`, 1); got != want {
+	if got, want := fileText(t, config.File(root)), strings.Replace(syncConfig, `"ctrl+g"`, `"alt+y"`, 1); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
 	m, _ = press(m, "esc")
@@ -98,13 +98,13 @@ func TestTheConfigScreenDeletesAnAction(t *testing.T) {
 		t.Errorf("footer = %q, want the question", f)
 	}
 	m, _ = press(m, "n")
-	if got := configText(t, root); got != syncConfig {
+	if got := fileText(t, config.File(root)); got != syncConfig {
 		t.Errorf("config.toml = %q after n, want it untouched", got)
 	}
 
 	m, _ = press(m, "alt+d")
 	m, _ = press(m, "y")
-	if got, want := configText(t, root), "# my actions\n# g for git\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "# my actions\n# g for git\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 	if strings.Contains(screen(m), "git pull") {
@@ -134,7 +134,7 @@ func TestTheConfigScreenRefusesATakenKey(t *testing.T) {
 		if f := footer(m); !strings.Contains(f, want) {
 			t.Errorf("key %s: footer = %q, want %q", key, f, want)
 		}
-		if got := configText(t, root); got != syncConfig {
+		if got := fileText(t, config.File(root)); got != syncConfig {
 			t.Errorf("key %s: config.toml = %q, want it untouched", key, got)
 		}
 	}

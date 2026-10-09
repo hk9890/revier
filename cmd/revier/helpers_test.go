@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
@@ -43,4 +45,29 @@ func remoteProject(t *testing.T) core.Project {
 			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
 	return p
+}
+
+// configRoot writes a configuration root and points revier at it: cfg as
+// config.toml, when it is not empty, and each of files in the projects
+// directory, keyed by file name.
+func configRoot(t *testing.T, cfg string, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(file, body string) {
+		if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if cfg != "" {
+		write(filepath.Join(root, "config.toml"), cfg)
+	}
+	for name, body := range files {
+		write(filepath.Join(dir, name), body)
+	}
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	return root
 }

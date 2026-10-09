@@ -13,12 +13,7 @@ import (
 // renameRoot is a configuration root with one project file in it.
 func renameRoot(t *testing.T, name, body string) string {
 	t.Helper()
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	write(t, filepath.Join(root, "projects"), name+".toml", body)
-	return root
+	return projectsRoot(t, "", map[string]string{name + ".toml": body})
 }
 
 func TestRenameMovesTheFileAndKeepsItsText(t *testing.T) {

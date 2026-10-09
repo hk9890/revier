@@ -1,14 +1,12 @@
 //go:build integration
 
-// Layer L3: what Instances costs, against a stub tmux on the PATH that records
-// every call and answers with generated listings.
+// Layer L3: what Instances costs, against a recorder in place of tmux that
+// answers with generated listings.
 package tmux_test
 
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,31 +17,27 @@ import (
 // every pane on the server.
 func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	const projects = 90
-	dir := t.TempDir()
 	var sessions, panes strings.Builder
 	for i := range projects {
 		fmt.Fprintf(&sessions, "4242|$%d|1|project-%d\n", i, i)
 		fmt.Fprintf(&panes, "$%d|@%d|%%%d|100|zsh||shell\n", i, i, 2*i)
 		fmt.Fprintf(&panes, "$%d|@%d|%%%d|101|claude||agent\n", i, i, 2*i+1)
 	}
-	for name, body := range map[string]string{"sessions": sessions.String(), "panes": panes.String()} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
+	var calls []string
+	h := &tmux.Host{}
+	h.SetRunner(func(_ context.Context, args ...string) (string, error) {
+		joined := strings.Join(args, " ")
+		calls = append(calls, joined)
+		switch {
+		case strings.Contains(joined, "list-sessions"):
+			return sessions.String(), nil
+		case strings.Contains(joined, "list-panes"):
+			return panes.String(), nil
 		}
-	}
-	log := filepath.Join(dir, "calls")
-	script := "#!/bin/sh\n" +
-		"echo \"$*\" >> " + log + "\n" +
-		"case \"$*\" in\n" +
-		"*list-sessions*) cat " + filepath.Join(dir, "sessions") + " ;;\n" +
-		"*list-panes*) cat " + filepath.Join(dir, "panes") + " ;;\n" +
-		"esac\n"
-	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		return "", nil
+	})
 
-	got, err := (&tmux.Host{}).Instances(context.Background())
+	got, err := h.Instances(context.Background())
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
 	}
@@ -53,11 +47,7 @@ func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	if p := got[1].Panels; len(p) != 2 || p[0].ID != "%2" || p[0].Tab != "@1" || p[1].Tab != "@1" {
 		t.Errorf("panels = %+v, want %%2 and %%3, both in window @1", p)
 	}
-	calls, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := strings.Count(string(calls), "\n"); n != 2 {
-		t.Errorf("tmux invoked %d times, want 2:\n%s", n, calls)
+	if len(calls) != 2 {
+		t.Errorf("tmux invoked %d times, want 2: %q", len(calls), calls)
 	}
 }

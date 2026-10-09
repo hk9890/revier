@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
@@ -364,9 +361,13 @@ func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
 
 // CloseLast moves the steps that would end the calling process to the end of
 // the plan, so a shutdown run from a terminal of a workspace closes everything
-// else before its own terminal. self reports a panel the process runs under.
+// else before its own terminal. self reports a panel the process runs under,
+// and nil keeps the plan's order.
 // A window host lists a window with no panels, so its process stands for it.
 func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.Panel) bool) []CloseStep {
+	if self == nil {
+		return plan
+	}
 	byRef := make(map[string]revier.Instance, len(instances))
 	for _, inst := range instances {
 		byRef[key(inst.Ref)] = inst
@@ -394,38 +395,6 @@ func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.P
 		return 1
 	})
 	return out
-}
-
-// RunsUnder reports a panel the calling process runs under: the panel's
-// process is this process or one of its ancestors. It is CloseLast's self.
-func RunsUnder() func(revier.Panel) bool {
-	mine := map[int]bool{}
-	for pid := os.Getpid(); pid > 1 && !mine[pid]; {
-		mine[pid] = true
-		ppid, ok := parentPID(pid)
-		if !ok {
-			break
-		}
-		pid = ppid
-	}
-	return func(p revier.Panel) bool { return p.PID > 0 && mine[p.PID] }
-}
-
-// parentPID reads a process's parent from /proc. The command is the second
-// field of stat, in parentheses, and may itself hold spaces and parentheses,
-// so the fields are counted from its last closing one.
-func parentPID(pid int) (int, bool) {
-	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, false
-	}
-	s := string(raw)
-	fields := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
-	if len(fields) < 2 {
-		return 0, false
-	}
-	ppid, err := strconv.Atoi(fields[1])
-	return ppid, err == nil
 }
 
 // CloseResult is one step of a shutdown and what came of it. Open is a step
@@ -515,13 +484,6 @@ type ShutdownOpts struct {
 	Bound    map[revier.ProjectName]Bindings
 	Attached map[revier.ProjectName][]revier.TargetRef
 
-	// Self reports a panel the calling process runs under. With it, the
-	// steps that would end that process go last (CloseLast), ordered off the
-	// same survey the agents were read from, so a shutdown run from a
-	// terminal of a workspace closes everything else before its own
-	// terminal. Nil keeps the plan's order.
-	Self func(revier.Panel) bool
-
 	// Before runs once the recheck has let the plan through and before the
 	// first close, handed the survey the agents and the order were read
 	// from. It is where the session a shutdown ends is saved, so a close the
@@ -564,7 +526,7 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // could not read closes nothing either, and that one is its own refusal: the
 // rest of the plan still closes.
 //
-// That recheck's survey is the freshest one there is, so the order opts.Self
+// That recheck's survey is the freshest one there is, so the order c.Self
 // asks for and the session opts.Before saves are both taken from it: a
 // refused close saves nothing, and a saved session holds what is open now
 // rather than what was open when the plan was drawn.
@@ -579,9 +541,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		return nil, &BusyRefusal{Plan: plan}
 	}
-	if opts.Self != nil {
-		plan = CloseLast(plan, r.Instances, opts.Self)
-	}
+	plan = CloseLast(plan, r.Instances, c.Self)
 	// A shutdown with nothing left to close changes nothing, so there is
 	// nothing to record: the save is skipped rather than writing a session
 	// saying the desktop had been shut down. What leaves is read from each

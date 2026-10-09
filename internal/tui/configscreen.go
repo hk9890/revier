@@ -218,7 +218,7 @@ func (m Model) switchRuntime(step int) (tea.Model, tea.Cmd) {
 	m.switching = next
 	pick := m.pick
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
 		rt, err := pick(ctx, want)
 		return runtimeMsg{want: want, runtime: rt, err: err}

@@ -253,10 +253,10 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 }
 
 const (
-	// listTimeout bounds one run of the listing, which answers in well under
+	// listWait bounds one run of the listing, which answers in well under
 	// a second. A caller's own deadline can be a minute - a CLI command's -
 	// and one hung claude must not hold `revier list` that long.
-	listTimeout = 5 * time.Second
+	listWait = 5 * time.Second
 
 	// waitDelay is how long the listing's output is waited for once its
 	// context is done. Without it a child of claude that keeps stdout open
@@ -265,7 +265,7 @@ const (
 )
 
 func claudeAgents(ctx context.Context) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, listTimeout)
+	ctx, cancel := context.WithTimeout(ctx, listWait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
 	cmd.WaitDelay = waitDelay

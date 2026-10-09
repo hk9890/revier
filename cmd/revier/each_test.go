@@ -26,24 +26,17 @@ home = true
 // directory is created only when create names it, so the others are missing.
 func eachScratch(t *testing.T, dirs map[string]string, create ...string) string {
 	t.Helper()
-	root := t.TempDir()
-	projects := filepath.Join(root, "projects")
-	if err := os.MkdirAll(projects, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	files := map[string]string{}
 	for name, dir := range dirs {
-		body := fmt.Sprintf(eachProjectTOML, dir)
-		if err := os.WriteFile(filepath.Join(projects, name+".toml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		files[name+".toml"] = fmt.Sprintf(eachProjectTOML, dir)
 	}
+	root := configRoot(t, "", files)
 	for _, name := range create {
 		if err := os.MkdirAll(dirs[name], 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	state := filepath.Join(root, "state")
-	t.Setenv("REVIER_CONFIG_HOME", root)
 	t.Setenv("REVIER_STATE_HOME", state)
 	return state
 }

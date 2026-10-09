@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,7 +118,7 @@ func TestSavedFileIsReadableTOML(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/user/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`} {
-		if !contains(string(b), want) {
+		if !strings.Contains(string(b), want) {
 			t.Errorf("saved file has no %s:\n%s", want, b)
 		}
 	}
@@ -228,15 +229,6 @@ func mustSave(t *testing.T, root string, s session.Session) string {
 		t.Fatalf("Save: %v", err)
 	}
 	return path
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // A session saved by v0.3.0 recorded its conversations as panels, by position.

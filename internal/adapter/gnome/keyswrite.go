@@ -51,7 +51,7 @@ func (w *Writer) Bind(ctx context.Context, b revier.Binding) error {
 	for key, value := range map[string]string{
 		"name": b.Label, "binding": b.Chord, "command": b.Command,
 	} {
-		if _, err := w.write(ctx, w.dconf(), "write", path+key, quote(value)); err != nil {
+		if _, err := w.write(ctx, dconf, "write", path+key, quote(value)); err != nil {
 			return err
 		}
 	}
@@ -79,7 +79,7 @@ func (w *Writer) Disable(ctx context.Context, b revier.Binding) error {
 // dropAccelerator rewrites a built-in setting without the one accelerator the
 // binding stands for. A setting that no longer holds it is left alone.
 func (w *Writer) dropAccelerator(ctx context.Context, b revier.Binding) error {
-	raw, err := w.write(ctx, w.gsettings(), "get", b.Where, b.Label)
+	raw, err := w.write(ctx, gsettings, "get", b.Where, b.Label)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (w *Writer) dropAccelerator(ctx context.Context, b revier.Binding) error {
 	if len(kept) == len(current) {
 		return nil
 	}
-	_, err = w.write(ctx, w.gsettings(), "set", b.Where, b.Label, gvariantArray(kept))
+	_, err = w.write(ctx, gsettings, "set", b.Where, b.Label, gvariantArray(kept))
 	return err
 }
 
@@ -110,7 +110,7 @@ func (w *Writer) Remove(ctx context.Context, b revier.Binding) error {
 	if err := w.setEnabled(ctx, b.Where, false); err != nil {
 		return err
 	}
-	_, err := w.write(ctx, w.dconf(), "reset", "-f", b.Where)
+	_, err := w.write(ctx, dconf, "reset", "-f", b.Where)
 	return err
 }
 
@@ -119,7 +119,7 @@ func (w *Writer) Remove(ctx context.Context, b revier.Binding) error {
 // GNOME stores it in; a path that is already where it should be is left alone,
 // so a second run writes nothing.
 func (w *Writer) setEnabled(ctx context.Context, path string, want bool) error {
-	raw, err := w.write(ctx, w.gsettings(), "get", customSchema, "custom-keybindings")
+	raw, err := w.write(ctx, gsettings, "get", customSchema, "custom-keybindings")
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (w *Writer) setEnabled(ctx context.Context, path string, want bool) error {
 		return nil // already as it should be
 	}
 
-	_, err = w.write(ctx, w.gsettings(), "set", customSchema, "custom-keybindings", gvariantArray(out))
+	_, err = w.write(ctx, gsettings, "set", customSchema, "custom-keybindings", gvariantArray(out))
 	return err
 }
 

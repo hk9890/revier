@@ -201,7 +201,7 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[strin
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 
 	p("# %s: written by `revier new`.\n", name)
-	p("path = %s\n", quote(contractHome(dir)))
+	p("path = %s\n", quote(ContractHome(dir)))
 	if gitURL != "" {
 		p("git_url = %s\n", quote(gitURL))
 	}
@@ -248,9 +248,11 @@ func quote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
-// contractHome writes a path under the home directory as ~/..., because the
-// project file is shared between machines and the home directory is not.
-func contractHome(p string) string {
+// ContractHome writes a path under the home directory as ~/...: the form a
+// project file keeps, because it is shared between machines and the home
+// directory is not, and the form the surface shows, because it is how the user
+// names the path.
+func ContractHome(p string) string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return p

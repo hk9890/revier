@@ -74,7 +74,7 @@ func cmdShellNew(out io.Writer, args []string) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -33,7 +34,7 @@ type projectItem struct {
 func (i projectItem) FilterValue() string { return string(i.view.Project.Name) }
 
 func (i projectItem) rowView() revier.ProjectView { return i.view }
-func (i projectItem) rowPath() string             { return contractHome(i.view.Project.Path) }
+func (i projectItem) rowPath() string             { return config.ContractHome(i.view.Project.Path) }
 func (i projectItem) rowNote() string             { return "" }
 func (i projectItem) rowUnsurveyed() bool         { return i.unsurveyed }
 func (i projectItem) rowHeld() bool               { return i.held }

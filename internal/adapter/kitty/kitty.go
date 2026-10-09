@@ -47,6 +47,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -517,25 +518,13 @@ func (h *Host) parents() func(pid int) (int, bool) {
 	}
 }
 
-// parentOf reads a process's parent from /proc. kitty is a host on this
-// machine, so its pids are this machine's.
+// parentOf is a process's parent. kitty is a host on this machine, so its
+// pids are this machine's and /proc here answers.
 func (h *Host) parentOf(pid int) (int, bool) {
 	if h.parent != nil {
 		return h.parent(pid)
 	}
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, false
-	}
-	// The command name in parentheses may hold spaces and parentheses of its
-	// own; the fields after its last ')' are fixed: state, then ppid.
-	rest := stat[bytes.LastIndexByte(stat, ')')+1:]
-	fields := strings.Fields(string(rest))
-	if len(fields) < 2 {
-		return 0, false
-	}
-	ppid, err := strconv.Atoi(fields[1])
-	return ppid, err == nil
+	return proc.Parent(pid)
 }
 
 func base(arg string) string { return arg[strings.LastIndex(arg, "/")+1:] }

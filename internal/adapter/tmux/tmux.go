@@ -60,6 +60,10 @@ const focusOption = "@revier-focus"
 // Socket uses the user's default server.
 type Host struct {
 	Socket string
+
+	// tmux runs tmux with the arguments and returns its standard output.
+	// Tests replace it; production leaves it nil and runs the tmux on PATH.
+	tmux func(ctx context.Context, args ...string) (string, error)
 }
 
 func (h *Host) Name() string { return "tmux" }
@@ -82,6 +86,9 @@ func (h *Host) cmd(ctx context.Context, args ...string) *exec.Cmd {
 }
 
 func (h *Host) run(ctx context.Context, args ...string) (string, error) {
+	if h.tmux != nil {
+		return h.tmux(ctx, args...)
+	}
 	var out, errb bytes.Buffer
 	c := h.cmd(ctx, args...)
 	c.Stdout, c.Stderr = &out, &errb

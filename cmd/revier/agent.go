@@ -82,10 +82,10 @@ lands on whatever the panel shows.
 // so a script can tell it from a failure.
 var errWaitTimeout = errors.New("timed out")
 
-// promptTimeout bounds `revier agent prompt` from the host probe to the watch
+// promptWait bounds `revier agent prompt` from the host probe to the watch
 // for the turn to start. A wedged tmux would otherwise hold it for good. A
 // variable, so a test need not wait this long for it.
-var promptTimeout = commandTimeout
+var promptWait = commandWait
 
 func cmdAgent(out io.Writer, args []string) error {
 	sub := ""
@@ -181,7 +181,7 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 	if len(pos) != 2 {
 		return fmt.Errorf("usage: revier agent prompt <agent> [--] <text>")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), promptWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {
@@ -216,7 +216,7 @@ func cmdAgentRead(out io.Writer, args []string) error {
 	if len(pos) != 1 || *lines < 0 || (*lines > 0 && !*screen) {
 		return errors.New("usage: revier agent read <agent> [--screen [--lines <n>]]")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {
@@ -286,7 +286,7 @@ func cmdAgentKeys(out io.Writer, args []string) error {
 	if len(pos) < 2 {
 		return errors.New("usage: revier agent send-keys <agent> [--] <key> [<key> ..]")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), promptWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {
@@ -315,7 +315,7 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	if len(pos) != 1 {
 		return errors.New("usage: revier agent focus <agent> [--ref <instance>]")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {
@@ -372,7 +372,7 @@ func cmdAgentNew(out io.Writer, args []string) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 	a, err := newApp(ctx, out)
 	if err != nil {

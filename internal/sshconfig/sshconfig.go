@@ -99,6 +99,10 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 // directory, which is how ssh reads it and the form a tool that drops a file
 // into ~/.ssh/config writes. A home that cannot be resolved leaves the path
 // as it stands, which then matches nothing.
+//
+// It is config.ExpandHome again on purpose. This package reads one file and
+// imports nothing of revier, so config, core and session can each ask it
+// about a link's host; an import of config here would close that.
 func expandHome(p string) string {
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p

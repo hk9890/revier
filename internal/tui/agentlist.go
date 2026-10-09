@@ -466,7 +466,7 @@ func (m *Model) agentFacts(it agentItem, w int) string {
 	if it.agent.State.Dir != "" {
 		path = it.agent.State.Dir
 	}
-	line("Path", contractHome(path), th.Path)
+	line("Path", config.ContractHome(path), th.Path)
 	if it.project.GitURL != "" {
 		line("Git URL", it.project.GitURL, th.Path)
 	}

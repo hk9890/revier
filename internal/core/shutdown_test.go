@@ -676,13 +676,14 @@ func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _, _, projects := openDesktop(t, tc.status)
+			c.Self = self
 			plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 			if got, want := stepNames(plan), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
 				t.Fatalf("plan = %v, want %v", got, want)
 			}
 
 			out, err := c.Shutdown(context.Background(), plan, 0,
-				core.ShutdownOpts{Force: tc.force, Projects: projects, Self: self})
+				core.ShutdownOpts{Force: tc.force, Projects: projects})
 			if err != nil {
 				t.Fatalf("shutdown: %v", err)
 			}
@@ -690,6 +691,24 @@ func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
 				t.Errorf("closed in %v, want %v: the workspace this process runs under goes last", got, want)
 			}
 		})
+	}
+}
+
+// The config screen swaps the core for one over the runtime it selected. That
+// core is the same process, so a shutdown after the switch still closes the
+// terminal it runs in last.
+func TestACoreOverAnotherRuntimeStillClosesItsOwnStepLast(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	c.Self = func(p revier.Panel) bool { return p.ID == "1" }
+	c = c.WithRuntime(rt)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	out, err := c.Shutdown(context.Background(), plan, 0, reading(projects))
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if got, want := closedNames(out), []string{"notes", "editor", "home"}; !slices.Equal(got, want) {
+		t.Errorf("closed in %v, want %v: the switch dropped the panel this process runs under", got, want)
 	}
 }
 

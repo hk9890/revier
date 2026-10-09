@@ -67,7 +67,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	if *dry {
 		// A dry run prints the order this listing gives. The close takes its
 		// own from the survey it rechecks with.
-		return printClosePlan(a.out, core.CloseLast(plan, report.Instances, core.RunsUnder()))
+		return printClosePlan(a.out, core.CloseLast(plan, report.Instances, a.core.Self))
 	}
 	if busy := core.Busy(plan); len(busy) > 0 && !*force {
 		if err := printClosePlan(a.out, busy); err != nil {
@@ -76,10 +76,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return errShutdownBusy
 	}
 
-	opts := core.ShutdownOpts{
-		Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached,
-		Self: core.RunsUnder(),
-	}
+	opts := core.ShutdownOpts{Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached}
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the

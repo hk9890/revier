@@ -26,9 +26,9 @@ import (
 // it here, which is then a row like any other. Three steps in the list's own
 // place, with the pane beside them.
 
-// askTimeout bounds one ask of a host. Long enough for a cold ssh; short
+// askWait bounds one ask of a host. Long enough for a cold ssh; short
 // enough that a host that is down is a message, not a wait.
-const askTimeout = 15 * time.Second
+const askWait = 15 * time.Second
 
 // hostItem is one row of the dialog's first step.
 type hostItem struct{ host string }
@@ -56,7 +56,7 @@ func (i remoteItem) rowNote() string {
 	return "linked as " + string(i.linked)
 }
 
-// remoteHome writes a path on the host the way contractHome writes one here,
+// remoteHome writes a path on the host the way config.ContractHome writes one here,
 // with its home directory as ~. The host's home is not known here, so it is
 // taken to be the directory under /home or /Users the path starts in.
 func remoteHome(p string) string {
@@ -146,7 +146,7 @@ func (m Model) openHosts() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if len(hosts) == 0 {
-		m.err = fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", contractHome(path))
+		m.err = fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
 		return m, nil
 	}
 	items := make([]list.Item, 0, len(hosts))
@@ -275,7 +275,7 @@ func (m Model) askHost() (tea.Model, tea.Cmd) {
 	m.asking = it.host
 	c := m.core
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), askTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), askWait)
 		defer cancel()
 		views, err := c.ProjectsOn(ctx, it.host)
 		return askedMsg{host: it.host, views: views, err: err}
@@ -379,7 +379,7 @@ func (m Model) linkNameFault() error {
 		return err
 	}
 	if p, ok := m.project(name); ok {
-		return fmt.Errorf("a project named %q exists here: %s", name, contractHome(p.File))
+		return fmt.Errorf("a project named %q exists here: %s", name, config.ContractHome(p.File))
 	}
 	return nil
 }
@@ -451,7 +451,7 @@ func (m Model) linkNameScreen() string {
 		return say(th.Attention, err.Error())
 	}
 	return say(th.NameDim, "Enter writes") + "\n" +
-		say(th.Path, contractHome(config.ProjectFile(root, m.linkNameValue()))) + "\n" +
+		say(th.Path, config.ContractHome(config.ProjectFile(root, m.linkNameValue()))) + "\n" +
 		say(th.Meta, fmt.Sprintf("a link to %s on %s", it.view.Project.Name, m.host))
 }
 

@@ -243,7 +243,7 @@ func run(out io.Writer, args []string) error {
 
 	// A keypress command gets long enough for a detached launch's wait
 	// (core.BindWait) on top of the host calls around it.
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 
 	a, err := newApp(ctx, out)
@@ -286,8 +286,8 @@ func run(out io.Writer, args []string) error {
 	}
 }
 
-// commandTimeout bounds a command that has no bound of its own.
-var commandTimeout = core.BindWait + 30*time.Second
+// commandWait bounds a command that has no bound of its own.
+var commandWait = core.BindWait + 30*time.Second
 
 // projectFlag registers -p/--project on a flag set.
 func projectFlag(fs *flag.FlagSet) *string {

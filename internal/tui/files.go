@@ -176,7 +176,7 @@ func (m Model) askDropTarget(v revier.ProjectView) (tea.Model, tea.Cmd) {
 	default:
 		// Asked before anything closes: a delete the file refuses must not
 		// cost the windows and agents the close ends first.
-		err = config.CheckRemoveProjectTarget(p.File, m.usable, name)
+		err = config.CanRemoveProjectTarget(p.File, name, m.usable)
 	}
 	if err != nil {
 		m.err = err
@@ -265,7 +265,7 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 	if !ok {
 		return nil
 	}
-	written, err := config.RemoveProjectTarget(p.File, m.usable, target)
+	written, err := config.RemoveProjectTarget(p.File, target, m.usable)
 	if err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func (m Model) dropNote(name revier.ProjectName, target revier.TargetName) strin
 	if !ok {
 		return ""
 	}
-	file := contractHome(p.File)
+	file := config.ContractHome(p.File)
 	switch {
 	case target != "":
 		return "removes it from " + file
