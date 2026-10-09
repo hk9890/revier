@@ -91,7 +91,12 @@ func (m Model) openProject() (tea.Model, tea.Cmd) {
 // surface: the project as its file now loads.
 func (m Model) projectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	was := m.proj.name
-	res, cmd := m.proj.key(m.surface(), m.renameRefusal(was), msg)
+	// Only Enter on a typed field can rename.
+	var locked error
+	if m.proj.edit.Focused() {
+		locked = m.renameRefusal(was)
+	}
+	res, cmd := m.proj.key(m.surface(), locked, msg)
 	m.err = res.err
 	if p := res.written; p != nil {
 		if p.Name != was {

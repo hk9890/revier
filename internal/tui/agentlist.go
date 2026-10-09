@@ -372,7 +372,8 @@ func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.barKey(msg); ok {
 		return next, cmd
 	}
-	return m, m.agents.edit(msg)
+	cmd = m.agents.edit(msg)
+	return m, cmd
 }
 
 // key is every press the list itself takes: the movement keys, Enter, del
@@ -386,7 +387,6 @@ func (al *agentList) key(sf surface, msg tea.KeyMsg) (agentsResult, tea.Cmd) {
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
 		return agentsResult{}, tea.Quit
-	case switches(msg):
 	case key.Matches(msg, sf.keys.Back):
 		if al.filter != "" {
 			al.endSearch()
@@ -526,8 +526,8 @@ func spokeAt(now, t time.Time) string {
 	return t.Format(layout) + ", " + ago(now, t)
 }
 
-// agentTotals is the agents under the rule counted by state, for the totals
-// the rule carries: the rows the query left.
+// totals is the agents under the rule counted by state, for the totals the
+// rule carries: the rows the query left.
 func (al *agentList) totals() map[revier.Status]int {
 	counts := map[revier.Status]int{}
 	for _, item := range al.list.VisibleItems() {

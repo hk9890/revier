@@ -62,9 +62,10 @@ const (
 )
 
 // dialog is a screen standing over the surface: the link dialog (decisions.md
-// D45), the new-project field, the sessions screen and its name step, the config
-// screen, or the project screen. dialogNone is the surface itself, which is
-// where it is nearly always.
+// D45), the new-project field, the sessions screen, the config screen, the
+// help screen, the shutdown wizard, or the project screen. A screen's step is
+// the screen's own. dialogNone is the surface itself, which is where it is
+// nearly always.
 type dialog int
 
 const (
@@ -974,7 +975,8 @@ func (m Model) targetRows() []targetRow {
 // enter acts on the row under the cursor, by key or by double click.
 func (m Model) enter() (Model, tea.Cmd) {
 	if m.agents.shown {
-		return m, m.agents.goSelected(m.surface())
+		cmd := m.agents.goSelected(m.surface())
+		return m, cmd
 	}
 	return opened(m.act())
 }
