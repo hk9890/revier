@@ -89,7 +89,8 @@ type Action struct {
 	Argv []string
 	Dir  string
 
-	project core.Project
+	project revier.ProjectName
+	here    bool
 	name    string
 	start   time.Time
 	ledger  core.Ledger
@@ -109,10 +110,10 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 	if err != nil {
 		return Action{}, err
 	}
-	a := Action{Argv: argv, Dir: dir, project: p, name: name, start: time.Now(), ledger: c.Ledger}
-	if p.Remote == nil {
+	a := Action{Argv: argv, Dir: dir, project: p.Name, here: p.Remote == nil, name: name, start: time.Now(), ledger: c.Ledger}
+	if a.here {
 		a.ledger.Update(func(st *state.State) bool {
-			st.Launched(p.Name, "", a.start)
+			st.Launched(a.project, "", a.start)
 			return true
 		})
 	}
@@ -125,8 +126,8 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 // revier that ran it on its host, which `revier events` prints with that
 // host, so it is no second one here.
 func (a Action) Done(err error) {
-	logging.Op("action", a.start, err, "project", a.project.Name, "action", a.name, "argv", a.Argv)
-	if err == nil && a.project.Remote == nil {
-		a.ledger.Record(revier.Event{Time: a.start, Kind: revier.EventAction, Project: a.project.Name, Action: a.name})
+	logging.Op("action", a.start, err, "project", a.project, "action", a.name, "argv", a.Argv)
+	if err == nil && a.here {
+		a.ledger.Record(revier.Event{Time: a.start, Kind: revier.EventAction, Project: a.project, Action: a.name})
 	}
 }

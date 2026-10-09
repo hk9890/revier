@@ -750,5 +750,6 @@ link one, rename one, run an action - and the copies differed: one stamped an
 action's launch and its event with two times. `internal/app` holds a sequence
 that crosses the project files, a checkout, the state, the saved sessions or
 the events; a surface takes the input and shows the result. The core stays
-free of files, so the sequences are not there. An event is recorded by the
-operation that did the thing, through the ledger (D120), and by no surface.
+free of files, so the sequences are not there. The event of a use is recorded
+by the operation that did the thing, through the ledger (D120); a surface
+records only the conversations its survey saw.

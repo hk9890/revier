@@ -48,7 +48,10 @@ func cmdRun(ctx context.Context, a *app, args []string) error {
 	}
 	err = runAction(a.out, act.Argv, act.Dir)
 	act.Done(err)
-	return err
+	if err != nil {
+		return fmt.Errorf("%w: %w", errActionFailed, err)
+	}
+	return nil
 }
 
 // errActionFailed marks an action's own failure, whose exit status revier
@@ -68,8 +71,5 @@ func runAction(out io.Writer, argv []string, dir string) error {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, out, os.Stderr
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("%w: %w", errActionFailed, err)
-	}
-	return nil
+	return c.Run()
 }

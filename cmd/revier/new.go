@@ -42,7 +42,7 @@ func cmdNew(out io.Writer, args []string) error {
 }
 
 // createProject writes the project for the working directory, as
-// app.CreateProject writes it. An empty name is the directory's own.
+// internal/app's CreateProject writes it. An empty name is the directory's own.
 func createProject(out io.Writer, root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
