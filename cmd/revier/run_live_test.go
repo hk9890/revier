@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -17,6 +18,17 @@ import (
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// acting is the app over one project and the actions it can run.
+func acting(root string, p core.Project, c *core.Core, actions ...config.Action) *app {
+	return &app{cfg: &config.Config{Actions: actions}, projects: []core.Project{p}, state: &state.State{}, stateRoot: root, core: c, out: &bytes.Buffer{}}
+}
+
+// localProject is a project on this machine, in a directory that exists.
+func localProject(t *testing.T) core.Project {
+	t.Helper()
+	return core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir()})
+}
 
 // An action that ran is an event; one that failed is the log's alone.
 func TestAnActionThatRanIsAnEvent(t *testing.T) {

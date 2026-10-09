@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/hk9890/revier/internal/config"
 )
 
 // Path is the user's ssh configuration file, or what REVIER_SSH_CONFIG
@@ -75,9 +73,7 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 			}
 		case "include":
 			for _, pattern := range fields {
-				// A leading "~" is the home directory, which is how ssh reads
-				// an Include and what a tool that adds one writes.
-				pattern = config.ExpandHome(pattern)
+				pattern = expandHome(pattern)
 				if !filepath.IsAbs(pattern) {
 					pattern = filepath.Join(filepath.Dir(path), pattern)
 				}
@@ -97,4 +93,23 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	return nil
+}
+
+// expandHome resolves a leading "~" in an Include path against the home
+// directory, which is how ssh reads it and the form a tool that drops a file
+// into ~/.ssh/config writes. A home that cannot be resolved leaves the path
+// as it stands, which then matches nothing.
+//
+// It is config.ExpandHome again on purpose. This package reads one file and
+// imports nothing of revier, so config, core and session can each ask it
+// about a link's host; an import of config here would close that.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }

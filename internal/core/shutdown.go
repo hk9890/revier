@@ -484,13 +484,6 @@ type ShutdownOpts struct {
 	Bound    map[revier.ProjectName]Bindings
 	Attached map[revier.ProjectName][]revier.TargetRef
 
-	// Self reports a panel the calling process runs under. With it, the
-	// steps that would end that process go last (CloseLast), ordered off the
-	// same survey the agents were read from, so a shutdown run from a
-	// terminal of a workspace closes everything else before its own
-	// terminal. Nil keeps the plan's order.
-	Self func(revier.Panel) bool
-
 	// Before runs once the recheck has let the plan through and before the
 	// first close, handed the survey the agents and the order were read
 	// from. It is where the session a shutdown ends is saved, so a close the
@@ -533,7 +526,7 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // could not read closes nothing either, and that one is its own refusal: the
 // rest of the plan still closes.
 //
-// That recheck's survey is the freshest one there is, so the order opts.Self
+// That recheck's survey is the freshest one there is, so the order c.Self
 // asks for and the session opts.Before saves are both taken from it: a
 // refused close saves nothing, and a saved session holds what is open now
 // rather than what was open when the plan was drawn.
@@ -548,9 +541,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		return nil, &BusyRefusal{Plan: plan}
 	}
-	if opts.Self != nil {
-		plan = CloseLast(plan, r.Instances, opts.Self)
-	}
+	plan = CloseLast(plan, r.Instances, c.Self)
 	// A shutdown with nothing left to close changes nothing, so there is
 	// nothing to record: the save is skipped rather than writing a session
 	// saying the desktop had been shut down. What leaves is read from each

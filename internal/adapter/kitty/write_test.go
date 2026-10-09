@@ -37,12 +37,21 @@ func newHost() *kitty.Host {
 	return h
 }
 
+// A realization with no name is refused before kitten is asked: an Open that
+// got as far as a launch fails as well, on the reply.
 func TestOpenRequiresAName(t *testing.T) {
 	h := newHost()
+	var got []call
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
-	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) { return nil, nil })
+	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+		got = append(got, call{socket, args})
+		return nil, nil
+	})
 	if _, err := h.Open(context.Background(), revier.Realization{Launch: []string{"x"}}); err == nil {
 		t.Fatal("want an error: without a name the OS window has no identity to match")
+	}
+	if len(got) != 0 {
+		t.Errorf("kitten invoked %d times, want none: %+v", len(got), got)
 	}
 }
 

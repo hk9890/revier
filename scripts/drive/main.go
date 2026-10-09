@@ -1,8 +1,9 @@
 // Command drive runs the core by hand against a private tmux server.
 //
 // It drives the core with no configuration: it builds a project in memory,
-// runs run-or-raise against it, and prints the survey as JSON. Everything happens on a tmux socket of its own, so it never touches the
-// user's tmux sessions and never opens a window on any display.
+// runs run-or-raise against it, and prints the survey as JSON. Everything
+// happens on a tmux socket of its own, so it never touches the user's tmux
+// sessions and never opens a window on any display.
 //
 // Usage:
 //

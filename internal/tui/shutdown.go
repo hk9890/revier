@@ -318,10 +318,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
 		st := loadedState(root)
-		opts := core.ShutdownOpts{
-			Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached,
-			Self: m.core.Self,
-		}
+		opts := core.ShutdownOpts{Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached}
 		note := ""
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so

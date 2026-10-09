@@ -76,10 +76,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return errShutdownBusy
 	}
 
-	opts := core.ShutdownOpts{
-		Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached,
-		Self: a.core.Self,
-	}
+	opts := core.ShutdownOpts{Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached}
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the

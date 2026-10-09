@@ -9,6 +9,10 @@
 //
 // The host lists and does nothing else. What it lists is shown in a terminal
 // elsewhere, so there is nothing here to open or to focus.
+//
+// The package is also the one reader of a process's parent on this machine:
+// Parent, which the kitty host walks a window's processes with, and
+// RunsUnder, the panels a shutdown closes last.
 package proc
 
 import (
@@ -21,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -262,16 +267,20 @@ func Parent(pid int) (int, bool) {
 }
 
 // RunsUnder reports a panel the calling process runs under: the panel's
-// process is this process or one of its ancestors.
+// process is this process or one of its ancestors. The ancestors are read on
+// the first ask, so a command that closes nothing reads none.
 func RunsUnder() func(revier.Panel) bool {
-	mine := map[int]bool{}
-	for pid := os.Getpid(); pid > 1 && !mine[pid]; {
-		mine[pid] = true
-		ppid, ok := Parent(pid)
-		if !ok {
-			break
+	ancestors := sync.OnceValue(func() map[int]bool {
+		mine := map[int]bool{}
+		for pid := os.Getpid(); pid > 1 && !mine[pid]; {
+			mine[pid] = true
+			ppid, ok := Parent(pid)
+			if !ok {
+				break
+			}
+			pid = ppid
 		}
-		pid = ppid
-	}
-	return func(p revier.Panel) bool { return p.PID > 0 && mine[p.PID] }
+		return mine
+	})
+	return func(p revier.Panel) bool { return p.PID > 0 && ancestors()[p.PID] }
 }

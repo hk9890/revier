@@ -1,7 +1,8 @@
 //go:build live
 
-// Layer L4: what the GNOME host starts is a real process. No GNOME session and
-// no wctl: Open launches and asks wctl nothing.
+// Layer L4: what the GNOME host starts is a real process, and so is the wctl
+// it runs. No GNOME session and no real wctl: Open launches and asks wctl
+// nothing, and the wctl the runner test finds on PATH is a script.
 package gnome_test
 
 import (
@@ -58,5 +59,31 @@ func TestOpenOutlivesTheKeypress(t *testing.T) {
 	after := strings.Fields(string(stat[strings.LastIndexByte(string(stat), ')')+1:]))
 	if sid, _ := strconv.Atoi(after[3]); sid != pid {
 		t.Errorf("session = %d, want one of its own (%d)", sid, pid)
+	}
+}
+
+// A wctl without --no-animation says so on its standard error and exits
+// non-zero, and the host reads the refusal in the error its runner makes of
+// that. The recorder of the L3 tests writes that error itself, so this one
+// runs a wctl that is a process.
+func TestARefusalReachesTheHostFromWctlsStandardError(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "argv")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + log + "'\n" +
+		"case \"$*\" in *--no-animation) echo 'Error: Usage: wctl minimize <WINDOW>' >&2; exit 1;; esac\n"
+	if err := os.WriteFile(filepath.Join(dir, "wctl"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := (&gnome.Host{}).Hide(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
+		t.Fatalf("Hide: %v", err)
+	}
+	got, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "minimize 4181121382 --no-animation\nminimize 4181121382\n"; string(got) != want {
+		t.Errorf("argv = %q, want %q", got, want)
 	}
 }

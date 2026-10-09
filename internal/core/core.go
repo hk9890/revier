@@ -52,9 +52,11 @@ type Core struct {
 	Served revier.Host
 
 	// Self reports a panel this process runs under: the panel's process is
-	// this process or one of its ancestors. A shutdown closes such a panel
-	// last (CloseLast). Reading a process's ancestors is a fact about this
-	// machine, so the wiring supplies it; nil keeps a plan's order.
+	// this process or one of its ancestors. Shutdown puts the steps that
+	// would end this process last (CloseLast), so a shutdown run from a
+	// terminal of a workspace closes everything else before its own
+	// terminal. Reading a process's ancestors is a fact about this machine,
+	// so the wiring supplies it; nil keeps a plan's order.
 	Self func(revier.Panel) bool
 
 	// Machine is this machine's name, as `uname -n` prints it: the first half
@@ -94,6 +96,7 @@ func (c *Core) WithRuntime(rt revier.Runtime) *Core {
 		Window:    c.Window,
 		Probes:    c.Probes,
 		Served:    c.Served,
+		Self:      c.Self,
 		Machine:   c.Machine,
 		Remotes:   maps.Clone(c.Remotes),
 		NewRemote: c.NewRemote,
