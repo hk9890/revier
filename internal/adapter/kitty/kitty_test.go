@@ -669,8 +669,10 @@ func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
 }
 
 // With no kitty running, Open starts one on a socket discovery recognises and
-// waits for it to answer.
+// waits for it to answer. The socket is a file in the runtime directory, which
+// only the user can enter.
 func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	h := newHost()
 	var started []string
 	running := false
@@ -681,7 +683,7 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 	})
 	h.SetSockets(func() []string {
 		if running {
-			return []string{"unix:@kitty-5000"}
+			return []string{"unix:/run/user/1000/kitty-5000"}
 		}
 		return nil
 	})
@@ -705,11 +707,11 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if ref.ID != "@kitty-5000/1" {
+	if ref.ID != "/run/user/1000/kitty-5000/1" {
 		t.Errorf("ref = %+v", ref)
 	}
 	joined := strings.Join(started, " ")
-	for _, want := range []string{"--detach", "--listen-on unix:@kitty-{kitty_pid}", "--name session:demo", "--title session:demo", "--directory /d", "claude"} {
+	for _, want := range []string{"--detach", "--listen-on unix:/run/user/1000/kitty-{kitty_pid}", "--name session:demo", "--title session:demo", "--directory /d", "claude"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("kitty started with %q, lacks %q", joined, want)
 		}
@@ -722,6 +724,30 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 	}
 	if !split {
 		t.Error("the second panel was never launched into the new kitty")
+	}
+}
+
+// With no runtime directory, the only socket Open could ask for is one every
+// user of the machine can connect to. It starts no kitty and says why.
+func TestOpenStartsNoKittyWithoutARuntimeDirectory(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	h := newHost()
+	started := false
+	h.SetStarter(func(context.Context, ...string) error {
+		started = true
+		return nil
+	})
+	h.SetSockets(func() []string { return nil })
+
+	_, err := h.Open(context.Background(), revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Panels: []revier.PanelSpec{{Title: "shell", Dir: "/d"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "XDG_RUNTIME_DIR") {
+		t.Errorf("Open = %v, want an error that names XDG_RUNTIME_DIR", err)
+	}
+	if started {
+		t.Error("a kitty was started with no private directory for its socket")
 	}
 }
 
