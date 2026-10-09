@@ -11,6 +11,8 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,13 +24,15 @@ import (
 // and a line that starts before the window is skipped whole.
 const tailBytes = 512 << 10
 
-// errNoMessage is a transcript read whole with nothing the agent said in it.
-// A session that has only listened is a normal outcome, not a read that broke.
-var errNoMessage = fmt.Errorf("%w: no assistant message in the transcript's tail", revier.ErrNoDetail)
+// errNoMessage is a transcript read whole with no turn in it: nothing the user
+// asked, and nothing the agent said or called. A session that has not started
+// is a normal outcome, not a read that broke.
+var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transcript's tail", revier.ErrNoDetail)
 
-// Detail is the last thing the agent in the panel said, read from the end of
-// its transcript: ~/.claude/projects/<dir>/<session id>.jsonl, the session
-// named for the panel's pid by the listing Inspect keeps.
+// Detail is the last thing the agent in the panel said and the turn it is in,
+// read from the end of its transcript: ~/.claude/projects/<dir>/<session
+// id>.jsonl, the session named for the panel's pid by the listing Inspect
+// keeps.
 //
 // The transcript's format is Claude Code's internal one, and it changes
 // between releases. So this is display only, as revier.Detailed says
@@ -220,45 +224,96 @@ func readTail(path string, n int64) ([]byte, error) {
 // entry is the part of a transcript line Detail reads. Everything else a line
 // carries is ignored, so a field Claude Code adds costs nothing.
 type entry struct {
-	IsSidechain bool      `json:"isSidechain"`
-	Timestamp   time.Time `json:"timestamp"`
-	Message     struct {
+	IsSidechain      bool      `json:"isSidechain"`
+	IsMeta           bool      `json:"isMeta"`
+	IsCompactSummary bool      `json:"isCompactSummary"`
+	Timestamp        time.Time `json:"timestamp"`
+	Message          struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
 
-// lastSaid walks the lines back from the end to the last text the agent wrote
-// in its own conversation. A subagent's lines (isSidechain) are its work, not
-// what the agent said to the user.
-func lastSaid(tail []byte) (revier.AgentDetail, error) {
-	lines := bytes.Split(tail, []byte("\n"))
-	for i := len(lines) - 1; i >= 0; i-- {
-		var e entry
-		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.Message.Role != "assistant" {
-			continue
-		}
-		if text := textOf(e.Message.Content); text != "" {
-			return revier.AgentDetail{Message: text, At: e.Timestamp}, nil
-		}
-	}
-	return revier.AgentDetail{}, errNoMessage
+// block is one part of a message's content: text the agent or the user wrote,
+// a tool the agent called, or what a tool answered.
+type block struct {
+	Type      string                     `json:"type"`
+	Text      string                     `json:"text"`
+	ID        string                     `json:"id"`
+	Name      string                     `json:"name"`
+	Input     map[string]json.RawMessage `json:"input"`
+	ToolUseID string                     `json:"tool_use_id"`
+	IsError   bool                       `json:"is_error"`
 }
 
-// textOf is the text of a message's content: a plain string, or the text
-// blocks of a block list, joined. A tool call or a thinking block is not
-// something the agent said.
-func textOf(content json.RawMessage) string {
+// briefRunes is how much of a prompt or of a tool's input Detail keeps: the
+// pane draws a line of each, and a prompt can be a pasted file.
+const briefRunes = 300
+
+// lastSaid walks the lines back from the end: through the turn the agent is
+// in, which is every tool it called since the user last wrote, and on to the
+// last text the agent wrote in its own conversation, which can be older than
+// the turn (decisions.md D122). A subagent's lines (isSidechain) are its
+// work, not the agent's. A line Claude Code wrote into the conversation
+// itself (isMeta), and the summary it put in a compacted conversation's place
+// (isCompactSummary), are not the user's: the turn goes on through both.
+//
+// A call's result is on a line after the call, so walking back meets it
+// first; a call met with no result is still open.
+func lastSaid(tail []byte) (revier.AgentDetail, error) {
+	var d revier.AgentDetail
+	failed := map[string]bool{}
+	inTurn := true
+	lines := bytes.Split(tail, []byte("\n"))
+	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == ""); i-- {
+		var e entry
+		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
+			continue
+		}
+		text, blocks := contentOf(e.Message.Content)
+		switch e.Message.Role {
+		case "assistant":
+			if d.Message == "" && text != "" {
+				d.Message, d.At = text, e.Timestamp
+			}
+			for at := len(blocks) - 1; at >= 0 && inTurn; at-- {
+				if b := blocks[at]; b.Type == "tool_use" {
+					isFailed, done := failed[b.ID]
+					d.Tools = append(d.Tools, revier.ToolCall{Name: b.Name, Input: inputOf(b.Input), Pending: !done, Failed: isFailed})
+				}
+			}
+		case "user":
+			if !inTurn {
+				continue
+			}
+			for _, b := range blocks {
+				if b.Type == "tool_result" {
+					failed[b.ToolUseID] = b.IsError
+				}
+			}
+			if prompt := promptOf(text); prompt != "" {
+				d.Prompt, inTurn = prompt, false
+			}
+		}
+	}
+	if d.IsZero() {
+		return revier.AgentDetail{}, errNoMessage
+	}
+	slices.Reverse(d.Tools)
+	return d, nil
+}
+
+// contentOf is a message's content: its text, which is a plain string or the
+// text blocks of a block list joined, and the blocks. A tool call or a
+// thinking block is not something the agent said.
+func contentOf(content json.RawMessage) (string, []block) {
 	var plain string
 	if json.Unmarshal(content, &plain) == nil {
-		return strings.TrimSpace(plain)
+		return strings.TrimSpace(plain), nil
 	}
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
+	var blocks []block
 	if json.Unmarshal(content, &blocks) != nil {
-		return ""
+		return "", nil
 	}
 	var texts []string
 	for _, b := range blocks {
@@ -266,5 +321,69 @@ func textOf(content json.RawMessage) string {
 			texts = append(texts, strings.TrimSpace(b.Text))
 		}
 	}
-	return strings.Join(texts, "\n\n")
+	return strings.Join(texts, "\n\n"), blocks
+}
+
+var (
+	slashCommand = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>`)
+	slashArgs    = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
+	pasted       = regexp.MustCompile(`(?s)<pasted_content[^>]*>.*?</pasted_content[^>]*>`)
+)
+
+// notPrompts open the user lines the user asked nothing in: what a local
+// command printed for the user alone, a shell command of the `!` mode and
+// what it printed, the report of a background task, and an interrupt.
+var notPrompts = []string{"<local-command-", "<bash-", "<task-notification>", "[Request interrupted"}
+
+// promptOf is a user line's text as the user typed it, or nothing for a line
+// the user asked nothing in (notPrompts). Claude Code files a slash command
+// as tags around its name and its arguments, and a paste under tags before
+// the words typed with it.
+func promptOf(text string) string {
+	if slices.ContainsFunc(notPrompts, func(open string) bool { return strings.HasPrefix(text, open) }) {
+		return ""
+	}
+	if name := slashCommand.FindStringSubmatch(text); name != nil && strings.HasPrefix(text, "<command-") {
+		typed := name[1]
+		if args := slashArgs.FindStringSubmatch(text); args != nil {
+			typed += " " + args[1]
+		}
+		return brief(typed)
+	}
+	if typed := brief(pasted.ReplaceAllString(text, " ")); typed != "" {
+		return typed
+	}
+	return brief(text)
+}
+
+// inputKeys are the fields of a tool's input that say what it was called on,
+// the most telling first. A tool with none of them is named and nothing more.
+var inputKeys = []string{"command", "file_path", "notebook_path", "pattern", "url", "query", "skill", "description", "prompt"}
+
+// inputOf is what a tool was called on, as one short line.
+func inputOf(input map[string]json.RawMessage) string {
+	for _, key := range inputKeys {
+		var value string
+		if json.Unmarshal(input[key], &value) == nil && strings.TrimSpace(value) != "" {
+			return brief(value)
+		}
+	}
+	// A question to the user is the one input worth reading that is not a
+	// string at the top.
+	var questions []struct {
+		Question string `json:"question"`
+	}
+	if json.Unmarshal(input["questions"], &questions) == nil && len(questions) > 0 {
+		return brief(questions[0].Question)
+	}
+	return ""
+}
+
+// brief is a text on one line, cut to briefRunes.
+func brief(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > briefRunes {
+		return string(r[:briefRunes])
+	}
+	return s
 }

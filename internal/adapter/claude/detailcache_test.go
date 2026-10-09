@@ -36,7 +36,7 @@ func TestDetailSaysThereIsNothingToShowRatherThanFailing(t *testing.T) {
 		{"nothing said", func(t *testing.T) (*claude.Probe, revier.Panel) {
 			p, root := transcripts(t)
 			writeTranscript(t, root, "-demo", "s1",
-				`{"type":"user","message":{"role":"user","content":"hello?"}}`)
+				`{"type":"system","subtype":"turn_duration"}`)
 			return p, revier.Panel{PID: 101}
 		}},
 	} {

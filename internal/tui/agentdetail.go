@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -19,6 +20,9 @@ const detailWait = 2 * time.Second
 // maxPaneWidth is the widest the pane's text is set: past it a message's line
 // is too long to read, and a wider terminal leaves the pane as it was.
 const maxPaneWidth = 100
+
+// minMessageRows is the least of a message the pane keeps under the turn.
+const minMessageRows = 4
 
 // agentKey names one agent across surveys: the instance that holds it, by
 // host and id as the core names one, and its panel, whose id is unique only
@@ -115,8 +119,13 @@ func (m *Model) took(msg detailsMsg) {
 	m.atook = msg.seq
 	said := make(map[agentKey]revier.AgentDetail, len(msg.said))
 	for k, d := range msg.said {
-		if before := m.adetails[k]; d == (revier.AgentDetail{}) && before != (revier.AgentDetail{}) {
+		// A turn with no message is one whose last message is further back
+		// than the probe reads, and the one shown is still the last.
+		switch before := m.adetails[k]; {
+		case d.IsZero():
 			d = before
+		case d.Message == "" && before.Message != "":
+			d.Message, d.At = before.Message, before.At
 		}
 		said[k] = d
 	}
@@ -188,10 +197,10 @@ func (m Model) firstAgent(rows []agentRow) int {
 	return best
 }
 
-// agentSaid is the pane's part below the facts: the last thing the agent
-// under the pane's cursor said, and how long ago, so the user can tell whether
-// it is worth going to. The name and the state are on the row above and are
-// not repeated. rows counts the heading.
+// agentSaid is the pane's part below the facts: the turn the agent under the
+// pane's cursor is in (turn), then the last thing it said, and how long ago,
+// so the user can tell whether it is worth going to. The name and the state
+// are on the row above and are not repeated. rows counts the heading.
 //
 // A message that does not fit keeps its end, under an ellipsis: an agent ends
 // on what it did and what it needs, which is what the pane is read for
@@ -223,15 +232,32 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, tw, rows 
 		body = note("The last message of an agent on another machine is not implemented yet.")
 	case !answered:
 		body = note("reading...")
-	case d.Message == "":
+	case d.Message == "" && d.Prompt == "" && len(d.Tools) == 0:
 		body = note("Nothing this agent said can be read.")
 	default:
-		if !d.At.IsZero() {
-			head = []string{th.Meta.Render(ago(m.now(), d.At)), ""}
+		head = m.turn(a, d)
+		if d.Message != "" {
+			body = m.setMessage(d.Message, tw)
+			var age []string
+			if !d.At.IsZero() {
+				age = []string{th.Meta.Render(ago(m.now(), d.At)), ""}
+			}
+			// The message is what the pane is for (decisions.md D107): a
+			// pane with no room for the turn and minMessageRows of the
+			// message under it drops the turn's lines from the top, so the
+			// open call goes last.
+			for len(head) > 0 && len(head)+1+len(age)+min(len(body), minMessageRows) > room {
+				head = head[1:]
+			}
+			if len(head) > 0 {
+				head = append(head, "")
+			}
+			head = append(head, age...)
 		}
-		body = m.setMessage(d.Message, tw)
 	}
-	if len(head)+len(body) > room {
+	// The ellipsis stands for the start of a text that was cut, so a turn
+	// with no message under it carries none.
+	if len(body) > 0 && len(head)+len(body) > room {
 		tail := body[len(body)-max(room-len(head)-1, 0):]
 		for len(tail) > 0 && tail[0] == "" {
 			tail = tail[1:]
@@ -241,12 +267,88 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, tw, rows 
 	lines := append(head, body...)
 	lines = lines[max(len(lines)-room, 0):]
 	var b strings.Builder
-	b.WriteString(heading(m.theme, "Last message", w))
+	b.WriteString(heading(m.theme, "Last turn", w))
 	for _, line := range lines {
 		b.WriteString(clipTo(line, tw))
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// turn is the turn the agent is in, a line each: what the user asked, the
+// tools the agent called since, counted by name with the most called first,
+// and the last call that has no result yet (decisions.md D122). That call is
+// what an agent waiting for the user asks leave for, and what a working one
+// is running, so the agent's state words it. A line the harness gave nothing
+// for is left out.
+//
+// Each is drawn as text, as the message is: a prompt, a command and a tool's
+// name are whatever the transcript holds, and a command quotes what it likes
+// (D108).
+func (m Model) turn(a revier.AgentView, d revier.AgentDetail) []string {
+	th := m.theme
+	var lines []string
+	if d.Prompt != "" {
+		lines = append(lines, th.Help.Render("> ")+th.Meta.Render(oneLine(d.Prompt)))
+	}
+	if len(d.Tools) > 0 {
+		lines = append(lines, toolCounts(d.Tools, th))
+	}
+	for _, c := range slices.Backward(d.Tools) {
+		if !c.Pending {
+			continue
+		}
+		var word string
+		switch a.State.Status {
+		case revier.StatusAttention:
+			word = th.Attention.Render("waiting on")
+		case revier.StatusRunning:
+			word = th.Running.Render("running")
+		default:
+			// An agent at rest runs nothing: the call was cut off, by a
+			// shutdown or an interrupt, and its count is all that is left.
+			return lines
+		}
+		lines = append(lines, strings.TrimRight(word+" "+oneLine(c.Name)+" "+th.Meta.Render(oneLine(c.Input)), " "))
+		break
+	}
+	return lines
+}
+
+// oneLine is a text of the turn as the pane draws it: plain (plainText), and
+// on one line, because the pane counts a row for each.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(plainText(s)), " ")
+}
+
+// toolCounts is a turn's tool calls on one line: each tool with how often it
+// was called, the most called first, and how many calls failed.
+func toolCounts(tools []revier.ToolCall, th theme.Theme) string {
+	var names []string
+	counts := map[string]int{}
+	failed := 0
+	for _, c := range tools {
+		if counts[c.Name] == 0 {
+			names = append(names, c.Name)
+		}
+		counts[c.Name]++
+		if c.Failed {
+			failed++
+		}
+	}
+	slices.SortStableFunc(names, func(a, b string) int { return counts[b] - counts[a] })
+	parts := make([]string, len(names))
+	for i, name := range names {
+		parts[i] = oneLine(name)
+		if counts[name] > 1 {
+			parts[i] += th.Meta.Render(fmt.Sprintf(" ×%d", counts[name]))
+		}
+	}
+	line := strings.Join(parts, th.Meta.Render(" · "))
+	if failed > 0 {
+		line += th.Meta.Render(" · ") + th.Attention.Render(fmt.Sprintf("%d failed", failed))
+	}
+	return line
 }
 
 // setMessage is a message set as the pane's lines at a width, kept while the

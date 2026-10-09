@@ -223,10 +223,11 @@ type Titled interface {
 // assertion. Detail is the last thing the agent in a panel said, for the pane
 // that shows one agent, for the agent list, which orders its rows by when
 // each spoke, and for `revier agent read`, which prints it (decisions.md
-// D116). It is asked for every agent the surface shows - one project's
-// beside the project list, every project's on the agent list - each time the
-// surface refreshes, and never in a survey: keep it cheap, and read again only
-// what changed since the last answer.
+// D116), with the turn the agent is in, which the pane alone shows (D122). It
+// is asked for every agent the surface shows - one project's beside the
+// project list, every project's on the agent list - each time the surface
+// refreshes, and never in a survey: keep it cheap, and read again only what
+// changed since the last answer.
 //
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so
@@ -243,11 +244,37 @@ type Detailed interface {
 // a probe that broke, and is logged (docs/CODING.md, "Errors").
 var ErrNoDetail = errors.New("the probe has no detail for this panel")
 
-// AgentDetail is what an agent said last, and when. Either is empty when the
-// harness does not say.
+// AgentDetail is what an agent said last, and when, with the turn it is in:
+// what the user asked, and the tools the agent called since (decisions.md
+// D122). Any of them is empty when the harness does not say.
 type AgentDetail struct {
 	Message string    `json:"message,omitempty"`
 	At      time.Time `json:"at,omitzero"`
+
+	// Prompt is what the user asked last, and Tools the calls the agent made
+	// since, in the order it made them. A probe hands both over short: the
+	// surface draws a line of each, and keeps every answer while the agent
+	// lives.
+	Prompt string     `json:"prompt,omitempty"`
+	Tools  []ToolCall `json:"tools,omitempty"`
+}
+
+// IsZero reports whether the probe had nothing to say about the agent.
+func (d AgentDetail) IsZero() bool {
+	return d.Message == "" && d.At.IsZero() && d.Prompt == "" && len(d.Tools) == 0
+}
+
+// ToolCall is one tool an agent called: the tool under the harness's own
+// name, and what it was called on - a command, a file, a question.
+type ToolCall struct {
+	Name  string `json:"name"`
+	Input string `json:"input,omitempty"`
+
+	// Pending is a call with no result yet: the tool is running, or the
+	// harness is asking the user whether it may. Which of the two is the
+	// agent's status to say, not the call's.
+	Pending bool `json:"pending,omitempty"`
+	Failed  bool `json:"failed,omitempty"`
 }
 
 // Resumable is an optional capability of an AgentProbe, detected by type

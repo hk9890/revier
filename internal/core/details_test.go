@@ -69,7 +69,7 @@ func TestDetailsAreEmptyWhenTheProbeCannotSay(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c, _, agents := detailWorld(t, probe)
 			for i, d := range c.Details(context.Background(), agents) {
-				if d != (revier.AgentDetail{}) {
+				if !d.IsZero() {
 					t.Errorf("detail %d = %+v, want it empty", i, d)
 				}
 			}
@@ -85,7 +85,7 @@ func TestDetailsBeforeAnySurveyAreEmpty(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 	got := c.Details(context.Background(), []revier.AgentView{{Panel: "1", Ref: revier.TargetRef{Host: "rt", ID: "1"}}})
-	if len(got) != 1 || got[0] != (revier.AgentDetail{}) {
+	if len(got) != 1 || !got[0].IsZero() {
 		t.Errorf("Details = %+v, want one empty detail", got)
 	}
 	if rt.InstancesCalls != 0 || probe.DetailCalls() != 0 {

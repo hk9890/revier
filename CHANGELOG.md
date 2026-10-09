@@ -8,6 +8,14 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **The pane shows the turn an agent is in, above its last message:** your
+  last prompt, the tools the agent called since with the failures counted,
+  and the call it is running or waits on you for. The section is headed
+  `Last turn`. A Claude Code agent that has called tools and said nothing yet
+  now shows them, where the pane said nothing could be read.
+- **Action required for an out-of-tree probe that compares an `AgentDetail`
+  with `==`:** the type holds a slice now, so the comparison no longer
+  builds. Call `IsZero` in its place.
 - **A kitty that revier starts listens on a socket file only you can reach.**
   The control socket is `$XDG_RUNTIME_DIR/kitty-<pid>`. It was the abstract
   socket `@kitty-<pid>`, which every user of the machine can connect to, and
