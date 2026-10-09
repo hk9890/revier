@@ -728,26 +728,30 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 }
 
 // With no runtime directory, the only socket Open could ask for is one every
-// user of the machine can connect to. It starts no kitty and says why.
+// user of the machine can connect to. It starts no kitty and says why. A
+// relative path is no runtime directory: kitty resolves it under the
+// temporary directory.
 func TestOpenStartsNoKittyWithoutARuntimeDirectory(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", "")
-	h := newHost()
-	started := false
-	h.SetStarter(func(context.Context, ...string) error {
-		started = true
-		return nil
-	})
-	h.SetSockets(func() []string { return nil })
+	for _, dir := range []string{"", "run"} {
+		t.Setenv("XDG_RUNTIME_DIR", dir)
+		h := newHost()
+		started := false
+		h.SetStarter(func(context.Context, ...string) error {
+			started = true
+			return nil
+		})
+		h.SetSockets(func() []string { return nil })
 
-	_, err := h.Open(context.Background(), revier.Realization{
-		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{{Title: "shell", Dir: "/d"}},
-	})
-	if err == nil || !strings.Contains(err.Error(), "XDG_RUNTIME_DIR") {
-		t.Errorf("Open = %v, want an error that names XDG_RUNTIME_DIR", err)
-	}
-	if started {
-		t.Error("a kitty was started with no private directory for its socket")
+		_, err := h.Open(context.Background(), revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+			Panels: []revier.PanelSpec{{Title: "shell", Dir: "/d"}},
+		})
+		if err == nil || !strings.Contains(err.Error(), "XDG_RUNTIME_DIR") {
+			t.Errorf("XDG_RUNTIME_DIR=%q: Open = %v, want an error that names XDG_RUNTIME_DIR", dir, err)
+		}
+		if started {
+			t.Errorf("XDG_RUNTIME_DIR=%q: a kitty was started with no private directory for its socket", dir)
+		}
 	}
 }
 
