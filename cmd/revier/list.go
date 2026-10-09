@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"text/tabwriter"
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -39,14 +37,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	// What the survey can judge: a ref written after this, by another
-	// process, is to a window the listing may have missed. A state that
-	// cannot be read is nil, and a nil state lets nothing be pruned.
-	before, err := state.Load(a.stateRoot)
-	if err != nil {
-		slog.Warn("state load, nothing pruned", "err", err)
-	}
-	report, err := a.core.Survey(ctx, projects, a.state.Bound, a.state.Attached)
+	report, err := a.core.Survey(ctx, projects)
 	if err != nil {
 		return err
 	}
@@ -56,19 +47,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	views := report.Views
 
 	// Drop attachments and bindings whose windows are gone, so state does not
-	// accumulate refs to closed windows forever. The settle is made on the
-	// state as it is on disk: another process may have written it since. With
-	// no previous listing nothing is new, so a list claims nothing. The lock
-	// is taken only when the state loaded at startup has something to drop:
-	// a list runs every refresh on a linked host.
-	now := time.Now()
-	if a.core.Settle(a.state, before, report, nil, false, a.projects, now) {
-		if _, err := state.Update(a.stateRoot, func(s *state.State) bool {
-			return a.core.Settle(s, before, report, nil, false, a.projects, now)
-		}); err != nil {
-			slog.Warn("state update", "err", err)
-		}
-	}
+	// accumulate refs to closed windows forever. A list is the first settle
+	// of its process, so no window is new to it and it claims nothing.
+	a.core.Settle(report, a.projects, time.Now())
 
 	if *asJSON {
 		// What a save on another machine records for its link to a project

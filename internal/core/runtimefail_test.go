@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -23,7 +24,7 @@ var errRuntimeGone = errors.New("the runtime went away")
 // that prompts again types the text a second time.
 func TestAPromptWhoseEnterIsLostSaysTheTextSitsUnsent(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestAPromptWhoseEnterIsLostSaysTheTextSitsUnsent(t *testing.T) {
 // that it does: this prompt can be given again.
 func TestAPromptThatTypesNothingIsThePlainFailure(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestAPromptThatTypesNothingIsThePlainFailure(t *testing.T) {
 // sends them all again types those two a second time.
 func TestSendKeysThatStopPartWaySayHowManyArrived(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestATabThatCannotBeFocusedInTheWorkspaceItOpenedReportsTheWorkspace(t *tes
 	rt.FocusPanelErr = errRuntimeGone
 	c := &core.Core{Runtime: rt}
 
-	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if !errors.Is(err, errRuntimeGone) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -104,7 +105,7 @@ func TestATabThatCannotBeFocusedInAnOpenWorkspaceReportsNothing(t *testing.T) {
 	rt.FocusPanelErr = errRuntimeGone
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if !errors.Is(err, errRuntimeGone) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -123,13 +124,13 @@ func TestAReturnHomeFromATabThatCannotBeFocusedIsAFailure(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
-	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	wm.SetFocus(osw)
 	rt.FocusPanelErr = errRuntimeGone
 
-	res, err := c.Go(context.Background(), p, "tickets", nil)
+	res, err := press(context.Background(), c, p, "tickets")
 	if !errors.Is(err, errRuntimeGone) || !strings.Contains(err.Error(), "focus home") {
 		t.Fatalf("err = %v, want the failure to focus home", err)
 	}
@@ -148,13 +149,13 @@ func restoreWithAgentTabs(t *testing.T, fail func(*hosttest.FakeRuntime)) (core.
 	rt := hosttest.NewRuntime("rt")
 	fail(rt)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "declared"},
 		{Harness: "claude", Session: "second"},
 		{Harness: "claude", Session: "third"},
 	})
 	if err != nil {
-		t.Fatalf("GoResuming: %v; the workspace opened, so a tab's failure is not the launch's", err)
+		t.Fatalf("ActivateWaiting: %v; the workspace opened, so a tab's failure is not the launch's", err)
 	}
 	if res.Ref.IsZero() {
 		t.Fatal("the opened workspace is not reported")
@@ -295,11 +296,12 @@ func TestActivateAgentWaitingFocusesTheAgentAndWritesNothing(t *testing.T) {
 	ref := rt.Add("diff:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
 	c := &core.Core{Runtime: rt}
 	a := revier.AgentView{Panel: "2", Ref: ref, State: revier.AgentState{Harness: "agent", Session: "abc"}}
-	l := &ledger{}
+	l := pendingLaunch("revier", "home")
 
 	// A pending launch of a project on this machine does not hold its agent:
 	// home is not up, and the agent is in the diff window, which is.
-	res, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a, pendingLedger{l})
+	c.Ledger = l
+	res, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a)
 	if err != nil || res.ComingUp {
 		t.Fatalf("ActivateAgentWaiting = %+v, %v; want the agent reached", res, err)
 	}
@@ -324,7 +326,8 @@ func TestActivateAgentWaitingLeavesALinkThatIsComingUp(t *testing.T) {
 	c := &core.Core{Runtime: rt, Machine: "box"}
 	a := revier.AgentView{Panel: "9", Ref: revier.TargetRef{Host: "rt", ID: "1"}, State: revier.AgentState{Harness: "claude"}}
 
-	res, err := c.ActivateAgentWaiting(context.Background(), linkProject(t), a, pendingLedger{&ledger{}})
+	c.Ledger = pendingLaunch("far", "home")
+	res, err := c.ActivateAgentWaiting(context.Background(), linkProject(t), a)
 	if err != nil || !res.ComingUp || res.Target != "home" {
 		t.Fatalf("ActivateAgentWaiting = %+v, %v; want home coming up", res, err)
 	}
@@ -344,9 +347,11 @@ func TestActivateAgentWaitingFindsALinksWorkspaceByItsBinding(t *testing.T) {
 	ref := rt.Add("renamed", "kitty", agentPanel("9", "idle"))
 	c := &core.Core{Runtime: rt, Machine: "box"}
 	a := revier.AgentView{Panel: "9", Ref: ref, State: revier.AgentState{Harness: "claude"}}
-	l := &ledger{bound: map[revier.ProjectName]core.Bindings{"far": {"home": ref}}}
+	l := bindings("far", core.Bindings{"home": ref})
+	l.st.Launch = &state.Launch{Project: "far", Target: "home", At: time.Now()}
 
-	res, err := c.ActivateAgentWaiting(context.Background(), linkProject(t), a, pendingLedger{l})
+	c.Ledger = l
+	res, err := c.ActivateAgentWaiting(context.Background(), linkProject(t), a)
 	if err != nil || res.ComingUp {
 		t.Fatalf("ActivateAgentWaiting = %+v, %v; want the agent reached", res, err)
 	}
@@ -364,7 +369,8 @@ func TestActivateAgentWaitingRecordsNoEventForAFailure(t *testing.T) {
 	c := &core.Core{Runtime: rt}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "agent"}}
 
-	if _, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a, &ledger{}); !errors.Is(err, errRuntimeGone) {
+	c.Ledger = &ledger{}
+	if _, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a); !errors.Is(err, errRuntimeGone) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
 	if got := recorded(); len(got) != 0 {

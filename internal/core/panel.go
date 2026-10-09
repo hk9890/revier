@@ -144,7 +144,7 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 	return "", false
 }
 
-// goTab is Go for a target inside another. The tab is opened only when the
+// goTab is goTo for a target inside another. The tab is opened only when the
 // instance holds none for this target, so a second press never makes a second
 // tab; the instance is opened first when it is not there.
 //
@@ -166,12 +166,12 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	if err != nil {
 		return Result{}, err
 	}
-	// An instance opened for the tab was focused by that Go, and the window
+	// An instance opened for the tab was focused by that goTo, and the window
 	// host may not list its OS window yet: it is raised by the launch, not here.
 	// It holds no tab yet, so only its ref is needed.
 	opened := !found
 	if opened {
-		res, err := c.Go(ctx, p, t.Runtime.Inside, bound)
+		res, err := c.goTo(ctx, p, t.Runtime.Inside, bound)
 		if err != nil {
 			return res, err // an instance opened and not focused is still pinned
 		}
@@ -198,7 +198,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// keep raising the instance after inside is removed from the file.
 	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref}
 	// An instance this press opened is reported with a failure after it, as
-	// Go reports one it could not focus, so the caller still pins it.
+	// goTo reports one it could not focus, so the activation still pins it.
 	var failed Result
 	if opened {
 		failed = Result{Target: res.Target, Ref: res.Ref}
@@ -210,7 +210,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		}
 		res.Launched = true
 	}
-	// An instance this press opened was focused by its Go. One that was there
+	// An instance this press opened was focused by its goTo. One that was there
 	// is focused before its tab: on tmux, focusing the session is what brings
 	// a terminal showing another session to the tab.
 	if !opened {
@@ -242,7 +242,7 @@ func inTab(resumes []Resume) []AgentOutcome {
 }
 
 // goHomeFromTab is the second press on a tab. A home that holds the tab gets
-// its own first panel back; any other home is an ordinary Go.
+// its own first panel back; any other home is an ordinary goTo.
 func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in revier.Instance, bound Bindings, opener revier.PanelOpener) (Result, error) {
 	home, _ := p.Home()
 	if c.holds(snap, p, home.Name, bound, in) {
@@ -253,7 +253,7 @@ func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in r
 			return Result{Target: home.Name, Ref: in.Ref}, nil
 		}
 	}
-	return c.Go(ctx, p, home.Name, bound)
+	return c.goTo(ctx, p, home.Name, bound)
 }
 
 // holds reports whether the named target's instance is in.

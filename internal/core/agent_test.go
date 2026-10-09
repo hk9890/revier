@@ -33,7 +33,7 @@ func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
 func TestAgentIsTheProjectsOnlyAgent(t *testing.T) {
 	c, _ := agentCore(shellPanel("1"), agentPanel("2", "idle"))
 
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatalf("Agent: %v", err)
 	}
@@ -48,11 +48,11 @@ func TestAgentRefusesAnAmbiguousProject(t *testing.T) {
 	c, _ := agentCore(agentPanel("1", "idle"), agentPanel("2", "busy"))
 	p := prepared(t, project())
 
-	_, err := c.Agent(context.Background(), p, "", nil)
+	_, err := c.Agent(context.Background(), p, "")
 	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:1, revier:2") {
 		t.Fatalf("err = %v, want ErrAmbiguous naming revier:1 and revier:2", err)
 	}
-	a, err := c.Agent(context.Background(), p, "2", nil)
+	a, err := c.Agent(context.Background(), p, "2")
 	if err != nil || a.Panel.ID != "2" {
 		t.Fatalf("Agent by panel id = %+v, %v; want panel 2", a, err)
 	}
@@ -64,11 +64,11 @@ func TestAgentByTargetName(t *testing.T) {
 	rt.Add("diff:revier", "kitty", agentPanel("7", "busy"))
 	p := prepared(t, project())
 
-	a, err := c.Agent(context.Background(), p, "diff", nil)
+	a, err := c.Agent(context.Background(), p, "diff")
 	if err != nil || a.Panel.ID != "7" {
 		t.Fatalf("Agent(diff) = %+v, %v; want panel 7", a, err)
 	}
-	if _, err := c.Agent(context.Background(), p, "editor", nil); err == nil || !strings.Contains(err.Error(), "not running") {
+	if _, err := c.Agent(context.Background(), p, "editor"); err == nil || !strings.Contains(err.Error(), "not running") {
 		t.Errorf("Agent(editor) err = %v, want not running", err)
 	}
 }
@@ -91,11 +91,11 @@ func TestAgentRefusesWhatIsNotAnAgent(t *testing.T) {
 		{"1", core.ErrNotAgent},
 		{"3", core.ErrNotAgent},
 	} {
-		if _, err := c.Agent(context.Background(), p, tc.addr, nil); !errors.Is(err, tc.want) {
+		if _, err := c.Agent(context.Background(), p, tc.addr); !errors.Is(err, tc.want) {
 			t.Errorf("Agent(%q) err = %v, want %v", tc.addr, err, tc.want)
 		}
 	}
-	if _, err := c.Agent(context.Background(), p, "nosuch", nil); err == nil {
+	if _, err := c.Agent(context.Background(), p, "nosuch"); err == nil {
 		t.Error("an address naming nothing must be an error")
 	}
 }
@@ -112,7 +112,7 @@ func TestUntil(t *testing.T) {
 
 func TestWaitReturnsWhenTheStatusArrives(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "busy"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestWaitReturnsWhenTheStatusArrives(t *testing.T) {
 // so the caller can report it and exit with its own status.
 func TestWaitTimesOutWithTheLastState(t *testing.T) {
 	c, _ := agentCore(agentPanel("1", "busy"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestWaitTimesOutWithTheLastState(t *testing.T) {
 // A wait with no timeout must still end when the agent does.
 func TestWaitEndsWhenTheAgentIsGone(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "busy"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestPromptTypesSubmitsAndWaitsForTheTurn(t *testing.T) {
 			rt.Retitle(panel, "busy")
 		}
 	}
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestPromptTypesSubmitsAndWaitsForTheTurn(t *testing.T) {
 // An idle agent that never starts is reported, not waited on forever.
 func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 	c, _ := agentCore(agentPanel("1", "idle"))
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,14 +218,14 @@ func TestAPanelIDHeldTwiceNamesNoAgent(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
-	if _, err := c.Agent(context.Background(), p, "1", nil); !errors.Is(err, core.ErrAmbiguous) {
+	if _, err := c.Agent(context.Background(), p, "1"); !errors.Is(err, core.ErrAmbiguous) {
 		t.Errorf("Agent(1) = %v, want ErrAmbiguous: two windows hold a panel 1", err)
 	}
-	_, err := c.Agent(context.Background(), p, "", nil)
+	_, err := c.Agent(context.Background(), p, "")
 	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:home") || !strings.Contains(err.Error(), "revier:diff") {
 		t.Errorf("Agent() = %v, want both agents named by their targets", err)
 	}
-	if a, err := c.Agent(context.Background(), p, "diff", nil); err != nil || a.Ref.Title != "diff:revier" {
+	if a, err := c.Agent(context.Background(), p, "diff"); err != nil || a.Ref.Title != "diff:revier" {
 		t.Errorf("Agent(diff) = %+v, %v; want the diff window's agent", a, err)
 	}
 }
@@ -241,7 +241,7 @@ func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
 			rt.Retitle(panel, "mystery") // TitleProbe reads this as unknown
 		}
 	}
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
 func TestPromptRefusesAnAgentThatMayShowADialog(t *testing.T) {
 	for _, title := range []string{"ask permission", "mystery"} {
 		c, rt := agentCore(agentPanel("1", title))
-		a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+		a, err := c.Agent(context.Background(), prepared(t, project()), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +275,7 @@ func TestPromptRefusesAnAgentThatMayShowADialog(t *testing.T) {
 
 func TestPromptRefusesMoreThanOneLine(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, _ := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, _ := c.Agent(context.Background(), prepared(t, project()), "")
 	if _, err := c.Prompt(context.Background(), a, "one\ntwo", time.Millisecond); err == nil || len(rt.Sent) != 0 {
 		t.Fatalf("err = %v, sent %+v; want a refusal and nothing sent", err, rt.Sent)
 	}
@@ -285,7 +285,7 @@ func TestPromptRefusesMoreThanOneLine(t *testing.T) {
 // is nothing to wait for.
 func TestPromptToAWorkingAgentReturnsAtOnce(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "busy"))
-	a, _ := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, _ := c.Agent(context.Background(), prepared(t, project()), "")
 	calls := rt.InstancesCalls
 	if _, err := c.Prompt(context.Background(), a, "also this", time.Hour); err != nil {
 		t.Fatalf("Prompt: %v", err)
@@ -299,7 +299,7 @@ func TestPromptNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -58,7 +58,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		scope = core.ShutdownTargets
 	}
 
-	report := a.core.SurveyToClose(ctx, a.projects, a.state.Bound, a.state.Attached, only)
+	report := a.core.SurveyToClose(ctx, a.projects, only)
 	plan := a.core.ShutdownPlan(report, only, scope)
 	if len(plan) == 0 {
 		_, _ = fmt.Fprintln(a.out, "nothing to close")
@@ -76,7 +76,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return errShutdownBusy
 	}
 
-	opts := core.ShutdownOpts{Force: *force, Projects: a.projects, Bound: a.state.Bound, Attached: a.state.Attached}
+	opts := core.ShutdownOpts{Force: *force, Projects: a.projects}
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the
@@ -85,7 +85,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		// runs on the budget the shutdown hands it, not on what the two
 		// surveys left of this command's.
 		opts.Before = func(saving context.Context, now core.Report) error {
-			stored, saved, gaps, err := a.core.SaveChanged(saving, a.stateRoot, now, a.state.Current, time.Now())
+			stored, saved, gaps, err := a.core.SaveChanged(saving, a.stateRoot, now, a.core.Ledger.State().Current, time.Now())
 			switch {
 			case err != nil:
 				return err

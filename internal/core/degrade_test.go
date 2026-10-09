@@ -49,7 +49,7 @@ func TestASurveyDegradesToTheHostsThatAnswered(t *testing.T) {
 	} {
 		t.Run(tc.failing, func(t *testing.T) {
 			c, projects := degraded(t, tc.failing)
-			report, err := c.Survey(context.Background(), projects, nil, nil)
+			report, err := c.Survey(context.Background(), projects)
 			if err != nil {
 				t.Fatalf("Survey: %v, want the view over the hosts that answered", err)
 			}
@@ -80,13 +80,13 @@ func TestASurveyDegradesToTheHostsThatAnswered(t *testing.T) {
 // copy. A target of the other host still goes.
 func TestGoRefusesATargetOfAHostThatCannotList(t *testing.T) {
 	c, projects := degraded(t, "rt")
-	if _, err := c.Go(context.Background(), projects[0], "home", nil); err == nil || !strings.Contains(err.Error(), "rt: instances: went away") {
+	if _, err := press(context.Background(), c, projects[0], "home"); err == nil || !strings.Contains(err.Error(), "rt: instances: went away") {
 		t.Errorf("Go(home) = %v, want the runtime's failure", err)
 	}
-	if _, err := c.Go(context.Background(), projects[0], "editor", nil); err != nil {
+	if _, err := press(context.Background(), c, projects[0], "editor"); err != nil {
 		t.Errorf("Go(editor) = %v, want the window host's target raised", err)
 	}
-	if _, err := c.Running(context.Background(), projects[0], "home", nil); err == nil {
+	if _, err := c.Running(context.Background(), projects[0], "home"); err == nil {
 		t.Error("Running(home) = nil, want the runtime's failure")
 	}
 }
@@ -101,13 +101,13 @@ func TestATabGoesWhileTheWindowHostCannotList(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
 
-	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go(tickets) = %v, want the tab opened", err)
 	}
-	if open, err := c.Running(context.Background(), p, "tickets", nil); err != nil || !open {
+	if open, err := c.Running(context.Background(), p, "tickets"); err != nil || !open {
 		t.Errorf("Running(tickets) = %v, %v; want the tab open", open, err)
 	}
-	if _, err := c.AgentWorkspace(context.Background(), p, "home", nil); err != nil {
+	if _, err := c.AgentWorkspace(context.Background(), p, "home"); err != nil {
 		t.Errorf("AgentWorkspace(home) = %v, want the workspace", err)
 	}
 }
@@ -119,7 +119,7 @@ func TestATabOfARuntimeThatCannotListIsUnknown(t *testing.T) {
 	rt.InstancesErr = errors.New("went away")
 	c := &core.Core{Runtime: rt}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {
 		t.Fatal(err)
 	}

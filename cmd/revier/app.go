@@ -13,17 +13,18 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// app is everything a command needs: configuration, persisted state, and a
-// core wired to the hosts this machine actually has.
+// app is everything a command needs: configuration, the state root, and a
+// core wired to the hosts this machine actually has and to the ledger of its
+// state.
 type app struct {
 	cfg       *config.Config
 	cfgRoot   string
 	projects  []core.Project
-	state     *state.State
 	stateRoot string
 	core      *core.Core
 	// out is where a command's own output goes: stdout, or a buffer under
@@ -46,21 +47,25 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	st, err := state.Load(stateRoot)
-	if err != nil {
-		return nil, err
-	}
 	rt, win, err := selectHosts(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
+	// No keybinder: probing the desktop costs a process, and only
+	// `revier keys` reads one. cmdKeys selects it when it is needed.
+	c := newCore(cfg, rt, win, nil)
+	c.Ledger = ledger.File{Root: stateRoot, Failed: warnState}
 	return &app{
-		cfg: cfg, cfgRoot: cfgRoot, projects: projects, state: st,
-		stateRoot: stateRoot, out: out,
-		// No keybinder: probing the desktop costs a process, and only
-		// `revier keys` reads one. cmdKeys selects it when it is needed.
-		core: newCore(cfg, rt, win, nil),
+		cfg: cfg, cfgRoot: cfgRoot, projects: projects,
+		stateRoot: stateRoot, out: out, core: c,
 	}, nil
+}
+
+// warnState says that a change did not reach the state file. State is a
+// convenience: losing it costs the next keybinding a fallback, not
+// correctness, so it does not fail the command.
+func warnState(err error) {
+	fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
 }
 
 // warnProblems says on stderr that some of the configuration did not load,
@@ -170,8 +175,8 @@ func (a *app) resolveAway(ctx context.Context) (core.Project, bool) {
 		slog.Info("resolve", "project", p.Name, "by", "focused window")
 		return p, true
 	}
-	if a.state.Current != "" {
-		if p, ok := a.project(a.state.Current); ok {
+	if current := a.core.Ledger.State().Current; current != "" {
+		if p, ok := a.project(current); ok {
 			slog.Info("resolve", "project", p.Name, "by", "last project")
 			return p, true
 		}
@@ -214,38 +219,25 @@ func (a *app) commit(p revier.ProjectName, apply func(s *state.State)) {
 	})
 }
 
-// update applies a change to the state on disk. The TUI writes claims to it
-// while a command runs, and a launch can take seconds waiting for a socket, so
-// the change goes to what is on disk now, not to the state loaded at startup.
+// update applies a change to the state through the core's ledger. The TUI
+// writes claims to it while a command runs, and a launch can take seconds
+// waiting for a socket, so the change goes to what is on disk now.
 func (a *app) update(apply func(s *state.State)) {
-	st, err := state.Update(a.stateRoot, func(s *state.State) bool {
+	a.core.Ledger.Update(func(s *state.State) bool {
 		apply(s)
 		return true
 	})
-	if err != nil {
-		// State is a convenience. Losing it costs the next keybinding a
-		// fallback, not correctness, so it must not fail the command.
-		slog.Warn("state update", "err", err)
-		fmt.Fprintf(os.Stderr, "revier: warning: could not save state: %v\n", err)
-		return
-	}
-	a.state = st
 }
 
 // goTarget is the whole run-or-raise for one target, as core.ActivateWaiting
-// walks it, with the state on disk as its ledger.
+// walks it.
 func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
-	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil, a.ledger())
+	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil)
 	return ref, err
 }
 
-// ledger is the state on disk as an activation reads and writes it: what is
-// there now, not what was loaded at startup, since the surface writes claims
-// while a command runs.
-func (a *app) ledger() core.StateLedger { return core.StateLedger{Root: a.stateRoot} }
-
 // launchedAction records that an action ran, so a window that appears within
-// core.ClaimWindow and matches no declared target is attached to the project:
+// the claim window and matches no declared target is attached to the project:
 // the link opened from the terminal that claim-on-appear exists for.
 func (a *app) launchedAction(p revier.ProjectName) {
 	a.update(func(s *state.State) { s.Launched(p, "", time.Now()) })

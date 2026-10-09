@@ -38,7 +38,8 @@ func TestAPressThatLaunchesIsAGoEventThatSaysSo(t *testing.T) {
 	recorded := recording(t)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 
-	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "home", nil, &ledger{}); err != nil {
+	c.Ledger = &ledger{}
+	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "home", nil); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}
 
@@ -59,7 +60,8 @@ func TestAGoEventCarriesTheTimeOfThePress(t *testing.T) {
 	t.Cleanup(func() { events.Setup("") })
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm")}
 
-	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "editor", nil, &ledger{}); err != nil {
+	c.Ledger = &ledger{}
+	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "editor", nil); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}
 	waited := time.Now()
@@ -89,7 +91,8 @@ func TestAToggleBackIsOneEventOfWhereItLanded(t *testing.T) {
 	}})
 	rt.SetFocus(diff)
 
-	if _, _, err := c.ActivateWaiting(context.Background(), p, "diff", nil, &ledger{}); err != nil {
+	c.Ledger = &ledger{}
+	if _, _, err := c.ActivateWaiting(context.Background(), p, "diff", nil); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}
 
@@ -104,10 +107,12 @@ func TestAPressThatFailsOrOnlyWaitsIsNoEvent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	p := prepared(t, project())
 
-	if _, _, err := c.ActivateWaiting(context.Background(), p, "nope", nil, &ledger{}); err == nil {
+	c.Ledger = &ledger{}
+	if _, _, err := c.ActivateWaiting(context.Background(), p, "nope", nil); err == nil {
 		t.Fatal("a press of an unknown target succeeded")
 	}
-	if _, res, err := c.ActivateWaiting(context.Background(), p, "editor", nil, pendingLedger{&ledger{}}); err != nil || !res.ComingUp {
+	c.Ledger = pendingLaunch("revier", "editor")
+	if _, res, err := c.ActivateWaiting(context.Background(), p, "editor", nil); err != nil || !res.ComingUp {
 		t.Fatalf("press = %+v, %v; want the launch still coming up", res, err)
 	}
 
@@ -115,11 +120,6 @@ func TestAPressThatFailsOrOnlyWaitsIsNoEvent(t *testing.T) {
 		t.Errorf("events = %+v, want none", got)
 	}
 }
-
-// pendingLedger has a launch of every target on record.
-type pendingLedger struct{ *ledger }
-
-func (pendingLedger) Pending(revier.ProjectName, revier.TargetName) bool { return true }
 
 // A tab is reached through the workspace that holds it, and the result names
 // the workspace for the binding. The event names the tab, and says launched
@@ -133,7 +133,8 @@ func TestAPressOfATabIsAnEventOfTheTab(t *testing.T) {
 	l := &ledger{}
 
 	for range 2 {
-		if _, _, err := c.ActivateWaiting(context.Background(), p, "tickets", nil, l); err != nil {
+		c.Ledger = l
+		if _, _, err := c.ActivateWaiting(context.Background(), p, "tickets", nil); err != nil {
 			t.Fatalf("ActivateWaiting: %v", err)
 		}
 	}
@@ -170,11 +171,11 @@ func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "claude", Session: "abc"}}
 
-	if _, err := c.ActivateAgent(context.Background(), prepared(t, project()), a, nil, false); err != nil {
-		t.Fatalf("ActivateAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 
 	want := []revier.Event{{Kind: revier.EventGoAgent, Project: "revier", Agent: "claude", Session: "abc"}}

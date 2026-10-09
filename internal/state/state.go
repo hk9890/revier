@@ -70,12 +70,12 @@ func Root() (string, error) {
 	return filepath.Join(home, ".local", "state", "revier"), nil
 }
 
-func path(root string) string { return filepath.Join(root, "state.json") }
+func path(stateRoot string) string { return filepath.Join(stateRoot, "state.json") }
 
 // Load reads the state. A missing file is an empty state, not an error: the
 // first run of revier has none.
-func Load(root string) (*State, error) {
-	b, err := os.ReadFile(path(root))
+func Load(stateRoot string) (*State, error) {
+	b, err := os.ReadFile(path(stateRoot))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &State{Attached: map[revier.ProjectName][]revier.TargetRef{}}, nil
@@ -101,11 +101,11 @@ func Load(root string) (*State, error) {
 // launch one records between another's read and save is overwritten, and the
 // next press opens a duplicate window. apply runs while the lock is held, so it
 // does no I/O.
-func Update(root string, apply func(s *State) bool) (*State, error) {
-	if err := os.MkdirAll(root, 0o755); err != nil {
+func Update(stateRoot string, apply func(s *State) bool) (*State, error) {
+	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create state dir: %w", err)
 	}
-	lock, err := os.OpenFile(filepath.Join(root, "state.lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	lock, err := os.OpenFile(filepath.Join(stateRoot, "state.lock"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open state lock: %w", err)
 	}
@@ -113,12 +113,12 @@ func Update(root string, apply func(s *State) bool) (*State, error) {
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		return nil, fmt.Errorf("lock state: %w", err)
 	}
-	s, err := Load(root)
+	s, err := Load(stateRoot)
 	if err != nil {
 		return nil, err
 	}
 	if apply(s) {
-		if err := s.Save(root); err != nil {
+		if err := s.Save(stateRoot); err != nil {
 			return s, err
 		}
 	}
@@ -127,25 +127,53 @@ func Update(root string, apply func(s *State) bool) (*State, error) {
 
 // Save writes the state atomically, so a crash mid-write cannot leave a
 // truncated file that the next run has to discard.
-func (s *State) Save(root string) error {
-	if err := os.MkdirAll(root, 0o755); err != nil {
+func (s *State) Save(stateRoot string) error {
+	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode state: %w", err)
 	}
-	if err := fsutil.WriteFile(path(root), b, 0o644); err != nil {
+	if err := fsutil.WriteFile(path(stateRoot), b, 0o644); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return nil
 }
 
-// Pending reports whether l, the launch on record if any, is of the project's
-// target and younger than within: a press that finds one must not launch the
-// target again.
-func (l *Launch) Pending(p revier.ProjectName, t revier.TargetName, within time.Duration) bool {
-	return l != nil && l.Project == p && l.Target == t && time.Since(l.At) < within
+// ClaimWindow is how long after an action's launch a window that appears is
+// attached to the project. Short on purpose: a wrong claim binds an unrelated
+// window to a project and is only visible later, when a key goes somewhere
+// surprising.
+const ClaimWindow = 5 * time.Second
+
+// BindWindow is how long after a target's launch a window of its class is
+// still bound to it. Longer than ClaimWindow because the class filter makes
+// a wrong binding unlikely and an editor's cold start takes this long.
+const BindWindow = 60 * time.Second
+
+// Pending reports whether l, the launch on record if any, is still inside its
+// window at now: a window that appears can still be claimed for it, and until
+// then it is not over. A launch stamped after now is pending: another process
+// wrote it since now was read, or the clock stepped back, and a press that
+// took it for over would launch a second copy.
+func (l *Launch) Pending(now time.Time) bool {
+	if l == nil || l.At.IsZero() {
+		return false
+	}
+	limit := ClaimWindow
+	if l.Target != "" {
+		limit = BindWindow
+	}
+	return now.Sub(l.At) <= limit
+}
+
+// Pending reports whether a launch of the project's target is on record and
+// still pending at now: a press that finds one must not launch the target
+// again.
+func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time) bool {
+	l := s.Launch
+	return l.Pending(now) && l.Project == p && l.Target == t
 }
 
 // Launched records a launch whose window has not appeared, and makes its

@@ -56,19 +56,30 @@ func TestUpdateSavesOnlyAChange(t *testing.T) {
 	}
 }
 
-func TestPendingIsTheTargetsLaunchInsideTheWindow(t *testing.T) {
-	l := &state.Launch{Project: "demo", Target: "editor", At: time.Now().Add(-5 * time.Second)}
-	if !l.Pending("demo", "editor", time.Minute) {
-		t.Error("a launch of the target inside the window is pending")
+// The one rule for a launch still pending: of this project's target, and not
+// older than its window - the bind window for a target, the claim window for
+// an action.
+func TestPendingIsTheTargetsLaunchInsideItsWindow(t *testing.T) {
+	now := time.Now()
+	target := &state.State{Launch: &state.Launch{Project: "demo", Target: "editor", At: now.Add(-state.ClaimWindow - time.Second)}}
+	if !target.Pending("demo", "editor", now) {
+		t.Error("a target's launch inside the bind window is pending")
 	}
-	if l.Pending("demo", "home", time.Minute) || l.Pending("other", "editor", time.Minute) {
+	if target.Pending("demo", "home", now) || target.Pending("other", "editor", now) {
 		t.Error("a launch of another target is not this target's")
 	}
-	if l.Pending("demo", "editor", time.Second) {
-		t.Error("a launch older than the window has expired")
+	if target.Pending("demo", "editor", now.Add(state.BindWindow)) {
+		t.Error("a target's launch older than the bind window has expired")
+	}
+	action := &state.Launch{Project: "demo", At: now.Add(-state.ClaimWindow)}
+	if !action.Pending(now) || action.Pending(now.Add(time.Second)) {
+		t.Error("an action's launch is pending for the claim window, and no longer")
+	}
+	if !(&state.Launch{Project: "demo", Target: "editor", At: now.Add(time.Minute)}).Pending(now) {
+		t.Error("a launch stamped after now is not over: a press must not launch it again")
 	}
 	var none *state.Launch
-	if none.Pending("demo", "editor", time.Minute) {
+	if none.Pending(now) || (&state.State{}).Pending("demo", "editor", now) {
 		t.Error("no launch on record is nothing pending")
 	}
 }

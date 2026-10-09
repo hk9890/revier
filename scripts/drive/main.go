@@ -66,7 +66,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "survey":
-		report, err := c.Survey(ctx, []core.Project{project}, nil, nil)
+		report, err := c.Survey(ctx, []core.Project{project})
 		fatal(err)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -77,7 +77,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: drive go <target>")
 			os.Exit(2)
 		}
-		res, err := c.Go(ctx, project, revier.TargetName(os.Args[2]), nil)
+		_, res, err := c.ActivateWaiting(ctx, project, revier.TargetName(os.Args[2]), nil)
 		fatal(err)
 		fmt.Printf("focused %s (%s) on %s\n", res.Ref.Title, res.Ref.ID, res.Ref.Host)
 

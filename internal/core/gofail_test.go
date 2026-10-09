@@ -16,7 +16,7 @@ func TestGoReportsAnOpenThatFailed(t *testing.T) {
 	wm.OpenErr = errors.New("code: not found")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
+	res, err := press(context.Background(), c, prepared(t, project()), "editor")
 	if !errors.Is(err, wm.OpenErr) {
 		t.Fatalf("err = %v, want the open failure", err)
 	}
@@ -31,10 +31,11 @@ func TestGoReportsAnOpenThatFailed(t *testing.T) {
 func TestGoKeepsTheRefOfAnOpenedInstanceItCouldNotFocus(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.FocusErr = errors.New("no such window")
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	// The ledger pins the ref a press returned with its error.
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: &ledger{}}
 	p := prepared(t, project())
 
-	res, err := c.Go(context.Background(), p, "editor", nil)
+	res, err := press(context.Background(), c, p, "editor")
 	if !errors.Is(err, wm.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -43,30 +44,31 @@ func TestGoKeepsTheRefOfAnOpenedInstanceItCouldNotFocus(t *testing.T) {
 	}
 
 	wm.FocusErr = nil
-	again, err := c.Go(context.Background(), p, "editor", core.Bindings{"editor": res.Ref})
+	again, err := press(context.Background(), c, p, "editor")
 	if err != nil {
-		t.Fatalf("second Go: %v", err)
+		t.Fatalf("second press: %v", err)
 	}
 	if len(wm.Opened) != 1 || again.Ref != res.Ref {
 		t.Errorf("second press: opened %d, ref %v; want the first instance raised", len(wm.Opened), again.Ref)
 	}
 }
 
-// A window Bind found and could not raise still exists. It comes back with the
-// error, so the caller pins it and the next press does not wait for a window
-// that is already there.
-func TestBindKeepsAWindowItCouldNotRaise(t *testing.T) {
+// A window a detached launch produced and the press could not raise still
+// exists. It is pinned with the error, so the next press does not wait for a
+// window that is already there.
+func TestADetachedLaunchKeepsAWindowItCouldNotRaise(t *testing.T) {
 	wm := hosttest.New("wm")
-	editor := wm.Add("Visual Studio Code", "code")
+	wm.Detached = true
 	wm.FocusErr = errors.New("no such window")
-	c := &core.Core{Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: &ledger{}}
 
-	inst, ok, err := c.Bind(context.Background(), prepared(t, project()), "editor", nil, 0)
+	_, err := press(context.Background(), c, prepared(t, project()), "editor")
 	if !errors.Is(err, wm.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
-	if !ok || inst.Ref != editor {
-		t.Errorf("Bind = %+v, %v; want the editor %v", inst, ok, editor)
+	windows, _ := wm.Instances(context.Background())
+	if ref := landed(t, c, "editor"); len(windows) != 1 || ref != windows[0].Ref {
+		t.Errorf("bound %v, want the editor %+v", ref, windows)
 	}
 }
 
@@ -78,7 +80,7 @@ func TestATabKeepsTheWorkspaceItOpenedAndCouldNotFocus(t *testing.T) {
 	rt.FocusErr = errors.New("no such window")
 	c := &core.Core{Runtime: rt}
 
-	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if !errors.Is(err, rt.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -94,7 +96,7 @@ func TestGoReportsARaiseThatCouldNotFocus(t *testing.T) {
 	wm.FocusErr = errors.New("no such window")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
+	res, err := press(context.Background(), c, prepared(t, project()), "editor")
 	if !errors.Is(err, wm.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -112,7 +114,7 @@ func TestGoRaisesWhenFocusCannotBeRead(t *testing.T) {
 	wm.FocusedErr = errors.New("focused: timed out")
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, project()), "editor", nil)
+	res, err := press(context.Background(), c, prepared(t, project()), "editor")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -130,7 +132,7 @@ func TestGoLandsWhenPlacementFails(t *testing.T) {
 	wm.PlaceErr = errors.New("place: refused")
 	c := &core.Core{Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, raw), "editor", nil)
+	res, err := press(context.Background(), c, prepared(t, raw), "editor")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}

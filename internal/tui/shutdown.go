@@ -268,11 +268,11 @@ func (m Model) shutEnter() (tea.Model, tea.Cmd) {
 func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.step, s.row, s.planned, s.plan = shutConfirm, 0, false, nil
-	c, projects, root := m.core, m.projects, m.stateRoot
+	c, projects := m.core, m.projects
 	s.projects = projects
 	asked := plannedMsg{whole: s.whole, project: s.project, scope: s.scope}
 	return m, func() tea.Msg {
-		asked.plan = surveyPlan(c, root, projects, asked.project, func(r core.Report) []core.CloseStep {
+		asked.plan = surveyPlan(c, projects, asked.project, func(r core.Report) []core.CloseStep {
 			return c.ShutdownPlan(r, asked.project, asked.scope)
 		})
 		return asked
@@ -282,11 +282,10 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 // surveyPlan surveys what is open now, attachments included, and makes the
 // plan from what it found. Of the linked hosts it waits only for the ones the
 // close is about (core.SurveyToClose). It runs off the update loop.
-func surveyPlan(c *core.Core, root string, projects []core.Project, only revier.ProjectName, plan func(core.Report) []core.CloseStep) []core.CloseStep {
+func surveyPlan(c *core.Core, projects []core.Project, only revier.ProjectName, plan func(core.Report) []core.CloseStep) []core.CloseStep {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
 	defer cancel()
-	st := loadedState(root)
-	return plan(c.SurveyToClose(ctx, projects, st.Bound, st.Attached, only))
+	return plan(c.SurveyToClose(ctx, projects, only))
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
@@ -317,8 +316,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
-		st := loadedState(root)
-		opts := core.ShutdownOpts{Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached}
+		current := c.Ledger.State().Current
+		opts := core.ShutdownOpts{Force: force, Projects: projects}
 		note := ""
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so
@@ -329,7 +328,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
 			opts.Before = func(saving context.Context, now core.Report) error {
-				stored, saved, _, err := c.SaveChanged(saving, root, now, st.Current, time.Now())
+				stored, saved, _, err := c.SaveChanged(saving, root, now, current, time.Now())
 				if err != nil {
 					return err
 				}

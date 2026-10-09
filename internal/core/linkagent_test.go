@@ -52,7 +52,7 @@ func TestASurveyReportsTheAgentsServedToAnotherMachine(t *testing.T) {
 		if len(agents) != 1 || agents[0].Panel != "box.4242" || agents[0].Ref != ref || agents[0].State.Status != revier.StatusRunning {
 			t.Errorf("%s: agents = %+v, want box.4242 running in %v", name, agents, ref)
 		}
-		a, err := c.Agent(context.Background(), p, "box.4242", nil)
+		a, err := c.Agent(context.Background(), p, "box.4242")
 		if err != nil || a.Ref != ref {
 			t.Errorf("%s: Agent = %+v, %v; want the served one", name, a, err)
 		}
@@ -86,7 +86,7 @@ func (activityProbe) Activity(title string) string { return title }
 func TestAPromptForALinksAgentIsTypedIntoThePanelHere(t *testing.T) {
 	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	p := linkProject(t)
-	a, err := c.Agent(context.Background(), p, "", nil)
+	a, err := c.Agent(context.Background(), p, "")
 	if err != nil || a.Ref != pane || a.Panel.ID != "9" {
 		t.Fatalf("Agent = %+v, %v; want panel 9 of %v", a, err, pane)
 	}
@@ -102,7 +102,7 @@ func TestAPromptForALinksAgentIsTypedIntoThePanelHere(t *testing.T) {
 	}
 
 	remote.Views[0].Agents = []revier.AgentView{hostAgent("box.4242", revier.StatusAttention)}
-	waiting, err := c.Agent(context.Background(), p, "9", nil)
+	waiting, err := c.Agent(context.Background(), p, "9")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,14 +115,14 @@ func TestAPromptForALinksAgentIsTypedIntoThePanelHere(t *testing.T) {
 // link with no agent at all, and from a panel here the host lists no agent in.
 func TestAnAgentShownNowhereHereIsNotFound(t *testing.T) {
 	c, _, _, _ := linked(t, hostAgent("laptop.77", revier.StatusIdle))
-	if _, err := c.Agent(context.Background(), linkProject(t), "", nil); !errors.Is(err, core.ErrAgentElsewhere) {
+	if _, err := c.Agent(context.Background(), linkProject(t), ""); !errors.Is(err, core.ErrAgentElsewhere) {
 		t.Errorf("err = %v, want ErrAgentElsewhere", err)
 	}
-	if _, err := c.Agent(context.Background(), linkProject(t), "10", nil); !errors.Is(err, core.ErrNotAgent) {
+	if _, err := c.Agent(context.Background(), linkProject(t), "10"); !errors.Is(err, core.ErrNotAgent) {
 		t.Errorf("err = %v, want ErrNotAgent for the shell panel", err)
 	}
 	c, _, _, _ = linked(t)
-	if _, err := c.Agent(context.Background(), linkProject(t), "", nil); !errors.Is(err, core.ErrNoAgent) {
+	if _, err := c.Agent(context.Background(), linkProject(t), ""); !errors.Is(err, core.ErrNoAgent) {
 		t.Errorf("err = %v, want ErrNoAgent", err)
 	}
 }
@@ -134,11 +134,11 @@ func TestALinksAgentIsAddressedByItsTarget(t *testing.T) {
 	c, rt, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	rt.Add("far-logs", "", revier.Panel{ID: "20", Kind: revier.PanelShell, PID: 5000})
 	p := linkProject(t)
-	a, err := c.Agent(context.Background(), p, "home", nil)
+	a, err := c.Agent(context.Background(), p, "home")
 	if err != nil || a.Ref != pane || a.Panel.ID != "9" {
 		t.Errorf("Agent(far:home) = %+v, %v; want panel 9 of %v", a, err, pane)
 	}
-	if _, err := c.Agent(context.Background(), p, "logs", nil); !errors.Is(err, core.ErrNoAgent) {
+	if _, err := c.Agent(context.Background(), p, "logs"); !errors.Is(err, core.ErrNoAgent) {
 		t.Errorf("Agent(far:logs) err = %v, want ErrNoAgent", err)
 	}
 }
@@ -159,13 +159,13 @@ func TestTheHostsOwnAgentIsNotTakenForOneHere(t *testing.T) {
 	if len(agents) != 1 || agents[0].Panel != "3" || !agents[0].Ref.IsZero() {
 		t.Fatalf("agents = %+v, want the host's under its own name and no ref here", agents)
 	}
-	if _, err := c.GoAgent(context.Background(), p, agents[0], nil); !errors.Is(err, core.ErrAgentElsewhere) {
-		t.Errorf("GoAgent err = %v, want ErrAgentElsewhere", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agents[0]); !errors.Is(err, core.ErrAgentElsewhere) {
+		t.Errorf("ActivateAgentWaiting err = %v, want ErrAgentElsewhere", err)
 	}
-	if _, err := c.Agent(context.Background(), p, "", nil); !errors.Is(err, core.ErrAgentElsewhere) {
+	if _, err := c.Agent(context.Background(), p, ""); !errors.Is(err, core.ErrAgentElsewhere) {
 		t.Errorf("Agent err = %v, want ErrAgentElsewhere", err)
 	}
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestTheHostsOwnAgentIsNotTakenForOneHere(t *testing.T) {
 func TestAShutdownClosesThePanelsThatShowALinksAgents(t *testing.T) {
 	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusRunning), hostAgent("laptop.77", revier.StatusIdle))
 	projects := []core.Project{linkProject(t)}
-	report, err := c.Survey(context.Background(), projects, nil, nil)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestASaveRecordsALinksConversationsFromItsHost(t *testing.T) {
 	first.Conversation = &revier.Conversation{ID: "abc-123", Dir: "/srv/far/wt"}
 	remote.Named = []revier.ProjectView{{Project: revier.Project{Name: "far-there"}, Agents: []revier.AgentView{second, first}}}
 
-	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 	served := hosttest.New("proc")
 	served.Add("session:revier", "", revier.Panel{ID: "box.4242", Kind: revier.PanelTool, Title: "claude", Vars: map[string]string{"session": "abc-123", "dir": "/srv/wt"}})
 	c := &core.Core{Served: served, Probes: []revier.AgentProbe{resumable()}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestAShutdownLeavesAServedAgentToItsTerminal(t *testing.T) {
 	served.Add("session:revier", "", revier.Panel{ID: "box.4242", Kind: revier.PanelTool, Title: "agent", PID: 7})
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "agent", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Served: served, Probes: []revier.AgentProbe{probe}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
 	c, _, _, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	alt := linkProject(t)
 	alt.Name = "far-alt"
-	report, err := c.Survey(context.Background(), []core.Project{linkProject(t), alt}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{linkProject(t), alt})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,8 +351,8 @@ func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 	term := rt.Add("scratch", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
 	p := linkProject(t)
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
-		map[revier.ProjectName][]revier.TargetRef{p.Name: {term}})
+	c.Ledger = attachments(map[revier.ProjectName][]revier.TargetRef{p.Name: {term}})
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -383,8 +383,8 @@ func TestALinkListsAnAgentBothSidesReportOnce(t *testing.T) {
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
 	p := linkProject(t)
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil,
-		map[revier.ProjectName][]revier.TargetRef{p.Name: {pane}})
+	c.Ledger = attachments(map[revier.ProjectName][]revier.TargetRef{p.Name: {pane}})
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

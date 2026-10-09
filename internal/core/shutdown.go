@@ -476,13 +476,11 @@ type ShutdownOpts struct {
 	// still what closes, is saved and is ordered.
 	Force bool
 
-	// Projects, Bound and Attached are what the recheck surveys, the three
-	// Survey takes. With no projects there is nothing to read the agents
-	// from, so every step is one the recheck could not answer for and the
-	// close leaves them all open rather than closing blind.
+	// Projects are what the recheck surveys. With none there is nothing to
+	// read the agents from, so every step is one the recheck could not
+	// answer for and the close leaves them all open rather than closing
+	// blind.
 	Projects []Project
-	Bound    map[revier.ProjectName]Bindings
-	Attached map[revier.ProjectName][]revier.TargetRef
 
 	// Before runs once the recheck has let the plan through and before the
 	// first close, handed the survey the agents and the order were read
@@ -601,7 +599,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 	reading, stop := phaseContext(ctx, RecheckBudget)
 	defer stop()
 	start := time.Now()
-	r, answers := c.surveyAsking(reading, opts.Projects, opts.Bound, opts.Attached, func(v revier.ProjectView) bool {
+	r, answers := c.surveyAsking(reading, opts.Projects, func(v revier.ProjectView) bool {
 		return slices.ContainsFunc(plan, func(s CloseStep) bool { return s.Project == v.Project.Name })
 	})
 	plan = c.rechecked(r, plan)

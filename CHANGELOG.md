@@ -8,6 +8,18 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **A command acts on the state as it is when it acts.** `revier open`,
+  `agent`, `session` and `shutdown` used the state read when the command
+  started, so a window another process bound in the meantime was not found by
+  its binding.
+- **A project can be renamed or deleted 5 seconds after one of its actions
+  ran.** The surface refused both for 60 seconds, the wait that belongs to a
+  target's window.
+- **A state file that cannot be read no longer stops a command.** The command
+  runs with nothing remembered and the log says why, as the surface does.
+- **A press and `revier list` say `could not save state` on stderr when the
+  state file cannot be written.** Only the log said it; `revier attach` and
+  `revier run` already did.
 - **Action required for an out-of-tree runtime adapter:** a runtime's
   `Capabilities` no longer have the fields `Layout` and `Persistent`. revier
   never read them. An adapter that sets them no longer builds: delete the two

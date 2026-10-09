@@ -313,7 +313,7 @@ type Event struct {
 
 A kind is added, never renamed: a reader counts by it. Only an operation that
 succeeded is an event, and a press is one event however many times it ran
-`Go`: of the tab it made current, else of the target it landed on. A step of a
+run-or-raise: of the tab it made current, else of the target it landed on. A step of a
 restore is no event, since it opens what was open and is nobody's use of the
 project. An agent session is written by the surface, the one process that surveys
 all day: when it first sees the conversation, and once on each later day it

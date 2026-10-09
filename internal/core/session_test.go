@@ -80,8 +80,8 @@ func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Re
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
-	if _, err := c.GoResuming(context.Background(), prepared(t, proj), "home", nil, resumes); err != nil {
-		t.Fatalf("GoResuming: %v", err)
+	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 	if len(rt.Opened) != 1 {
 		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
@@ -100,7 +100,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 		agent("4", "third", "/a/.claude/worktrees/tui"),
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 // workspace the save did not have.
 func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,8 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	c := &core.Core{Runtime: rt}
 
 	attached := map[revier.ProjectName][]revier.TargetRef{"revier": {stray}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, attached)
+	c.Ledger = attachments(attached)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +209,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	noConversation := []session.Agent{{Harness: "claude"}}
 
 	plain := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude"}}}
-	report, err := plain.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := plain.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +224,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	failing := resumable()
 	failing.SessionErr = errors.New("the harness did not answer")
 	broken := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{failing}}
-	report, err = broken.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err = broken.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +260,7 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	probe := resumable()
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject()), prepared(t, other)}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject()), prepared(t, other)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +294,7 @@ func TestRestorePlanClassifiesEveryRecordedTarget(t *testing.T) {
 	rt.Add("session:revier", "kitty") // home is up; notes is not
 	c := &core.Core{Runtime: rt}      // no window host, so editor has none
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +327,7 @@ func TestRestorePlanClassifiesEveryRecordedTarget(t *testing.T) {
 // that appears after it, so the caller has to walk the plan one at a time.
 func TestRestorePlanKeepsTheFileOrder(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,13 +433,13 @@ func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
-	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "declared", Dir: root},
 		{Harness: "claude", Session: "by-hand", Dir: worktree},
 		{Harness: "claude"},
 	})
 	if err != nil {
-		t.Fatalf("GoResuming: %v", err)
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 	samePanels(t, "opened", rt.Opened[0].Panels, []revier.PanelSpec{
 		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/user/dev/github/revier"},
@@ -516,11 +517,11 @@ func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
 	rt.OpenTabErr = errors.New("kitty went away")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
-	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}, {Harness: "claude", Session: "c"},
 	})
 	if err != nil {
-		t.Fatalf("GoResuming: %v, want the open workspace kept", err)
+		t.Fatalf("ActivateWaiting: %v, want the open workspace kept", err)
 	}
 	if res.Ref.IsZero() || len(rt.Focuses) != 1 || rt.Focuses[0] != res.Ref {
 		t.Errorf("Ref = %+v, focuses = %+v, want the workspace returned and focused", res.Ref, rt.Focuses)
@@ -539,9 +540,9 @@ func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
 // The launch reports what it did with each recorded agent, which is what the
 // restore prints: a count taken from the recording would say resumed for an
 // agent the launch dropped.
-func TestGoResumingReportsWhatBecameOfEachAgent(t *testing.T) {
+func TestActivateWaitingReportsWhatBecameOfEachAgent(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: []revier.AgentProbe{resumable()}}
-	res, err := c.GoResuming(context.Background(), prepared(t, agentProject()), "home", nil, []core.Resume{
+	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "abc-123"},
 		{Harness: "opencode", Session: "def-456"},
 	})
@@ -561,7 +562,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 	p := prepared(t, agentProject())
 
 	resumes := []core.Resume{{Harness: "claude", Session: "abc-123", Dir: t.TempDir()}, {Harness: "claude", Session: "def-456"}}
-	if _, err := c.GoResuming(context.Background(), p, "home", nil, resumes); err != nil {
+	if _, err := pressResuming(context.Background(), c, p, "home", resumes); err != nil {
 		t.Fatal(err)
 	}
 	panels := p.Targets[0].Runtime.Panels
@@ -646,7 +647,7 @@ func TestRestorePlanNamesARefusedTarget(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	p := prepared(t, agentProject())
 	p.Refuse(1, errors.New("launch renders empty"))
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -665,7 +666,7 @@ func TestSessionRecordsTheAgentsOfASharedInstanceOnce(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	proj := agentProject()
 	proj.Targets[1].Runtime.Match = revier.Match{Title: "^session:revier$"}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
 	if err != nil {
 		t.Fatal(err)
 	}

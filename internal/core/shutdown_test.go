@@ -43,7 +43,10 @@ func reading(projects []core.Project) core.ShutdownOpts {
 
 func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef) core.Report {
 	t.Helper()
-	r, err := c.Survey(context.Background(), projects, nil, attached)
+	if attached != nil {
+		c.Ledger = attachments(attached)
+	}
+	r, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

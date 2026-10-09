@@ -52,11 +52,11 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
 	}
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
+	report, err := a.core.Survey(ctx, a.projects)
 	if err != nil {
 		return err
 	}
-	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.state.Current, *name, time.Now())
+	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.core.Ledger.State().Current, *name, time.Now())
 	if errors.Is(err, core.ErrNothingOpen) {
 		_, _ = fmt.Fprintln(a.out, err)
 		return nil
@@ -101,7 +101,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	report, err := a.core.Survey(ctx, a.projects, a.state.Bound, a.state.Attached)
+	report, err := a.core.Survey(ctx, a.projects)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	// cancel that comes before that deadline still stops the walk.
 	walk, stop := core.WithoutDeadline(ctx)
 	defer stop()
-	restored, back := a.core.Restore(walk, s, report, a.projects, a.ledger())
+	restored, back := a.core.Restore(walk, s, report, a.projects)
 	if err := printRestored(a.out, restored); err != nil {
 		return err
 	}

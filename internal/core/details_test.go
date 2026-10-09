@@ -25,7 +25,7 @@ func detailWorld(t *testing.T, probe revier.AgentProbe) (*core.Core, *hosttest.F
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
 	}}})
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
-	r, err := c.Survey(context.Background(), projects, nil, nil)
+	r, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -44,7 +43,7 @@ func TestSurveyReportsARefusedTargetWithItsReason(t *testing.T) {
 	win := hosttest.New("win")
 	c := &core.Core{Runtime: rt, Window: win}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, refusing())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, refusing())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -74,7 +73,7 @@ func TestAMissingHostIsNotAReason(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt} // no window host
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -95,7 +94,7 @@ func TestGoOnARefusedTargetFailsWithTheReason(t *testing.T) {
 	win := hosttest.New("win")
 	c := &core.Core{Runtime: rt, Window: win}
 
-	_, err := c.Go(context.Background(), prepared(t, refusing()), "web", nil)
+	_, err := press(context.Background(), c, prepared(t, refusing()), "web")
 	if err == nil {
 		t.Fatal("want the keypress refused")
 	}
@@ -116,7 +115,7 @@ func TestSurveyListsAnInvalidProject(t *testing.T) {
 	p := core.PrepareProject(revier.Project{Name: "broken"})
 	p.Invalid = errors.New("demo.toml: expected a key at line 2")
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -148,12 +147,11 @@ func TestARefusedTargetMatchesNothing(t *testing.T) {
 		t.Fatal("the target should be refused for its pattern")
 	}
 
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
-	stray := revier.Instance{Ref: revier.TargetRef{Host: "wm", ID: "9"}, Title: "notes", Class: "gedit"}
-	l := core.Launch{Project: prep, At: time.Now()}
+	wm := hosttest.New("wm")
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
 
-	got, ok := c.Claim(nil, []revier.Instance{stray}, l, time.Now(), []core.Project{prep})
-	if !ok || got.Ref != stray.Ref {
-		t.Errorf("claimed %+v (%v), want the stray window: no target of this project matches it", got, ok)
+	got := attachedAfterAction(t, c, wm, prep, revier.Instance{Title: "notes", Class: "gedit"})
+	if len(got) != 1 || got[0].Title != "notes" {
+		t.Errorf("attached %+v, want the stray window: no target of this project matches it", got)
 	}
 }

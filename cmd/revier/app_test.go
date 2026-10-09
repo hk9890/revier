@@ -22,7 +22,7 @@ func press(t *testing.T, c *core.Core, p core.Project, root string, name revier.
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, st)
 	ref, err := a.goTarget(context.Background(), p, name)
 	if err != nil {
 		t.Fatalf("goTarget %s: %v", name, err)
@@ -60,7 +60,7 @@ func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, st)
 
 	if _, err := a.goTarget(context.Background(), p, "editor"); !errors.Is(err, wm.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
@@ -113,7 +113,7 @@ func TestListSavesItsPrune(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: loaded, stateRoot: root, core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, loaded)
 
 	// The listing itself is not what is under test.
 	output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
@@ -135,7 +135,7 @@ func TestListJSONCarriesAttachments(t *testing.T) {
 	p, root := demoProject(t), t.TempDir()
 	st := &state.State{}
 	st.Attach("demo", stray)
-	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: st, stateRoot: root, core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, st)
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json"}) })
 	var views []revier.ProjectView

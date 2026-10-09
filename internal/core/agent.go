@@ -124,7 +124,8 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 // Agent finds the agent panel addr names in a project: with addr empty, the
 // project's only agent; with a target name, the only agent in that target's
 // instance; otherwise the panel with that id.
-func (c *Core) Agent(ctx context.Context, p Project, addr string, bound Bindings) (Agent, error) {
+func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
+	bound := c.state().Bound[p.Name]
 	// Agents are panels, and only the runtime and the served processes
 	// list instances with panels.
 	snap, err := c.answered(ctx, nameOf(c.Runtime), nameOf(c.Served))

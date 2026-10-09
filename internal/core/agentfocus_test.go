@@ -13,7 +13,7 @@ import (
 // agentsOf is the agents a survey reports for the one project.
 func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
 	t.Helper()
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -23,7 +23,7 @@ func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
 // An agent on this machine is reached by its tab: its instance is focused, the
 // tab becomes current and the OS window holding it is raised. On tmux the
 // instance's focus is what switches a terminal showing another session.
-func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
+func TestActivateAgentWaitingFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
@@ -32,8 +32,8 @@ func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
-	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[1], nil); err != nil {
-		t.Fatalf("GoAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[1]); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 	if len(rt.Focuses) != 1 || rt.Focuses[0] != workspace {
 		t.Errorf("runtime focuses = %v, want the workspace %v", rt.Focuses, workspace)
@@ -49,7 +49,7 @@ func TestGoAgentFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 // Two processes can each have an OS window of one title. The window raised is
 // the one of the process the instance runs in, whichever the window host
 // lists first: the title says which window, the pid says whose.
-func TestGoAgentRaisesTheWindowOfItsOwnProcess(t *testing.T) {
+func TestActivateAgentWaitingRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
@@ -59,8 +59,8 @@ func TestGoAgentRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
-	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {
-		t.Fatalf("GoAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[0]); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 	if len(wm.Focuses) != 1 || wm.Focuses[0] != own {
 		t.Errorf("window focuses = %v, want only the window of pid 1001 %v", wm.Focuses, own)
@@ -70,7 +70,7 @@ func TestGoAgentRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 // Two instances of one project, as two kitty processes, can each hold a panel
 // 1. The survey reports each agent with its instance, and going to one focuses
 // that one, where a lookup by panel id alone was ambiguous (decisions.md D75).
-func TestGoAgentReachesOneOfTwoAgentsThatShareAPanelID(t *testing.T) {
+func TestActivateAgentWaitingReachesOneOfTwoAgentsThatShareAPanelID(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
 	diff := rt.Add("diff:revier", "kitty", agentPanel("1", "busy"))
 	p := prepared(t, project())
@@ -79,8 +79,8 @@ func TestGoAgentReachesOneOfTwoAgentsThatShareAPanelID(t *testing.T) {
 	if len(agents) != 2 || agents[1].Ref != diff {
 		t.Fatalf("agents = %+v, want two, the second in %v", agents, diff)
 	}
-	if _, err := c.GoAgent(context.Background(), p, agents[1], nil); err != nil {
-		t.Fatalf("GoAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agents[1]); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 	if got, _ := rt.FocusedPanel(context.Background(), diff); got != "1" {
 		t.Errorf("focused panel in %v = %q, want panel 1 there", diff, got)
@@ -92,13 +92,13 @@ func TestGoAgentReachesOneOfTwoAgentsThatShareAPanelID(t *testing.T) {
 
 // An agent whose panel closed since the survey is said to be gone, and nothing
 // is focused.
-func TestGoAgentRefusesAnAgentThatIsGone(t *testing.T) {
+func TestActivateAgentWaitingRefusesAnAgentThatIsGone(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
 	p := prepared(t, project())
 	a := agentsOf(t, c, p)[0]
 	a.Panel = "9"
 
-	if _, err := c.GoAgent(context.Background(), p, a, nil); !errors.Is(err, core.ErrAgentGone) {
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, a); !errors.Is(err, core.ErrAgentGone) {
 		t.Errorf("err = %v, want ErrAgentGone", err)
 	}
 	if len(rt.PanelFocuses) != 0 {
@@ -108,14 +108,14 @@ func TestGoAgentRefusesAnAgentThatIsGone(t *testing.T) {
 
 // A runtime that cannot focus a panel still brings the user to the instance
 // the agent is in.
-func TestGoAgentWithoutTabsFocusesTheInstance(t *testing.T) {
+func TestActivateAgentWaitingWithoutTabsFocusesTheInstance(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", agentPanel("2", "idle"))
 	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
-	if _, err := c.GoAgent(context.Background(), p, agentsOf(t, c, p)[0], nil); err != nil {
-		t.Fatalf("GoAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[0]); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 	if len(rt.Focuses) != 1 || rt.Focuses[0] != ref {
 		t.Errorf("focuses = %v, want the instance %v", rt.Focuses, ref)
@@ -143,15 +143,15 @@ func TestALinksAgentIsReachedInThePanelThatShowsIt(t *testing.T) {
 	if len(agents) != 2 || agents[0].Panel != "9" || agents[0].Ref != pane || agents[0].State.Status != revier.StatusAttention {
 		t.Fatalf("agents = %+v, want the first in panel 9 of %v, waiting", agents, pane)
 	}
-	if _, err := c.GoAgent(context.Background(), p, agents[0], nil); err != nil {
-		t.Fatalf("GoAgent: %v", err)
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agents[0]); err != nil {
+		t.Fatalf("ActivateAgentWaiting: %v", err)
 	}
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "9" {
 		t.Errorf("panel focuses = %v, want panel 9", rt.PanelFocuses)
 	}
 
 	// The second was started from another machine: nothing here shows it.
-	if _, err := c.GoAgent(context.Background(), p, agents[1], nil); !errors.Is(err, core.ErrAgentElsewhere) {
+	if _, err := c.ActivateAgentWaiting(context.Background(), p, agents[1]); !errors.Is(err, core.ErrAgentElsewhere) {
 		t.Errorf("err = %v, want ErrAgentElsewhere", err)
 	}
 }

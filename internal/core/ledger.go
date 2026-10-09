@@ -3,111 +3,143 @@ package core
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// StateLedger is the state file as an activation reads and writes it: the
-// one ledger the command line, the surface and a restore share, so the
-// launch rule (decisions.md D21) is written once. Every read is of the file
-// as it is now, under its lock, because another process writes launches to
-// it - a desktop key while the surface runs - and a press must find them.
-// Written, when set, is told of every write, so a surface can take the state
-// into itself before its next survey does.
-type StateLedger struct {
-	Root    string
-	Written chan<- struct{}
+// Ledger is where the core keeps what it learned at runtime and what it did:
+// the one way state reaches the core, and the one way out (decisions.md
+// D120). It is storage. The rules - what a launch records, what a landing
+// consumes, what a survey settles - are the core's and internal/state's, so
+// a second ledger cannot hold a second form of one.
+type Ledger interface {
+	// State is the state as it is now, and never nil; a store that cannot be
+	// read is an empty state. It is a copy of the caller's own: Settle
+	// changes the one it reads, and that must not reach the store.
+	State() *state.State
+	// Update applies a change under the store's lock and returns the state
+	// after it. apply reports whether it changed anything.
+	Update(apply func(*state.State) bool) *state.State
+	// Record appends one event.
+	Record(e revier.Event)
 }
 
-func (l StateLedger) Bound(p revier.ProjectName) Bindings { return l.load().Bound[p] }
-
-func (l StateLedger) Pending(p revier.ProjectName, t revier.TargetName) bool {
-	return l.load().Launch.Pending(p, t, BindWindow)
-}
-
-func (l StateLedger) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
-	l.update(func(st *state.State) { st.Launched(p, t, at) })
-}
-
-func (l StateLedger) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-	l.update(func(st *state.State) { st.Landed(p, t, ref) })
-}
-
-// load is the state on disk, or an empty one: state is a convenience, and
-// losing it costs a binding, not the activation.
-func (l StateLedger) load() *state.State {
-	st, err := state.Load(l.Root)
-	if err != nil {
-		slog.Warn("state load", "err", err, "root", l.Root)
+// state is the state an operation starts from. Each operation reads it once,
+// so one operation never sees two states. A core with no ledger remembers
+// nothing: every state is empty, and a write is dropped.
+func (c *Core) state() *state.State {
+	if c.Ledger == nil {
 		return &state.State{}
 	}
-	return st
+	return c.Ledger.State()
 }
 
-func (l StateLedger) update(apply func(st *state.State)) {
-	if _, err := state.Update(l.Root, func(st *state.State) bool {
-		apply(st)
-		return true
-	}); err != nil {
-		slog.Warn("state update", "err", err, "root", l.Root)
-	}
-	if l.Written == nil {
+func (c *Core) update(apply func(*state.State)) {
+	if c.Ledger == nil {
 		return
 	}
-	// A write still waiting to be read already stands for this one: the
-	// reader takes the whole state again.
-	select {
-	case l.Written <- struct{}{}:
-	default:
+	c.Ledger.Update(func(st *state.State) bool {
+		apply(st)
+		return true
+	})
+}
+
+func (c *Core) record(e revier.Event) {
+	if c.Ledger != nil {
+		c.Ledger.Record(e)
 	}
 }
 
-// ActivateAgentWaiting is ActivateAgent with the ledger: the project's
-// bindings and whether its home is still coming up are the ledger's. Nothing
-// is written back: an agent is focused where the survey saw it, and a
-// workspace still coming up is left to the press that launched it.
-func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.AgentView, l Ledger) (Result, error) {
-	homePending := false
-	if home, ok := p.Home(); ok {
-		homePending = l.Pending(p.Name, home.Name)
+// ActivateAgentWaiting is one press of an agent: the agent is brought to the
+// front, unless the project is a link whose workspace is still coming up from
+// an earlier press. Nothing is written to state: an agent is focused where
+// the survey saw it, and a workspace still coming up is left to the press
+// that launched it. A press that reached the agent is one EventGoAgent.
+func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.AgentView) (Result, error) {
+	if home, ok := p.Home(); ok && p.Remote != nil {
+		st := c.state()
+		pending := st.Pending(p.Name, home.Name, time.Now())
+		if coming, err := c.comingUp(ctx, p, home.Name, st.Bound[p.Name], pending); err != nil || coming {
+			return Result{Target: home.Name, ComingUp: coming}, err
+		}
 	}
-	return c.ActivateAgent(ctx, p, a, l.Bound(p.Name), homePending)
+	res, err := c.goAgent(ctx, p, a)
+	if err == nil {
+		c.record(revier.Event{Kind: revier.EventGoAgent, Project: p.Name, Agent: a.State.Harness, Session: a.State.Session})
+	}
+	return res, err
 }
 
 // Settle is what a survey settles in state, under one write: refs to windows
 // the listing no longer holds are pruned; the window that appeared since the
 // previous listing is claimed for the last launch (claim-on-appear); a
-// launch past its window expires. before is the state as it was when the
-// survey started, so a ref written since is to a window the listing may
-// have missed and is kept. prev is the window host's previous listing, and
-// surveyed whether there was one: with no previous listing no window is
-// new, so nothing is claimed and nothing expires. It reports whether state
-// changed.
-func (c *Core) Settle(st, before *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time) bool {
-	changed := st.Prune(r.Hosts, r.Instances, before)
-	if !surveyed || st.Launch == nil {
+// launch past its window expires. It returns the state after it.
+//
+// A ref written since the survey started is to a window the listing may have
+// missed, and is kept. A launch written since now was read is kept too:
+// another process writes one while this waits for the lock, and it is not
+// past its window. The previous listing is the core's own, of the last
+// report it settled: with none no window is new, so the first settle of a
+// process claims nothing and expires nothing. The lock is taken only when
+// there is something to settle, since `revier list` settles on every refresh
+// of a surface that links to this machine.
+func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State {
+	prev, surveyed := c.lastWindows(r)
+	st := c.state()
+	// The first pass only asks whether there is something to settle, on a
+	// copy nobody keeps, so it says nothing: the pass under the lock does.
+	quiet := func(string, ...any) {}
+	if c.Ledger == nil || !c.settle(st, r, prev, surveyed, projects, now, quiet) {
+		return st
+	}
+	return c.Ledger.Update(func(st *state.State) bool {
+		return c.settle(st, r, prev, surveyed, projects, now, slog.Info)
+	})
+}
+
+// lastWindows is the window host's listing of the last report settled, and
+// whether there was one; r's listing takes its place. A report the window
+// host is missing from leaves the listing as it was: a missing listing is not
+// an empty one, and the next settle would take every window as new and claim
+// one of them.
+func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
+	c.seenMu.Lock()
+	defer c.seenMu.Unlock()
+	prev, surveyed := c.windows, c.listedWindows
+	if c.Window == nil || slices.Contains(r.Hosts, c.Window.Name()) {
+		c.windows, c.listedWindows = r.Windows, true
+	}
+	return prev, surveyed
+}
+
+// settle is one pass of Settle over st. say takes the log line of a claim or
+// of an expiry.
+func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
+	changed := st.Prune(r.Hosts, r.Instances, r.before)
+	l := st.Launch
+	if !surveyed || l == nil {
 		return changed
 	}
-	p, ok := projectNamed(projects, st.Launch.Project)
+	p, ok := projectNamed(projects, l.Project)
 	if !ok {
 		return changed
 	}
-	l := Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}
-	if claimed, ok := c.Claim(prev, r.Windows, l, now, projects); ok {
-		slog.Info("claim", "project", l.Project.Name, "target", claimed.Target, "ref", claimed.Ref)
+	if ref, ok := c.claim(prev, r.Windows, p, l, now, projects); ok {
+		say("claim", "project", p.Name, "target", l.Target, "ref", ref)
 		// An attachment records the terminal inside the window as well
 		// (decisions.md D95); a binding is of the window itself.
-		refs := []revier.TargetRef{claimed.Ref}
-		if claimed.Target == "" {
-			refs = c.attachment(r.Instances, claimed.Ref)
+		refs := []revier.TargetRef{ref}
+		if l.Target == "" {
+			refs = c.attachment(r.Instances, ref)
 		}
-		st.Claim(claimed.Target, refs...)
+		st.Claim(l.Target, refs...)
 		return true
 	}
 	if !l.Pending(now) {
-		slog.Info("claim: launch expired with no window claimed", "project", l.Project.Name, "target", l.Target, "launched_at", l.At)
+		say("claim: launch expired with no window claimed", "project", p.Name, "target", l.Target, "launched_at", l.At)
 		st.Launch = nil
 		return true
 	}

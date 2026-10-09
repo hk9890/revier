@@ -41,6 +41,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
@@ -113,8 +114,6 @@ type Model struct {
 	spinning  bool // whether a spin tick is out, so a survey starts no second one
 
 	views    []revier.ProjectView // attention first, then config order
-	windows  []revier.Instance    // the window host's listing at the last survey it answered
-	listed   bool                 // whether the window host has answered once: windows is a listing, and a diff against it means something
 	surveyed bool                 // whether a survey has answered: the counts are real
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
@@ -232,9 +231,12 @@ type Model struct {
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
-// state lives: attached instances are read from it on every refresh and
-// claims are written to it.
+// state lives: the saved sessions are under it, and a core handed in with no
+// ledger keeps its state there.
 func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	if c.Ledger == nil {
+		c.Ledger = ledger.File{Root: stateRoot}
+	}
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
@@ -258,9 +260,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.setFiles(cfg.Targets, projects)
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
-	if st, err := state.Load(stateRoot); err == nil {
-		m.keep(st)
-	}
+	m.takeState()
 	// The project field has the cursor from the start: the surface filters as
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
@@ -365,11 +365,9 @@ func (m *Model) reloadViews() {
 	m.reload()
 }
 
-// surveyMsg is one survey's answer, and the state it started from: what it
-// may prune (state.Prune).
+// surveyMsg is one survey's answer.
 type surveyMsg struct {
 	report core.Report
-	before *state.State
 	err    error
 }
 
@@ -391,7 +389,7 @@ func spin() tea.Cmd {
 	return tea.Tick(spinInterval, func(time.Time) tea.Msg { return spinMsg{} })
 }
 
-// actedMsg follows a Go, a Focus, or an action; the next survey shows the
+// actedMsg follows a press, a focus, or an action; the next survey shows the
 // result. An activation wrote what it learned through the ledger, and the
 // surface takes state in on the update loop.
 type actedMsg struct{ err error }
@@ -454,21 +452,16 @@ const localHostWait = 10 * time.Second
 // is a command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects, bound, root := m.core, m.projects, m.bound, m.stateRoot
+	c, projects := m.core, m.projects
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
-		// A state that cannot be read is nil, which lets nothing be pruned.
-		before, _ := loadState(root)
-		// No attachments: the surface lists them from state, which a claim
-		// updates between surveys, so a claimed window shows at once rather
-		// than a refresh later.
-		report, err := c.SurveyLocal(ctx, projects, bound, nil)
+		report, err := c.SurveyLocal(ctx, projects)
 		if err == nil {
 			// The agents here. A link's are recorded when its host answers.
 			events.Sessions(report.Views)
 		}
-		return surveyMsg{report: report, before: before, err: err}
+		return surveyMsg{report: report, err: err}
 	}
 }
 
@@ -574,7 +567,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // loggedAlready reports a message whose error the operation behind it has
-// logged: a Go, a bind, a focus or an action. Every other error set on m.err -
+// logged: a press, a bind, a focus or an action. Every other error set on m.err -
 // a form refused, a file that did not load, a clone - is logged by Update. A
 // failed survey is shown from m.surveyErr and logged by core.SurveyLocal.
 func loggedAlready(msg tea.Msg) bool {
@@ -612,14 +605,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// A host that could not list degraded the survey rather than
 			// failing it: the view stands, and the footer says which host.
 			m.surveyErr = msg.report.HostErr()
-			m.claimByPolling(msg.report, msg.before)
+			// What the survey settles in state - prune, claim, expire - is
+			// the core's, on the state on disk: the launch may have been
+			// written by another process.
+			m.keep(m.core.Settle(msg.report, m.projects, time.Now()))
 			m.local, m.surveyed = msg.report, true
-			// The window listing stands only when the window host answered:
-			// one it is missing from is not an empty one, and the next diff
-			// would take every window as new and claim one of them.
-			if m.core.Window == nil || slices.Contains(msg.report.Hosts, m.core.Window.Name()) {
-				m.windows, m.listed = msg.report.Windows, true
-			}
 			m.show()
 		}
 		// Hidden, nobody reads the answer, and the chain ends here, and with
@@ -759,38 +749,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds[:]...)
 }
 
-// claimByPolling diffs the window listing against the previous survey's and
-// settles the last launch with a window that appeared since: bound to its
-// target, or attached to the project when an action launched. The launch may
-// have been written by another process, so the claim is made on the state on
-// disk. The same pass drops attachments and bindings whose instances are
-// gone, of those the survey started from: one written while it listed is the
-// next survey's.
-func (m *Model) claimByPolling(report core.Report, before *state.State) {
-	c, prev, listed, projects := m.core, m.windows, m.listed, m.projects
-	m.updateState(func(st *state.State) bool {
-		return c.Settle(st, before, report, prev, listed, projects, time.Now())
-	})
-}
-
-// loadState reads state for a survey to start from. A state file that cannot
-// be read or written costs the next keypress a fallback, not the surface, so
-// it is logged and not shown; the surface does both every refresh, so a
-// failure that lasts is one line per cause (logging.Repeat).
-func loadState(root string) (*state.State, error) {
-	st, err := state.Load(root)
-	logging.Repeat("state load", "state load", err, "root", root)
-	return st, err
-}
-
-// updateState is every write of state on the surface: the change is made to
-// the state on disk under its lock, and the surface keeps the result.
+// updateState is every write of state the surface makes itself: it goes
+// through the core's ledger, and the surface keeps the result. A state file
+// that cannot be read or written costs the next keypress a fallback, not the
+// surface, so the ledger logs it and nothing is shown.
 func (m *Model) updateState(apply func(st *state.State) bool) {
-	st, err := state.Update(m.stateRoot, apply)
-	logging.Repeat("state update", "state update", err, "root", m.stateRoot)
-	if st != nil {
-		m.keep(st)
-	}
+	m.keep(m.core.Ledger.Update(apply))
 }
 
 // keep holds the parts of state the surface reads between refreshes.
@@ -809,12 +773,10 @@ func (m *Model) apply(l state.Launch) {
 	})
 }
 
-// takeState takes the state on disk into the surface: what an activation
-// wrote through the ledger, before the next survey would.
+// takeState takes the ledger's state into the surface: what an activation
+// wrote, before the next survey would.
 func (m *Model) takeState() {
-	if st, err := loadState(m.stateRoot); err == nil && st != nil {
-		m.keep(st)
-	}
+	m.keep(m.core.Ledger.State())
 }
 
 // sorted puts projects needing attention first, then the running ones, and
@@ -1171,11 +1133,11 @@ func (m Model) goRow(i int) tea.Cmd {
 // surface stays live. Enter on a row of the pane and a target key on the
 // list are the same operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
-	c, root := m.core, m.stateRoot
+	c := m.core
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
-		_, _, err := c.ActivateWaiting(ctx, p, name, nil, core.StateLedger{Root: root})
+		_, _, err := c.ActivateWaiting(ctx, p, name, nil)
 		return actedMsg{err: err}
 	}
 }
@@ -1211,7 +1173,7 @@ func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
 		start := time.Now()
 		// An action may open anything; the window that appears next is the
 		// project's (claim-on-appear). The launch is recorded now, as the
-		// CLI records it, so core.ClaimWindow runs from the action's start
+		// CLI records it, so its claim window runs from the action's start
 		// and not from its exit, which for an editor is hours later. A
 		// remote project's action runs on its host and opens no window here.
 		if here {
