@@ -18,8 +18,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// app is everything a command needs: configuration, persisted state, and a
-// core wired to the hosts this machine actually has.
+// app is everything a command needs: configuration, the state root, and a
+// core wired to the hosts this machine actually has and to the ledger of its
+// state.
 type app struct {
 	cfg       *config.Config
 	cfgRoot   string

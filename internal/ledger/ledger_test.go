@@ -81,6 +81,39 @@ func TestFileSaysWhenAWriteDidNotReachTheFile(t *testing.T) {
 	}
 }
 
+// A write that cannot take the lock changed nothing, so what it hands back is
+// the state on disk: a surface keeps what Update returns, and must not lose
+// its bindings to a write that failed.
+func TestFileHandsBackTheStateOnDiskWhenAWriteCouldNotStart(t *testing.T) {
+	root := t.TempDir()
+	ref := revier.TargetRef{Host: "rt", ID: "1"}
+	ledger.File{Root: root}.Update(func(st *state.State) bool {
+		st.Landed("work", "home", ref)
+		return true
+	})
+	// The lock is a directory, so it cannot be opened to be locked.
+	lock := filepath.Join(root, "state.lock")
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(lock, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var failed error
+	l := ledger.File{Root: root, Failed: func(err error) { failed = err }}
+
+	st := l.Update(func(st *state.State) bool {
+		st.Current = "other"
+		return true
+	})
+	if failed == nil {
+		t.Fatal("the failed write was not told")
+	}
+	if st.Bound["work"]["home"] != ref || st.Current != "work" {
+		t.Errorf("state = %+v, want the one on disk", st)
+	}
+}
+
 // An event recorded through the ledger is in the event file of the process.
 func TestFileRecordsAnEvent(t *testing.T) {
 	root := t.TempDir()

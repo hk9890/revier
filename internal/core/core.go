@@ -1293,33 +1293,20 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 	return r
 }
 
-// Launch is what a window that appears is attributed to: the project that
-// launched, the target if the launch was one (else an action's, which may
-// open anything), and when.
-type Launch struct {
-	Project Project
-	Target  revier.TargetName
-	At      time.Time
-}
-
-// Claimed is the outcome of a claim: the window, and the target it was bound
-// to, or none for an attachment.
-type Claimed struct {
-	Ref    revier.TargetRef
-	Target revier.TargetName
-}
-
-// claim decides what a window that is new since the previous survey means
-// for the last launch. For a target's launch it is a binding: the window the
-// target's rule accepts by class, which the activation may have missed because the
-// window took longer than its wait. For an action's launch it is an
-// attachment: a window no declared target of any project matches, since a
-// declared one is reached by its key already. Either way it claims nothing
-// rather than the wrong thing: nothing outside the window after the launch,
-// and nothing when more than one candidate appeared at once.
-func (c *Core) claim(before, after []revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
-	if !l.Pending(now) {
-		return Claimed{}, false
+// claim finds the window that is new since the previous survey and belongs to
+// l, the last launch, which is of the project p. For a target's launch it is
+// a binding: the window the target's rule accepts by class, which the
+// activation may have missed because the window took longer than its wait.
+// For an action's launch, which has no target, it is an attachment: a window
+// no declared target of any project matches, since a declared one is reached
+// by its key already. Either way it claims nothing rather than the wrong
+// thing: nothing outside the window after the launch, and nothing when more
+// than one candidate appeared at once.
+func (c *Core) claim(before, after []revier.Instance, p Project, l *state.Launch, now time.Time, projects []Project) (revier.TargetRef, bool) {
+	// A launch stamped after now was written after the listing was taken, so
+	// no window in the listing is its.
+	if !l.Pending(now) || l.At.After(now) {
+		return revier.TargetRef{}, false
 	}
 	seen := map[string]bool{}
 	for _, inst := range before {
@@ -1327,31 +1314,25 @@ func (c *Core) claim(before, after []revier.Instance, l Launch, now time.Time, p
 	}
 	var candidates []revier.Instance
 	for _, inst := range after {
-		if !seen[key(inst.Ref)] && c.candidate(inst, l, projects) {
+		if !seen[key(inst.Ref)] && c.candidate(inst, p, l.Target, projects) {
 			candidates = append(candidates, inst)
 		}
 	}
 	if len(candidates) != 1 {
-		return Claimed{}, false
+		return revier.TargetRef{}, false
 	}
-	return Claimed{Ref: candidates[0].Ref, Target: l.Target}, true
+	return candidates[0].Ref, true
 }
 
-func (c *Core) candidate(inst revier.Instance, l Launch, projects []Project) bool {
-	if l.Target == "" {
+func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, projects []Project) bool {
+	if target == "" {
 		return !c.declared(inst, projects)
 	}
-	i, ok := l.Project.index(l.Target)
-	if !ok || l.Project.Targets[i].Window == nil {
+	i, ok := p.index(target)
+	if !ok || p.Targets[i].Window == nil {
 		return false
 	}
-	return l.Project.compiled[i].window.Matches(inst) || c.classOK(l.Project, i, inst)
-}
-
-// Pending reports whether now is still inside the launch's window, by the
-// rule of internal/state.
-func (l Launch) Pending(now time.Time) bool {
-	return (&state.Launch{Target: l.Target, At: l.At}).Pending(now)
+	return p.compiled[i].window.Matches(inst) || c.classOK(p, i, inst)
 }
 
 // declared reports whether any project's rule matches the instance: it is

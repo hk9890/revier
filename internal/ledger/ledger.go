@@ -39,7 +39,9 @@ func (f File) State() *state.State {
 
 // Update applies a change to the state on disk and returns the state after
 // it. apply reports whether it changed anything; it runs under the lock, so
-// it does no I/O.
+// it does no I/O. A change that could not be started changed nothing, and
+// the state after it is the one on disk: a caller that keeps what Update
+// returns must not lose its bindings to a lock it could not take.
 func (f File) Update(apply func(*state.State) bool) *state.State {
 	st, err := state.Update(f.Root, apply)
 	logging.Repeat("state update", "state update", err, "root", f.Root)
@@ -47,7 +49,7 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 		f.Failed(err)
 	}
 	if st == nil {
-		return &state.State{}
+		return f.State()
 	}
 	if f.Written != nil {
 		// A write still waiting to be read already stands for this one: the

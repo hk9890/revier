@@ -17,6 +17,9 @@ Each section is also the text of its release on the
   target's window.
 - **A state file that cannot be read no longer stops a command.** The command
   runs with nothing remembered and the log says why, as the surface does.
+- **A press and `revier list` say `could not save state` on stderr when the
+  state file cannot be written.** Only the log said it; `revier attach` and
+  `revier run` already did.
 - **Action required for an out-of-tree runtime adapter:** a runtime's
   `Capabilities` no longer have the fields `Layout` and `Persistent`. revier
   never read them. An adapter that sets them no longer builds: delete the two

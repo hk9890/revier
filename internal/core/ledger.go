@@ -16,8 +16,9 @@ import (
 // consumes, what a survey settles - are the core's and internal/state's, so
 // a second ledger cannot hold a second form of one.
 type Ledger interface {
-	// State is the state as it is now. It is the caller's to read and never
-	// nil; a store that cannot be read is an empty state.
+	// State is the state as it is now, and never nil; a store that cannot be
+	// read is an empty state. It is a copy of the caller's own: Settle
+	// changes the one it reads, and that must not reach the store.
 	State() *state.State
 	// Update applies a change under the store's lock and returns the state
 	// after it. apply reports whether it changed anything.
@@ -78,7 +79,9 @@ func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.Age
 // launch past its window expires. It returns the state after it.
 //
 // A ref written since the survey started is to a window the listing may have
-// missed, and is kept. The previous listing is the core's own, of the last
+// missed, and is kept. A launch written since now was read is kept too:
+// another process writes one while this waits for the lock, and it is not
+// past its window. The previous listing is the core's own, of the last
 // report it settled: with none no window is new, so the first settle of a
 // process claims nothing and expires nothing. The lock is taken only when
 // there is something to settle, since `revier list` settles on every refresh
@@ -86,14 +89,14 @@ func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.Age
 func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State {
 	prev, surveyed := c.lastWindows(r)
 	st := c.state()
-	if !c.settle(st, r, prev, surveyed, projects, now) {
-		return st
-	}
-	if c.Ledger == nil {
+	// The first pass only asks whether there is something to settle, on a
+	// copy nobody keeps, so it says nothing: the pass under the lock does.
+	quiet := func(string, ...any) {}
+	if c.Ledger == nil || !c.settle(st, r, prev, surveyed, projects, now, quiet) {
 		return st
 	}
 	return c.Ledger.Update(func(st *state.State) bool {
-		return c.settle(st, r, prev, surveyed, projects, now)
+		return c.settle(st, r, prev, surveyed, projects, now, slog.Info)
 	})
 }
 
@@ -112,29 +115,31 @@ func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
 	return prev, surveyed
 }
 
-func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time) bool {
+// settle is one pass of Settle over st. say takes the log line of a claim or
+// of an expiry.
+func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
 	changed := st.Prune(r.Hosts, r.Instances, r.before)
-	if !surveyed || st.Launch == nil {
+	l := st.Launch
+	if !surveyed || l == nil {
 		return changed
 	}
-	p, ok := projectNamed(projects, st.Launch.Project)
+	p, ok := projectNamed(projects, l.Project)
 	if !ok {
 		return changed
 	}
-	l := Launch{Project: p, Target: st.Launch.Target, At: st.Launch.At}
-	if claimed, ok := c.claim(prev, r.Windows, l, now, projects); ok {
-		slog.Info("claim", "project", l.Project.Name, "target", claimed.Target, "ref", claimed.Ref)
+	if ref, ok := c.claim(prev, r.Windows, p, l, now, projects); ok {
+		say("claim", "project", p.Name, "target", l.Target, "ref", ref)
 		// An attachment records the terminal inside the window as well
 		// (decisions.md D95); a binding is of the window itself.
-		refs := []revier.TargetRef{claimed.Ref}
-		if claimed.Target == "" {
-			refs = c.attachment(r.Instances, claimed.Ref)
+		refs := []revier.TargetRef{ref}
+		if l.Target == "" {
+			refs = c.attachment(r.Instances, ref)
 		}
-		st.Claim(claimed.Target, refs...)
+		st.Claim(l.Target, refs...)
 		return true
 	}
-	if !st.Launch.Pending(now) {
-		slog.Info("claim: launch expired with no window claimed", "project", l.Project.Name, "target", l.Target, "launched_at", l.At)
+	if !l.Pending(now) {
+		say("claim: launch expired with no window claimed", "project", p.Name, "target", l.Target, "launched_at", l.At)
 		st.Launch = nil
 		return true
 	}

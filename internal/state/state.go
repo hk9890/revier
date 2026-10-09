@@ -154,7 +154,9 @@ const BindWindow = 60 * time.Second
 
 // Pending reports whether l, the launch on record if any, is still inside its
 // window at now: a window that appears can still be claimed for it, and until
-// then it is not over.
+// then it is not over. A launch stamped after now is pending: another process
+// wrote it since now was read, or the clock stepped back, and a press that
+// took it for over would launch a second copy.
 func (l *Launch) Pending(now time.Time) bool {
 	if l == nil || l.At.IsZero() {
 		return false
@@ -163,8 +165,7 @@ func (l *Launch) Pending(now time.Time) bool {
 	if l.Target != "" {
 		limit = BindWindow
 	}
-	age := now.Sub(l.At)
-	return age >= 0 && age <= limit
+	return now.Sub(l.At) <= limit
 }
 
 // Pending reports whether a launch of the project's target is on record and

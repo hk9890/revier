@@ -144,6 +144,24 @@ func TestSettleKeepsARefWrittenSinceTheSurveyStarted(t *testing.T) {
 	}
 }
 
+// A launch stamped after the settle's clock was read was written since, by a
+// press in another process. It is not past its window: the settle keeps it,
+// or the next press would launch the target a second time (decisions.md D21).
+func TestSettleKeepsALaunchWrittenSinceItsClockWasRead(t *testing.T) {
+	now := time.Now()
+	l := &ledger{}
+	settle := settling(t, &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}, l, now)
+	settle()
+	l.Update(func(st *state.State) bool {
+		st.Launched("revier", "editor", now.Add(time.Millisecond))
+		return true
+	})
+
+	if st := settle(); !st.Pending("revier", "editor", now.Add(time.Second)) {
+		t.Errorf("launch = %+v, want the launch written since the clock was read kept", st.Launch)
+	}
+}
+
 // A window claimed for an action's launch is attached with the terminal
 // inside it, exactly as `revier attach` records one, so the agent a launched
 // terminal holds is surveyed from the moment it is claimed (decisions.md

@@ -75,8 +75,8 @@ func TestPendingIsTheTargetsLaunchInsideItsWindow(t *testing.T) {
 	if !action.Pending(now) || action.Pending(now.Add(time.Second)) {
 		t.Error("an action's launch is pending for the claim window, and no longer")
 	}
-	if (&state.Launch{Project: "demo", Target: "editor", At: now.Add(time.Minute)}).Pending(now) {
-		t.Error("a launch from the future is not pending")
+	if !(&state.Launch{Project: "demo", Target: "editor", At: now.Add(time.Minute)}).Pending(now) {
+		t.Error("a launch stamped after now is not over: a press must not launch it again")
 	}
 	var none *state.Launch
 	if none.Pending(now) || (&state.State{}).Pending("demo", "editor", now) {
