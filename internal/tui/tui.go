@@ -61,23 +61,20 @@ const (
 	focusAgents
 )
 
-// dialog is a screen standing over the surface: the link dialog's three steps
-// - which host, which of its projects (decisions.md D45), and the link's name -
-// the new-project field, the sessions screen and its name step, the config
-// screen, or the project screen. dialogNone is the surface itself, which is
-// where it is nearly always.
+// dialog is a screen standing over the surface: the link dialog (decisions.md
+// D45), the new-project field, the sessions screen, the config screen, the
+// help screen, the shutdown wizard, or the project screen. A screen's step is
+// the screen's own. dialogNone is the surface itself, which is where it is
+// nearly always.
 type dialog int
 
 const (
 	dialogNone dialog = iota
-	dialogHosts
-	dialogRemote
-	dialogLinkName
+	dialogLink
 	dialogNew
 	dialogConfig
 	dialogHelp
 	dialogSessions
-	dialogSessionName
 	dialogShutdown
 	dialogProject
 )
@@ -85,10 +82,14 @@ const (
 // hasRows reports a screen whose body is list rows: what a click selects and
 // the wheel moves through. Every other screen stands over the project list
 // with text of its own, and a press must not reach a row nobody can see.
-func (d dialog) hasRows() bool {
-	switch d {
-	case dialogNone, dialogHosts, dialogRemote, dialogSessions:
+func (m Model) hasRows() bool {
+	switch m.dialog {
+	case dialogNone:
 		return true
+	case dialogSessions:
+		return !m.sessions.naming
+	case dialogLink:
+		return m.link.list() != nil
 	}
 	return false
 }
@@ -136,14 +137,7 @@ type Model struct {
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
-	dialog    dialog             // the link dialog, while it is up
-	host      string             // the host the dialog's second step shows
-	rfilter   string             // the query over the host's projects
-	rbefore   revier.ProjectName // the host's project the cursor was on when its query began
-	asking    string             // the host an ask is out to, while it is
-	saving    bool               // whether a session save is out
-	restoring string             // the session a restore is walking, while it is
-	outcome   sessionOutcome     // what the last save or restore came to
+	dialog    dialog             // the screen standing over the surface
 	shut      shutdown           // the shutdown wizard, while it is up
 	width     int
 	height    int
@@ -152,10 +146,7 @@ type Model struct {
 	// the order of the rows a query leaves is ranked's, and what a row looks
 	// like is the delegate's.
 	plist    list.Model
-	hlist    list.Model // the hosts, the link dialog's first step
-	rlist    list.Model // a host's projects, its second
-	slist    list.Model // the saved sessions
-	filter   string     // the query, held here so a refresh can re-apply it
+	filter   string // the query, held here so a refresh can re-apply it
 	keys     keyMap
 	help     help.Model
 	detail   viewport.Model
@@ -172,14 +163,6 @@ type Model struct {
 	polling  []string                         // the linked hosts that are being asked
 	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input    textinput.Model                  // the filter query, with its own cursor
-	path     textinput.Model                  // the directory field of the new-project screen
-	nstep    newStep                          // the new-project screen's step
-	nrows    []string                         // what the new-project screen lists under the field
-	nrow     int                              // the chosen one of nrows, -1 for none
-	ndir     string                           // the folder the new-project screen asks to create
-	lname    textinput.Model                  // the name field of the link dialog's last step
-	rinput   textinput.Model                  // the query over the link dialog's second step
-	sname    textinput.Model                  // the name field of a session being saved
 	over     hovered                          // what the pointer is on
 	cell     *pointerCell                     // where the pointer last was, nil before it moved
 	body     viewport.Model                   // the scrolling window over the list
@@ -192,12 +175,6 @@ type Model struct {
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
 	amessage setMessage                       // the message the pane last set, as it set it
 	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
-	agents   bool                             // the surface shows the agent list in the project list's place (agentlist.go)
-	aglist   list.Model                       // the agent list's rows
-	aginput  textinput.Model                  // the agent list's query, with its own cursor
-	agfilter string                           // that query, held here so a refresh can re-apply it
-	agtop    bool                             // the agent list opened and the user has not acted on it: the cursor is on the first row whatever agent that is
-	mirror   mirror                           // the screen of the agent under the agent list's cursor (mirror.go)
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
 	copied   int                              // the characters the last selection copied, shown until the next press
@@ -206,29 +183,16 @@ type Model struct {
 	// it for every target of every row it draws.
 	tdeclared map[core.Chord]bool
 
-	// proposed is whether the link's name is still the one offered, which
-	// the first character typed replaces.
-	proposed bool
+	targets []revier.Target // the shared targets, typed, as config.toml holds them
 
-	// The config screen.
-	ui        config.UI       // [ui] as config.toml holds it
-	runtime   []string        // [hosts] runtime as config.toml holds it
-	runtimes  []string        // the runtime hosts the screen offers besides auto
-	pick      RuntimeSelector // probes a runtime choice, as startup does
-	switching string          // the runtime choice being probed
-	refused   string          // the last runtime choice that did not probe, stepped from next
-	crow      int             // the row the screen's cursor is on
-	chord     textinput.Model // the trigger key, while it is typed
-	aform     actionForm      // the action being added or changed, while its form is up
-	targets   []revier.Target // the shared targets, typed, as config.toml holds them
-	tform     targetForm      // the shared target being added or changed, while its form is up
-	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
-
-	// The project screen. Its target form is tform.
-	proj  revier.ProjectName // the project the screen edits
-	ptext config.ProjectText // its file as written
-	prow  int                // the row the screen's cursor is on
-	pedit textinput.Model    // a field's value, while it is typed
+	// The screens. Each is a struct of its own (screen.go): the root routes a
+	// press to the one that is up and applies the result it hands back.
+	link     linkScreen     // the link dialog (link.go)
+	create   createScreen   // the new-project screen (newproject.go)
+	sessions sessionsScreen // the sessions screen, and its save or restore (sessions.go)
+	config   configScreen   // the config screen (configscreen.go)
+	proj     projectScreen  // the project screen (projectscreen.go)
+	agents   agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -244,16 +208,15 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		hlist: newHostList(th), rlist: newRemoteList(th), slist: newSessionList(th),
+		link:  newLinkScreen(th), sessions: newSessionsScreen(th),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
-		path: newPathInput(th), lname: newLinkNameInput(th), sname: newSessionNameInput(th),
-		rinput: newPrompt(th, ""),
+		agents: newAgentScreen(th),
+		create: newCreateScreen(th),
 		body:   newBody(),
-		ui:     cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
-		pedit: newFieldInput(th),
+		config: newConfigScreen(th, cfg),
+		proj:   newProjectScreen(th),
 	}
 	// The files go in through the one function that reads them, so what is
 	// derived from them is derived once and the first frame holds the same
@@ -551,7 +514,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// The mirror is asked for before the pane is drawn: an agent that came
 	// under the cursor is drawn with its own screen pending, and not over the
 	// screen of the agent the cursor left.
-	read := mm.askMirror(msg)
+	var read tea.Cmd
+	if mm.mirroring() {
+		read = mm.agents.askMirror(mm.core, msg)
+	}
 	mm.syncDetail()
 	mm.syncBody()
 	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
@@ -589,14 +555,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.took(msg)
 		return m, nil
 	case mirroredMsg:
-		m.tookScreen(msg)
+		m.agents.tookScreen(msg, m.paneCols()-paneChrome)
 		return m, nil
 	case mirrorTickMsg:
 		// The tick ends with the mirror off the screen, and askMirror starts
 		// it again when the mirror comes back; the read it is for is
 		// askMirror's too.
 		if !m.mirroring() {
-			m.mirror.ticking = false
+			m.agents.mirror.ticking = false
 			return m, nil
 		}
 		return m, mirrorTick()
@@ -686,7 +652,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The surface opens on the projects, a raise included: the press that
 		// raises it is the one that opened it (decisions.md D110).
-		m.hidden, m.agents = false, false
+		m.hidden, m.agents.shown = false, false
 		return m, reloadFiles
 	case reloadedMsg:
 		if msg.err != nil {
@@ -746,7 +712,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds [3]tea.Cmd
 	m.input, cmds[0] = m.input.Update(msg)
 	m.ainput, cmds[1] = m.ainput.Update(msg)
-	m.aginput, cmds[2] = m.aginput.Update(msg)
+	m.agents.query, cmds[2] = m.agents.query.Update(msg)
 	return m, tea.Batch(cmds[:]...)
 }
 
@@ -802,9 +768,9 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch m.dialog {
 	case dialogNew:
-		return m.newKey(msg)
-	case dialogLinkName:
-		return m.linkNameKey(msg)
+		return m.createKey(msg)
+	case dialogLink:
+		return m.linkKey(msg)
 	case dialogConfig:
 		return m.configKey(msg)
 	case dialogProject:
@@ -813,15 +779,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.helpScreenKey(msg)
 	case dialogSessions:
 		return m.sessionsKey(msg)
-	case dialogSessionName:
-		return m.sessionNameKey(msg)
 	case dialogShutdown:
 		return m.shutdownKey(msg)
 	}
-	if m.dialog != dialogNone {
-		return m.dialogKey(msg)
-	}
-	if m.agents {
+	if m.agents.shown {
 		return m.agentsKey(msg)
 	}
 	m.err = nil
@@ -874,7 +835,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 	// The targets have no query: a letter typed there filters nothing.
-	if m.focus != focusTargets && m.promptKey(msg) {
+	if m.focus != focusTargets && promptKey(msg) {
 		return m.edit(msg)
 	}
 	return m, nil
@@ -890,12 +851,7 @@ func (m Model) selected() (revier.ProjectView, bool) {
 }
 
 func (m Model) project(name revier.ProjectName) (core.Project, bool) {
-	for _, p := range m.projects {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return core.Project{}, false
+	return projectNamed(m.projects, name)
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
@@ -992,7 +948,11 @@ func (m Model) agentsOnPage(dir int) int {
 // claim writes one between surveys so a claimed window shows at once rather
 // than a refresh later.
 func (m Model) heldHere(v revier.ProjectView) bool {
-	return v.Held() || len(m.attached[v.Project.Name]) > 0
+	return heldHere(m.attached, v)
+}
+
+func heldHere(attached map[revier.ProjectName][]revier.TargetRef, v revier.ProjectView) bool {
+	return v.Held() || len(attached[v.Project.Name]) > 0
 }
 
 // targetRows is the pane's Targets section: every target, then every
@@ -1014,8 +974,9 @@ func (m Model) targetRows() []targetRow {
 
 // enter acts on the row under the cursor, by key or by double click.
 func (m Model) enter() (Model, tea.Cmd) {
-	if m.agents {
-		return m.goListed()
+	if m.agents.shown {
+		cmd := m.agents.goSelected(m.surface())
+		return m, cmd
 	}
 	return opened(m.act())
 }
@@ -1194,19 +1155,19 @@ func working(v revier.ProjectView) bool {
 func (m *Model) redrawSpin() {
 	// Every working agent on the agent list is a row with the spinner, and
 	// the pane's head carries it for the one under the cursor.
-	if m.agents && m.dialog == dialogNone {
-		for _, item := range m.aglist.VisibleItems() {
+	if m.agents.shown && m.dialog == dialogNone {
+		for _, item := range m.agents.list.VisibleItems() {
 			if it, ok := item.(agentItem); ok && it.agent.State.Status == revier.StatusRunning {
 				m.syncBody()
 				break
 			}
 		}
-		if it, ok := m.listedAgent(); ok && it.agent.State.Status == revier.StatusRunning {
+		if it, ok := m.agents.selected(); ok && it.agent.State.Status == revier.StatusRunning {
 			m.syncDetail()
 		}
 		return
 	}
-	if m.dialog.hasRows() {
+	if m.hasRows() {
 		for _, item := range m.bodyList().VisibleItems() {
 			if row, ok := item.(tableRow); ok && working(row.rowView()) {
 				m.syncBody()

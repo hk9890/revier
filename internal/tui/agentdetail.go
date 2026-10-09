@@ -86,7 +86,7 @@ func (m Model) detailsWanted() (revier.ProjectName, []revier.AgentView) {
 	if m.hidden || m.dialog != dialogNone {
 		return "", nil
 	}
-	if m.agents {
+	if m.agents.shown {
 		var all []revier.AgentView
 		for _, v := range m.views {
 			all = append(all, v.Agents...)
@@ -125,9 +125,9 @@ func (m *Model) took(msg detailsMsg) {
 	// The agent list opened before this answer, on the first row of an order
 	// that did not know when each agent spoke. The first row of the order
 	// that does is the one it opens on (switchList).
-	if m.agents && m.agtop {
-		m.agtop = false
-		m.aglist.Select(0)
+	if m.agents.shown && m.agents.top {
+		m.agents.top = false
+		m.agents.list.Select(0)
 	}
 }
 
@@ -241,7 +241,7 @@ func (m *Model) agentSaid(v revier.ProjectView, a revier.AgentView, w, tw, rows 
 	lines := append(head, body...)
 	lines = lines[max(len(lines)-room, 0):]
 	var b strings.Builder
-	b.WriteString(m.heading("Last message", w))
+	b.WriteString(heading(m.theme, "Last message", w))
 	for _, line := range lines {
 		b.WriteString(clipTo(line, tw))
 		b.WriteString("\n")

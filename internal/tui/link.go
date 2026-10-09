@@ -131,151 +131,235 @@ func cursor(th theme.Theme, sel bool) string {
 	return th.Path.Render("  ")
 }
 
-// openHosts is alt+r: the dialog's first step, over the hosts the ssh
-// configuration names. No hosts is a message, not an empty list to be
-// puzzled at. The cursor comes back to the list first, so the surface the
-// dialog stands over is the one it is left on.
-func (m Model) openHosts() (tea.Model, tea.Cmd) {
-	path, err := sshconfig.Path()
+// linkStep is the step of the dialog in view.
+type linkStep int
+
+const (
+	linkHosts  linkStep = iota // which host
+	linkRemote                 // which of its projects
+	linkNaming                 // what to name the link
+)
+
+// linkScreen is the link dialog while it is up.
+type linkScreen struct {
+	step     linkStep
+	hosts    list.Model         // the hosts, the first step
+	remote   list.Model         // a host's projects, the second
+	host     string             // the host the second step shows
+	filter   string             // the query over the host's projects
+	before   revier.ProjectName // the host's project the cursor was on when its query began
+	query    textinput.Model    // that query, with its own cursor
+	asking   string             // the host an ask is out to, while it is
+	name     textinput.Model    // the name field of the last step
+	proposed bool               // whether the name is still the one offered, which the first character typed replaces
+}
+
+func newLinkScreen(th theme.Theme) linkScreen {
+	return linkScreen{
+		hosts: newHostList(th), remote: newRemoteList(th),
+		query: newPrompt(th, ""), name: newLinkNameInput(th),
+	}
+}
+
+// linked is a link the dialog wrote: the project here, and the host's view of
+// the project it points at.
+type linked struct {
+	project core.Project
+	view    revier.ProjectView
+}
+
+// linkResult is what a press in the dialog leaves for the surface.
+type linkResult struct {
+	err    error   // the footer's
+	closed bool    // Esc on the first step: back to the surface
+	linked *linked // the link the press wrote
+}
+
+// openLink is alt+r. The cursor comes back to the list first, so the surface
+// the dialog stands over is the one it is left on.
+func (m Model) openLink() (tea.Model, tea.Cmd) {
+	if m.err = m.link.open(); m.err != nil {
+		return m, nil
+	}
+	m.toList()
+	m.dialog = dialogLink
+	return m, nil
+}
+
+// linkKey is every press while the dialog is up, and what it left for the
+// surface: the dialog closed, or a link that is then a row.
+func (m Model) linkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	res, cmd := m.link.key(m.surface(), msg)
+	m.err = res.err
+	switch {
+	case res.closed:
+		m.dialog = dialogNone
+	case res.linked != nil:
+		m.addLink(*res.linked)
+	}
+	return m, cmd
+}
+
+// addLink puts a link just written in as a row, at once, as the next survey
+// will show it, rather than a refresh later.
+func (m *Model) addLink(l linked) {
+	p := l.project
+	// Provisional, until the survey answers: the host's own view, as the
+	// merge would lay it over a local one with no pane here yet. Its agents
+	// go with its panes: no panel here shows one yet, so the row counts none
+	// rather than counting the host's in a project it draws as closed
+	// (decisions.md D104).
+	view := l.view
+	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
+	m.addProject(p, view)
+}
+
+// asked takes a host's answer to the dialog's ask.
+func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
+	cmd, err := m.link.asked(m.projects, msg)
 	if err != nil {
 		m.err = err
-		return m, nil
+	}
+	return m, cmd
+}
+
+// open is the dialog's first step, over the hosts the ssh configuration
+// names. No hosts is a message, not an empty list to be puzzled at.
+func (s *linkScreen) open() error {
+	path, err := sshconfig.Path()
+	if err != nil {
+		return err
 	}
 	hosts, err := sshconfig.Hosts(path)
 	if err != nil {
-		m.err = err
-		return m, nil
+		return err
 	}
 	if len(hosts) == 0 {
-		m.err = fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
-		return m, nil
+		return fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
 	}
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
 		items = append(items, hostItem{host: h})
 	}
-	_ = m.hlist.SetItems(items)
-	m.hlist.Select(0)
+	_ = s.hosts.SetItems(items)
+	s.hosts.Select(0)
 	// A link written last time left its query behind; Esc here would clear
 	// it instead of closing the dialog.
-	m.setRemoteFilter("")
-	m.toList()
-	m.dialog = dialogHosts
-	return m, nil
+	s.setFilter("")
+	s.step = linkHosts
+	return nil
 }
 
-// dialogKey is every press while the dialog is up. It takes a step at a
-// time: the movement keys walk the rows, Enter takes the step, Esc goes back
-// one, and none of the surface's own keys act under it. On a host's projects
-// what is typed filters them, and Esc clears the query before it goes back,
-// as on the surface (decisions.md D44).
-func (m Model) dialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.err = nil
-	if by, ok := m.keys.move(msg, func(int) int { return m.listPage() }); ok {
-		moveRow(m.dialogList(), by)
-		return m, nil
+// key is every press while the dialog is up. It takes a step at a time: the
+// movement keys walk the rows, Enter takes the step, Esc goes back one, and
+// none of the surface's own keys act under it. On a host's projects what is
+// typed filters them, and Esc clears the query before it goes back, as on the
+// surface (decisions.md D44).
+func (s *linkScreen) key(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
+	if s.step == linkNaming {
+		return s.nameKey(sf, msg)
+	}
+	var res linkResult
+	if by, ok := sf.keys.move(msg, func(int) int { return sf.page }); ok {
+		moveRow(s.list(), by)
+		return res, nil
 	}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		if m.rfilter != "" {
-			m.setRemoteFilter("")
-			return m, nil
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		if s.filter != "" {
+			s.setFilter("")
+			return res, nil
 		}
-		m.stepBack()
-	case key.Matches(msg, m.keys.Enter):
-		return m.dialogEnter()
-	case m.dialog == dialogRemote && m.promptKey(msg):
-		next, cmd := m.rinput.Update(msg)
-		m.rinput = next
-		if next.Value() != m.rfilter {
-			m.setRemoteFilter(next.Value())
+		res.closed = s.back()
+	case key.Matches(msg, sf.keys.Enter):
+		if s.step == linkHosts {
+			return res, s.ask(sf.core)
 		}
-		return m, cmd
+		var cmd tea.Cmd
+		cmd, res.err = s.pick()
+		return res, cmd
+	case s.step == linkRemote && promptKey(msg):
+		next, cmd := s.query.Update(msg)
+		s.query = next
+		if next.Value() != s.filter {
+			s.setFilter(next.Value())
+		}
+		return res, cmd
 	}
-	return m, nil
+	return res, nil
 }
 
-// setRemoteFilter is every change to the query over a host's projects. As on
-// the surface, clearing it puts the cursor back on the project it was on when
-// the query began.
-func (m *Model) setRemoteFilter(q string) {
-	if m.rfilter == "" && q != "" {
-		m.rbefore = m.remoteSelected()
+// setFilter is every change to the query over a host's projects. As on the
+// surface, clearing it puts the cursor back on the project it was on when the
+// query began.
+func (s *linkScreen) setFilter(q string) {
+	if s.filter == "" && q != "" {
+		s.before = s.selected()
 	}
-	m.rfilter = q
-	if m.rinput.Value() != q {
-		m.rinput.SetValue(q)
+	s.filter = q
+	if s.query.Value() != q {
+		s.query.SetValue(q)
 	}
 	if q != "" {
-		m.rlist.SetFilterText(q)
+		s.remote.SetFilterText(q)
 		return
 	}
-	m.rlist.ResetFilter()
-	for i, item := range m.rlist.Items() {
-		if it, ok := item.(remoteItem); ok && it.view.Project.Name == m.rbefore {
-			m.rlist.Select(i)
+	s.remote.ResetFilter()
+	for i, item := range s.remote.Items() {
+		if it, ok := item.(remoteItem); ok && it.view.Project.Name == s.before {
+			s.remote.Select(i)
 			return
 		}
 	}
-	m.rlist.Select(0)
+	s.remote.Select(0)
 }
 
-// remoteSelected is the host's project under the cursor, if any.
-func (m Model) remoteSelected() revier.ProjectName {
-	it, ok := m.rlist.SelectedItem().(remoteItem)
+// selected is the host's project under the cursor, if any.
+func (s *linkScreen) selected() revier.ProjectName {
+	it, ok := s.remote.SelectedItem().(remoteItem)
 	if !ok {
 		return ""
 	}
 	return it.view.Project.Name
 }
 
-// dialogEnter takes the step the cursor is on: a host is asked for its
-// projects, a project of that host is linked.
-func (m Model) dialogEnter() (tea.Model, tea.Cmd) {
-	switch m.dialog {
-	case dialogHosts:
-		return m.askHost()
-	case dialogSessions:
-		return m.restoreSession()
+// back is Esc: the second step goes back to the first, and the first reports
+// that the dialog closed. An ask still out is abandoned with the step it was
+// made from, because its answer must not pull the surface back into a dialog
+// the user has just left.
+func (s *linkScreen) back() (closed bool) {
+	s.asking = ""
+	if s.step == linkRemote {
+		s.query.Blur()
+		s.step = linkHosts
+		return false
 	}
-	return m.link()
+	return true
 }
 
-// stepBack is Esc in the dialog: the second step goes back to the first, the
-// first back to the surface. An ask still out is abandoned with the step it
-// was made from, because its answer must not pull the surface back into a
-// dialog the user has just left.
-func (m *Model) stepBack() {
-	m.asking = ""
-	if m.dialog == dialogRemote {
-		m.rinput.Blur()
-		m.dialog = dialogHosts
-		return
+// list is the rows of the step in view, nil on the step that names the link.
+// It is a pointer because the cursor moves on it.
+func (s *linkScreen) list() *list.Model {
+	switch s.step {
+	case linkHosts:
+		return &s.hosts
+	case linkRemote:
+		return &s.remote
 	}
-	m.dialog = dialogNone
+	return nil
 }
 
-// dialogList is the list of the step in view. It is a pointer because the
-// cursor moves on it.
-func (m *Model) dialogList() *list.Model {
-	if m.dialog == dialogRemote {
-		return &m.rlist
-	}
-	return &m.hlist
-}
-
-// askHost is Enter on a host: the host is asked for its projects, off the
+// ask is Enter on a host: the host is asked for its projects, off the
 // terminal, and the answer opens the second step.
-func (m Model) askHost() (tea.Model, tea.Cmd) {
-	it, ok := m.hlist.SelectedItem().(hostItem)
+func (s *linkScreen) ask(c *core.Core) tea.Cmd {
+	it, ok := s.hosts.SelectedItem().(hostItem)
 	if !ok {
-		return m, nil
+		return nil
 	}
-	m.asking = it.host
-	c := m.core
-	return m, func() tea.Msg {
+	s.asking = it.host
+	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), askWait)
 		defer cancel()
 		views, err := c.ProjectsOn(ctx, it.host)
@@ -283,51 +367,51 @@ func (m Model) askHost() (tea.Model, tea.Cmd) {
 	}
 }
 
-// asked takes a host's answer. A failure stays on the hosts, with the
-// failure in the footer; an answer is the second step.
-func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
-	if msg.host != m.asking {
-		return m, nil // an answer to an ask the user has moved on from
+// asked takes a host's answer. A failure stays on the hosts, with the failure
+// for the footer; an answer is the second step. projects are the ones here,
+// for the link that already points at a project of the host.
+func (s *linkScreen) asked(projects []core.Project, msg askedMsg) (tea.Cmd, error) {
+	if msg.host != s.asking {
+		return nil, nil // an answer to an ask the user has moved on from
 	}
-	m.asking = ""
+	s.asking = ""
 	if msg.err != nil {
-		m.err = msg.err
-		return m, nil
+		return nil, msg.err
 	}
 	items := make([]list.Item, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, linked: core.LinkedAs(m.projects, msg.host, v.Project.Name)})
+		items = append(items, remoteItem{view: v, linked: core.LinkedAs(projects, msg.host, v.Project.Name)})
 	}
-	m.host = msg.host
-	m.setRemoteFilter("")
-	_ = m.rlist.SetItems(items)
-	m.rlist.Select(0)
-	m.rinput.Placeholder = "filter the projects on " + msg.host
-	m.dialog = dialogRemote
+	s.host = msg.host
+	s.setFilter("")
+	_ = s.remote.SetItems(items)
+	s.remote.Select(0)
+	s.query.Placeholder = "filter the projects on " + msg.host
+	s.step = linkRemote
+	var err error
 	if len(items) == 0 {
-		m.err = fmt.Errorf("%s has no projects; `revier new` there writes one", msg.host)
+		err = fmt.Errorf("%s has no projects; `revier new` there writes one", msg.host)
 	}
-	return m, m.rinput.Focus()
+	return s.query.Focus(), err
 }
 
-// link is Enter on a project of the host: the step that names the link,
-// with a name that cannot be taken by a project here in the field. A project
+// pick is Enter on a project of the host: the step that names the link, with
+// a name that cannot be taken by a project here in the field. A project
 // already linked is refused, and says under which name.
-func (m Model) link() (tea.Model, tea.Cmd) {
-	it, ok := m.rlist.SelectedItem().(remoteItem)
+func (s *linkScreen) pick() (tea.Cmd, error) {
+	it, ok := s.remote.SelectedItem().(remoteItem)
 	if !ok {
-		return m, nil
+		return nil, nil
 	}
 	if it.linked != "" {
-		m.err = fmt.Errorf("%s on %s is already linked as %s", it.view.Project.Name, m.host, it.linked)
-		return m, nil
+		return nil, fmt.Errorf("%s on %s is already linked as %s", it.view.Project.Name, s.host, it.linked)
 	}
-	m.lname.SetValue(linkName(m.host, it.view.Project.Name))
-	m.lname.CursorEnd()
-	m.proposed = true
-	m.dialog = dialogLinkName
-	m.rinput.Blur()
-	return m, m.lname.Focus()
+	s.name.SetValue(linkName(s.host, it.view.Project.Name))
+	s.name.CursorEnd()
+	s.proposed = true
+	s.step = linkNaming
+	s.query.Blur()
+	return s.name.Focus(), nil
 }
 
 // linkName is the name a link is offered under: the host and the project
@@ -336,40 +420,41 @@ func linkName(host string, project revier.ProjectName) string {
 	return "rs-" + host + "-" + string(project)
 }
 
-// linkNameKey is every press while the link is named. Enter writes it, Esc
-// goes back to the host's projects, and everything else is the field's. The
+// nameKey is every press while the link is named. Enter writes it, Esc goes
+// back to the host's projects, and everything else is the field's. The
 // offered name is replaced by the first character typed, as a selected
 // field's is; any other edit keeps it.
-func (m Model) linkNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (s *linkScreen) nameKey(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
+	res := linkResult{err: sf.err}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.dialog = dialogRemote
-		m.lname.Blur()
-		return m, m.rinput.Focus()
-	case key.Matches(msg, m.keys.Enter):
-		return m.writeLink()
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		res.err = nil
+		s.step = linkRemote
+		s.name.Blur()
+		return res, s.query.Focus()
+	case key.Matches(msg, sf.keys.Enter):
+		return s.write(sf), nil
 	}
 	if altRune(msg) {
-		return m, nil
+		return res, nil
 	}
-	m.err = nil
-	if m.proposed && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
-		m.lname.SetValue("")
+	res.err = nil
+	if s.proposed && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
+		s.name.SetValue("")
 	}
-	m.proposed = false
-	in, cmd := m.lname.Update(msg)
-	m.lname = in
-	return m, cmd
+	s.proposed = false
+	in, cmd := s.name.Update(msg)
+	s.name = in
+	return res, cmd
 }
 
-// linkNameFault is why the name in the field cannot be written, or nil. It
-// is asked on every frame, so a name that is taken, or that no agent address
-// can carry, says so as it is typed.
-func (m Model) linkNameFault() error {
-	name := m.linkNameValue()
+// nameFault is why the name in the field cannot be written, or nil. It is
+// asked on every frame, so a name that is taken, or that no agent address can
+// carry, says so as it is typed.
+func (s *linkScreen) nameFault(projects []core.Project) error {
+	name := s.nameValue()
 	if name == "" {
 		return fmt.Errorf("give the link a name")
 	}
@@ -379,71 +464,138 @@ func (m Model) linkNameFault() error {
 	if err := config.CanAddress(name); err != nil {
 		return err
 	}
-	if p, ok := m.project(name); ok {
+	if p, ok := projectNamed(projects, name); ok {
 		return fmt.Errorf("a project named %q exists here: %s", name, config.ContractHome(p.File))
 	}
 	return nil
 }
 
-func (m Model) linkNameValue() revier.ProjectName {
-	return revier.ProjectName(strings.TrimSpace(m.lname.Value()))
+func (s *linkScreen) nameValue() revier.ProjectName {
+	return revier.ProjectName(strings.TrimSpace(s.name.Value()))
 }
 
-// writeLink is Enter on the name: a link file under it, which is then a row.
-// A name that is taken writes nothing, so no project here is overwritten.
-// The row is put in at once, as the next survey will show it, rather than a
-// refresh later.
-func (m Model) writeLink() (tea.Model, tea.Cmd) {
-	it, ok := m.rlist.SelectedItem().(remoteItem)
+// write is Enter on the name: a link file under it. A name that is taken
+// writes nothing, so no project here is overwritten.
+func (s *linkScreen) write(sf surface) linkResult {
+	res := linkResult{err: sf.err}
+	it, ok := s.remote.SelectedItem().(remoteItem)
 	if !ok {
-		return m, nil
+		return res
 	}
-	if err := m.linkNameFault(); err != nil {
-		m.err = err
-		return m, nil
+	if res.err = s.nameFault(sf.projects); res.err != nil {
+		return res
 	}
 	root, err := config.Root()
 	if err != nil {
-		m.err = err
-		return m, nil
+		res.err = err
+		return res
 	}
-	p, err := app.LinkProject(root, m.linkNameValue(), m.host, it.view.Project)
+	p, err := app.LinkProject(root, s.nameValue(), s.host, it.view.Project)
 	if err != nil {
-		m.err = err
-		return m, nil
+		res.err = err
+		return res
 	}
-	m.projects = append(m.projects, p)
-	m.setKeys()
-	// Provisional, until the survey answers: the host's own view, as the
-	// merge would lay it over a local one with no pane here yet. Its agents
-	// go with its panes: no panel here shows one yet, so the row counts none
-	// rather than counting the host's in a project it draws as closed
-	// (decisions.md D104).
-	view := it.view
-	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
-	m.views = m.sorted(append(m.views, view))
-	m.dialog = dialogNone
-	m.lname.Blur()
-	m.reload()
-	m.selectName(p.Name)
-	return m, nil
+	s.name.Blur()
+	res.err, res.linked = sf.err, &linked{project: p, view: it.view}
+	return res
 }
 
-// linkNameScreen is what stands in the list's place while the link is
-// named: what Enter writes, or why it writes nothing. The reason is wrapped
-// where every other line is clipped: it is a sentence, and what the name
-// breaks comes at its end.
-func (m Model) linkNameScreen() string {
-	th := m.theme
-	w := m.listWidth()
-	say := func(s lipgloss.Style, text string) string {
-		return s.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
+// title names the step, on the surface's first line.
+func (s *linkScreen) title() string {
+	switch s.step {
+	case linkRemote:
+		return s.host
+	case linkNaming:
+		name := "Name the link"
+		if it, ok := s.remote.SelectedItem().(remoteItem); ok {
+			name += " to " + string(it.view.Project.Name) + " on " + s.host
+		}
+		return name
 	}
-	it, ok := m.rlist.SelectedItem().(remoteItem)
+	return "Link a project on another machine"
+}
+
+// subtitle is the line over the rule: the query over a host's projects, or
+// the name field. The hosts step says nothing there - the title over it
+// already says what the rows are, and the rule under it counts them - but it
+// keeps the line, so the rows do not move as the step changes.
+func (s *linkScreen) subtitle(th theme.Theme) string {
+	switch s.step {
+	case linkRemote:
+		return " " + s.query.View()
+	case linkNaming:
+		// The offered name is drawn as a selection until it is edited,
+		// because the first character typed replaces it.
+		in := s.name
+		if s.proposed {
+			in.TextStyle = th.OnSelection(th.ProjectName)
+		}
+		return " " + in.View()
+	}
+	return ""
+}
+
+// count is what the rule says of the rows under it.
+func (s *linkScreen) count(th theme.Theme) string {
+	switch {
+	case s.step == linkHosts:
+		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(s.hosts.Items())))
+	case s.step == linkRemote && s.filter != "":
+		return th.NameDim.Render(fmt.Sprintf("%d/%d projects", len(s.remote.VisibleItems()), len(s.remote.Items())))
+	case s.step == linkRemote:
+		return th.NameDim.Render(fmt.Sprintf("%d projects", len(s.remote.Items())))
+	}
+	return ""
+}
+
+// empty is what stands in place of rows when the query left none.
+func (s *linkScreen) empty() string {
+	if s.step == linkRemote && s.filter != "" {
+		return fmt.Sprintf("No project on %s matches %q.", s.host, s.filter)
+	}
+	return ""
+}
+
+// help is the footer. Its two list steps take the same keys and mean
+// different things by them.
+func (s *linkScreen) help(k keyMap) []key.Binding {
+	switch s.step {
+	case linkHosts:
+		return []key.Binding{helpKey("enter", "list its projects"), helpKey("esc", "back"), k.Quit}
+	case linkRemote:
+		return []key.Binding{helpKey("enter", "name the link"), helpKey("type", "filter"), helpKey("esc", "clear/back"), k.Quit}
+	}
+	return []key.Binding{helpKey("enter", "link"), helpKey("esc", "back"), k.Quit}
+}
+
+// restyle redraws the rows and the fields in a theme.
+func (s *linkScreen) restyle(th theme.Theme) {
+	s.hosts.SetDelegate(hostDelegate{theme: th})
+	s.light(th, -1)
+	styleField(&s.query, th)
+	styleField(&s.name, th)
+}
+
+// light draws a host's projects with the row under the pointer lit, -1 for
+// none.
+func (s *linkScreen) light(th theme.Theme, row int) {
+	s.remote.SetDelegate(projectDelegate{theme: th, hover: row})
+}
+
+// nameScreen is what stands in the list's place while the link is named:
+// what Enter writes, or why it writes nothing. The reason is wrapped where
+// every other line is clipped: it is a sentence, and what the name breaks
+// comes at its end.
+func (s *linkScreen) nameScreen(sf surface) string {
+	th, w := sf.theme, sf.list
+	say := func(st lipgloss.Style, text string) string {
+		return st.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
+	}
+	it, ok := s.remote.SelectedItem().(remoteItem)
 	if !ok {
 		return ""
 	}
-	if err := m.linkNameFault(); err != nil {
+	if err := s.nameFault(sf.projects); err != nil {
 		return th.Attention.PaddingLeft(2).Width(w).Render(err.Error()) + "\n" +
 			say(th.Meta, "Enter writes nothing until the name changes")
 	}
@@ -452,18 +604,8 @@ func (m Model) linkNameScreen() string {
 		return say(th.Attention, err.Error())
 	}
 	return say(th.NameDim, "Enter writes") + "\n" +
-		say(th.Path, config.ContractHome(config.ProjectFile(root, m.linkNameValue()))) + "\n" +
-		say(th.Meta, fmt.Sprintf("a link to %s on %s", it.view.Project.Name, m.host))
-}
-
-// linkNameView is the field, with the offered name drawn as a selection
-// until it is edited, because the first character typed replaces it.
-func (m Model) linkNameView() string {
-	in := m.lname
-	if m.proposed {
-		in.TextStyle = m.theme.OnSelection(m.theme.ProjectName)
-	}
-	return " " + in.View()
+		say(th.Path, config.ContractHome(config.ProjectFile(root, s.nameValue()))) + "\n" +
+		say(th.Meta, fmt.Sprintf("a link to %s on %s", it.view.Project.Name, s.host))
 }
 
 // newLinkNameInput is the field the link's name is typed in.
@@ -475,19 +617,18 @@ func newLinkNameInput(th theme.Theme) textinput.Model {
 	return in
 }
 
-// remoteDetail is the pane on the dialog's second step: what the host said
-// about the project under the cursor.
-func (m *Model) remoteDetail() string {
-	it, ok := m.rlist.SelectedItem().(remoteItem)
-	if !ok {
+// detail is the pane past the first step: what the host said about the
+// project under the cursor.
+func (s *linkScreen) detail(sf surface) string {
+	it, ok := s.remote.SelectedItem().(remoteItem)
+	if !ok || s.step == linkHosts {
 		return ""
 	}
-	th, v := m.theme, it.view
-	w := m.paneCols() - paneChrome
+	th, v, w := sf.theme, it.view, sf.pane
 	line := func(label, value string, style lipgloss.Style) string {
 		return hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style) + "\n"
 	}
-	out := th.Header.Render(clipTo(string(v.Project.Name)+"@"+m.host, w)) + "\n"
+	out := th.Header.Render(clipTo(string(v.Project.Name)+"@"+s.host, w)) + "\n"
 	out += line("Path", v.Project.Path, th.Path)
 	status, style := "stopped", th.NameDim
 	switch {
@@ -499,19 +640,19 @@ func (m *Model) remoteDetail() string {
 	out += line("Status", status, style)
 	if it.linked != "" {
 		out += line("Linked as", string(it.linked), th.Remote)
-	} else if m.dialog == dialogRemote {
+	} else if s.step == linkRemote {
 		out += th.Meta.Render(clipTo("Enter: name a link to it here", w)) + "\n"
 	}
 	if len(v.Agents) > 0 {
-		out += m.heading("Agents", w)
+		out += heading(th, "Agents", w)
 		for _, a := range v.Agents {
-			out += m.detailAgent(agentRow{agent: a}, w, false, false) + "\n"
+			out += detailAgent(sf.spun, agentRow{agent: a}, w, false, false, false) + "\n"
 		}
 	}
 	return out
 }
 
 // askingLine is the footer while an ask is out.
-func (m Model) askingLine() string {
-	return m.theme.Meta.Render(fmt.Sprintf(" asking %s for its projects…", m.asking))
+func (s *linkScreen) askingLine(th theme.Theme) string {
+	return th.Meta.Render(fmt.Sprintf(" asking %s for its projects…", s.asking))
 }

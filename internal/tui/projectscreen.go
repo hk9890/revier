@@ -47,197 +47,265 @@ func newFieldInput(th theme.Theme) textinput.Model {
 	return in
 }
 
+// projectScreen is the project screen while it is up.
+type projectScreen struct {
+	name     revier.ProjectName // the project the screen edits
+	text     config.ProjectText // its file as written
+	row      int                // the row the cursor is on
+	edit     textinput.Model    // a field's value, while it is typed
+	tform    targetForm         // the target being added or changed, while its form is up
+	dropping bool               // whether the target under the cursor waits on a y to be deleted
+}
+
+func newProjectScreen(th theme.Theme) projectScreen {
+	return projectScreen{edit: newFieldInput(th)}
+}
+
+// projectResult is what a press on the screen leaves for the surface. The
+// screen has written the project file; the surface takes the project as it
+// now loads.
+type projectResult struct {
+	err     error         // the footer's
+	closed  bool          // Esc on the rows: back to the surface
+	written *core.Project // the project as its file now loads, under a new name after a rename
+}
+
 // openProject is alt+e and a click on the pane's name.
 func (m Model) openProject() (tea.Model, tea.Cmd) {
 	p, ok := m.highlighted()
 	if !ok || p.File == "" {
 		return m, nil
 	}
-	text, err := config.ReadProject(p.File, m.usable)
-	if err != nil {
+	if err := m.proj.open(p, m.usable); err != nil {
 		m.err = err
 		return m, nil
 	}
 	m.err = nil
 	m.toList()
-	m.proj, m.ptext, m.prow = p.Name, text, 0
-	m.pedit.Blur()
-	m.aform = actionForm{}
-	m.tform = targetForm{}
-	m.dropping = false
 	m.body.SetYOffset(0)
 	m.dialog = dialogProject
 	return m, nil
 }
 
-// projectFields are the first section's rows. A link has no directory or
-// checkout here, only its name.
-func (m Model) projectFields() []projectField {
-	if m.ptext.Remote != nil {
-		return []projectField{projName}
-	}
-	return []projectField{projName, projPath, projGitURL}
-}
-
-// projectTargetRow is the target the cursor is on, if any.
-func (m Model) projectTargetRow() (int, bool) {
-	i := m.prow - len(m.projectFields())
-	return i, i >= 0 && i < len(m.ptext.Targets)
-}
-
-// addProjectTargetRow is the row that adds a target.
-func (m Model) addProjectTargetRow() int {
-	return len(m.projectFields()) + len(m.ptext.Targets)
-}
-
-// projectValue is a field as the file has it.
-func (m Model) projectValue(f projectField) string {
-	switch f {
-	case projPath:
-		return m.ptext.Path
-	case projGitURL:
-		return m.ptext.GitURL
-	}
-	return string(m.proj)
-}
-
-// projectKey is every press on the project screen.
+// projectKey is every press on the project screen, and what it left for the
+// surface: the project as its file now loads.
 func (m Model) projectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case m.pedit.Focused():
-		return m.projectEditKey(msg)
-	case m.tform.open:
-		return m.targetFormKey(msg)
-	case m.dropping:
-		return m.confirmDropProjectTarget(msg)
+	was := m.proj.name
+	// Only Enter on a typed field can rename.
+	var locked error
+	if m.proj.edit.Focused() {
+		locked = m.renameRefusal(was)
 	}
-	m.err = nil
-	i, onTarget := m.projectTargetRow()
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back, m.keys.Edit):
+	res, cmd := m.proj.key(m.surface(), locked, msg)
+	m.err = res.err
+	if p := res.written; p != nil {
+		if p.Name != was {
+			// A rename moved what state holds under the old name. What a
+			// link's host said last is laid over the row at every refresh, so
+			// it follows the name too: the row would otherwise lose its
+			// agents until the host answers again.
+			m.takeState()
+			m.answers = m.answers.Renamed(was, p.Name)
+		}
+		m.replaceProject(was, *p)
+	}
+	if res.closed {
 		m.dialog = dialogNone
 		m.layout()
-	case key.Matches(msg, m.keys.Up):
-		m.prow = max(m.prow-1, 0)
-	case key.Matches(msg, m.keys.Down):
-		m.prow = min(m.prow+1, m.addProjectTargetRow())
-	case onTarget && key.Matches(msg, m.keys.Delete):
-		pt := m.ptext.Targets[i]
-		if pt.Source == config.FromShared || pt.Source == config.Derived {
-			m.err = fmt.Errorf("target %q is not in the project file; there is nothing to delete", pt.Target.Name)
-			return m, nil
-		}
-		m.dropping = true
-	case onTarget && key.Matches(msg, m.keys.Enter):
-		return m.openProjectTargetForm(i)
-	case m.prow == m.addProjectTargetRow() && key.Matches(msg, m.keys.Enter):
-		return m.openProjectTargetForm(len(m.ptext.Targets))
-	case key.Matches(msg, m.keys.Enter):
-		// As wide as the row leaves it, so a long path scrolls under the
-		// cursor instead of running off the right edge, typed blind.
-		m.pedit.Width = max(m.listWidth()-lipgloss.Width(cursor(m.theme, true))-configLabelWidth-1, 8)
-		m.pedit.SetValue(m.projectValue(m.projectFields()[m.prow]))
-		m.pedit.CursorEnd()
-		return m, m.pedit.Focus()
 	}
-	return m, nil
-}
-
-// projectEditKey is a press while a field is typed. Enter writes it, Esc
-// leaves it as it was.
-func (m Model) projectEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.pedit.Blur()
-		return m, nil
-	case key.Matches(msg, m.keys.Enter):
-		if err := m.saveProjectField(m.projectFields()[m.prow], strings.TrimSpace(m.pedit.Value())); err != nil {
-			m.err = err
-			return m, nil
-		}
-		m.err = nil
-		m.pedit.Blur()
-		return m, nil
-	case altRune(msg):
-		return m, nil
-	}
-	in, cmd := m.pedit.Update(msg)
-	m.pedit = in
 	return m, cmd
 }
 
-func (m *Model) saveProjectField(f projectField, value string) error {
-	if f == projName {
-		return m.renameProject(revier.ProjectName(value))
-	}
-	if value == m.projectValue(f) {
-		return nil
-	}
-	p, _ := m.project(m.proj)
-	written, err := config.SetProjectValue(p.File, projectFieldKeys[f], value, m.usable)
-	if err != nil {
-		return err
-	}
-	return m.projectWritten(m.proj, written)
-}
-
-// renameProject moves the project file, and what state and the saved
-// sessions hold under the old name with it. A running project is refused:
-// its instances are found by titles its name is part of.
-func (m *Model) renameProject(to revier.ProjectName) error {
-	from := m.proj
-	if to == from {
-		return nil
-	}
+// renameRefusal is why the project cannot be renamed now, or nil. A running
+// project is refused: its instances are found by titles its name is part of.
+func (m Model) renameRefusal(name revier.ProjectName) error {
 	for _, v := range m.views {
-		if v.Project.Name == from {
+		if v.Project.Name == name {
 			if err := m.refuseRunning(v, "renaming"); err != nil {
 				return err
 			}
 		}
 	}
-	var written core.Project
-	err := withConfigRoot(func(root string) (err error) {
-		written, err = app.RenameProject(root, m.stateRoot, m.core.Ledger, from, to, m.usable)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	m.takeState()
-	// What a link's host said last is laid over the row at every refresh, so
-	// it follows the name: the row would otherwise lose its agents until the
-	// host answers again.
-	m.answers = m.answers.Renamed(from, to)
-	return m.projectWritten(from, written)
-}
-
-// projectWritten takes what a write to the project file left: the project for
-// the surface, and the file as written for the screen.
-func (m *Model) projectWritten(was revier.ProjectName, p core.Project) error {
-	m.replaceProject(was, p)
-	m.proj = p.Name
-	text, err := config.ReadProject(p.File, m.usable)
-	if err != nil {
-		return err
-	}
-	m.ptext = text
 	return nil
 }
 
-// openProjectTargetForm opens the form for the project's target i, or for a
-// new one when i is past the last. A derived target is not in the file, so
-// saving it declares one.
-func (m Model) openProjectTargetForm(i int) (tea.Model, tea.Cmd) {
-	f := m.newTargetForm(i, nil)
-	if i < len(m.ptext.Targets) {
-		pt := m.ptext.Targets[i]
-		f = m.newTargetForm(i, &pt.Target)
+// open reads the project's file for a new visit.
+func (ps *projectScreen) open(p core.Project, usable []map[string]any) error {
+	text, err := config.ReadProject(p.File, usable)
+	if err != nil {
+		return err
+	}
+	ps.name, ps.text, ps.row = p.Name, text, 0
+	ps.edit.Blur()
+	ps.tform = targetForm{}
+	ps.dropping = false
+	return nil
+}
+
+// fields are the first section's rows. A link has no directory or checkout
+// here, only its name.
+func (ps *projectScreen) fields() []projectField {
+	if ps.text.Remote != nil {
+		return []projectField{projName}
+	}
+	return []projectField{projName, projPath, projGitURL}
+}
+
+// targetRow is the target the cursor is on, if any.
+func (ps *projectScreen) targetRow() (int, bool) {
+	i := ps.row - len(ps.fields())
+	return i, i >= 0 && i < len(ps.text.Targets)
+}
+
+// addTargetRow is the row that adds a target.
+func (ps *projectScreen) addTargetRow() int {
+	return len(ps.fields()) + len(ps.text.Targets)
+}
+
+// value is a field as the file has it.
+func (ps *projectScreen) value(f projectField) string {
+	switch f {
+	case projPath:
+		return ps.text.Path
+	case projGitURL:
+		return ps.text.GitURL
+	}
+	return string(ps.name)
+}
+
+// key is every press on the project screen. locked is why the project cannot
+// be renamed now, nil when it can.
+func (ps *projectScreen) key(sf surface, locked error, msg tea.KeyMsg) (projectResult, tea.Cmd) {
+	switch {
+	case ps.edit.Focused():
+		return ps.editKey(sf, locked, msg)
+	case ps.tform.open:
+		form, cmd := ps.tform.key(sf, msg)
+		if form.save != nil {
+			return ps.saveTarget(sf, *form.save), cmd
+		}
+		return projectResult{err: form.err}, cmd
+	case ps.dropping:
+		return ps.dropTarget(sf, msg), nil
+	}
+	var res projectResult
+	i, onTarget := ps.targetRow()
+	switch {
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back, sf.keys.Edit):
+		res.closed = true
+	case key.Matches(msg, sf.keys.Up):
+		ps.row = max(ps.row-1, 0)
+	case key.Matches(msg, sf.keys.Down):
+		ps.row = min(ps.row+1, ps.addTargetRow())
+	case onTarget && key.Matches(msg, sf.keys.Delete):
+		pt := ps.text.Targets[i]
+		if pt.Source == config.FromShared || pt.Source == config.Derived {
+			res.err = fmt.Errorf("target %q is not in the project file; there is nothing to delete", pt.Target.Name)
+			return res, nil
+		}
+		ps.dropping = true
+	case onTarget && key.Matches(msg, sf.keys.Enter):
+		return res, ps.openTargetForm(sf.theme, i)
+	case ps.row == ps.addTargetRow() && key.Matches(msg, sf.keys.Enter):
+		return res, ps.openTargetForm(sf.theme, len(ps.text.Targets))
+	case key.Matches(msg, sf.keys.Enter):
+		// As wide as the row leaves it, so a long path scrolls under the
+		// cursor instead of running off the right edge, typed blind.
+		ps.edit.Width = max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8)
+		ps.edit.SetValue(ps.value(ps.fields()[ps.row]))
+		ps.edit.CursorEnd()
+		return res, ps.edit.Focus()
+	}
+	return res, nil
+}
+
+// editKey is a press while a field is typed. Enter writes it, Esc leaves it
+// as it was.
+func (ps *projectScreen) editKey(sf surface, locked error, msg tea.KeyMsg) (projectResult, tea.Cmd) {
+	res := projectResult{err: sf.err}
+	switch {
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		res.err = nil
+		ps.edit.Blur()
+		return res, nil
+	case key.Matches(msg, sf.keys.Enter):
+		res = ps.saveField(sf, locked, ps.fields()[ps.row], strings.TrimSpace(ps.edit.Value()))
+		if res.err == nil {
+			ps.edit.Blur()
+		}
+		return res, nil
+	case altRune(msg):
+		return res, nil
+	}
+	in, cmd := ps.edit.Update(msg)
+	ps.edit = in
+	return res, cmd
+}
+
+// saveField writes a field's value to the project file. The name is the
+// file's own, so a new one moves the file.
+func (ps *projectScreen) saveField(sf surface, locked error, f projectField, value string) projectResult {
+	if f == projName {
+		return ps.rename(sf, locked, revier.ProjectName(value))
+	}
+	if value == ps.value(f) {
+		return projectResult{}
+	}
+	p, _ := projectNamed(sf.projects, ps.name)
+	written, err := config.SetProjectValue(p.File, projectFieldKeys[f], value, sf.usable)
+	if err != nil {
+		return projectResult{err: err}
+	}
+	return ps.took(sf, written)
+}
+
+// rename moves the project file, and what state and the saved sessions hold
+// under the old name with it.
+func (ps *projectScreen) rename(sf surface, locked error, to revier.ProjectName) projectResult {
+	from := ps.name
+	if to == from {
+		return projectResult{}
+	}
+	if locked != nil {
+		return projectResult{err: locked}
+	}
+	var written core.Project
+	err := withConfigRoot(func(root string) (err error) {
+		written, err = app.RenameProject(root, sf.stateRoot, sf.core.Ledger, from, to, sf.usable)
+		return err
+	})
+	if err != nil {
+		return projectResult{err: err}
+	}
+	return ps.took(sf, written)
+}
+
+// took takes what a write to the project file left: the file as written for
+// the screen, and the project for the surface.
+func (ps *projectScreen) took(sf surface, p core.Project) projectResult {
+	res := projectResult{written: &p}
+	ps.name = p.Name
+	text, err := config.ReadProject(p.File, sf.usable)
+	if err != nil {
+		res.err = err
+		return res
+	}
+	ps.text = text
+	return res
+}
+
+// openTargetForm opens the form for the project's target i, or for a new one
+// when i is past the last. A derived target is not in the file, so saving it
+// declares one.
+func (ps *projectScreen) openTargetForm(th theme.Theme, i int) tea.Cmd {
+	f := newTargetForm(th, i, nil)
+	if i < len(ps.text.Targets) {
+		pt := ps.text.Targets[i]
+		f = newTargetForm(th, i, &pt.Target)
 		if pt.Source != config.Derived {
 			f.was = pt.Target.Name
 		}
@@ -246,80 +314,78 @@ func (m Model) openProjectTargetForm(i int) (tea.Model, tea.Cmd) {
 			f.shared = &v
 		}
 	}
-	m.err = nil
-	m.tform = f
-	return m, m.tform.fields[tfName].Focus()
+	ps.tform = f
+	return ps.tform.fields[tfName].Focus()
 }
 
-// saveProjectTarget writes the form's target to the project file.
-func (m Model) saveProjectTarget(t revier.Target, from []int) (tea.Model, tea.Cmd) {
-	p, _ := m.project(m.proj)
-	written, err := config.SaveProjectTarget(p.File, m.tform.was, config.TargetEdit{Target: t, PanelFrom: from}, m.usable)
-	if err == nil {
-		err = m.projectWritten(m.proj, written)
-	}
+// saveTarget writes the form's target to the project file.
+func (ps *projectScreen) saveTarget(sf surface, edit config.TargetEdit) projectResult {
+	p, _ := projectNamed(sf.projects, ps.name)
+	written, err := config.SaveProjectTarget(p.File, ps.tform.was, edit, sf.usable)
 	if err != nil {
-		m.err = err
-		return m, nil
+		return projectResult{err: err}
 	}
-	m.err = nil
-	m.tform = targetForm{}
-	for i, pt := range m.ptext.Targets {
-		if pt.Target.Name == t.Name {
-			m.prow = len(m.projectFields()) + i
+	res := ps.took(sf, written)
+	if res.err != nil {
+		return res
+	}
+	ps.tform = targetForm{}
+	for i, pt := range ps.text.Targets {
+		if pt.Target.Name == edit.Target.Name {
+			ps.row = len(ps.fields()) + i
 		}
 	}
-	return m, nil
+	return res
 }
 
-// confirmDropProjectTarget takes the key that answers the delete question.
-// Only y deletes the file's entry: a target of the project's own goes, and
-// an override leaves config.toml's target as it is there.
-func (m Model) confirmDropProjectTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.dropping = false
-	i, ok := m.projectTargetRow()
+// dropTarget takes the key that answers the delete question. Only y deletes
+// the file's entry: a target of the project's own goes, and an override
+// leaves config.toml's target as it is there.
+func (ps *projectScreen) dropTarget(sf surface, msg tea.KeyMsg) projectResult {
+	ps.dropping = false
+	i, ok := ps.targetRow()
 	if msg.String() != "y" || !ok {
-		return m, nil
+		return projectResult{err: sf.err}
 	}
-	p, _ := m.project(m.proj)
-	written, err := config.RemoveProjectTarget(p.File, m.ptext.Targets[i].Target.Name, m.usable)
-	if err == nil {
-		err = m.projectWritten(m.proj, written)
-	}
+	p, _ := projectNamed(sf.projects, ps.name)
+	written, err := config.RemoveProjectTarget(p.File, ps.text.Targets[i].Target.Name, sf.usable)
 	if err != nil {
-		m.err = err
-		return m, nil
+		return projectResult{err: err}
 	}
-	m.prow = min(m.prow, m.addProjectTargetRow())
-	return m, nil
+	res := ps.took(sf, written)
+	if res.err != nil {
+		return res
+	}
+	res.err = sf.err
+	ps.row = min(ps.row, ps.addTargetRow())
+	return res
 }
 
-// dropProjectPrompt is the delete question for the target under the cursor.
-func (m Model) dropProjectPrompt() string {
+// dropPrompt is the delete question for the target under the cursor.
+func (ps *projectScreen) dropPrompt(th theme.Theme) string {
 	question := ""
-	if i, ok := m.projectTargetRow(); ok {
-		pt := m.ptext.Targets[i]
+	if i, ok := ps.targetRow(); ok {
+		pt := ps.text.Targets[i]
 		question = fmt.Sprintf("delete target %q?", pt.Target.Name)
 		if pt.Source == config.Overridden {
 			question = fmt.Sprintf("drop this project's changes to target %q?", pt.Target.Name)
 		}
 	}
-	return m.theme.Attention.Render(" "+question+"  ") +
-		m.theme.Help.Render("y: delete · any other key: keep")
+	return th.Attention.Render(" "+question+"  ") +
+		th.Help.Render("y: delete · any other key: keep")
 }
 
-// projectHelp is the footer on the project screen.
-func (m Model) projectHelp() []key.Binding {
-	k := m.keys
-	_, onTarget := m.projectTargetRow()
+// help is the footer on the project screen.
+func (ps *projectScreen) help(k keyMap) []key.Binding {
+	_, onTarget := ps.targetRow()
 	switch {
-	case m.pedit.Focused():
+	case ps.edit.Focused():
 		return k.helpForConfig(configTyping)
-	case m.tform.open:
-		return k.helpForConfig(m.configHelp())
+	case ps.tform.open:
+		return k.helpForConfig(ps.tform.helpKind())
 	case onTarget:
 		return k.helpForConfig(configOnAction)
-	case m.prow == m.addProjectTargetRow():
+	case ps.row == ps.addTargetRow():
 		return k.helpForConfig(configOnAdd)
 	}
 	return []key.Binding{helpKey("↑↓", "move"), helpKey("enter", "edit"), helpKey("esc", "back"), k.Quit}
@@ -338,16 +404,16 @@ func sourceNote(s config.Source) string {
 	return "this project"
 }
 
-// projectScreen stands in the list's place while the screen is up, and the
-// line the cursor is on, which the body keeps in view.
-func (m Model) projectScreen() (string, int) {
-	th := m.theme
-	w := m.listWidth()
+// screen stands in the list's place while the screen is up, and the line the
+// cursor is on, which the body keeps in view.
+func (ps *projectScreen) screen(sf surface) (string, int) {
+	th := sf.theme
+	w := sf.list
 	var b strings.Builder
 	at := 0
 	row := func(r int, label, value, note string) {
 		// While a form is open its own cursor is the one on screen.
-		sel := m.prow == r && !m.tform.open
+		sel := ps.row == r && !ps.tform.open
 		if sel {
 			at = strings.Count(b.String(), "\n")
 		}
@@ -357,58 +423,58 @@ func (m Model) projectScreen() (string, int) {
 		b.WriteString(clipTo(th.Path.Render("  ")+th.Meta.Render(pad(label, configLabelWidth))+th.NameDim.Render(value), w) + "\n")
 	}
 
-	b.WriteString(m.heading("Project", w))
+	b.WriteString(heading(th, "Project", w))
 	labels := map[projectField]string{projName: "name", projPath: "path", projGitURL: "git url"}
 	notes := map[projectField]string{
 		projName:   "the file's name; renaming moves the file",
 		projPath:   "the directory",
 		projGitURL: "where Enter clones a missing directory from",
 	}
-	for r, f := range m.projectFields() {
-		value := m.projectValue(f)
-		if m.pedit.Focused() && m.prow == r {
-			value = m.pedit.View()
+	for r, f := range ps.fields() {
+		value := ps.value(f)
+		if ps.edit.Focused() && ps.row == r {
+			value = ps.edit.View()
 		}
 		row(r, labels[f], value, notes[f])
 	}
-	if l := m.ptext.Remote; l != nil {
+	if l := ps.text.Remote; l != nil {
 		info("host", l.Host)
 		info("name there", string(l.Project))
-		if m.ptext.Path != "" {
-			info("path there", m.ptext.Path)
+		if ps.text.Path != "" {
+			info("path there", ps.text.Path)
 		}
-		if m.ptext.GitURL != "" {
-			info("git url there", m.ptext.GitURL)
+		if ps.text.GitURL != "" {
+			info("git url there", ps.text.GitURL)
 		}
 	}
 
-	b.WriteString(m.heading("Targets", w))
-	base := len(m.projectFields())
+	b.WriteString(heading(th, "Targets", w))
+	base := len(ps.fields())
 	form := func() {
-		lines, line := m.targetFormLines(w)
+		lines, line := ps.tform.lines(th, w)
 		at = strings.Count(b.String(), "\n") + line
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
-	for i, pt := range m.ptext.Targets {
+	for i, pt := range ps.text.Targets {
 		row(base+i, keyLabel(pt.Target.Key), string(pt.Target.Name), sourceNote(pt.Source)+" · "+describeTarget(pt.Target))
-		if m.tform.open && m.tform.index == i {
+		if ps.tform.open && ps.tform.index == i {
 			form()
 		}
 	}
-	row(m.addProjectTargetRow(), "+", "add a target", "this project only")
-	if m.tform.open && m.tform.index == len(m.ptext.Targets) {
+	row(ps.addTargetRow(), "+", "add a target", "this project only")
+	if ps.tform.open && ps.tform.index == len(ps.text.Targets) {
 		form()
 	}
 
-	if len(m.ptext.Vars) > 0 {
-		b.WriteString(m.heading("Vars", w))
-		names := make([]string, 0, len(m.ptext.Vars))
-		for name := range m.ptext.Vars {
+	if len(ps.text.Vars) > 0 {
+		b.WriteString(heading(th, "Vars", w))
+		names := make([]string, 0, len(ps.text.Vars))
+		for name := range ps.text.Vars {
 			names = append(names, name)
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			info(name, m.ptext.Vars[name])
+			info(name, ps.text.Vars[name])
 		}
 	}
 	return b.String(), at

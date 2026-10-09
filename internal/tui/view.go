@@ -10,7 +10,6 @@ import (
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -71,8 +70,8 @@ func (m *Model) layout() {
 		query = m.listWidth()
 	}
 	m.input.Width = query - lipgloss.Width(promptMark) - 2
-	m.rinput.Width = m.input.Width
-	m.aginput.Width = m.input.Width
+	m.link.query.Width = m.input.Width
+	m.agents.query.Width = m.input.Width
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
@@ -133,24 +132,20 @@ func (m Model) View() string {
 func (m Model) top() string {
 	name := ""
 	switch m.dialog {
-	case dialogHosts:
-		name = "Link a project on another machine"
-	case dialogRemote:
-		name = m.host
-	case dialogLinkName:
-		name = "Name the link"
-		if it, ok := m.rlist.SelectedItem().(remoteItem); ok {
-			name += " to " + string(it.view.Project.Name) + " on " + m.host
-		}
+	case dialogLink:
+		name = m.link.title()
 	case dialogNew:
 		name = "Add a project on this machine"
 	case dialogConfig:
 		name = "Configuration"
 	case dialogProject:
-		name = "Project " + string(m.proj)
+		name = "Project " + string(m.proj.name)
 	case dialogHelp:
 		name = "Keyboard shortcuts"
-	case dialogSessionName:
+	case dialogSessions:
+		if !m.sessions.naming {
+			return m.bar()
+		}
 		name = "Save the projects open now"
 	case dialogShutdown:
 		name = "Shutdown"
@@ -191,19 +186,13 @@ func (m Model) thinRule(width int) string {
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or
-// what the dialog's rows are. The hosts step says nothing there - the title
-// over it already says what the rows are, and the rule under it counts them -
-// but it keeps the line, so the rows do not move as the step changes.
+// what the dialog's rows are.
 func (m Model) subtitle() string {
 	switch m.dialog {
-	case dialogHosts:
-		return ""
-	case dialogRemote:
-		return " " + m.rinput.View()
-	case dialogLinkName:
-		return m.linkNameView()
+	case dialogLink:
+		return m.link.subtitle(m.theme)
 	case dialogNew:
-		return " " + m.path.View()
+		return " " + m.create.path.View()
 	case dialogConfig:
 		where := "config.toml"
 		if root, err := config.Root(); err == nil {
@@ -212,21 +201,19 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
 	case dialogProject:
 		file := ""
-		if p, ok := m.project(m.proj); ok {
+		if p, ok := m.project(m.proj.name); ok {
 			file = config.ContractHome(p.File)
 		}
 		return " " + m.theme.Meta.Render("written to "+file+" as it changes")
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
 	case dialogSessions:
-		return " " + m.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(m.stateRoot))+", newest first")
-	case dialogSessionName:
-		return " " + m.sname.View()
+		return m.sessions.subtitle(m.surface())
 	case dialogShutdown:
 		return " " + m.theme.Meta.Render(m.shutdownTitle())
 	}
-	if m.agents {
-		return " " + m.fieldView(m.aginput, focusList)
+	if m.agents.shown {
+		return " " + m.fieldView(m.agents.query, focusList)
 	}
 	return " " + m.fieldView(m.input, focusList)
 }
@@ -302,20 +289,16 @@ func pad0(head string) string {
 func (m Model) ruleCount() string {
 	th := m.theme
 	switch {
-	case m.dialog == dialogHosts:
-		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(m.hlist.Items())))
-	case m.dialog == dialogRemote && m.rfilter != "":
-		return th.NameDim.Render(fmt.Sprintf("%d/%d projects", len(m.rlist.VisibleItems()), len(m.rlist.Items())))
-	case m.dialog == dialogRemote:
-		return th.NameDim.Render(fmt.Sprintf("%d projects", len(m.rlist.Items())))
-	case m.dialog == dialogSessions:
-		return th.NameDim.Render(core.Count(len(m.slist.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogLinkName, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessionName, m.dialog == dialogShutdown:
+	case m.dialog == dialogLink:
+		return m.link.count(th)
+	case m.dialog == dialogSessions && !m.sessions.naming:
+		return th.NameDim.Render(core.Count(len(m.sessions.list.Items()), "session"))
+	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessions, m.dialog == dialogShutdown:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
-	case m.agents:
-		return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.aglist.VisibleItems()), len(m.aglist.Items())))
+	case m.agents.shown:
+		return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.agents.list.VisibleItems()), len(m.agents.list.Items())))
 	}
 	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
 }
@@ -333,8 +316,8 @@ func (m Model) ruleTotals() (int, []agentPiece) {
 	// The agent list has no column of counts for the totals to stand over,
 	// so they stand at the rule's right end, where its rows' ages are. The
 	// rule stops a column short of the pane's border.
-	if m.agents {
-		return m.listWidth() - maxAgentWidth - 1, agentPieces(m.theme, m.agentTotals(), maxAgentWidth)
+	if m.agents.shown {
+		return m.listWidth() - maxAgentWidth - 1, agentPieces(m.theme, m.agents.totals(), maxAgentWidth)
 	}
 	counts := map[revier.Status]int{}
 	for _, item := range m.plist.VisibleItems() {
@@ -375,13 +358,13 @@ func (m Model) empty() string {
 	switch {
 	case m.dialog == dialogSessions:
 		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
-	case m.dialog == dialogRemote && m.rfilter != "":
-		return say(th.NameDim, fmt.Sprintf("No project on %s matches %q.", m.host, m.rfilter))
+	case m.dialog == dialogLink && m.link.empty() != "":
+		return say(th.NameDim, m.link.empty())
 	case m.dialog != dialogNone:
 		return ""
-	case m.agents && m.agfilter != "":
-		return say(th.NameDim, fmt.Sprintf("No agent matches %q.", m.agfilter))
-	case m.agents:
+	case m.agents.shown && m.agents.filter != "":
+		return say(th.NameDim, fmt.Sprintf("No agent matches %q.", m.agents.filter))
+	case m.agents.shown:
 		return say(th.NameDim, "No agent runs in an open project.")
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
@@ -401,14 +384,14 @@ func (m Model) footer() string {
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
-	if m.dialog == dialogConfig && m.dropping {
-		return m.dropPrompt()
+	if m.dialog == dialogConfig && m.config.dropping {
+		return m.config.dropPrompt(m.surface())
 	}
-	if m.dialog == dialogProject && m.dropping {
-		return m.dropProjectPrompt()
+	if m.dialog == dialogProject && m.proj.dropping {
+		return m.proj.dropPrompt(m.theme)
 	}
-	if m.asking != "" {
-		return m.askingLine()
+	if m.link.asking != "" {
+		return m.link.askingLine(m.theme)
 	}
 	err := m.err
 	if err == nil {
@@ -419,8 +402,8 @@ func (m Model) footer() string {
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
-	if m.restoring != "" || m.saving {
-		return m.progressLine()
+	if m.sessions.restoring != "" || m.sessions.saving {
+		return m.sessions.progressLine(m.theme)
 	}
 	if m.shut.running && m.shut.saves() {
 		return m.theme.Meta.Render(" saving the session when it changed, and closing…")
@@ -436,19 +419,25 @@ func (m Model) footer() string {
 		return m.theme.NameDim.Render(fmt.Sprintf(" Copied %d %s.", m.copied, unit))
 	}
 	if m.dialog == dialogConfig {
-		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.configHelp()))
+		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.config.helpKind(m.surface())))
 	}
 	if m.dialog == dialogProject {
-		return " " + m.help.ShortHelpView(m.projectHelp())
+		return " " + m.help.ShortHelpView(m.proj.help(m.keys))
 	}
 	if m.dialog == dialogNew {
-		return " " + m.help.ShortHelpView(m.newHelp())
+		return " " + m.help.ShortHelpView(m.create.help(m.keys))
+	}
+	if m.dialog == dialogLink {
+		return " " + m.help.ShortHelpView(m.link.help(m.keys))
+	}
+	if m.dialog == dialogSessions {
+		return " " + m.help.ShortHelpView(m.sessions.help(m.keys))
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))
 	}
-	if m.agents {
-		return " " + m.help.ShortHelpView(m.agentsHelp())
+	if m.agents.shown {
+		return " " + m.help.ShortHelpView(m.agents.help(m.keys))
 	}
 	keys := m.keys.helpFor(m.focus)
 	if v, ok := m.selected(); ok {

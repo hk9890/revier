@@ -99,14 +99,14 @@ func (m *Model) syncDetail() {
 	}
 	m.detail.Width, m.detail.Height = cols, h
 	switch m.dialog {
-	case dialogHosts, dialogNew, dialogConfig, dialogProject:
+	case dialogNew, dialogConfig, dialogProject:
 		m.detail.SetContent("")
 		return
-	case dialogRemote, dialogLinkName:
-		m.detail.SetContent(m.remoteDetail())
+	case dialogLink:
+		m.detail.SetContent(m.link.detail(m.surface()))
 		return
-	case dialogSessions, dialogSessionName:
-		m.detail.SetContent(m.sessionDetail())
+	case dialogSessions:
+		m.detail.SetContent(m.sessions.detail(m.surface()))
 		return
 	case dialogShutdown:
 		m.detail.SetContent(m.shutdownDetail())
@@ -114,8 +114,8 @@ func (m *Model) syncDetail() {
 	}
 	// The agent list's pane scrolls its mirror itself, under a head that
 	// stays (mirror.go).
-	if m.agents {
-		m.detail.SetContent(m.agentPane())
+	if m.agents.shown {
+		m.detail.SetContent(m.agents.pane(m.surface(), m.now(), m.detail.Height))
 		m.detail.GotoTop()
 		return
 	}
@@ -284,7 +284,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// screen and a click can find its row.
 	lineNow := func() int { return strings.Count(b.String(), "\n") }
 	m.ainput.Width = w - lipgloss.Width(promptMark) - 1
-	b.WriteString(m.heading("Targets", w))
+	b.WriteString(heading(m.theme, "Targets", w))
 	m.tlines = m.tlines[:0]
 	for i, row := range m.targetRows() {
 		m.tlines = append(m.tlines, lineNow())
@@ -295,12 +295,12 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// Every agent, and what it is doing: the row only counts them by state.
 	m.afield, m.alines = -1, m.alines[:0]
 	if len(v.Agents) > 0 {
-		b.WriteString(m.heading("Agents", w))
+		b.WriteString(heading(m.theme, "Agents", w))
 		m.afield = lineNow()
 		b.WriteString(m.fieldView(m.ainput, focusAgents) + "\n")
 		for i, row := range m.agentRows() {
 			start := lineNow()
-			b.WriteString(m.detailAgent(row, w, i == m.acursor, m.over.is(hoverAgent, i)))
+			b.WriteString(detailAgent(m.spun(), row, w, i == m.acursor, m.over.is(hoverAgent, i), m.focus == focusAgents))
 			b.WriteString("\n")
 			m.alines = append(m.alines, lineSpan{start, lineNow()})
 		}
@@ -311,8 +311,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 // heading opens a section of the pane: a blank line, then the title with a
 // rule to the pane's edge, so the sections read as blocks rather than as a
 // list of lines that happens to change colour.
-func (m Model) heading(title string, w int) string {
-	th := m.theme
+func heading(th theme.Theme, title string, w int) string {
 	rule := w - lipgloss.Width(title) - 1
 	if rule < 0 {
 		rule = 0
@@ -377,8 +376,9 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 // the harness under the target names, the state glyph and words under theirs,
 // and the activity where their keys are, wrapped under itself. A selected or
 // pointed-at row is lit as a target row is, on every line it takes.
-func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
-	th := m.spun()
+//
+// cursor is whether the selected row carries the cursor's bar.
+func detailAgent(th theme.Theme, row agentRow, w int, sel, over, cursor bool) string {
 	style := func(s lipgloss.Style) lipgloss.Style {
 		switch {
 		case sel:
@@ -391,7 +391,7 @@ func (m Model) detailAgent(row agentRow, w int, sel, over bool) string {
 	// The agent shown below is marked while the cursor is in the list, so the
 	// message has a row it belongs to; the cursor's bar is the Agents' own.
 	bar := style(th.Path).Render(" ")
-	if sel && m.focus == focusAgents {
+	if sel && cursor {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
 	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))

@@ -27,8 +27,8 @@ type barAction struct {
 }
 
 var barActions = []barAction{
-	{label: "new", key: "alt+n", run: Model.openNew},
-	{label: "remote", key: "alt+r", run: Model.openHosts},
+	{label: "new", key: "alt+n", run: Model.openCreate},
+	{label: "remote", key: "alt+r", run: Model.openLink},
 	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
 	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 	{label: "config", key: "alt+c", run: Model.openConfig},
@@ -66,7 +66,7 @@ func (m Model) buttons() []barAction {
 		// The switch to the other list leads: it is the one button about
 		// what the surface shows, and its label changes with it.
 		return append([]barAction{m.switchButton()}, barActions...)
-	case m.dialog == dialogSessions:
+	case m.dialog == dialogSessions && !m.sessions.naming:
 		return sessionActions
 	}
 	return nil
@@ -75,7 +75,7 @@ func (m Model) buttons() []barAction {
 // barLead is what stands on the bar before the buttons: the name of the
 // screen, where a screen has buttons of its own.
 func (m Model) barLead() string {
-	if m.dialog == dialogSessions {
+	if m.dialog == dialogSessions && !m.sessions.naming {
 		return " " + m.theme.Header.Render("Sessions") + "  "
 	}
 	return ""

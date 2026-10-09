@@ -11,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -99,6 +100,27 @@ func (i agentItem) where() string {
 // FilterValue is what the query matches: what the agent is on, then where.
 func (i agentItem) FilterValue() string {
 	return i.text + " " + i.where()
+}
+
+// agentList is the surface's second list, and the mirror beside it.
+type agentList struct {
+	shown  bool            // the surface shows it in the project list's place
+	list   list.Model      // its rows
+	query  textinput.Model // its query, with its own cursor
+	filter string          // that query, held here so a refresh can re-apply it
+	top    bool            // it opened and the user has not acted on it: the cursor is on the first row whatever agent that is
+	mirror mirror          // the screen of the agent under the cursor (mirror.go)
+}
+
+func newAgentScreen(th theme.Theme) agentList {
+	return agentList{list: newAgentList(th), query: newPrompt(th, agentPlaceholder)}
+}
+
+// agentsResult is what a press on the agent list leaves for the surface.
+type agentsResult struct {
+	leave bool       // Esc with no query: the surface's own leave
+	close *agentItem // del on a row: the agent whose tab is to close
+	rest  bool       // the press is not the list's own: a key of the bar, or text for the query
 }
 
 func newAgentList(th theme.Theme) list.Model {
@@ -197,13 +219,13 @@ var listedRank = map[revier.Status]int{
 // speaks all the time, and a row that moved on every line would not be
 // readable, so those stand by project and panel, and so does an agent whose
 // state or time nothing says (decisions.md D110).
-func (m Model) agentItems() []list.Item {
+func agentItems(views []revier.ProjectView, details map[agentKey]revier.AgentDetail, now time.Time) []list.Item {
 	var items []agentItem
-	for _, v := range m.views {
+	for _, v := range views {
 		for _, a := range v.Agents {
-			d := m.adetails[keyOf(a)]
+			d := details[keyOf(a)]
 			text, titled := summary(a, d)
-			items = append(items, agentItem{agent: a, project: v.Project, detail: d, text: text, titled: titled, age: shortAgo(m.now(), d.At)})
+			items = append(items, agentItem{agent: a, project: v.Project, detail: d, text: text, titled: titled, age: shortAgo(now, d.At)})
 		}
 	}
 	timed := func(s revier.Status) bool { return s == revier.StatusAttention || s == revier.StatusIdle }
@@ -248,34 +270,36 @@ func shortAgo(now, t time.Time) string {
 // agent that left hands the cursor to the row that took its place, as a
 // project that closed does (decisions.md D109, D110).
 func (m *Model) reloadAgents() {
-	if !m.agents {
-		return
-	}
-	was, had := m.listedAgent()
-	at := m.aglist.Index()
-	items := m.agentItems()
-	m.aglist.Filter = ranked(func(i int) int { return listedRank[items[i].(agentItem).agent.State.Status] })
-	_ = m.aglist.SetItems(items)
-	if m.agfilter != "" {
-		m.aglist.SetFilterText(m.agfilter)
-	}
-	if !had || !m.selectListed(was.key()) {
-		m.aglist.Select(clampRow(at, len(m.aglist.VisibleItems())))
+	if m.agents.shown {
+		m.agents.reload(agentItems(m.views, m.adetails, m.now()))
 	}
 }
 
-// listedAgent is the row under the agent list's cursor.
-func (m Model) listedAgent() (agentItem, bool) {
-	it, ok := m.aglist.SelectedItem().(agentItem)
+// reload puts items into the list, keeping the query and the cursor's agent.
+func (al *agentList) reload(items []list.Item) {
+	was, had := al.selected()
+	at := al.list.Index()
+	al.list.Filter = ranked(func(i int) int { return listedRank[items[i].(agentItem).agent.State.Status] })
+	_ = al.list.SetItems(items)
+	if al.filter != "" {
+		al.list.SetFilterText(al.filter)
+	}
+	if !had || !al.selectKey(was.key()) {
+		al.list.Select(clampRow(at, len(al.list.VisibleItems())))
+	}
+}
+
+// selected is the row under the cursor.
+func (al *agentList) selected() (agentItem, bool) {
+	it, ok := al.list.SelectedItem().(agentItem)
 	return it, ok
 }
 
-// selectListed puts the agent list's cursor on a row, and reports whether the
-// list holds it.
-func (m *Model) selectListed(key listedKey) bool {
-	for i, item := range m.aglist.VisibleItems() {
+// selectKey puts the cursor on a row, and reports whether the list holds it.
+func (al *agentList) selectKey(key listedKey) bool {
+	for i, item := range al.list.VisibleItems() {
 		if it, ok := item.(agentItem); ok && it.key() == key {
-			m.aglist.Select(i)
+			al.list.Select(i)
 			return true
 		}
 	}
@@ -292,16 +316,16 @@ func (m *Model) selectListed(key listedKey) bool {
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.toList()
-	m.agents = !m.agents
-	if !m.agents {
+	m.agents.shown = !m.agents.shown
+	if !m.agents.shown {
 		return m, nil
 	}
-	m.setAgentFilter("")
+	m.agents.setFilter("")
 	m.reloadAgents()
-	m.aglist.Select(0)
-	m.agtop = true
+	m.agents.list.Select(0)
+	m.agents.top = true
 	m.body.SetYOffset(0)
-	return m, m.aginput.Focus()
+	return m, m.agents.query.Focus()
 }
 
 // switchButton is the bar's first button: the list the switch key goes to,
@@ -309,7 +333,7 @@ func (m Model) switchList() (tea.Model, tea.Cmd) {
 // can change.
 func (m Model) switchButton() barAction {
 	label := "agents"
-	if m.agents {
+	if m.agents.shown {
 		label = "projects"
 	}
 	return barAction{label: label, key: m.switchKey(), run: Model.switchList}
@@ -319,96 +343,122 @@ func (m Model) switchButton() barAction {
 // desktop's trigger key in the popup, and alt+space in any other terminal.
 func (m Model) switchKey() string {
 	if m.popup {
-		if trigger, err := (&config.Config{UI: m.ui}).TriggerKey(); err == nil {
+		if trigger, err := (&config.Config{UI: m.config.ui}).TriggerKey(); err == nil {
 			return string(trigger)
 		}
 	}
 	return string(switchChord)
 }
 
-// agentsKey is every press on the agent list. The rows are agents, so Enter
-// goes to one and del closes one; the keys that act on a project - its
-// screen, its targets, the actions - have no row to act on here.
+// agentsKey is every press on the agent list, and what it left for the
+// surface. The rows are agents, so Enter goes to one and del closes one; the
+// keys that act on a project - its screen, its targets, the actions - have no
+// row to act on here.
 func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.err, m.agtop = nil, false
-	if by, ok := m.keys.move(msg, func(int) int { return m.listPage() }); ok {
-		moveRow(&m.aglist, by)
-		return m, nil
-	}
+	m.err = nil
+	res, cmd := m.agents.key(m.surface(), msg)
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case switches(msg):
-		return m.switchList()
-	case key.Matches(msg, m.keys.Back):
-		if m.agfilter != "" {
-			m.endAgentSearch()
-			return m, nil
-		}
+	case res.leave:
 		return m, m.leave()
-	case key.Matches(msg, m.keys.Enter):
-		return m.goListed()
-	case key.Matches(msg, m.keys.Close) && atEnd(&m.aginput):
-		return m.closeListed()
+	case res.close != nil:
+		a := res.close.agent
+		return m.closeRow(res.close.project.Name, core.CloseRow{Agent: a.Ref, Panel: a.Panel}, harnessOf(a), false)
+	case !res.rest:
+		return m, cmd
+	}
+	if switches(msg) {
+		return m.switchList()
 	}
 	if next, cmd, ok := m.barKey(msg); ok {
 		return next, cmd
 	}
-	if m.promptKey(msg) {
-		next, cmd := m.aginput.Update(msg)
-		m.aginput = next
-		if next.Value() != m.agfilter {
-			m.setAgentFilter(next.Value())
-		}
-		return m, cmd
-	}
-	return m, nil
+	cmd = m.agents.edit(msg)
+	return m, cmd
 }
 
-// setAgentFilter is every change to the agent list's query. The first match
-// is selected, as on a project query.
-func (m *Model) setAgentFilter(q string) {
-	m.agfilter = q
-	if m.aginput.Value() != q {
-		m.aginput.SetValue(q)
+// key is every press the list itself takes: the movement keys, Enter, del
+// and Esc.
+func (al *agentList) key(sf surface, msg tea.KeyMsg) (agentsResult, tea.Cmd) {
+	al.top = false
+	if by, ok := sf.keys.move(msg, func(int) int { return sf.page }); ok {
+		moveRow(&al.list, by)
+		return agentsResult{}, nil
+	}
+	switch {
+	case key.Matches(msg, sf.keys.Quit):
+		return agentsResult{}, tea.Quit
+	case key.Matches(msg, sf.keys.Back):
+		if al.filter != "" {
+			al.endSearch()
+			return agentsResult{}, nil
+		}
+		return agentsResult{leave: true}, nil
+	case key.Matches(msg, sf.keys.Enter):
+		return agentsResult{}, al.goSelected(sf)
+	case key.Matches(msg, sf.keys.Close) && atEnd(&al.query):
+		if it, ok := al.selected(); ok {
+			return agentsResult{close: &it}, nil
+		}
+		return agentsResult{}, nil
+	}
+	return agentsResult{rest: true}, nil
+}
+
+// edit feeds a key to the query, and filters again if it changed.
+func (al *agentList) edit(msg tea.KeyMsg) tea.Cmd {
+	if !promptKey(msg) {
+		return nil
+	}
+	next, cmd := al.query.Update(msg)
+	al.query = next
+	if next.Value() != al.filter {
+		al.setFilter(next.Value())
+	}
+	return cmd
+}
+
+// setFilter is every change to the query. The first match is selected, as on
+// a project query.
+func (al *agentList) setFilter(q string) {
+	al.filter = q
+	if al.query.Value() != q {
+		al.query.SetValue(q)
 	}
 	if q != "" {
-		m.aglist.SetFilterText(q)
+		al.list.SetFilterText(q)
 		return
 	}
-	m.aglist.ResetFilter()
+	al.list.ResetFilter()
 }
 
-// endAgentSearch drops the agent list's query and leaves the cursor on the
-// agent the search led to.
-func (m *Model) endAgentSearch() {
-	was, had := m.listedAgent()
-	m.setAgentFilter("")
+// endSearch drops the query and leaves the cursor on the agent the search
+// led to.
+func (al *agentList) endSearch() {
+	was, had := al.selected()
+	al.setFilter("")
 	if had {
-		m.selectListed(was.key())
+		al.selectKey(was.key())
 	}
 }
 
-// goListed is Enter, or a double click, on a row of the agent list: the
-// agent's tab comes to the front, as from the pane's Agents, and the query
-// that found it ends.
-func (m Model) goListed() (Model, tea.Cmd) {
-	it, ok := m.listedAgent()
+// goSelected is Enter, or a double click, on a row: the agent's tab comes to
+// the front, as from the pane's Agents, and the query that found it ends.
+func (al *agentList) goSelected(sf surface) tea.Cmd {
+	it, ok := al.selected()
 	if !ok {
-		return m, nil
+		return nil
 	}
-	p, ok := m.project(it.project.Name)
+	p, ok := projectNamed(sf.projects, it.project.Name)
 	if !ok {
-		return m, nil
+		return nil
 	}
-	m.endAgentSearch()
-	return m, m.goAgent(p, it.agent)
+	al.endSearch()
+	return goAgent(sf.core, p, it.agent)
 }
 
 // goAgent brings an agent to the front: the panel here that shows it, for a
 // link's agent too, unless the link's workspace is still coming up.
-func (m Model) goAgent(p core.Project, agent revier.AgentView) tea.Cmd {
-	c := m.core
+func goAgent(c *core.Core, p core.Project, agent revier.AgentView) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
@@ -417,34 +467,21 @@ func (m Model) goAgent(p core.Project, agent revier.AgentView) tea.Cmd {
 	}
 }
 
-// closeListed is del on a row of the agent list: the agent's tab closes, as
-// del on its row in the pane closes it.
-func (m Model) closeListed() (tea.Model, tea.Cmd) {
-	it, ok := m.listedAgent()
-	if !ok {
-		return m, nil
-	}
-	a := it.agent
-	return m.closeRow(it.project.Name, core.CloseRow{Agent: a.Ref, Panel: a.Panel}, harnessOf(a), false)
-}
-
-// agentPane is the pane beside the agent list: the agent under the cursor,
-// then its terminal.
-func (m *Model) agentPane() string {
-	it, ok := m.listedAgent()
+// pane is the pane beside the list, rows lines high: the agent under the
+// cursor, then its terminal.
+func (al *agentList) pane(sf surface, now time.Time, rows int) string {
+	it, ok := al.selected()
 	if !ok {
 		return ""
 	}
-	w := m.paneCols() - paneChrome
-	facts := m.agentFacts(it, w)
-	return facts + m.mirrorView(w, m.detail.Height-strings.Count(facts, "\n"))
+	facts := agentFacts(sf.spun, it, now, sf.pane)
+	return facts + al.mirrorView(sf.theme, sf.pane, rows-strings.Count(facts, "\n"))
 }
 
 // agentFacts is the head of the agent list's pane, laid out as a project's
 // is: the agent in the title's place, and its project among the lines under
 // it. It ends in a blank line, which sets the mirror off.
-func (m *Model) agentFacts(it agentItem, w int) string {
-	th := m.spun()
+func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	var b strings.Builder
 	line := func(label, value string, style lipgloss.Style) {
 		b.WriteString(hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style))
@@ -472,7 +509,7 @@ func (m *Model) agentFacts(it agentItem, w int) string {
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
 	if at := it.detail.At; !at.IsZero() {
-		line("Last", spokeAt(m.now(), at), th.Path)
+		line("Last", spokeAt(now, at), th.Path)
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -489,11 +526,11 @@ func spokeAt(now, t time.Time) string {
 	return t.Format(layout) + ", " + ago(now, t)
 }
 
-// agentTotals is the agents under the rule counted by state, for the totals
-// the rule carries: the rows the query left.
-func (m Model) agentTotals() map[revier.Status]int {
+// totals is the agents under the rule counted by state, for the totals the
+// rule carries: the rows the query left.
+func (al *agentList) totals() map[revier.Status]int {
 	counts := map[revier.Status]int{}
-	for _, item := range m.aglist.VisibleItems() {
+	for _, item := range al.list.VisibleItems() {
 		if it, ok := item.(agentItem); ok {
 			counts[it.agent.State.Status]++
 		}
@@ -501,13 +538,13 @@ func (m Model) agentTotals() map[revier.Status]int {
 	return counts
 }
 
-// agentsHelp is the footer on the agent list.
-func (m Model) agentsHelp() []key.Binding {
+// help is the footer on the agent list.
+func (al *agentList) help(k keyMap) []key.Binding {
 	return []key.Binding{
 		helpKey("enter", "go to agent"),
 		helpKey("type", "filter"),
 		helpKey("esc", "clear/quit"),
-		m.keys.Close,
-		m.keys.Quit,
+		k.Close,
+		k.Quit,
 	}
 }

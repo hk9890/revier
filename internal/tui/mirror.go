@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -75,41 +76,39 @@ func mirrorTick() tea.Cmd {
 // mirroring reports the mirror on the screen: the agent list in view, with a
 // pane beside it and nothing standing over it.
 func (m Model) mirroring() bool {
-	return m.agents && !m.hidden && m.dialog == dialogNone && m.paneCols() > 0
+	return m.agents.shown && !m.hidden && m.dialog == dialogNone && m.paneCols() > 0
 }
 
-// askMirror sends for the screen of the agent under the cursor: at once when
+// askMirror sends for the screen of the agent under the cursor, while the
+// mirror is on the screen: at once when
 // another agent comes under it, and when the mirror comes back into view with
 // a screen read before it left, and on every tick after. It starts the tick
 // when the mirror comes into view, and the tick ends itself when it leaves.
-func (m *Model) askMirror(msg tea.Msg) tea.Cmd {
-	if !m.mirroring() {
-		return nil
-	}
-	it, ok := m.listedAgent()
+func (al *agentList) askMirror(c *core.Core, msg tea.Msg) tea.Cmd {
+	it, ok := al.selected()
 	if !ok {
-		m.mirror = mirror{ticking: m.mirror.ticking, seq: m.mirror.seq}
+		al.mirror = mirror{ticking: al.mirror.ticking, seq: al.mirror.seq}
 		return nil
 	}
 	var cmds []tea.Cmd
-	back := !m.mirror.ticking
+	back := !al.mirror.ticking
 	if back {
-		m.mirror.ticking = true
+		al.mirror.ticking = true
 		cmds = append(cmds, mirrorTick())
 	}
 	_, tick := msg.(mirrorTickMsg)
-	if key := it.key(); key != m.mirror.key {
-		m.mirror = mirror{key: key, ticking: true, seq: m.mirror.seq}
+	if key := it.key(); key != al.mirror.key {
+		al.mirror = mirror{key: key, ticking: true, seq: al.mirror.seq}
 	} else if !tick && !back {
 		return tea.Batch(cmds...)
 	}
-	return tea.Batch(append(cmds, m.readScreen(it.agent))...)
+	return tea.Batch(append(cmds, al.readScreen(c, it.agent))...)
 }
 
 // readScreen is one read of the agent's panel, off the update loop.
-func (m *Model) readScreen(a revier.AgentView) tea.Cmd {
-	m.mirror.seq++
-	c, key, seq, deep := m.core, m.mirror.key, m.mirror.seq, m.mirror.deep
+func (al *agentList) readScreen(c *core.Core, a revier.AgentView) tea.Cmd {
+	al.mirror.seq++
+	key, seq, deep := al.mirror.key, al.mirror.seq, al.mirror.deep
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), detailWait)
 		defer cancel()
@@ -123,8 +122,10 @@ func (m *Model) readScreen(a revier.AgentView) tea.Cmd {
 // failed keeps the screen the mirror was showing: one kitty call that timed
 // out must not blank it. While the user is scrolled up, the view stays on the
 // lines it shows as more are written under them.
-func (m *Model) tookScreen(msg mirroredMsg) {
-	if msg.key != m.mirror.key || msg.seq <= m.mirror.took {
+//
+// w is the width the pane's text has.
+func (al *agentList) tookScreen(msg mirroredMsg, w int) {
+	if msg.key != al.mirror.key || msg.seq <= al.mirror.took {
 		return
 	}
 	if !errors.Is(msg.err, core.ErrNoScreen) {
@@ -134,23 +135,23 @@ func (m *Model) tookScreen(msg mirroredMsg) {
 		at := msg.key.agent
 		logging.Repeat("mirror\x00"+at.host+"\x00"+at.id+"\x00"+string(at.panel), "mirror", msg.err, "panel", at.panel)
 	}
-	before := len(m.screenLines())
-	m.mirror.took, m.mirror.read, m.mirror.err = msg.seq, true, msg.err
+	before := len(al.screenLines(w))
+	al.mirror.took, al.mirror.read, al.mirror.err = msg.seq, true, msg.err
 	if msg.err != nil {
 		return
 	}
 	// The first read with the scrollback adds lines above the view, which a
 	// view counted from the end does not move for; a later one adds them
 	// under it.
-	grew := msg.deep && m.mirror.textDeep
-	if msg.text != m.mirror.text {
-		m.mirror.text, m.mirror.lines = msg.text, nil
+	grew := msg.deep && al.mirror.textDeep
+	if msg.text != al.mirror.text {
+		al.mirror.text, al.mirror.lines = msg.text, nil
 	}
-	m.mirror.textDeep = msg.deep
-	if m.mirror.off > 0 && grew {
-		m.mirror.off += max(len(m.screenLines())-before, 0)
+	al.mirror.textDeep = msg.deep
+	if al.mirror.off > 0 && grew {
+		al.mirror.off += max(len(al.screenLines(w))-before, 0)
 	}
-	m.boundScroll()
+	al.boundScroll(w)
 }
 
 // scrollMirror moves the mirror's view by lines, up for a positive count.
@@ -158,17 +159,17 @@ func (m *Model) tookScreen(msg mirroredMsg) {
 // while it follows the end; back at the end it stops reading it. Until the
 // scrollback is here there is nothing above the screen to stop at, so the
 // moves are kept as they come.
-func (m *Model) scrollMirror(by int) tea.Cmd {
-	it, ok := m.listedAgent()
+func (al *agentList) scrollMirror(c *core.Core, by, w int) tea.Cmd {
+	it, ok := al.selected()
 	if !ok {
 		return nil
 	}
-	if by > 0 && !m.mirror.deep {
-		m.mirror.deep, m.mirror.off = true, by
-		return m.readScreen(it.agent)
+	if by > 0 && !al.mirror.deep {
+		al.mirror.deep, al.mirror.off = true, by
+		return al.readScreen(c, it.agent)
 	}
-	m.mirror.off = max(m.mirror.off+by, 0)
-	m.boundScroll()
+	al.mirror.off = max(al.mirror.off+by, 0)
+	al.boundScroll(w)
 	return nil
 }
 
@@ -176,30 +177,28 @@ func (m *Model) scrollMirror(by int) tea.Cmd {
 // the mirror follow the end again when the view is at it: a scrollback with
 // nothing above the pane leaves no line to hold, and a view that held one
 // would stand still while the panel wrote on under it.
-func (m *Model) boundScroll() {
-	if m.mirror.textDeep {
-		m.mirror.off = min(m.mirror.off, max(len(m.screenLines())-m.mirror.room, 0))
+func (al *agentList) boundScroll(w int) {
+	if al.mirror.textDeep {
+		al.mirror.off = min(al.mirror.off, max(len(al.screenLines(w))-al.mirror.room, 0))
 	}
-	if m.mirror.off == 0 {
-		m.mirror.deep = false
+	if al.mirror.off == 0 {
+		al.mirror.deep = false
 	}
 }
 
 // screenLines is the mirror's text as the pane's lines, at the pane's width,
 // kept while the text and the width stay.
-func (m *Model) screenLines() []string {
-	w := m.paneCols() - paneChrome
-	if m.mirror.lines == nil || m.mirror.linesW != w {
-		m.mirror.lines, m.mirror.linesW = screenLines(m.mirror.text, w), w
+func (al *agentList) screenLines(w int) []string {
+	if al.mirror.lines == nil || al.mirror.linesW != w {
+		al.mirror.lines, al.mirror.linesW = screenLines(al.mirror.text, w), w
 	}
-	return m.mirror.lines
+	return al.mirror.lines
 }
 
 // mirrorView is the mirror in rows lines, w wide: the end of the screen, or
 // the part the user scrolled to.
-func (m *Model) mirrorView(w, rows int) string {
-	th := m.theme
-	m.mirror.room = rows
+func (al *agentList) mirrorView(th theme.Theme, w, rows int) string {
+	al.mirror.room = rows
 	if rows < 1 {
 		return ""
 	}
@@ -210,16 +209,16 @@ func (m *Model) mirrorView(w, rows int) string {
 		}
 		return strings.Join(parts, "\n")
 	}
-	lines := m.screenLines()
+	lines := al.screenLines(w)
 	switch {
-	case errors.Is(m.mirror.err, core.ErrNoScreen):
+	case errors.Is(al.mirror.err, core.ErrNoScreen):
 		return note("The screen of this agent cannot be read here.")
-	case !m.mirror.read:
+	case !al.mirror.read:
 		return note("reading...")
-	case m.mirror.err != nil && len(lines) == 0:
+	case al.mirror.err != nil && len(lines) == 0:
 		return note("The screen of this agent could not be read.")
 	}
-	end := len(lines) - min(m.mirror.off, max(len(lines)-rows, 0))
+	end := len(lines) - min(al.mirror.off, max(len(lines)-rows, 0))
 	return strings.Join(lines[max(end-rows, 0):end], "\n")
 }
 

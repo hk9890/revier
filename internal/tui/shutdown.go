@@ -123,13 +123,13 @@ func (m Model) openShutdown() (tea.Model, tea.Cmd) {
 // refuseSave refuses a close that saves the session first while a save or a
 // restore runs.
 func (m Model) refuseSave() error {
-	if m.saving {
+	if m.sessions.saving {
 		return errors.New("a save is still running; shut down once it is done")
 	}
 	// The save before the close would record a desktop half restored, and the
 	// restore would open again what the shutdown closes.
-	if m.restoring != "" {
-		return fmt.Errorf("the restore of %s is still running; shut down once it is done", m.restoring)
+	if m.sessions.restoring != "" {
+		return fmt.Errorf("the restore of %s is still running; shut down once it is done", m.sessions.restoring)
 	}
 	return nil
 }

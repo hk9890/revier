@@ -71,7 +71,7 @@ func (m Model) paneAt(x, y int) hovered {
 	line, ok := m.paneLine(y)
 	v, selected := m.selected()
 	// The agent list's pane is read and not clicked: it holds no row.
-	if m.dialog != dialogNone || m.agents || !ok || !selected {
+	if m.dialog != dialogNone || m.agents.shown || !ok || !selected {
 		return hovered{}
 	}
 	line += m.detail.YOffset
