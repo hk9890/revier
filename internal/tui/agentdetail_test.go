@@ -283,13 +283,13 @@ func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	var raw []revier.Project
 	for _, name := range []string{"alpha", "beta"} {
-		rt.Add("session:"+name, "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude " + name + " work"})
+		rt.Add("session:"+name, "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude idle " + name + " work"})
 		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
 				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}},
 		}})
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleActivity{}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 140, 30)
 
 	x, y := paneCell(t, m, "alpha work")

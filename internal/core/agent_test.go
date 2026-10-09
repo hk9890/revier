@@ -12,22 +12,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// titleProbe claims a panel running "agent" and reads its state off the first
-// word of the title, the way the Claude probe reads a glyph: the state lives
-// in the panel, so a test changes it by retitling.
-type titleProbe struct{}
-
-func (titleProbe) Name() string { return "agent" }
-
-func (titleProbe) Match(p revier.Panel) bool { return len(p.Command) > 0 && p.Command[0] == "agent" }
-
-func (titleProbe) Inspect(_ context.Context, p revier.Panel) (revier.AgentState, error) {
-	status := map[string]revier.Status{
-		"idle": revier.StatusIdle, "busy": revier.StatusRunning, "ask": revier.StatusAttention,
-	}[strings.Fields(p.Title + " ?")[0]]
-	return revier.AgentState{Harness: "agent", Status: status}, nil
-}
-
+// agentPanel is a panel hosttest.TitleProbe claims for the harness "agent",
+// in the state its title names.
 func agentPanel(id, title string) revier.Panel {
 	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelAgent, Title: title, Command: []string{"agent"}}
 }
@@ -37,11 +23,11 @@ func shellPanel(id string) revier.Panel {
 }
 
 // agentCore is a runtime holding the project's home workspace with the given
-// panels, and the core reading it with titleProbe.
+// panels, and the core reading it with hosttest.TitleProbe.
 func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", panels...)
-	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}, rt
+	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}, rt
 }
 
 func TestAgentIsTheProjectsOnlyAgent(t *testing.T) {
@@ -229,7 +215,7 @@ func TestAPanelIDHeldTwiceNamesNoAgent(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	rt.Add("diff:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.Agent(context.Background(), p, "1", nil); !errors.Is(err, core.ErrAmbiguous) {
@@ -252,7 +238,7 @@ func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
 	rt.OnSend = func(panel revier.PanelID, text string) {
 		if text == "\r" {
-			rt.Retitle(panel, "mystery") // titleProbe reads this as unknown
+			rt.Retitle(panel, "mystery") // TitleProbe reads this as unknown
 		}
 	}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
@@ -312,7 +298,7 @@ func TestPromptToAWorkingAgentReturnsAtOnce(t *testing.T) {
 func TestPromptNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
 	if err != nil {
 		t.Fatal(err)

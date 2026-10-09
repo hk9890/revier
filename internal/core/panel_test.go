@@ -347,7 +347,7 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "busy", Command: []string{"agent"},
 			Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 
 	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets", nil)
 	if err != nil {
