@@ -12,12 +12,15 @@
 //     as `wm_name`), and the same value is set as the OS window title so a
 //     window host sees it too. A window kitty opened from a session file
 //     carries the default name "kitty" and is not recognisable to revier.
-//   - Each kitty process listens on its own socket, and with the documented
-//     `listen_on unix:@kitty` setting that socket is `@kitty-<pid>`. The
-//     windows revier cares about may span several processes - every kitty
-//     started from a session file is a process of its own - so Instances
-//     queries every `@kitty-<pid>` socket, concurrently. That is one call per
-//     kitty process, which does not grow with the project count.
+//   - Each kitty process listens on its own socket. With
+//     `listen_on unix:${XDG_RUNTIME_DIR}/kitty` that socket is the file
+//     `$XDG_RUNTIME_DIR/kitty-<pid>` (read from kitty 0.49's kitty.conf
+//     manual; not run against a live kitty), and with `listen_on unix:@kitty`
+//     it is the abstract `@kitty-<pid>`. The windows revier cares about may
+//     span several processes - every kitty started from a session file is a
+//     process of its own - so Instances queries every such socket,
+//     concurrently. That is one call per kitty process, which does not grow
+//     with the project count.
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
@@ -51,9 +54,60 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// socketPattern is the socket kitty creates for `listen_on unix:@kitty`, and
-// the one this host asks for when it starts kitty itself.
-var socketPattern = regexp.MustCompile(`^@kitty-\d+$`)
+// socketFile is the name of the control socket this host asks for when it
+// starts kitty itself, and the one kitty creates for
+// `listen_on unix:${XDG_RUNTIME_DIR}/kitty`. It is a file in the runtime
+// directory, which only the user can enter.
+var socketFile = regexp.MustCompile(`^kitty-(\d+)$`)
+
+// abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
+// the one this host asked for up to 0.13. An abstract socket has no
+// permissions: every user of the machine can connect to it, and can bind the
+// name. It is still found, so a kitty started before the upgrade stays
+// reachable.
+var abstractSocket = regexp.MustCompile(`^@kitty-(\d+)$`)
+
+// runtimeDir is the directory that is the user's alone, and "" when the
+// environment names none. A relative path names none: kitty resolves one
+// under the temporary directory, which every user can enter.
+func runtimeDir() string {
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if !filepath.IsAbs(dir) {
+		return ""
+	}
+	return filepath.Clean(dir)
+}
+
+// ListenOn is the `--listen-on` address of a kitty that revier starts: a
+// socket file in the runtime directory, with `{kitty_pid}` for kitty to
+// expand. It is "" when there is no runtime directory.
+func ListenOn() string {
+	dir := runtimeDir()
+	if dir == "" {
+		return ""
+	}
+	return "unix:" + filepath.Join(dir, "kitty-{kitty_pid}")
+}
+
+// socketPID is the kitty process id a control socket carries in its name, and
+// whether the name is one discovery looks for. dir is the runtime directory.
+// A socket file is taken by the path it was bound to, as written, and never
+// by what that path cleans to: the kernel table holds the paths of every
+// user, and one with a `..` behind a symbolic link cleans to the runtime
+// directory and is a file somewhere else. Only the slash before the file name
+// may repeat: `${XDG_RUNTIME_DIR}/kitty` has two when the variable ends in
+// one.
+func socketPID(dir, name string) (int, bool) {
+	m := abstractSocket.FindStringSubmatch(name)
+	if file, ok := strings.CutPrefix(name, dir); m == nil && dir != "" && ok && strings.HasPrefix(file, "/") {
+		m = socketFile.FindStringSubmatch(strings.TrimLeft(file, "/"))
+	}
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n, true
+}
 
 // Host is a kitty Runtime. The zero value uses the real kitten binary and
 // discovers sockets; tests inject recorders through export_test.go.
@@ -254,10 +308,17 @@ func (h *Host) socketList() []string {
 }
 
 // discover lists the control sockets to query: the one this process was
-// started inside, first, then every `@kitty-<pid>` abstract socket the kernel
-// knows about. KITTY_LISTEN_ON comes first so a launch from inside kitty lands
-// in that same process.
+// started inside, first, then every kitty socket the kernel knows about.
 func discover() []string {
+	b, _ := os.ReadFile("/proc/net/unix")
+	return candidates(os.Getenv("KITTY_LISTEN_ON"), string(b))
+}
+
+// candidates orders the control sockets of one kernel socket table. The table
+// holds a socket file by its path, and only while a process is bound to it: a
+// kitty that crashed leaves a file and no entry. own comes first so a launch
+// from inside kitty lands in that same process.
+func candidates(own, table string) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(name string) {
@@ -267,18 +328,18 @@ func discover() []string {
 		seen[name] = true
 		out = append(out, "unix:"+name)
 	}
-	add(strings.TrimPrefix(os.Getenv("KITTY_LISTEN_ON"), "unix:"))
+	add(strings.TrimPrefix(own, "unix:"))
 
+	dir := runtimeDir()
 	var found []string
-	if b, err := os.ReadFile("/proc/net/unix"); err == nil {
-		for _, line := range strings.Split(string(b), "\n") {
-			f := strings.Fields(line)
-			if len(f) < 8 {
-				continue
-			}
-			if name := f[len(f)-1]; socketPattern.MatchString(name) && !seen[name] {
-				found = append(found, name)
-			}
+	for _, line := range strings.Split(table, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 8 {
+			continue
+		}
+		name := f[len(f)-1]
+		if _, ok := socketPID(dir, name); ok && !seen[name] {
+			found = append(found, name)
 		}
 	}
 	sort.Strings(found)
@@ -406,11 +467,7 @@ func parseRef(id string) (string, int, error) {
 // place ls does not report it. A window host reports the same pid for every OS
 // window of that process; it is a filter, not an identity.
 func pidOf(socket string) int {
-	name := strings.TrimPrefix(socket, "unix:")
-	if !socketPattern.MatchString(name) {
-		return 0
-	}
-	n, _ := strconv.Atoi(strings.TrimPrefix(name, "@kitty-"))
+	n, _ := socketPID(runtimeDir(), strings.TrimPrefix(socket, "unix:"))
 	return n
 }
 
@@ -663,13 +720,19 @@ func (h *Host) liveSocket(ctx context.Context) (string, bool) {
 
 // startKitty starts a kitty process for the first panel and waits for its
 // control socket. `{kitty_pid}` is expanded by kitty, so the socket matches the
-// pattern discovery looks for.
+// name discovery looks for. With no runtime directory there is no place that
+// is the user's alone, and no kitty is started: a socket anywhere else is one
+// another user can connect to.
 func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
+	listenOn := ListenOn()
+	if listenOn == "" {
+		return "", 0, errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
+	}
 	before := map[string]bool{}
 	for _, s := range h.socketList() {
 		before[s] = true
 	}
-	args := []string{"--detach", "--listen-on", "unix:@kitty-{kitty_pid}",
+	args := []string{"--detach", "--listen-on", listenOn,
 		"-o", "allow_remote_control=socket-only",
 		"--name", r.Name, "--title", r.Name, "--hold"}
 	if p.Dir != "" {

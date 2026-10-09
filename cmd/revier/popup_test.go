@@ -13,13 +13,24 @@ import (
 // With none resolved the marker is still set, empty, since being set is what
 // makes the surface the popup.
 func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
-	argv := popupArgv("/usr/bin/revier", "demo")
+	argv := popupArgv("/usr/bin/revier", "demo", "")
 	want := []string{"kitty", "--class", core.PopupClass, "--title", "revier",
 		"-o", "remember_window_size=no", "-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
-	if argv := popupArgv("/usr/bin/revier", ""); !slices.Contains(argv, core.PopupEnv+"=") {
+	if argv := popupArgv("/usr/bin/revier", "", ""); !slices.Contains(argv, core.PopupEnv+"=") {
 		t.Errorf("argv with no project = %q, want the marker set and empty", argv)
+	}
+}
+
+// The surface's targets open in the popup's kitty, so its control socket is
+// the socket file revier asks every kitty for, whatever kitty.conf names. The
+// option is before -e: what follows -e is the surface's command.
+func TestPopupArgvPutsThePopupOnASocketFile(t *testing.T) {
+	argv := popupArgv("/usr/bin/revier", "demo", "unix:/run/user/1000/kitty-{kitty_pid}")
+	i := slices.Index(argv, "--listen-on")
+	if i < 0 || argv[i+1] != "unix:/run/user/1000/kitty-{kitty_pid}" || i > slices.Index(argv, "-e") {
+		t.Errorf("argv = %q, want --listen-on with the socket file, before -e", argv)
 	}
 }
