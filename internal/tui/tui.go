@@ -137,8 +137,6 @@ type Model struct {
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
 	dialog    dialog             // the screen standing over the surface
-	link      linkScreen         // the link dialog (link.go)
-	sessions  sessionsScreen     // the sessions screen, and its save or restore (sessions.go)
 	shut      shutdown           // the shutdown wizard, while it is up
 	width     int
 	height    int
@@ -164,7 +162,6 @@ type Model struct {
 	polling  []string                         // the linked hosts that are being asked
 	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input    textinput.Model                  // the filter query, with its own cursor
-	create   createScreen                     // the new-project screen (newproject.go)
 	over     hovered                          // what the pointer is on
 	cell     *pointerCell                     // where the pointer last was, nil before it moved
 	body     viewport.Model                   // the scrolling window over the list
@@ -177,12 +174,6 @@ type Model struct {
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
 	amessage setMessage                       // the message the pane last set, as it set it
 	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
-	agents   bool                             // the surface shows the agent list in the project list's place (agentlist.go)
-	aglist   list.Model                       // the agent list's rows
-	aginput  textinput.Model                  // the agent list's query, with its own cursor
-	agfilter string                           // that query, held here so a refresh can re-apply it
-	agtop    bool                             // the agent list opened and the user has not acted on it: the cursor is on the first row whatever agent that is
-	mirror   mirror                           // the screen of the agent under the agent list's cursor (mirror.go)
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
 	copied   int                              // the characters the last selection copied, shown until the next press
@@ -192,9 +183,15 @@ type Model struct {
 	tdeclared map[core.Chord]bool
 
 	targets []revier.Target // the shared targets, typed, as config.toml holds them
-	config  configScreen    // the config screen (configscreen.go)
 
-	proj projectScreen // the project screen (projectscreen.go)
+	// The screens. Each is a struct of its own (screen.go): the root routes a
+	// press to the one that is up and applies the result it hands back.
+	link     linkScreen     // the link dialog (link.go)
+	create   createScreen   // the new-project screen (newproject.go)
+	sessions sessionsScreen // the sessions screen, and its save or restore (sessions.go)
+	config   configScreen   // the config screen (configscreen.go)
+	proj     projectScreen  // the project screen (projectscreen.go)
+	agents   agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -214,7 +211,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
+		agents: newAgentScreen(th),
 		create: newCreateScreen(th),
 		body:   newBody(),
 		config: newConfigScreen(th, cfg),
@@ -516,7 +513,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// The mirror is asked for before the pane is drawn: an agent that came
 	// under the cursor is drawn with its own screen pending, and not over the
 	// screen of the agent the cursor left.
-	read := mm.askMirror(msg)
+	var read tea.Cmd
+	if mm.mirroring() {
+		read = mm.agents.askMirror(mm.core, msg)
+	}
 	mm.syncDetail()
 	mm.syncBody()
 	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
@@ -554,14 +554,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.took(msg)
 		return m, nil
 	case mirroredMsg:
-		m.tookScreen(msg)
+		m.agents.tookScreen(msg, m.paneCols()-paneChrome)
 		return m, nil
 	case mirrorTickMsg:
 		// The tick ends with the mirror off the screen, and askMirror starts
 		// it again when the mirror comes back; the read it is for is
 		// askMirror's too.
 		if !m.mirroring() {
-			m.mirror.ticking = false
+			m.agents.mirror.ticking = false
 			return m, nil
 		}
 		return m, mirrorTick()
@@ -651,7 +651,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The surface opens on the projects, a raise included: the press that
 		// raises it is the one that opened it (decisions.md D110).
-		m.hidden, m.agents = false, false
+		m.hidden, m.agents.shown = false, false
 		return m, reloadFiles
 	case reloadedMsg:
 		if msg.err != nil {
@@ -711,7 +711,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds [3]tea.Cmd
 	m.input, cmds[0] = m.input.Update(msg)
 	m.ainput, cmds[1] = m.ainput.Update(msg)
-	m.aginput, cmds[2] = m.aginput.Update(msg)
+	m.agents.query, cmds[2] = m.agents.query.Update(msg)
 	return m, tea.Batch(cmds[:]...)
 }
 
@@ -781,7 +781,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case dialogShutdown:
 		return m.shutdownKey(msg)
 	}
-	if m.agents {
+	if m.agents.shown {
 		return m.agentsKey(msg)
 	}
 	m.err = nil
@@ -973,8 +973,8 @@ func (m Model) targetRows() []targetRow {
 
 // enter acts on the row under the cursor, by key or by double click.
 func (m Model) enter() (Model, tea.Cmd) {
-	if m.agents {
-		return m.goListed()
+	if m.agents.shown {
+		return m, m.agents.goSelected(m.surface())
 	}
 	return opened(m.act())
 }
@@ -1153,14 +1153,14 @@ func working(v revier.ProjectView) bool {
 func (m *Model) redrawSpin() {
 	// Every working agent on the agent list is a row with the spinner, and
 	// the pane's head carries it for the one under the cursor.
-	if m.agents && m.dialog == dialogNone {
-		for _, item := range m.aglist.VisibleItems() {
+	if m.agents.shown && m.dialog == dialogNone {
+		for _, item := range m.agents.list.VisibleItems() {
 			if it, ok := item.(agentItem); ok && it.agent.State.Status == revier.StatusRunning {
 				m.syncBody()
 				break
 			}
 		}
-		if it, ok := m.listedAgent(); ok && it.agent.State.Status == revier.StatusRunning {
+		if it, ok := m.agents.selected(); ok && it.agent.State.Status == revier.StatusRunning {
 			m.syncDetail()
 		}
 		return

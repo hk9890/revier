@@ -71,7 +71,7 @@ func (m *Model) layout() {
 	}
 	m.input.Width = query - lipgloss.Width(promptMark) - 2
 	m.link.query.Width = m.input.Width
-	m.aginput.Width = m.input.Width
+	m.agents.query.Width = m.input.Width
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
 	m.body.Width, m.body.Height = m.listWidth(), h
@@ -212,8 +212,8 @@ func (m Model) subtitle() string {
 	case dialogShutdown:
 		return " " + m.theme.Meta.Render(m.shutdownTitle())
 	}
-	if m.agents {
-		return " " + m.fieldView(m.aginput, focusList)
+	if m.agents.shown {
+		return " " + m.fieldView(m.agents.query, focusList)
 	}
 	return " " + m.fieldView(m.input, focusList)
 }
@@ -297,8 +297,8 @@ func (m Model) ruleCount() string {
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
-	case m.agents:
-		return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.aglist.VisibleItems()), len(m.aglist.Items())))
+	case m.agents.shown:
+		return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.agents.list.VisibleItems()), len(m.agents.list.Items())))
 	}
 	return th.NameDim.Render(fmt.Sprintf("%d/%d", len(m.plist.VisibleItems()), len(m.views)))
 }
@@ -316,8 +316,8 @@ func (m Model) ruleTotals() (int, []agentPiece) {
 	// The agent list has no column of counts for the totals to stand over,
 	// so they stand at the rule's right end, where its rows' ages are. The
 	// rule stops a column short of the pane's border.
-	if m.agents {
-		return m.listWidth() - maxAgentWidth - 1, agentPieces(m.theme, m.agentTotals(), maxAgentWidth)
+	if m.agents.shown {
+		return m.listWidth() - maxAgentWidth - 1, agentPieces(m.theme, m.agents.totals(), maxAgentWidth)
 	}
 	counts := map[revier.Status]int{}
 	for _, item := range m.plist.VisibleItems() {
@@ -362,9 +362,9 @@ func (m Model) empty() string {
 		return say(th.NameDim, m.link.empty())
 	case m.dialog != dialogNone:
 		return ""
-	case m.agents && m.agfilter != "":
-		return say(th.NameDim, fmt.Sprintf("No agent matches %q.", m.agfilter))
-	case m.agents:
+	case m.agents.shown && m.agents.filter != "":
+		return say(th.NameDim, fmt.Sprintf("No agent matches %q.", m.agents.filter))
+	case m.agents.shown:
 		return say(th.NameDim, "No agent runs in an open project.")
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
@@ -436,8 +436,8 @@ func (m Model) footer() string {
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))
 	}
-	if m.agents {
-		return " " + m.help.ShortHelpView(m.agentsHelp())
+	if m.agents.shown {
+		return " " + m.help.ShortHelpView(m.agents.help(m.keys))
 	}
 	keys := m.keys.helpFor(m.focus)
 	if v, ok := m.selected(); ok {

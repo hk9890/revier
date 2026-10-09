@@ -76,7 +76,7 @@ func (m *Model) syncBody() {
 	}
 	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
 	m.link.light(m.spun(), row)
-	m.aglist.SetDelegate(agentDelegate{theme: m.spun(), hover: row})
+	m.agents.list.SetDelegate(agentDelegate{theme: m.spun(), hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()
 
 	n := len(l.VisibleItems())
@@ -107,8 +107,8 @@ func (m *Model) bodyList() *list.Model {
 	case dialogSessions:
 		return &m.sessions.list
 	}
-	if m.agents {
-		return &m.aglist
+	if m.agents.shown {
+		return &m.agents.list
 	}
 	return &m.plist
 }

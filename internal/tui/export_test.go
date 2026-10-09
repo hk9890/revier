@@ -41,11 +41,11 @@ func (m Model) Said() Model {
 func (m Model) Mirrored() Model {
 	next, _ := m.Update(mirrorTickMsg{})
 	m = next.(Model)
-	it, ok := m.listedAgent()
+	it, ok := m.agents.selected()
 	if !ok {
 		return m
 	}
-	next, _ = m.Update(m.readScreen(it.agent)())
+	next, _ = m.Update(m.agents.readScreen(m.core, it.agent)())
 	return next.(Model)
 }
 
@@ -56,7 +56,7 @@ func (m Model) MirrorTicked() Model {
 }
 
 // MirrorAsked is how many reads of a panel the mirror has sent for.
-func (m Model) MirrorAsked() int { return m.mirror.seq }
+func (m Model) MirrorAsked() int { return m.agents.mirror.seq }
 
 // ScreenLines exposes the mirror's setting of a panel's screen.
 func ScreenLines(text string, w int) []string { return screenLines(text, w) }
@@ -73,7 +73,7 @@ func (m Model) Raised() Model {
 // command that sleeps half a second before it answers, and a test that runs
 // the command a focus returns would otherwise wait it out.
 func (m Model) StaticCursors() Model {
-	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.aginput, &m.create.path, &m.link.name, &m.link.query, &m.sessions.name, &m.config.chord, &m.proj.edit} {
+	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.agents.query, &m.create.path, &m.link.name, &m.link.query, &m.sessions.name, &m.config.chord, &m.proj.edit} {
 		in.Cursor.SetMode(bcursor.CursorStatic)
 	}
 	return m

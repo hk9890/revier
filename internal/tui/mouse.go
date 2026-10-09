@@ -54,7 +54,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	// A press is the user's: the agent list's cursor is theirs from here
 	// (switchList).
-	m.copied, m.agtop = 0, false
+	m.copied, m.agents.top = 0, false
 	if msg.Button == tea.MouseButtonLeft {
 		m.press = &press{at: *m.cell, over: m.over}
 	}
@@ -78,12 +78,12 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.overPane(msg.X) {
 		// The wheel over the agent list's pane scrolls the mirror through
 		// the panel's scrollback; its head stays.
-		if m.agents && m.dialog == dialogNone {
+		if m.agents.shown && m.dialog == dialogNone {
 			switch msg.Button {
 			case tea.MouseButtonWheelUp:
-				return m, m.scrollMirror(mirrorNotch)
+				return m, m.agents.scrollMirror(m.core, mirrorNotch, m.paneCols()-paneChrome)
 			case tea.MouseButtonWheelDown:
-				return m, m.scrollMirror(-mirrorNotch)
+				return m, m.agents.scrollMirror(m.core, -mirrorNotch, m.paneCols()-paneChrome)
 			}
 			return m, nil
 		}
