@@ -35,6 +35,8 @@ One JSON line per event, oldest first:
   event     go, go agent, agent new, shell new, action, agent session
   project   the project, by its name on the machine that recorded it
   host      the linked host that recorded it; absent for this machine
+  link      the project here that links to the host's project, the first
+            by name; absent for this machine, and where none links to it
   target    where a go landed: the tab, the target, or home on a press
             back; for a new tab, the workspace it opened in
   launched  true when a go started its target instead of raising it

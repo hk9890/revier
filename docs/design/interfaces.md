@@ -301,7 +301,8 @@ type Event struct {
     Time     time.Time
     Kind     string      // "go", "go agent", "agent new", "shell new", "action", "agent session"
     Host     string      // the linked host that recorded it; empty for this machine
-    Project  ProjectName
+    Project  ProjectName // by its name on the machine that recorded it
+    Link     ProjectName // the project here that links to Project on Host; set by the read that asked the host
     Target   TargetName  // where a go landed, or the workspace a tab opened in
     Launched bool        // a go that started its target
     Action   string

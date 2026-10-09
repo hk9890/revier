@@ -297,13 +297,19 @@ func dropDoubles(v *revier.ProjectView, at int) {
 
 // RemoteEvents asks the revier on every host the projects name for what it
 // recorded in the last days, every host at once, and marks each event with
-// its host (decisions.md D112). A host that fails costs its own events and is
-// returned by name with why; the others answer.
+// its host and with the project here that links to its project there
+// (decisions.md D112). A host that fails costs its own events and is returned
+// by name with why; the others answer.
 func (c *Core) RemoteEvents(ctx context.Context, projects []Project, days int) ([]revier.Event, map[string]error) {
 	hosts := map[string]bool{}
+	links := map[revier.Link]revier.ProjectName{}
 	for _, p := range projects {
-		if p.Remote != nil {
-			hosts[p.Remote.Host] = true
+		if p.Remote == nil {
+			continue
+		}
+		hosts[p.Remote.Host] = true
+		if first, ok := links[*p.Remote]; !ok || p.Name < first {
+			links[*p.Remote] = p.Name
 		}
 	}
 	var out []revier.Event
@@ -321,6 +327,7 @@ func (c *Core) RemoteEvents(ctx context.Context, projects []Project, days int) (
 			}
 			for _, e := range recorded {
 				e.Host = host
+				e.Link = links[revier.Link{Host: host, Project: e.Project}]
 				out = append(out, e)
 			}
 		})
