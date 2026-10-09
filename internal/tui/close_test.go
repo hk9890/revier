@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -17,28 +15,6 @@ import (
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// deliver runs a command and feeds its message back, and returns the command
-// the model answers with: a close that needs no confirm plans, then runs.
-func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
-	msg := cmd()
-	batch, ok := msg.(tea.BatchMsg)
-	if !ok {
-		next, out := m.Update(msg)
-		return next.(tui.Model), out
-	}
-	// A batch answers one message per command, as the program delivers them.
-	var outs []tea.Cmd
-	for _, c := range batch {
-		if c == nil {
-			continue
-		}
-		var out tea.Cmd
-		m, out = deliver(m, c)
-		outs = append(outs, out)
-	}
-	return m, tea.Batch(outs...)
-}
 
 // del on a project asks first, naming the busy agent, and then closes it as
 // a project shutdown does: the session is saved, and the surface is back.

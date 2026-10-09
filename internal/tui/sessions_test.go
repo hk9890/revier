@@ -197,8 +197,8 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	if !ok {
 		t.Fatalf("enter returned %T, want the walk and the wait on its writes", cmd())
 	}
-	for _, each := range batch {
-		m = run(m, each)
+	for _, part := range batch {
+		m = run(m, part)
 	}
 
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
