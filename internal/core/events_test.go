@@ -319,6 +319,31 @@ func TestAHostEventNamesTheProjectThatLinksToIt(t *testing.T) {
 	}
 }
 
+// The link that `revier link` and the link dialog name for a host's project
+// is the one its event lines name. The projects are in the order of their
+// files, where `far-2.toml` stands before `far.toml`.
+func TestLinkedAsIsTheLinkAHostEventNames(t *testing.T) {
+	box := hosttest.NewRemote("buildbox")
+	box.Recorded = []revier.Event{{Kind: revier.EventGo, Project: "app"}}
+	c := &core.Core{Remotes: map[string]revier.Remote{"buildbox": box}}
+	var projects []core.Project
+	for _, name := range []string{"far-2", "far"} {
+		p := remoteProject(name)
+		p.Remote.Project = "app"
+		projects = append(projects, prepared(t, p))
+	}
+
+	got, _ := c.RemoteEvents(context.Background(), projects, 7)
+
+	linked := core.LinkedAs(projects, "buildbox", "app")
+	if linked != "far" || len(got) != 1 || got[0].Link != linked {
+		t.Errorf("LinkedAs = %q, events = %+v; want far for both", linked, got)
+	}
+	if unlinked := core.LinkedAs(projects, "buildbox", "far"); unlinked != "" {
+		t.Errorf("LinkedAs = %q for a project nothing links to, want none", unlinked)
+	}
+}
+
 func TestAHostThatFailsCostsItsOwnEventsAndIsNamed(t *testing.T) {
 	down := hosttest.NewRemote("buildbox")
 	down.Err = errors.New("connection refused")

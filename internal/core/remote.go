@@ -53,15 +53,27 @@ func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectVie
 	return c.survey(ctx, host, nil)
 }
 
-// LinkedAs is the name of the link here to project on host, or "" when
-// nothing here links to it.
+// LinkedAs is the name of the link here to project on host: the first by
+// name where several link to it, and "" when nothing here does.
 func LinkedAs(projects []Project, host string, project revier.ProjectName) revier.ProjectName {
+	return linkNames(projects)[revier.Link{Host: host, Project: project}]
+}
+
+// linkNames is the name of the link here to each project of a host. The
+// first by name stands for a project that several link to, whatever the order
+// of the projects: the files are listed with their extension, which puts
+// `far-2` before `far`.
+func linkNames(projects []Project) map[revier.Link]revier.ProjectName {
+	names := map[revier.Link]revier.ProjectName{}
 	for _, p := range projects {
-		if p.Remote != nil && p.Remote.Host == host && p.Remote.Project == project {
-			return p.Name
+		if p.Remote == nil {
+			continue
+		}
+		if first, ok := names[*p.Remote]; !ok || p.Name < first {
+			names[*p.Remote] = p.Name
 		}
 	}
-	return ""
+	return names
 }
 
 // HostWait is how long a save waits for the linked hosts to say what the
@@ -302,16 +314,12 @@ func dropDoubles(v *revier.ProjectView, at int) {
 // by name with why; the others answer.
 func (c *Core) RemoteEvents(ctx context.Context, projects []Project, days int) ([]revier.Event, map[string]error) {
 	hosts := map[string]bool{}
-	links := map[revier.Link]revier.ProjectName{}
 	for _, p := range projects {
-		if p.Remote == nil {
-			continue
-		}
-		hosts[p.Remote.Host] = true
-		if first, ok := links[*p.Remote]; !ok || p.Name < first {
-			links[*p.Remote] = p.Name
+		if p.Remote != nil {
+			hosts[p.Remote.Host] = true
 		}
 	}
+	links := linkNames(projects)
 	var out []revier.Event
 	failed := map[string]error{}
 	var mu sync.Mutex
