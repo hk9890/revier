@@ -22,7 +22,7 @@ func TestACloseAsksNoHostOfALinkWithNothingOpenHere(t *testing.T) {
 
 	var plan []core.CloseStep
 	for _, only := range []revier.ProjectName{projects[0].Name, ""} {
-		r := c.SurveyToClose(context.Background(), projects, nil, nil, only)
+		r := c.SurveyToClose(context.Background(), projects, only)
 		if plan = c.ShutdownPlan(r, only, core.ShutdownAll); len(plan) == 0 {
 			t.Fatalf("plan for %q is empty, want what is open on this machine", only)
 		}
@@ -42,12 +42,12 @@ func TestACloseAsksTheHostOfTheLinkItCloses(t *testing.T) {
 	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	projects := []core.Project{prepared(t, project()), linkProject(t)}
 
-	if c.SurveyToClose(context.Background(), projects, nil, nil, "revier"); len(remote.Asked) != 0 {
+	if c.SurveyToClose(context.Background(), projects, "revier"); len(remote.Asked) != 0 {
 		t.Fatalf("a close of revier asked the link's host %d times, want it left alone", len(remote.Asked))
 	}
 	var plan []core.CloseStep
 	for i, only := range []revier.ProjectName{"far", ""} {
-		r := c.SurveyToClose(context.Background(), projects, nil, nil, only)
+		r := c.SurveyToClose(context.Background(), projects, only)
 		if len(remote.Asked) != i+1 {
 			t.Fatalf("SurveyToClose(%q) left the host asked %d times, want %d", only, len(remote.Asked), i+1)
 		}
@@ -71,7 +71,7 @@ func TestACloseOfOneLinkAsksItsHostWithNothingOfItHeld(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	if c.SurveyToClose(context.Background(), []core.Project{linkProject(t)}, nil, nil, "far"); len(remote.Asked) != 1 {
+	if c.SurveyToClose(context.Background(), []core.Project{linkProject(t)}, "far"); len(remote.Asked) != 1 {
 		t.Errorf("the host was asked %d times, want once", len(remote.Asked))
 	}
 }

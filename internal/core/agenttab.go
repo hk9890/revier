@@ -175,19 +175,20 @@ type Workspace struct {
 
 // TabIn is the open workspace a tab for a project's target opens in. An empty
 // target is the one pick chooses.
-func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, bound Bindings, pick func(Project) (revier.TargetName, error)) (Workspace, error) {
+func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, pick func(Project) (revier.TargetName, error)) (Workspace, error) {
 	if target == "" {
 		var err error
 		if target, err = pick(p); err != nil {
 			return Workspace{}, err
 		}
 	}
-	return c.AgentWorkspace(ctx, p, target, bound)
+	return c.AgentWorkspace(ctx, p, target)
 }
 
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`.
-func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Workspace, error) {
+func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName) (Workspace, error) {
+	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)
 	if !ok {
 		return Workspace{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
@@ -221,7 +222,8 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // One instance can back two targets. The target is the first of them that
 // declares an agent panel, because only that one has an agent tab to give; a
 // shell tab opened through it takes that target's shell panel too.
-func (c *Core) PanelOwner(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, panel revier.PanelID) (Workspace, error) {
+func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
+	bound := c.state().Bound
 	if c.Runtime == nil {
 		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
 	}
@@ -294,7 +296,7 @@ func holdsPanel(inst revier.Instance, panel revier.PanelID) bool {
 // what the agent in the open tab came to.
 //
 // An OS window the window host does not list is refused before the tab
-// opens, as Go refuses it: a focus with no raise is a GNOME "is ready" notice
+// opens, as a press refuses it: a focus with no raise is a GNOME "is ready" notice
 // (decisions.md D63).
 func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcome, error) {
 	_, outcome, err := c.newAgent(ctx, w, r, true)

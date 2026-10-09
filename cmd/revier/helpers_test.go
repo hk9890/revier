@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -70,4 +72,15 @@ func configRoot(t *testing.T, cfg string, files map[string]string) string {
 	}
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	return root
+}
+
+// withState is the app on the state file under its state root, which holds
+// st: what a command finds there when it starts.
+func withState(t *testing.T, a *app, st *state.State) *app {
+	t.Helper()
+	if err := st.Save(a.stateRoot); err != nil {
+		t.Fatal(err)
+	}
+	a.core.Ledger = ledger.File{Root: a.stateRoot}
+	return a
 }

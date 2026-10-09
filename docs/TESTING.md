@@ -26,8 +26,8 @@ L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
 resolution, toggle-back, and the degradation rules need no tool at all.
 
-L2 does not replace L4. The fake has no opinion about focus, so `Go` not
-focusing after `Open` passed L2 and failed L4.
+L2 does not replace L4. The fake has no opinion about focus, so a press
+that did not focus after `Open` passed L2 and failed L4.
 
 ## What every host test must cover
 

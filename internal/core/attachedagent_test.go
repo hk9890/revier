@@ -146,7 +146,8 @@ func TestSurveyProbesAttachedTerminalsWithoutAPerProjectCost(t *testing.T) {
 				revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"},
 			)}
 		}
-		if _, err := c.Survey(context.Background(), projects, nil, attached); err != nil {
+		c.Ledger = attachments(attached)
+		if _, err := c.Survey(context.Background(), projects); err != nil {
 			t.Fatal(err)
 		}
 		if rt.InstancesCalls != 1 || probe.Reads() != tc.attachedTo {
@@ -168,7 +169,8 @@ func TestSurveyReadsATerminalAttachedToTwoProjectsOnce(t *testing.T) {
 		projects[0].Name: {ref}, projects[1].Name: {ref},
 	}
 
-	report, err := c.Survey(context.Background(), projects, nil, attached)
+	c.Ledger = attachments(attached)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}

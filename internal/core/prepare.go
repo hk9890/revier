@@ -8,7 +8,7 @@ import (
 
 // Project is a revier.Project prepared for the hot path: every realization
 // rendered and every match compiled, once, when the configuration is loaded.
-// Survey and Go take this form and render or compile nothing of their own, so
+// A survey and a press take this form and render or compile nothing of their own, so
 // a refresh re-derives nothing from inputs that have not changed since load.
 //
 // The embedded Project is the rendered one: its realizations are what a host

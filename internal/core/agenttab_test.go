@@ -29,7 +29,7 @@ func openWorkspace(t *testing.T, panels ...revier.Panel) (*core.Core, *hosttest.
 // then the tab opened in it.
 func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetName, r core.Resume) (core.AgentOutcome, error) {
 	t.Helper()
-	w, err := c.AgentWorkspace(context.Background(), p, target, nil)
+	w, err := c.AgentWorkspace(context.Background(), p, target)
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
-	if _, err := c.AgentWorkspace(context.Background(), p, "home", nil); !errors.Is(err, core.ErrNotOpen) {
+	if _, err := c.AgentWorkspace(context.Background(), p, "home"); !errors.Is(err, core.ErrNotOpen) {
 		t.Errorf("closed workspace: err = %v, want ErrNotOpen", err)
 	}
 	rt.Add("notes:revier", "")
@@ -142,7 +142,7 @@ func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 // asked for, made current in the open workspace.
 func TestNewShellOpensTheDeclaredShellInTheOpenWorkspace(t *testing.T) {
 	c, rt, p, ref := openWorkspace(t)
-	w, err := c.AgentWorkspace(context.Background(), p, "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), p, "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 	c := &core.Core{Runtime: rt}
 	rt.Add("notes:revier", "")
 	p := prepared(t, agentProject())
-	w, err := c.AgentWorkspace(context.Background(), p, "notes", nil)
+	w, err := c.AgentWorkspace(context.Background(), p, "notes")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: bareRuntime{rt}}
 	rt.Add("session:revier", "")
-	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("far", "")
 	c := &core.Core{Runtime: rt}
-	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
 	}
@@ -258,9 +258,9 @@ func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
 	p := prepared(t, agentProject())
 	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
 
-	res, err := c.GoResuming(context.Background(), p, "home", nil, resumes)
+	res, err := pressResuming(context.Background(), c, p, "home", resumes)
 	if err != nil {
-		t.Fatalf("GoResuming: %v", err)
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 	want := []core.AgentOutcome{core.AgentResumed, core.AgentDropped}
 	if !slices.Equal(res.Agents, want) {
@@ -291,7 +291,7 @@ func twoWorkspaces(t *testing.T, revierPanels, otherPanels []revier.Panel) (*cor
 func TestPanelOwnerFindsTheWorkspaceHoldingAPanel(t *testing.T) {
 	c, _, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}, {ID: "2"}}, []revier.Panel{{ID: "7"}})
 
-	w, err := c.PanelOwner(context.Background(), projects, nil, "7")
+	w, err := c.PanelOwner(context.Background(), projects, "7")
 	if err != nil {
 		t.Fatalf("PanelOwner: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestPanelOwnerTakesTheTargetThatDeclaresAnAgent(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	ref := rt.Add("session:revier", "", revier.Panel{ID: "5"})
 
-	w, err := c.PanelOwner(context.Background(), []core.Project{prepared(t, proj)}, nil, "5")
+	w, err := c.PanelOwner(context.Background(), []core.Project{prepared(t, proj)}, "5")
 	if err != nil {
 		t.Fatalf("PanelOwner: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestPanelOwnerTakesTheTargetThatDeclaresAnAgent(t *testing.T) {
 func TestPanelOwnerRefusesAnIDTwoWorkspacesHold(t *testing.T) {
 	c, _, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
-	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrAmbiguous) {
+	if _, err := c.PanelOwner(context.Background(), projects, "1"); !errors.Is(err, core.ErrAmbiguous) {
 		t.Errorf("err = %v, want ErrAmbiguous", err)
 	}
 }
@@ -352,15 +352,15 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 	_, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
 	c := &core.Core{Runtime: finding{rt, other}}
-	if w, err := c.PanelOwner(context.Background(), projects, nil, "1"); err != nil || w.Project.Name != "other" || w.Ref != other {
+	if w, err := c.PanelOwner(context.Background(), projects, "1"); err != nil || w.Project.Name != "other" || w.Ref != other {
 		t.Errorf("owner = %s %+v, %v, want other %+v", w.Project.Name, w.Ref, err, other)
 	}
 	c = &core.Core{Runtime: finding{rt, revier.TargetRef{}}}
-	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); !errors.Is(err, core.ErrNoPanel) {
+	if _, err := c.PanelOwner(context.Background(), projects, "1"); !errors.Is(err, core.ErrNoPanel) {
 		t.Errorf("nothing found: err = %v, want ErrNoPanel", err)
 	}
 	c = &core.Core{Runtime: finding{rt, rt.Add("a kitty window of no project", "")}}
-	if _, err := c.PanelOwner(context.Background(), projects, nil, "1"); err == nil || !strings.Contains(err.Error(), "no project") {
+	if _, err := c.PanelOwner(context.Background(), projects, "1"); err == nil || !strings.Contains(err.Error(), "no project") {
 		t.Errorf("found in no workspace: err = %v, want it named", err)
 	}
 }
@@ -369,7 +369,7 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 func TestPanelOwnerNamesAnUnknownPanel(t *testing.T) {
 	c, _, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 
-	_, err := c.PanelOwner(context.Background(), projects, nil, "42")
+	_, err := c.PanelOwner(context.Background(), projects, "42")
 	if !errors.Is(err, core.ErrNoPanel) || !strings.Contains(err.Error(), "42") {
 		t.Errorf("err = %v, want ErrNoPanel naming 42", err)
 	}

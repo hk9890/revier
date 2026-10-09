@@ -46,7 +46,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	}
 	home, _ := p.Home()
 	open, err := core.Open(p, func() (bool, error) {
-		return a.core.Running(ctx, p, home.Name, a.state.Bound[p.Name])
+		return a.core.Running(ctx, p, home.Name)
 	})
 	if err != nil {
 		return err

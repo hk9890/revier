@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -18,16 +19,19 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	written := make(chan struct{}, 1)
-	ledger := core.StateLedger{Root: root, Written: written}
-	m := Model{stateRoot: root}
+	restoring := ledger.File{Root: root, Written: written}
+	m := Model{stateRoot: root, core: &core.Core{Ledger: ledger.File{Root: root}}}
 
-	ledger.Launched("work", "home", time.Now())
+	restoring.Update(func(st *state.State) bool {
+		st.Launched("work", "home", time.Now())
+		return true
+	})
 	msg, ok := waitLedger(written)().(ledgerMsg)
 	if !ok || !msg.ok {
 		t.Fatalf("msg = %+v, want the write said", msg)
 	}
 	next, again := m.ledgerWritten(msg)
-	if !next.(Model).pending.Pending("work", "home", core.BindWindow) {
+	if p := next.(Model).pending; !p.Pending(time.Now()) || p.Project != "work" || p.Target != "home" {
 		t.Errorf("pending = %+v, want the restore's launch", next.(Model).pending)
 	}
 	if again == nil {
@@ -35,7 +39,10 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 	}
 
 	ref := revier.TargetRef{Host: "rt", ID: "1"}
-	ledger.Landed("work", "home", ref)
+	restoring.Update(func(st *state.State) bool {
+		st.Landed("work", "home", ref)
+		return true
+	})
 	close(written)
 	msg = waitLedger(written)().(ledgerMsg)
 	next, _ = next.(Model).ledgerWritten(msg)

@@ -461,7 +461,7 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 
 func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
 	if panel != "" {
-		return a.core.PanelOwner(ctx, a.projects, a.state.Bound, revier.PanelID(panel))
+		return a.core.PanelOwner(ctx, a.projects, revier.PanelID(panel))
 	}
 	name, sel, _ := strings.Cut(project, ":")
 	p, inDir := a.projectForPath(dir)
@@ -471,7 +471,7 @@ func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick fun
 			return core.Workspace{}, err
 		}
 	}
-	return a.core.TabIn(ctx, p, revier.TargetName(sel), a.state.Bound[p.Name], pick)
+	return a.core.TabIn(ctx, p, revier.TargetName(sel), pick)
 }
 
 // agent finds the agent an address names: <project>, or <project>:<target>,
@@ -482,7 +482,7 @@ func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
 	if !ok {
 		return core.Agent{}, fmt.Errorf("no project named %q", name)
 	}
-	return a.core.Agent(ctx, p, sel, a.state.Bound[p.Name])
+	return a.core.Agent(ctx, p, sel)
 }
 
 // cmdAgentExec becomes the project's agent, for a terminal on another machine:

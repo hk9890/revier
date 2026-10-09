@@ -96,10 +96,10 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 		}
 		projects = []core.Project{p}
 	}
-	c, root := m.core, m.stateRoot
+	c := m.core
 	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects}
 	return m, func() tea.Msg {
-		asked.plan = surveyPlan(c, root, projects, project, func(r core.Report) []core.CloseStep {
+		asked.plan = surveyPlan(c, projects, project, func(r core.Report) []core.CloseStep {
 			if whole {
 				return c.ShutdownPlan(r, project, core.ShutdownAll)
 			}

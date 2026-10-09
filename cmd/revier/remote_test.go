@@ -19,7 +19,7 @@ import (
 // how a revier on another machine is asked about the projects there.
 func TestListNamedProjectsIsThoseAlone(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json", "far"}) })
 	var views []revier.ProjectView
@@ -33,7 +33,7 @@ func TestListNamedProjectsIsThoseAlone(t *testing.T) {
 
 func TestListRefusesANameItDoesNotKnow(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	err := cmdList(context.Background(), a, []string{"--json", "nope"})
 	if err == nil || !strings.Contains(err.Error(), `"nope"`) {
@@ -48,7 +48,7 @@ func TestListTableShowsTheHostAndAnUnreachableOne(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	remote.Err = errors.New("buildbox: connection refused")
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, nil) })
 	if !strings.Contains(out, "far@buildbox") || !strings.Contains(out, "unreachable") {
@@ -65,7 +65,7 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 	rt := hosttest.NewRuntime("tmux")
 	pane := rt.Add("far", "", revier.Panel{ID: "%7", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 	ctx := context.Background()
 
 	if err := a.newAgent(ctx, "far", "", "", "abc-123"); err != nil {
@@ -96,7 +96,7 @@ func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("home", "", revier.Panel{ID: "3", Kind: revier.PanelTool})
 	demo := demoProject(t)
-	a := &app{cfg: &config.Config{}, projects: []core.Project{demo}, state: &state.State{}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
 	ctx := context.Background()
 
 	for _, dir := range []string{"", "/", demo.Path} {

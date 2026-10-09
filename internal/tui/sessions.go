@@ -18,8 +18,8 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -248,12 +248,11 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), saveWait)
 		defer cancel()
-		st := loadedState(root)
-		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
+		report, err := c.Survey(ctx, projects)
 		if err != nil {
 			return savedMsg{err: err}
 		}
-		stored, _, gaps, err := c.SaveSession(ctx, root, report, st.Current, name, time.Now())
+		stored, _, gaps, err := c.SaveSession(ctx, root, report, c.Ledger.State().Current, name, time.Now())
 		if err != nil {
 			return savedMsg{err: err}
 		}
@@ -295,19 +294,20 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.restoring = it.session.ID
-	c, projects, root, s := m.core, m.projects, m.stateRoot, it.session
+	projects, s := m.projects, it.session
 	written := make(chan struct{}, 1)
+	// The restore's own ledger, on the same state: it says when it wrote.
+	c := m.core.WithLedger(ledger.File{Root: m.stateRoot, Written: written})
 	walk := func() tea.Msg {
 		defer close(written)
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
-		st := loadedState(root)
-		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
+		report, err := c.Survey(ctx, projects)
 		cancel()
 		if err != nil {
 			return restoredMsg{id: s.ID, err: err}
 		}
 		// No deadline over the whole walk: each step bounds its own.
-		out, back := c.Restore(context.Background(), s, report, projects, core.StateLedger{Root: root, Written: written})
+		out, back := c.Restore(context.Background(), s, report, projects)
 		return restoredMsg{id: s.ID, restored: out, back: back}
 	}
 	return m, tea.Batch(walk, waitLedger(written))
@@ -358,15 +358,6 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 		m.err = msg.back
 	}
 	return m, nil
-}
-
-// loadedState is state as a save or a restore starts from. One that cannot be
-// read is empty: it costs a binding, not the operation.
-func loadedState(root string) *state.State {
-	if st, err := loadState(root); err == nil && st != nil {
-		return st
-	}
-	return &state.State{}
 }
 
 // sessionNameScreen is what stands in the list's place while the name is

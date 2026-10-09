@@ -408,11 +408,11 @@ func (m Model) goListed() (Model, tea.Cmd) {
 // goAgent brings an agent to the front: the panel here that shows it, for a
 // link's agent too, unless the link's workspace is still coming up.
 func (m Model) goAgent(p core.Project, agent revier.AgentView) tea.Cmd {
-	c, root := m.core, m.stateRoot
+	c := m.core
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
-		_, err := c.ActivateAgentWaiting(ctx, p, agent, core.StateLedger{Root: root})
+		_, err := c.ActivateAgentWaiting(ctx, p, agent)
 		return actedMsg{err: err}
 	}
 }

@@ -158,7 +158,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Match: revier.Match{Title: "^home$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
-	a := &app{cfg: &config.Config{}, projects: []core.Project{p}, state: &state.State{}, stateRoot: root, core: &core.Core{Runtime: rt}}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "demo", "", "", "abc-123"); err != nil {
 		t.Fatalf("agent new: %v", err)

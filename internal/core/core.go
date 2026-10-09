@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -78,6 +79,17 @@ type Core struct {
 	seen   snapshot
 	seenMu sync.Mutex
 
+	// windows is the window host's listing in the last report Settle took,
+	// and listedWindows whether there was one: what a window must be new
+	// since to be claimed. Guarded by seenMu.
+	windows       []revier.Instance
+	listedWindows bool
+
+	// Ledger is the state and the events of this installation: where every
+	// operation reads what was learned at runtime, and where it writes
+	// (decisions.md D120). Nil remembers nothing.
+	Ledger Ledger
+
 	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
 	// provides no instances and takes no part in run-or-raise, and a machine
 	// with no desktop leaves it nil.
@@ -89,18 +101,40 @@ type Core struct {
 // the host it started with, and the two never share a mutable map: the
 // remotes known so far are copied.
 func (c *Core) WithRuntime(rt revier.Runtime) *Core {
+	out := c.clone()
+	out.Runtime = rt
+	return out
+}
+
+// WithLedger is the same core over another ledger: a new core, as
+// WithRuntime's is. A surface uses it for a restore whose writes it wants to
+// hear of.
+func (c *Core) WithLedger(l Ledger) *Core {
+	out := c.clone()
+	out.Ledger = l
+	return out
+}
+
+// clone copies what a core is configured with and the window listing it last
+// settled, which is of the window host and so stands for the copy too.
+func (c *Core) clone() *Core {
 	c.remotesMu.Lock()
 	defer c.remotesMu.Unlock()
+	c.seenMu.Lock()
+	defer c.seenMu.Unlock()
 	return &Core{
-		Runtime:   rt,
-		Window:    c.Window,
-		Probes:    c.Probes,
-		Served:    c.Served,
-		Self:      c.Self,
-		Machine:   c.Machine,
-		Remotes:   maps.Clone(c.Remotes),
-		NewRemote: c.NewRemote,
-		KeyBinder: c.KeyBinder,
+		Runtime:       c.Runtime,
+		Window:        c.Window,
+		Probes:        c.Probes,
+		Served:        c.Served,
+		Self:          c.Self,
+		Machine:       c.Machine,
+		Remotes:       maps.Clone(c.Remotes),
+		NewRemote:     c.NewRemote,
+		windows:       c.windows,
+		listedWindows: c.listedWindows,
+		Ledger:        c.Ledger,
+		KeyBinder:     c.KeyBinder,
 	}
 }
 
@@ -499,14 +533,14 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 	return c.classOK(p, i, inst)
 }
 
-// Result is what Go did. Target is the target the key landed on: the one
+// Result is what a press did. Target is the target the key landed on: the one
 // asked for, the project's home when the press toggled back, or the target a
 // tab is inside, and the one a caller pins Ref to. Ref is where the key
 // landed, and it survives a failure to focus an instance the launch made.
 // Launched reports that the run half ran; with a zero Ref the host could not
 // name the window it started, and Before is the window listing from before
-// the launch, which Bind diffs against. Agents is what the launch did with
-// each recorded agent. ComingUp reports an Activate that did nothing because
+// the launch, which the wait for its window diffs against. Agents is what the launch did with
+// each recorded agent. ComingUp reports a press that did nothing because
 // the target's earlier launch has not produced its window yet.
 type Result struct {
 	Target revier.TargetName
@@ -524,24 +558,25 @@ type Result struct {
 	AgentErr error
 }
 
-// Go runs-or-raises a target. Pressing the same key twice returns to the
+// goTo runs-or-raises a target. Pressing the same key twice returns to the
 // project's home target, which is what makes a binding a round trip rather than
-// a one-way jump. bound is where the project's targets last landed; the caller
-// records Result.Ref there afterwards, so the next press needs no rule.
-func (c *Core) Go(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
-	return c.GoResuming(ctx, p, name, bound, nil)
+// a one-way jump. bound is where the project's targets last landed; the
+// activation records Result.Ref there afterwards, so the next press needs no
+// rule.
+func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
+	return c.goToResuming(ctx, p, name, bound, nil)
 }
 
-// GoResuming is Go with the agent panels of a launch started on the
+// goToResuming is goTo with the agent panels of a launch started on the
 // conversations they held, which is what makes a restored workspace a
-// continuation rather than an empty one. It is Go in every other respect,
+// continuation rather than an empty one. It is goTo in every other respect,
 // toggle-back included, and resumes apply only to the run half: a target
 // already up is raised as it stands, because the agent in it is already the
 // one the recording named.
 //
-// Every call is one line of the log, and a Go that calls Go writes one more:
-// a toggle back for the Go home, a tab for the Go of its workspace.
-func (c *Core) GoResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
+// Every call is one line of the log, and a goTo that calls goTo writes one
+// more: a toggle back for the way home, a tab for its workspace.
+func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
@@ -590,7 +625,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		}
 		if ref.IsZero() {
 			// The host launched a process and cannot name the window it will
-			// produce; a window host is like this. Bind waits for it, and
+			// produce; a window host is like this. bindWindow waits for it, and
 			// nothing can be added to a window not yet named.
 			for range extra {
 				agents = append(agents, AgentDropped)
@@ -603,7 +638,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
-		// not. Go always leaves the target focused.
+		// not. A press always leaves the target focused.
 		res.Ref = ref
 		if err := host.Focus(ctx, ref); err != nil {
 			// The launch ran and the instance exists: its ref and agents are
@@ -619,7 +654,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 	// returns home instead of doing nothing.
 	if !t.Home && c.focusedOn(ctx, snap, inst) {
 		if home, ok := p.Home(); ok {
-			return c.Go(ctx, p, home.Name, bound)
+			return c.goTo(ctx, p, home.Name, bound)
 		}
 	}
 	osw, err := c.raisable(snap, inst, name)
@@ -672,10 +707,15 @@ func (c *Core) raise(ctx context.Context, osw revier.TargetRef, name revier.Targ
 }
 
 // Running reports whether a target has an instance to raise: its binding while
-// that is alive, else the first instance its rule matches. It is Go's raise
-// half without the run half, for a press that must not launch a second copy
-// of a target still coming up, and must still reach it once it is there.
-func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (bool, error) {
+// that is alive, else the first instance its rule matches. It is the raise
+// half of a press without the run half, for a press that must not launch a
+// second copy of a target still coming up, and must still reach it once it is
+// there.
+func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName) (bool, error) {
+	return c.isUp(ctx, p, name, c.state().Bound[p.Name])
+}
+
+func (c *Core) isUp(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (bool, error) {
 	i, ok := p.index(name)
 	if !ok {
 		return false, fmt.Errorf("%w: %s", ErrNoTarget, name)
@@ -700,19 +740,19 @@ func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName, b
 	return found, nil
 }
 
-// BindPoll is how often Bind asks the window host while waiting.
+// BindPoll is how often the wait for a launch's window asks the window host.
 const BindPoll = 250 * time.Millisecond
 
-// Bind waits for the window a detached launch produces and binds it, then
+// bindWindow waits for the window a detached launch produces and binds it, then
 // raises it. The window is the first one, new since before, that the target's
 // rule accepts by class alone: the class is right from the first frame while
 // a title settles later, which is exactly when a rule would miss it. A window
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
 // which. It gives up after wait and reports false. A window it found and
-// could not raise is reported with the failure, as Go reports an instance it
-// launched and could not focus, so the caller pins it.
-func (c *Core) Bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (inst revier.Instance, ok bool, err error) {
+// could not raise is reported with the failure, as goTo reports an instance it
+// launched and could not focus, so the activation pins it.
+func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("bind", start, err, "project", p.Name, "target", name, "bound", ok, "ref", inst.Ref)
@@ -763,7 +803,7 @@ var errNoNewWindow = errors.New("no new window appeared")
 
 // awaitNew asks the window host every poll, for at most wait, for the windows
 // not listed in before, and hands them to pick. pick returns the window it
-// settles on and found, or stop to end the wait without one. Bind and Popup
+// settles on and found, or stop to end the wait without one. bindWindow and Popup
 // both wait for the window a detached launch produces, and share this so the
 // two waits cannot drift apart.
 func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, poll time.Duration,
@@ -1077,6 +1117,9 @@ type Report struct {
 	// tags is where the runtime here shows each panel a linked host can name:
 	// what places a host's agents, whenever its answer is laid over.
 	tags map[revier.PanelID]shown
+	// before is the state the survey started from: what Settle may judge. A
+	// ref written since is to a window the listing may have missed.
+	before *state.State
 }
 
 // HostErr is every failure a survey degraded over, joined, or nil: what a
@@ -1085,10 +1128,10 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 
 // Survey builds the view every renderer reads: one bulk listing per host, then
 // local matching for every project, with what each linked host says laid over
-// its projects. bound is where each project's targets last landed; a bound
-// instance that is still listed is its target. attached is what was bound to
-// each project by hand or by a claim; an attachment that is still listed
-// follows the project's targets, marked Attached.
+// its projects. The ledger says where each project's targets last landed; a
+// bound instance that is still listed is its target. It also says what was
+// bound to each project by hand or by a claim; an attachment that is still
+// listed follows the project's targets, marked Attached.
 //
 // Every project here is already rendered and compiled, so the survey does no
 // work that a previous refresh did not also have to do. What could not be
@@ -1099,7 +1142,7 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 // It answers when the slowest linked host has. A surface that refreshes takes
 // the two parts apart instead, SurveyLocal and AskRemotes, and lays one over
 // the other with Lay (decisions.md D114).
-func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (r Report, err error) {
+func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Poll("survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
@@ -1109,7 +1152,8 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 	// and nothing local waits for it.
 	remote := make(chan RemoteAnswers, 1)
 	go func() { remote <- c.AskRemotes(ctx, projects) }()
-	r = c.listed(ctx, projects, bound, attached)
+	st := c.state()
+	r = c.listed(ctx, projects, st, st.Attached)
 	c.lay(&r, <-remote)
 	return r, nil
 }
@@ -1124,9 +1168,9 @@ func (c *Core) Survey(ctx context.Context, projects []Project, bound map[revier.
 // An agent of a link in a panel of an instance the link no longer holds - its
 // tab moved to another window - is therefore missing from a plan of every
 // project. A close of its own project still finds it.
-func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, only revier.ProjectName) Report {
+func (c *Core) SurveyToClose(ctx context.Context, projects []Project, only revier.ProjectName) Report {
 	start := time.Now()
-	r, answers := c.surveyAsking(ctx, projects, bound, attached, func(v revier.ProjectView) bool {
+	r, answers := c.surveyAsking(ctx, projects, func(v revier.ProjectView) bool {
 		if only != "" {
 			return v.Project.Name == only
 		}
@@ -1140,8 +1184,9 @@ func (c *Core) SurveyToClose(ctx context.Context, projects []Project, bound map[
 // from the listing of this machine, and returns what they said beside it.
 // The other links keep the view of the window that reaches them, as
 // SurveyLocal leaves it.
-func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef, ask func(revier.ProjectView) bool) (Report, RemoteAnswers) {
-	r := c.listed(ctx, projects, bound, attached)
+func (c *Core) surveyAsking(ctx context.Context, projects []Project, ask func(revier.ProjectView) bool) (Report, RemoteAnswers) {
+	st := c.state()
+	r := c.listed(ctx, projects, st, st.Attached)
 	var links []Project
 	for i, p := range projects {
 		if p.Remote != nil && ask(r.Views[i]) {
@@ -1159,14 +1204,18 @@ func (c *Core) surveyAsking(ctx context.Context, projects []Project, bound map[r
 // its host's yet. No linked host is asked, so it costs what the hosts here
 // cost however a host elsewhere answers (decisions.md D114).
 //
+// It lists no attachment either: a surface lists them from the state Settle
+// returns, which a claim changes between surveys, so a claimed window shows
+// at once and not a refresh later.
+//
 // The TUI surveys every refresh, so a survey is logged only when it failed or
 // was slow, and a failure that repeats only once (logging.Poll).
-func (c *Core) SurveyLocal(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) (r Report, err error) {
+func (c *Core) SurveyLocal(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Poll("local survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
 	}()
-	return c.listed(ctx, projects, bound, attached), nil
+	return c.listed(ctx, projects, c.state(), nil), nil
 }
 
 // Lay returns the report with what the linked hosts said laid over their
@@ -1215,10 +1264,12 @@ func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	return views
 }
 
-// listed is the local part of a survey.
-func (c *Core) listed(ctx context.Context, projects []Project, bound map[revier.ProjectName]Bindings, attached map[revier.ProjectName][]revier.TargetRef) Report {
+// listed is the local part of a survey, from the state st: its bindings, and
+// the attachments the caller takes of it.
+func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, attached map[revier.ProjectName][]revier.TargetRef) Report {
 	snap, failed := c.listing(ctx)
-	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap)}
+	bound := st.Bound
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap), before: st}
 	if len(failed) > 0 {
 		r.Failed = failed
 	}
@@ -1258,26 +1309,15 @@ type Claimed struct {
 	Target revier.TargetName
 }
 
-// ClaimWindow is how long after an action's launch a window that appears is
-// attached to the project. Short on purpose: a wrong claim binds an unrelated
-// window to a project and is only visible later, when a key goes somewhere
-// surprising.
-const ClaimWindow = 5 * time.Second
-
-// BindWindow is how long after a target's launch a window of its class is
-// still bound to it. Longer than ClaimWindow because the class filter makes
-// a wrong binding unlikely and an editor's cold start takes this long.
-const BindWindow = 60 * time.Second
-
-// Claim decides what a window that is new since the previous survey means
+// claim decides what a window that is new since the previous survey means
 // for the last launch. For a target's launch it is a binding: the window the
-// target's rule accepts by class, which Bind may have missed because the
+// target's rule accepts by class, which the activation may have missed because the
 // window took longer than its wait. For an action's launch it is an
 // attachment: a window no declared target of any project matches, since a
 // declared one is reached by its key already. Either way it claims nothing
 // rather than the wrong thing: nothing outside the window after the launch,
 // and nothing when more than one candidate appeared at once.
-func (c *Core) Claim(before, after []revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
+func (c *Core) claim(before, after []revier.Instance, l Launch, now time.Time, projects []Project) (Claimed, bool) {
 	if !l.Pending(now) {
 		return Claimed{}, false
 	}
@@ -1308,18 +1348,10 @@ func (c *Core) candidate(inst revier.Instance, l Launch, projects []Project) boo
 	return l.Project.compiled[i].window.Matches(inst) || c.classOK(l.Project, i, inst)
 }
 
-// Pending reports whether now is still inside the launch's window: a window
-// that appears can still be claimed for it, and until then it is not over.
+// Pending reports whether now is still inside the launch's window, by the
+// rule of internal/state.
 func (l Launch) Pending(now time.Time) bool {
-	if l.At.IsZero() {
-		return false
-	}
-	limit := ClaimWindow
-	if l.Target != "" {
-		limit = BindWindow
-	}
-	age := now.Sub(l.At)
-	return age >= 0 && age <= limit
+	return (&state.Launch{Target: l.Target, At: l.At}).Pending(now)
 }
 
 // declared reports whether any project's rule matches the instance: it is

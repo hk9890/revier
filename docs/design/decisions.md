@@ -476,16 +476,6 @@ render it. A running workspace is raised, since raising touches no directory;
 a fresh start into a missing directory is refused; a project with no home
 shows the reason, and the surface also moves to the targets it has.
 
-### D91 — one ledger, the state file, and every activation goes through it
-
-The launch rule of D21 was written four times: `ActivateWaiting`, a ledger
-in the command line over its startup state, a ledger in the surface for a
-restore, and the surface's own message chain for a press. A rule copied that
-often breaks silently when one copy is missed. `core.StateLedger` is the one
-ledger, the state file under its lock at every step, and every activation
-goes through `ActivateWaiting` with it. What a survey settles in state -
-prune, claim, expire - is `core.Settle`, for the surface and `revier list`.
-
 ### D92 — a process leaves a start directory that is gone; a host sets no directory for it
 
 The TUI is often started in a worktree and outlives it, and a shell can lose
@@ -741,3 +731,14 @@ with the dash of a login shell removed, and every other program is a `tool`.
 Whether a tool is an agent is a probe's answer. Rejected: one shared list of
 harnesses, a second registry beside the probes that a probe declared in config
 is never in.
+
+### D120 — the core holds the one ledger, and no caller hands it state
+
+Replaces D91. The launch rule of D21 was written four times, and twelve core
+operations took bindings and attachments from a caller, which the command line
+filled from the state it loaded at startup. `Core.Ledger` is the one way state
+reaches the core: an operation reads it once at its start, a press is
+`ActivateWaiting`, and what a survey settles - prune, claim, expire - is
+`Core.Settle`. The ledger is storage, `internal/ledger` over the state file;
+the rules stay in the core and `internal/state`. Rejected: a ledger with one
+method for each rule, which every fake writes again.

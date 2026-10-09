@@ -5,11 +5,9 @@ package core_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -17,42 +15,17 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// ledger is state as a restore writes it, in memory, with every write in
-// order.
-type ledger struct {
-	bound  map[revier.ProjectName]core.Bindings
-	writes []string
-}
-
-func (l *ledger) Bound(p revier.ProjectName) core.Bindings { return l.bound[p] }
-
-func (l *ledger) Pending(revier.ProjectName, revier.TargetName) bool { return false }
-
-func (l *ledger) Launched(p revier.ProjectName, t revier.TargetName, _ time.Time) {
-	l.writes = append(l.writes, fmt.Sprintf("launched %s/%s", p, t))
-}
-
-func (l *ledger) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-	if l.bound == nil {
-		l.bound = map[revier.ProjectName]core.Bindings{}
-	}
-	if l.bound[p] == nil {
-		l.bound[p] = core.Bindings{}
-	}
-	l.bound[p][t] = ref
-	l.writes = append(l.writes, fmt.Sprintf("landed %s/%s", p, t))
-}
-
 // restoreOf surveys the agent project and restores s over it.
 func restoreOf(t *testing.T, c *core.Core, s session.Session) (core.Restored, *ledger, error) {
 	t.Helper()
 	projects := []core.Project{prepared(t, agentProject())}
-	report, err := c.Survey(context.Background(), projects, nil, nil)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}
 	l := &ledger{}
-	out, back := c.Restore(context.Background(), s, report, projects, l)
+	c.Ledger = l
+	out, back := c.Restore(context.Background(), s, report, projects)
 	return out, l, back
 }
 
@@ -152,7 +125,7 @@ func TestRestorePreviewOpensNothing(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	projects := []core.Project{prepared(t, agentProject())}
-	report, err := c.Survey(context.Background(), projects, nil, nil)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}

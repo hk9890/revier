@@ -24,7 +24,7 @@ func dirOf(t *testing.T, path, dir string) string {
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
 	}}})
-	report, err := c.Survey(context.Background(), projects, nil, nil)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil || len(report.Views) != 1 || len(report.Views[0].Agents) != 1 {
 		t.Fatalf("Survey = %+v, %v; want one project with one agent", report.Views, err)
 	}

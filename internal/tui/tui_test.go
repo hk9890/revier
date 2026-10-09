@@ -466,7 +466,7 @@ func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	}
 }
 
-// Enter on a target is core.Go: the same run-or-raise the CLI does, and the
+// Enter on a target is core.ActivateWaiting: the same run-or-raise the CLI does, and the
 // next refresh shows the result.
 func TestEnterOnATargetRunsGo(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
@@ -479,7 +479,7 @@ func TestEnterOnATargetRunsGo(t *testing.T) {
 	}
 	msg := cmd()
 	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
-		t.Fatalf("Opened = %v, want the editor launched through core.Go", wm.Opened)
+		t.Fatalf("Opened = %v, want the editor launched through the core", wm.Opened)
 	}
 	next, _ := m.Update(msg)
 	m = next.(tui.Model)

@@ -21,7 +21,7 @@ func saidCore(t *testing.T, probe revier.AgentProbe) (*core.Core, core.Agent) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestSaidOfALinksAgentIsNoMessage(t *testing.T) {
 	c, _, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	probe := hosttest.NewDetailedProbe("claude", "ssh")
 	c.Probes = []revier.AgentProbe{probe}
-	a, err := c.Agent(context.Background(), linkProject(t), "", nil)
+	a, err := c.Agent(context.Background(), linkProject(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestSaidOfALinksAgentIsNoMessage(t *testing.T) {
 // it; one character stands for itself.
 func TestSendKeysTypesEachKeyInOrder(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, _ := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, _ := c.Agent(context.Background(), prepared(t, project()), "")
 
 	if err := c.SendKeys(context.Background(), a, []string{"down", "2", "Enter", "esc"}, time.Millisecond); err != nil {
 		t.Fatalf("SendKeys: %v", err)
@@ -111,7 +111,7 @@ func TestSendKeysTypesEachKeyInOrder(t *testing.T) {
 func TestSendKeysReachesAnAgentInAnyState(t *testing.T) {
 	for _, title := range []string{"idle", "busy", "ask permission", "mystery"} {
 		c, rt := agentCore(agentPanel("1", title))
-		a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+		a, err := c.Agent(context.Background(), prepared(t, project()), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,7 +124,7 @@ func TestSendKeysReachesAnAgentInAnyState(t *testing.T) {
 // One name that is no key refuses every key: nothing is typed up to a typo.
 func TestSendKeysTypesNothingWhenAKeyIsUnknown(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
-	a, _ := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, _ := c.Agent(context.Background(), prepared(t, project()), "")
 	for _, name := range []string{"escape", "", "\x1b"} {
 		err := c.SendKeys(context.Background(), a, []string{"down", name}, time.Millisecond)
 		if err == nil || !strings.Contains(err.Error(), "unknown key") || len(rt.Sent) != 0 {
@@ -137,7 +137,7 @@ func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
-	a, err := c.Agent(context.Background(), prepared(t, project()), "", nil)
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 func TestAddAgentOpensTheTabAndLeavesTheFocus(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
 	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
-	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestAddAgentOpensTheTabAndLeavesTheFocus(t *testing.T) {
 func TestAddAgentNeedsNoWindowToRaise(t *testing.T) {
 	rt, _, _, _ := osWindowHosts()
 	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
-	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestAddAgentNeedsNoWindowToRaise(t *testing.T) {
 func TestAddAgentReportsATabThatDidNotOpen(t *testing.T) {
 	c, rt, p, _ := openWorkspace(t)
 	rt.OpenTabErr = errors.New("no room")
-	w, err := c.AgentWorkspace(context.Background(), p, "home", nil)
+	w, err := c.AgentWorkspace(context.Background(), p, "home")
 	if err != nil {
 		t.Fatal(err)
 	}

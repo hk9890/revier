@@ -21,6 +21,8 @@ import (
 
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -716,11 +718,11 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 
 	prepared := core.PrepareProject(p)
-	homeRef, err := cr.Go(c, prepared, "home", nil)
+	homeRef, err := press(c, cr, prepared, "home")
 	if err != nil {
 		t.Fatalf("open home: %v", err)
 	}
-	diffRef, err := cr.Go(c, prepared, "diff", nil)
+	diffRef, err := press(c, cr, prepared, "diff")
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
@@ -729,7 +731,7 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 
 	// Opening left diff focused, so the second press is the round trip home.
-	back, err := cr.Go(c, prepared, "diff", nil)
+	back, err := press(c, cr, prepared, "diff")
 	if err != nil {
 		t.Fatalf("toggle back: %v", err)
 	}
@@ -738,7 +740,7 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 
 	// Third press raises the existing window rather than opening a duplicate.
-	again, err := cr.Go(c, prepared, "diff", nil)
+	again, err := press(c, cr, prepared, "diff")
 	if err != nil {
 		t.Fatalf("raise diff: %v", err)
 	}
@@ -1087,20 +1089,32 @@ func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 			}},
 		},
 	})
-	diff, err := cr.Go(c, p, "diff", nil)
+	diff, err := press(c, cr, p, "diff")
 	if err != nil {
 		t.Fatalf("open diff: %v", err)
 	}
 	killServer(t, h.Socket)
-	if _, err := cr.Go(c, p, "home", nil); err != nil {
+	if _, err := press(c, cr, p, "home"); err != nil {
 		t.Fatalf("open home on the new server: %v", err)
 	}
 
-	res, err := cr.Go(c, p, "diff", core.Bindings{"diff": diff.Ref})
+	// The binding the first press left, as the next press reads it.
+	cr.Ledger = ledger.File{Root: t.TempDir()}
+	cr.Ledger.Update(func(st *state.State) bool {
+		st.Bind(p.Name, "diff", diff.Ref)
+		return true
+	})
+	res, err := press(c, cr, p, "diff")
 	if err != nil {
 		t.Fatalf("go diff: %v", err)
 	}
 	if !res.Launched {
 		t.Fatalf("go diff raised %q: the binding from the old server landed on another window", res.Ref.Title)
 	}
+}
+
+// press is one press of a target, as every surface makes it.
+func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
+	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
+	return res, err
 }

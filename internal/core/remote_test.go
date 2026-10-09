@@ -49,7 +49,7 @@ func TestSurveyTakesARemoteProjectsAgentsFromItsHost(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusAttention))
 	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestSurveyKeepsALinksOwnReasonBesideTheHosts(t *testing.T) {
 	p := prepared(t, remoteProject("demo"))
 	p.Invalid = errors.New(`demo.toml: git_url: "x y" contains whitespace`)
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestSurveyKeepsALinksOwnReasonBesideTheHosts(t *testing.T) {
 		t.Errorf("Invalid = %q, want this side's reason kept", got)
 	}
 	remote.Views[0].Invalid = "demo.toml: no target is marked home"
-	report, err = c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err = c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestSurveyKeepsRunningLocalForARemoteProject(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusRunning))
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestSurveyMarksTheProjectsOfAHostThatDidNotAnswer(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{prepared(t, remoteProject("demo")), prepared(t, project())}
 
-	report, err := c.Survey(context.Background(), projects, nil, nil)
+	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatalf("Survey: a host that is down must not fail the survey: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestSurveyTakesAHostsOwnUnreachableWord(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", said)
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestSurveyDoesNotProbeTheLocalPaneOfARemoteProject(t *testing.T) {
 	remote.Err = errors.New("buildbox: connection refused")
 	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestSurveyAsksByTheHostsNameAndAnswersByTheLinks(t *testing.T) {
 	link := remoteProject("build")
 	link.Remote.Project = "far"
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, link)}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, link)})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestSurveyAsksAHostOnceForAllItsProjects(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{prepared(t, remoteProject("one")), prepared(t, project()), prepared(t, remoteProject("two"))}
 
-	if _, err := c.Survey(context.Background(), projects, nil, nil); err != nil {
+	if _, err := c.Survey(context.Background(), projects); err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
 	want := []revier.ProjectName{"one", "two"}
@@ -249,7 +249,7 @@ func TestSurveyProbesTheLocalAgentsWhileAHostAnswers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	report, err := c.Survey(ctx, []core.Project{prepared(t, project()), prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(ctx, []core.Project{prepared(t, project()), prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestSurveyReportsAProjectItsHostDidNotList(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", answer("other", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestARemoteIsMadeOnDemandAndKept(t *testing.T) {
 	if err != nil || len(views) != 1 || views[0].Project.Name != "far" {
 		t.Fatalf("ProjectsOn = %+v, %v; want the host's one project", views, err)
 	}
-	if _, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("far"))}, nil, nil); err != nil {
+	if _, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("far"))}); err != nil {
 		t.Fatal(err)
 	}
 	if made != 1 {
@@ -297,7 +297,7 @@ func TestARemoteIsMadeOnDemandAndKept(t *testing.T) {
 
 func TestSurveyReportsAHostNothingIsWiredFor(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("kitty")}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestSurveyLocalAsksNoHostAndLayPutsItsAnswerOver(t *testing.T) {
 	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{prepared(t, remoteProject("demo"))}
 
-	local, err := c.SurveyLocal(context.Background(), projects, nil, nil)
+	local, err := c.SurveyLocal(context.Background(), projects)
 	if err != nil {
 		t.Fatalf("SurveyLocal: %v", err)
 	}
@@ -373,7 +373,7 @@ func TestAnAnswerIsForTheLinkThatWasAsked(t *testing.T) {
 	if answers.Has(moved) {
 		t.Error("a link pointed at another project has the old one's answer")
 	}
-	local, err := c.SurveyLocal(context.Background(), []core.Project{prepared(t, moved)}, nil, nil)
+	local, err := c.SurveyLocal(context.Background(), []core.Project{prepared(t, moved)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestAnAnswerOfOneHostLeavesTheOthersStanding(t *testing.T) {
 	nearbox.Err = errors.New("buildbox: connection refused")
 	all = all.With([]string{"buildbox"}, c.AskRemotes(context.Background(), projects[:1]))
 
-	local, err := c.SurveyLocal(context.Background(), projects, nil, nil)
+	local, err := c.SurveyLocal(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}

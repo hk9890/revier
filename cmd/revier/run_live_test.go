@@ -15,13 +15,15 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // acting is the app over one project and the actions it can run.
 func acting(root string, p core.Project, c *core.Core, actions ...config.Action) *app {
-	return &app{cfg: &config.Config{Actions: actions}, projects: []core.Project{p}, state: &state.State{}, stateRoot: root, core: c, out: &bytes.Buffer{}}
+	c.Ledger = ledger.File{Root: root}
+	return &app{cfg: &config.Config{Actions: actions}, projects: []core.Project{p}, stateRoot: root, core: c, out: &bytes.Buffer{}}
 }
 
 // localProject is a project on this machine, in a directory that exists.
@@ -103,7 +105,7 @@ func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	remote.RunArgv = []string{"true"}
 	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); err != nil {
 		t.Fatalf("run: %v", err)

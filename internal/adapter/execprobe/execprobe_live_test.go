@@ -109,7 +109,7 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{good, broken}}
 	p := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,
 		Runtime: &revier.Realization{Name: "session:p", Launch: []string{"x"}, Match: revier.Match{Title: "^session:p$"}}}}})
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}

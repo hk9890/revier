@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -41,7 +40,7 @@ func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
 	c := &core.Core{Runtime: rt, Window: wm}
 
-	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestASecondPressFocusesTheTabItOpened(t *testing.T) {
 	p := prepared(t, tabProject())
 
 	for range 2 {
-		if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+		if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 			t.Fatalf("Go: %v", err)
 		}
 		wm.SetFocus(revier.TargetRef{}) // the user looked away
@@ -94,7 +93,7 @@ func TestATabOpensItsTargetFirst(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt}
 
-	if _, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil); err != nil {
+	if _, err := press(context.Background(), c, prepared(t, tabProject()), "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:revier" {
@@ -112,7 +111,7 @@ func TestATabThatFailsInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
 	rt.OpenTabErr = errors.New("kitty went away")
 	c := &core.Core{Runtime: rt}
 
-	res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if err == nil {
 		t.Fatal("Go succeeded, want the tab's failure")
 	}
@@ -127,12 +126,12 @@ func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
-	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	wm.SetFocus(osw)
 
-	res, err := c.Go(context.Background(), p, "tickets", nil)
+	res, err := press(context.Background(), c, p, "tickets")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
@@ -154,7 +153,7 @@ func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt}
 
-	if _, err := c.Go(context.Background(), prepared(t, tabProject()), "home", nil); err != nil {
+	if _, err := press(context.Background(), c, prepared(t, tabProject()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
 	if len(rt.Opened) != 1 || rt.Opened[0].Vars[core.PanelHomeVar] != "home" {
@@ -172,7 +171,7 @@ func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
 
-	res, err := c.Go(context.Background(), p, "home", nil)
+	res, err := press(context.Background(), c, p, "home")
 	if err != nil {
 		t.Fatalf("Go(home): %v", err)
 	}
@@ -180,7 +179,7 @@ func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 
 	wm.SetFocus(wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001}))
 	for range 2 {
-		if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+		if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 			t.Fatalf("Go(tickets): %v", err)
 		}
 	}
@@ -237,7 +236,7 @@ func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
 			}
 			c := &core.Core{Runtime: rt, Window: wm}
 
-			res, err := c.Go(context.Background(), prepared(t, tabProject()), "tickets", nil)
+			res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 			if err != nil {
 				t.Fatalf("Go: %v", err)
 			}
@@ -257,7 +256,7 @@ func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 	c := &core.Core{Runtime: bareRuntime{rt}}
 	p := prepared(t, tabProject())
 
-	_, err := c.Go(context.Background(), p, "tickets", nil)
+	_, err := press(context.Background(), c, p, "tickets")
 	if !errors.Is(err, core.ErrNoTabs) {
 		t.Fatalf("err = %v, want ErrNoTabs", err)
 	}
@@ -270,7 +269,7 @@ func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 		t.Errorf("opened %d, want none: a window the user did not ask for is not the fallback", len(rt.Opened))
 	}
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -288,7 +287,7 @@ func TestTheSurveyReportsAnOpenTabOnce(t *testing.T) {
 	}}}
 	p := prepared(t, tabProject())
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -296,10 +295,10 @@ func TestTheSurveyReportsAnOpenTabOnce(t *testing.T) {
 		t.Errorf("tickets before = %+v, want available and not open", tv)
 	}
 
-	if _, err := c.Go(context.Background(), p, "tickets", nil); err != nil {
+	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	report, err = c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err = c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -325,7 +324,7 @@ func TestASessionRecordsATabAfterItsInstance(t *testing.T) {
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -349,7 +348,7 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 
-	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets", nil)
+	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets")
 	if err != nil {
 		t.Fatalf("Agent(tickets): %v", err)
 	}
@@ -368,7 +367,7 @@ func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), stale)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -382,19 +381,17 @@ func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
 // everything. A stray window is still a stray, and a focused window no target
 // declares still belongs to no project.
 func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
-	rt := hosttest.NewRuntime("kitty")
+	rt, wm := hosttest.NewRuntime("kitty"), hosttest.New("wm")
 	stray := rt.Add("htop", "kitty")
 	rt.SetFocus(stray)
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
 
 	if _, found, err := c.ProjectOfFocused(context.Background(), []core.Project{p}); err != nil || found {
 		t.Errorf("ProjectOfFocused = %v, %v; want no project for a window no target declares", found, err)
 	}
-	now := time.Now()
-	after, _ := rt.Instances(context.Background())
-	if _, ok := c.Claim(nil, after, core.Launch{Project: p, At: now}, now, []core.Project{p}); !ok {
-		t.Error("the stray was not claimed: a tab was taken to declare it")
+	if got := attachedAfterAction(t, c, wm, p, revier.Instance{Title: "htop", Class: "kitty"}); len(got) != 1 {
+		t.Errorf("attached = %v; the stray was not claimed: a tab was taken to declare it", got)
 	}
 }
 
@@ -411,7 +408,7 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, tabProject())
 
-	report, err := c.Survey(context.Background(), []core.Project{p}, nil, nil)
+	report, err := c.Survey(context.Background(), []core.Project{p})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
@@ -435,9 +432,9 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	restored.Add("session:revier", "kitty", agent("1", "abc-123", ""))
 	c.Runtime = restored
 	resumes := []core.Resume{{Harness: "claude", Session: "tab-9", Dir: t.TempDir()}}
-	res, err := c.GoResuming(context.Background(), p, "tickets", nil, resumes)
+	res, err := pressResuming(context.Background(), c, p, "tickets", resumes)
 	if err != nil {
-		t.Fatalf("GoResuming: %v", err)
+		t.Fatalf("ActivateWaiting: %v", err)
 	}
 	if len(restored.Tabs) != 1 {
 		t.Fatalf("tabs = %d, want 1", len(restored.Tabs))

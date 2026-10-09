@@ -349,7 +349,7 @@ func (c *Core) conversations(ctx context.Context, agents []agentPanel) ([]revier
 }
 
 // RestorePlan decides what each recorded target means on this machine now. It
-// is the whole of restore's policy; the caller walks the plan and calls Go for
+// is the whole of restore's policy; the caller walks the plan and presses
 // every RestoreLaunch, in order.
 //
 // Order is the file's, and the caller keeps it: a launch is bound to the

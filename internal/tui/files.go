@@ -204,7 +204,7 @@ func (m Model) targetOpen(project revier.ProjectName, tv revier.TargetView) (boo
 		return false, fmt.Errorf("no survey has answered yet; wait for it before deleting %s", tv.Name)
 	case tv.Unknown != "":
 		return false, fmt.Errorf("%s: %s; wait for the host before deleting it", tv.Name, tv.Unknown)
-	case m.pending != nil && m.pending.Project == project && m.pending.Target == tv.Name && time.Since(m.pending.At) <= core.BindWindow:
+	case m.pending.Pending(time.Now()) && m.pending.Project == project && m.pending.Target == tv.Name:
 		return false, fmt.Errorf("%s is coming up; wait for its window before deleting it", tv.Name)
 	}
 	ref, bound := m.bound[project][tv.Name]
@@ -315,7 +315,7 @@ func (m Model) refuseUnsettled(v revier.ProjectView, doing string) error {
 			return fmt.Errorf("%s: %s; wait for the host before %s it", name, t.Unknown, doing)
 		}
 	}
-	if m.pending != nil && m.pending.Project == name && time.Since(m.pending.At) <= core.BindWindow {
+	if m.pending.Pending(time.Now()) && m.pending.Project == name {
 		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
 	}
 	return nil

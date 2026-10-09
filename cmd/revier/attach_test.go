@@ -8,6 +8,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -25,8 +26,8 @@ func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 	root := t.TempDir()
 	a := &app{
 		cfg: &config.Config{}, projects: []core.Project{demoProject(t)},
-		state: &state.State{}, stateRoot: root,
-		core: &core.Core{Runtime: rt, Window: wm},
+		stateRoot: root,
+		core:      &core.Core{Runtime: rt, Window: wm, Ledger: ledger.File{Root: root}},
 	}
 
 	output(t, a, func() error { return cmdAttach(context.Background(), a, []string{"-p", "demo"}) })
@@ -56,8 +57,8 @@ func TestAttachRecordsAnAmbiguousWindowAlone(t *testing.T) {
 	root := t.TempDir()
 	a := &app{
 		cfg: &config.Config{}, projects: []core.Project{demoProject(t)},
-		state: &state.State{}, stateRoot: root,
-		core: &core.Core{Runtime: rt, Window: wm},
+		stateRoot: root,
+		core:      &core.Core{Runtime: rt, Window: wm, Ledger: ledger.File{Root: root}},
 	}
 
 	output(t, a, func() error { return cmdAttach(context.Background(), a, []string{"-p", "demo"}) })

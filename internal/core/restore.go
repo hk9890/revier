@@ -7,21 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// Ledger is where an activation reads and writes what it learns: where a
-// project's targets last landed, the launch still coming up, and the ref or
-// launch each activation leaves. StateLedger is the one every surface uses
-// (decisions.md D91); a test may hand in another.
-type Ledger interface {
-	Bound(p revier.ProjectName) Bindings
-	Pending(p revier.ProjectName, t revier.TargetName) bool
-	Launched(p revier.ProjectName, t revier.TargetName, at time.Time)
-	Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef)
-}
 
 // RestoreResult is one step of a restore and what came of it. Ref is zero for
 // a step that launched nothing, and for a launch whose window is not up yet.
@@ -106,7 +95,7 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 // the window that appears after it, so two at once are two windows neither
 // can be attributed to. One step's failure is not the restore's: the other
 // workspaces still come back, and the one that did not is named.
-func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project, l Ledger) (out Restored, back error) {
+func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project) (out Restored, back error) {
 	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", false)
 	for _, step := range c.RestorePlan(s, r) {
 		res := RestoreResult{RestoreStep: step}
@@ -121,14 +110,14 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		// the last one the log names.
 		logStep(res.RestoreStep, false)
 		if res.Action == RestoreLaunch {
-			res = c.restoreLaunch(ctx, p, step, l)
+			res = c.restoreLaunch(ctx, p, step)
 			logAgents(res)
 		}
 		out = append(out, res)
 	}
 	if p, ok := projectNamed(projects, s.Current); ok {
-		if home, has := p.Home(); has && c.returnable(ctx, s, p, home.Name, l) {
-			if res := c.restoreLaunch(ctx, p, RestoreStep{Project: p.Name, Target: home.Name}, l); res.Err != nil {
+		if home, has := p.Home(); has && c.returnable(ctx, s, p, home.Name) {
+			if res := c.restoreLaunch(ctx, p, RestoreStep{Project: p.Name, Target: home.Name}); res.Err != nil {
 				back = fmt.Errorf("could not return to %s: %w", s.Current, res.Err)
 			}
 		}
@@ -141,16 +130,16 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 // restoreLaunch is one step of a restore, walked by ActivateWaiting. It has
 // the deadline a keypress and the bind after it have, so a host that never
 // answers costs the restore one step and not the rest of the walk.
-func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l Ledger) RestoreResult {
+func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
-	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes, l)
+	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes)
 	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
 }
 
-// ActivateWaiting is the whole run-or-raise for one target: Activate with the
-// project's bindings, then, for a detached launch, the wait that binds its
-// window. The launch is recorded before the wait, so a press elsewhere during
+// ActivateWaiting is the whole run-or-raise for one target, and the one way
+// to press a target: the press with the project's bindings from the ledger,
+// then, for a detached launch, the wait that binds its window. The launch is recorded before the wait, so a press elsewhere during
 // it does not launch again, and every ref it lands on is recorded after, so
 // the next press finds the target by id whatever the application has done to
 // its title since. A zero ref with no error is a target launched and not yet
@@ -159,37 +148,39 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, l
 //
 // It is one press, and a press that ran or raised something is one EventGo of
 // where it landed: the tab it made current, else the target. It is recorded
-// here and not in Go, which a toggle back and a tab each run twice, and not
+// here and not in goTo, which a toggle back and a tab each run twice, and not
 // for a step of a restore, which opens what was open and is nobody's use of
 // the project (decisions.md D112). Its time is the press's: the wait for a
 // window comes after it, and a press made during that wait happened later.
-func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, l Ledger) (revier.TargetRef, Result, error) {
+func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume) (revier.TargetRef, Result, error) {
 	pressed := time.Now()
-	ref, res, err := c.activateWaiting(ctx, p, name, resumes, l)
+	ref, res, err := c.activateWaiting(ctx, p, name, resumes)
 	if err == nil && !res.ComingUp {
 		landed := res.Target
 		if res.Tab != "" {
 			landed = res.Tab
 		}
-		events.Record(revier.Event{Time: pressed, Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
+		c.record(revier.Event{Time: pressed, Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
 	}
 	return ref, res, err
 }
 
-func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, l Ledger) (revier.TargetRef, Result, error) {
-	res, err := c.Activate(ctx, p, name, l.Bound(p.Name), l.Pending(p.Name, name), resumes)
+func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume) (revier.TargetRef, Result, error) {
+	st := c.state()
+	res, err := c.activate(ctx, p, name, st.Bound[p.Name], st.Pending(p.Name, name, time.Now()), resumes)
 	ref := res.Ref
 	if res.Launched && ref.IsZero() && err == nil {
-		l.Launched(p.Name, res.Target, time.Now())
+		at := time.Now()
+		c.update(func(st *state.State) { st.Launched(p.Name, res.Target, at) })
 		var inst revier.Instance
 		var ok bool
-		inst, ok, err = c.Bind(ctx, p, res.Target, res.Before, BindWait)
+		inst, ok, err = c.bindWindow(ctx, p, res.Target, res.Before, BindWait)
 		if ok {
 			ref = inst.Ref
 		}
 	}
 	if !ref.IsZero() {
-		l.Landed(p.Name, res.Target, ref)
+		c.update(func(st *state.State) { st.Landed(p.Name, res.Target, ref) })
 	}
 	return ref, res, err
 }
@@ -291,11 +282,11 @@ func Count(n int, noun string) string {
 // returnable reports whether a restore may end on the project's home: the
 // session recorded it open, so the plan showed it, or it runs now, so the
 // return raises it and launches nothing.
-func (c *Core) returnable(ctx context.Context, s session.Session, p Project, home revier.TargetName, l Ledger) bool {
+func (c *Core) returnable(ctx context.Context, s session.Session, p Project, home revier.TargetName) bool {
 	if recorded(s, p.Name, home) {
 		return true
 	}
-	running, err := c.Running(ctx, p, home, l.Bound(p.Name))
+	running, err := c.Running(ctx, p, home)
 	return err == nil && running
 }
 
