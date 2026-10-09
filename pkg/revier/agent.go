@@ -39,7 +39,7 @@ const (
 // never reports PanelAgent for a live panel: whether a program is an agent is
 // the probes' to say (decisions.md D119).
 func IsShell(program string) bool {
-	switch strings.TrimPrefix(program[strings.LastIndex(program, "/")+1:], "-") {
+	switch strings.TrimPrefix(baseName(program), "-") {
 	case "sh", "bash", "zsh", "fish", "dash", "ksh":
 		return true
 	}

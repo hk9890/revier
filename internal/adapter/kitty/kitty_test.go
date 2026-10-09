@@ -234,6 +234,7 @@ func TestAProcessDetachedFromTheWindowIsNotTheCommand(t *testing.T) {
 		{"after the agent", []map[string]any{wrapper, agent, wlCopy}, revier.PanelTool, "claude", 7002},
 		{"in a shell", []map[string]any{wlCopy, shell}, revier.PanelShell, "/usr/bin/zsh", 7001},
 		{"in a login shell", []map[string]any{wlCopy, login}, revier.PanelShell, "-zsh", 7001},
+		{"behind a login shell", []map[string]any{login, agent, wlCopy}, revier.PanelTool, "claude", 7002},
 	}
 	for _, tc := range cases {
 		h := newHost()

@@ -220,7 +220,7 @@ revier writes one `Panel` as JSON on the probe's stdin and reads one
 `AgentState` as JSON from its stdout:
 
 ```json
-{"id":"3","kind":"agent","title":"✳ refactoring the store","vars":{},"pid":41221,"command":["aider"]}
+{"id":"3","kind":"tool","title":"✳ refactoring the store","vars":{},"pid":41221,"command":["aider"]}
 ```
 
 ```json
