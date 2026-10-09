@@ -95,7 +95,7 @@ func TestGoRefusesATargetOfAHostThatCannotList(t *testing.T) {
 // nothing on a runtime whose instances need no window to be raised.
 func TestATabGoesWhileTheWindowHostCannotList(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	wm := hosttest.New("wm")
 	wm.InstancesErr = errors.New("went away")
 	c := &core.Core{Runtime: rt, Window: wm}

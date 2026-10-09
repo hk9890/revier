@@ -58,7 +58,7 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 		if !slices.Contains(names, a.project) {
 			names = append(names, a.project)
 		}
-		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelAgent, Title: "claude " + marker})
+		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
 		rt.Screens[id] = a.screen
 	}
 	var raw []revier.Project

@@ -171,7 +171,7 @@ func TestARestoreIsNoGoEvent(t *testing.T) {
 func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "claude", Session: "abc"}}
 
@@ -245,7 +245,7 @@ func TestATabThatDidNotOpenIsNoEvent(t *testing.T) {
 func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
+	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
 
 	if err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "1"}); err != nil {

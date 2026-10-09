@@ -803,7 +803,7 @@ func TestASurveyKeepsABindingWrittenWhileItListed(t *testing.T) {
 // with no agent, and the right answer waits a whole refresh.
 func TestTheFirstSurveyUsesTheBindingsInState(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
-	renamed := rt.Add("renamed", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	renamed := rt.Add("renamed", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	root := stateWith(t, nil)
 	st, _ := state.Load(root)
 	st.Bind("project-00", "home", renamed)
@@ -845,7 +845,7 @@ func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
 	// project-09's agent starts wanting the human, so it sorts to the top and
 	// every row below it moves down one. An index-based cursor would now be
 	// pointing at project-01.
-	rt.Add("session:project-09", "kitty", revier.Panel{ID: "9", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:project-09", "kitty", revier.Panel{ID: "9", Kind: revier.PanelTool, Title: "claude"})
 	m = survey(m)
 
 	if first := rows(m)[0]; !strings.Contains(first, "project-09") {
@@ -902,8 +902,8 @@ func TestDetailPaneFollowsTheCursor(t *testing.T) {
 func TestDetailPaneListsEveryAgent(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	rt.Add("session:project-00", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude"})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	// Both projects want the human now, so the sort keeps config order and
@@ -1459,7 +1459,7 @@ func countedWorld(t *testing.T, path string, statuses []revier.Status) tui.Model
 		marker := fmt.Sprintf("agent-%d", i)
 		probes = append(probes, &hosttest.FakeProbe{Harness: "claude", Marker: marker,
 			State: revier.AgentState{Harness: "claude", Status: s, Activity: marker + " task"}})
-		panels = append(panels, revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelAgent, Title: "claude " + marker})
+		panels = append(panels, revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelTool, Title: "claude " + marker})
 	}
 	projects := core.Prepare([]revier.Project{{Name: "duo", Path: path, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{

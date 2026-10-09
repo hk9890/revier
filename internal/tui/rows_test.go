@@ -369,7 +369,7 @@ func TestThePaneWaitsUntilTheListHasItsRoom(t *testing.T) {
 // counts line up in one column.
 func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	rt, _, c, projects := world(t, 3) // project-02 needs you
-	rt.Add("session:project-00", "kitty", revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:project-00", "kitty", revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude"})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 380, 20)
 	g := theme.Default().Glyphs
 
@@ -458,7 +458,7 @@ func longNamedWorld(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, *core.
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:x", Launch: []string{"x"}, Match: revier.Match{Title: "^session:x$"}}},
 	}}})
-	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:x", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	return rt, nil, c, projects
 }
 

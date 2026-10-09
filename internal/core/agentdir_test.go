@@ -16,7 +16,7 @@ import (
 func dirOf(t *testing.T, path, dir string) string {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Dir: dir}}
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}

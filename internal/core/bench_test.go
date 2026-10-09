@@ -63,7 +63,7 @@ func benchCore(n int) *core.Core {
 	wm := hosttest.New("wm")
 	for i := 0; i < n; i++ {
 		rt.Add(fmt.Sprintf("project-%03d", i), "kitty",
-			revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "⠧ Working", Vars: map[string]string{"CS_TAB": "1"}},
+			revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "⠧ Working", Vars: map[string]string{"CS_TAB": "1"}},
 			revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"},
 		)
 	}

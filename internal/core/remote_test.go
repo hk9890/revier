@@ -242,7 +242,7 @@ func (p *signalProbe) Inspect(ctx context.Context, panel revier.Panel) (revier.A
 func TestSurveyProbesTheLocalAgentsWhileAHostAnswers(t *testing.T) {
 	probed := make(chan struct{})
 	rt := hosttest.NewRuntime("kitty")
-	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	remote := slowRemote{hosttest.NewRemote("buildbox", answer("demo", revier.StatusIdle)), probed}
 	probe := &signalProbe{FakeProbe: &hosttest.FakeProbe{Harness: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}, probed: probed}
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Remotes: map[string]revier.Remote{"buildbox": remote}}

@@ -18,8 +18,8 @@ func detailWorld(t *testing.T, probe revier.AgentProbe) (*core.Core, *hosttest.F
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:demo", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude one"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude two"})
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude one"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude two"})
 	projects := core.Prepare([]revier.Project{{Name: "demo", Path: "/p/demo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},

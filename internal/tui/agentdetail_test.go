@@ -43,7 +43,7 @@ func saidWorld(t *testing.T, width, height int, agents ...saidAgent) (tui.Model,
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: marker + " task"}
 		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at, Prompt: a.prompt, Tools: a.tools}
 		probes, fakes = append(probes, p), append(fakes, p)
-		panels = append(panels, revier.Panel{ID: id, Kind: revier.PanelAgent, Title: "claude " + marker})
+		panels = append(panels, revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
 	}
 	projects := core.Prepare([]revier.Project{{Name: "duo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -382,7 +382,7 @@ func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	var raw []revier.Project
 	for _, name := range []string{"alpha", "beta"} {
-		rt.Add("session:"+name, "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude idle " + name + " work"})
+		rt.Add("session:"+name, "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude idle " + name + " work"})
 		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
 				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}},

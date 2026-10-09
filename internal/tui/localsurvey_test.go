@@ -221,7 +221,7 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 func linkOpenHere(t *testing.T) tui.Model {
 	t.Helper()
 	rt := openHere("alpha")
-	rt.Add("session:local", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:local", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
 	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
 		Probes: []revier.AgentProbe{&hosttest.FakeProbe{

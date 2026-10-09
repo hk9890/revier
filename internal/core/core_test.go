@@ -267,7 +267,7 @@ func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 func TestSurveyReportsAgentAttention(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude: waiting"},
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude: waiting"},
 		revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"},
 	)
 	c := &core.Core{
@@ -320,7 +320,7 @@ func TestSurveySkipsAShellLeftWhereAnAgentWas(t *testing.T) {
 func TestSurveySurvivesAProbeError(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	c := &core.Core{
 		Runtime: rt,
 		Probes:  []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Err: errors.New("boom")}},
@@ -847,7 +847,7 @@ func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
 	rt.AddInstance(revier.Instance{
 		Ref:    revier.TargetRef{Host: "rt", ID: "1"},
 		PID:    pid,
-		Panels: []revier.Panel{{ID: "1", Kind: revier.PanelAgent, Title: "claude"}},
+		Panels: []revier.Panel{{ID: "1", Kind: revier.PanelTool, Title: "claude"}},
 	})
 	return rt
 }

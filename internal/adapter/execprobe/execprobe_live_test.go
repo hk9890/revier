@@ -34,7 +34,7 @@ func script(t *testing.T, body string) string {
 func TestInspectRoundTrip(t *testing.T) {
 	path := script(t, `read -r panel; printf '{"harness":"aider","status":"running","activity":"got %s"}' "$(printf %s "$panel" | sed 's/.*"title":"\([^"]*\)".*/\1/')"`)
 	p := execprobe.New("aider", path)
-	got, err := p.Inspect(context.Background(), revier.Panel{ID: "3", Kind: revier.PanelAgent, Title: "refactoring", Command: []string{"aider"}})
+	got, err := p.Inspect(context.Background(), revier.Panel{ID: "3", Kind: revier.PanelTool, Title: "refactoring", Command: []string{"aider"}})
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -103,8 +103,8 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 	broken := execprobe.New("goose", script(t, `exit 2`))
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:p", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "x", Command: []string{"aider"}},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "y", Command: []string{"goose"}},
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "x", Command: []string{"aider"}},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "y", Command: []string{"goose"}},
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{good, broken}}
 	p := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,

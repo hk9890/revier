@@ -15,7 +15,7 @@ import (
 // agentPanel is a panel hosttest.TitleProbe claims for the harness "agent",
 // in the state its title names.
 func agentPanel(id, title string) revier.Panel {
-	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelAgent, Title: title, Command: []string{"agent"}}
+	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, Title: title, Command: []string{"agent"}}
 }
 
 func shellPanel(id string) revier.Panel {

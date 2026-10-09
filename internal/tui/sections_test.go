@@ -19,8 +19,8 @@ func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:demo", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude idle fix-remote-work"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude idle UX and naming"})
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude idle fix-remote-work"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude idle UX and naming"})
 	var raw []revier.Project
 	for _, name := range []revier.ProjectName{"demo", "solo"} {
 		raw = append(raw, revier.Project{Name: name, Path: "/p/" + string(name), Targets: []revier.Target{

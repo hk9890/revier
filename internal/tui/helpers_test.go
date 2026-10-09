@@ -40,7 +40,7 @@ func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Co
 		}})
 	}
 	last := raw[n-1].Name
-	rt.Add("session:"+string(last), "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:"+string(last), "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	projects := core.Prepare(raw)
 	return rt, wm, c, projects
 }
@@ -267,7 +267,7 @@ func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
 		{Name: "long", Path: path, Targets: []revier.Target{home("long")}},
 		{Name: "short", Path: "/p/short", Targets: []revier.Target{home("short")}},
 	})
-	rt.Add("session:long", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude"})
+	rt.Add("session:long", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	return c, projects
 }
 
