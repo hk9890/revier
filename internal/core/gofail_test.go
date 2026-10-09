@@ -74,7 +74,7 @@ func TestBindKeepsAWindowItCouldNotRaise(t *testing.T) {
 // back with the error, as Go's does.
 func TestATabKeepsTheWorkspaceItOpenedAndCouldNotFocus(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.FocusErr = errors.New("no such window")
 	c := &core.Core{Runtime: rt}
 

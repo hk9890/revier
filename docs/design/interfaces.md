@@ -137,9 +137,6 @@ type Runtime interface {
 }
 
 type Capabilities struct {
-    Layout     bool // can arrange panels from a PanelSpec list
-    Persistent bool // an instance survives its client exiting
-
     // OSWindows: every instance is an OS window, titled as a WindowController
     // reports it. The core then raises a runtime instance through the window
     // host and judges its toggle-back by OS focus. A multiplexer cannot claim it.

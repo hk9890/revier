@@ -5,6 +5,9 @@ import "context"
 // ParseVars is parseVars, for the parsing tests outside the package.
 var ParseVars = parseVars
 
+// KindOf is kindOf, for the classification test outside the package.
+var KindOf = kindOf
+
 // SetRunner replaces tmux, so the L3 tests drive the host against a recorder
 // with no tmux and no process.
 func (h *Host) SetRunner(fn func(ctx context.Context, args ...string) (string, error)) {

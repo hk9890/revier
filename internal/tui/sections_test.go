@@ -1,7 +1,6 @@
 package tui_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -14,26 +13,14 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// titleActivity reads an agent's activity off its panel's title, after the
-// harness, so two agents in one workspace can be told apart by a query.
-type titleActivity struct{}
-
-func (titleActivity) Name() string { return "claude" }
-
-func (titleActivity) Match(p revier.Panel) bool { return strings.HasPrefix(p.Title, "claude ") }
-
-func (titleActivity) Inspect(_ context.Context, p revier.Panel) (revier.AgentState, error) {
-	return revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Activity: strings.TrimPrefix(p.Title, "claude ")}, nil
-}
-
 // agentWorld is demo, open with two agents, and solo, closed with none. demo
 // sorts first, so the cursor starts on it.
 func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:demo", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude fix-remote-work"},
-		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude UX and naming"})
+		revier.Panel{ID: "1", Kind: revier.PanelAgent, Title: "claude idle fix-remote-work"},
+		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude idle UX and naming"})
 	var raw []revier.Project
 	for _, name := range []revier.ProjectName{"demo", "solo"} {
 		raw = append(raw, revier.Project{Name: name, Path: "/p/" + string(name), Targets: []revier.Target{
@@ -42,7 +29,7 @@ func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 		}})
 	}
 	projects := core.Prepare(raw)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleActivity{}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30)
 }
 

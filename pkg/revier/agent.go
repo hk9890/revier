@@ -33,6 +33,19 @@ const (
 	PanelTool  PanelKind = "tool"
 )
 
+// IsShell reports whether a live panel's command is a shell, by the name of
+// its program. A login shell carries a leading dash in argv[0]. Every runtime
+// asks here, so a panel has the same kind whichever host reports it. A host
+// never reports PanelAgent for a live panel: whether a program is an agent is
+// the probes' to say (decisions.md D119).
+func IsShell(program string) bool {
+	switch strings.TrimPrefix(baseName(program), "-") {
+	case "sh", "bash", "zsh", "fish", "dash", "ksh":
+		return true
+	}
+	return false
+}
+
 // Panel is one live pane inside a runtime instance. A probe reads this and
 // nothing else.
 type Panel struct {

@@ -1520,10 +1520,9 @@ func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
 
 // inspect runs the first matching probe over every panel of an instance. A
 // probe's Match decides what an agent panel is, not the host's PanelKind: a
-// host knows only the harnesses it was written with, and a probe declared in
-// config exists for the one it was not. A shell in the foreground is the one
-// thing that overrules a probe, as it does for `revier agent`: the marker a
-// harness leaves outlives it in a --hold window.
+// host says shell or tool and names no harness (decisions.md D119). A shell
+// in the foreground is the one thing that overrules a probe, as it does for
+// `revier agent`: the marker a harness leaves outlives it in a --hold window.
 func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.AgentView {
 	var out []revier.AgentView
 	for _, panel := range inst.Panels {

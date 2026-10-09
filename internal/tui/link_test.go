@@ -37,19 +37,6 @@ func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Mod
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20), remote, root
 }
 
-// step presses a key and runs the command it returns, feeding the message
-// back, the way the program does.
-func step(m tui.Model, key string) tui.Model {
-	m, cmd := press(m, key)
-	if cmd != nil {
-		if out := cmd(); out != nil {
-			next, _ := m.Update(out)
-			m = next.(tui.Model)
-		}
-	}
-	return m
-}
-
 // alt+r lists the hosts the ssh configuration names; Enter on one asks it
 // and shows its projects, with the link here that already points at each.
 func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {

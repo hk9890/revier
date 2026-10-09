@@ -6,6 +6,23 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **Action required for an out-of-tree runtime adapter:** a runtime's
+  `Capabilities` no longer have the fields `Layout` and `Persistent`. revier
+  never read them. An adapter that sets them no longer builds: delete the two
+  fields from what it returns.
+- **Action required for a `[[probe]]` script that reads `kind`:** under tmux,
+  a pane that runs claude, opencode or aider reaches the script with the kind
+  `tool`, as it does under kitty. It was `agent`. Match on `command` in its
+  place.
+- **An agent started from a login shell, a `dash` or a `ksh` is found under
+  kitty.** The shell was taken for the pane's program, so the agent was not
+  listed, saved or counted by a close.
+- **`revier agent prompt` says that a pane holds a shell for `dash`, `ksh` and
+  a login shell too.** It refused such a pane with `no probe recognises what
+  runs in it`, which sent the reader to the probes.
+
 ## v0.13.0
 
 - **Action required for an out-of-tree remote adapter:** the `Remote` port has

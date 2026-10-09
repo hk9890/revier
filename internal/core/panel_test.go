@@ -30,7 +30,7 @@ func tabProject() revier.Project {
 func tabHosts(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef) {
 	t.Helper()
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelAgent})
 	wm := hosttest.New("wm")
 	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
@@ -167,7 +167,7 @@ func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
 // back as a real one does, so the two halves are joined rather than assumed.
 func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
@@ -224,7 +224,7 @@ func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rt := hosttest.NewRuntime("kitty")
-			rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+			rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 			ref := rt.Add("session:revier", "kitty",
 				revier.Panel{ID: "1", Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 				revier.Panel{ID: "2", Tab: "t2", Kind: revier.PanelShell},
@@ -347,7 +347,7 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "busy", Command: []string{"agent"},
 			Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{titleProbe{}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 
 	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets", nil)
 	if err != nil {

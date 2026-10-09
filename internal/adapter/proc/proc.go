@@ -229,11 +229,7 @@ func isShell(cmdline []string) bool {
 	if len(cmdline) == 0 {
 		return true
 	}
-	switch strings.TrimPrefix(filepath.Base(cmdline[0]), "-") {
-	case "sh", "bash", "zsh", "fish", "dash", "ksh":
-		return true
-	}
-	return false
+	return revier.IsShell(cmdline[0])
 }
 
 func (h *Host) Open(context.Context, revier.Realization) (revier.TargetRef, error) {

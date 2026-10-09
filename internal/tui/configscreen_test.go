@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/theme"
@@ -30,12 +28,6 @@ func configRoot(t *testing.T, text string) string {
 }
 
 func screen(m tui.Model) string { return strings.Join(lines(m), "\n") }
-
-// run delivers what a command answers, as the program would.
-func run(m tui.Model, cmd tea.Cmd) tui.Model {
-	next, _ := m.Update(cmd())
-	return next.(tui.Model)
-}
 
 // onRuntimeRow opens the config screen with the cursor on the runtime row.
 func onRuntimeRow(m tui.Model) tui.Model {

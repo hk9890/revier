@@ -33,3 +33,29 @@ func TestPanelRunsTheProgramNotAnArgument(t *testing.T) {
 		})
 	}
 }
+
+// One list of shells for every runtime, so a panel has the same kind whichever
+// host reports it. A login shell carries a dash in argv[0], and a harness is
+// never a shell: a probe says what it is.
+func TestIsShellKnowsAShellByItsProgram(t *testing.T) {
+	cases := []struct {
+		program string
+		want    bool
+	}{
+		{"zsh", true},
+		{"-zsh", true},
+		{"/usr/bin/bash", true},
+		{"sh", true},
+		{"fish", true},
+		{"dash", true},
+		{"ksh", true},
+		{"claude", false},
+		{"/home/u/.local/bin/opencode", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := revier.IsShell(tc.program); got != tc.want {
+			t.Errorf("IsShell(%q) = %v, want %v", tc.program, got, tc.want)
+		}
+	}
+}

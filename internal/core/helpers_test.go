@@ -73,7 +73,7 @@ func osWindowProject() revier.Project {
 // sees the same two windows, and returns the window host's refs for them.
 func osWindowHosts() (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef, revier.TargetRef) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
 	rt.Add("session:revier", "kitty")
 	rt.Add("diff:revier", "kitty")

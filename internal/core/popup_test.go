@@ -179,7 +179,7 @@ func TestPopupRaisesAFocusedPopupTheRuntimeDoesNotHold(t *testing.T) {
 func surfaceTerminal(panels ...revier.Panel) (*hosttest.Fake, *hosttest.FakeRuntime, revier.TargetRef, revier.TargetRef) {
 	wm := hosttest.New("wm")
 	rt := hosttest.NewRuntime("rt")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	window := wm.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000})
 	terminal := rt.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000, Panels: panels})
 	wm.SetFocus(window)

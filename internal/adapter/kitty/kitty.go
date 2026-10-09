@@ -68,7 +68,7 @@ type Host struct {
 func (h *Host) Name() string { return "kitty" }
 
 func (h *Host) Capabilities() revier.Capabilities {
-	return revier.Capabilities{Layout: true, Persistent: false, OSWindows: true}
+	return revier.Capabilities{OSWindows: true}
 }
 
 // The subset of `kitten @ ls` this host reads.
@@ -455,7 +455,7 @@ func classify(fg []process, root int, parent func(pid int) (int, bool)) (revier.
 			continue
 		}
 		own = append(own, p)
-		if len(p.Cmdline) == 0 || isRunShell(p.Cmdline) || isShell(base(p.Cmdline[0])) {
+		if len(p.Cmdline) == 0 || isRunShell(p.Cmdline) || revier.IsShell(p.Cmdline[0]) {
 			continue
 		}
 		if best < 0 || r < bestRank {
@@ -531,14 +531,6 @@ func base(arg string) string { return arg[strings.LastIndex(arg, "/")+1:] }
 
 func isRunShell(cmdline []string) bool {
 	return base(cmdline[0]) == "kitten" && len(cmdline) > 1 && cmdline[1] == "run-shell"
-}
-
-func isShell(cmd string) bool {
-	switch cmd {
-	case "bash", "zsh", "sh", "fish":
-		return true
-	}
-	return false
 }
 
 // Open creates an OS window named r.Name holding r.Panels, or r.Launch alone

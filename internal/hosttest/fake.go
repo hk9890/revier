@@ -80,6 +80,17 @@ type Fake struct {
 	// OnSend runs after each SendText, so a test can make the agent react to
 	// its prompt the way a real one does.
 	OnSend func(panel revier.PanelID, text string)
+	// SendErr makes SendText fail once Sent holds SendsBeforeErr calls, so a
+	// test can lose the Enter after the text arrived. The count is of every
+	// call in Sent, the ones from before SendErr was set included. A call
+	// that fails types nothing: it is not in Sent and OnSend does not run.
+	SendErr        error
+	SendsBeforeErr int
+	// FocusPanelErr makes FocusPanel fail and FocusedPanelErr makes
+	// FocusedPanel fail, for a runtime that goes away between opening a tab
+	// and showing it. A FocusPanel that fails is still in PanelFocuses.
+	FocusPanelErr   error
+	FocusedPanelErr error
 
 	// Closed records every ref passed to Close and ClosedPanels every panel
 	// passed to ClosePanel, in order. CloseErr makes both fail. Refuses holds
@@ -98,7 +109,7 @@ type Fake struct {
 
 // New returns a fake host with the given name.
 func New(name string) *Fake {
-	return &Fake{name: name, caps: revier.Capabilities{Layout: true}}
+	return &Fake{name: name}
 }
 
 // NewRuntime returns a fake that satisfies revier.Runtime.
@@ -109,8 +120,8 @@ type FakeRuntime struct{ *Fake }
 
 func (f *FakeRuntime) Capabilities() revier.Capabilities { return f.caps }
 
-// SetCapabilities changes what the runtime reports, for tests that assert on
-// the no-layout path.
+// SetCapabilities changes what the runtime reports, for tests of a runtime
+// whose instances are OS windows.
 func (f *FakeRuntime) SetCapabilities(c revier.Capabilities) { f.caps = c }
 
 // Sent is one SendText call.
@@ -120,10 +131,14 @@ type Sent struct {
 	Text  string
 }
 
-// SendText records the text, then runs OnSend. FakeRuntime implements
+// SendText records the text, then runs OnSend, or fails with SendErr. FakeRuntime implements
 // revier.PanelWriter; a runtime without the capability is a different double.
 func (f *FakeRuntime) SendText(_ context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
 	f.mu.Lock()
+	if f.SendErr != nil && len(f.Sent) >= f.SendsBeforeErr {
+		f.mu.Unlock()
+		return f.SendErr
+	}
 	f.Sent = append(f.Sent, Sent{Ref: ref, Panel: panel, Text: text})
 	on := f.OnSend
 	f.mu.Unlock()
@@ -230,11 +245,15 @@ func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.
 	return "", fmt.Errorf("%s: no instance %s", f.name, ref.ID)
 }
 
-// FocusPanel records the panel and makes it current in its instance.
+// FocusPanel records the panel and makes it current in its instance, or fails
+// with FocusPanelErr.
 func (f *FakeRuntime) FocusPanel(_ context.Context, ref revier.TargetRef, panel revier.PanelID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.PanelFocuses = append(f.PanelFocuses, panel)
+	if f.FocusPanelErr != nil {
+		return f.FocusPanelErr
+	}
 	if f.current == nil {
 		f.current = map[string]revier.PanelID{}
 	}
@@ -242,10 +261,14 @@ func (f *FakeRuntime) FocusPanel(_ context.Context, ref revier.TargetRef, panel 
 	return nil
 }
 
-// FocusedPanel reports the panel last focused in the instance.
+// FocusedPanel reports the panel last focused in the instance, or fails with
+// FocusedPanelErr.
 func (f *FakeRuntime) FocusedPanel(_ context.Context, ref revier.TargetRef) (revier.PanelID, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.FocusedPanelErr != nil {
+		return "", f.FocusedPanelErr
+	}
 	return f.current[ref.ID], nil
 }
 
@@ -496,134 +519,4 @@ func literal(pattern string) string {
 		s = s[:len(s)-1]
 	}
 	return s
-}
-
-// FakeProbe is an AgentProbe that reports a fixed state for every panel whose
-// title carries a marker. It exists so core tests can assert on the survey's
-// agent half without a real harness.
-type FakeProbe struct {
-	Harness string
-	Marker  string // a panel matches when its title contains this
-	State   revier.AgentState
-	Err     error
-
-	mu sync.Mutex
-	// reads counts Inspect calls, so a test can assert that a survey reads a
-	// panel once whatever the project count. A survey dispatches its probes
-	// from more than one goroutine, so the count is kept under the mutex and
-	// read through Reads.
-	reads int
-}
-
-// Reads is how many panels Inspect was asked about.
-func (p *FakeProbe) Reads() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.reads
-}
-
-func (p *FakeProbe) Name() string { return p.Harness }
-
-func (p *FakeProbe) Match(panel revier.Panel) bool {
-	return p.Marker == "" || contains(panel.Title, p.Marker)
-}
-
-func (p *FakeProbe) Inspect(context.Context, revier.Panel) (revier.AgentState, error) {
-	p.mu.Lock()
-	p.reads++
-	p.mu.Unlock()
-	if p.Err != nil {
-		return revier.AgentState{}, p.Err
-	}
-	return p.State, nil
-}
-
-// FakeResumableProbe is a FakeProbe that can also name the conversation a panel
-// holds, so a core test can exercise the resume half without Claude Code. The
-// id is the panel's Vars["session"] and the directory its Vars["dir"], a
-// stand-in for the listing the real probe matches panels against.
-type FakeResumableProbe struct {
-	*FakeProbe
-	// Flag is the argument name folded into a resumed command, standing in
-	// for the harness's own spelling of --resume.
-	Flag string
-	// SessionErr makes Sessions fail, for the path where a panel restores
-	// empty rather than failing the save.
-	SessionErr error
-	// Calls counts Sessions calls, so a test can assert a save asks once
-	// whatever the number of agents.
-	Calls int
-}
-
-// NewResumableProbe returns a probe that claims every panel of the harness.
-func NewResumableProbe(harness, marker string) *FakeResumableProbe {
-	return &FakeResumableProbe{
-		FakeProbe: &FakeProbe{Harness: harness, Marker: marker},
-		Flag:      "--resume",
-	}
-}
-
-func (p *FakeResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
-	p.Calls++
-	if p.SessionErr != nil {
-		return nil, p.SessionErr
-	}
-	out := make([]revier.Conversation, len(panels))
-	for i, panel := range panels {
-		out[i] = revier.Conversation{ID: revier.SessionID(panel.Vars["session"]), Dir: panel.Vars["dir"]}
-	}
-	return out, nil
-}
-
-func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {
-	cmd := append([]string{}, spec.Command...)
-	return append(cmd, p.Flag, string(id))
-}
-
-// FakeDetailedProbe is a FakeProbe that can also say what the agent in a panel
-// said last, so a test can exercise the pane's message without a transcript.
-// The answer is Said's entry for the panel's id, and the zero detail for a
-// panel it has none for.
-type FakeDetailedProbe struct {
-	*FakeProbe
-	Said map[revier.PanelID]revier.AgentDetail
-	// DetailErr makes Detail fail, for the path where the pane shows nothing.
-	DetailErr error
-
-	calls int
-}
-
-// NewDetailedProbe returns a probe that claims every panel of the harness and
-// has said nothing yet.
-func NewDetailedProbe(harness, marker string) *FakeDetailedProbe {
-	return &FakeDetailedProbe{
-		FakeProbe: &FakeProbe{Harness: harness, Marker: marker},
-		Said:      map[revier.PanelID]revier.AgentDetail{},
-	}
-}
-
-// DetailCalls is how many panels Detail was asked about.
-func (p *FakeDetailedProbe) DetailCalls() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.calls
-}
-
-func (p *FakeDetailedProbe) Detail(_ context.Context, panel revier.Panel) (revier.AgentDetail, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.calls++
-	if p.DetailErr != nil {
-		return revier.AgentDetail{}, p.DetailErr
-	}
-	return p.Said[panel.ID], nil
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

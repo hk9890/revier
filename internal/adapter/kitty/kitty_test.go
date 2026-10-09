@@ -195,6 +195,7 @@ func TestAProcessDetachedFromTheWindowIsNotTheCommand(t *testing.T) {
 	wrapper := map[string]any{"pid": 7001, "cmdline": []string{"/opt/kitty/bin/kitten", "run-shell", "--shell=/usr/bin/zsh"}}
 	agent := map[string]any{"pid": 7002, "cmdline": []string{"claude"}}
 	shell := map[string]any{"pid": 7001, "cmdline": []string{"/usr/bin/zsh", "-i"}}
+	login := map[string]any{"pid": 7001, "cmdline": []string{"-zsh"}}
 
 	cases := []struct {
 		name string
@@ -206,6 +207,8 @@ func TestAProcessDetachedFromTheWindowIsNotTheCommand(t *testing.T) {
 		{"before the agent", []map[string]any{wlCopy, wrapper, agent}, revier.PanelTool, "claude", 7002},
 		{"after the agent", []map[string]any{wrapper, agent, wlCopy}, revier.PanelTool, "claude", 7002},
 		{"in a shell", []map[string]any{wlCopy, shell}, revier.PanelShell, "/usr/bin/zsh", 7001},
+		{"in a login shell", []map[string]any{wlCopy, login}, revier.PanelShell, "-zsh", 7001},
+		{"behind a login shell", []map[string]any{login, agent, wlCopy}, revier.PanelTool, "claude", 7002},
 	}
 	for _, tc := range cases {
 		h := newHost()
