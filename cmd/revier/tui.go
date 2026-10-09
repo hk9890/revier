@@ -28,7 +28,7 @@ func cmdTUI(a *app) error {
 	start, popup := tuiStart(a)
 	m := tui.New(a.core, a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
-			return selectRuntime(ctx, want, runtimeAdapters())
+			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
 		})
 	// All motion reports the pointer with no button held, which the hover
 	// needs, as well as the wheel and clicks. It takes plain drag-to-select

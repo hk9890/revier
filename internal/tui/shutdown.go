@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
@@ -24,11 +25,11 @@ import (
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
 
-// shutdownTimeout bounds the survey a plan is made from. The close keeps none
+// shutdownWait bounds the survey a plan is made from. The close keeps none
 // of it: the recheck, the save and the closes each run on a budget of their
 // own, core.RecheckBudget, core.SaveBudget and core.CloseBudget, counted from
 // where each starts.
-const shutdownTimeout = 30 * time.Second
+const shutdownWait = 30 * time.Second
 
 type shutStep int
 
@@ -282,7 +283,7 @@ func (m Model) shutPlan() (tea.Model, tea.Cmd) {
 // plan from what it found. Of the linked hosts it waits only for the ones the
 // close is about (core.SurveyToClose). It runs off the update loop.
 func surveyPlan(c *core.Core, root string, projects []core.Project, only revier.ProjectName, plan func(core.Report) []core.CloseStep) []core.CloseStep {
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
 	defer cancel()
 	st := loadedState(root)
 	return plan(c.SurveyToClose(ctx, projects, st.Bound, st.Attached, only))
@@ -319,7 +320,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		st := loadedState(root)
 		opts := core.ShutdownOpts{
 			Force: force, Projects: projects, Bound: st.Bound, Attached: st.Attached,
-			Self: core.RunsUnder(),
+			Self: m.core.Self,
 		}
 		note := ""
 		if saves {
@@ -345,7 +346,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				return nil
 			}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
 		defer cancel()
 		answer := closeAnswer(c.Shutdown(ctx, plan, core.CloseWait, opts))
 		if answer.err == nil && answer.recheck == nil {
@@ -541,7 +542,7 @@ func (m Model) shutdownDetail() string {
 		}
 		switch {
 		case s.saves():
-			b.WriteString(hang("", "\nthe session is saved first when it changed; "+contractHome(session.Dir(m.stateRoot)), w, th.Meta) + "\n")
+			b.WriteString(hang("", "\nthe session is saved first when it changed; "+config.ContractHome(session.Dir(m.stateRoot)), w, th.Meta) + "\n")
 		case s.drop:
 			b.WriteString(hang("", "\nthen "+m.dropNote(s.project, s.pick.Target), w, th.Meta) + "\n")
 		}

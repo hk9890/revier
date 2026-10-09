@@ -188,7 +188,7 @@ func TestTheProjectScreenOverridesASharedTarget(t *testing.T) {
 	if got := fileText(t, file); got != want {
 		t.Errorf("file =\n%s\nwant\n%s", got, want)
 	}
-	if got := configText(t, root); got != sharedTargets {
+	if got := fileText(t, config.File(root)); got != sharedTargets {
 		t.Errorf("config.toml changed:\n%s", got)
 	}
 	if !strings.Contains(screen(m), "ctrl+h") {

@@ -64,27 +64,31 @@ const hostNone = "none"
 // did not list would hide a broken setup. With no list configured the defaults
 // are searched and finding nothing is survivable.
 func selectHosts(ctx context.Context, cfg *config.Config) (revier.Runtime, revier.WindowController, error) {
-	rt, err := selectRuntime(ctx, cfg.Hosts.Runtime, runtimeAdapters())
+	rt, err := selectHost(ctx, "runtime", cfg.Hosts.Runtime, defaultRuntimeOrder, runtimeAdapters())
 	if err != nil {
 		return nil, nil, err
 	}
-	win, err := selectWindow(ctx, cfg.Hosts.Window, windowAdapters())
+	win, err := selectHost(ctx, "window", cfg.Hosts.Window, defaultWindowOrder, windowAdapters())
 	if err != nil {
 		return nil, nil, err
 	}
 	return rt, win, nil
 }
 
-func selectRuntime(ctx context.Context, want []string, adapters map[string]revier.Runtime) (revier.Runtime, error) {
+// selectHost picks one host of a kind, "runtime" or "window". Finding none
+// among the defaults is survivable: without a runtime the window-only targets
+// still work, and without a window host they report unavailable.
+func selectHost[H revier.Host](ctx context.Context, kind string, want, defaults []string, adapters map[string]H) (H, error) {
+	var none H
 	if len(want) > 0 {
 		var errs []error
 		for _, name := range want {
 			if name == hostNone {
-				return nil, nil
+				return none, nil
 			}
 			h, ok := adapters[name]
 			if !ok {
-				return nil, fmt.Errorf("unknown runtime host %q", name)
+				return none, fmt.Errorf("unknown %s host %q", kind, name)
 			}
 			if err := h.Probe(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", name, err))
@@ -92,43 +96,14 @@ func selectRuntime(ctx context.Context, want []string, adapters map[string]revie
 			}
 			return h, nil
 		}
-		return nil, fmt.Errorf("no configured runtime host is usable: %w", errors.Join(errs...))
+		return none, fmt.Errorf("no configured %s host is usable: %w", kind, errors.Join(errs...))
 	}
-	for _, name := range defaultRuntimeOrder {
-		if h := adapters[name]; h != nil && h.Probe(ctx) == nil {
+	for _, name := range defaults {
+		if h, ok := adapters[name]; ok && h.Probe(ctx) == nil {
 			return h, nil
 		}
 	}
-	// No runtime is survivable: window-only targets still work.
-	return nil, nil
-}
-
-func selectWindow(ctx context.Context, want []string, adapters map[string]revier.WindowController) (revier.WindowController, error) {
-	if len(want) > 0 {
-		var errs []error
-		for _, name := range want {
-			if name == hostNone {
-				return nil, nil
-			}
-			h, ok := adapters[name]
-			if !ok {
-				return nil, fmt.Errorf("unknown window host %q", name)
-			}
-			if err := h.Probe(ctx); err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", name, err))
-				continue
-			}
-			return h, nil
-		}
-		return nil, fmt.Errorf("no configured window host is usable: %w", errors.Join(errs...))
-	}
-	for _, name := range defaultWindowOrder {
-		if h := adapters[name]; h != nil && h.Probe(ctx) == nil {
-			return h, nil
-		}
-	}
-	// No window host is survivable: window-only targets report unavailable.
-	return nil, nil
+	return none, nil
 }
 
 // keyBinders are the desktops whose keyboard shortcuts revier can read. This
@@ -176,7 +151,7 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
 }
 
 // servedProcesses lists what `revier agent exec` started here for a terminal

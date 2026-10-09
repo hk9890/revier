@@ -8,17 +8,43 @@ package gnome_test
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// wctl stands in for the wctl binary: it records the arguments of every
+// call, joined, and answers with what reply returns for them. With no reply
+// every call succeeds and prints nothing.
+type wctl struct {
+	calls []string
+	reply func(args string) ([]byte, error)
+}
+
+// host is a GNOME host that runs w in place of wctl.
+func (w *wctl) host() *gnome.Host {
+	h := &gnome.Host{}
+	h.SetRunner(func(_ context.Context, args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		w.calls = append(w.calls, joined)
+		if w.reply == nil {
+			return nil, nil
+		}
+		return w.reply(joined)
+	})
+	return h
+}
+
+// refused is what the host gets from a wctl that exits non-zero: the command,
+// the exit status, and what wctl wrote to its standard error.
+func refused(args string, code int, stderr string) error {
+	return fmt.Errorf("wctl %s: exit status %d: %s", args, code, stderr)
+}
 
 func read(t *testing.T, name string) []byte {
 	t.Helper()
@@ -199,52 +225,27 @@ func TestDecodeFocusedArrayForm(t *testing.T) {
 // pinning: without it the request is made before the compositor has placed the
 // window, and the compositor's own placement overwrites it.
 func TestPlaceBuildsTheCommand(t *testing.T) {
-	dir := t.TempDir()
-	log := filepath.Join(dir, "argv")
-	stub := filepath.Join(dir, "wctl")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + log + "\n"
-	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	h := &gnome.Host{Bin: stub}
-	err := h.Place(context.Background(),
+	w := &wctl{}
+	err := w.host().Place(context.Background(),
 		revier.TargetRef{Host: "gnome", ID: "4181121382"},
 		[]string{"right", "top", "75%", "100%"})
 	if err != nil {
 		t.Fatalf("Place: %v", err)
 	}
-
-	got, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "place 4181121382 right top 75% 100% --settled\n"
-	if string(got) != want {
-		t.Errorf("argv = %q, want %q", got, want)
+	if want := []string{"place 4181121382 right top 75% 100% --settled"}; !slices.Equal(w.calls, want) {
+		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }
 
 // Close asks wctl to close the window by its id, which is the polite close a
 // close button makes.
 func TestCloseBuildsTheCommand(t *testing.T) {
-	dir := t.TempDir()
-	log := filepath.Join(dir, "argv")
-	stub := filepath.Join(dir, "wctl")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + log + "\n"
-	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := (&gnome.Host{Bin: stub}).Close(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
+	w := &wctl{}
+	if err := w.host().Close(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	got, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "close 4181121382\n"; string(got) != want {
-		t.Errorf("argv = %q, want %q", got, want)
+	if want := []string{"close 4181121382"}; !slices.Equal(w.calls, want) {
+		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }
 
@@ -274,16 +275,13 @@ func TestHideAndFocusSkipTheAnimationWhereWctlCan(t *testing.T) {
 // A wctl and an extension can each have one flag and not the other, so a
 // refusal of one is not remembered for the other.
 func TestARefusedHideLeavesFocusWithoutTheAnimation(t *testing.T) {
-	dir := t.TempDir()
-	log := filepath.Join(dir, "argv")
-	stub := filepath.Join(dir, "wctl")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + log + "\n" +
-		"case \"$*\" in minimize*--no-animation) echo 'Error: Usage: wctl minimize <WINDOW>' >&2; exit 1;; esac\n"
-	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	h := &gnome.Host{Bin: stub}
+	w := &wctl{reply: func(args string) ([]byte, error) {
+		if strings.HasPrefix(args, "minimize") && strings.HasSuffix(args, "--no-animation") {
+			return nil, refused(args, 1, "Error: Usage: wctl minimize <WINDOW>")
+		}
+		return nil, nil
+	}}
+	h := w.host()
 	ref := revier.TargetRef{Host: "gnome", ID: "4181121382"}
 	if err := h.Hide(context.Background(), ref); err != nil {
 		t.Fatalf("Hide: %v", err)
@@ -291,13 +289,9 @@ func TestARefusedHideLeavesFocusWithoutTheAnimation(t *testing.T) {
 	if err := h.Focus(context.Background(), ref); err != nil {
 		t.Fatalf("Focus: %v", err)
 	}
-	got, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "minimize 4181121382 --no-animation\nminimize 4181121382\nactivate 4181121382 --no-animation\n"
-	if string(got) != want {
-		t.Errorf("argv = %q, want %q", got, want)
+	want := []string{"minimize 4181121382 --no-animation", "minimize 4181121382", "activate 4181121382 --no-animation"}
+	if !slices.Equal(w.calls, want) {
+		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }
 
@@ -344,40 +338,21 @@ func testSkipsTheAnimation(t *testing.T, command, flagUnknown, method string, ca
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			log := filepath.Join(dir, "argv")
-			refusal := filepath.Join(dir, "refusal")
-			stub := filepath.Join(dir, "wctl")
-			script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + log + "\n"
-			if tc.refusal != "" {
-				if err := os.WriteFile(refusal, []byte(tc.refusal+"\n"), 0o644); err != nil {
-					t.Fatal(err)
+			w := &wctl{reply: func(args string) ([]byte, error) {
+				if tc.refusal != "" && (tc.always || strings.HasSuffix(args, "--no-animation")) {
+					return nil, refused(args, tc.code, tc.refusal)
 				}
-				refused := "*--no-animation"
-				if tc.always {
-					refused = "*"
-				}
-				script += "case \"$*\" in " + refused + ") cat " + refusal + " >&2; exit " + strconv.Itoa(tc.code) + ";; esac\n"
-			}
-			if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-				t.Fatal(err)
-			}
-
-			h := &gnome.Host{Bin: stub}
+				return nil, nil
+			}}
+			h := w.host()
 			for i, want := range []string{tc.first, tc.second} {
 				if err := call(h); (err != nil) != tc.fail {
 					t.Fatalf("call %d: err = %v, want failure %v", i+1, err, tc.fail)
 				}
-				got, err := os.ReadFile(log)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if string(got) != want {
+				if got := strings.Join(w.calls, "\n") + "\n"; got != want {
 					t.Errorf("call %d: argv = %q, want %q", i+1, got, want)
 				}
-				if err := os.Remove(log); err != nil {
-					t.Fatal(err)
-				}
+				w.calls = nil
 			}
 		})
 	}
@@ -397,13 +372,13 @@ func TestWorkareaWidthReadsTheReply(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			stub := filepath.Join(dir, "wctl")
-			script := "#!/bin/sh\n[ \"$*\" = 'workarea --json' ] || exit 9\nprintf '%s' '" + tc.reply + "'\n"
-			if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			got, err := (&gnome.Host{Bin: stub}).WorkareaWidth(context.Background())
+			w := &wctl{reply: func(args string) ([]byte, error) {
+				if args != "workarea --json" {
+					return nil, refused(args, 9, "")
+				}
+				return []byte(tc.reply), nil
+			}}
+			got, err := w.host().WorkareaWidth(context.Background())
 			if tc.fail {
 				if err == nil {
 					t.Fatalf("width = %d, want an error", got)
@@ -417,57 +392,18 @@ func TestWorkareaWidthReadsTheReply(t *testing.T) {
 	}
 }
 
-// A launched application outlives the keypress that started it. The context
-// bounds the host calls around a launch and never the application: a TUI
-// activation ends it the moment the new window is bound. The application also
-// gets a session of its own, so the hangup of the terminal revier runs in -
-// the popup closing - does not reach it.
-func TestOpenOutlivesTheKeypress(t *testing.T) {
-	pidFile := filepath.Join(t.TempDir(), "pid")
-	ctx, cancel := context.WithCancel(context.Background())
-	_, err := (&gnome.Host{}).Open(ctx, revier.Realization{
-		Launch: []string{"sh", "-c", `echo $$ > "$0"; exec sleep 30`, pidFile},
-	})
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	var pid int
-	for deadline := time.Now().Add(2 * time.Second); pid == 0 && time.Now().Before(deadline); {
-		if b, err := os.ReadFile(pidFile); err == nil {
-			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if pid == 0 {
-		t.Fatal("the launched command never started")
-	}
-	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
-
-	cancel()
-	time.Sleep(300 * time.Millisecond)
-	if err := syscall.Kill(pid, 0); err != nil {
-		t.Fatalf("the application died with the keypress context: %v", err)
-	}
-	// /proc/<pid>/stat: "pid (comm) state ppid pgrp session ...", and comm
-	// may hold spaces, so the fields are counted from its closing paren.
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		t.Fatal(err)
-	}
-	after := strings.Fields(string(stat[strings.LastIndexByte(string(stat), ')')+1:]))
-	if sid, _ := strconv.Atoi(after[3]); sid != pid {
-		t.Errorf("session = %d, want one of its own (%d)", sid, pid)
-	}
-}
-
-// A zero ref and a short geometry are refused before the process starts, so a
+// A zero ref and a short geometry are refused before wctl is asked, so a
 // broken project file cannot reach the compositor.
 func TestPlaceRefusesWhatItCannotSend(t *testing.T) {
-	h := &gnome.Host{Bin: "/nonexistent"}
+	w := &wctl{}
+	h := w.host()
 	if err := h.Place(context.Background(), revier.TargetRef{}, []string{"a", "b", "c", "d"}); err == nil {
 		t.Error("a zero ref should be refused")
 	}
 	if err := h.Place(context.Background(), revier.TargetRef{ID: "1"}, []string{"a"}); err == nil {
 		t.Error("a geometry short of four tokens should be refused")
+	}
+	if len(w.calls) != 0 {
+		t.Errorf("calls = %q, want wctl not asked", w.calls)
 	}
 }

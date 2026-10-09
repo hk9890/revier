@@ -29,8 +29,9 @@ import (
 
 // Host is a GNOME WindowController.
 type Host struct {
-	// Bin overrides the wctl binary, for tests.
-	Bin string
+	// wctl runs wctl with the arguments and returns its standard output.
+	// Tests replace it; production leaves it nil and runs the wctl on PATH.
+	wctl func(ctx context.Context, args ...string) ([]byte, error)
 
 	// animatedHide and animatedFocus are each set once wctl has refused to
 	// hide or to activate without the animation, and has then done it with it.
@@ -38,13 +39,6 @@ type Host struct {
 }
 
 func (h *Host) Name() string { return "gnome" }
-
-func (h *Host) bin() string {
-	if h.Bin != "" {
-		return h.Bin
-	}
-	return "wctl"
-}
 
 // window is wctl's JSON shape. Only the fields revier uses are decoded; wctl
 // reports geometry and state flags that a project switcher has no use for.
@@ -105,7 +99,7 @@ func shownWorkspace(windows []window) (int, bool) {
 // the desktop, so that a wctl left on PATH after a session change does not
 // make this host claim a compositor it cannot drive.
 func (h *Host) Probe(ctx context.Context) error {
-	if _, err := exec.LookPath(h.bin()); err != nil {
+	if _, err := exec.LookPath("wctl"); err != nil {
 		return fmt.Errorf("wctl not on PATH: %w", err)
 	}
 	if d := os.Getenv("XDG_CURRENT_DESKTOP"); d != "" && !strings.Contains(strings.ToUpper(d), "GNOME") {
@@ -118,7 +112,10 @@ func (h *Host) Probe(ctx context.Context) error {
 }
 
 func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
-	return execRun(ctx, h.bin(), args...)
+	if h.wctl != nil {
+		return h.wctl(ctx, args...)
+	}
+	return execRun(ctx, "wctl", args...)
 }
 
 // Instances lists every window in one call. The active workspace comes from

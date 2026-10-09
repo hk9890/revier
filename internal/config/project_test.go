@@ -96,7 +96,7 @@ func TestSaveProjectTargetWritesOnlyWhatDiffersFromShared(t *testing.T) {
 	home.Runtime = new(*home.Runtime)
 	home.Runtime.Match.Title = "^work$"
 
-	if _, err := config.SaveProjectTarget(file, shared, "home", config.TargetEdit{Target: home, PanelFrom: []int{0, 1}}); err != nil {
+	if _, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home, PanelFrom: []int{0, 1}}, shared); err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
 	want := overriding + "\n[[target]]\nname = \"home\"\n  [target.runtime]\n  match = { title = \"^work$\" }\n"
@@ -113,7 +113,7 @@ func TestSaveProjectTargetDropsAnOverrideEqualToShared(t *testing.T) {
 	editor := p.Targets[1].Target
 	editor.Key = p.Targets[1].Shared.Key
 
-	if _, err := config.SaveProjectTarget(file, shared, "editor", config.TargetEdit{Target: editor}); err != nil {
+	if _, err := config.SaveProjectTarget(file, "editor", config.TargetEdit{Target: editor}, shared); err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
 	if got := read(t, file); strings.Contains(got, `"editor"`) {
@@ -127,7 +127,7 @@ func TestSaveProjectTargetChangesAnOwnTargetInPlace(t *testing.T) {
 	pulls := p.Targets[2].Target
 	pulls.Name, pulls.Key = "prs", "ctrl-g"
 
-	if _, err := config.SaveProjectTarget(file, shared, "pulls", config.TargetEdit{Target: pulls}); err != nil {
+	if _, err := config.SaveProjectTarget(file, "pulls", config.TargetEdit{Target: pulls}, shared); err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
 	want := strings.Replace(overriding, "name = \"pulls\"\n", "name = \"prs\"\nkey = \"ctrl-g\"\n", 1)
@@ -157,7 +157,7 @@ func TestSaveProjectTargetRefuses(t *testing.T) {
 		"a shared target renamed": {"home", renamedShared, "keeps its name"},
 		"a name another has":      {"pulls", taken, "already"},
 	} {
-		if _, err := config.SaveProjectTarget(file, shared, c.was, config.TargetEdit{Target: c.edit}); err == nil || !strings.Contains(err.Error(), c.want) {
+		if _, err := config.SaveProjectTarget(file, c.was, config.TargetEdit{Target: c.edit}, shared); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", name, err, c.want)
 		}
 	}
@@ -179,7 +179,7 @@ func TestAProjectIsRepairedOneTargetAtATime(t *testing.T) {
 	}
 
 	web := revier.Target{Name: "web", Window: &revier.Realization{Launch: []string{"browser"}, Match: revier.Match{Class: "^browser$"}}}
-	p, err := config.SaveProjectTarget(file, nil, "web", config.TargetEdit{Target: web})
+	p, err := config.SaveProjectTarget(file, "web", config.TargetEdit{Target: web}, nil)
 	if err != nil {
 		t.Fatalf("SaveProjectTarget(web): %v, want the repair written with docs still refused", err)
 	}
@@ -188,11 +188,11 @@ func TestAProjectIsRepairedOneTargetAtATime(t *testing.T) {
 	}
 
 	stillBroken := revier.Target{Name: "docs", Window: &revier.Realization{Launch: []string{"zeal", "--new"}, Match: revier.Match{Class: "^zeal($"}}}
-	if _, err := config.SaveProjectTarget(file, nil, "docs", config.TargetEdit{Target: stillBroken}); err == nil || !strings.Contains(err.Error(), "not written") {
+	if _, err := config.SaveProjectTarget(file, "docs", config.TargetEdit{Target: stillBroken}, nil); err == nil || !strings.Contains(err.Error(), "not written") {
 		t.Errorf("err = %v, want a change that leaves docs refused refused", err)
 	}
 	docs := revier.Target{Name: "docs", Window: &revier.Realization{Launch: []string{"zeal"}, Match: revier.Match{Class: "^zeal$"}}}
-	p, err = config.SaveProjectTarget(file, nil, "docs", config.TargetEdit{Target: docs})
+	p, err = config.SaveProjectTarget(file, "docs", config.TargetEdit{Target: docs}, nil)
 	if err != nil {
 		t.Fatalf("SaveProjectTarget(docs): %v", err)
 	}
@@ -209,7 +209,7 @@ func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 	home := p.Targets[0].Target
 	home.Key = "ctrl-h"
 
-	loaded, err := config.SaveProjectTarget(file, shared, "home", config.TargetEdit{Target: home, PanelFrom: nil})
+	loaded, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home, PanelFrom: nil}, shared)
 	if err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 
 func TestRemoveProjectTargetResetsAnOverride(t *testing.T) {
 	file, shared := projectRoot(t, overriding)
-	p, err := config.RemoveProjectTarget(file, shared, "editor")
+	p, err := config.RemoveProjectTarget(file, "editor", shared)
 	if err != nil {
 		t.Fatalf("RemoveProjectTarget: %v", err)
 	}
@@ -235,24 +235,24 @@ func TestRemoveProjectTargetResetsAnOverride(t *testing.T) {
 			t.Errorf("editor key = %q, want the shared one back", tg.Key)
 		}
 	}
-	if _, err := config.RemoveProjectTarget(file, shared, "home"); err == nil {
+	if _, err := config.RemoveProjectTarget(file, "home", shared); err == nil {
 		t.Error("removing a target the file does not declare: no error")
 	}
 }
 
 func TestSetProjectValue(t *testing.T) {
 	file, shared := projectRoot(t, overriding)
-	if _, err := config.SetProjectValue(file, shared, "git_url", "git@github.com:me/demo.git"); err != nil {
+	if _, err := config.SetProjectValue(file, "git_url", "git@github.com:me/demo.git", shared); err != nil {
 		t.Fatalf("set git_url: %v", err)
 	}
 	want := strings.Replace(overriding, "path = \"~/demo\"\n", "path = \"~/demo\"\ngit_url = \"git@github.com:me/demo.git\"\n", 1)
 	if got := read(t, file); got != want {
 		t.Errorf("file =\n%s\nwant\n%s", got, want)
 	}
-	if _, err := config.SetProjectValue(file, shared, "git_url", ""); err != nil {
+	if _, err := config.SetProjectValue(file, "git_url", "", shared); err != nil {
 		t.Fatalf("clear git_url: %v", err)
 	}
-	if _, err := config.SetProjectValue(file, shared, "path", ""); err == nil {
+	if _, err := config.SetProjectValue(file, "path", "", shared); err == nil {
 		t.Error("clearing the path: no error")
 	}
 	if got := read(t, file); got != overriding {
@@ -299,7 +299,7 @@ name = "remote-editor"
 
 	want := editor.Target
 	want.Window.Match.Title = "^far \\[SSH: buildbox\\]"
-	loaded, err := config.SaveProjectTarget(file, shared, "remote-editor", config.TargetEdit{Target: want})
+	loaded, err := config.SaveProjectTarget(file, "remote-editor", config.TargetEdit{Target: want}, shared)
 	if err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}

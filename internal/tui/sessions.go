@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
@@ -38,8 +39,8 @@ var sessionActions = []barAction{
 	{label: "save", key: sessionsBarKey, run: Model.openSessionName},
 }
 
-// saveTimeout bounds a save: one survey, and one ask of each agent probe.
-const saveTimeout = 30 * time.Second
+// saveWait bounds a save: one survey, and one ask of each agent probe.
+const saveWait = 30 * time.Second
 
 // sessionItem is one row of the screen.
 type sessionItem struct{ session session.Session }
@@ -245,7 +246,7 @@ func (m Model) saveSession() (tea.Model, tea.Cmd) {
 	m.saving = true
 	c, projects, root := m.core, m.projects, m.stateRoot
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), saveTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), saveWait)
 		defer cancel()
 		st := loadedState(root)
 		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
@@ -298,7 +299,7 @@ func (m Model) restoreSession() (tea.Model, tea.Cmd) {
 	written := make(chan struct{}, 1)
 	walk := func() tea.Msg {
 		defer close(written)
-		ctx, cancel := context.WithTimeout(context.Background(), hostTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		st := loadedState(root)
 		report, err := c.Survey(ctx, projects, st.Bound, st.Attached)
 		cancel()
@@ -414,7 +415,7 @@ func (m *Model) sessionDetail() string {
 	if s.Current != "" {
 		line("Ends on", string(s.Current), th.ProjectName)
 	}
-	line("File", contractHome(filepath.Join(session.Dir(m.stateRoot), s.ID+".toml")), th.Path)
+	line("File", config.ContractHome(filepath.Join(session.Dir(m.stateRoot), s.ID+".toml")), th.Path)
 	line("Holds", sessionCounts(s), th.Path)
 
 	out := m.outcome
@@ -518,7 +519,7 @@ func (m Model) planAgent(th theme.Theme, r core.RestoreResult, i int, a core.Res
 			text = "no conversation recorded"
 		}
 		if p, ok := m.project(r.Project); ok && a.Dir != "" && a.Dir != p.Path {
-			text += " in " + contractHome(a.Dir)
+			text += " in " + config.ContractHome(a.Dir)
 		}
 	}
 	return planRow(th, op, th.ProjectName.Render(harness), th.Count.Render(th.Glyphs.Stopped+" stopped"), text, style, w)

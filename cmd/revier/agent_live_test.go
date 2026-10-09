@@ -168,23 +168,10 @@ func TestAgentPromptRefusals(t *testing.T) {
 // stopped responding, which no host call times out on by itself.
 func wedgedTmux(t *testing.T) {
 	t.Helper()
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\nexec sleep 10\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.ReplaceAll(projectTOML, "%PATH%", t.TempDir())
-	if err := os.WriteFile(filepath.Join(root, "projects", "demo.toml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("REVIER_CONFIG_HOME", root)
+	onPath(t, "tmux", "exec sleep 10")
+	root := configRoot(t, "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n", map[string]string{
+		"demo.toml": strings.ReplaceAll(projectTOML, "%PATH%", t.TempDir()),
+	})
 	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
 }
 
@@ -207,9 +194,9 @@ func TestAgentWaitTimesOutOnAHostThatNeverAnswers(t *testing.T) {
 // rather than holding the script that called it for good.
 func TestAgentPromptGivesUpOnAHostThatNeverAnswers(t *testing.T) {
 	wedgedTmux(t)
-	old := promptTimeout
-	promptTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { promptTimeout = old })
+	old := promptWait
+	promptWait = 300 * time.Millisecond
+	t.Cleanup(func() { promptWait = old })
 	start := time.Now()
 	if err := run(io.Discard, []string{"agent", "prompt", "demo", "hello"}); err == nil {
 		t.Fatal("prompt succeeded against a host that never answered")

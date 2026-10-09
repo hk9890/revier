@@ -108,7 +108,7 @@ func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
 
 // SetProjectValue writes one top-level value of a project file: path or
 // git_url. An empty value removes the key.
-func SetProjectValue(file string, shared []map[string]any, key, value string) (core.Project, error) {
+func SetProjectValue(file, key, value string, shared []map[string]any) (core.Project, error) {
 	return editProject(file, shared, func(lines []string, _ projectFile) ([]string, error) {
 		top := tables(lines)[0]
 		if value == "" {
@@ -122,7 +122,7 @@ func SetProjectValue(file string, shared []map[string]any, key, value string) (c
 // name the target had, empty for a new one. A target config.toml has is
 // written as the values that differ from it, and an override left with
 // none is removed.
-func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetName, e TargetEdit) (core.Project, error) {
+func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared []map[string]any) (core.Project, error) {
 	t := e.Target
 	return editProject(file, shared, func(lines []string, f projectFile) ([]string, error) {
 		sharedTargets, err := targetsFor(shared, f.link)
@@ -185,13 +185,13 @@ func SaveProjectTarget(file string, shared []map[string]any, was revier.TargetNa
 // RemoveProjectTarget deletes the project file's own entry for a target: a
 // target of its own goes, and an override leaves the shared target as it is
 // in config.toml.
-func RemoveProjectTarget(file string, shared []map[string]any, name revier.TargetName) (core.Project, error) {
+func RemoveProjectTarget(file string, name revier.TargetName, shared []map[string]any) (core.Project, error) {
 	return editProject(file, shared, removeTarget(name), nil)
 }
 
-// CheckRemoveProjectTarget is why RemoveProjectTarget would refuse, with
+// CanRemoveProjectTarget is why RemoveProjectTarget would refuse, with
 // nothing written: the home target, or one a tab is inside, cannot go.
-func CheckRemoveProjectTarget(file string, shared []map[string]any, name revier.TargetName) error {
+func CanRemoveProjectTarget(file string, name revier.TargetName, shared []map[string]any) error {
 	_, _, err := editedProject(file, shared, removeTarget(name), nil)
 	return err
 }

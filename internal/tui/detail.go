@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -239,7 +240,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	if !v.PathExists && v.Unreachable == "" && answered {
 		pathStyle = th.PathMissing
 	}
-	line("Path", contractHome(v.Project.Path), pathStyle)
+	line("Path", config.ContractHome(v.Project.Path), pathStyle)
 	if v.Project.GitURL != "" {
 		line("Git URL", v.Project.GitURL, th.Path)
 	}

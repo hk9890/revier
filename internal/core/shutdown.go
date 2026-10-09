@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
@@ -364,9 +361,13 @@ func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
 
 // CloseLast moves the steps that would end the calling process to the end of
 // the plan, so a shutdown run from a terminal of a workspace closes everything
-// else before its own terminal. self reports a panel the process runs under.
+// else before its own terminal. self reports a panel the process runs under,
+// and nil keeps the plan's order.
 // A window host lists a window with no panels, so its process stands for it.
 func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.Panel) bool) []CloseStep {
+	if self == nil {
+		return plan
+	}
 	byRef := make(map[string]revier.Instance, len(instances))
 	for _, inst := range instances {
 		byRef[key(inst.Ref)] = inst
@@ -394,38 +395,6 @@ func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.P
 		return 1
 	})
 	return out
-}
-
-// RunsUnder reports a panel the calling process runs under: the panel's
-// process is this process or one of its ancestors. It is CloseLast's self.
-func RunsUnder() func(revier.Panel) bool {
-	mine := map[int]bool{}
-	for pid := os.Getpid(); pid > 1 && !mine[pid]; {
-		mine[pid] = true
-		ppid, ok := parentPID(pid)
-		if !ok {
-			break
-		}
-		pid = ppid
-	}
-	return func(p revier.Panel) bool { return p.PID > 0 && mine[p.PID] }
-}
-
-// parentPID reads a process's parent from /proc. The command is the second
-// field of stat, in parentheses, and may itself hold spaces and parentheses,
-// so the fields are counted from its last closing one.
-func parentPID(pid int) (int, bool) {
-	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, false
-	}
-	s := string(raw)
-	fields := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
-	if len(fields) < 2 {
-		return 0, false
-	}
-	ppid, err := strconv.Atoi(fields[1])
-	return ppid, err == nil
 }
 
 // CloseResult is one step of a shutdown and what came of it. Open is a step

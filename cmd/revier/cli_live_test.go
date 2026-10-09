@@ -298,11 +298,7 @@ func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
 // window host and not from a machine without kitty.
 func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
 	scratch(t)
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "kitty"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	onPath(t, "kitty", "exit 1")
 
 	err := run(io.Discard, []string{"go", "home", "--picker"})
 	if err == nil || errors.Is(err, errNoProject) {

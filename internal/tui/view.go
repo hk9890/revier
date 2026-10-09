@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -208,19 +207,19 @@ func (m Model) subtitle() string {
 	case dialogConfig:
 		where := "config.toml"
 		if root, err := config.Root(); err == nil {
-			where = contractHome(config.File(root))
+			where = config.ContractHome(config.File(root))
 		}
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
 	case dialogProject:
 		file := ""
 		if p, ok := m.project(m.proj); ok {
-			file = contractHome(p.File)
+			file = config.ContractHome(p.File)
 		}
 		return " " + m.theme.Meta.Render("written to "+file+" as it changes")
 	case dialogHelp:
 		return " " + m.theme.Meta.Render("every key revier answers to")
 	case dialogSessions:
-		return " " + m.theme.Meta.Render("saved in "+contractHome(session.Dir(m.stateRoot))+", newest first")
+		return " " + m.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(m.stateRoot))+", newest first")
 	case dialogSessionName:
 		return " " + m.sname.View()
 	case dialogShutdown:
@@ -387,7 +386,7 @@ func (m Model) empty() string {
 	case len(m.projects) == 0:
 		where := "projects/<name>.toml under the configuration directory"
 		if root, err := config.Root(); err == nil {
-			where = contractHome(filepath.Join(root, "projects")) + "/<name>.toml"
+			where = config.ContractHome(filepath.Join(root, "projects")) + "/<name>.toml"
 		}
 		return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
 	default:
@@ -485,19 +484,6 @@ func pad(s string, width int) string {
 		return s + strings.Repeat(" ", width-n)
 	}
 	return s
-}
-
-// contractHome writes a path under the home directory as ~/..., which is how
-// the user names it and how it fits the column.
-func contractHome(p string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || p == home {
-		return p
-	}
-	if rest, ok := strings.CutPrefix(p, home+string(filepath.Separator)); ok {
-		return "~" + string(filepath.Separator) + rest
-	}
-	return p
 }
 
 // clipTo cuts text to a width, keeping the start: for a name, an activity

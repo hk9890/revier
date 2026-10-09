@@ -87,7 +87,7 @@ func cmdEvents(out io.Writer, args []string) error {
 		return err
 	}
 	warnProblems(cfg, projects)
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
 	return writeEvents(ctx, out, root, *days, newCore(cfg, nil, nil, nil), projects)
 }

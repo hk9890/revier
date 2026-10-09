@@ -20,10 +20,6 @@ import (
 // commands this type may run are listed in one place, readCommands, and
 // checked before each one runs.
 type Keys struct {
-	// GSettings and Dconf override the binaries, for tests.
-	GSettings string
-	Dconf     string
-
 	// run executes a command and returns its standard output. Tests replace
 	// it; production leaves it nil and gets execRun.
 	run func(ctx context.Context, bin string, args ...string) ([]byte, error)
@@ -50,26 +46,18 @@ var builtinSchemas = []string{
 	customSchema,
 }
 
-func (k *Keys) gsettings() string {
-	if k.GSettings != "" {
-		return k.GSettings
-	}
-	return "gsettings"
-}
-
-func (k *Keys) dconf() string {
-	if k.Dconf != "" {
-		return k.Dconf
-	}
-	return "dconf"
-}
+// The two tools that read and write GNOME's settings.
+const (
+	gsettings = "gsettings"
+	dconf     = "dconf"
+)
 
 // Probe reports GNOME shortcuts readable when gsettings is on PATH and the
 // session is GNOME. dconf is checked too: without it the entries that exist in
 // the store but are switched off cannot be seen, and reporting a chord as free
 // when a disabled entry sits on it is worse than reporting nothing.
 func (k *Keys) Probe(ctx context.Context) error {
-	for _, bin := range []string{k.gsettings(), k.dconf()} {
+	for _, bin := range []string{gsettings, dconf} {
 		if _, err := exec.LookPath(bin); err != nil {
 			return fmt.Errorf("%s not on PATH: %w", bin, err)
 		}
@@ -77,7 +65,7 @@ func (k *Keys) Probe(ctx context.Context) error {
 	if d := os.Getenv("XDG_CURRENT_DESKTOP"); d != "" && !strings.Contains(strings.ToUpper(d), "GNOME") {
 		return fmt.Errorf("XDG_CURRENT_DESKTOP is %q, not GNOME", d)
 	}
-	_, err := k.exec(ctx, k.gsettings(), "get", customSchema, "custom-keybindings")
+	_, err := k.exec(ctx, gsettings, "get", customSchema, "custom-keybindings")
 	return err
 }
 
@@ -86,18 +74,18 @@ func (k *Keys) Probe(ctx context.Context) error {
 // one gsettings list-recursively per desktop schema. Nothing here scales with
 // the number of projects.
 func (k *Keys) List(ctx context.Context) ([]revier.Binding, error) {
-	dump, err := k.exec(ctx, k.dconf(), "dump", customPath)
+	dump, err := k.exec(ctx, dconf, "dump", customPath)
 	if err != nil {
 		return nil, err
 	}
-	enabled, err := k.exec(ctx, k.gsettings(), "get", customSchema, "custom-keybindings")
+	enabled, err := k.exec(ctx, gsettings, "get", customSchema, "custom-keybindings")
 	if err != nil {
 		return nil, err
 	}
 	out := decodeCustom(dump, enabled)
 
 	for _, schema := range builtinSchemas {
-		raw, err := k.exec(ctx, k.gsettings(), "list-recursively", schema)
+		raw, err := k.exec(ctx, gsettings, "list-recursively", schema)
 		if err != nil {
 			// A schema this GNOME does not ship is not a failure. Every other
 			// schema still reports, and a missing one holds no chord.
@@ -131,14 +119,13 @@ func (k *Keys) exec(ctx context.Context, bin string, args ...string) ([]byte, er
 func readOnly(bin string, args []string) error { return allowed(readCommands, bin, args) }
 
 // allowed refuses a command that is not in the set its caller may run. The
-// binary is matched on its base name, so a test pointing GSettings at a stub
-// is held to the same rule as the real thing.
+// binary is matched on its base name, so one named by its path is held to
+// the same rule.
 func allowed(set map[string][]string, bin string, args []string) error {
 	base := bin
 	if i := strings.LastIndexByte(base, '/'); i >= 0 {
 		base = base[i+1:]
 	}
-	base = strings.TrimSuffix(base, "-stub")
 	subcommands, ok := set[base]
 	if !ok {
 		return fmt.Errorf("gnome keys: %s is not a command this runs", bin)

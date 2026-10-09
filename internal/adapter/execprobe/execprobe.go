@@ -20,10 +20,10 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// DefaultTimeout bounds one probe run. It is well under the TUI's refresh
+// DefaultWait bounds one probe run. It is well under the TUI's refresh
 // interval, so a probe that hangs costs one panel its state for one refresh
 // and never stalls the surface.
-const DefaultTimeout = 500 * time.Millisecond
+const DefaultWait = 500 * time.Millisecond
 
 // Probe runs a declared binary. Construct it with New.
 type Probe struct {
@@ -37,7 +37,7 @@ type Probe struct {
 // reads panels whose command is aider, and no others, so an unrelated agent
 // pane never costs a process.
 func New(name, exec string) *Probe {
-	return &Probe{name: name, exec: exec, timeout: DefaultTimeout}
+	return &Probe{name: name, exec: exec, timeout: DefaultWait}
 }
 
 // WithTimeout returns the probe with a different bound, for tests.

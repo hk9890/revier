@@ -29,15 +29,6 @@ func configRoot(t *testing.T, text string) string {
 	return root
 }
 
-func configText(t *testing.T, root string) string {
-	t.Helper()
-	data, err := os.ReadFile(config.File(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
-}
-
 func screen(m tui.Model) string { return strings.Join(lines(m), "\n") }
 
 // run delivers what a command answers, as the program would.
@@ -102,7 +93,7 @@ func TestTheConfigScreenWritesTheThemeAndKeepsComments(t *testing.T) {
 
 	m, _ = press(m, "alt+c")
 	m, _ = press(m, "left")
-	if got, want := configText(t, root), "# mine\n[ui]\ntheme = \"catppuccin-macchiato\" # dark\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "# mine\n[ui]\ntheme = \"catppuccin-macchiato\" # dark\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 	if !strings.Contains(screen(m), "catppuccin-macchiato") {
@@ -111,7 +102,7 @@ func TestTheConfigScreenWritesTheThemeAndKeepsComments(t *testing.T) {
 
 	m, _ = press(m, "down")
 	m, _ = press(m, "right")
-	if got := configText(t, root); !strings.Contains(got, `glyphs = "unicode"`) {
+	if got := fileText(t, config.File(root)); !strings.Contains(got, `glyphs = "unicode"`) {
 		t.Errorf("config.toml = %q, want the next glyph set written", got)
 	}
 	if !strings.Contains(screen(m), "unicode") {
@@ -135,7 +126,7 @@ func TestTheConfigScreenWritesTheTriggerKey(t *testing.T) {
 	if f := footer(m); !strings.Contains(f, "frob") {
 		t.Errorf("footer = %q, want the bad key refused", f)
 	}
-	if got := configText(t, root); got != "" {
+	if got := fileText(t, config.File(root)); got != "" {
 		t.Errorf("config.toml = %q after a refused key, want it untouched", got)
 	}
 
@@ -144,7 +135,7 @@ func TestTheConfigScreenWritesTheTriggerKey(t *testing.T) {
 	}
 	m = typeInto(m, "alt-j")
 	m, _ = press(m, "enter")
-	if got, want := configText(t, root), "[ui]\ntrigger_key = \"alt-j\"\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "[ui]\ntrigger_key = \"alt-j\"\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 	if !strings.Contains(screen(m), "alt-j") {
@@ -169,14 +160,14 @@ func TestTheConfigScreenSwitchesTheRuntime(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("no probe for the runtime choice")
 	}
-	if got := configText(t, root); got != "" {
+	if got := fileText(t, config.File(root)); got != "" {
 		t.Errorf("config.toml = %q before the probe answered, want it untouched", got)
 	}
 	m = run(m, cmd)
 	if len(asked) != 1 || asked[0] != "tmux" {
 		t.Errorf("probed %v, want [tmux]", asked)
 	}
-	if got, want := configText(t, root), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 	if !strings.Contains(screen(m), "in use: tmux") {
@@ -199,7 +190,7 @@ func TestTheConfigScreenKeepsARuntimeThatDoesNotProbe(t *testing.T) {
 	if f := footer(m); !strings.Contains(f, "not installed") {
 		t.Errorf("footer = %q, want the probe failure", f)
 	}
-	if got := configText(t, root); got != "" {
+	if got := fileText(t, config.File(root)); got != "" {
 		t.Errorf("config.toml = %q, want it untouched", got)
 	}
 	if !strings.Contains(screen(m), "in use: rt") {
@@ -232,7 +223,7 @@ func TestTheConfigScreenStepsPastARuntimeThatDoesNotProbe(t *testing.T) {
 	if len(asked) != 2 || asked[1][0] != "tmux" {
 		t.Fatalf("probed %v, want kitty and then tmux", asked)
 	}
-	if got, want := configText(t, root), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 }

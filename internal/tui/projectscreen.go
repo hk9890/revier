@@ -181,7 +181,7 @@ func (m *Model) saveProjectField(f projectField, value string) error {
 		return nil
 	}
 	p, _ := m.project(m.proj)
-	written, err := config.SetProjectValue(p.File, m.usable, projectFieldKeys[f], value)
+	written, err := config.SetProjectValue(p.File, projectFieldKeys[f], value, m.usable)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (m Model) openProjectTargetForm(i int) (tea.Model, tea.Cmd) {
 // saveProjectTarget writes the form's target to the project file.
 func (m Model) saveProjectTarget(t revier.Target, from []int) (tea.Model, tea.Cmd) {
 	p, _ := m.project(m.proj)
-	written, err := config.SaveProjectTarget(p.File, m.usable, m.tform.was, config.TargetEdit{Target: t, PanelFrom: from})
+	written, err := config.SaveProjectTarget(p.File, m.tform.was, config.TargetEdit{Target: t, PanelFrom: from}, m.usable)
 	if err == nil {
 		err = m.projectWritten(m.proj, written)
 	}
@@ -290,7 +290,7 @@ func (m Model) confirmDropProjectTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	p, _ := m.project(m.proj)
-	written, err := config.RemoveProjectTarget(p.File, m.usable, m.ptext.Targets[i].Target.Name)
+	written, err := config.RemoveProjectTarget(p.File, m.ptext.Targets[i].Target.Name, m.usable)
 	if err == nil {
 		err = m.projectWritten(m.proj, written)
 	}

@@ -51,6 +51,12 @@ type Core struct {
 	// and focuses nothing, and no target resolves to it. Nil without one.
 	Served revier.Host
 
+	// Self reports a panel this process runs under: the panel's process is
+	// this process or one of its ancestors. A shutdown closes such a panel
+	// last (CloseLast). Reading a process's ancestors is a fact about this
+	// machine, so the wiring supplies it; nil keeps a plan's order.
+	Self func(revier.Panel) bool
+
 	// Machine is this machine's name, as `uname -n` prints it: the first half
 	// of the tag a link's panel gives what it starts on a host. Empty reads
 	// it from the kernel.

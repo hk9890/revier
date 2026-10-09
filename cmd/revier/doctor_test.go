@@ -33,17 +33,7 @@ home = true
 // doctorRoot writes a configuration root and points revier at it.
 func doctorRoot(t *testing.T, files map[string]string) {
 	t.Helper()
-	root := t.TempDir()
-	dir := filepath.Join(root, "projects")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, body := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Setenv("REVIER_CONFIG_HOME", root)
+	configRoot(t, "", files)
 }
 
 // doctor reports each problem under the file that holds it, and ends non-zero

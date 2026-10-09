@@ -12,11 +12,7 @@ import (
 // writeConfig puts text in config.toml under a fresh root.
 func writeConfig(t *testing.T, text string) string {
 	t.Helper()
-	root := t.TempDir()
-	if err := os.WriteFile(config.File(root), []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return root
+	return projectsRoot(t, text, nil)
 }
 
 func readConfig(t *testing.T, root string) string {

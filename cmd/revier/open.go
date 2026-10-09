@@ -58,7 +58,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		// The clone ran without a deadline. The host calls still need one,
 		// and the one set at startup may have been spent waiting for git.
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), commandTimeout)
+		ctx, cancel = context.WithTimeout(context.Background(), commandWait)
 		defer cancel()
 	}
 	ref, err := a.goTarget(ctx, p, home.Name)

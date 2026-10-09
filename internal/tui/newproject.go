@@ -281,7 +281,7 @@ func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
 	case err != nil:
 		m.err = err
 	case !info.IsDir():
-		m.err = fmt.Errorf("%s is not a folder", contractHome(dir))
+		m.err = fmt.Errorf("%s is not a folder", config.ContractHome(dir))
 	default:
 		m.addFolder(dir)
 	}
@@ -299,7 +299,7 @@ func (m *Model) addFolder(dir string) {
 	}
 	checkout.Trust(dir, io.Discard)
 	if url := m.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(origin) {
-		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", contractHome(dir), url)
+		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", config.ContractHome(dir), url)
 	}
 }
 
@@ -311,7 +311,7 @@ func sameRepo(url string) string {
 
 func (m Model) nameFree(name revier.ProjectName) error {
 	if p, ok := m.project(name); ok {
-		return fmt.Errorf("project %q already exists: %s", name, contractHome(p.File))
+		return fmt.Errorf("project %q already exists: %s", name, config.ContractHome(p.File))
 	}
 	return nil
 }
@@ -376,7 +376,7 @@ func projectRoots(projects []core.Project) []string {
 		if parent == home {
 			parent = "~"
 		}
-		count[contractHome(parent)]++
+		count[config.ContractHome(parent)]++
 	}
 	roots := make([]string, 0, len(count))
 	for r := range count {
@@ -499,7 +499,7 @@ func (m Model) newScreen() (text string, at int) {
 		}
 		lines = []string{
 			say(th.Attention, "This folder is not there:"),
-			say(th.Path, contractHome(m.ndir)),
+			say(th.Path, config.ContractHome(m.ndir)),
 			say(th.NameDim, verb),
 			m.newFileLine(say, config.NameFor(m.ndir)),
 		}
@@ -513,7 +513,7 @@ func (m Model) newScreen() (text string, at int) {
 		rows = make([]string, len(m.nrows))
 		for i := range m.nrows {
 			dir := m.rootTarget(i)
-			rows[i] = contractHome(dir)
+			rows[i] = config.ContractHome(dir)
 			if _, err := os.Stat(dir); err == nil {
 				rows[i] += "  (already there)"
 			}
@@ -545,7 +545,7 @@ func (m Model) newFileLine(say func(lipgloss.Style, string) string, name revier.
 	if err != nil {
 		return say(m.theme.Attention, err.Error())
 	}
-	return say(m.theme.Path, contractHome(config.ProjectFile(root, name)))
+	return say(m.theme.Path, config.ContractHome(config.ProjectFile(root, name)))
 }
 
 // newTargets says what the written project will run. With shared targets in

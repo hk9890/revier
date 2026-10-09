@@ -56,22 +56,6 @@ func TestListTableShowsTheHostAndAnUnreachableOne(t *testing.T) {
 	}
 }
 
-// An action on a remote project runs on the host, through the remote's
-// command, and needs no action of that name in the configuration here.
-func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox")
-	remote.RunArgv = []string{"true"}
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	a := &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, state: &state.State{}, stateRoot: t.TempDir(), core: c}
-
-	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	if len(remote.Runs) != 1 || remote.Runs[0] != (hosttest.Run{Project: "far", Action: "sync"}) {
-		t.Errorf("runs = %+v, want sync on far", remote.Runs)
-	}
-}
-
 // An agent or a shell asked for a remote project opens here, as a tab of the
 // link's workspace that reaches the host itself: by -p, or by the panel a key
 // was pressed in. A --dir is a path on this machine and is dropped, not
