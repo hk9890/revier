@@ -731,3 +731,13 @@ needs no window that can be raised (D63). So `OpenTab` leaves the keyboard
 where it is on every runtime, and going to a tab is `FocusPanel`'s. A kitty
 OS window without the keyboard still shows the tab it was given: putting the
 old one back asks the desktop for the focus, which is what the flag avoids.
+
+### D119 — a host says shell or tool of a live panel, never agent
+
+tmux named four harnesses and reported their panes as `agent`; kitty reported
+the same panes as `tool`, so one pane had two kinds. A host reads a program's
+name and nothing of what it does. `revier.IsShell` is the one list of shells,
+with the dash of a login shell removed, and every other program is a `tool`.
+Whether a tool is an agent is a probe's answer. Rejected: one shared list of
+harnesses, a second registry beside the probes that a probe declared in config
+is never in.

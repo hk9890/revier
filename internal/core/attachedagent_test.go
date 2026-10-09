@@ -22,7 +22,7 @@ import (
 // reports, and the attachment as state holds it.
 func attachScratch(t *testing.T, c *core.Core, rt *hosttest.FakeRuntime, wm *hosttest.Fake) (revier.TargetRef, map[revier.ProjectName][]revier.TargetRef) {
 	t.Helper()
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	term := rt.AddInstance(revier.Instance{
 		Title: "scratch", Class: "kitty", PID: 4242,
 		Panels: []revier.Panel{agent("9", "", "")},
@@ -60,7 +60,7 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 // no terminal at all.
 func TestAnAmbiguousWindowAttachesAlone(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusRunning)
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	for range 2 {
 		rt.AddInstance(revier.Instance{
 			Title: "scratch", Class: "kitty", PID: 4242,
@@ -225,7 +225,7 @@ func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 // (decisions.md D63).
 func TestFocusingAnUnraisableTerminalMovesNothing(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	term := rt.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})
 
 	if err := c.Focus(context.Background(), term); !errors.Is(err, core.ErrUnraisable) {
@@ -243,7 +243,7 @@ func TestFocusingAnUnraisableTerminalMovesNothing(t *testing.T) {
 // attachment as two rows.
 func TestASharedWindowTitleDoesNotDoubleAnAttachedRow(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	term := rt.AddInstance(revier.Instance{
 		Title: "scratch", Class: "kitty", PID: 4242,
 		Panels: []revier.Panel{agent("9", "", "")},

@@ -252,7 +252,9 @@ For a new terminal, a new multiplexer, or a new compositor.
    [interfaces.md](interfaces.md#host) lists.
 2. Implement `Capabilities` as well when the adapter is a `Runtime`, and return
    panels on the instances it lists. Only a runtime host can see inside a
-   terminal, and the agent monitor reads nothing else.
+   terminal, and the agent monitor reads nothing else. A panel's kind is
+   `shell` where `revier.IsShell` says so and `tool` otherwise, never `agent`
+   (D119).
 3. Make `Probe(ctx)` return nil only when the adapter can genuinely work. It is
    how automatic selection stays correct on a machine that has several.
 4. Add one line to `cmd/revier/adapters.go`.
@@ -262,10 +264,6 @@ For a new terminal, a new multiplexer, or a new compositor.
 What an adapter must never decide, and what `Instances` may cost, are in
 [CODING.md](../CODING.md#adapters-hold-no-policy) and its
 [two invariants](../CODING.md#two-invariants).
-
-Report `Capabilities.Layout` as false and open a single pane when the runtime
-cannot arrange panes. The core handles that case rather than the adapter faking
-it.
 
 ## What is not extensible, on purpose
 

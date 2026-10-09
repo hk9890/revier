@@ -491,7 +491,7 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 // (decisions.md D16, D19).
 func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
-	rt.SetCapabilities(revier.Capabilities{Layout: true})
+	rt.SetCapabilities(revier.Capabilities{})
 	wm.SetFocus(diffWm)
 	c := &core.Core{Runtime: rt, Window: wm}
 
@@ -512,7 +512,7 @@ func TestNoBridgeWithoutOSWindows(t *testing.T) {
 // window of its own to raise the press is refused rather than half done.
 func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
 	rt.Add("diff:revier", "kitty") // pid 1001
 	rt.Add("session:revier", "kitty")
@@ -780,7 +780,7 @@ func TestSurveyReportsWhetherTheProjectPathExists(t *testing.T) {
 func unnamedRuntime(t *testing.T, pid int) *hosttest.FakeRuntime {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.AddInstance(revier.Instance{
 		Ref:    revier.TargetRef{Host: "rt", ID: "1"},
 		PID:    pid,
@@ -845,7 +845,7 @@ func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
 // the wrong window.
 func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	rt.SetCapabilities(revier.Capabilities{Layout: true, OSWindows: true})
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	for _, id := range []string{"1", "2"} {
 		rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: id}, PID: 4242})
 	}

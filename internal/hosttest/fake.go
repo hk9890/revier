@@ -98,7 +98,7 @@ type Fake struct {
 
 // New returns a fake host with the given name.
 func New(name string) *Fake {
-	return &Fake{name: name, caps: revier.Capabilities{Layout: true}}
+	return &Fake{name: name, caps: revier.Capabilities{}}
 }
 
 // NewRuntime returns a fake that satisfies revier.Runtime.

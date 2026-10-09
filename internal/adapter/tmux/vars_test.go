@@ -5,7 +5,28 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/tmux"
+	"github.com/hk9890/revier/pkg/revier"
 )
+
+// A pane is a shell or a tool. A harness is a tool here as it is under every
+// other runtime: a probe says that it is an agent, never the adapter.
+func TestAPaneIsAShellOrATool(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want revier.PanelKind
+	}{
+		{"zsh", revier.PanelShell},
+		{"dash", revier.PanelShell},
+		{"claude", revier.PanelTool},
+		{"aider", revier.PanelTool},
+		{"nvim", revier.PanelTool},
+	}
+	for _, tc := range cases {
+		if got := tmux.KindOf(tc.cmd); got != tc.want {
+			t.Errorf("kindOf(%q) = %s, want %s", tc.cmd, got, tc.want)
+		}
+	}
+}
 
 func TestParseVars(t *testing.T) {
 	cases := []struct {
