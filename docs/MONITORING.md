@@ -55,7 +55,7 @@ doc reads what it already did.
 | `shutdown step`, `shutdown`, `shutdown refused` | a shutdown: each step's `ref`, `panel`, `busy`, `unread` and `err`, then the counts and the `duration_ms` from the recheck to the last wait; its save writes `session saved` with `by` shutdown. A close the busy guard refused writes `shutdown refused` alone, with the plan's `steps` and `busy` counts, and closed and saved nothing (`docs/design/decisions.md` D99) |
 | `start directory` | one `WARN` when the home directory a process moves to cannot be reached, and it runs in `/` instead. Written by the surface, which always leaves, and by a command whose working directory was removed under the shell (`docs/design/decisions.md` D92) |
 | `config problem` | one `WARN` per refusal at load, with `project` and `file`; not written by `list`, which runs every refresh on a linked host |
-| `state load`, `state update` | a process could not read the state file, or could not update it; a command that could not read it ran with nothing remembered |
+| `state load`, `state update` | a process could not read the state file, or could not update it; it went on with the state it read last, and with nothing remembered when it had read none |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
 | `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |
 

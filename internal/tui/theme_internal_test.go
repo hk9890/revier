@@ -15,7 +15,7 @@ import (
 // A theme change repaints the field of every screen, also of a screen that is
 // not up: the next visit must not show a field in the old theme's colours.
 func TestAThemeChangeRepaintsTheFieldOfEveryScreen(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	th, err := theme.Lookup("catppuccin-latte", "")
 	if err != nil {
 		t.Fatal(err)

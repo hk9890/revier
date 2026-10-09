@@ -72,7 +72,11 @@ func (f File) State() *state.State {
 // the state after it is the one on disk: a caller that keeps what Update
 // returns must not lose its bindings to a lock it could not take.
 func (f File) Update(apply func(*state.State) bool) *state.State {
-	st, err := state.Update(f.Root, apply)
+	changed := false
+	st, err := state.Update(f.Root, func(st *state.State) bool {
+		changed = apply(st)
+		return changed
+	})
 	logging.Repeat("state update", "state update", err, "root", f.Root)
 	if err != nil && f.Failed != nil {
 		f.Failed(err)
@@ -80,7 +84,9 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 	if st == nil {
 		return f.State()
 	}
-	if err == nil {
+	// Only a state that was saved is what the root holds: what apply did to
+	// one it reported as unchanged is not in the file.
+	if changed && err == nil {
 		f.keep(st)
 	}
 	if f.Written != nil {
