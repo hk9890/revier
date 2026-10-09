@@ -190,7 +190,7 @@ func (m Model) subtitle() string {
 	case dialogLink:
 		return m.link.subtitle(m.theme)
 	case dialogNew:
-		return " " + m.path.View()
+		return " " + m.create.path.View()
 	case dialogConfig:
 		where := "config.toml"
 		if root, err := config.Root(); err == nil {
@@ -425,7 +425,7 @@ func (m Model) footer() string {
 		return " " + m.help.ShortHelpView(m.projectHelp())
 	}
 	if m.dialog == dialogNew {
-		return " " + m.help.ShortHelpView(m.newHelp())
+		return " " + m.help.ShortHelpView(m.create.help(m.keys))
 	}
 	if m.dialog == dialogLink {
 		return " " + m.help.ShortHelpView(m.link.help(m.keys))

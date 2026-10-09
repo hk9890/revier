@@ -23,7 +23,7 @@ func (m *Model) syncBody() {
 	// their own text.
 	switch m.dialog {
 	case dialogNew:
-		text, at := m.newScreen()
+		text, at := m.create.screen(m.surface())
 		m.body.SetContent(text)
 		m.body.SetYOffset(0)
 		m.follow(at, 1)

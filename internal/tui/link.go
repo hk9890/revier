@@ -204,8 +204,6 @@ func (m Model) linkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // will show it, rather than a refresh later.
 func (m *Model) addLink(l linked) {
 	p := l.project
-	m.projects = append(m.projects, p)
-	m.setKeys()
 	// Provisional, until the survey answers: the host's own view, as the
 	// merge would lay it over a local one with no pane here yet. Its agents
 	// go with its panes: no panel here shows one yet, so the row counts none
@@ -213,10 +211,7 @@ func (m *Model) addLink(l linked) {
 	// (decisions.md D104).
 	view := l.view
 	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
-	m.views = m.sorted(append(m.views, view))
-	m.dialog = dialogNone
-	m.reload()
-	m.selectName(p.Name)
+	m.addProject(p, view)
 }
 
 // asked takes a host's answer to the dialog's ask.

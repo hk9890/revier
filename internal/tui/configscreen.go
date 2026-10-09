@@ -267,7 +267,7 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.link.restyle(th)
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
-	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.path, &m.chord, &m.pedit} {
+	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.create.path, &m.chord, &m.pedit} {
 		styleField(in, th)
 	}
 	m.layout()

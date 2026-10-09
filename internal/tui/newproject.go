@@ -55,251 +55,299 @@ func newPathInput(th theme.Theme) textinput.Model {
 	return in
 }
 
-// openNew is the "new" button and alt+n. The cursor comes back to the list
-// first, so the surface the screen stands over is the one it is left on.
-func (m Model) openNew() (tea.Model, tea.Cmd) {
-	m.err = nil
-	m.path.SetValue("")
-	m.nstep = newField
-	m.syncNewRows()
-	m.toList()
-	m.dialog = dialogNew
-	return m, m.path.Focus()
+// createScreen is the new-project screen while it is up.
+type createScreen struct {
+	step newStep
+	path textinput.Model // the directory field
+	rows []string        // what the screen lists under the field
+	row  int             // the chosen one of rows, -1 for none
+	dir  string          // the folder the screen asks to create
 }
 
-// newKey is every press on the new-project screen. Esc goes back a step, and
-// from the field closes the screen.
-func (m Model) newKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Quit) {
-		return m, tea.Quit
-	}
-	switch m.nstep {
-	case newRoot:
-		return m.rootKey(msg)
-	case newMkdir:
-		return m.mkdirKey(msg)
-	}
-	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.dialog = dialogNone
-		m.path.Blur()
-		return m, nil
-	case key.Matches(msg, m.keys.Enter):
-		return m.submitField()
-	case key.Matches(msg, m.keys.Next):
-		return m.completePath(), nil
-	case key.Matches(msg, m.keys.Down):
-		m.nrow = min(m.nrow+1, len(m.nrows)-1)
-		return m, nil
-	case key.Matches(msg, m.keys.Up):
-		if m.nrow > 0 {
-			m.nrow--
-		}
-		return m, nil
-	}
-	if altRune(msg) {
-		return m, nil
-	}
+func newCreateScreen(th theme.Theme) createScreen {
+	return createScreen{path: newPathInput(th), row: -1}
+}
+
+// created is a project the screen wrote.
+type created struct {
+	project core.Project
+	exists  bool // its directory is there
+	clone   bool // its directory is to be cloned from the project's URL
+}
+
+// createResult is what a press on the screen leaves for the surface.
+type createResult struct {
+	err     error    // the footer's
+	closed  bool     // Esc on the field: back to the surface
+	created *created // the project the press wrote
+}
+
+// openCreate is the "new" button and alt+n. The cursor comes back to the
+// list first, so the surface the screen stands over is the one it is left on.
+func (m Model) openCreate() (tea.Model, tea.Cmd) {
 	m.err = nil
-	in, cmd := m.path.Update(msg)
-	m.path = in
-	m.syncNewRows()
+	cmd := m.create.open()
+	m.toList()
+	m.dialog = dialogNew
 	return m, cmd
 }
 
-// rootKey is the step that chooses the folder a name or a clone goes in.
-func (m Model) rootKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		m.nstep = newField
-		m.syncNewRows()
-		return m, m.path.Focus()
-	case key.Matches(msg, m.keys.Enter):
-		return m.submitRoot()
-	case key.Matches(msg, m.keys.Down):
-		m.nrow = min(m.nrow+1, len(m.nrows)-1)
-	case key.Matches(msg, m.keys.Up):
-		m.nrow = max(m.nrow-1, 0)
+// createKey is every press on the new-project screen, and what it left for
+// the surface: the screen closed, or a project that is a row the moment it
+// lands, and is cloned when its folder is to come from a repository.
+func (m Model) createKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	res, cmd := m.create.key(m.surface(), msg)
+	m.err = res.err
+	if res.closed {
+		m.dialog = dialogNone
 	}
-	return m, nil
+	if c := res.created; c != nil {
+		// Provisional, until the survey answers: nothing of it is running.
+		m.addProject(c.project, revier.ProjectView{Project: c.project.Project, PathExists: c.exists})
+		if c.clone {
+			home, _ := c.project.Home()
+			cmd = m.clone(c.project, home.Name)
+		}
+	}
+	return m, cmd
+}
+
+// addProject puts a project just written in as the selected row, at once, as the
+// next survey will show it, rather than a refresh later. The screen that
+// wrote it closes.
+func (m *Model) addProject(p core.Project, view revier.ProjectView) {
+	m.projects = append(m.projects, p)
+	m.setKeys()
+	m.views = m.sorted(append(m.views, view))
+	m.dialog = dialogNone
+	m.reload()
+	m.selectName(p.Name)
+}
+
+// open clears the field for a new visit.
+func (s *createScreen) open() tea.Cmd {
+	s.path.SetValue("")
+	s.step = newField
+	s.syncRows()
+	return s.path.Focus()
+}
+
+// key is every press on the screen. Esc goes back a step, and from the field
+// closes the screen.
+func (s *createScreen) key(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
+	res := createResult{err: sf.err}
+	if key.Matches(msg, sf.keys.Quit) {
+		return res, tea.Quit
+	}
+	switch s.step {
+	case newRoot:
+		return s.rootKey(sf, msg)
+	case newMkdir:
+		return s.mkdirKey(sf, msg)
+	}
+	switch {
+	case key.Matches(msg, sf.keys.Back):
+		res.closed = true
+		s.path.Blur()
+		return res, nil
+	case key.Matches(msg, sf.keys.Enter):
+		return s.submitField(sf), nil
+	case key.Matches(msg, sf.keys.Next):
+		s.completePath()
+		return res, nil
+	case key.Matches(msg, sf.keys.Down):
+		s.row = min(s.row+1, len(s.rows)-1)
+		return res, nil
+	case key.Matches(msg, sf.keys.Up):
+		if s.row > 0 {
+			s.row--
+		}
+		return res, nil
+	}
+	if altRune(msg) {
+		return res, nil
+	}
+	res.err = nil
+	in, cmd := s.path.Update(msg)
+	s.path = in
+	s.syncRows()
+	return res, cmd
+}
+
+// rootKey is the step that chooses the folder a name or a clone goes in.
+func (s *createScreen) rootKey(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
+	res := createResult{err: sf.err}
+	switch {
+	case key.Matches(msg, sf.keys.Back):
+		res.err = nil
+		s.step = newField
+		s.syncRows()
+		return res, s.path.Focus()
+	case key.Matches(msg, sf.keys.Enter):
+		return s.addOrAsk(sf, s.rootTarget(s.row)), nil
+	case key.Matches(msg, sf.keys.Down):
+		s.row = min(s.row+1, len(s.rows)-1)
+	case key.Matches(msg, sf.keys.Up):
+		s.row = max(s.row-1, 0)
+	}
+	return res, nil
 }
 
 // mkdirKey is the question whether to create the folder. Esc goes back to
 // where the folder was given.
-func (m Model) mkdirKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (s *createScreen) mkdirKey(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.err = nil
-		if isFullPath(m.typed()) {
-			m.nstep = newField
-			return m, m.path.Focus()
+	case key.Matches(msg, sf.keys.Back):
+		if isFullPath(s.typed()) {
+			s.step = newField
+			return createResult{}, s.path.Focus()
 		}
-		m.nstep = newRoot
-	case key.Matches(msg, m.keys.Enter):
-		m.err = nil
-		if url := m.typed(); isCloneURL(url) {
-			return m.cloneInto(m.ndir, url)
+		s.step = newRoot
+		return createResult{}, nil
+	case key.Matches(msg, sf.keys.Enter):
+		if url := s.typed(); isCloneURL(url) {
+			return s.cloneInto(sf, s.dir, url), nil
 		}
-		m.mkdirProject(m.ndir)
+		return s.mkdirProject(sf, s.dir), nil
 	}
-	return m, nil
+	return createResult{err: sf.err}, nil
 }
 
 // mkdirProject writes the project for dir, then creates dir. The file comes
 // first, so a file that cannot be written leaves no folder behind.
-func (m *Model) mkdirProject(dir string) {
-	p, ok := m.addProject(dir, "", false)
-	if !ok {
-		return
+func (s *createScreen) mkdirProject(sf surface, dir string) createResult {
+	p, err := s.write(sf, dir, "")
+	if err != nil {
+		return createResult{err: err}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		m.err = fmt.Errorf("project %q is written, but its folder is not: %w", p.Name, err)
-		return
+		return createResult{created: &created{project: p}, err: fmt.Errorf("project %q is written, but its folder is not: %w", p.Name, err)}
 	}
-	for i := range m.views {
-		if m.views[i].Project.Name == p.Name {
-			m.views[i].PathExists = true
-		}
-	}
-	m.reload()
+	return createResult{created: &created{project: p, exists: true}}
 }
 
-// cloneInto writes the project for url at dir, which is not there yet, and
-// clones it; git creates the folder.
-func (m Model) cloneInto(dir, url string) (tea.Model, tea.Cmd) {
-	p, ok := m.addProject(dir, url, false)
-	if !ok {
-		return m, nil
+// cloneInto writes the project for url at dir, which is not there yet, to be
+// cloned; git creates the folder.
+func (s *createScreen) cloneInto(sf surface, dir, url string) createResult {
+	p, err := s.write(sf, dir, url)
+	if err != nil {
+		return createResult{err: err}
 	}
-	home, _ := p.Home()
-	return m, m.clone(p, home.Name)
+	return createResult{created: &created{project: p, clone: true}}
 }
 
-func (m Model) typed() string { return strings.TrimSpace(m.path.Value()) }
+func (s *createScreen) typed() string { return strings.TrimSpace(s.path.Value()) }
 
 // fieldPath is the full path Enter adds: the row chosen under the field, or
 // the field itself.
-func (m Model) fieldPath() string {
-	if m.nrow >= 0 {
-		return m.nrows[m.nrow]
+func (s *createScreen) fieldPath() string {
+	if s.row >= 0 {
+		return s.rows[s.row]
 	}
-	return m.typed()
+	return s.typed()
 }
 
-// syncNewRows lists the subdirectories that complete a full path. A name
-// lists nothing until Enter asks where it goes.
-func (m *Model) syncNewRows() {
-	m.nrow = -1
-	m.nrows = nil
-	if typed := m.typed(); isFullPath(typed) {
-		m.nrows = subdirs(typed)
+// syncRows lists the subdirectories that complete a full path. A name lists
+// nothing until Enter asks where it goes.
+func (s *createScreen) syncRows() {
+	s.row = -1
+	s.rows = nil
+	if typed := s.typed(); isFullPath(typed) {
+		s.rows = subdirs(typed)
 	}
 }
 
 // completePath is Tab on a full path: the chosen row, the only row, or the
 // part every row shares. A row is a directory, so it goes in with the
 // separator that lists what is inside it.
-func (m Model) completePath() Model {
-	typed := m.typed()
+func (s *createScreen) completePath() {
+	typed := s.typed()
 	next := typed
 	switch {
-	case m.nrow >= 0:
-		next = m.nrows[m.nrow] + "/"
-	case len(m.nrows) == 1:
-		next = m.nrows[0] + "/"
-	case len(m.nrows) > 1:
-		next = commonPrefix(m.nrows)
+	case s.row >= 0:
+		next = s.rows[s.row] + "/"
+	case len(s.rows) == 1:
+		next = s.rows[0] + "/"
+	case len(s.rows) > 1:
+		next = commonPrefix(s.rows)
 	}
 	if len(next) <= len(typed) {
-		return m
+		return
 	}
-	m.path.SetValue(next)
-	m.path.CursorEnd()
-	m.syncNewRows()
-	return m
+	s.path.SetValue(next)
+	s.path.CursorEnd()
+	s.syncRows()
 }
 
 // submitField is Enter in the field: a full path is added, or asked about;
 // a name or a clone URL goes on to choose its folder.
-func (m Model) submitField() (tea.Model, tea.Cmd) {
-	m.err = nil
-	typed := m.typed()
+func (s *createScreen) submitField(sf surface) createResult {
+	typed := s.typed()
 	switch {
 	case typed == "":
-		m.err = fmt.Errorf("give a full path, a name, or a clone URL")
-		return m, nil
+		return createResult{err: fmt.Errorf("give a full path, a name, or a clone URL")}
 	case isFullPath(typed):
-		typed = m.fieldPath()
+		typed = s.fieldPath()
 		dir := config.ExpandHome(typed)
 		if !filepath.IsAbs(dir) {
-			m.err = fmt.Errorf("%s is not a full path", typed)
-			return m, nil
+			return createResult{err: fmt.Errorf("%s is not a full path", typed)}
 		}
-		return m.addOrAsk(filepath.Clean(dir))
+		return s.addOrAsk(sf, filepath.Clean(dir))
 	case isCloneURL(typed):
 		if err := config.ValidateGitURL(typed); err != nil {
-			m.err = fmt.Errorf("clone URL: %w", err)
-			return m, nil
+			return createResult{err: fmt.Errorf("clone URL: %w", err)}
 		}
 	}
-	name := m.newName()
+	name := s.newName()
 	if err := config.ValidateName(revier.ProjectName(name)); err != nil {
-		m.err = err
-		return m, nil
+		return createResult{err: err}
 	}
-	if err := m.nameFree(config.NameFor(name)); err != nil {
-		m.err = err
-		return m, nil
+	if err := nameFree(sf.projects, config.NameFor(name)); err != nil {
+		return createResult{err: err}
 	}
-	m.nstep = newRoot
-	m.nrows = projectRoots(m.projects)
-	m.nrow = 0
-	m.path.Blur()
-	return m, nil
-}
-
-// submitRoot is Enter on a folder: the name or the clone goes in it.
-func (m Model) submitRoot() (tea.Model, tea.Cmd) {
-	m.err = nil
-	return m.addOrAsk(m.rootTarget(m.nrow))
+	s.step = newRoot
+	s.rows = projectRoots(sf.projects)
+	s.row = 0
+	s.path.Blur()
+	return createResult{}
 }
 
 // addOrAsk adds dir when it is a folder, and asks to create it, or to clone
 // into it, when it is not there.
-func (m Model) addOrAsk(dir string) (tea.Model, tea.Cmd) {
-	if err := config.CanCreate(m.projects, config.NameFor(dir), dir); err != nil {
-		m.err = err
-		return m, nil
+func (s *createScreen) addOrAsk(sf surface, dir string) createResult {
+	if err := config.CanCreate(sf.projects, config.NameFor(dir), dir); err != nil {
+		return createResult{err: err}
 	}
 	info, err := os.Stat(dir)
 	switch {
 	case os.IsNotExist(err):
-		m.ndir = dir
-		m.nstep = newMkdir
-		m.path.Blur()
+		s.dir = dir
+		s.step = newMkdir
+		s.path.Blur()
 	case err != nil:
-		m.err = err
+		return createResult{err: err}
 	case !info.IsDir():
-		m.err = fmt.Errorf("%s is not a folder", config.ContractHome(dir))
+		return createResult{err: fmt.Errorf("%s is not a folder", config.ContractHome(dir))}
 	default:
-		m.addFolder(dir)
+		return s.addFolder(sf, dir)
 	}
-	return m, nil
+	return createResult{}
 }
 
 // addFolder writes the project for a folder that is there. Its origin is
 // recorded, as `revier new` records it, so the project can be cloned on the
 // next machine. A clone URL that is not that origin is not recorded, and the
 // footer says so.
-func (m *Model) addFolder(dir string) {
-	p, ok := m.addProject(dir, "", true)
-	if !ok {
-		return
+func (s *createScreen) addFolder(sf surface, dir string) createResult {
+	p, err := s.write(sf, dir, "")
+	if err != nil {
+		return createResult{err: err}
 	}
-	if url := m.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(p.GitURL) {
-		m.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", config.ContractHome(dir), url)
+	res := createResult{created: &created{project: p, exists: true}}
+	if url := s.typed(); isCloneURL(url) && sameRepo(url) != sameRepo(p.GitURL) {
+		res.err = fmt.Errorf("%s was already there and its origin is not %s: the URL is ignored", config.ContractHome(dir), url)
 	}
+	return res
 }
 
 // sameRepo is url without what two spellings of one repository differ by: a
@@ -308,56 +356,43 @@ func sameRepo(url string) string {
 	return strings.TrimSuffix(strings.TrimRight(url, "/"), ".git")
 }
 
-func (m Model) nameFree(name revier.ProjectName) error {
-	if p, ok := m.project(name); ok {
+func nameFree(projects []core.Project, name revier.ProjectName) error {
+	if p, ok := projectNamed(projects, name); ok {
 		return fmt.Errorf("project %q already exists: %s", name, config.ContractHome(p.File))
 	}
 	return nil
 }
 
-// addProject writes the project file for dir, as app.CreateProject writes it,
-// and makes it the selected row. gitURL is the repository a folder that is not
-// there is cloned from. It reports false, with the reason in m.err, when
-// nothing was written.
-func (m *Model) addProject(dir, gitURL string, exists bool) (core.Project, bool) {
+// write writes the project file for dir, as app.CreateProject writes it.
+// gitURL is the repository a folder that is not there is cloned from.
+func (s *createScreen) write(sf surface, dir, gitURL string) (core.Project, error) {
 	name := config.NameFor(dir)
-	if err := m.nameFree(name); err != nil {
-		m.err = err
-		return core.Project{}, false
+	if err := nameFree(sf.projects, name); err != nil {
+		return core.Project{}, err
 	}
 	root, err := config.Root()
 	if err != nil {
-		m.err = err
-		return core.Project{}, false
+		return core.Project{}, err
 	}
-	p, err := app.CreateProject(root, m.projects, name, dir, gitURL, io.Discard)
+	p, err := app.CreateProject(root, sf.projects, name, dir, gitURL, io.Discard)
 	if err != nil {
-		m.err = err
-		return core.Project{}, false
+		return core.Project{}, err
 	}
-	m.projects = append(m.projects, p)
-	m.setKeys()
-	// Provisional, until the survey answers: nothing of it is running, and
-	// its directory is the one just checked.
-	m.views = m.sorted(append(m.views, revier.ProjectView{Project: p.Project, PathExists: exists}))
-	m.dialog = dialogNone
-	m.path.Blur()
-	m.reload()
-	m.selectName(p.Name)
-	return p, true
+	s.path.Blur()
+	return p, nil
 }
 
 // newName is the folder name a name or a clone URL puts in the chosen folder.
-func (m Model) newName() string {
-	if typed := m.typed(); isCloneURL(typed) {
+func (s *createScreen) newName() string {
+	if typed := s.typed(); isCloneURL(typed) {
 		return repoName(typed)
 	}
-	return m.typed()
+	return s.typed()
 }
 
 // rootTarget is the folder the name goes to in the i-th listed folder.
-func (m Model) rootTarget(i int) string {
-	return filepath.Join(config.ExpandHome(m.nrows[i]), m.newName())
+func (s *createScreen) rootTarget(i int) string {
+	return filepath.Join(config.ExpandHome(s.rows[i]), s.newName())
 }
 
 // projectRoots is the folders the local projects live in, the one holding
@@ -463,36 +498,42 @@ func repoName(url string) string {
 	return s
 }
 
-// newHelp is the footer of the step the screen is at.
-func (m Model) newHelp() []key.Binding {
+// help is the footer of the step the screen is at.
+func (s *createScreen) help(k keyMap) []key.Binding {
 	back := helpKey("esc", "back")
 	switch {
-	case m.nstep == newMkdir && isCloneURL(m.typed()):
-		return []key.Binding{helpKey("enter", "clone"), back, m.keys.Quit}
-	case m.nstep == newMkdir:
-		return []key.Binding{helpKey("enter", "create the folder"), back, m.keys.Quit}
-	case m.nstep == newRoot:
-		return []key.Binding{helpKey("enter", "add the project"), helpKey("↑↓", "choose"), back, m.keys.Quit}
-	case isFullPath(m.typed()):
-		return []key.Binding{helpKey("enter", "add the project"), helpKey("tab", "complete"), helpKey("↑↓", "choose"), back, m.keys.Quit}
+	case s.step == newMkdir && isCloneURL(s.typed()):
+		return []key.Binding{helpKey("enter", "clone"), back, k.Quit}
+	case s.step == newMkdir:
+		return []key.Binding{helpKey("enter", "create the folder"), back, k.Quit}
+	case s.step == newRoot:
+		return []key.Binding{helpKey("enter", "add the project"), helpKey("↑↓", "choose"), back, k.Quit}
+	case isFullPath(s.typed()):
+		return []key.Binding{helpKey("enter", "add the project"), helpKey("tab", "complete"), helpKey("↑↓", "choose"), back, k.Quit}
 	}
-	return []key.Binding{helpKey("enter", "choose its folder"), back, m.keys.Quit}
+	return []key.Binding{helpKey("enter", "choose its folder"), back, k.Quit}
 }
 
-// newScreen is what stands in the list's place while the screen is up: what
-// the step is for, what Enter will write, and the rows to choose from. at is
-// the line of the chosen row, for the body to keep in view.
-func (m Model) newScreen() (text string, at int) {
-	th := m.theme
-	w := m.listWidth()
-	say := func(s lipgloss.Style, text string) string {
-		return s.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
+// screen is what stands in the list's place while the screen is up: what the
+// step is for, what Enter will write, and the rows to choose from. at is the
+// line of the chosen row, for the body to keep in view.
+func (s *createScreen) screen(sf surface) (text string, at int) {
+	th, w := sf.theme, sf.list
+	say := func(st lipgloss.Style, text string) string {
+		return st.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
 	}
-	typed := m.typed()
-	rows := m.nrows
+	file := func(name revier.ProjectName) string {
+		root, err := config.Root()
+		if err != nil {
+			return say(th.Attention, err.Error())
+		}
+		return say(th.Path, config.ContractHome(config.ProjectFile(root, name)))
+	}
+	typed := s.typed()
+	rows := s.rows
 	var lines []string
 	switch {
-	case m.nstep == newMkdir:
+	case s.step == newMkdir:
 		rows = nil
 		verb := "Enter creates it and writes"
 		if isCloneURL(typed) {
@@ -500,20 +541,20 @@ func (m Model) newScreen() (text string, at int) {
 		}
 		lines = []string{
 			say(th.Attention, "This folder is not there:"),
-			say(th.Path, config.ContractHome(m.ndir)),
+			say(th.Path, config.ContractHome(s.dir)),
 			say(th.NameDim, verb),
-			m.newFileLine(say, config.NameFor(m.ndir)),
+			file(config.NameFor(s.dir)),
 		}
-	case m.nstep == newRoot:
+	case s.step == newRoot:
 		verb := "Enter puts " + typed + " in the folder chosen below, and writes"
 		if isCloneURL(typed) {
 			verb = "Enter clones " + typed + " into the folder chosen below, and writes"
 		}
-		name := config.NameFor(m.newName())
-		lines = []string{say(th.NameDim, verb), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
-		rows = make([]string, len(m.nrows))
-		for i := range m.nrows {
-			dir := m.rootTarget(i)
+		name := config.NameFor(s.newName())
+		lines = []string{say(th.NameDim, verb), file(name), say(th.Meta, newTargets(sf, name))}
+		rows = make([]string, len(s.rows))
+		for i := range s.rows {
+			dir := s.rootTarget(i)
 			rows[i] = config.ContractHome(dir)
 			if _, err := os.Stat(dir); err == nil {
 				rows[i] += "  (already there)"
@@ -526,42 +567,33 @@ func (m Model) newScreen() (text string, at int) {
 			say(th.Meta, "A folder that is not there is created after asking."),
 		}
 	case isFullPath(typed):
-		name := config.NameFor(config.ExpandHome(m.fieldPath()))
-		lines = []string{say(th.NameDim, "Enter writes"), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
+		name := config.NameFor(config.ExpandHome(s.fieldPath()))
+		lines = []string{say(th.NameDim, "Enter writes"), file(name), say(th.Meta, newTargets(sf, name))}
 	default:
-		verb := "Enter chooses the folder for " + m.newName()
+		verb := "Enter chooses the folder for " + s.newName()
 		if isCloneURL(typed) {
-			verb = "Enter chooses the folder to clone " + m.newName() + " into"
+			verb = "Enter chooses the folder to clone " + s.newName() + " into"
 		}
-		name := config.NameFor(m.newName())
-		lines = []string{say(th.NameDim, verb), m.newFileLine(say, name), say(th.Meta, m.newTargets(name))}
+		name := config.NameFor(s.newName())
+		lines = []string{say(th.NameDim, verb), file(name), say(th.Meta, newTargets(sf, name))}
 	}
 	lines = append(lines, "")
-	return strings.Join(append(lines, choiceRows(th, rows, m.nrow, w)), "\n"), len(lines) + max(m.nrow, 0)
-}
-
-// newFileLine is the project file Enter writes for name.
-func (m Model) newFileLine(say func(lipgloss.Style, string) string, name revier.ProjectName) string {
-	root, err := config.Root()
-	if err != nil {
-		return say(m.theme.Attention, err.Error())
-	}
-	return say(m.theme.Path, config.ContractHome(config.ProjectFile(root, name)))
+	return strings.Join(append(lines, choiceRows(th, rows, s.row, w)), "\n"), len(lines) + max(s.row, 0)
 }
 
 // newTargets says what the written project will run. With shared targets in
 // config.toml the project gets the shared ones, and the file declares only
 // a home of its own, when no shared target is home.
-func (m Model) newTargets(name revier.ProjectName) string {
-	if len(m.targets) == 0 {
+func newTargets(sf surface, name revier.ProjectName) string {
+	if len(sf.targets) == 0 {
 		return fmt.Sprintf("an agent, a shell and an editor for %q", name)
 	}
-	names := make([]string, len(m.targets))
-	for i, t := range m.targets {
+	names := make([]string, len(sf.targets))
+	for i, t := range sf.targets {
 		names[i] = string(t.Name)
 	}
 	with := "the shared targets"
-	if !config.SharedHome(m.usable) {
+	if !config.SharedHome(sf.usable) {
 		with = "its own home and shared targets"
 	}
 	return fmt.Sprintf("%q with %s: %s", name, with, strings.Join(names, ", "))

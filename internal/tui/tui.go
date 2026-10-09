@@ -166,11 +166,7 @@ type Model struct {
 	polling  []string                         // the linked hosts that are being asked
 	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input    textinput.Model                  // the filter query, with its own cursor
-	path     textinput.Model                  // the directory field of the new-project screen
-	nstep    newStep                          // the new-project screen's step
-	nrows    []string                         // what the new-project screen lists under the field
-	nrow     int                              // the chosen one of nrows, -1 for none
-	ndir     string                           // the folder the new-project screen asks to create
+	create   createScreen                     // the new-project screen (newproject.go)
 	sname    textinput.Model                  // the name field of a session being saved
 	over     hovered                          // what the pointer is on
 	cell     *pointerCell                     // where the pointer last was, nil before it moved
@@ -237,7 +233,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		aglist: newAgentList(th), aginput: newPrompt(th, agentPlaceholder),
-		path: newPathInput(th), sname: newSessionNameInput(th),
+		create: newCreateScreen(th), sname: newSessionNameInput(th),
 		body: newBody(),
 		ui:   cfg.UI, runtime: cfg.Hosts.Runtime, chord: newChordInput(th),
 		pedit: newFieldInput(th),
@@ -789,7 +785,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch m.dialog {
 	case dialogNew:
-		return m.newKey(msg)
+		return m.createKey(msg)
 	case dialogLink:
 		return m.linkKey(msg)
 	case dialogConfig:
