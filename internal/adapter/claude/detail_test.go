@@ -252,8 +252,11 @@ func TestDetailIsTheTurnTheAgentIsIn(t *testing.T) {
 	}
 }
 
-// A slash command is filed as tags and reads as it was typed; what a command
-// printed for the user alone, and an interrupt, start no turn.
+// A slash command is filed as tags and reads as it was typed, and a paste
+// filed under tags leaves the words typed with it. What a command printed for
+// the user alone, a shell command of the user's, a background task's report,
+// the summary of a compacted conversation and an interrupt start no turn. A
+// prompt that only quotes a command's tags is a prompt.
 func TestDetailReadsAPromptAsItWasTyped(t *testing.T) {
 	typed := `{"type":"user","message":{"role":"user","content":"typed"}}`
 	for _, tc := range []struct {
@@ -263,8 +266,13 @@ func TestDetailReadsAPromptAsItWasTyped(t *testing.T) {
 	}{
 		{"a slash command", []string{`{"type":"user","message":{"role":"user","content":"<command-message>ship</command-message>\n<command-name>/ship</command-name>\n<command-args>the fix</command-args>"}}`}, "/ship the fix"},
 		{"a command's own output", []string{typed, `{"type":"user","message":{"role":"user","content":"<local-command-stdout>renamed</local-command-stdout>"}}`}, "typed"},
+		{"a shell command", []string{typed, `{"type":"user","message":{"role":"user","content":"<bash-input>ls</bash-input>"}}`, `{"type":"user","message":{"role":"user","content":"<bash-stdout>a.go</bash-stdout><bash-stderr></bash-stderr>"}}`}, "typed"},
+		{"a background task's report", []string{typed, `{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n</task-notification>"}}`}, "typed"},
+		{"a compacted conversation's summary", []string{typed, `{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued from a previous conversation."}}`}, "typed"},
 		{"an interrupt", []string{typed, `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}`}, "typed"},
 		{"a pasted file", []string{`{"type":"user","message":{"role":"user","content":"` + strings.Repeat("x", 5000) + `"}}`}, strings.Repeat("x", 300)},
+		{"a paste under tags", []string{`{"type":"user","message":{"role":"user","content":"<pasted_content id=\"2fb7\">func main() {}</pasted_content id=\"2fb7\">\n\n\nwhy does this fail"}}`}, "why does this fail"},
+		{"a command's tags quoted", []string{`{"type":"user","message":{"role":"user","content":"what is <command-name>/ship</command-name> for"}}`}, "what is <command-name>/ship</command-name> for"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, root := transcripts(t)

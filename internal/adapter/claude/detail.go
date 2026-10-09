@@ -224,10 +224,11 @@ func readTail(path string, n int64) ([]byte, error) {
 // entry is the part of a transcript line Detail reads. Everything else a line
 // carries is ignored, so a field Claude Code adds costs nothing.
 type entry struct {
-	IsSidechain bool      `json:"isSidechain"`
-	IsMeta      bool      `json:"isMeta"`
-	Timestamp   time.Time `json:"timestamp"`
-	Message     struct {
+	IsSidechain      bool      `json:"isSidechain"`
+	IsMeta           bool      `json:"isMeta"`
+	IsCompactSummary bool      `json:"isCompactSummary"`
+	Timestamp        time.Time `json:"timestamp"`
+	Message          struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
@@ -253,8 +254,9 @@ const briefRunes = 300
 // in, which is every tool it called since the user last wrote, and on to the
 // last text the agent wrote in its own conversation, which can be older than
 // the turn (decisions.md D122). A subagent's lines (isSidechain) are its
-// work, not the agent's, and a line Claude Code wrote into the conversation
-// itself (isMeta) is not the user's.
+// work, not the agent's. A line Claude Code wrote into the conversation
+// itself (isMeta), and the summary it put in a compacted conversation's place
+// (isCompactSummary), are not the user's: the turn goes on through both.
 //
 // A call's result is on a line after the call, so walking back meets it
 // first; a call met with no result is still open.
@@ -265,7 +267,7 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	lines := bytes.Split(tail, []byte("\n"))
 	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == ""); i-- {
 		var e entry
-		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta {
+		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
 			continue
 		}
 		text, blocks := contentOf(e.Message.Content)
@@ -325,22 +327,31 @@ func contentOf(content json.RawMessage) (string, []block) {
 var (
 	slashCommand = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>`)
 	slashArgs    = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
+	pasted       = regexp.MustCompile(`(?s)<pasted_content[^>]*>.*?</pasted_content[^>]*>`)
 )
 
+// notPrompts open the user lines the user asked nothing in: what a local
+// command printed for the user alone, a shell command of the `!` mode and
+// what it printed, the report of a background task, and an interrupt.
+var notPrompts = []string{"<local-command-", "<bash-", "<task-notification>", "[Request interrupted"}
+
 // promptOf is a user line's text as the user typed it, or nothing for a line
-// that started no turn. Claude Code files a slash command as tags around its
-// name and its arguments, and what a command printed for the user alone under
-// tags of its own.
+// the user asked nothing in (notPrompts). Claude Code files a slash command
+// as tags around its name and its arguments, and a paste under tags before
+// the words typed with it.
 func promptOf(text string) string {
-	if strings.HasPrefix(text, "<local-command-") || strings.HasPrefix(text, "[Request interrupted") {
+	if slices.ContainsFunc(notPrompts, func(open string) bool { return strings.HasPrefix(text, open) }) {
 		return ""
 	}
-	if name := slashCommand.FindStringSubmatch(text); name != nil {
+	if name := slashCommand.FindStringSubmatch(text); name != nil && strings.HasPrefix(text, "<command-") {
 		typed := name[1]
 		if args := slashArgs.FindStringSubmatch(text); args != nil {
 			typed += " " + args[1]
 		}
 		return brief(typed)
+	}
+	if typed := brief(pasted.ReplaceAllString(text, " ")); typed != "" {
+		return typed
 	}
 	return brief(text)
 }

@@ -188,8 +188,8 @@ func TestAnAgentWithNothingReadableSaysSo(t *testing.T) {
 
 // Above the message the pane shows the turn: what the user asked, the tools
 // called since with the most called first and the failures counted, and the
-// call that is open, worded by the agent's state. Nothing a prompt or a
-// command carries reaches the terminal.
+// call that is open, worded by the agent's state. Nothing a prompt, a command
+// or a tool's name carries reaches the terminal, and each stays on its line.
 func TestThePaneShowsTheTurnAboveTheMessage(t *testing.T) {
 	tools := []revier.ToolCall{
 		{Name: "Read", Input: "/src/a.go"},
@@ -208,9 +208,31 @@ func TestThePaneShowsTheTurnAboveTheMessage(t *testing.T) {
 		t.Errorf("the turn is not above the message:\n%s", body)
 	}
 
-	m, _ = saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, tools: tools[3:]})
+	open := revier.ToolCall{Name: "Ba\x1b[31msh", Input: "git push\n\x1b[31morigin", Pending: true}
+	m, _ = saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, tools: []revier.ToolCall{open}})
 	if body := pane(m); !strings.Contains(body, "running Bash git push origin") || strings.Contains(body, "Nothing this agent said") {
 		t.Errorf("pane = %q, want the open call of a working agent that has said nothing", body)
+	}
+}
+
+// The ellipsis stands for the start of a message that was cut. A turn with no
+// message under it carries none, however few rows the pane leaves it.
+func TestATurnWithNoMessageCarriesNoEllipsis(t *testing.T) {
+	agent := saidAgent{status: revier.StatusRunning, prompt: "make it green", tools: []revier.ToolCall{{Name: "Bash", Input: "go vet", Pending: true}}}
+	for height := 12; height <= 30; height++ {
+		m, _ := saidWorld(t, 140, height, agent)
+		if body := pane(m); strings.Contains(body, "...") {
+			t.Errorf("pane at %d rows elides a message the agent has not written:\n%s", height, body)
+		}
+	}
+}
+
+// A detail that carries a time and nothing to draw says so, as an empty one
+// does.
+func TestADetailWithNothingToDrawSaysSo(t *testing.T) {
+	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, at: time.Now()})
+	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
+		t.Errorf("pane = %q, want it to say nothing can be read", body)
 	}
 }
 
@@ -271,6 +293,53 @@ func TestAReadThatFailsKeepsTheMessageShown(t *testing.T) {
 	m = survey(m).Said()
 	if body := pane(m); !strings.Contains(body, "all tests pass") {
 		t.Errorf("pane = %q after a read that failed, want the message it showed", body)
+	}
+}
+
+// A turn read with no message in it keeps the message the pane showed: the
+// last one is further back than the probe reads, and still the last.
+func TestATurnReadWithNoMessageKeepsTheMessageShown(t *testing.T) {
+	m, fakes := saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, said: "all tests pass"})
+	fakes[0].Said["1"] = revier.AgentDetail{Prompt: "now push it"}
+	m = survey(m).Said()
+	if body := pane(m); !strings.Contains(body, "all tests pass") || !strings.Contains(body, "> now push it") {
+		t.Errorf("pane = %q, want the new turn above the message it showed", body)
+	}
+}
+
+// A call with no result is what a working agent runs. An agent at rest runs
+// nothing, so its open call, cut off by a shutdown, is counted and not named.
+func TestAnAgentAtRestRunsNoOpenCall(t *testing.T) {
+	open := []revier.ToolCall{{Name: "Bash", Input: "npm test", Pending: true}}
+	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, said: "resumed", tools: open})
+	if body := pane(m); strings.Contains(body, "npm test") || !strings.Contains(body, "Bash") {
+		t.Errorf("pane = %q, want the call counted and not named as running", body)
+	}
+}
+
+// The message is what the pane is for: where the turn would leave it under
+// four rows, the pane shows the message alone.
+func TestAShortPaneShowsTheMessageBeforeTheTurn(t *testing.T) {
+	agent := saidAgent{status: revier.StatusIdle, said: "one\n\ntwo\n\nthree\n\nfour\n\nthe end", prompt: "make it green"}
+	shown := 0
+	for height := 14; height <= 30; height++ {
+		m, _ := saidWorld(t, 140, height, agent)
+		body := pane(m)
+		if !strings.Contains(body, "Last turn") {
+			continue
+		}
+		if !strings.Contains(body, "> make it green") {
+			continue
+		}
+		shown++
+		for _, want := range []string{"four", "the end"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("pane at %d rows shows the turn and no %q of the message:\n%s", height, want, body)
+			}
+		}
+	}
+	if shown == 0 {
+		t.Error("no height showed the turn")
 	}
 }
 
