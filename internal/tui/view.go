@@ -139,7 +139,7 @@ func (m Model) top() string {
 	case dialogConfig:
 		name = "Configuration"
 	case dialogProject:
-		name = "Project " + string(m.proj)
+		name = "Project " + string(m.proj.name)
 	case dialogHelp:
 		name = "Keyboard shortcuts"
 	case dialogSessions:
@@ -201,7 +201,7 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render("written to "+where+" as it changes")
 	case dialogProject:
 		file := ""
-		if p, ok := m.project(m.proj); ok {
+		if p, ok := m.project(m.proj.name); ok {
 			file = config.ContractHome(p.File)
 		}
 		return " " + m.theme.Meta.Render("written to "+file+" as it changes")
@@ -387,8 +387,8 @@ func (m Model) footer() string {
 	if m.dialog == dialogConfig && m.config.dropping {
 		return m.config.dropPrompt(m.surface())
 	}
-	if m.dialog == dialogProject && m.dropping {
-		return m.dropProjectPrompt()
+	if m.dialog == dialogProject && m.proj.dropping {
+		return m.proj.dropPrompt(m.theme)
 	}
 	if m.link.asking != "" {
 		return m.link.askingLine(m.theme)
@@ -422,7 +422,7 @@ func (m Model) footer() string {
 		return " " + m.help.ShortHelpView(m.keys.helpForConfig(m.config.helpKind(m.surface())))
 	}
 	if m.dialog == dialogProject {
-		return " " + m.help.ShortHelpView(m.projectHelp())
+		return " " + m.help.ShortHelpView(m.proj.help(m.keys))
 	}
 	if m.dialog == dialogNew {
 		return " " + m.help.ShortHelpView(m.create.help(m.keys))

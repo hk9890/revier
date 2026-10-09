@@ -52,7 +52,7 @@ func (m *Model) syncBody() {
 		return
 	case dialogProject:
 		m.body.Width = m.listWidth()
-		text, at := m.projectScreen()
+		text, at := m.proj.screen(m.surface())
 		m.body.SetContent(text)
 		m.follow(at, 1)
 		return
