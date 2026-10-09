@@ -5,6 +5,7 @@ package execprobe_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,6 +71,21 @@ func TestInspectEnforcesTheTimeout(t *testing.T) {
 	}
 	if took := time.Since(start); took > time.Second {
 		t.Errorf("Inspect took %s, want the 100ms bound to hold", took)
+	}
+	if !strings.Contains(err.Error(), "timed out after 100ms") {
+		t.Errorf("err = %v, want the bound that was reached", err)
+	}
+}
+
+// A read that the caller ended is not a probe that was slow: the error names
+// what ended it, so the log sends nobody to the probe.
+func TestInspectSaysThatTheCallerEndedTheRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	p := execprobe.New("aider", script(t, `echo '{"status":"idle"}'`))
+	_, err := p.Inspect(ctx, revier.Panel{Command: []string{"aider"}})
+	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "timed out") {
+		t.Errorf("err = %v, want the cancellation and no timeout", err)
 	}
 }
 
