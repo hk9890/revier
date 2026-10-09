@@ -28,6 +28,9 @@ func runtimeAdapters() map[string]revier.Runtime {
 	}
 }
 
+// popupListenOn is the control socket of the kitty the popup runs in.
+var popupListenOn = kitty.ListenOn
+
 func windowAdapters() map[string]revier.WindowController {
 	return map[string]revier.WindowController{
 		"gnome": &gnome.Host{},

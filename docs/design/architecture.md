@@ -113,7 +113,7 @@ Detection signals the adapters use:
 
 | Adapter | Signal |
 |---|---|
-| kitty | `kitten` on PATH or beside `kitty`; a `@kitty-<pid>` control socket answers, or no kitty runs yet |
+| kitty | `kitten` on PATH or beside `kitty`; a `$XDG_RUNTIME_DIR/kitty-<pid>` control socket answers, or no kitty runs yet |
 | tmux | `$TMUX`, `tmux` on PATH |
 | wezterm | `$WEZTERM_PANE` |
 | gnome | `$XDG_CURRENT_DESKTOP` contains GNOME, `wctl` on PATH |

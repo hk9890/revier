@@ -256,8 +256,9 @@ kitten @ close-window --match 'title:^session:demo$'      # or close-window per 
 ```
 
 Every `kitten @` command above addresses the socket of the kitty it runs
-inside. Pass `--to unix:@kitty-<pid>` to reach another process; the pids are
-the kitty entries in `wctl list --json`.
+inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
+process; the pids are the kitty entries in `wctl list --json`. A kitty that
+`kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`.
 
 To check a binding's command as the desktop runs it, hand the user the same
 scratch project in the login shell the binding uses:

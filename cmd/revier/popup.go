@@ -31,7 +31,7 @@ func cmdPopup(ctx context.Context, a *app) error {
 		if p, err := a.resolveProject(ctx, ""); err == nil {
 			start = p.Name
 		}
-		return popupArgv(self, start)
+		return popupArgv(self, start, popupListenOn())
 	})
 	if !errors.Is(err, core.ErrNoPopupHost) {
 		return err
@@ -54,8 +54,16 @@ func cmdPopup(ctx context.Context, a *app) error {
 // every window launched into this kitty, which is where the surface's
 // targets open. The variable is set either way, which is what makes the
 // surface the popup.
-func popupArgv(self string, start revier.ProjectName) []string {
+//
+// listenOn is the control socket of this kitty, a file only the user can
+// reach, in place of the one `listen_on` in kitty.conf names: the surface's
+// targets open in this kitty, through that socket. With none, kitty.conf
+// decides.
+func popupArgv(self string, start revier.ProjectName, listenOn string) []string {
 	mark := core.PopupEnv + "=" + string(start)
-	return []string{"kitty", "--class", core.PopupClass, "--title", "revier",
-		"-o", "remember_window_size=no", "-e", "env", mark, self}
+	argv := []string{"kitty", "--class", core.PopupClass, "--title", "revier"}
+	if listenOn != "" {
+		argv = append(argv, "--listen-on", listenOn)
+	}
+	return append(argv, "-o", "remember_window_size=no", "-e", "env", mark, self)
 }

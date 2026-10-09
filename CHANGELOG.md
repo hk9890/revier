@@ -8,6 +8,17 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **A kitty that revier starts listens on a socket file only you can reach.**
+  The control socket is `$XDG_RUNTIME_DIR/kitty-<pid>`. It was the abstract
+  socket `@kitty-<pid>`, which every user of the machine can connect to, and
+  through it read and type into each kitty window. The popup's kitty gets the
+  same socket, in place of the one `listen_on` in `kitty.conf` names. Without
+  `XDG_RUNTIME_DIR`, revier starts no kitty for a workspace and says so, and
+  the popup's kitty listens where `kitty.conf` says.
+- **revier finds a kitty that `kitty.conf` puts on a socket file.** Set
+  `listen_on unix:${XDG_RUNTIME_DIR}/kitty` to close the kitty windows you
+  start yourself to other users too. A kitty on `@kitty-<pid>` is still found
+  in this release, and no longer in the next.
 - **A command acts on the state as it is when it acts.** `revier open`,
   `agent`, `session` and `shutdown` used the state read when the command
   started, so a window another process bound in the meantime was not found by
