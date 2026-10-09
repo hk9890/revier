@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,5 +50,39 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 	s.open()
 	if res, _ := s.key(sf, tea.KeyMsg{Type: tea.KeyEsc}); !res.closed {
 		t.Errorf("result = %+v, want Esc on the field to close the screen", res)
+	}
+}
+
+// A folder that appears between the question and Enter is added as one that
+// was there: the project is not cloned, and the footer names the clone URL
+// that is not its origin.
+func TestAFolderThatAppearsAfterTheCloneQuestionKeepsTheURLInSight(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("PATH", t.TempDir())
+	parent := t.TempDir()
+	const url = "https://example.com/owner/widget.git"
+
+	th := theme.Default()
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60}
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	s := newCreateScreen(th)
+	s.open()
+	s.path.SetValue(url)
+	s.key(sf, enter)
+	s.rows, s.row = []string{parent}, 0
+	if res, _ := s.key(sf, enter); res.err != nil || s.step != newMkdir {
+		t.Fatalf("step = %v, result = %+v, want the question about the clone", s.step, res)
+	}
+	if err := os.Mkdir(filepath.Join(parent, "widget"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, _ := s.key(sf, enter)
+	if res.created == nil || res.created.clone || !res.created.exists {
+		t.Fatalf("result = %+v, want the folder added as it is, with no clone", res)
+	}
+	if res.err == nil || !strings.Contains(res.err.Error(), url) {
+		t.Errorf("err = %v, want the footer to name the URL that is ignored", res.err)
 	}
 }
