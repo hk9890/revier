@@ -77,6 +77,9 @@ Each section is also the text of its release on the
 - **`revier agent prompt` says that a pane holds a shell for `dash`, `ksh` and
   a login shell too.** It refused such a pane with `no probe recognises what
   runs in it`, which sent the reader to the probes.
+- **revier knows `ash`, `mksh`, `tcsh`, `csh`, `nu`, `elvish`, `xonsh` and
+  `pwsh` as shells.** What the three entries above say of a `dash` and a
+  `ksh` holds for each of them.
 
 ## v0.13.0
 

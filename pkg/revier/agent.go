@@ -40,7 +40,7 @@ const (
 // the probes' to say (decisions.md D119).
 func IsShell(program string) bool {
 	switch strings.TrimPrefix(baseName(program), "-") {
-	case "sh", "bash", "zsh", "fish", "dash", "ksh":
+	case "sh", "bash", "zsh", "fish", "dash", "ksh", "ash", "mksh", "tcsh", "csh", "nu", "elvish", "xonsh", "pwsh":
 		return true
 	}
 	return false
