@@ -606,14 +606,14 @@ func validateTargets(p revier.Project) []error {
 
 // nothingToStart refuses a realization of t with no launch and no tabs. On a
 // link the reason is the link's: the home alone has a list of tabs, the
-// derived one, and a home that has the name of the derived tab gets none
-// (decisions.md D128).
+// derived one (decisions.md D128). A home with the name of the derived tab
+// gets none; one that also has a window gets none under any name.
 func nothingToStart(p revier.Project, t revier.Target, kind revier.HostKind) error {
 	switch {
 	case p.Remote == nil || kind == revier.HostWindow:
 	case !t.Home:
 		return fmt.Errorf("target %q runtime realization has no launch argv, and on a link only the home has tabs", t.Name)
-	case t.Name == agentTab:
+	case t.Name == agentTab && t.Window == nil:
 		return fmt.Errorf("target %q is the home of a link, and %q is the name of the tab a link opens with; give the home another name", t.Name, agentTab)
 	}
 	return fmt.Errorf("target %q %s realization has no launch argv and no tabs", t.Name, kind)

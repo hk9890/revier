@@ -199,7 +199,8 @@ project = "far"     # its name there; defaults to this file's name
 # home target and its one tab, agent, are derived: an agent panel and a shell
 # panel, each an ssh onto the workspace (D84, D128). A declared home keeps
 # every field it sets - a placement alone is enough - and a tabs it sets is
-# dropped.
+# dropped. A home that takes the derived tab cannot have the name agent, which
+# is the tab's (D128).
 [[target]]
 name = "editor"
 key  = "ctrl-shift-o"
