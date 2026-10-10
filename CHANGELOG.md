@@ -20,6 +20,9 @@ Each section is also the text of its release on the
   is resumed. A session saved before the change to `tabs` restores after it.
   Panels directly on the home target, with no `tabs`, work as before. A linked
   project opens without the listed tabs.
+- **The mouse works after an action or a clone.** After a key ran an action,
+  or Enter cloned a missing project, a click did nothing, and a drag selected
+  text that was lost at once while an agent worked.
 - **Fast pointer motion no longer types into a filter.** Text such as
   `<35;76;40M` appeared in the project filter with no key pressed, and the
   list then matched nothing.
