@@ -6,7 +6,7 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
-## Unreleased
+## v0.15.0
 
 - **Action required: `panels` are on a tab target only.** A project file or a
   `config.toml` with `[[target.runtime.panels]]` on a target that has no
