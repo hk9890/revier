@@ -41,7 +41,7 @@ func (m Model) Said() Model {
 func (m Model) Mirrored() Model {
 	next, _ := m.Update(mirrorTickMsg{})
 	m = next.(Model)
-	_, a, ok := m.mirrored()
+	_, a, ok := m.mirroring()
 	if !ok {
 		return m
 	}

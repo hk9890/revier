@@ -519,10 +519,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	mm.syncDetail()
 	mm.syncBody()
-	// The mirror is asked for once the pane has its cursor: beside the
-	// project list the pane chooses the agent as it is drawn (chooseAgent).
+	// The mirror is asked for once the pane is drawn: beside the project list
+	// the pane chooses the agent as it is drawn (chooseAgent), and only a
+	// drawn pane says whether it has a row for the mirror.
 	var read tea.Cmd
-	if key, a, ok := mm.mirrored(); ok {
+	if key, a, ok := mm.mirroring(); ok {
 		read = mm.mirror.ask(mm.core, key, a, msg)
 	}
 	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
@@ -560,13 +561,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.took(msg)
 		return m, nil
 	case mirroredMsg:
-		m.mirror.take(msg, m.mirrorWidth())
+		m.mirror.take(msg)
 		return m, nil
 	case mirrorTickMsg:
 		// The tick ends with the mirror off the screen, and the mirror's ask
 		// starts it again when the mirror comes back; the read it is for is
 		// the ask's too.
-		if _, _, ok := m.mirrored(); !ok {
+		if _, _, ok := m.mirroring(); !ok {
 			m.mirror.ticking = false
 			return m, nil
 		}

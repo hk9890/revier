@@ -48,6 +48,7 @@ type mirror struct {
 	deep     bool      // the scrollback is asked for: the user scrolled up
 	off      int       // the lines the view is scrolled up from the end
 	room     int       // the lines the pane last had for it
+	width    int       // the columns the pane last set its lines at
 	seq      int       // the number of the last read asked for
 	took     int       // the number of the last read taken
 	ticking  bool      // whether a tick is out, so a switch starts no second one
@@ -96,14 +97,12 @@ func (m Model) mirrored() (listedKey, revier.AgentView, bool) {
 	return listedKey{project: v.Project.Name, agent: keyOf(a)}, a, true
 }
 
-// mirrorWidth is the width the mirror's lines are set at: the pane's text, or
-// what a wide project pane leaves beside the facts (detailContent).
-func (m Model) mirrorWidth() int {
-	w := m.paneCols() - paneChrome
-	if !m.agents.shown && m.paneCols() >= widePaneWidth {
-		return w - gridGap - maxFactsWidth
-	}
-	return w
+// mirroring is mirrored for a pane that had a row for the mirror when it was
+// last drawn. A pane with none shows no mirror: nothing is read for it, and
+// the wheel over it scrolls the pane.
+func (m Model) mirroring() (listedKey, revier.AgentView, bool) {
+	key, a, ok := m.mirrored()
+	return key, a, ok && m.mirror.room > 0
 }
 
 // ask sends for the screen of the agent the pane mirrors: at once when
@@ -120,7 +119,7 @@ func (mi *mirror) ask(c *core.Core, key listedKey, a revier.AgentView, msg tea.M
 	}
 	_, tick := msg.(mirrorTickMsg)
 	if key != mi.key {
-		*mi = mirror{key: key, ticking: true, seq: mi.seq, room: mi.room}
+		*mi = mirror{key: key, ticking: true, seq: mi.seq, room: mi.room, width: mi.width}
 	} else if !tick && !back {
 		return tea.Batch(cmds...)
 	}
@@ -144,9 +143,7 @@ func (mi *mirror) readScreen(c *core.Core, a revier.AgentView) tea.Cmd {
 // failed keeps the screen the mirror was showing: one kitty call that timed
 // out must not blank it. While the user is scrolled up, the view stays on the
 // lines it shows as more are written under them.
-//
-// w is the width the mirror's lines have.
-func (mi *mirror) take(msg mirroredMsg, w int) {
+func (mi *mirror) take(msg mirroredMsg) {
 	if msg.key != mi.key || msg.seq <= mi.took {
 		return
 	}
@@ -157,7 +154,7 @@ func (mi *mirror) take(msg mirroredMsg, w int) {
 		at := msg.key.agent
 		logging.Repeat("mirror\x00"+at.host+"\x00"+at.id+"\x00"+string(at.panel), "mirror", msg.err, "panel", at.panel)
 	}
-	before := len(mi.screenLines(w))
+	before := len(mi.screenLines())
 	mi.took, mi.read, mi.err = msg.seq, true, msg.err
 	if msg.err != nil {
 		return
@@ -171,9 +168,9 @@ func (mi *mirror) take(msg mirroredMsg, w int) {
 	}
 	mi.textDeep = msg.deep
 	if mi.off > 0 && grew {
-		mi.off += max(len(mi.screenLines(w))-before, 0)
+		mi.off += max(len(mi.screenLines())-before, 0)
 	}
-	mi.boundScroll(w)
+	mi.boundScroll()
 }
 
 // scroll moves the mirror's view of the agent's screen by lines, up for a
@@ -181,13 +178,13 @@ func (mi *mirror) take(msg mirroredMsg, w int) {
 // does not read while it follows the end; back at the end it stops reading
 // it. Until the scrollback is here there is nothing above the screen to stop
 // at, so the moves are kept as they come.
-func (mi *mirror) scroll(c *core.Core, a revier.AgentView, by, w int) tea.Cmd {
+func (mi *mirror) scroll(c *core.Core, a revier.AgentView, by int) tea.Cmd {
 	if by > 0 && !mi.deep {
 		mi.deep, mi.off = true, by
 		return mi.readScreen(c, a)
 	}
 	mi.off = max(mi.off+by, 0)
-	mi.boundScroll(w)
+	mi.boundScroll()
 	return nil
 }
 
@@ -195,20 +192,20 @@ func (mi *mirror) scroll(c *core.Core, a revier.AgentView, by, w int) tea.Cmd {
 // the mirror follow the end again when the view is at it: a scrollback with
 // nothing above the pane leaves no line to hold, and a view that held one
 // would stand still while the panel wrote on under it.
-func (mi *mirror) boundScroll(w int) {
+func (mi *mirror) boundScroll() {
 	if mi.textDeep {
-		mi.off = min(mi.off, max(len(mi.screenLines(w))-mi.room, 0))
+		mi.off = min(mi.off, max(len(mi.screenLines())-mi.room, 0))
 	}
 	if mi.off == 0 {
 		mi.deep = false
 	}
 }
 
-// screenLines is the mirror's text as the pane's lines, at the pane's width,
-// kept while the text and the width stay.
-func (mi *mirror) screenLines(w int) []string {
-	if mi.lines == nil || mi.linesW != w {
-		mi.lines, mi.linesW = screenLines(mi.text, w), w
+// screenLines is the mirror's text as the pane's lines, at the width the pane
+// last drew it, kept while the text and the width stay.
+func (mi *mirror) screenLines() []string {
+	if mi.lines == nil || mi.linesW != mi.width {
+		mi.lines, mi.linesW = screenLines(mi.text, mi.width), mi.width
 	}
 	return mi.lines
 }
@@ -218,13 +215,17 @@ func (mi *mirror) screenLines(w int) []string {
 // another agent's screen has not been asked for this one yet and says it is
 // reading, so an agent is never drawn over the screen of the one the cursor
 // left.
+//
+// The room and the width are kept: a read and a wheel that come before the
+// next draw bound the scroll by what is on the screen.
 func (mi *mirror) view(th theme.Theme, key listedKey, w, rows int) string {
-	mi.room = rows
+	mi.room, mi.width = rows, w
 	if rows < 1 {
 		return ""
 	}
 	note := func(s string) string {
 		parts := wrap(s, w)
+		parts = parts[:min(len(parts), rows)]
 		for i := range parts {
 			parts[i] = th.Meta.Render(parts[i])
 		}
@@ -233,7 +234,7 @@ func (mi *mirror) view(th theme.Theme, key listedKey, w, rows int) string {
 	if key != mi.key {
 		return note("reading...")
 	}
-	lines := mi.screenLines(w)
+	lines := mi.screenLines()
 	switch {
 	case errors.Is(mi.err, core.ErrNoScreen):
 		return note("The screen of this agent cannot be read here.")
@@ -332,7 +333,7 @@ func screenLines(text string, w int) []string {
 // with its parameters, an OSC up to its terminator, or a two-character
 // escape. An escape cut short by the end of the text is the rest of it.
 func escapeAt(s string) (string, int) {
-	if loc := mdEscape.FindStringIndex(s); loc != nil && loc[0] == 0 {
+	if loc := escapeSeq.FindStringIndex(s); loc != nil && loc[0] == 0 {
 		return s[:loc[1]], loc[1]
 	}
 	return s[:1], 1

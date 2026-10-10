@@ -428,7 +428,7 @@ func (c *Core) SendKeys(ctx context.Context, a Agent, names []string, gap time.D
 
 // Said is the last thing the agent said, as its probe reads it
 // (revier.Detailed): what `revier agent read` prints. The read is display,
-// as it is in the pane, and nothing is decided by it (decisions.md D106,
+// as it is on the surface, and nothing is decided by it (decisions.md D106,
 // D116). An agent with no message to read answers ErrNoMessage; any other
 // error is a probe that broke.
 func (c *Core) Said(ctx context.Context, a Agent) (revier.AgentDetail, error) {
@@ -485,7 +485,7 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 }
 
 // Details is what each agent in the views said last, in the views' order, for
-// the pane that shows one project's agents (revier.Detailed). The panels are
+// the surface that shows them (revier.Detailed). The panels are
 // the ones the last listing found, so a detail asks no host anything; an
 // agent that listing did not hold has no detail until the next survey.
 //

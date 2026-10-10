@@ -79,12 +79,12 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		// The wheel over a pane that mirrors an agent scrolls the mirror
 		// through the panel's scrollback, and what stands over it stays. A
 		// pane too short for the mirror scrolls as a whole.
-		if _, a, ok := m.mirrored(); ok && m.mirror.room > 0 {
+		if _, a, ok := m.mirroring(); ok {
 			switch msg.Button {
 			case tea.MouseButtonWheelUp:
-				return m, m.mirror.scroll(m.core, a, mirrorNotch, m.mirrorWidth())
+				return m, m.mirror.scroll(m.core, a, mirrorNotch)
 			case tea.MouseButtonWheelDown:
-				return m, m.mirror.scroll(m.core, a, -mirrorNotch, m.mirrorWidth())
+				return m, m.mirror.scroll(m.core, a, -mirrorNotch)
 			}
 			return m, nil
 		}

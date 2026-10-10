@@ -119,7 +119,7 @@ func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.Sess
 type FakeDetailedProbe struct {
 	*FakeProbe
 	Said map[revier.PanelID]revier.AgentDetail
-	// DetailErr makes Detail fail, for the path where the pane shows nothing.
+	// DetailErr makes Detail fail, for the path where the surface reads nothing.
 	DetailErr error
 
 	calls int

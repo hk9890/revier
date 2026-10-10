@@ -134,6 +134,10 @@ func (m *Model) syncDetail() {
 	m.tcursor = clampRow(m.tcursor, len(m.targetRows()))
 	m.chooseAgent()
 	m.detail.SetContent(m.detailContent(v))
+	// A viewport keeps its offset over a content that got shorter, and the
+	// wheel over a mirror scrolls the mirror: a pane that fits again would
+	// stand scrolled with nothing to bring its top back.
+	m.detail.SetYOffset(m.detail.YOffset)
 	if fresh {
 		m.detail.GotoTop()
 	}
@@ -184,7 +188,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),
-		strings.TrimPrefix(m.agentScreen(key, m.mirrorWidth(), m.detail.Height+1), "\n"))
+		strings.TrimPrefix(m.agentScreen(key, w-gridGap-maxFactsWidth, m.detail.Height+1), "\n"))
 }
 
 // agentScreen is the project pane's part below the facts: the mirror of the
@@ -397,8 +401,8 @@ func detailAgent(th theme.Theme, row agentRow, w int, sel, over, cursor bool) st
 		}
 		return s
 	}
-	// The agent shown below is marked while the cursor is in the list, so the
-	// message has a row it belongs to; the cursor's bar is the Agents' own.
+	// The agent mirrored below is marked while the cursor is in the list, so
+	// the mirror has a row it belongs to; the cursor's bar is the Agents' own.
 	bar := style(th.Path).Render(" ")
 	if sel && cursor {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)

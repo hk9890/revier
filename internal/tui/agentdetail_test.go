@@ -280,7 +280,49 @@ func TestNothingIsReadWithoutAPaneToShowIt(t *testing.T) {
 		t.Errorf("the probe was asked %d times with no pane on screen, want none", n)
 	}
 	if n := len(rt.ScreenReads); n != 0 || m.MirrorAsked() != 0 {
-		t.Errorf("the panel was read %d times with no pane on screen, want none", n)
+		t.Errorf("the panel was read %d times and asked for %d times with no pane on screen, want neither", n, m.MirrorAsked())
+	}
+}
+
+// crowd is n agents at rest: more rows than a short pane holds, so it has
+// none left for the mirror.
+func crowd(n int) []shownAgent {
+	agents := make([]shownAgent, n)
+	for i := range agents {
+		agents[i] = shownAgent{status: revier.StatusIdle, screen: "the only line"}
+	}
+	return agents
+}
+
+// Nothing is read for a pane with no row left for the mirror either, however
+// often the timer fires. The read is sent once the pane has a row for it.
+func TestNothingIsReadForAPaneWithNoRowForTheMirror(t *testing.T) {
+	m, rt, _ := shownWorld(t, 140, 22, crowd(16)...)
+	if body := pane(m); strings.Contains(body, "Screen") {
+		t.Fatalf("the pane has a row for the mirror:\n%s", body)
+	}
+	m = m.MirrorTicked().MirrorTicked()
+	if n := len(rt.ScreenReads); n != 0 || m.MirrorAsked() != 0 {
+		t.Errorf("the panel was read %d times and asked for %d times with no row for the mirror, want neither", n, m.MirrorAsked())
+	}
+	m = resize(m, 140, 60)
+	if got := m.MirrorAsked(); got != 1 {
+		t.Errorf("reads asked for = %d once the pane has a row for the mirror, want 1", got)
+	}
+}
+
+// A pane scrolled while it had no row for the mirror stands at its top once
+// it fits: the wheel over a mirror scrolls the mirror, so nothing else would
+// bring the facts back.
+func TestAPaneThatFitsAgainStandsAtItsTop(t *testing.T) {
+	m, _, _ := shownWorld(t, 140, 22, crowd(16)...)
+	m = wheel(m, paneBorder(t, m)+4, tea.MouseButtonWheelDown)
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
+		t.Fatalf("the wheel did not scroll a pane with no row for the mirror:\n%s", body)
+	}
+	m = resize(m, 140, 60)
+	if body := pane(m); !strings.HasPrefix(body, "Project  duo") || !strings.Contains(body, "Screen") {
+		t.Errorf("the pane that fits again stands scrolled:\n%s", body)
 	}
 }
 

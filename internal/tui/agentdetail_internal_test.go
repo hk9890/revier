@@ -47,6 +47,12 @@ func TestTheNewestAnswerForTheProjectShownIsTaken(t *testing.T) {
 	if got := m.adetails[two].Message; got != "two again" {
 		t.Errorf("the other agent holds %q, want its new word", got)
 	}
+	// A turn read with no message in it: the last message is further back
+	// than the probe reads, and still the last, with the time it was said.
+	m.took(detailsMsg{project: "demo", seq: 5, said: map[agentKey]revier.AgentDetail{one: {Prompt: "now push it"}}})
+	if got := m.adetails[one]; got.Message != "newer" || !got.At.Equal(time.Unix(1, 0)) || got.Prompt != "now push it" {
+		t.Errorf("after a turn with no message the pane holds %+v, want the turn with the message and the time before it", got)
+	}
 }
 
 func TestAgoSaysTheLargestWholeUnit(t *testing.T) {
