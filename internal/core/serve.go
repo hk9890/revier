@@ -27,8 +27,8 @@ type Served struct {
 	Outcome AgentOutcome
 }
 
-// workspace is the first runtime realization of the project whose layout
-// declares a panel of that kind, or for a shell its home's when none does and
+// workspace is the first runtime realization of the project whose listed tabs
+// declare a panel of that kind, or for a shell its home's when none does and
 // no tab the home lists is refused. It is read from the project and not
 // resolved: a machine reached over ssh alone has no runtime, and serves its
 // panels all the same. A refused target is passed over, as

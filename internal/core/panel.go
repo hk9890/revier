@@ -47,7 +47,7 @@ func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host re
 	}
 	opener, ok := host.(revier.PanelOpener)
 	if !ok {
-		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch or panels",
+		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch",
 			ErrNoTabs, name, host.Name())
 	}
 	return opener, nil
@@ -101,15 +101,13 @@ func (c *Core) listedTabs(p Project, real revier.Realization) ([]revier.Target, 
 }
 
 // layout is the panels a workspace declares, which is where its agent panel
-// and its shell panel are read from: the realization's own, or the panels of
-// the tabs it lists, in their order (decisions.md D127). So the first panel of
-// a kind is the one of the first listed tab that declares it. Every reader of
-// a workspace's declared panels that starts one here takes them from here: an
-// agent tab, a shell tab, a restore.
+// and its shell panel are read from: the panels of the tabs it lists, in
+// their order (decisions.md D127). So the first panel of a kind is the one of
+// the first listed tab that declares it, and a target that lists no tab has
+// no layout: panels are on a tab alone (D128). Every reader of a workspace's
+// declared panels that starts one here takes them from here: an agent tab, a
+// shell tab, a restore.
 func (c *Core) layout(p Project, real revier.Realization) ([]revier.PanelSpec, error) {
-	if len(real.Tabs) == 0 {
-		return real.Panels, nil
-	}
 	tabs, err := c.listedTabs(p, real)
 	if err != nil {
 		return nil, err
@@ -121,9 +119,6 @@ func (c *Core) layout(p Project, real revier.Realization) ([]revier.PanelSpec, e
 // link filled in: what a panel served to a link is read from, on the host,
 // where the project is not a link.
 func (p Project) layout(real revier.Realization) []revier.PanelSpec {
-	if len(real.Tabs) == 0 {
-		return real.Panels
-	}
 	return panelsOf(p.listed(real))
 }
 
@@ -150,15 +145,19 @@ func panelTab(p revier.Project, t revier.Target) bool {
 
 // resumingTabs is the opening with the recorded agents laid over the agent
 // panels of its tabs, in the order of the tabs, what became of each, and the
-// recorded agents past them. The tabs are copied before a resume is written
-// into one: they arrive sharing the prepared project's realizations.
+// recorded agents past them, which the launch adds once the instance is open.
+// The tabs are copied before a resume is written into one: they arrive sharing
+// the prepared project's realizations, and a restore must not edit the project
+// every later keypress reads.
 func (c *Core) resumingTabs(o opening, resumes []Resume, link bool) (opening, []AgentOutcome, []Resume) {
 	o.tabs = slices.Clone(o.tabs)
 	o.laid = make([]int, len(o.tabs))
 	var outcomes []AgentOutcome
 	for i := range o.tabs {
-		real, laid, rest := c.resuming(*o.tabs[i].Runtime, resumes, link)
-		o.tabs[i].Runtime, resumes = &real, rest
+		real := *o.tabs[i].Runtime
+		var laid []AgentOutcome
+		real.Panels, laid, resumes = c.layAgents(real.Panels, resumes, link)
+		o.tabs[i].Runtime = &real
 		outcomes = append(outcomes, laid...)
 		o.laid[i] = len(outcomes)
 	}

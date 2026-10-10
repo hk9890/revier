@@ -17,7 +17,7 @@ import (
 // on that host (decisions.md D40). Its agents and its checkout are on that
 // machine, where the local hosts and probes cannot see them, so this side asks
 // the revier there and takes its answer. What stays local is the workspace
-// that shows it: the home target's realization here is panels that each run an
+// that shows it: the home target here lists one tab, whose panels each run an
 // ssh onto the host, matched, raised and closed like any other
 // (decisions.md D84).
 

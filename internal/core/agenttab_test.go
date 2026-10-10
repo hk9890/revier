@@ -233,32 +233,6 @@ func TestAShellTabOfALinkIsTheSSHPanel(t *testing.T) {
 	}
 }
 
-// On a runtime without tabs, a restore still opens the workspace with its
-// declared agents, and names the agents past them as not restored. Only a
-// home that holds its panels itself opens there, so the panels of the tab are
-// moved back onto it.
-func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
-	proj := agentProject()
-	proj.Targets[0].Runtime.Tabs, proj.Targets[0].Runtime.Panels = nil, proj.Targets[3].Runtime.Panels
-	proj.Targets = proj.Targets[:3]
-	p := prepared(t, proj)
-	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
-
-	res, err := pressResuming(context.Background(), c, p, "home", resumes)
-	if err != nil {
-		t.Fatalf("ActivateWaiting: %v", err)
-	}
-	want := []core.AgentOutcome{core.AgentResumed, core.AgentDropped}
-	if !slices.Equal(res.Agents, want) {
-		t.Errorf("Agents = %v, want %v", res.Agents, want)
-	}
-	if dry := c.Resumes(p, "home", resumes); !slices.Equal(dry, want) {
-		t.Errorf("dry run = %v, want %v", dry, want)
-	}
-}
-
 // twoWorkspaces is agentProject and a second project, each with its home
 // open, holding the given panels.
 func twoWorkspaces(t *testing.T, revierPanels, otherPanels []revier.Panel) (*core.Core, *hosttest.FakeRuntime, []core.Project, revier.TargetRef, revier.TargetRef) {

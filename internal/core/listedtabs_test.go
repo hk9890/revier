@@ -402,31 +402,6 @@ func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
 	}
 }
 
-// A target with panels and no tabs opens as it did before a target could list
-// its tabs: the panels are the instance, and its first panel has the home
-// mark.
-func TestAWorkspaceThatListsNoTabsOpensItsOwnPanels(t *testing.T) {
-	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
-	proj := revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}}}}
-
-	res, err := press(context.Background(), c, prepared(t, proj), "home")
-	if err != nil {
-		t.Fatalf("Go: %v", err)
-	}
-	if len(rt.Opened) != 1 || len(rt.Opened[0].Panels) != 1 || len(rt.Tabs) != 0 || len(rt.PanelFocuses) != 0 {
-		t.Fatalf("opened = %+v, tabs = %+v, panel focuses = %v; want the declared panels alone", rt.Opened, rt.Tabs, rt.PanelFocuses)
-	}
-	if got, want := marks(t, rt), []string{"/home"}; !slices.Equal(got, want) {
-		t.Errorf("marks = %q, want %q", got, want)
-	}
-	if len(res.Tabs) != 0 {
-		t.Errorf("tabs = %v, want none", res.Tabs)
-	}
-}
-
 // markedPanels is the panels of the instance that carry the mark of the named
 // tab target, in listing order, and the tabs that hold them.
 func markedPanels(t *testing.T, rt *hosttest.FakeRuntime, name revier.TargetName) (panels []revier.PanelID, tabs []string) {

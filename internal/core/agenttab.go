@@ -143,7 +143,7 @@ func notAdded(outcomes []AgentOutcome, n int) []AgentOutcome {
 	return outcomes
 }
 
-// AgentTarget is the target of a project whose layout declares an agent
+// AgentTarget is the target of a project whose listed tabs declare an agent
 // panel: the one `revier agent new -p <project>` opens its tab in. A
 // workspace that lists two tabs with an agent panel is one target, and its
 // agent is the one of the first of them.
