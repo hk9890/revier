@@ -774,3 +774,13 @@ action's is; the command needs no configuration to load, so it also repairs
 one. Only this agent is revier's: a project's agent is still only observed.
 Rejected: a terminal drawn in the surface, an emulator to maintain; a project
 of its own, which a configuration that does not load takes with it.
+
+### D124 — a first tab opens the instance, and the target's panels are the tab after it
+
+`first = true` on a tab puts the ticket viewer on tab 1 of every workspace.
+Both runtimes add a tab after the ones an instance holds, so the order is the
+order of opening: the tab's launch opens the instance under its tab mark
+(D64), and the panels open through `OpenTab` under the home mark, which D100
+put on the first panel of the instance. When the panels fail, the instance
+stays open and is reported with the error. A save records no step for the
+tab. Rejected: a tab number on a panel, which declares the tab a second time.

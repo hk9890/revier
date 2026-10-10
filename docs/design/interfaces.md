@@ -61,6 +61,11 @@ type Realization struct {
     // Inside names another target; this one is then a tab of that target's
     // instance, found by its name, and Match and Name are not used (D64).
     Inside TargetName
+
+    // First makes a tab the first one of the instance it is inside: it opens
+    // with that instance, and that target's panels open as the tab after it
+    // (D124).
+    First bool
 }
 
 // Match recognises an instance. An empty field does not constrain; every

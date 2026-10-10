@@ -548,6 +548,15 @@ func validateTargets(p revier.Project) []error {
 		if tab {
 			errs = append(errs, validateTab(p, t)...)
 		}
+		for kind, r := range map[revier.HostKind]*revier.Realization{
+			revier.HostWindow: t.Window, revier.HostRuntime: t.Runtime,
+		} {
+			if r != nil && r.First && r.Inside == "" {
+				// Ignored, the target would open as an instance of its own
+				// and never with another, which is what first was written for.
+				errs = append(errs, fmt.Errorf("target %q %s realization is first and inside nothing; first is the place of a tab, so give it inside", t.Name, kind))
+			}
+		}
 		if t.Window != nil && t.Window.Inside != "" {
 			// Only a runtime opens tabs. Ignored, it would open a window of its
 			// own, which is the choice inside was written to refuse.
@@ -623,6 +632,19 @@ func validateTab(p revier.Project, t revier.Target) []error {
 	}
 	if r.Inside == t.Name {
 		return append(errs, fmt.Errorf("target %q is inside itself", t.Name))
+	}
+	if r.First {
+		// Two first tabs of one instance cannot both be first, and the one
+		// declared later would open at its own press, as the last tab.
+		for _, other := range p.Targets {
+			if other.Name == t.Name {
+				break
+			}
+			if other.Runtime != nil && other.Runtime.First && other.Runtime.Inside == r.Inside {
+				errs = append(errs, fmt.Errorf("target %q is first inside %q, and %q is already; one tab is the first", t.Name, r.Inside, other.Name))
+				break
+			}
+		}
 	}
 	in, ok := p.Target(r.Inside)
 	switch {

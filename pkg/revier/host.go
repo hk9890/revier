@@ -146,8 +146,9 @@ type PanelOpener interface {
 	// every later panel split into the first, each panel started in its Dir,
 	// and r.Launch in r.Dir. vars are set on the first panel. An OpenTab that
 	// fails closes what it opened, so no half-built tab runs an agent the
-	// core names as not added. It is a tab target's tab (decisions.md D64)
-	// and the agent tab of `revier agent new` and a restore (D65).
+	// core names as not added. It is a tab target's tab (decisions.md D64),
+	// the agent tab of `revier agent new` and a restore (D65), and the panels
+	// of a target whose instance a first tab opened (D124).
 	//
 	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
 	// and a tab a script opens is gone to by nobody (D118).
