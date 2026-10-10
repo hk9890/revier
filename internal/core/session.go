@@ -378,6 +378,13 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 	for _, p := range s.Projects {
 		v, known := views[p.Name]
 		for _, t := range p.Targets {
+			// A file saved before the target listed its tabs holds a step for
+			// one of them. The tab opens with its instance now, and a step
+			// for it would leave it the current tab, not the active one
+			// (decisions.md D126).
+			if tab, ok := v.Project.Target(t.Name); ok && tabTarget(tab) && listedTab(v.Project, tab) {
+				continue
+			}
 			// Every step carries its recorded agents, so a step stepped
 			// over can still say which conversations it held.
 			step := RestoreStep{Project: p.Name, Target: t.Name, Resumes: resumesOf(t)}

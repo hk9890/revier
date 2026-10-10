@@ -351,6 +351,25 @@ func TestATabThatCreatedTheWorkspaceStartsAtItsFirstPanelWhenThatLostItsMark(t *
 	}
 }
 
+// A file saved before the target listed its tabs holds a step for one of
+// them. The plan has no step for it: the tab opens with its workspace, and a
+// press on it would leave it current in place of the active tab.
+func TestARestorePlanHasNoStepForAListedTab(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty")}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, listedTabsProject("agent"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{
+		{Name: "home"}, {Name: "tickets"},
+	}}}}
+
+	plan := c.RestorePlan(s, report)
+	if len(plan) != 1 || plan[0].Target != "home" || plan[0].Action != core.RestoreLaunch {
+		t.Errorf("plan = %+v, want the one step that opens home", plan)
+	}
+}
+
 // A listed tab comes back with its workspace, so a save records no step for
 // it. A tab the target does not list keeps its step.
 func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
@@ -663,8 +682,8 @@ func TestSaveThenRestoreResumesTheAgentOfAListedTab(t *testing.T) {
 
 // A file saved while the panels were the workspace's own restores into the
 // project after its panels moved into a listed tab: the conversation goes to
-// the agent panel of that tab, and the step of the tab that is now listed
-// opens no second copy of it.
+// the agent panel of that tab, and the tab that is now listed has no step,
+// so the active tab stays the current one.
 func TestASessionOfAWorkspaceWithItsOwnPanelsRestoresIntoItsListedTabs(t *testing.T) {
 	dir := t.TempDir()
 	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{
@@ -673,11 +692,14 @@ func TestASessionOfAWorkspaceWithItsOwnPanelsRestoresIntoItsListedTabs(t *testin
 	}}}}
 
 	rt, out := restoredInto(t, listedTabsProject("agent"), s)
-	if len(out) != 2 || !slices.Equal(out[0].Agents, []core.AgentOutcome{core.AgentResumed}) {
-		t.Fatalf("restore = %+v, want home with its agent resumed", out)
+	if len(out) != 1 || !slices.Equal(out[0].Agents, []core.AgentOutcome{core.AgentResumed}) {
+		t.Fatalf("restore = %+v, want home alone, with its agent resumed", out)
 	}
 	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 {
 		t.Fatalf("opened %d instances and %d tabs, want the workspace and its agent tab", len(rt.Opened), len(rt.Tabs))
+	}
+	if got := lastPanelFocus(t, rt); got != rt.Tabs[0].Panel {
+		t.Errorf("focused panel %s, want the agent panel %s of the active tab", got, rt.Tabs[0].Panel)
 	}
 	if got, want := rt.Tabs[0].Real.Panels[0].Command, []string{"claude", "--resume", "main"}; !slices.Equal(got, want) {
 		t.Errorf("agent command = %v, want %v", got, want)
