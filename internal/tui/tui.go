@@ -750,9 +750,9 @@ const hideSettles = 500 * time.Millisecond
 // raise is the popup back on the screen: the files again, then one survey,
 // then the chain as before. A chain still running while hidden goes on by
 // itself. The terminal's focus report says so, and so does a key or the
-// pointer: a minimized window gets neither, and bubbletea knows a focus
-// report only when a read ends with it, so one with a mouse report behind it
-// in the same read is lost (decisions.md D86).
+// pointer: a minimized window gets neither, and a focus report can be lost
+// (decisions.md D86). bubbletea knows a focus report only when a read ends
+// with it, so one with a mouse report behind it in the same read is lost.
 func (m *Model) raise() tea.Cmd {
 	if !m.hidden {
 		return nil
