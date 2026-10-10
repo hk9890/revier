@@ -13,7 +13,8 @@ Each section is also the text of its release on the
   has the focus. Each name is a target with `inside = "home"`. Such a target
   can now hold `panels` in place of a `launch`, so the agent and the shell are
   a tab like any other. The key of a listed tab goes to that tab and opens no
-  second one. A workspace that is open already keeps its tabs as they are.
+  second one, also after the first panel of the tab has ended. A workspace
+  that is open already keeps its tabs as they are.
   Panels directly on the home target, with no `tabs`, work as before. A linked
   project opens without the listed tabs.
 - **Fast pointer motion no longer types into a filter.** Text such as

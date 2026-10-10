@@ -567,7 +567,7 @@ func refIDOf(t *testing.T, serverPID, id string) string {
 
 // A tab is a window of the instance's session, after every window it holds
 // even when an earlier one was closed: a save records agents in listing order.
-// Its panels are split beside the first, the vars land on the first, and the
+// Its panels are split beside the first, the vars land on every pane, and the
 // panel returned is the first.
 func TestOpenTabAppendsAWindowToTheSession(t *testing.T) {
 	h, c := server(t), ctx(t)
@@ -609,8 +609,11 @@ func TestOpenTabAppendsAWindowToTheSession(t *testing.T) {
 	if agent.ID != first || agent.Title != "agent" || shell.Title != "shell" {
 		t.Errorf("last two panels = %+v, %+v, want the new tab's agent (%s) then its shell", agent, shell, first)
 	}
-	if agent.Vars["REVIER_TARGET"] != "notes" || shell.Vars != nil {
-		t.Errorf("vars = %v and %v, want them on the first panel only", agent.Vars, shell.Vars)
+	if agent.Vars["REVIER_TARGET"] != "notes" || shell.Vars["REVIER_TARGET"] != "notes" {
+		t.Errorf("vars = %v and %v, want them on both panes of the tab", agent.Vars, shell.Vars)
+	}
+	if panels[0].Vars != nil || panels[1].Vars != nil {
+		t.Errorf("vars = %v and %v on the panes of the other tabs, want none", panels[0].Vars, panels[1].Vars)
 	}
 	if got := paneValue(t, h, shell.ID, "#{window_id}"); got != paneValue(t, h, agent.ID, "#{window_id}") {
 		t.Errorf("the shell is in window %s, want it split into the agent's", got)
@@ -839,10 +842,10 @@ func TestOpenBuildsThePanels(t *testing.T) {
 	}
 }
 
-// The vars the core gives an Open land on the session's first pane and come
+// The vars the core gives an Open land on every pane of the session and come
 // back from Instances, as a tab's do: that mark is how the panel a return
-// home lands in is found again.
-func TestOpenMarksTheFirstPaneWithItsVars(t *testing.T) {
+// home lands in is found again, also after the first pane has ended.
+func TestOpenMarksEveryPaneWithItsVars(t *testing.T) {
 	h, c := server(t), ctx(t)
 	if _, err := h.Open(c, revier.Realization{
 		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
@@ -862,8 +865,8 @@ func TestOpenMarksTheFirstPaneWithItsVars(t *testing.T) {
 		t.Fatalf("instances = %+v, want the one session with its two panes", instances)
 	}
 	first, second := instances[0].Panels[0], instances[0].Panels[1]
-	if first.Vars["REVIER_HOME"] != "home" || second.Vars != nil {
-		t.Errorf("vars = %v and %v, want them on the first pane only", first.Vars, second.Vars)
+	if first.Vars["REVIER_HOME"] != "home" || second.Vars["REVIER_HOME"] != "home" {
+		t.Errorf("vars = %v and %v, want them on both panes", first.Vars, second.Vars)
 	}
 }
 

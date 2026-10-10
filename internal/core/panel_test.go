@@ -123,6 +123,30 @@ func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 	}
 }
 
+// The mark of Open is best effort, so the first panel of the workspace's own
+// tab can be without it while the shell beside it has it. A return home lands
+// in the first panel of that tab all the same.
+func TestAReturnHomeLandsInTheFirstPanelOfTheMarkedTab(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	ref := rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "agent", Kind: revier.PanelTool, Tab: "own"},
+		revier.Panel{ID: "shell", Kind: revier.PanelShell, Tab: "own", Vars: map[string]string{core.PanelHomeVar: "home"}},
+		revier.Panel{ID: "tickets", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "tickets"}})
+	if err := rt.FocusPanel(context.Background(), ref, "tickets"); err != nil {
+		t.Fatalf("FocusPanel: %v", err)
+	}
+	rt.SetFocus(ref)
+	c := &core.Core{Runtime: rt}
+
+	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if last := rt.PanelFocuses[len(rt.PanelFocuses)-1]; res.Target != "home" || last != "agent" {
+		t.Errorf("result = %+v with panel %s focused, want home at its agent panel", res, last)
+	}
+}
+
 // An instance revier opens is marked at its own first panel with the target
 // it was opened for, so the panel a return home lands in is identified and
 // not guessed at (decisions.md D100).

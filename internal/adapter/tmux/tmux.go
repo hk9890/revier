@@ -272,7 +272,7 @@ func kindOf(cmd string) revier.PanelKind {
 // runs yet, and leaves r.Name on it where Instances reads the title. With
 // panels, the first panel is the session's first pane and every later one is
 // split into it, side by side; without, the session runs r.Launch alone.
-// r.Vars go into the first pane's @revier option, which Instances reports
+// r.Vars go into the @revier option of every pane, which Instances reports
 // back as the panel's Vars, as OpenTab's do for a tab.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
@@ -321,13 +321,20 @@ func (h *Host) name(ctx context.Context, session, window, pane string, r revier.
 	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
 		return err
 	}
-	if err := h.setVars(ctx, pane, r.Vars); err != nil {
-		// The mark is best effort: an unmarked panel falls back to the guess
-		// it replaces (decisions.md D100). Failing here would kill a session
-		// whose panes are already running, over a mark nothing depends on.
-		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
+	panes, err := h.fill(ctx, window, pane, panels)
+	if err != nil {
+		return err
 	}
-	return h.fill(ctx, window, pane, panels)
+	for _, pane := range panes {
+		if err := h.setVars(ctx, pane, r.Vars); err != nil {
+			// The mark is best effort: an unmarked panel falls back to the
+			// guess it replaces (decisions.md D100). Failing here would kill a
+			// session whose panes are already running, over a mark nothing
+			// depends on.
+			slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
+		}
+	}
+	return nil
 }
 
 // start is the part of a new-session, new-window or split-window that starts
@@ -341,33 +348,36 @@ func start(p revier.PanelSpec) []string {
 }
 
 // fill titles the window's first pane and splits every later panel into the
-// window beside it.
-func (h *Host) fill(ctx context.Context, window, first string, panels []revier.PanelSpec) error {
+// window beside it. It returns the window's panes, the first one first.
+func (h *Host) fill(ctx context.Context, window, first string, panels []revier.PanelSpec) ([]string, error) {
 	if err := h.title(ctx, first, panels[0].Title); err != nil {
-		return err
+		return nil, err
 	}
+	panes := []string{first}
 	for _, p := range panels[1:] {
 		args := append([]string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}, start(p)...)
 		out, err := h.run(ctx, args...)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := h.title(ctx, strings.TrimSpace(out), p.Title); err != nil {
-			return err
+		pane := strings.TrimSpace(out)
+		if err := h.title(ctx, pane, p.Title); err != nil {
+			return nil, err
 		}
+		panes = append(panes, pane)
 	}
 	if len(panels) > 1 {
 		if _, err := h.run(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return panes, nil
 }
 
 // OpenTab opens a window after the last one of the session: r.Launch alone,
 // or r.Panels with every later one split into the first. It goes last, not
 // into the lowest free index, so the panels keep their order in the listing a
-// save records agents by. The vars go into the first pane's @revier option,
+// save records agents by. The vars go into the @revier option of every pane,
 // which Instances reports back as the panel's Vars. The window opens without
 // becoming current; the core focuses the panel it wants.
 //
@@ -401,13 +411,19 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 }
 
 func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.PanelSpec, vars map[string]string) error {
+	panes, err := h.fill(ctx, window, pane, panels)
+	if err != nil {
+		return err
+	}
 	// A tab's mark is its whole identity (decisions.md D64): a tab that
 	// carries none is found by nothing, and the next press opens another. It
 	// fails the tab, which OpenTab then kills.
-	if err := h.setVars(ctx, pane, vars); err != nil {
-		return err
+	for _, pane := range panes {
+		if err := h.setVars(ctx, pane, vars); err != nil {
+			return err
+		}
 	}
-	return h.fill(ctx, window, pane, panels)
+	return nil
 }
 
 // setVars leaves the variables on the pane, packed into its @revier option,

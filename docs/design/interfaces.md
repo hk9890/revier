@@ -47,9 +47,9 @@ type Realization struct {
     Match  Match      // how to recognise an existing instance
     Panels []PanelSpec // runtime hosts only: the layout of the instance, or of a tab when Inside is set
 
-    // Vars are the panel variables the host sets on the first panel it opens
-    // and reports back as Panel.Vars. For a realization with Tabs that is the
-    // first panel of the first tab, and the vars are that tab's (D126). The core fills them, as it fills Dir,
+    // Vars are the panel variables the host sets on every panel Open makes
+    // and reports back as Panel.Vars. For a realization with Tabs those are
+    // the panels of the first tab, and the vars are that tab's (D126). The core fills them, as it fills Dir,
     // so a panel revier opened is identified later rather than guessed at
     // (D100). Setting them is best effort: the instance is open by then, and
     // an Open that failed over them would hand the caller nothing to pin, so
@@ -190,7 +190,8 @@ kitty OS window (D70).
 // into the first, each panel in its own Dir. An OpenTab that fails closes
 // what it opened, and one that succeeds leaves the keyboard focus where it
 // was (D118). Which tab belongs to which target is the core's: the
-// runtime sets vars on the first panel and reports them back in Panel.Vars.
+// runtime sets vars on every panel of the tab and reports them back in
+// Panel.Vars, so the tab is found while any panel of it is open (D64).
 type PanelOpener interface {
     OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
     FocusPanel(ctx context.Context, ref TargetRef, panel PanelID) error

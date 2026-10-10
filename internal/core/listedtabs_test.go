@@ -80,7 +80,7 @@ func TestAWorkspaceOpensWithTheTabsItListsAndTheActiveOneCurrent(t *testing.T) {
 	if len(agent.Real.Panels) != 2 || agent.Real.Panels[0].Kind != revier.PanelAgent || agent.Real.Panels[1].Kind != revier.PanelShell {
 		t.Errorf("second tab = %+v, want the agent and the shell", agent.Real.Panels)
 	}
-	if got, want := marks(t, rt), []string{"tickets/", "agent/home"}; !slices.Equal(got, want) {
+	if got, want := marks(t, rt), []string{"tickets/", "agent/home", "agent/home"}; !slices.Equal(got, want) {
 		t.Errorf("marks = %q, want %q", got, want)
 	}
 	if got := lastPanelFocus(t, rt); got != agent.Panel {
@@ -106,7 +106,7 @@ func TestAWorkspaceEndsOnItsFirstTabWhenThatIsActiveOrNoneIs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Go: %v", err)
 			}
-			if got, want := marks(t, rt), []string{"tickets/home", "agent/"}; !slices.Equal(got, want) {
+			if got, want := marks(t, rt), []string{"tickets/home", "agent/", "agent/"}; !slices.Equal(got, want) {
 				t.Errorf("marks = %q, want %q", got, want)
 			}
 			if got, want := lastPanelFocus(t, rt), rt.FirstPanel(res.Ref); got != want {
@@ -128,7 +128,7 @@ func TestAPressOnAListedTabOfAClosedWorkspaceEndsOnThatTab(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}
-	if got, want := marks(t, rt), []string{"tickets/", "agent/home"}; !slices.Equal(got, want) {
+	if got, want := marks(t, rt), []string{"tickets/", "agent/home", "agent/home"}; !slices.Equal(got, want) {
 		t.Errorf("marks = %q, want %q", got, want)
 	}
 	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 {
@@ -168,7 +168,7 @@ func TestAListedTabThatIsRefusedIsSkipped(t *testing.T) {
 	if len(rt.Opened) != 1 || len(rt.Opened[0].Panels) != 2 || rt.Opened[0].Name != "session:revier" || len(rt.Tabs) != 0 {
 		t.Fatalf("opened = %+v, tabs = %+v; want the agent panels as the instance and no other tab", rt.Opened, rt.Tabs)
 	}
-	if got, want := marks(t, rt), []string{"agent/home"}; !slices.Equal(got, want) {
+	if got, want := marks(t, rt), []string{"agent/home", "agent/home"}; !slices.Equal(got, want) {
 		t.Errorf("marks = %q, want %q", got, want)
 	}
 	if got, want := lastPanelFocus(t, rt), rt.FirstPanel(res.Ref); got != want {
@@ -311,6 +311,45 @@ func TestATabThatCreatedTheWorkspaceIsFoundWithoutItsMark(t *testing.T) {
 	}
 }
 
+// firstUnmarked is a runtime that lists the panels of Open as one tab whose
+// first panel lost its mark, as kitty does when set-user-vars fails on the
+// first window and the launch of the second carried its vars.
+type firstUnmarked struct{ *hosttest.FakeRuntime }
+
+func (f firstUnmarked) Instances(ctx context.Context) ([]revier.Instance, error) {
+	instances, err := f.FakeRuntime.Instances(ctx)
+	for i := range instances {
+		for n := range instances[i].Panels {
+			panel := &instances[i].Panels[n]
+			if panel.Tab == "" {
+				panel.Tab = "created"
+			}
+			if n == 0 {
+				panel.Vars = nil
+			}
+		}
+	}
+	return instances, err
+}
+
+// The tab that created the instance is taken from its first panel when only a
+// later panel of it carries the mark: the press ends on the agent, not on the
+// shell beside it.
+func TestATabThatCreatedTheWorkspaceStartsAtItsFirstPanelWhenThatLostItsMark(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	c := &core.Core{Runtime: firstUnmarked{rt}}
+	project := listedTabsProject("agent")
+	project.Targets[0].Runtime.Tabs = []revier.TargetName{"agent", "tickets"}
+
+	res, err := press(context.Background(), c, prepared(t, project), "home")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if got, want := lastPanelFocus(t, rt), rt.FirstPanel(res.Ref); got != want {
+		t.Errorf("focused panel %s, want the agent panel %s", got, want)
+	}
+}
+
 // A listed tab comes back with its workspace, so a save records no step for
 // it. A tab the target does not list keeps its step.
 func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
@@ -362,5 +401,87 @@ func TestAWorkspaceThatListsNoTabsOpensItsOwnPanels(t *testing.T) {
 	}
 	if len(res.Tabs) != 0 {
 		t.Errorf("tabs = %v, want none", res.Tabs)
+	}
+}
+
+// markedPanels is the panels of the instance that carry the mark of the named
+// tab target, in listing order, and the tabs that hold them.
+func markedPanels(t *testing.T, rt *hosttest.FakeRuntime, name revier.TargetName) (panels []revier.PanelID, tabs []string) {
+	t.Helper()
+	instances, err := rt.Instances(context.Background())
+	if err != nil || len(instances) != 1 {
+		t.Fatalf("instances = %+v, %v; want one", instances, err)
+	}
+	for _, panel := range instances[0].Panels {
+		if panel.Vars[core.PanelTargetVar] != string(name) {
+			continue
+		}
+		panels = append(panels, panel.ID)
+		if !slices.Contains(tabs, panel.Tab) {
+			tabs = append(tabs, panel.Tab)
+		}
+	}
+	return panels, tabs
+}
+
+// The first panel of a tab that holds panels is the agent, and the tab
+// outlives it. The key still finds the tab by the panel that is left, and
+// opens no second one (decisions.md D64).
+func TestATabIsFoundAfterItsFirstPanelHasEnded(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, listedTabsProject("tickets"))
+	res, err := press(context.Background(), c, p, "home")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	opened, _ := markedPanels(t, rt, "agent")
+	if len(opened) != 2 {
+		t.Fatalf("panels of the agent tab = %v, want the agent and the shell", opened)
+	}
+	if err := rt.ClosePanel(context.Background(), res.Ref, opened[0]); err != nil {
+		t.Fatalf("ClosePanel: %v", err)
+	}
+
+	if _, err := press(context.Background(), c, p, "agent"); err != nil {
+		t.Fatalf("Go agent: %v", err)
+	}
+	left, tabs := markedPanels(t, rt, "agent")
+	if len(rt.Tabs) != 1 || len(tabs) != 1 || !slices.Equal(left, opened[1:]) {
+		t.Errorf("OpenTab ran %d times, and the agent target has panels %v in tabs %v; want the one tab with its shell", len(rt.Tabs), left, tabs)
+	}
+	if got := lastPanelFocus(t, rt); got != opened[1] {
+		t.Errorf("focused panel %s, want the shell that is left, %s", got, opened[1])
+	}
+}
+
+// The second press goes home from any panel of the tab, not only from its
+// first.
+func TestAPressOnATabGoesHomeFromItsSecondPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	c := &core.Core{Runtime: rt}
+	p := prepared(t, listedTabsProject("tickets"))
+	res, err := press(context.Background(), c, p, "home")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	opened, _ := markedPanels(t, rt, "agent")
+	if len(opened) != 2 {
+		t.Fatalf("panels of the agent tab = %v, want the agent and the shell", opened)
+	}
+	if err := rt.FocusPanel(context.Background(), res.Ref, opened[1]); err != nil {
+		t.Fatalf("FocusPanel: %v", err)
+	}
+	rt.SetFocus(res.Ref)
+
+	back, err := press(context.Background(), c, p, "agent")
+	if err != nil {
+		t.Fatalf("Go agent: %v", err)
+	}
+	if back.Target != "home" || back.Tab != "" {
+		t.Errorf("result = %+v, want the press to land on home", back)
+	}
+	if got, want := lastPanelFocus(t, rt), rt.FirstPanel(res.Ref); got != want {
+		t.Errorf("focused panel %s, want the tickets panel %s, which has the home mark", got, want)
 	}
 }

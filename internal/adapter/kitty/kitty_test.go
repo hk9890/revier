@@ -378,6 +378,33 @@ func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
 	}
 }
 
+// Every window of a tab carries the tab's vars, so the tab is found by any of
+// them after its first window has closed.
+func TestOpenTabMarksEveryWindowOfTheTab(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if _, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude"}},
+			{Kind: revier.PanelShell},
+		},
+	}, map[string]string{"revier_target": "agent", "revier_home": "home"}); err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	var launches []string
+	for _, c := range rec.all() {
+		if c.args[0] == "launch" {
+			launches = append(launches, strings.Join(c.args, " "))
+		}
+	}
+	want := []string{
+		"launch --type=tab --location=last --match window_id:4 --hold --var revier_home=home --var revier_target=agent --keep-focus claude",
+		"launch --type=window --match window_id:9 --hold --var revier_home=home --var revier_target=agent --keep-focus",
+	}
+	if !slices.Equal(launches, want) {
+		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 // While no OS window of the kitty holds the keyboard, a launch moves none, and
 // --keep-focus would have kitty ask the desktop to focus its last OS window:
 // the tab opens without it.
@@ -600,6 +627,43 @@ func TestOpenMarksTheFirstWindowWithItsVars(t *testing.T) {
 	}
 	if !marked {
 		t.Errorf("calls = %+v, want %q among them", calls, want)
+	}
+}
+
+// A window split into the new OS window is a launch, and carries the vars as
+// --var; the first window is marked after it opened.
+func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
+	h := newHost()
+	var calls []string
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(args, " "))
+		if args[0] == "launch" {
+			if slices.Contains(args, "--type=os-window") {
+				return []byte("7\n"), nil
+			}
+			return []byte("8\n"), nil
+		}
+		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}, {"id": 8}}}}}})
+	})
+	if _, err := h.Open(context.Background(), revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Vars: map[string]string{"revier_home": "home"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"claude"}},
+			{Kind: revier.PanelShell},
+		},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	for _, want := range []string{
+		"set-user-vars --match id:7 revier_home=home",
+		"launch --type=window --match window_id:7 --hold --var revier_home=home",
+	} {
+		if !slices.Contains(calls, want) {
+			t.Errorf("calls = %q, want %q among them", calls, want)
+		}
 	}
 }
 

@@ -268,9 +268,12 @@ raise becomes a GNOME "is ready" notice, so the press fails with
 ### D64 — a target can be a tab inside another target
 
 `inside` places the ticket viewer on a workspace tab. The tab's identity is a
-variable revier sets, because a title or a position is not one. `PanelOpener` is
-optional, and a runtime without it refuses; it does not open a window the user
-did not choose.
+variable revier sets, because a title or a position is not one. Every panel of
+the tab carries it: the first panel of a tab that holds panels is the agent,
+and a mark on that panel alone ended with the agent, so the key opened a second
+tab. The tab is the first panel that carries the mark, and a second press on
+its key goes home from any panel of it. `PanelOpener` is optional, and a
+runtime without it refuses; it does not open a window the user did not choose.
 
 ### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore
 
@@ -545,11 +548,11 @@ remote host stop eighty-nine projects until `--force` turned the guard off.
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose
 tab holds a shell beside the tab target's panel it picked that shell: a return
 home from a tab landed in the wrong pane, and the own-tab rule of a shutdown
-(D94) read the same guess. revier now marks the first panel of every instance
-it opens with the target it was opened for, through `Realization.Vars`, as
-`OpenTab` already marks a tab's. In an instance that opens with its tabs
-(D126), that panel is the first one of the active tab. The guess stays only
-for an instance opened before the mark.
+(D94) read the same guess. revier now marks the panels `Open` makes with the
+target the instance was opened for, through `Realization.Vars`, as `OpenTab`
+marks a tab's (D64); the own panel is the first one of the marked tab. In an
+instance that opens with its tabs (D126), that tab is the active one. The
+guess stays only for an instance opened before the mark.
 
 ### D101 — a link's view is the host's agents and this machine's, added together
 
