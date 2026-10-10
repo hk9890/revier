@@ -479,7 +479,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 	if _, err := pressResuming(context.Background(), c, p, "home", resumes); err != nil {
 		t.Fatal(err)
 	}
-	panels := p.Targets[0].Runtime.Panels
+	panels := p.Targets[3].Runtime.Panels
 	if len(panels) != 2 {
 		t.Errorf("the project now has %d panels, want its 2: a tab was added to it", len(panels))
 	}

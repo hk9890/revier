@@ -29,11 +29,12 @@ func onTargetRow(m tui.Model, i int) tui.Model {
 	return m
 }
 
-// The screen lists every shared target with its key and where it opens.
+// The screen lists every shared target with its key and where it opens: a
+// target that lists its tabs with them, and a tab with the target it is inside.
 func TestTheConfigScreenListsTheSharedTargets(t *testing.T) {
 	m, _ := targetsSurface(t)
 	m, _ = press(m, "alt+c")
-	for _, want := range []string{"ctrl+shift+u", "runtime, 2 panels · home", "ctrl+shift+o", "window: idea {{.Path}}", "add a target"} {
+	for _, want := range []string{"ctrl+shift+u", "runtime, tabs: agent · home", "ctrl+shift+o", "window: idea {{.Path}}", "tab of home, 2 panels", "add a target"} {
 		if !strings.Contains(screen(m), want) {
 			t.Errorf("config screen does not say %q:\n%s", want, screen(m))
 		}
@@ -62,7 +63,7 @@ func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 // and a command, and all of it written when the target is saved.
 func TestTheConfigScreenEditsPanels(t *testing.T) {
 	m, root := targetsSurface(t)
-	m, _ = press(onTargetRow(m, 0), "enter")
+	m, _ = press(onTargetRow(m, 2), "enter")
 	m = downs(m, 8) // the agent panel
 	m, _ = press(m, "alt+d")
 	m = downs(m, 1) // add a panel
@@ -79,7 +80,7 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 	m, _ = press(m, "up")
 	m, _ = press(m, "up") // place
 	m, _ = press(m, "enter")
-	if !strings.Contains(screen(m), "runtime, 2 panels") {
+	if !strings.Contains(screen(m), "tab of home, 2 panels") {
 		t.Errorf("config screen does not show the saved panels:\n%s", screen(m))
 	}
 
@@ -108,7 +109,7 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 // A new target is written at the end and listed.
 func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)
-	m, _ = press(onTargetRow(m, 2), "enter")
+	m, _ = press(onTargetRow(m, 3), "enter")
 	m = typeInto(m, "notes")
 	m = downs(m, 10) // the window's command
 	m = typeInto(m, "gedit")

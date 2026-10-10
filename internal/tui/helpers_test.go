@@ -475,6 +475,19 @@ key = "ctrl-shift-u"
   [target.runtime]
   name = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
+  tabs = ["agent"]
+
+[[target]]
+name = "editor"
+key = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"] # IntelliJ
+  match = { class = "^jetbrains-idea" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
     # the agent
     [[target.runtime.panels]]
     kind = "agent"
@@ -483,13 +496,6 @@ key = "ctrl-shift-u"
     [[target.runtime.panels]]
     kind = "shell"
     title = "shell"
-
-[[target]]
-name = "editor"
-key = "ctrl-shift-o"
-  [target.window]
-  launch = ["idea", "{{.Path}}"] # IntelliJ
-  match = { class = "^jetbrains-idea" }
 `
 
 func downs(m tui.Model, n int) tui.Model {

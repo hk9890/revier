@@ -463,17 +463,29 @@ func (f *targetForm) panelKey(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) 
 	return res, nil
 }
 
-// describeTarget is a target's row note, on either screen: where it opens.
+// describeTarget is a target's row note, on either screen: where it opens. A
+// tab says the target it opens inside, and a target that lists its tabs says
+// them in the place of what it starts.
 func describeTarget(t revier.Target) string {
 	var parts []string
 	if r := t.Runtime; r != nil {
+		where := "runtime"
+		if r.Inside != "" {
+			where = "tab of " + string(r.Inside)
+		}
 		switch {
+		case len(r.Tabs) > 0:
+			tabs := make([]string, len(r.Tabs))
+			for i, tab := range r.Tabs {
+				tabs[i] = string(tab)
+			}
+			parts = append(parts, where+", tabs: "+strings.Join(tabs, ", "))
 		case len(r.Panels) == 1:
-			parts = append(parts, "runtime, 1 panel")
+			parts = append(parts, where+", 1 panel")
 		case len(r.Panels) > 1:
-			parts = append(parts, fmt.Sprintf("runtime, %d panels", len(r.Panels)))
+			parts = append(parts, fmt.Sprintf("%s, %d panels", where, len(r.Panels)))
 		default:
-			parts = append(parts, "runtime: "+joinCommand(r.Launch))
+			parts = append(parts, where+": "+joinCommand(r.Launch))
 		}
 	}
 	if r := t.Window; r != nil {

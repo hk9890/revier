@@ -67,7 +67,7 @@ func TestNewAgentStartsEmptyInTheProject(t *testing.T) {
 // another harness's resume flag.
 func TestNewAgentResumesOnlyTheHarnessTheAgentPanelRuns(t *testing.T) {
 	proj := agentProject()
-	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 	rt.Add("session:revier", "")
@@ -234,11 +234,16 @@ func TestAShellTabOfALinkIsTheSSHPanel(t *testing.T) {
 }
 
 // On a runtime without tabs, a restore still opens the workspace with its
-// declared agents, and names the agents past them as not restored.
+// declared agents, and names the agents past them as not restored. Only a
+// home that holds its panels itself opens there, so the panels of the tab are
+// moved back onto it.
 func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
-	p := prepared(t, agentProject())
+	proj := agentProject()
+	proj.Targets[0].Runtime.Tabs, proj.Targets[0].Runtime.Panels = nil, proj.Targets[3].Runtime.Panels
+	proj.Targets = proj.Targets[:3]
+	p := prepared(t, proj)
 	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
 
 	res, err := pressResuming(context.Background(), c, p, "home", resumes)
@@ -412,7 +417,7 @@ func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
 // instead, and the restore says why.
 func TestRestoreDoesNotResumeAConversationIntoAnotherHarness(t *testing.T) {
 	proj := agentProject()
-	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 
 	resumes := []core.Resume{{Harness: "claude", Session: "abc-123"}}

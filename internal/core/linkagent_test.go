@@ -347,16 +347,22 @@ func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
 
 // A target its file refused is not served: the realization it keeps is as
 // written, not as rendered, so nothing may run from it (decisions.md D85),
-// and the reason is what the panel on the other machine prints.
+// and the reason is what the panel on the other machine prints. The shell of
+// a home whose listed tab is refused is refused with it, and is not a plain
+// shell in the place of the one the tab declares.
 func TestServeSkipsARefusedTarget(t *testing.T) {
-	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--add-dir", "{{.Vars.extra}}"}},
-			{Kind: revier.PanelShell},
-		}}}}})
-	if p.TargetErr(0) == nil {
-		t.Fatal("the target should be refused for the key it renders")
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude", "--add-dir", "{{.Vars.extra}}"}},
+				{Kind: revier.PanelShell},
+			}}},
+	}})
+	if p.TargetErr(0) != nil || p.TargetErr(1) == nil {
+		t.Fatalf("refused = %v, %v; want the tab alone refused, for the key it renders", p.TargetErr(0), p.TargetErr(1))
 	}
 	c := &core.Core{}
 	if _, err := c.ServeAgent(p, core.Resume{}); err == nil || !strings.Contains(err.Error(), "extra") {
@@ -372,9 +378,13 @@ func TestServeSkipsARefusedTarget(t *testing.T) {
 // into a panel that runs another harness, which would start
 // `opencode --resume <claude id>`.
 func TestServeResumesOnlyIntoThePanelsOwnHarness(t *testing.T) {
-	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}}}}}})
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}}}},
+	}})
 	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 	s, err := c.ServeAgent(p, core.Resume{Session: "abc-123"})
 	if err != nil || s.Outcome != core.AgentUnresumable || !slices.Equal(s.Argv, []string{"opencode"}) {
@@ -387,12 +397,16 @@ func TestServeResumesOnlyIntoThePanelsOwnHarness(t *testing.T) {
 // the declared shell.
 func TestServeStartsTheDeclaredPanels(t *testing.T) {
 	dir := t.TempDir()
-	p := prepared(t, revier.Project{Name: "demo", Path: dir, Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--model", "opus"}},
-			{Kind: revier.PanelShell, Command: []string{"zsh", "-l"}},
-		}}}}})
+	p := prepared(t, revier.Project{Name: "demo", Path: dir, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude", "--model", "opus"}},
+				{Kind: revier.PanelShell, Command: []string{"zsh", "-l"}},
+			}}},
+	}})
 	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
 
 	agent, err := c.ServeAgent(p, core.Resume{Session: "abc-123", Dir: dir})

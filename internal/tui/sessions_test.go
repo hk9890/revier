@@ -144,12 +144,14 @@ func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}}
 	worktree := t.TempDir()
-	projects := core.Prepare([]revier.Project{{Name: "work", Path: "/p/work", Targets: []revier.Target{{
-		Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "work", Match: revier.Match{Title: "^work$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}},
-		},
-	}}}})
+	projects := core.Prepare([]revier.Project{{Name: "work", Path: "/p/work", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "work", Match: revier.Match{Title: "^work$"}, Tabs: []revier.TargetName{"agent"},
+		}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}},
+		}},
+	}}})
 	root := stateWith(t, nil)
 	work := homeOf("work")
 	work.Targets[0].Agents = []session.Agent{{Harness: "claude", Session: "3f2a9c1e-77b0", Dir: worktree}}

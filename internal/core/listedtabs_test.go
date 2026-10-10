@@ -408,8 +408,11 @@ func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
 func TestAWorkspaceThatListsNoTabsOpensItsOwnPanels(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt}
+	proj := revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+		Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
+		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}}}}
 
-	res, err := press(context.Background(), c, prepared(t, tabProject()), "home")
+	res, err := press(context.Background(), c, prepared(t, proj), "home")
 	if err != nil {
 		t.Fatalf("Go: %v", err)
 	}

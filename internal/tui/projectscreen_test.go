@@ -18,7 +18,7 @@ func TestAltEOpensTheProjectScreen(t *testing.T) {
 	for _, leave := range []string{"esc", "alt+e"} {
 		m, _ = press(m, "alt+e")
 		s := screen(m)
-		for _, want := range []string{"Project demo", "demo.toml as it changes", "/tmp/demo", "config.toml · runtime, 2 panels", "config.toml, changed here", "add a target"} {
+		for _, want := range []string{"Project demo", "demo.toml as it changes", "/tmp/demo", "config.toml · runtime, tabs: agent · home", "config.toml · tab of home, 2 panels", "config.toml, changed here", "add a target"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("project screen does not say %q:\n%s", want, s)
 			}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -27,9 +28,10 @@ type Served struct {
 }
 
 // workspace is the first runtime realization of the project whose layout
-// declares a panel of that kind, or its home's when none does. It is read from the
-// project and not resolved: a machine reached over ssh alone has no runtime,
-// and serves its panels all the same. A refused target is passed over, as
+// declares a panel of that kind, or for a shell its home's when none does and
+// no tab the home lists is refused. It is read from the project and not
+// resolved: a machine reached over ssh alone has no runtime, and serves its
+// panels all the same. A refused target is passed over, as
 // resolveAt passes over it: its realization is as written, not as rendered,
 // and nothing may run from an argv that did not render (decisions.md D85).
 func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.PanelSpec, error) {
@@ -47,7 +49,7 @@ func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.Pan
 		}
 	}
 	if home, ok := p.Home(); ok && home.Runtime != nil && kind == revier.PanelShell {
-		if i, ok := p.index(home.Name); ok && p.TargetErr(i) == nil {
+		if i, ok := p.index(home.Name); ok && p.TargetErr(i) == nil && !p.refusedTab(*home.Runtime) {
 			return *home.Runtime, revier.PanelSpec{Kind: revier.PanelShell, Dir: home.Runtime.Dir}, nil
 		}
 	}
@@ -56,6 +58,16 @@ func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.Pan
 		err = fmt.Errorf("%w: %w", err, errors.Join(refused...))
 	}
 	return revier.Realization{}, revier.PanelSpec{}, err
+}
+
+// refusedTab reports whether a tab the realization lists is refused. The shell
+// such a tab declares cannot be read, and a plain shell in its place would
+// hide the reason from the panel that asked.
+func (p Project) refusedTab(real revier.Realization) bool {
+	return slices.ContainsFunc(real.Tabs, func(name revier.TargetName) bool {
+		i, ok := p.index(name)
+		return ok && p.TargetErr(i) != nil
+	})
 }
 
 func article(kind revier.PanelKind) string {
