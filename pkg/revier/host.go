@@ -120,7 +120,7 @@ type PanelWriter interface {
 // PanelReader is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can say what one of its panels
 // shows, which is how a pane mirrors the agent under its cursor
-// (decisions.md D111, D124) and what `revier agent read --screen` prints (D116).
+// (decisions.md D111, D125) and what `revier agent read --screen` prints (D116).
 // One that does not leaves the mirror empty and the screen unread.
 //
 // ReadPanel is the panel's screen as text, a line per row, with the colour
@@ -146,8 +146,9 @@ type PanelOpener interface {
 	// every later panel split into the first, each panel started in its Dir,
 	// and r.Launch in r.Dir. vars are set on the first panel. An OpenTab that
 	// fails closes what it opened, so no half-built tab runs an agent the
-	// core names as not added. It is a tab target's tab (decisions.md D64)
-	// and the agent tab of `revier agent new` and a restore (D65).
+	// core names as not added. It is a tab target's tab (decisions.md D64),
+	// the agent tab of `revier agent new` and a restore (D65), and the panels
+	// of a target whose instance a first tab opened (D124).
 	//
 	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
 	// and a tab a script opens is gone to by nobody (D118).

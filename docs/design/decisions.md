@@ -598,7 +598,7 @@ pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
 ### D106 — what an agent said last is read from its transcript, for display only
 
-When an agent spoke last orders the agents (D110, D124), and `revier agent
+When an agent spoke last orders the agents (D110, D125), and `revier agent
 read` prints what it said (D116). The Claude probe reads both from the
 session's transcript, whose format is Claude Code's own and changes between
 releases, so the read is display only (`Detailed`). Rejected: the agent view's
@@ -759,7 +759,17 @@ one. Only this agent is revier's: a project's agent is still only observed.
 Rejected: a terminal drawn in the surface, an emulator to maintain; a project
 of its own, which a configuration that does not load takes with it.
 
-### D124 — the project pane mirrors one agent's panel, as the agent list's pane does
+### D124 — a first tab opens the instance, and the target's panels are the tab after it
+
+`first = true` on a tab puts the ticket viewer on tab 1 of every workspace.
+Both runtimes add a tab after the ones an instance holds, so the order is the
+order of opening: the tab's launch opens the instance under its tab mark
+(D64), and the panels open through `OpenTab` under the home mark, which D100
+put on the first panel of the instance. When the panels fail, the instance
+stays open and is reported with the error. A save records no step for the
+tab. Rejected: a tab number on a panel, which declares the tab a second time.
+
+### D125 — the project pane mirrors one agent's panel, as the agent list's pane does
 
 One agent drawn two ways, its message set from the transcript beside the
 projects and its panel beside the agents, read as two agents, and a transcript

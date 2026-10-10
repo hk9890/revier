@@ -255,6 +255,7 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, b
 			{"dir", o.Dir, r.new.Dir},
 			{"place", o.Place, r.new.Place},
 			{"inside", string(o.Inside), string(r.new.Inside)},
+			{"first", o.First, r.new.First},
 		} {
 			if lines, err = putValue(lines, i, path, kv.key, kv.old, kv.new); err != nil {
 				return nil, err

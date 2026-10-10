@@ -347,6 +347,9 @@ func realizationOverride(kind string, r, shared *revier.Realization) (*revier.Re
 	if o.Inside, err = differs(kind+" inside", r.Inside, shared.Inside); err != nil {
 		return nil, err
 	}
+	if o.First, err = differs(kind+" first", r.First, shared.First); err != nil {
+		return nil, err
+	}
 	if o.Launch, err = listOverride(kind+" command", r.Launch, shared.Launch); err != nil {
 		return nil, err
 	}

@@ -172,7 +172,7 @@ the tag the panel gave it. They are told apart by the panel each landed on,
 not by assuming they cannot meet, and the local reading stands.
 
 The pane ends in the screen of one of the project's agents, under the heading
-`Screen`: the mirror the agent list's pane shows, described below (D124).
+`Screen`: the mirror the agent list's pane shows, described below (D125).
 Without a keypress it mirrors the agent that needs the user; else one at rest
 before one working, and one whose state is unknown last; the latest to speak
 among equals, which the pane waits to know before it reads a panel. It keeps

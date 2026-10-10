@@ -49,5 +49,8 @@ git push -u origin HEAD
 gh pr create --fill
 ```
 
+Review the PR against [REVIEWING.md](REVIEWING.md) with
+`/worktree-flow:worktree-review <pr>`.
+
 Merge only when the user tells you to in that session, with a merge commit:
 `gh pr merge --merge`.

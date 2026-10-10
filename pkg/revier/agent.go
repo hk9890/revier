@@ -223,7 +223,7 @@ type Titled interface {
 // assertion. Detail is the last thing the agent in a panel said, for the
 // surface, which orders its agents by when each spoke, and for `revier agent
 // read`, which prints it (decisions.md D116), with the turn the agent is in,
-// which nothing in revier draws (D124). It
+// which nothing in revier draws (D125). It
 // is asked for every agent the surface shows - one project's beside the
 // project list, every project's on the agent list - each time the surface
 // refreshes, and never in a survey: keep it cheap, and read again only what

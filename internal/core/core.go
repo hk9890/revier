@@ -547,7 +547,11 @@ type Result struct {
 	// Tab is the tab target the press made current inside Target. Target
 	// stays the instance's, which is what a caller binds; Tab is what the
 	// user pressed and reached, and Launched then says the tab was opened.
-	Tab      revier.TargetName
+	Tab revier.TargetName
+	// FirstTab is the tab target a launch of Target opened as the first tab
+	// of the new instance (decisions.md D124). It is set also when the
+	// launch then failed: the instance is open, and that tab is in it.
+	FirstTab revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
 	ComingUp bool
@@ -580,7 +584,7 @@ func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetNa
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
-			"launched", res.Launched, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
+			"launched", res.Launched, "first_tab", res.FirstTab, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
 	}()
 	return c.goResuming(ctx, p, name, bound, resumes)
 }
@@ -618,10 +622,25 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// The instance's own first panel is marked with the target it was
 		// opened for, so a return home from a tab lands in it rather than in
 		// the first panel that happens to carry no tab mark (decisions.md D100).
-		launch.Vars = map[string]string{PanelHomeVar: string(name)}
-		ref, err := host.Open(ctx, launch)
+		home := map[string]string{PanelHomeVar: string(name)}
+		launch.Vars = home
+		// A first tab opens as the instance, under its own mark, and the
+		// target's panels open as the tab after it, under the home mark: the
+		// order of the tabs is the order they are opened in (decisions.md D124).
+		first := launch
+		tab, opener, led := c.firstTab(p, name, host)
+		if led {
+			launch.Vars = nil
+			first = real
+			first.Panels, first.Launch, first.Dir = nil, tab.Runtime.Launch, tab.Runtime.Dir
+			first.Vars = map[string]string{PanelTargetVar: string(tab.Name)}
+		}
+		ref, err := host.Open(ctx, first)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
+		}
+		if led {
+			res.FirstTab = tab.Name
 		}
 		if ref.IsZero() {
 			// The host launched a process and cannot name the window it will
@@ -633,18 +652,35 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			res.Agents = agents
 			return res, nil
 		}
+		res.Ref = ref
+		var own revier.PanelID
+		if led {
+			if own, err = opener.OpenTab(ctx, ref, launch, home); err != nil {
+				// The instance stays open with the first tab alone, and is
+				// reported with the failure, so the caller pins it and the next
+				// press raises it instead of opening another. No agent started.
+				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), 0)
+				return res, fmt.Errorf("%s: open the panels of %s after its first tab %s: %w", host.Name(), name, tab.Name, err)
+			}
+		}
 		added, err := c.addAgents(ctx, host, real, ref, extra, p.Remote != nil)
 		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
 		// not. A press always leaves the target focused.
-		res.Ref = ref
 		if err := host.Focus(ctx, ref); err != nil {
 			// The launch ran and the instance exists: its ref and agents are
 			// reported with the failure, so the caller pins it and the next
 			// press raises it instead of opening another.
 			return res, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+		}
+		if led {
+			// The first tab is the current one, because it opened the instance.
+			// The press is on this target, so its own first panel is.
+			if err := opener.FocusPanel(ctx, ref, own); err != nil {
+				return res, fmt.Errorf("%s: focus the panels of %s after its first tab %s: %w", host.Name(), name, tab.Name, err)
+			}
 		}
 		c.place(ctx, real, ref)
 		return res, nil

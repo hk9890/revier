@@ -61,6 +61,11 @@ type Realization struct {
     // Inside names another target; this one is then a tab of that target's
     // instance, found by its name, and Match and Name are not used (D64).
     Inside TargetName
+
+    // First makes a tab the first one of the instance it is inside: it opens
+    // with that instance, and that target's panels open as the tab after it
+    // (D124).
+    First bool
 }
 
 // Match recognises an instance. An empty field does not constrain; every
@@ -197,7 +202,7 @@ type PanelFinder interface {
 // PanelReader is an optional capability of a Runtime. ReadPanel is what one
 // panel shows, a line per row, with the style of each run as SGR sequences,
 // and with the lines above the screen when scrollback is asked for: how a
-// pane mirrors the agent under its cursor (D111, D124), and what `revier
+// pane mirrors the agent under its cursor (D111, D125), and what `revier
 // agent read --screen` prints (D116). What of it is drawn is the surface's
 // decision.
 type PanelReader interface {
@@ -473,7 +478,7 @@ runtime's already or impossible for it, and in both cases revier adds nothing.
 An optional capability of an `AgentProbe`, detected by type assertion. A probe
 that implements it says what the agent in a panel said last and when, which
 orders the agents on the surface and is what `revier agent read` prints
-(D106), with the turn the agent is in, which nothing in revier draws (D124). A
+(D106), with the turn the agent is in, which nothing in revier draws (D125). A
 probe that does not leaves its agents with no age.
 
 ```go

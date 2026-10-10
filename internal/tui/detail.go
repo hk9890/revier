@@ -164,7 +164,7 @@ func (m *Model) followPane(line int) {
 
 // detailContent is what this project is, then what is up, then what its agents
 // are doing, then the screen of the agent under the pane's cursor, mirrored
-// as the agent list's pane mirrors it (decisions.md D124).
+// as the agent list's pane mirrors it (decisions.md D125).
 //
 // A narrow pane stacks them, and the mirror takes the rows the others leave.
 // A wide pane puts the mirror beside the rest, so it has the whole height;

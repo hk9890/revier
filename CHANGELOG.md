@@ -8,6 +8,12 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **A tab can open with its workspace, as the first tab.** Add `first = true`
+  to a target that has `inside`. The workspace then opens with that tab as
+  tab 1 and its own panels as tab 2, with the focus in the first of those
+  panels. The tab's key goes to that tab and opens no second one. A workspace
+  that is open already keeps its tabs as they are. A linked project opens
+  without the tab.
 - **The pane beside the project list shows the terminal of one agent, as the
   pane beside the agent list does.** The section is headed `Screen`, follows
   the agent each second in its own colours, and the wheel scrolls back

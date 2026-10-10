@@ -3,7 +3,7 @@
 // project's targets, attached instances and agents, and the terminal of one of
 // its agents, mirrored. Tab moves the cursor between the projects and the
 // agents, and alt+t to the targets. Enter activates. It is the picker and the
-// monitor at once (decisions.md D8, D105, D124). The key that opens it puts a
+// monitor at once (decisions.md D8, D105, D125). The key that opens it puts a
 // second list in the first one's place: every agent of every project, with
 // the terminal of the one under the cursor mirrored beside it as the project
 // pane mirrors it (D110, D111).

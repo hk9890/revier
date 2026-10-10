@@ -181,6 +181,24 @@ func TestValidateRejects(t *testing.T) {
 			`inside "editor", which has no runtime realization`,
 		},
 		{
+			"second first tab of one target",
+			func() revier.Project {
+				p := tabProject(func(tab *revier.Target) { tab.Runtime.First = true })
+				p.Targets[2].Runtime.First = true
+				return p
+			}(),
+			`target "tickets" is first inside "home", and "notes" is already`,
+		},
+		{
+			"first on a target that is no tab",
+			func() revier.Project {
+				p := tabProject(func(*revier.Target) {})
+				p.Targets[1].Window.First = true
+				return p
+			}(),
+			`target "editor" window realization is first and inside nothing`,
+		},
+		{
 			"window realization inside a target",
 			func() revier.Project {
 				p := tabProject(func(*revier.Target) {})
@@ -219,6 +237,12 @@ func tabProject(edit func(tab *revier.Target)) revier.Project {
 // A tab is found by its target's name, so it needs neither a match nor a name.
 func TestValidateAcceptsATabWithNoMatchAndNoName(t *testing.T) {
 	if err := config.Validate(tabProject(func(*revier.Target) {})); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
+func TestValidateAcceptsOneFirstTab(t *testing.T) {
+	if err := config.Validate(tabProject(func(tab *revier.Target) { tab.Runtime.First = true })); err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
 }

@@ -96,6 +96,12 @@ key  = "ctrl-shift-t"
   launch = ["taskmgr-ui"]
 ```
 
+Add `first = true` to make the tab the first one of the instance (D124). It
+then opens with the target it is inside and needs no press: the tab is tab 1,
+the panels of that target are tab 2, and the first of those panels has the
+focus. The tab's key finds that tab. One tab of a target can be first. A link
+opens without it, and so does a workspace on a runtime with no tabs.
+
 Targets most projects have in common are declared once, in
 `~/.config/revier/config.toml`, in the same form (D59). Every
 project with a realization of its kind in them gets them, and its file then

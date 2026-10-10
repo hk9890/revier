@@ -27,7 +27,8 @@ const PanelTargetVar = "revier_target"
 // PanelHomeVar is the panel variable that names the target an instance was
 // opened for. It marks the instance's own first panel, the one a press that
 // returns home from a tab lands in, so that panel is identified rather than
-// guessed at (decisions.md D100).
+// guessed at (decisions.md D100). Behind a first tab that panel is the first
+// one of the second tab (D124).
 const PanelHomeVar = "revier_home"
 
 // isTab reports whether the i-th target is a tab inside another target.
@@ -35,6 +36,30 @@ func (p Project) isTab(i int) bool { return tabTarget(p.Targets[i]) }
 
 // tabTarget reports whether t is a tab inside another target.
 func tabTarget(t revier.Target) bool { return t.Runtime != nil && t.Runtime.Inside != "" }
+
+// leads reports whether t is a first tab: one that opens with the target it
+// is inside, as the first tab of the instance (decisions.md D124). A link has
+// none: what it opens is the panels that reach its host.
+func leads(p revier.Project, t revier.Target) bool {
+	return tabTarget(t) && t.Runtime.First && p.Remote == nil
+}
+
+// firstTab is the tab that opens first in a new instance of the named target
+// on host, and the runtime that opens the target's own panels after it. A
+// refused tab leads nothing, and neither does any tab on a host with no tabs:
+// the target then opens as it is declared.
+func (c *Core) firstTab(p Project, name revier.TargetName, host revier.Host) (revier.Target, revier.PanelOpener, bool) {
+	opener, ok := host.(revier.PanelOpener)
+	if !ok {
+		return revier.Target{}, nil, false
+	}
+	for i, t := range p.Targets {
+		if leads(p.Project, t) && t.Runtime.Inside == name && p.compiled[i].err == nil {
+			return t, opener, true
+		}
+	}
+	return revier.Target{}, nil, false
+}
 
 // tabHost is the runtime that opens the i-th target's tab, when there is one
 // that can.
@@ -168,8 +193,11 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	}
 	// An instance opened for the tab was focused by that goTo, and the window
 	// host may not list its OS window yet: it is raised by the launch, not here.
-	// It holds no tab yet, so only its ref is needed.
+	// It holds no tab yet, unless this tab opened it as its first, so only its
+	// ref is needed.
 	opened := !found
+	// withInstance says the tab opened with the instance, as its first tab.
+	withInstance := false
 	if opened {
 		res, err := c.goTo(ctx, p, t.Runtime.Inside, bound)
 		if err != nil {
@@ -179,9 +207,21 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and cannot name it", c.Runtime.Name(), t.Runtime.Inside, t.Name)
 		}
 		in = revier.Instance{Ref: res.Ref}
+		if res.FirstTab == t.Name {
+			// The instance opened with this tab in it. It is read again to
+			// name the tab, which is then focused and not opened a second time.
+			if snap, err = c.answered(ctx, nameOf(c.Runtime)); err != nil {
+				return Result{Target: res.Target, Ref: res.Ref}, err
+			}
+			if listed, ok := byRef(snap, res.Ref); ok {
+				if id, isOpen := tabOf(listed, t.Name); isOpen {
+					tab, open, withInstance = id, true, true
+				}
+			}
+		}
 	}
 
-	if open && c.focusedOn(ctx, snap, in) {
+	if !opened && open && c.focusedOn(ctx, snap, in) {
 		if cur, err := opener.FocusedPanel(ctx, in.Ref); err == nil && cur == tab {
 			return c.goHomeFromTab(ctx, p, snap, in, bound, opener)
 		}
@@ -196,7 +236,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// The ref is the instance that holds the tab, so the result names that
 	// instance's target: a caller binds the two, and a tab bound to it would
 	// keep raising the instance after inside is removed from the file.
-	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref}
+	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref, Launched: withInstance}
 	// An instance this press opened is reported with a failure after it, as
 	// goTo reports one it could not focus, so the activation still pins it.
 	var failed Result

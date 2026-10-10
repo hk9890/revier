@@ -152,6 +152,12 @@ type Realization struct {
 	// found by the target's name, which revier sets on it, so Match and Name
 	// are not used (decisions.md D64).
 	Inside TargetName `toml:"inside" json:"inside,omitempty"`
+
+	// First makes a tab the first one of the instance it is inside: it opens
+	// with that instance and not at a press of its own, and the panels of the
+	// target it is inside open as the tab after it (decisions.md D124). Only
+	// a realization with Inside has it, and one tab of a target at most.
+	First bool `toml:"first" json:"first,omitempty"`
 }
 
 // PanelSpecs is what a runtime host runs for the realization: its panels, or
