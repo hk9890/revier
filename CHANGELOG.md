@@ -14,6 +14,18 @@ Each section is also the text of its release on the
   panels. The tab's key goes to that tab and opens no second one. A workspace
   that is open already keeps its tabs as they are. A linked project opens
   without the tab.
+- **Fast pointer motion no longer types into a filter.** Text such as
+  `<35;76;40M` appeared in the project filter with no key pressed, and the
+  list then matched nothing.
+- **The log says how a surface ended when its terminal closed.** The
+  `command` line of the process has `signal`, and the process exits with 128
+  plus the number of the signal. Before, a surface whose terminal closed
+  wrote no line.
+- **A desktop with no focused window is no error on GNOME.** `revier attach`
+  says `no window is focused`, where it printed a JSON error, and the popup
+  key writes no `resolve: focused window` warning to the log. The
+  `popup: launched` line names the window the key was pressed over, as
+  `over`.
 
 ## v0.14.0
 
