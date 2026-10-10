@@ -2,10 +2,12 @@ package claude_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -489,8 +491,22 @@ func TestResumeCommandDoesNotEditTheSpec(t *testing.T) {
 // place, and every directory is allowed by a flag of its own.
 func TestAssistArgv(t *testing.T) {
 	got := claude.AssistArgv("the brief", "/cfg", "/more")
-	want := []string{"claude", "--append-system-prompt", "the brief", "--add-dir", "/cfg", "--add-dir", "/more"}
+	if len(got) != 9 || got[3] != "--settings" {
+		t.Fatalf("AssistArgv = %q, want the settings after the brief", got)
+	}
+	want := []string{"claude", "--append-system-prompt", "the brief", "--settings", got[4], "--add-dir", "/cfg", "--add-dir", "/more"}
 	if !slices.Equal(got, want) {
 		t.Errorf("AssistArgv = %q, want %q", got, want)
+	}
+	// The surface is off the screen during the hand-over, so the session
+	// itself says how to return to it.
+	var settings struct {
+		StatusLine struct{ Type, Command string }
+	}
+	if err := json.Unmarshal([]byte(got[4]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if s := settings.StatusLine; s.Type != "command" || !strings.Contains(s.Command, "returns to revier") {
+		t.Errorf("status line = %+v, want a command that says how to return", s)
 	}
 }

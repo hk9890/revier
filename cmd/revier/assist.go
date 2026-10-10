@@ -41,7 +41,7 @@ How to work:
 - "%[1]s open", "go", "popup", "run", "each", "attach", "shutdown", "session restore", "agent new", "agent prompt", "agent send-keys", "shell new", "keys install" and "keys uninstall" act on the user's desktop, on their projects or on their agents. Run one only when the user asks for it.
 - Keep the comments and the order of a file you edit. Change the smallest thing that does what was asked.
 - When the cause is a fault in revier and not in the configuration, do not work around it. Write the user an issue report: what they did, what happened, the doctor output, and the log lines.
-- The user reviews your changes in revier when you exit. End with the list of files you changed and what each change does.
+- The user reviews your changes in revier when you exit. End with the list of files you changed and what each change does, and say that /exit returns to revier, where the changes are on the screen.
 `
 
 // cmdAssist hands this terminal to a coding agent briefed to configure and
