@@ -444,6 +444,66 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 	}
 }
 
+// A link has no list of tabs: its home is the derived panels, and a list
+// beside them is one the same load would refuse (decisions.md D126).
+func TestALinkHomeDropsItsTabs(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.runtime]
+  tabs = ["tickets"]
+  active = "tickets"
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
+	}
+	home, _ := p.Home()
+	if len(home.Runtime.Tabs) != 0 || home.Runtime.Active != "" || len(home.Runtime.Panels) != 2 {
+		t.Errorf("home runtime = %+v, want the derived panels and no tabs", home.Runtime)
+	}
+}
+
+// The tabs a shared target lists for a link are dropped from what its file is
+// compared against too: a change to another value of the target is written,
+// and is not taken for an attempt to empty the list.
+func TestSaveProjectTargetOnALinkIgnoresTheSharedTabs(t *testing.T) {
+	const cfg = `
+[[target]]
+name = "home"
+home = true
+  [target.remote.runtime]
+  tabs = ["tickets"]
+  active = "tickets"
+
+[[target]]
+name = "tickets"
+  [target.remote.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+`
+	root := projectsRoot(t, cfg, map[string]string{"far.toml": link})
+	file, shared := config.ProjectFile(root, "far"), sharedOf(t, root)
+	p, err := config.ReadProject(file, shared)
+	if err != nil {
+		t.Fatalf("ReadProject: %v", err)
+	}
+	home := p.Targets[0].Target
+	home.Key = "ctrl-h"
+
+	loaded, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, shared)
+	if err != nil {
+		t.Fatalf("SaveProjectTarget: %v", err)
+	}
+	if got, _ := loaded.Home(); got.Key != "ctrl-h" || len(got.Runtime.Tabs) != 0 {
+		t.Errorf("home = %+v, want the key written and no tabs", got)
+	}
+	if got := read(t, file); strings.Contains(got, "tabs") || strings.Contains(got, "active") {
+		t.Errorf("file =\n%s\nwant no list of tabs written", got)
+	}
+}
+
 // A link holds the repository the host records, for a target here that
 // renders it. The checkout it names is still the host's, which
 // internal/checkout refuses to clone here (decisions.md D83).

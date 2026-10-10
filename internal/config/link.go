@@ -49,10 +49,14 @@ func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 // that says it is a window is left alone: the link has named the tool that
 // reaches the workspace, and a second realization beside it would decide the
 // question the other way on a machine with no window host.
+//
+// A link has no list of tabs (decisions.md D126): one a runtime realization
+// declares is dropped, with its active tab, before the pane fills the home.
 func link(p *revier.Project) {
 	if p.Remote.Project == "" {
 		p.Remote.Project = p.Name
 	}
+	dropTabs(p.Targets)
 	title := "session:" + string(p.Name)
 	pane := revier.Realization{
 		Name:   title,
@@ -75,6 +79,17 @@ func link(p *revier.Project) {
 	p.Targets = append([]revier.Target{{
 		Name: "home", Home: true, Runtime: &pane,
 	}}, p.Targets...)
+}
+
+// dropTabs removes the list of tabs and the active tab from every runtime
+// realization: the targets of a link, and the shared targets a link's are
+// compared against when one is written.
+func dropTabs(targets []revier.Target) {
+	for _, t := range targets {
+		if t.Runtime != nil {
+			t.Runtime.Tabs, t.Runtime.Active = nil, ""
+		}
+	}
 }
 
 // fillPane writes the derived pane into the fields the link left empty. A

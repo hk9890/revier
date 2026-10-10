@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/hk9890/revier/internal/session"
@@ -179,10 +180,10 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
-				// A first tab comes back with its instance, so it is no step
-				// of a restore: a step would leave it the current tab
-				// (decisions.md D124).
-				if !leads(v.Project, t) {
+				// A tab its target lists comes back with the instance, so it
+				// is no step of a restore: a step would leave it the current
+				// tab (decisions.md D126).
+				if in, _ := v.Project.Target(t.Runtime.Inside); in.Runtime == nil || !slices.Contains(in.Runtime.Tabs, tv.Name) {
 					tabs = append(tabs, tab)
 				}
 				continue

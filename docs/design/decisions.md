@@ -545,9 +545,11 @@ remote host stop eighty-nine projects until `--force` turned the guard off.
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose
 tab holds a shell beside the tab target's panel it picked that shell: a return
 home from a tab landed in the wrong pane, and the own-tab rule of a shutdown
-(D94) read the same guess. revier now marks the first panel of every instance it opens with the
-target it was opened for, through `Realization.Vars`, as `OpenTab` already
-marks a tab's. The guess stays only for an instance opened before the mark.
+(D94) read the same guess. revier now marks the first panel of every instance
+it opens with the target it was opened for, through `Realization.Vars`, as
+`OpenTab` already marks a tab's. In an instance that opens with its tabs
+(D126), that panel is the first one of the active tab. The guess stays only
+for an instance opened before the mark.
 
 ### D101 — a link's view is the host's agents and this machine's, added together
 
@@ -759,16 +761,6 @@ one. Only this agent is revier's: a project's agent is still only observed.
 Rejected: a terminal drawn in the surface, an emulator to maintain; a project
 of its own, which a configuration that does not load takes with it.
 
-### D124 — a first tab opens the instance, and the target's panels are the tab after it
-
-`first = true` on a tab puts the ticket viewer on tab 1 of every workspace.
-Both runtimes add a tab after the ones an instance holds, so the order is the
-order of opening: the tab's launch opens the instance under its tab mark
-(D64), and the panels open through `OpenTab` under the home mark, which D100
-put on the first panel of the instance. When the panels fail, the instance
-stays open and is reported with the error. A save records no step for the
-tab. Rejected: a tab number on a panel, which declares the tab a second time.
-
 ### D125 — the project pane mirrors one agent's panel, as the agent list's pane does
 
 One agent drawn two ways, its message set from the transcript beside the
@@ -778,3 +770,13 @@ pane mirrors an agent before any keypress, and keeps it while no other is more
 worth a look: a mirror that changed hands when an equal spoke lost the scroll
 in it. Rejected: the turn an agent is in above the mirror, which the screen
 shows already. Replaces D107 and D122.
+
+### D126 — a target lists the tabs its instance opens with, and the active one
+
+A workspace opens with the ticket viewer on tab 1 and the agent on tab 2, in
+focus. The target that owns the instance says so: `tabs` is the order, `active`
+the focus. A tab is then a target like any other, panels included, and the home
+target is only the window. Both apply when revier creates the instance.
+Replaces D124. Rejected: a position flag on the tab, one flag for each
+position; the order of `[[target]]` in the file, since shared targets merge
+before a project's, and a file could not say which tabs open at the start.

@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -300,5 +301,41 @@ name = "remote-editor"
 	got, _ := loaded.Target("remote-editor")
 	if got.Window.Match.Title != "^far \\[SSH: buildbox\\]" || got.Window.Launch[0] != "code" {
 		t.Errorf("editor = %+v, want the title overridden and the shared launch kept", got.Window)
+	}
+}
+
+// The tabs and the active tab of a shared target are overridden as its other
+// values are: written when they differ from config.toml, gone when they do
+// not.
+func TestSaveProjectTargetWritesTabsAndActive(t *testing.T) {
+	const body = "path = \"/p\"\n"
+	root := projectsRoot(t, tabsConfig, map[string]string{"demo.toml": body})
+	file, shared := config.ProjectFile(root, "demo"), sharedOf(t, root)
+	p, err := config.ReadProject(file, shared)
+	if err != nil {
+		t.Fatalf("ReadProject: %v", err)
+	}
+	home := p.Targets[0].Target
+	home.Runtime = new(*home.Runtime)
+	home.Runtime.Tabs, home.Runtime.Active = []revier.TargetName{"agent", "tickets"}, "tickets"
+
+	loaded, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, shared)
+	if err != nil {
+		t.Fatalf("SaveProjectTarget: %v", err)
+	}
+	want := body + "\n[[target]]\nname = \"home\"\n  [target.runtime]\n  tabs = [\"agent\", \"tickets\"]\n  active = \"tickets\"\n"
+	if got := read(t, file); got != want {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
+	}
+	got, _ := loaded.Target("home")
+	if !slices.Equal(got.Runtime.Tabs, home.Runtime.Tabs) || got.Runtime.Active != "tickets" {
+		t.Errorf("home tabs = %v, active = %q; want them as written", got.Runtime.Tabs, got.Runtime.Active)
+	}
+
+	if _, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: p.Targets[0].Target}, shared); err != nil {
+		t.Fatalf("SaveProjectTarget back to shared: %v", err)
+	}
+	if got := read(t, file); strings.Contains(got, `"home"`) {
+		t.Errorf("file =\n%s\nwant the home entry gone", got)
 	}
 }

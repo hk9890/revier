@@ -81,8 +81,8 @@ both hosts are available.
 
 Set `inside` on a runtime realization to open the target as a tab of another
 target's instance, not as an instance of its own (D64). The tab
-needs a `launch`, and no `match` or `name`: revier marks the tab it opens and
-finds it again by that mark. It needs a runtime with tabs: kitty, where it is
+takes a `launch` or `panels`, one of the two, and no `match` or `name`: revier
+marks the tab it opens and finds it again by that mark. It needs a runtime with tabs: kitty, where it is
 a tab of the OS window, or tmux, where it is a window of the session (D70). On
 any other runtime the key is refused with the reason.
 
@@ -96,11 +96,59 @@ key  = "ctrl-shift-t"
   launch = ["taskmgr-ui"]
 ```
 
-Add `first = true` to make the tab the first one of the instance (D124). It
-then opens with the target it is inside and needs no press: the tab is tab 1,
-the panels of that target are tab 2, and the first of those panels has the
-focus. The tab's key finds that tab. One tab of a target can be first. A link
-opens without it, and so does a workspace on a runtime with no tabs.
+Set `tabs` on the target the tabs are inside to open its instance with them
+(D126). `tabs` lists the tab targets in the order they open, and `active` names
+the one that has the focus; with no `active` it is the first entry. The target
+is then only the window: it has no `launch` and no `panels`, and the agent and
+the shell are a tab target as the ticket viewer is.
+
+```toml
+[[target]]
+name = "home"
+key  = "ctrl-shift-h"
+home = true
+
+  [target.runtime]
+  name   = "session:{{.Name}}"
+  match  = { title = "^session:{{.Name}}$" }
+  tabs   = ["tickets", "agent"]
+  active = "agent"
+
+[[target]]
+name = "agent"
+
+  [target.runtime]
+  inside = "home"
+
+    [[target.runtime.panels]]
+    kind    = "agent"
+    title   = "claude"
+    command = ["claude"]
+
+    [[target.runtime.panels]]
+    kind = "shell"
+
+[[target]]
+name = "tickets"
+key  = "ctrl-shift-t"
+
+  [target.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+```
+
+Both keys apply only when revier creates the instance: one that is open keeps
+its tabs and its focus. A press on the key of a listed tab that creates the
+instance leaves the focus on that tab. A tab that is not listed opens at its
+key, as before. The `home` of the first example, with `panels` on the target
+and no `tabs`, is the same workspace with one tab, and still works. A link
+opens without the listed tabs. On a runtime with no tabs the key of a target
+with `tabs` is refused with the reason.
+
+A listed tab that fails to open stops the ones after it: the instance stays
+open with the tabs it has, and the press reports it with the error (D126). A
+save records no step for a listed tab, because it comes back with its
+instance.
 
 Targets most projects have in common are declared once, in
 `~/.config/revier/config.toml`, in the same form (D59). Every

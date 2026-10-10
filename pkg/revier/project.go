@@ -125,15 +125,17 @@ type Realization struct {
 
 	Match Match `toml:"match" json:"match"`
 
-	// Panels is the layout for a Home target. Runtime hosts only: a window
-	// host cannot see inside a terminal, and ignores it.
+	// Panels is the layout of the realization: of an instance, or of a tab
+	// when the realization has Inside. Runtime hosts only: a window host
+	// cannot see inside a terminal, and ignores it.
 	Panels []PanelSpec `toml:"panels" json:"panels,omitempty"`
 
 	// Vars are the panel variables the host sets on the first panel it
 	// opens, and reports back as Panel.Vars. No project file sets them: the
 	// core fills them, as it fills Dir, so that a panel revier opened is
 	// identified later by the mark rather than guessed at. They are what
-	// PanelOpener.OpenTab takes for a tab, on the instance's own first panel.
+	// PanelOpener.OpenTab takes for a tab, on the first panel of the
+	// instance: its own, or the one of the first tab it opens with.
 	// A window host has no panels and ignores them.
 	Vars map[string]string `toml:"-" json:"vars,omitempty"`
 
@@ -148,16 +150,22 @@ type Realization struct {
 
 	// Inside names another target of the project, and makes this one a tab
 	// of that target's instance rather than an instance of its own. Runtime
-	// realizations only, on a runtime that implements PanelOpener. The tab is
-	// found by the target's name, which revier sets on it, so Match and Name
-	// are not used (decisions.md D64).
+	// realizations only, on a runtime that implements PanelOpener. The tab
+	// runs Launch or holds Panels, one of the two. It is found by the
+	// target's name, which revier sets on it, so Match and Name are not used
+	// (decisions.md D64).
 	Inside TargetName `toml:"inside" json:"inside,omitempty"`
 
-	// First makes a tab the first one of the instance it is inside: it opens
-	// with that instance and not at a press of its own, and the panels of the
-	// target it is inside open as the tab after it (decisions.md D124). Only
-	// a realization with Inside has it, and one tab of a target at most.
-	First bool `toml:"first" json:"first,omitempty"`
+	// Tabs lists, in order, the tab targets a new instance opens with. The
+	// realization then has no Launch and no Panels of its own, and each
+	// entry is a target that is Inside this one (decisions.md D126). Runtime
+	// realizations only, and never one with Inside. It applies when the
+	// instance is created: an open instance is not changed.
+	Tabs []TargetName `toml:"tabs" json:"tabs,omitempty"`
+
+	// Active names the entry of Tabs that has the focus in a new instance.
+	// Empty means the first entry (decisions.md D126).
+	Active TargetName `toml:"active" json:"active,omitempty"`
 }
 
 // PanelSpecs is what a runtime host runs for the realization: its panels, or

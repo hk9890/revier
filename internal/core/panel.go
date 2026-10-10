@@ -27,8 +27,8 @@ const PanelTargetVar = "revier_target"
 // PanelHomeVar is the panel variable that names the target an instance was
 // opened for. It marks the instance's own first panel, the one a press that
 // returns home from a tab lands in, so that panel is identified rather than
-// guessed at (decisions.md D100). Behind a first tab that panel is the first
-// one of the second tab (D124).
+// guessed at (decisions.md D100). In an instance that opens with its tabs it
+// is the first panel of the active tab.
 const PanelHomeVar = "revier_home"
 
 // isTab reports whether the i-th target is a tab inside another target.
@@ -37,28 +37,126 @@ func (p Project) isTab(i int) bool { return tabTarget(p.Targets[i]) }
 // tabTarget reports whether t is a tab inside another target.
 func tabTarget(t revier.Target) bool { return t.Runtime != nil && t.Runtime.Inside != "" }
 
-// leads reports whether t is a first tab: one that opens with the target it
-// is inside, as the first tab of the instance (decisions.md D124). A link has
-// none: what it opens is the panels that reach its host.
-func leads(p revier.Project, t revier.Target) bool {
-	return tabTarget(t) && t.Runtime.First && p.Remote == nil
-}
-
-// firstTab is the tab that opens first in a new instance of the named target
-// on host, and the runtime that opens the target's own panels after it. A
-// refused tab leads nothing, and neither does any tab on a host with no tabs:
-// the target then opens as it is declared.
-func (c *Core) firstTab(p Project, name revier.TargetName, host revier.Host) (revier.Target, revier.PanelOpener, bool) {
+// tabsHost is the runtime that opens the tabs the realization lists, and nil
+// when it lists none. A runtime that cannot open a tab refuses the target at
+// the keypress, as it refuses a tab.
+func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host revier.Host) (revier.PanelOpener, error) {
+	if len(real.Tabs) == 0 {
+		return nil, nil
+	}
 	opener, ok := host.(revier.PanelOpener)
 	if !ok {
-		return revier.Target{}, nil, false
+		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch or panels",
+			ErrNoTabs, name, host.Name())
 	}
-	for i, t := range p.Targets {
-		if leads(p.Project, t) && t.Runtime.Inside == name && p.compiled[i].err == nil {
-			return t, opener, true
+	return opener, nil
+}
+
+// opening is how a new instance of a target that lists its tabs comes up
+// (decisions.md D126): the tabs in the order they open, and the one that has
+// the focus afterwards.
+type opening struct {
+	target revier.TargetName
+	tabs   []revier.Target
+	active revier.TargetName
+}
+
+// opening is the tabs a new instance of the named target opens with. An entry
+// that is refused in this project is skipped. The active tab is the declared
+// one, and the first that opens when none is declared or the declared one is
+// skipped.
+func (p Project) opening(name revier.TargetName, real revier.Realization) (opening, error) {
+	o := opening{target: name}
+	for _, entry := range real.Tabs {
+		if i, ok := p.index(entry); ok && p.compiled[i].err == nil {
+			o.tabs = append(o.tabs, p.Targets[i])
 		}
 	}
-	return revier.Target{}, nil, false
+	if len(o.tabs) == 0 {
+		return o, fmt.Errorf("target %q: every tab it lists is refused, so it has nothing to open", name)
+	}
+	o.active = o.tabs[0].Name
+	if slices.ContainsFunc(o.tabs, func(t revier.Target) bool { return t.Name == real.Active }) {
+		o.active = real.Active
+	}
+	return o, nil
+}
+
+// vars is the mark on the first panel of a tab: the tab's own, and on the
+// active tab the home mark beside it, so a return home lands there
+// (decisions.md D100).
+func (o opening) vars(tab revier.TargetName) map[string]string {
+	vars := map[string]string{PanelTargetVar: string(tab)}
+	if tab == o.active {
+		vars[PanelHomeVar] = string(o.target)
+	}
+	return vars
+}
+
+// first is the realization that creates the instance: the target's own name,
+// match and place, around what the first tab runs, under that tab's mark.
+func (o opening) first(real revier.Realization) revier.Realization {
+	tab := o.tabs[0]
+	real.Launch, real.Panels, real.Dir = tab.Runtime.Launch, tab.Runtime.Panels, tab.Runtime.Dir
+	real.Vars = o.vars(tab.Name)
+	return real
+}
+
+// rest opens every tab after the first in the instance, in order, and stops
+// at one that fails. It returns the tabs the instance now holds, the first
+// included, and the first panel of the active tab when that is one it opened.
+func (o opening) rest(ctx context.Context, opener revier.PanelOpener, ref revier.TargetRef) (opened []revier.TargetName, active revier.PanelID, err error) {
+	opened = []revier.TargetName{o.tabs[0].Name}
+	for _, tab := range o.tabs[1:] {
+		panel, err := opener.OpenTab(ctx, ref, *tab.Runtime, o.vars(tab.Name))
+		if err != nil {
+			return opened, "", fmt.Errorf("open tab %s of %s: %w", tab.Name, o.target, err)
+		}
+		opened = append(opened, tab.Name)
+		if tab.Name == o.active {
+			active = panel
+		}
+	}
+	return opened, active, nil
+}
+
+// focusActive makes the first panel of the active tab current. panel is that
+// panel when OpenTab returned it. The tab that created the instance has only
+// the instance's ref, so the instance is listed once and the panel found
+// there.
+func (c *Core) focusActive(ctx context.Context, opener revier.PanelOpener, o opening, ref revier.TargetRef, panel revier.PanelID) error {
+	if panel == "" {
+		snap, err := c.answered(ctx, ref.Host)
+		if err != nil {
+			return err
+		}
+		in, _ := byRef(snap, ref)
+		found, ok := createdTab(in, o.active)
+		if !ok {
+			return fmt.Errorf("%s: %s opened with tab %s, and the listing has no panel for it", ref.Host, o.target, o.active)
+		}
+		panel = found
+	}
+	if err := opener.FocusPanel(ctx, ref, panel); err != nil {
+		return fmt.Errorf("%s: focus tab %s of %s: %w", ref.Host, o.active, o.target, err)
+	}
+	return nil
+}
+
+// createdTab is the first panel of the tab that created the instance. A
+// runtime sets the mark of Open as best effort, so a tab that lost it is the
+// first panel no mark names: every tab opened after it carries one, or it
+// would not have opened.
+func createdTab(in revier.Instance, name revier.TargetName) (revier.PanelID, bool) {
+	if id, ok := tabOf(in, name); ok {
+		return id, true
+	}
+	for _, panel := range in.Panels {
+		if panel.Vars[PanelTargetVar] == "" && panel.Vars[PanelHomeVar] == "" {
+			return panel.ID, true
+		}
+	}
+	return "", false
 }
 
 // tabHost is the runtime that opens the i-th target's tab, when there is one
@@ -193,10 +291,10 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	}
 	// An instance opened for the tab was focused by that goTo, and the window
 	// host may not list its OS window yet: it is raised by the launch, not here.
-	// It holds no tab yet, unless this tab opened it as its first, so only its
+	// It holds no tab yet, unless this tab is one it opened with, so only its
 	// ref is needed.
 	opened := !found
-	// withInstance says the tab opened with the instance, as its first tab.
+	// withInstance says the tab opened with the instance, as a tab it lists.
 	withInstance := false
 	if opened {
 		res, err := c.goTo(ctx, p, t.Runtime.Inside, bound)
@@ -207,14 +305,18 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and cannot name it", c.Runtime.Name(), t.Runtime.Inside, t.Name)
 		}
 		in = revier.Instance{Ref: res.Ref}
-		if res.FirstTab == t.Name {
+		if slices.Contains(res.Tabs, t.Name) {
 			// The instance opened with this tab in it. It is read again to
 			// name the tab, which is then focused and not opened a second time.
 			if snap, err = c.answered(ctx, nameOf(c.Runtime)); err != nil {
 				return Result{Target: res.Target, Ref: res.Ref}, err
 			}
 			if listed, ok := byRef(snap, res.Ref); ok {
-				if id, isOpen := tabOf(listed, t.Name); isOpen {
+				find := tabOf
+				if res.Tabs[0] == t.Name {
+					find = createdTab
+				}
+				if id, isOpen := find(listed, t.Name); isOpen {
 					tab, open, withInstance = id, true, true
 				}
 			}

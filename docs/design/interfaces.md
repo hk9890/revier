@@ -42,13 +42,14 @@ type Realization struct {
     // a host that assigns its own identity satisfies the Open invariant.
     Name string
 
-    Launch []string   // argv, used when Match finds nothing; a runtime realization with Panels may omit it
+    Launch []string   // argv, used when Match finds nothing; a runtime realization with Panels or Tabs omits it
     Dir    string     // working directory for Launch and every panel; the project path when empty
     Match  Match      // how to recognise an existing instance
-    Panels []PanelSpec // runtime hosts only: the layout for a Home target
+    Panels []PanelSpec // runtime hosts only: the layout of the instance, or of a tab when Inside is set
 
     // Vars are the panel variables the host sets on the first panel it opens
-    // and reports back as Panel.Vars. The core fills them, as it fills Dir,
+    // and reports back as Panel.Vars. For a realization with Tabs that is the
+    // first panel of the first tab, and the vars are that tab's (D126). The core fills them, as it fills Dir,
     // so a panel revier opened is identified later rather than guessed at
     // (D100). Setting them is best effort: the instance is open by then, and
     // an Open that failed over them would hand the caller nothing to pin, so
@@ -59,13 +60,19 @@ type Realization struct {
     Vars map[string]string
 
     // Inside names another target; this one is then a tab of that target's
-    // instance, found by its name, and Match and Name are not used (D64).
+    // instance, found by its name, and Match and Name are not used (D64). The
+    // tab runs Launch or holds Panels, one of the two.
     Inside TargetName
 
-    // First makes a tab the first one of the instance it is inside: it opens
-    // with that instance, and that target's panels open as the tab after it
-    // (D124).
-    First bool
+    // Tabs lists, in order, the tab targets a new instance opens with. Each
+    // entry is a target that is Inside this one, and the realization then has
+    // no Launch and no Panels of its own. Runtime realizations only, and never
+    // one with Inside. An open instance is not changed (D126).
+    Tabs []TargetName
+
+    // Active names the entry of Tabs that has the focus in a new instance.
+    // Empty means the first entry (D126).
+    Active TargetName
 }
 
 // Match recognises an instance. An empty field does not constrain; every
