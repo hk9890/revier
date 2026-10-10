@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
 	"slices"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,8 +49,42 @@ func cmdTUI(a *app) error {
 			return p.Name, ok
 		})
 	}
-	_, err = tea.NewProgram(m, opts...).Run()
-	return err
+	return runSurface(tea.NewProgram(m, append(opts, tea.WithoutSignalHandler())...))
+}
+
+// signalEnd is the surface ended by a signal: its terminal closed, or
+// something stopped the process. It is a normal outcome, with the status a
+// shell gives a command a signal ended.
+type signalEnd struct{ sig syscall.Signal }
+
+func (e signalEnd) Error() string { return "ended by signal: " + e.sig.String() }
+
+// runSurface runs the surface until it quits or a signal ends it, and names
+// the signal. The program is started without bubbletea's own handler, which
+// does not catch a hangup and turns the others into a quit that names none:
+// a surface whose terminal closed ended with no line in the log.
+func runSurface(p *tea.Program) error {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
+	ended := make(chan syscall.Signal, 1)
+	quit := make(chan struct{})
+	defer close(quit)
+	go func() {
+		select {
+		case sig := <-signals:
+			ended <- sig.(syscall.Signal)
+			p.Kill()
+		case <-quit:
+		}
+	}()
+	_, err := p.Run()
+	select {
+	case sig := <-ended:
+		return signalEnd{sig}
+	default:
+		return err
+	}
 }
 
 // tuiStart reads what the surface needs from where it was started - the

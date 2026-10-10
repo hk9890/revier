@@ -1,9 +1,14 @@
 package main
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/core"
 )
@@ -59,5 +64,44 @@ func TestTUIStartWithoutAHomeLeavesForTheRoot(t *testing.T) {
 	tuiStart(tuiApp(t.TempDir()))
 	if got := cwd(t); got != "/" {
 		t.Errorf("cwd = %s, want /", got)
+	}
+}
+
+// program is a surface that runs first as soon as it is up, with no terminal.
+type program struct{ first tea.Cmd }
+
+func (p program) Init() tea.Cmd                       { return p.first }
+func (p program) Update(tea.Msg) (tea.Model, tea.Cmd) { return p, nil }
+func (p program) View() string                        { return "" }
+
+func surfaceOf(first tea.Cmd) *tea.Program {
+	return tea.NewProgram(program{first: first}, tea.WithInput(nil), tea.WithOutput(io.Discard), tea.WithoutSignalHandler())
+}
+
+// A terminal that closes hangs the surface up. The surface ends and says
+// which signal ended it, with the status a shell gives that signal, so the
+// log line of the process names it.
+func TestASignalEndsTheSurfaceAndIsNamed(t *testing.T) {
+	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT} {
+		err := runSurface(surfaceOf(func() tea.Msg {
+			if err := syscall.Kill(os.Getpid(), sig); err != nil {
+				t.Errorf("kill: %v", err)
+			}
+			return nil
+		}))
+		var ended signalEnd
+		if !errors.As(err, &ended) || ended.sig != sig {
+			t.Fatalf("%v: runSurface = %v, want the signal named", sig, err)
+		}
+		if status, say := outcome(err); status != 128+int(sig) || say {
+			t.Errorf("%v: outcome = %d, %v; want %d and nothing printed", sig, status, say, 128+int(sig))
+		}
+	}
+}
+
+// A surface the user quits ended by no signal.
+func TestAQuitSurfaceNamesNoSignal(t *testing.T) {
+	if err := runSurface(surfaceOf(tea.Quit)); err != nil {
+		t.Errorf("runSurface = %v, want a clean end", err)
 	}
 }
