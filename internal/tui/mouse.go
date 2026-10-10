@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -216,6 +217,25 @@ func (m Model) bodyLine(y int) (int, bool) {
 		return 0, false
 	}
 	return y - top, true
+}
+
+// reportTail is a mouse report with its first two bytes gone, as the input
+// reader types it.
+var reportTail = regexp.MustCompile(`^<\d+;\d+;\d+[Mm]$`)
+
+// splitReport reports a key that is half of a mouse report and no key at
+// all. The input reader takes 256 bytes at a time and does not wait for the
+// rest of a report that a full read cut, so a burst of pointer motion
+// arrives as alt+[ and then the rest of the report as typed text, which a
+// field took for a query. Pasted text of that form is the user's.
+func splitReport(msg tea.KeyMsg) bool {
+	if msg.Type != tea.KeyRunes || msg.Paste {
+		return false
+	}
+	if msg.Alt {
+		return string(msg.Runes) == "["
+	}
+	return reportTail.MatchString(string(msg.Runes))
 }
 
 // overPane reports whether a column is inside the detail pane: right of the

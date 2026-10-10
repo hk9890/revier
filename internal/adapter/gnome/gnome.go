@@ -341,9 +341,13 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	return h.decodeFocused(raw)
 }
 
+// noFocus is what wctl 0.13 prints when no window has the focus: plain text
+// with exit 0, with --json too.
+const noFocus = "No window focused"
+
 func (h *Host) decodeFocused(raw []byte) (revier.TargetRef, error) {
 	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte(noFocus)) {
 		// Nothing focused is a normal desktop state, not a failure.
 		return revier.TargetRef{}, nil
 	}

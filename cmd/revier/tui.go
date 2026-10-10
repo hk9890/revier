@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
 	"slices"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,8 +49,55 @@ func cmdTUI(a *app) error {
 			return p.Name, ok
 		})
 	}
-	_, err = tea.NewProgram(m, opts...).Run()
-	return err
+	return runSurface(m, opts...)
+}
+
+// signalEnd is the surface ended by a signal: its terminal closed, or
+// something stopped the process. It is a normal outcome, with the status a
+// shell gives a command a signal ended.
+type signalEnd struct{ sig syscall.Signal }
+
+func (e signalEnd) Error() string { return "ended by signal: " + e.sig.String() }
+
+// killWait is how long a surface that a signal ended has to give the
+// terminal back. A command that holds the terminal and outlives the signal
+// would hold the surface with it.
+const killWait = time.Second
+
+// runSurface runs the surface until it quits or a signal ends it, and names
+// the signal. The program runs without bubbletea's own handler, which does
+// not catch a hangup and turns a termination into a quit that names no
+// signal: a surface whose terminal closed ended with no line in the log.
+//
+// An interrupt ends nothing. The surface reads ctrl+c as a key, so the
+// terminal sends an interrupt only while an action, a clone or the assistant
+// holds it, and that one is for the command.
+func runSurface(m tea.Model, opts ...tea.ProgramOption) error {
+	p := tea.NewProgram(m, append(opts, tea.WithoutSignalHandler())...)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
+	quit := make(chan error, 1)
+	go func() {
+		_, err := p.Run()
+		quit <- err
+	}()
+	for {
+		select {
+		case err := <-quit:
+			return err
+		case sig := <-signals:
+			if sig == syscall.SIGINT {
+				continue
+			}
+			p.Kill()
+			select {
+			case <-quit:
+			case <-time.After(killWait):
+			}
+			return signalEnd{sig.(syscall.Signal)}
+		}
+	}
 }
 
 // tuiStart reads what the surface needs from where it was started - the
