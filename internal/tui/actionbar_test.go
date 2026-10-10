@@ -19,19 +19,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// barCell is a terminal cell inside the "new" button of the action bar: the
-// bar is the surface's first line, and "new" is the first button after the
-// switch between the two lists.
-func barCell(t *testing.T, m tui.Model) (x, y int) {
-	t.Helper()
-	mr, _ := margins(m)
-	x = column(barLine(m), "new")
-	if x < 0 {
-		t.Fatalf("bar = %q, want the new button on it", barLine(m))
-	}
-	return x, mr
-}
-
 // The bar is the top line, and every button says its key: the bar is
 // a second way to what the keyboard already reaches.
 func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
@@ -582,14 +569,6 @@ func motion(m tui.Model, x, y int) tui.Model {
 	return next.(tui.Model)
 }
 
-// typeInto types text into the screen's field, a rune at a time.
-func typeInto(m tui.Model, text string) tui.Model {
-	for _, r := range text {
-		m, _ = press(m, string(r))
-	}
-	return m
-}
-
 // The pointer lights a row of the list and a target in the pane, and the
 // light is not the selection's: two rows can be marked at once, and which of
 // them Enter means must stay readable.
@@ -673,12 +652,6 @@ func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
 	if m = motion(m, mc+9, rowTop(m)+2); m.View() != before {
 		t.Error("the surface changed with the pointer still on the same row")
 	}
-}
-
-// rowTop is the terminal row the first row of the list is on.
-func rowTop(m tui.Model) int {
-	mr, _ := margins(m)
-	return mr + 4
 }
 
 // The new-project screen stands over the list: a double click where the rows

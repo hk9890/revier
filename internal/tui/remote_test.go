@@ -2,8 +2,6 @@ package tui_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,50 +13,6 @@ import (
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// remoteFile is a project on buildbox: its path is in that machine's terms,
-// and the home target here is the ssh pane onto the workspace there.
-const remoteFile = `
-[remote]
-host = "buildbox"
-`
-
-// remoteOnDisk writes one remote project file and loads it the way the CLI
-// does.
-func remoteOnDisk(t *testing.T, name string) []core.Project {
-	t.Helper()
-	dir := t.TempDir()
-	body := strings.ReplaceAll(remoteFile, "%NAME%", name)
-	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	projects, err := config.LoadProjects(dir, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return projects
-}
-
-// hostSays is what the revier on buildbox answers about a project: the
-// checkout is there, and its one agent is in the given state. The agent is
-// named by the tag a panel of machine box on pid 4242 gave it, which is what
-// openHere opens.
-func hostSays(name string, status revier.Status) revier.ProjectView {
-	return revier.ProjectView{
-		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/user/dev/" + name},
-		PathExists: true,
-		Agents:     []revier.AgentView{{Panel: "box.4242", State: revier.AgentState{Harness: "claude", Status: status}}},
-	}
-}
-
-// openHere is the link's workspace open on this machine: one panel running
-// the ssh, on the pid the host tags what that panel started with.
-func openHere(name string) *hosttest.FakeRuntime {
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:"+name, "kitty", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242,
-		Command: []string{"ssh", "-t", "buildbox"}})
-	return rt
-}
 
 // A link with nothing open here sorts with the closed projects, however
 // much its host's agent wants the user: that agent is on no row

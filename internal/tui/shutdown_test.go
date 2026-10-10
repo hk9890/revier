@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
@@ -151,14 +150,10 @@ func TestAShutdownStartsNoSecondSurvey(t *testing.T) {
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
 	m, cmd = press(m, "enter")
-	if _, after := m.Update(cmd()); after != nil {
+	if _, after := deliver(m, cmd); after != nil {
 		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
 	}
 }
-
-// probeOf is the world's one agent probe, whose state a test changes between
-// the plan and the confirm.
-func probeOf(c *core.Core) *hosttest.FakeProbe { return c.Probes[0].(*hosttest.FakeProbe) }
 
 // fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
 func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {

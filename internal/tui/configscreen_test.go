@@ -3,7 +3,6 @@ package tui_test
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,20 +13,6 @@ import (
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// configRoot points the configuration at a scratch directory holding text as
-// config.toml.
-func configRoot(t *testing.T, text string) string {
-	t.Helper()
-	root := t.TempDir()
-	t.Setenv("REVIER_CONFIG_HOME", root)
-	if err := os.WriteFile(config.File(root), []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-func screen(m tui.Model) string { return strings.Join(lines(m), "\n") }
 
 // onRuntimeRow opens the config screen with the cursor on the runtime row.
 func onRuntimeRow(m tui.Model) tui.Model {

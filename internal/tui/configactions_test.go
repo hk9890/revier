@@ -30,12 +30,6 @@ func onActionRow(m tui.Model, i int) tui.Model {
 	return m
 }
 
-// clearField deletes what a form field holds.
-func clearField(m tui.Model) tui.Model {
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
-	return next.(tui.Model)
-}
-
 // An action added on the screen is written to config.toml and bound at once:
 // its key runs it on the surface, with no restart.
 func TestTheConfigScreenAddsAnAction(t *testing.T) {

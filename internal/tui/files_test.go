@@ -8,52 +8,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-const fileProject = `
-path = "%PATH%"
-%GIT%
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "session:{{.Name}}"
-  launch = ["sh"]
-  match = { title = "^session:{{.Name}}$" }
-`
-
-// onDisk writes one project file per name, loads them the way the CLI does,
-// and returns the loaded projects and the directory the files are in. path
-// maps a name to its directory; a name not in it gets a directory that
-// exists.
-func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[string]string) ([]core.Project, string) {
-	t.Helper()
-	dir := t.TempDir()
-	for _, n := range names {
-		p, ok := path[n]
-		if !ok {
-			p = t.TempDir()
-		}
-		git := ""
-		if u := gitURL[n]; u != "" {
-			git = `git_url = "` + u + `"`
-		}
-		body := strings.NewReplacer("%PATH%", p, "%GIT%", git).Replace(fileProject)
-		if err := os.WriteFile(filepath.Join(dir, n+".toml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	projects, err := config.LoadProjects(dir, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return projects, dir
-}
 
 func fileWorld(t *testing.T, names ...string) (*hosttest.FakeRuntime, tui.Model, string) {
 	t.Helper()

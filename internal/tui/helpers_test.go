@@ -3,6 +3,9 @@ package tui_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -356,4 +359,343 @@ func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
 	next, pressed := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	next, released := next.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
 	return next.(tui.Model), tea.Batch(pressed, released)
+}
+
+// barCell is a terminal cell inside the "new" button of the action bar: the
+// bar is the surface's first line, and "new" is the first button after the
+// switch between the two lists.
+func barCell(t *testing.T, m tui.Model) (x, y int) {
+	t.Helper()
+	mr, _ := margins(m)
+	x = column(barLine(m), "new")
+	if x < 0 {
+		t.Fatalf("bar = %q, want the new button on it", barLine(m))
+	}
+	return x, mr
+}
+
+// typeInto types text into the screen's field, a rune at a time.
+func typeInto(m tui.Model, text string) tui.Model {
+	for _, r := range text {
+		m, _ = press(m, string(r))
+	}
+	return m
+}
+
+// rowTop is the terminal row the first row of the list is on.
+func rowTop(m tui.Model) int {
+	mr, _ := margins(m)
+	return mr + 4
+}
+
+// listed is one agent of listedWorld: the project a panel of which shows it,
+// its state, what it is on, what it said last and when, the directory it
+// works in, and what its panel shows.
+type listed struct {
+	project string
+	status  revier.Status
+	on      string
+	said    string
+	at      time.Time
+	dir     string
+	screen  string
+}
+
+// listedWorld is listedSurface with the agent list in view and its asks
+// answered.
+func listedWorld(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
+	m, rt, fakes := listedSurface(t, width, height, agents...)
+	return switched(m).Said().Mirrored(), rt, fakes
+}
+
+// listColumnRows is the first line of every row of the list in view, in
+// order: the line a row's state and summary are on.
+func listedRows(m tui.Model) []string {
+	var out []string
+	all := lines(m)
+	for i := 4; i < len(all)-1; i += 2 {
+		left, _, _ := strings.Cut(all[i], "│")
+		if strings.TrimSpace(left) != "" {
+			out = append(out, strings.TrimSpace(left))
+		}
+	}
+	return out
+}
+
+// clearField deletes what a form field holds.
+func clearField(m tui.Model) tui.Model {
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	return next.(tui.Model)
+}
+
+// configRoot points the configuration at a scratch directory holding text as
+// config.toml.
+func configRoot(t *testing.T, text string) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	if err := os.WriteFile(config.File(root), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func screen(m tui.Model) string { return strings.Join(lines(m), "\n") }
+
+const sharedTargets = `[[target]]
+name = "home"
+home = true
+key = "ctrl-shift-u"
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+    # the agent
+    [[target.runtime.panels]]
+    kind = "agent"
+    title = "Claude Code"
+    command = ["claude"]
+    [[target.runtime.panels]]
+    kind = "shell"
+    title = "shell"
+
+[[target]]
+name = "editor"
+key = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"] # IntelliJ
+  match = { class = "^jetbrains-idea" }
+`
+
+func downs(m tui.Model, n int) tui.Model {
+	for range n {
+		m, _ = press(m, "down")
+	}
+	return m
+}
+
+func wantSelected(t *testing.T, m tui.Model, name, why string) {
+	t.Helper()
+	if row := selectedRow(t, m); !strings.Contains(row, name) {
+		t.Errorf("selected %q, want %s: %s", row, name, why)
+	}
+}
+
+const fileProject = `
+path = "%PATH%"
+%GIT%
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  launch = ["sh"]
+  match = { title = "^session:{{.Name}}$" }
+`
+
+// onDisk writes one project file per name, loads them the way the CLI does,
+// and returns the loaded projects and the directory the files are in. path
+// maps a name to its directory; a name not in it gets a directory that
+// exists.
+func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[string]string) ([]core.Project, string) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, n := range names {
+		p, ok := path[n]
+		if !ok {
+			p = t.TempDir()
+		}
+		git := ""
+		if u := gitURL[n]; u != "" {
+			git = `git_url = "` + u + `"`
+		}
+		body := strings.NewReplacer("%PATH%", p, "%GIT%", git).Replace(fileProject)
+		if err := os.WriteFile(filepath.Join(dir, n+".toml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	projects, err := config.LoadProjects(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return projects, dir
+}
+
+// linkWorld is a surface with an ssh configuration naming buildbox and
+// farbox, a scratch configuration root to write links into, and a fake
+// buildbox that has the named projects.
+func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Model, *hosttest.FakeRemote, string) {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	sshConfig := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(sshConfig, []byte("Host buildbox\n  HostName 10.0.0.7\nHost farbox\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
+
+	var views []revier.ProjectView
+	for _, n := range onHost {
+		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
+	}
+	remote := hosttest.NewRemote("buildbox", views...)
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), NewRemote: func(string) revier.Remote { return remote }}
+	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20), remote, root
+}
+
+const demoProject = `# demo
+path = "/tmp/demo"
+
+[[target]]
+name = "editor"
+key = "ctrl-o"
+`
+
+// projectSurface is the surface over a configuration root with the shared
+// targets of sharedTargets and one project, demo, written as body; the
+// runtime is rt. It returns the project file and the state root too.
+func projectSurface(t *testing.T, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
+	t.Helper()
+	return projectSurfaceOver(t, sharedTargets, body, rt)
+}
+
+// projectSurfaceOver is projectSurface with shared as config.toml.
+func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
+	t.Helper()
+	root := configRoot(t, shared)
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "demo.toml")
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateRoot := stateWith(t, nil)
+	m := tui.New(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), "")
+	next, _ := m.Update(m.Survey()())
+	return resize(next.(tui.Model), 140, 60), file, stateRoot
+}
+
+func fileText(t *testing.T, file string) string {
+	t.Helper()
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// remoteFile is a project on buildbox: its path is in that machine's terms,
+// and the home target here is the ssh pane onto the workspace there.
+const remoteFile = `
+[remote]
+host = "buildbox"
+`
+
+// remoteOnDisk writes one remote project file and loads it the way the CLI
+// does.
+func remoteOnDisk(t *testing.T, name string) []core.Project {
+	t.Helper()
+	dir := t.TempDir()
+	body := strings.ReplaceAll(remoteFile, "%NAME%", name)
+	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	projects, err := config.LoadProjects(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return projects
+}
+
+// hostSays is what the revier on buildbox answers about a project: the
+// checkout is there, and its one agent is in the given state. The agent is
+// named by the tag a panel of machine box on pid 4242 gave it, which is what
+// openHere opens.
+func hostSays(name string, status revier.Status) revier.ProjectView {
+	return revier.ProjectView{
+		Project:    revier.Project{Name: revier.ProjectName(name), Path: "/home/user/dev/" + name},
+		PathExists: true,
+		Agents:     []revier.AgentView{{Panel: "box.4242", State: revier.AgentState{Harness: "claude", Status: status}}},
+	}
+}
+
+// openHere is the link's workspace open on this machine: one panel running
+// the ssh, on the pid the host tags what that panel started with.
+func openHere(name string) *hosttest.FakeRuntime {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:"+name, "kitty", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242,
+		Command: []string{"ssh", "-t", "buildbox"}})
+	return rt
+}
+
+// clickAt is one press of the left button on a terminal cell.
+func clickAt(m tui.Model, x, y int) tui.Model {
+	m, _ = clickCell(m, x, y)
+	return m
+}
+
+// margins reads the frame's margin off the rendered surface: the rows above
+// its top border and the columns left of it.
+func margins(m tui.Model) (rows, cols int) {
+	for i, line := range strings.Split(m.View(), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		// Every line of the surface starts with a gutter space of its own,
+		// which is not margin.
+		return i, len(line) - len(strings.TrimLeft(line, " ")) - 1
+	}
+	return 0, 0
+}
+
+// probeOf is the world's one agent probe, whose state a test changes between
+// the plan and the confirm.
+func probeOf(c *core.Core) *hosttest.FakeProbe { return c.Probes[0].(*hosttest.FakeProbe) }
+
+// listedSurface is the given agents in running projects, one probe to each,
+// surveyed, with the project list in view and nothing read of what an agent
+// said. The projects are named as given and stand in that order in the
+// configuration. Agent i is panel i+1 of its project's workspace.
+func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Screens = map[revier.PanelID]string{}
+	var probes []revier.AgentProbe
+	var fakes []*hosttest.FakeDetailedProbe
+	var names []string
+	panels := map[string][]revier.Panel{}
+	for i, a := range agents {
+		marker := fmt.Sprintf("agent-%d", i)
+		id := revier.PanelID(fmt.Sprint(i + 1))
+		p := hosttest.NewDetailedProbe("claude", marker)
+		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir}
+		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
+		probes, fakes = append(probes, p), append(fakes, p)
+		if !slices.Contains(names, a.project) {
+			names = append(names, a.project)
+		}
+		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
+		rt.Screens[id] = a.screen
+	}
+	var raw []revier.Project
+	for _, name := range names {
+		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, GitURL: "https://example.com/" + name + ".git",
+			Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}})
+		rt.Add("session:"+name, "kitty", panels[name]...)
+	}
+	c := &core.Core{Runtime: rt, Probes: probes}
+	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
+}
+
+// switched is the model after the key that switches between the two lists.
+func switched(m tui.Model) tui.Model {
+	m, _ = send(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: true})
+	return m
 }

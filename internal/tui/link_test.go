@@ -8,34 +8,10 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// linkWorld is a surface with an ssh configuration naming buildbox and
-// farbox, a scratch configuration root to write links into, and a fake
-// buildbox that has the named projects.
-func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Model, *hosttest.FakeRemote, string) {
-	t.Helper()
-	root := t.TempDir()
-	t.Setenv("REVIER_CONFIG_HOME", root)
-	sshConfig := filepath.Join(t.TempDir(), "config")
-	if err := os.WriteFile(sshConfig, []byte("Host buildbox\n  HostName 10.0.0.7\nHost farbox\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
-
-	var views []revier.ProjectView
-	for _, n := range onHost {
-		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
-	}
-	remote := hosttest.NewRemote("buildbox", views...)
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), NewRemote: func(string) revier.Remote { return remote }}
-	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20), remote, root
-}
 
 // alt+r lists the hosts the ssh configuration names; Enter on one asks it
 // and shows its projects, with the link here that already points at each.
@@ -386,8 +362,7 @@ func TestEscDuringAnAskAbandonsIt(t *testing.T) {
 	if f := footer(m); strings.Contains(f, "asking") {
 		t.Errorf("footer = %q, want the project list's own legend", f)
 	}
-	next, _ := m.Update(cmd())
-	m = next.(tui.Model)
+	m = run(m, cmd)
 	if h := barLine(m); strings.Contains(h, "buildbox") {
 		t.Errorf("header = %q, want the project list, not the answered host", h)
 	}

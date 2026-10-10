@@ -12,30 +12,6 @@ import (
 	"github.com/hk9890/revier/internal/tui"
 )
 
-const sharedTargets = `[[target]]
-name = "home"
-home = true
-key = "ctrl-shift-u"
-  [target.runtime]
-  name = "session:{{.Name}}"
-  match = { title = "^session:{{.Name}}$" }
-    # the agent
-    [[target.runtime.panels]]
-    kind = "agent"
-    title = "Claude Code"
-    command = ["claude"]
-    [[target.runtime.panels]]
-    kind = "shell"
-    title = "shell"
-
-[[target]]
-name = "editor"
-key = "ctrl-shift-o"
-  [target.window]
-  launch = ["idea", "{{.Path}}"] # IntelliJ
-  match = { class = "^jetbrains-idea" }
-`
-
 // targetsSurface is the surface over a configuration root whose config.toml
 // holds the shared targets above and one project with none of its own, and
 // that root.
@@ -63,13 +39,6 @@ func targetsSurface(t *testing.T) (tui.Model, string) {
 func onTargetRow(m tui.Model, i int) tui.Model {
 	m, _ = press(m, "alt+c")
 	for range 4 + i {
-		m, _ = press(m, "down")
-	}
-	return m
-}
-
-func downs(m tui.Model, n int) tui.Model {
-	for range n {
 		m, _ = press(m, "down")
 	}
 	return m
