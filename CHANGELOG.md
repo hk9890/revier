@@ -24,8 +24,8 @@ Each section is also the text of its release on the
 - **A desktop with no focused window is no error on GNOME.** `revier attach`
   says `no window is focused`, where it printed a JSON error, and the popup
   key writes no `resolve: focused window` warning to the log. The
-  `popup: launched` line names the window the key was pressed over, as
-  `over`.
+  `popup: launched` line has the id of the window the key was pressed over,
+  as `over`, and an empty one when no window had the focus.
 
 ## v0.14.0
 
