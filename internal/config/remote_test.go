@@ -13,26 +13,36 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
+func TestALinkDerivesItsHomeItsAgentTabAndItsNameOnTheHost(t *testing.T) {
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
 	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {
 		t.Fatalf("remote = %+v, want buildbox and the link's own name there", p.Remote)
+	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
 	}
 	home, ok := p.Home()
 	if !ok || home.Runtime == nil {
 		t.Fatalf("home = %+v, want a derived runtime target", home)
 	}
-	panels := home.Runtime.Panels
+	if !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) || len(home.Runtime.Panels) != 0 || len(home.Runtime.Launch) != 0 {
+		t.Fatalf("home runtime = %+v, want a container that lists the agent tab alone", home.Runtime)
+	}
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) {
+		t.Fatalf("targets = %v, want the home and its tab after it", got)
+	}
+	tab := target(t, p, "agent")
+	if tab.Runtime.Inside != "home" || tab.Key != "" || len(tab.Runtime.Launch) != 0 {
+		t.Errorf("agent = %+v, want a keyless tab of home that its panels start", tab)
+	}
+	panels := tab.Runtime.Panels
 	if len(panels) != 2 || panels[0].Kind != revier.PanelAgent || panels[1].Kind != revier.PanelShell {
 		t.Fatalf("panels = %+v, want an agent and a shell", panels)
 	}
 	// The argv that reaches the host is the remote port's, asked by the
-	// core when the target is resolved: the file derives the kinds alone.
+	// core where the tabs are read: the file derives the kinds alone.
 	if len(panels[0].Command) != 0 || len(panels[1].Command) != 0 {
 		t.Errorf("commands = %q, %q; want none: the transport is the core's to ask", panels[0].Command, panels[1].Command)
-	}
-	if len(home.Runtime.Launch) != 0 {
-		t.Errorf("launch = %q, want none beside the panels", home.Runtime.Launch)
 	}
 	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
 		t.Errorf("name %q, match %q: the pane must be found again by its title", home.Runtime.Name, home.Runtime.Match.Title)
@@ -54,7 +64,7 @@ func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 
 // A link may declare targets of its own, windows here that reach the project
 // there; it writes them under [target.remote]. A declared home keeps what it
-// says and the pane fills the rest. The host's path, when written, is kept as
+// says, and one with a launch gets no agent tab. The host's path, when written, is kept as
 // written for templates: it is not a path here.
 func TestALinkKeepsItsOwnTargetsAndTheHostsPath(t *testing.T) {
 	body := "path = \"~/dev/far\"\n" + link + `
@@ -74,10 +84,10 @@ key = "ctrl-o"
 		t.Errorf("editor = %+v, want the host's path rendered into its launch", editor)
 	}
 	if _, ok := p.Home(); !ok {
-		t.Error("the pane is still derived beside a declared target")
+		t.Error("the home is still derived beside a declared target")
 	}
-	if len(p.Targets) != 2 {
-		t.Errorf("targets = %d, want the derived home and the editor", len(p.Targets))
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent", "editor"}) {
+		t.Errorf("targets = %v, want the derived home, its tab, and the editor", got)
 	}
 
 	own := link + `
@@ -93,14 +103,18 @@ home = true
 	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
 		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
 	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want a home with a launch and no tabs whole", probs)
+	}
 	if home, _ := p.Home(); !slices.Equal(home.Runtime.Launch, []string{"ssh", "buildbox"}) {
 		t.Errorf("launch = %q, want the one the link declared", home.Runtime.Launch)
 	}
 }
 
 // A home the link does not launch itself still reaches the workspace: the
-// pane fills every field it left empty, so a placement alone is enough.
-func TestALinkHomeTakesThePaneForWhatItLeavesOut(t *testing.T) {
+// derived name, match and tab fill what it left empty, so a placement alone
+// is enough. The home may have any name, and the tab is inside that one.
+func TestALinkHomeTakesWhatItLeavesOutFromTheDerivedOne(t *testing.T) {
 	body := link + `
 [[target]]
 name = "home"
@@ -116,8 +130,101 @@ home = true
 	if home.Runtime.Place != "right top 75% 100%" {
 		t.Errorf("place = %q, want the one the link declared", home.Runtime.Place)
 	}
-	if len(home.Runtime.Panels) != 2 || home.Runtime.Match.Title != "^session:far$" {
-		t.Errorf("home runtime = %+v, want the derived pane's panels and match", home.Runtime)
+	if !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) || home.Runtime.Match.Title != "^session:far$" {
+		t.Errorf("home runtime = %+v, want the derived tab and match", home.Runtime)
+	}
+	if tab := target(t, p, "agent"); tab.Runtime.Inside != "home" || len(tab.Runtime.Panels) != 2 {
+		t.Errorf("agent = %+v, want the derived tab of home", tab)
+	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", strings.Replace(body, `name = "home"`, `name = "work"`, 1)), nil)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"work", "agent"}) || target(t, p, "agent").Runtime.Inside != "work" {
+		t.Errorf("targets = %+v, want the tab inside the home as the link named it", p.Targets)
+	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+}
+
+// A target named agent that the link has is the tab when it is inside the
+// home: it gets the two panels when it has nothing to start, which is how a
+// shared target gives the tab its key, and keeps a launch or panels it has.
+func TestALinksDeclaredAgentTabIsTheDerivedOne(t *testing.T) {
+	body := link + `
+[[target]]
+name = "agent"
+key = "ctrl-a"
+  [target.remote.runtime]
+  inside = "home"
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
+	}
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) {
+		t.Fatalf("targets = %v, want no second agent", got)
+	}
+	if tab := target(t, p, "agent"); tab.Key != "ctrl-a" || len(tab.Runtime.Panels) != 2 {
+		t.Errorf("agent = %+v, want the declared key and the derived panels", tab)
+	}
+
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
+	}
+	if tab := target(t, p, "agent"); len(tab.Runtime.Panels) != 0 || len(tab.Runtime.Launch) != 2 {
+		t.Errorf("agent = %+v, want the declared launch and no panels beside it", tab)
+	}
+	if home, _ := p.Home(); !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) {
+		t.Errorf("home tabs = %v, want the declared tab listed", home.Runtime.Tabs)
+	}
+}
+
+// A target named agent that is no tab of the home is left as the link wrote
+// it. The home still lists the name, and is refused with the fix.
+func TestALinksAgentTargetThatIsNoTabRefusesTheHome(t *testing.T) {
+	body := link + `
+[[target]]
+name = "agent"
+  [target.remote.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) || target(t, p, "agent").Runtime != nil {
+		t.Fatalf("targets = %+v, want the declared window target alone under the name", p.Targets)
+	}
+	if err := refusalOf(p, "home"); err == nil || !strings.Contains(err.Error(), `lists tab "agent", which is not inside it`) {
+		t.Errorf("home refused = %v, want it refused for the tab it cannot open", err)
+	}
+	if err := refusalOf(p, "agent"); err != nil {
+		t.Errorf("agent refused = %v, want the declared target whole", err)
+	}
+}
+
+// A tab is refused inside a target that also has a window, so a home with
+// both realizations gets no tab: its runtime is refused for having nothing to
+// start, and says so.
+func TestALinkHomeWithAWindowAndARuntimeGetsNoTab(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.window]
+  launch = ["code", "--remote", "ssh-remote+buildbox"]
+  match = { class = "^Code$" }
+  [target.remote.runtime]
+  place = "right top 75% 100%"
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
+		t.Fatalf("targets = %v, want no derived tab", got)
+	}
+	if err := refusalOf(p, "home"); err == nil || !strings.Contains(err.Error(), "runtime realization has no launch argv and no tabs") {
+		t.Errorf("home refused = %v, want the runtime refused for what it lacks", err)
 	}
 }
 
@@ -186,7 +293,10 @@ name = "tickets"
 		t.Errorf("place = %q, want the remote part's", home.Runtime.Place)
 	}
 	if home.Runtime.Match.Title != "^session:far$" {
-		t.Errorf("match = %q, want the derived pane's, not the local part's", home.Runtime.Match.Title)
+		t.Errorf("match = %q, want the derived one, not the local part's", home.Runtime.Match.Title)
+	}
+	if tab, ok := p.Target("agent"); !ok || tab.Runtime.Inside != "home" || len(tab.Runtime.Panels) != 2 {
+		t.Errorf("agent = %+v, want the derived tab beside the shared targets", tab)
 	}
 
 	near, _ := local.Target("editor")
@@ -295,9 +405,9 @@ key = "ctrl-o"
 }
 
 // A home the link opens as a window has named the tool that reaches the
-// workspace, so the ssh pane is not put beside it: with no window host here
-// the pane would answer instead of the window the link asked for.
-func TestALinkHomeThatIsAWindowKeepsThePaneOut(t *testing.T) {
+// workspace, so no runtime and no agent tab are put beside it: with no window
+// host here they would answer instead of the window the link asked for.
+func TestALinkHomeThatIsAWindowKeepsTheDerivedHomeOut(t *testing.T) {
 	body := link + `
 [[target]]
 name = "home"
@@ -310,11 +420,15 @@ home = true
 	if home, _ := p.Home(); home.Runtime != nil {
 		t.Errorf("home runtime = %+v, want the declared window alone", home.Runtime)
 	}
+	if _, ok := p.Target("agent"); ok {
+		t.Error("an agent tab was derived for a home that is a window")
+	}
 }
 
-// A home that declares panels is launched by them, so the pane does not add
-// a launch that the same load would then refuse beside them.
-func TestALinkHomeWithPanelsKeepsThePanesLaunchOut(t *testing.T) {
+// Panels are on a tab alone, on a link as on a local project (decisions.md
+// D128): a link's home that declares them is refused with the fix, and the
+// tab is not derived beside them.
+func TestALinkHomeThatDeclaresPanelsIsRefused(t *testing.T) {
 	body := link + `
 [[target]]
 name = "home"
@@ -325,12 +439,15 @@ home = true
     title = "shell"
 `
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	home, _ := p.Home()
-	if len(home.Runtime.Launch) != 0 || len(home.Runtime.Panels) != 1 {
-		t.Errorf("home runtime = %+v, want the panels alone", home.Runtime)
+	want := `target "home" runtime realization declares panels; only a tab has them, so move them into a target with inside = "home" and list it in tabs`
+	if err := refusalOf(p, "home"); err == nil || err.Error() != want {
+		t.Errorf("home refused = %v\nwant %s", err, want)
 	}
-	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
-		t.Errorf("home runtime = %+v, want the pane's name and match filled in", home.Runtime)
+	if p.Invalid != nil {
+		t.Errorf("Invalid = %v, want the link listed with its refused home", p.Invalid)
+	}
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
+		t.Errorf("targets = %v, want no tab derived beside the declared panels", got)
 	}
 }
 
@@ -444,8 +561,8 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 	}
 }
 
-// A link has no list of tabs: its home is the derived panels, and a list
-// beside them is one the same load would refuse (decisions.md D126).
+// A link has no list of tabs of its own: the one its home declares is
+// dropped, and the home lists the derived tab alone (decisions.md D126).
 func TestALinkHomeDropsItsTabs(t *testing.T) {
 	body := link + `
 [[target]]
@@ -460,14 +577,15 @@ home = true
 		t.Fatalf("Problems = %v, want none", probs)
 	}
 	home, _ := p.Home()
-	if len(home.Runtime.Tabs) != 0 || home.Runtime.Active != "" || len(home.Runtime.Panels) != 2 {
-		t.Errorf("home runtime = %+v, want the derived panels and no tabs", home.Runtime)
+	if !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) || home.Runtime.Active != "" {
+		t.Errorf("home runtime = %+v, want the derived tab alone and no active tab", home.Runtime)
 	}
 }
 
 // The tabs a shared target lists for a link are dropped from what its file is
 // compared against too: a change to another value of the target is written,
-// and is not taken for an attempt to empty the list.
+// and is not taken for an attempt to empty the list. The derived list the
+// home was shown with is not written either.
 func TestSaveProjectTargetOnALinkIgnoresTheSharedTabs(t *testing.T) {
 	const cfg = `
 [[target]]
@@ -496,8 +614,8 @@ name = "tickets"
 	if err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
-	if got, _ := loaded.Home(); got.Key != "ctrl-h" || len(got.Runtime.Tabs) != 0 {
-		t.Errorf("home = %+v, want the key written and no tabs", got)
+	if got, _ := loaded.Home(); got.Key != "ctrl-h" || !slices.Equal(got.Runtime.Tabs, []revier.TargetName{"agent"}) {
+		t.Errorf("home = %+v, want the key written and the derived tab alone", got)
 	}
 	if got := read(t, file); strings.Contains(got, "tabs") || strings.Contains(got, "active") {
 		t.Errorf("file =\n%s\nwant no list of tabs written", got)

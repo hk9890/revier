@@ -572,15 +572,15 @@ func validateTargets(p revier.Project) []error {
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
 			}
 			if len(r.Launch) == 0 && len(r.Panels) == 0 && len(r.Tabs) == 0 {
-				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no panels", t.Name, kind))
-			}
-			if len(r.Launch) > 0 && len(r.Panels) > 0 {
-				// A host opens one or the other; a launch beside panels would
-				// be dropped silently, and the agent it named never started.
-				errs = append(errs, fmt.Errorf("target %q %s realization has both launch and panels; panels are what is launched, so drop launch", t.Name, kind))
+				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no tabs", t.Name, kind))
 			}
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
+			}
+			if len(r.Panels) > 0 && kind == revier.HostRuntime {
+				// Panels are what a tab starts, and a realization that is no
+				// tab has none (decisions.md D128).
+				errs = append(errs, fmt.Errorf("target %q runtime realization declares panels; only a tab has them, so move them into a target with inside = %q and list it in tabs", t.Name, t.Name))
 			}
 			if r.Name == "" && kind == revier.HostRuntime {
 				// A runtime host gives the instance it opens this name, and
@@ -657,10 +657,10 @@ func validateTabs(p revier.Project, t revier.Target, kind revier.HostKind, r *re
 		return []error{fmt.Errorf("target %q is inside %q and declares tabs; a tab holds no tabs", t.Name, r.Inside)}
 	}
 	var errs []error
-	if len(r.Launch) > 0 || len(r.Panels) > 0 {
-		// The first tab is what the instance opens with, so a launch or
-		// panels beside the list would have no tab to run in.
-		errs = append(errs, fmt.Errorf("target %q runtime realization has tabs beside launch or panels; the tabs are what is launched, so move them into a tab target", t.Name))
+	if len(r.Launch) > 0 {
+		// The first tab is what the instance opens with, so a launch beside
+		// the list would have no tab to run in.
+		errs = append(errs, fmt.Errorf("target %q runtime realization has tabs beside launch; the tabs are what is launched, so move it into a tab target", t.Name))
 	}
 	seen := map[revier.TargetName]bool{}
 	for _, name := range r.Tabs {

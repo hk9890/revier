@@ -19,8 +19,9 @@ import (
 // The targets section of the config screen: the shared targets of
 // config.toml (decisions.md D59), one row each, and a row that adds one.
 // Enter opens a target's form: its name, key and home flag, then its runtime
-// and its window realization, each launch, match and place, and the
-// runtime's panels as a list with a form of their own. alt+d deletes a
+// and its window realization, each launch, match and place, the target the
+// runtime's is a tab of, and the panels of that tab as a list with a form of
+// their own. alt+d deletes a
 // target after a y. A change is written as it is saved
 // (config.AddTarget, ReplaceTarget, RemoveTarget), and the projects are
 // loaded again with it, so the surface has the new targets at once. The
@@ -36,6 +37,7 @@ const (
 	tfRuntimeTitle
 	tfRuntimeClass
 	tfRuntimePlace
+	tfRuntimeInside
 	tfWindowName
 	tfWindowCommand
 	tfWindowTitle
@@ -112,6 +114,7 @@ func valuesOf(t revier.Target) targetValues {
 	fill(t.Runtime, tfRuntimeName, tfRuntimeCommand, tfRuntimeTitle, tfRuntimeClass, tfRuntimePlace)
 	fill(t.Window, tfWindowName, tfWindowCommand, tfWindowTitle, tfWindowClass, tfWindowPlace)
 	if t.Runtime != nil {
+		v.fields[tfRuntimeInside] = string(t.Runtime.Inside)
 		v.panels = t.Runtime.Panels
 	}
 	return v
@@ -213,10 +216,11 @@ func (f targetForm) rows() []formRow {
 		{kind: rowField, field: tfKey, label: "key", note: "a desktop key; empty for none"},
 		{kind: rowHome, label: "home", note: "the target Enter opens and toggle-back returns to"},
 		{kind: rowField, field: tfRuntimeName, label: "name", section: "runtime", note: "the window or tab title it opens with"},
-		{kind: rowField, field: tfRuntimeCommand, label: "command", note: "empty when the panels are what starts"},
+		{kind: rowField, field: tfRuntimeCommand, label: "command", note: "empty when tabs or panels are what starts"},
 		{kind: rowField, field: tfRuntimeTitle, label: "match title", note: "a regexp"},
 		{kind: rowField, field: tfRuntimeClass, label: "match class", note: "a regexp"},
 		{kind: rowField, field: tfRuntimePlace, label: "place", note: "x y width height"},
+		{kind: rowField, field: tfRuntimeInside, label: "inside", note: "the target it is a tab of, which is what has panels; empty for none"},
 	}
 	for i := range f.panels {
 		out = append(out, formRow{kind: rowPanel, field: i, label: "panel"})
@@ -359,11 +363,15 @@ func (f targetForm) target() (revier.Target, []int, error) {
 		panels = append(panels, p.spec)
 		from = append(from, p.from)
 	}
+	inside := revier.TargetName(strings.TrimSpace(f.fields[tfRuntimeInside].Value()))
 	var err error
-	if t.Runtime, err = f.realization(f.base.Runtime, tfRuntimeName, panels); err != nil {
+	if t.Runtime, err = f.realization(f.base.Runtime, tfRuntimeName, inside != "", panels); err != nil {
 		return t, nil, fmt.Errorf("runtime: %w", err)
 	}
-	if t.Window, err = f.realization(f.base.Window, tfWindowName, nil); err != nil {
+	if t.Runtime != nil {
+		t.Runtime.Inside = inside
+	}
+	if t.Window, err = f.realization(f.base.Window, tfWindowName, false, nil); err != nil {
 		return t, nil, fmt.Errorf("window: %w", err)
 	}
 	if t.Runtime == nil && t.Window == nil {
@@ -373,14 +381,15 @@ func (f targetForm) target() (revier.Target, []int, error) {
 }
 
 // realization is one realization as the form holds it, from its five fields
-// starting at first: none when every field is empty and it has no panels.
-func (f targetForm) realization(old *revier.Realization, first int, panels []revier.PanelSpec) (*revier.Realization, error) {
+// starting at first: none when every field is empty, it has no panels and it
+// is no tab.
+func (f targetForm) realization(old *revier.Realization, first int, tab bool, panels []revier.PanelSpec) (*revier.Realization, error) {
 	value := func(field int) string { return strings.TrimSpace(f.fields[first+field].Value()) }
 	command, err := splitCommand(value(1))
 	if err != nil {
 		return nil, err
 	}
-	if value(0) == "" && len(command) == 0 && value(2) == "" && value(3) == "" && value(4) == "" && len(panels) == 0 {
+	if value(0) == "" && len(command) == 0 && value(2) == "" && value(3) == "" && value(4) == "" && len(panels) == 0 && !tab {
 		return nil, nil
 	}
 	r := revier.Realization{}

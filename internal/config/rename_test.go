@@ -92,6 +92,11 @@ home = true
   [target.remote.runtime]
   name = "session:far"
   match = { title = "^session:far$" }
+
+[[target]]
+name = "agent"
+  [target.remote.runtime]
+  inside = "home"
     [[target.remote.runtime.panels]]
     kind = "agent"
     command = ["sh", "-c", "exec ssh buildbox revier agent exec -p 'far'", "sh"]

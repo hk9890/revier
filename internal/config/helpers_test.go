@@ -20,9 +20,7 @@ home = true
   [target.runtime]
   name = "home"
   match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
+  tabs = ["agent"]
 
 [[target]]
 name = "editor"
@@ -30,6 +28,14 @@ key = "ctrl-o"
   [target.window]
   launch = ["code", "{{.Path}}"]
   match = { class = "^code$" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
 `
 
 const sharedConfig = `
@@ -40,11 +46,7 @@ key = "ctrl-shift-u"
   [target.runtime]
   name = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
-    [[target.runtime.panels]]
-    kind = "shell"
+  tabs = ["agent"]
 
 [[target]]
 name = "editor"
@@ -52,6 +54,16 @@ key = "ctrl-shift-o"
   [target.window]
   launch = ["idea", "{{.Path}}"]
   match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
+    [[target.runtime.panels]]
+    kind = "shell"
 `
 
 // link is a project on another machine, in the smallest file that says so.

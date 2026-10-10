@@ -29,7 +29,7 @@ const (
 	FromProject Source = iota // the project file alone
 	FromShared                // config.toml alone
 	Overridden                // config.toml, with values the project file changes
-	Derived                   // a link's pane onto its host, which the file leaves out
+	Derived                   // a link's home or its agent tab, which the file leaves out
 )
 
 // ProjectTarget is a target as the project has it, templates unrendered.
@@ -84,8 +84,8 @@ func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
 					pt.Source = Overridden
 				}
 			} else if findTarget(own.Targets, t.Name) < 0 {
-				// The pane onto the host, which neither the file nor
-				// config.toml declares.
+				// The home or the agent tab onto the host, which neither
+				// the file nor config.toml declares.
 				pt.Source = Derived
 			}
 			out.Targets = append(out.Targets, pt)
@@ -128,6 +128,13 @@ func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared 
 		sharedTargets, err := targetsFor(shared, f.link)
 		if err != nil {
 			return nil, err
+		}
+		if f.link && t.Runtime != nil {
+			// The list of tabs a link's home was shown with is the derived
+			// one, which loading drops and derives again: it is not written.
+			r := *t.Runtime
+			r.Tabs, r.Active = nil, ""
+			t.Runtime = &r
 		}
 		if was != t.Name {
 			if findTarget(sharedTargets, was) >= 0 {
@@ -284,7 +291,7 @@ func editedProject(file string, shared []map[string]any, change func([]string, p
 		if err == nil {
 			if decoded.Remote != nil {
 				// As loading a link drops them, so the edit is checked
-				// against the targets the surface was shown.
+				// without them.
 				dropTabs(decoded.Targets)
 			}
 			err = check(decoded, p)

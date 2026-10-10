@@ -44,8 +44,8 @@ func TestOneBadFileDoesNotCostTheOthers(t *testing.T) {
 		if probs := config.Problems(p); len(probs) > 0 {
 			t.Errorf("%s: %v, want it whole", name, errors.Join(probs...))
 		}
-		if len(p.Targets) != 2 {
-			t.Errorf("%s: %d targets, want both", name, len(p.Targets))
+		if len(p.Targets) != 3 {
+			t.Errorf("%s: %d targets, want all three", name, len(p.Targets))
 		}
 	}
 	bad, ok := named(projects, "broken")
@@ -80,15 +80,15 @@ name = "web"
 	if p.Invalid != nil {
 		t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 	}
-	if len(p.Targets) != 3 {
+	if len(p.Targets) != 4 {
 		t.Fatalf("%d targets, want the refused one kept among them", len(p.Targets))
 	}
-	for i, want := range map[int]bool{0: false, 1: false, 2: true} {
+	for i, want := range map[int]bool{0: false, 1: false, 2: false, 3: true} {
 		if got := p.TargetErr(i) != nil; got != want {
 			t.Errorf("target %q refused = %v, want %v", p.Targets[i].Name, got, want)
 		}
 	}
-	if err := p.TargetErr(2); !strings.Contains(err.Error(), `"web"`) {
+	if err := p.TargetErr(3); !strings.Contains(err.Error(), `"web"`) {
 		t.Errorf("the refusal should name the target: %v", err)
 	}
 }
@@ -126,7 +126,7 @@ func TestAProjectWideRefusalStillLists(t *testing.T) {
 	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), "no target is marked home") {
 		t.Errorf("Invalid = %v, want the missing home named", p.Invalid)
 	}
-	if len(p.Targets) != 2 {
+	if len(p.Targets) != 3 {
 		t.Errorf("%d targets, want them kept for the surface to show", len(p.Targets))
 	}
 }

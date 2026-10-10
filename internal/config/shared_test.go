@@ -50,12 +50,15 @@ func names(p core.Project) []revier.TargetName {
 // A project file with no targets has the shared ones, rendered for itself.
 func TestAProjectHasTheSharedTargets(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"demo": "path = \"/tmp/demo\"\n"})[0]
-	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor"}) {
-		t.Fatalf("targets = %v, want home and editor", got)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor", "agent"}) {
+		t.Fatalf("targets = %v, want home, editor and agent", got)
 	}
 	home := target(t, p, "home")
-	if home.Runtime.Name != "session:demo" || len(home.Runtime.Panels) != 2 {
+	if home.Runtime.Name != "session:demo" || !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) {
 		t.Errorf("home runtime = %+v, want the shared one rendered for demo", home.Runtime)
+	}
+	if tab := target(t, p, "agent").Runtime; tab.Inside != "home" || len(tab.Panels) != 2 {
+		t.Errorf("agent runtime = %+v, want the shared tab of home", tab)
 	}
 }
 
@@ -85,17 +88,21 @@ name = "editor"
 func TestAProjectListReplacesTheSharedList(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"demo": `path = "/tmp/demo"
 [[target]]
-name = "home"
+name = "agent"
+key = "ctrl-shift-a"
   [target.runtime]
     [[target.runtime.panels]]
     kind = "shell"
 `})[0]
-	home := target(t, p, "home")
-	if len(home.Runtime.Panels) != 1 || home.Runtime.Panels[0].Kind != revier.PanelShell {
-		t.Errorf("home panels = %+v, want the project's one shell", home.Runtime.Panels)
+	tab := target(t, p, "agent")
+	if len(tab.Runtime.Panels) != 1 || tab.Runtime.Panels[0].Kind != revier.PanelShell {
+		t.Errorf("agent panels = %+v, want the project's one shell", tab.Runtime.Panels)
 	}
-	if home.Runtime.Name != "session:demo" || !home.Home {
-		t.Errorf("home = %+v, want the shared name and home kept", home)
+	if tab.Runtime.Inside != "home" || tab.Key != "ctrl-shift-a" {
+		t.Errorf("agent = %+v, want the shared inside kept beside the project's key", tab)
+	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
 	}
 }
 
@@ -110,7 +117,7 @@ key = "ctrl-shift-i"
   launch = ["chrome", "--app=https://example.invalid"]
   match = { class = "^chrome-example" }
 `})[0]
-	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor", "web"}) {
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor", "agent", "web"}) {
 		t.Errorf("targets = %v, want the shared ones, then web", got)
 	}
 }
@@ -132,14 +139,14 @@ func TestAnOverrideDoesNotReachAnotherProject(t *testing.T) {
 }
 
 // A shared target with no remote part is local-only, so a link is left with
-// the ssh pane onto the host alone (decisions.md D82).
+// the derived home and its tab onto the host alone (decisions.md D82).
 func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"far": "[remote]\nhost = \"buildbox\"\n"})[0]
-	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
-		t.Fatalf("targets = %v, want the derived home alone", got)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) {
+		t.Fatalf("targets = %v, want the derived home and its tab alone", got)
 	}
-	if panels := target(t, p, "home").Runtime.Panels; len(panels) != 2 {
-		t.Errorf("home panels = %v, want the derived agent and shell", panels)
+	if panels := target(t, p, "agent").Runtime.Panels; len(panels) != 2 || len(panels[0].Command) != 0 {
+		t.Errorf("agent panels = %v, want the derived agent and shell, not the shared ones", panels)
 	}
 }
 
@@ -170,8 +177,8 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 		if len(cfg.Shared()) != len(cfg.Targets)-1 {
 			t.Errorf("Load(%q): %d of %d targets shared, want one refused", body, len(cfg.Shared()), len(cfg.Targets))
 		}
-		if len(projects) != 1 || projects[0].Invalid != nil || len(projects[0].Targets) != 2 {
-			t.Errorf("Load(%q) projects = %+v, want the project whole with the two sound shared targets", body, projects)
+		if len(projects) != 1 || projects[0].Invalid != nil || len(projects[0].Targets) != 3 {
+			t.Errorf("Load(%q) projects = %+v, want the project whole with the three sound shared targets", body, projects)
 		}
 	}
 }
@@ -237,13 +244,14 @@ func TestCreateWritesNoTargetsWhenTheyAreShared(t *testing.T) {
 	if strings.Contains(string(data), "[[target]]") {
 		t.Errorf("project file =\n%s\nwant no targets", data)
 	}
-	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor"}) {
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "editor", "agent"}) {
 		t.Errorf("targets = %v, want the shared ones", got)
 	}
 }
 
 // With shared targets of which none is home, a new project file writes the
-// template's home alone, as a project with no home does not load.
+// template's home and its agent tab alone, as a project with no home does not
+// load.
 func TestCreateWritesItsOwnHomeWhenNoSharedTargetIsHome(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", `
@@ -261,11 +269,11 @@ name = "browser"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(data), "[[target]]"); n != 1 || !strings.Contains(string(data), "name = \"home\"\nhome = true") {
-		t.Errorf("project file =\n%s\nwant the home target alone", data)
+	if n := strings.Count(string(data), "[[target]]"); n != 2 || !strings.Contains(string(data), "name = \"home\"\nhome = true") || strings.Contains(string(data), "editor") {
+		t.Errorf("project file =\n%s\nwant the home target and its tab alone", data)
 	}
-	if got := names(p); !slices.Equal(got, []revier.TargetName{"browser", "home"}) {
-		t.Errorf("targets = %v, want the shared browser and its own home", got)
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"browser", "home", "agent"}) {
+		t.Errorf("targets = %v, want the shared browser, its own home and the tab", got)
 	}
 	if got := config.Problems(p); len(got) > 0 {
 		t.Errorf("problems = %v, want none", got)

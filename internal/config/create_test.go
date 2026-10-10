@@ -39,3 +39,48 @@ func TestCanCreateRefusesOnlyWhatALocalProjectHolds(t *testing.T) {
 		t.Errorf("the home directory: err = %v, want it refused", err)
 	}
 }
+
+// The file `revier new` writes has its panels on a tab target, the one place
+// a file has them (decisions.md D128): home lists the tab, whose first entry
+// has the focus with no active line.
+func TestCreateWritesThePanelsOnATabOfHome(t *testing.T) {
+	root := t.TempDir()
+	p, err := config.Create(root, "demo", "/srv/demo", "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	const want = "# demo: written by `revier new`.\n" + `path = "/srv/demo"
+
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+  tabs = ["agent"]
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    title = "claude"
+    command = ["claude"]
+    [[target.runtime.panels]]
+    kind = "shell"
+    title = "shell"
+
+[[target]]
+name = "editor"
+  [target.window]
+  launch = ["snap", "run", "intellij-idea", "{{.Path}}"]
+  match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+`
+	if got := read(t, p.File); got != want {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
+	}
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+}
