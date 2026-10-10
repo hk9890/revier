@@ -96,6 +96,32 @@ func projectsRoot(t *testing.T, cfg string, files map[string]string) string {
 	return root
 }
 
+// tabsConfig is shared targets in which home lists one of its two tabs.
+const tabsConfig = `
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+  tabs = ["tickets"] # in this order
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    [[target.runtime.panels]]
+    kind = "shell"
+
+[[target]]
+name = "tickets"
+  [target.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+`
+
 // writeConfig puts text in config.toml under a fresh root.
 func writeConfig(t *testing.T, text string) string {
 	t.Helper()

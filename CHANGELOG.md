@@ -8,12 +8,14 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
-- **A tab can open with its workspace, as the first tab.** Add `first = true`
-  to a target that has `inside`. The workspace then opens with that tab as
-  tab 1 and its own panels as tab 2, with the focus in the first of those
-  panels. The tab's key goes to that tab and opens no second one. A workspace
-  that is open already keeps its tabs as they are. A linked project opens
-  without the tab.
+- **A workspace can open with a list of tabs.** Add `tabs = ["tickets", "agent"]`
+  to the runtime of the home target, and `active = "agent"` for the tab that
+  has the focus. Each name is a target with `inside = "home"`. Such a target
+  can now hold `panels` in place of a `launch`, so the agent and the shell are
+  a tab like any other. The key of a listed tab goes to that tab and opens no
+  second one. A workspace that is open already keeps its tabs as they are.
+  Panels directly on the home target, with no `tabs`, work as before. A linked
+  project opens without the listed tabs.
 - **Fast pointer motion no longer types into a filter.** Text such as
   `<35;76;40M` appeared in the project filter with no key pressed, and the
   list then matched nothing.

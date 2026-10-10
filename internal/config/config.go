@@ -559,15 +559,11 @@ func validateTargets(p revier.Project) []error {
 			if r == nil {
 				continue
 			}
+			errs = append(errs, validateTabs(p, t, kind, r)...)
 			if tab && kind == revier.HostRuntime {
 				// A tab is found by its target's name, so it needs no match
 				// and no name; validateTab has checked the rest.
 				continue
-			}
-			if r.First && r.Inside == "" {
-				// Ignored, the target would open as an instance of its own
-				// and never with another, which is what first was written for.
-				errs = append(errs, fmt.Errorf("target %q %s realization is first and inside nothing; first is the place of a tab, so give it inside", t.Name, kind))
 			}
 			if r.Match.IsZero() {
 				// An unconstrained match selects whichever instance the host
@@ -575,7 +571,7 @@ func validateTargets(p revier.Project) []error {
 				// window.
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
 			}
-			if len(r.Launch) == 0 && len(r.Panels) == 0 {
+			if len(r.Launch) == 0 && len(r.Panels) == 0 && len(r.Tabs) == 0 {
 				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no panels", t.Name, kind))
 			}
 			if len(r.Launch) > 0 && len(r.Panels) > 0 {
@@ -620,27 +616,14 @@ func validateTab(p revier.Project, t revier.Target) []error {
 	if t.Window != nil {
 		errs = append(errs, fmt.Errorf("target %q is inside %q and has a window realization; a tab has only the runtime", t.Name, r.Inside))
 	}
-	if len(r.Launch) == 0 {
-		errs = append(errs, fmt.Errorf("target %q is inside %q and has no launch argv to run in the tab", t.Name, r.Inside))
+	if len(r.Launch) == 0 && len(r.Panels) == 0 {
+		errs = append(errs, fmt.Errorf("target %q is inside %q and has no launch argv and no panels to run in the tab", t.Name, r.Inside))
 	}
-	if len(r.Panels) > 0 {
-		errs = append(errs, fmt.Errorf("target %q is inside %q and declares panels; a tab runs one launch argv", t.Name, r.Inside))
+	if len(r.Launch) > 0 && len(r.Panels) > 0 {
+		errs = append(errs, fmt.Errorf("target %q is inside %q and has both launch and panels; panels are what is launched, so drop launch", t.Name, r.Inside))
 	}
 	if r.Inside == t.Name {
 		return append(errs, fmt.Errorf("target %q is inside itself", t.Name))
-	}
-	if r.First {
-		// Two first tabs of one instance cannot both be first, and the one
-		// declared later would open at its own press, as the last tab.
-		for _, other := range p.Targets {
-			if other.Name == t.Name {
-				break
-			}
-			if other.Runtime != nil && other.Runtime.First && other.Runtime.Inside == r.Inside {
-				errs = append(errs, fmt.Errorf("target %q is first inside %q, and %q is already; one tab is the first", t.Name, r.Inside, other.Name))
-				break
-			}
-		}
 	}
 	in, ok := p.Target(r.Inside)
 	switch {
@@ -652,6 +635,50 @@ func validateTab(p revier.Project, t revier.Target) []error {
 		errs = append(errs, fmt.Errorf("target %q is inside %q, which is itself a tab", t.Name, r.Inside))
 	case in.Window != nil:
 		errs = append(errs, fmt.Errorf("target %q is inside %q, which also has a window realization; the tab needs it on the runtime", t.Name, r.Inside))
+	}
+	return errs
+}
+
+// validateTabs checks the tabs and the active tab a realization of t
+// declares (decisions.md D126). Each rule is a list the open path could not
+// follow: an entry that is no tab of this target, or a list on a realization
+// that opens something else.
+func validateTabs(p revier.Project, t revier.Target, kind revier.HostKind, r *revier.Realization) []error {
+	if len(r.Tabs) == 0 {
+		if r.Active != "" {
+			return []error{fmt.Errorf("target %q %s realization has active %q and no tabs; active names an entry of tabs", t.Name, kind, r.Active)}
+		}
+		return nil
+	}
+	if kind == revier.HostWindow {
+		return []error{fmt.Errorf("target %q window realization declares tabs; only a runtime has them", t.Name)}
+	}
+	if r.Inside != "" {
+		return []error{fmt.Errorf("target %q is inside %q and declares tabs; a tab holds no tabs", t.Name, r.Inside)}
+	}
+	var errs []error
+	if len(r.Launch) > 0 || len(r.Panels) > 0 {
+		// The first tab is what the instance opens with, so a launch or
+		// panels beside the list would have no tab to run in.
+		errs = append(errs, fmt.Errorf("target %q runtime realization has tabs beside launch or panels; the tabs are what is launched, so move them into a tab target", t.Name))
+	}
+	seen := map[revier.TargetName]bool{}
+	for _, name := range r.Tabs {
+		if seen[name] {
+			errs = append(errs, fmt.Errorf("target %q lists tab %q twice", t.Name, name))
+			continue
+		}
+		seen[name] = true
+		entry, ok := p.Target(name)
+		switch {
+		case !ok:
+			errs = append(errs, fmt.Errorf("target %q lists tab %q, which the project does not declare", t.Name, name))
+		case entry.Runtime == nil || entry.Runtime.Inside != t.Name:
+			errs = append(errs, fmt.Errorf("target %q lists tab %q, which is not inside it; give that target inside = %q", t.Name, name, t.Name))
+		}
+	}
+	if r.Active != "" && !seen[r.Active] {
+		errs = append(errs, fmt.Errorf("target %q has active %q, which is not an entry of its tabs", t.Name, r.Active))
 	}
 	return errs
 }

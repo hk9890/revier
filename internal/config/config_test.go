@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -163,7 +164,12 @@ func TestValidateRejects(t *testing.T) {
 		{
 			"tab with nothing to run",
 			tabProject(func(tab *revier.Target) { tab.Runtime.Launch = nil }),
-			"has no launch argv to run in the tab",
+			"has no launch argv and no panels to run in the tab",
+		},
+		{
+			"tab with a launch beside its panels",
+			tabProject(func(tab *revier.Target) { tab.Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelShell}} }),
+			`target "tickets" is inside "home" and has both launch and panels`,
 		},
 		{
 			"tab with a window realization",
@@ -181,22 +187,63 @@ func TestValidateRejects(t *testing.T) {
 			`inside "editor", which has no runtime realization`,
 		},
 		{
-			"second first tab of one target",
-			func() revier.Project {
-				p := tabProject(func(tab *revier.Target) { tab.Runtime.First = true })
-				p.Targets[2].Runtime.First = true
-				return p
-			}(),
-			`target "tickets" is first inside "home", and "notes" is already`,
+			"tabs entry the project does not declare",
+			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Tabs = []revier.TargetName{"tickets", "nowhere"} }),
+			`target "home" lists tab "nowhere", which the project does not declare`,
 		},
 		{
-			"first on a target that is no tab",
-			func() revier.Project {
-				p := tabProject(func(*revier.Target) {})
-				p.Targets[1].Window.First = true
-				return p
-			}(),
-			`target "editor" window realization is first and inside nothing`,
+			"tabs entry that is not inside the target",
+			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Tabs = []revier.TargetName{"tickets", "editor"} }),
+			`target "home" lists tab "editor", which is not inside it`,
+		},
+		{
+			"tabs entry that is inside another target",
+			containerProject(func(p *revier.Project) {
+				p.Targets = append(p.Targets,
+					revier.Target{Name: "side", Runtime: &revier.Realization{Name: "side:p", Launch: []string{"x"}, Match: revier.Match{Title: "^side:p$"}}},
+					revier.Target{Name: "notes", Runtime: &revier.Realization{Inside: "side", Launch: []string{"notes"}}})
+				p.Targets[0].Runtime.Tabs = []revier.TargetName{"tickets", "notes"}
+			}),
+			`target "home" lists tab "notes", which is not inside it`,
+		},
+		{
+			"tabs entry twice",
+			containerProject(func(p *revier.Project) {
+				p.Targets[0].Runtime.Tabs = []revier.TargetName{"tickets", "agent", "tickets"}
+			}),
+			`target "home" lists tab "tickets" twice`,
+		},
+		{
+			"active that is no entry of tabs",
+			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Tabs = []revier.TargetName{"tickets"} }),
+			`target "home" has active "agent", which is not an entry of its tabs`,
+		},
+		{
+			"active with no tabs",
+			containerProject(func(p *revier.Project) {
+				p.Targets[0].Runtime.Tabs, p.Targets[0].Runtime.Launch = nil, []string{"x"}
+			}),
+			`target "home" runtime realization has active "agent" and no tabs`,
+		},
+		{
+			"tabs beside panels",
+			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelShell}} }),
+			`target "home" runtime realization has tabs beside launch or panels`,
+		},
+		{
+			"tabs beside a launch",
+			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Launch = []string{"x"} }),
+			`target "home" runtime realization has tabs beside launch or panels`,
+		},
+		{
+			"tabs on a tab target",
+			containerProject(func(p *revier.Project) { p.Targets[1].Runtime.Tabs = []revier.TargetName{"agent"} }),
+			`target "tickets" is inside "home" and declares tabs`,
+		},
+		{
+			"tabs on a window realization",
+			containerProject(func(p *revier.Project) { p.Targets[3].Window.Tabs = []revier.TargetName{"tickets"} }),
+			`target "editor" window realization declares tabs`,
 		},
 		{
 			"window realization inside a target",
@@ -241,9 +288,99 @@ func TestValidateAcceptsATabWithNoMatchAndNoName(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsOneFirstTab(t *testing.T) {
-	if err := config.Validate(tabProject(func(tab *revier.Target) { tab.Runtime.First = true })); err != nil {
+// containerProject is a valid project whose home lists its tabs: tickets,
+// then agent, which has the focus. edit changes it.
+func containerProject(edit func(p *revier.Project)) revier.Project {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:p", Match: revier.Match{Title: "^session:p$"},
+			Tabs: []revier.TargetName{"tickets", "agent"}, Active: "agent"}},
+		{Name: "tickets", Runtime: &revier.Realization{Inside: "home", Launch: []string{"taskmgr-ui"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
+		{Name: "editor", Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}}},
+	}}
+	edit(&p)
+	return p
+}
+
+// A target that lists tabs is launched by them, so it needs no launch and no
+// panels, and a tab holds panels as well as a launch (decisions.md D126).
+func TestValidateAcceptsATargetThatListsItsTabs(t *testing.T) {
+	if err := config.Validate(containerProject(func(*revier.Project) {})); err != nil {
 		t.Fatalf("Validate: %v", err)
+	}
+	firstIsActive := containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Active = "" })
+	if err := config.Validate(firstIsActive); err != nil {
+		t.Fatalf("Validate with no active: %v", err)
+	}
+}
+
+const container = `
+path = "/p"
+
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name   = "session:{{.Name}}"
+  match  = { title = "^session:{{.Name}}$" }
+  tabs   = ["tickets", "agent"]
+  active = "agent"
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    [[target.runtime.panels]]
+    kind = "shell"
+
+[[target]]
+name = "tickets"
+  [target.runtime]
+  inside = "home"
+  launch = ["taskmgr-ui"]
+`
+
+func TestLoadProjectReadsTheTabsOfATarget(t *testing.T) {
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", container), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
+	}
+	home := target(t, p, "home").Runtime
+	if want := []revier.TargetName{"tickets", "agent"}; !slices.Equal(home.Tabs, want) || home.Active != "agent" {
+		t.Errorf("home tabs = %v, active = %q; want %v and agent", home.Tabs, home.Active, want)
+	}
+	if agent := target(t, p, "agent").Runtime; agent.Inside != "home" || len(agent.Panels) != 2 {
+		t.Errorf("agent runtime = %+v, want two panels inside home", agent)
+	}
+}
+
+// A list that cannot be followed costs the target that declares it, and the
+// tabs it names stay usable at their own keys (decisions.md D85).
+func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
+	body := strings.Replace(container, `active = "agent"`, `active = "editor"`, 1)
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), nil)
+	if p.Invalid != nil {
+		t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
+	}
+	for i, tg := range p.Targets {
+		if err := p.TargetErr(i); (err != nil) != (tg.Name == "home") {
+			t.Errorf("target %s: refusal = %v, want only home refused", tg.Name, err)
+		}
+	}
+}
+
+// The form of 0.14.0, panels on the home target and no tabs, loads as it did.
+func TestLoadProjectReadsPanelsOnATargetWithNoTabs(t *testing.T) {
+	body := "path = \"/p\"\n" + sharedConfig
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Fatalf("Problems = %v, want none", probs)
+	}
+	if home := target(t, p, "home").Runtime; len(home.Panels) != 2 || len(home.Tabs) != 0 || home.Active != "" {
+		t.Errorf("home runtime = %+v, want its two panels and no tabs", home)
 	}
 }
 

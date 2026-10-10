@@ -282,6 +282,11 @@ func editedProject(file string, shared []map[string]any, change func([]string, p
 	if check != nil {
 		decoded, _, err := decodeProject(text, shared)
 		if err == nil {
+			if decoded.Remote != nil {
+				// As loading a link drops them, so the edit is checked
+				// against the targets the surface was shown.
+				dropTabs(decoded.Targets)
+			}
 			err = check(decoded, p)
 		}
 		if err != nil {
@@ -347,7 +352,10 @@ func realizationOverride(kind string, r, shared *revier.Realization) (*revier.Re
 	if o.Inside, err = differs(kind+" inside", r.Inside, shared.Inside); err != nil {
 		return nil, err
 	}
-	if o.First, err = differs(kind+" first", r.First, shared.First); err != nil {
+	if o.Active, err = differs(kind+" active", r.Active, shared.Active); err != nil {
+		return nil, err
+	}
+	if o.Tabs, err = listOverride(kind+" tabs", r.Tabs, shared.Tabs); err != nil {
 		return nil, err
 	}
 	if o.Launch, err = listOverride(kind+" command", r.Launch, shared.Launch); err != nil {

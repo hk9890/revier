@@ -548,10 +548,10 @@ type Result struct {
 	// stays the instance's, which is what a caller binds; Tab is what the
 	// user pressed and reached, and Launched then says the tab was opened.
 	Tab revier.TargetName
-	// FirstTab is the tab target a launch of Target opened as the first tab
-	// of the new instance (decisions.md D124). It is set also when the
-	// launch then failed: the instance is open, and that tab is in it.
-	FirstTab revier.TargetName
+	// Tabs is the tab targets a launch of Target opened with the new
+	// instance, in order (decisions.md D126). It is set also when the launch
+	// then failed: the instance is open, and those tabs are in it.
+	Tabs     []revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
 	ComingUp bool
@@ -584,7 +584,7 @@ func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetNa
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
-			"launched", res.Launched, "first_tab", res.FirstTab, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
+			"launched", res.Launched, "tabs", res.Tabs, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
 	}()
 	return c.goResuming(ctx, p, name, bound, resumes)
 }
@@ -599,6 +599,10 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 	}
 	t := p.Targets[i]
 	host, real, m, err := c.resolveAt(p, i)
+	if err != nil {
+		return Result{}, err
+	}
+	opener, err := c.tabsHost(name, real, host)
 	if err != nil {
 		return Result{}, err
 	}
@@ -622,25 +626,23 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		// The instance's own first panel is marked with the target it was
 		// opened for, so a return home from a tab lands in it rather than in
 		// the first panel that happens to carry no tab mark (decisions.md D100).
-		home := map[string]string{PanelHomeVar: string(name)}
-		launch.Vars = home
-		// A first tab opens as the instance, under its own mark, and the
-		// target's panels open as the tab after it, under the home mark: the
-		// order of the tabs is the order they are opened in (decisions.md D124).
-		first := launch
-		tab, opener, led := c.firstTab(p, name, host)
-		if led {
-			launch.Vars = nil
-			first = real
-			first.Panels, first.Launch, first.Dir = nil, tab.Runtime.Launch, tab.Runtime.Dir
-			first.Vars = map[string]string{PanelTargetVar: string(tab.Name)}
+		launch.Vars = map[string]string{PanelHomeVar: string(name)}
+		// A target that lists its tabs opens as the first of them, under that
+		// tab's mark, and the others open after it: the order of the tabs is
+		// the order they are opened in (decisions.md D126).
+		var tabs opening
+		if opener != nil {
+			if tabs, err = p.opening(name, real); err != nil {
+				return Result{}, err
+			}
+			launch = tabs.first(real)
 		}
-		ref, err := host.Open(ctx, first)
+		ref, err := host.Open(ctx, launch)
 		if err != nil {
 			return Result{}, fmt.Errorf("%s: open %s: %w", host.Name(), name, err)
 		}
-		if led {
-			res.FirstTab = tab.Name
+		if opener != nil {
+			res.Tabs = []revier.TargetName{tabs.tabs[0].Name}
 		}
 		if ref.IsZero() {
 			// The host launched a process and cannot name the window it will
@@ -653,14 +655,14 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return res, nil
 		}
 		res.Ref = ref
-		var own revier.PanelID
-		if led {
-			if own, err = opener.OpenTab(ctx, ref, launch, home); err != nil {
-				// The instance stays open with the first tab alone, and is
-				// reported with the failure, so the caller pins it and the next
-				// press raises it instead of opening another. No agent started.
+		var active revier.PanelID
+		if opener != nil {
+			if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
+				// The instance stays open with the tabs it has, and is reported
+				// with the failure, so the caller pins it and the next press
+				// raises it instead of opening another. No agent started.
 				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), 0)
-				return res, fmt.Errorf("%s: open the panels of %s after its first tab %s: %w", host.Name(), name, tab.Name, err)
+				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
 		added, err := c.addAgents(ctx, host, real, ref, extra, p.Remote != nil)
@@ -675,11 +677,11 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			// press raises it instead of opening another.
 			return res, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
 		}
-		if led {
-			// The first tab is the current one, because it opened the instance.
-			// The press is on this target, so its own first panel is.
-			if err := opener.FocusPanel(ctx, ref, own); err != nil {
-				return res, fmt.Errorf("%s: focus the panels of %s after its first tab %s: %w", host.Name(), name, tab.Name, err)
+		if opener != nil {
+			// After every tab and every agent tab is open, so that neither
+			// leaves another tab current.
+			if err := c.focusActive(ctx, opener, tabs, ref, active); err != nil {
+				return res, err
 			}
 		}
 		c.place(ctx, real, ref)

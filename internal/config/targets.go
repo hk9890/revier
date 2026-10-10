@@ -49,9 +49,14 @@ type TargetsWritten struct {
 
 // targetsFor is the shared targets a project of one kind has, as typed
 // targets: the realization of its kind taken from the part that holds it,
-// and a target with no part of that kind left out (decisions.md D82).
+// and a target with no part of that kind left out (decisions.md D82). A
+// link's have no list of tabs, as its own targets have none.
 func targetsFor(shared []map[string]any, isLink bool) ([]revier.Target, error) {
-	return DecodeTargets(partsFor(shared, nil, isLink))
+	targets, err := DecodeTargets(partsFor(shared, nil, isLink))
+	if err == nil && isLink {
+		dropTabs(targets)
+	}
+	return targets, err
 }
 
 // DecodeTargets is shared targets as typed targets.
@@ -255,7 +260,8 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, b
 			{"dir", o.Dir, r.new.Dir},
 			{"place", o.Place, r.new.Place},
 			{"inside", string(o.Inside), string(r.new.Inside)},
-			{"first", o.First, r.new.First},
+			{"tabs", o.Tabs, r.new.Tabs},
+			{"active", string(o.Active), string(r.new.Active)},
 		} {
 			if lines, err = putValue(lines, i, path, kv.key, kv.old, kv.new); err != nil {
 				return nil, err

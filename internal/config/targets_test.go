@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -265,6 +266,38 @@ func TestAProjectReadsWithTheUsableSharedTargets(t *testing.T) {
 	root, shared := targetsRoot(t, refusedConfig)
 	if _, err := config.ReadProject(config.ProjectFile(root, "demo"), config.Usable(shared)); err != nil {
 		t.Errorf("ReadProject = %v, want demo read without the refused web", err)
+	}
+}
+
+// The tabs a target lists and its active tab are values like any other: a
+// change is written in place, and reads back as written.
+func TestReplaceTargetWritesTabsAndActive(t *testing.T) {
+	root, shared := targetsRoot(t, tabsConfig)
+	home := sharedTyped(t, shared)[0]
+	home.Runtime.Tabs, home.Runtime.Active = []revier.TargetName{"tickets", "agent"}, "agent"
+
+	written, err := config.ReplaceTarget(root, 0, shared, config.TargetEdit{Target: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(tabsConfig,
+		"  tabs = [\"tickets\"] # in this order\n",
+		"  tabs = [\"tickets\", \"agent\"] # in this order\n  active = \"agent\"\n", 1)
+	if got := readConfig(t, root); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+	got := sharedTyped(t, written.Shared)[0].Runtime
+	if !slices.Equal(got.Tabs, home.Runtime.Tabs) || got.Active != "agent" {
+		t.Errorf("home tabs = %v, active = %q; want them as written", got.Tabs, got.Active)
+	}
+
+	home.Runtime = new(*home.Runtime)
+	home.Runtime.Tabs, home.Runtime.Active = []revier.TargetName{"tickets"}, ""
+	if _, err := config.ReplaceTarget(root, 0, written.Shared, config.TargetEdit{Target: home}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readConfig(t, root); got != tabsConfig {
+		t.Errorf("config.toml =\n%s\nwant it as it was\n%s", got, tabsConfig)
 	}
 }
 
