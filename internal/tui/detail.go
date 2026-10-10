@@ -12,22 +12,24 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The list's width bounds, the least the pane needs beside it, and the widest
-// the pane sets its facts when it lays the message beside them.
+// The list's width bounds, the least the pane needs beside it, the widest
+// the pane sets its facts when it lays the mirror beside them, and the least
+// the mirror has there.
 //
 // The list is a table of two columns - the project, and its agent's state -
 // and stops at the width that holds both whole. Past that every column goes
 // to the pane. Below the least the two need together, there is no pane.
 const (
-	minListWidth  = 56
-	maxListWidth  = 80
-	minPaneWidth  = 44
-	maxFactsWidth = 80
+	minListWidth   = 56
+	maxListWidth   = 80
+	minPaneWidth   = 44
+	maxFactsWidth  = 80
+	minMirrorWidth = 100
 )
 
-// widePaneWidth is the pane width at which the pane lays the message beside
-// the facts: the least that holds the facts and a message maxPaneWidth wide.
-const widePaneWidth = paneChrome + maxFactsWidth + gridGap + maxPaneWidth
+// widePaneWidth is the pane width at which the pane lays the mirror beside
+// the facts: the least that holds the facts and a mirror minMirrorWidth wide.
+const widePaneWidth = paneChrome + maxFactsWidth + gridGap + minMirrorWidth
 
 // paneWidth is what the detail pane gets, or zero when the terminal is too
 // narrow to give both the list and the pane their least. The list takes half
@@ -115,7 +117,7 @@ func (m *Model) syncDetail() {
 	// The agent list's pane scrolls its mirror itself, under a head that
 	// stays (mirror.go).
 	if m.agents.shown {
-		m.detail.SetContent(m.agents.pane(m.surface(), m.now(), m.detail.Height))
+		m.detail.SetContent(m.agents.pane(m.surface(), &m.mirror, m.now(), m.detail.Height))
 		m.detail.GotoTop()
 		return
 	}
@@ -157,37 +159,44 @@ func (m *Model) followPane(line int) {
 }
 
 // detailContent is what this project is, then what is up, then what its agents
-// are doing, then what the agent under the pane's cursor said last.
+// are doing, then the screen of the agent under the pane's cursor, mirrored
+// as the agent list's pane mirrors it (decisions.md D123).
 //
-// A narrow pane stacks them, and the message takes the rows the others leave.
-// A wide pane puts the message beside the rest, so it has the whole height
-// (decisions.md D107). The message's text is set maxPaneWidth wide on both
-// sides of the switch, so a resize across it moves the message and does not
-// re-wrap it; widePaneWidth is the least pane that holds it that wide beside
-// the facts. Only the text is held to that width: the facts, the rows and the
-// rules run to the pane's edge.
+// A narrow pane stacks them, and the mirror takes the rows the others leave.
+// A wide pane puts the mirror beside the rest, so it has the whole height;
+// widePaneWidth is the least pane that gives it minMirrorWidth there.
 func (m *Model) detailContent(v revier.ProjectView) string {
 	w := m.paneCols() - paneChrome
-	rows := m.agentRows()
+	key, _, mirrored := m.mirrored()
 	if m.paneCols() < widePaneWidth {
 		facts := m.facts(v, w)
-		if m.acursor >= len(rows) {
+		if !mirrored {
 			return facts
 		}
-		return facts + m.agentSaid(v, rows[m.acursor].agent, w, min(w, maxPaneWidth), m.detail.Height-strings.Count(facts, "\n"))
+		return facts + m.agentScreen(key, w, m.detail.Height-strings.Count(facts, "\n"))
 	}
 	facts := m.facts(v, maxFactsWidth)
-	if m.acursor >= len(rows) {
+	if !mirrored {
 		return facts
 	}
-	// The message starts level with the name: its heading's blank line is a
+	// The mirror starts level with the name: its heading's blank line is a
 	// separator from a section above it, and there is none here.
-	right := w - gridGap - maxFactsWidth
-	said := m.agentSaid(v, rows[m.acursor].agent, right, min(right, maxPaneWidth), m.detail.Height+1)
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),
-		strings.TrimPrefix(said, "\n"))
+		strings.TrimPrefix(m.agentScreen(key, m.mirrorWidth(), m.detail.Height+1), "\n"))
+}
+
+// agentScreen is the project pane's part below the facts: the mirror of the
+// agent under the pane's cursor, under its heading. The agent's name and
+// state are on its row above and are not repeated. rows counts the heading,
+// and a pane with no row for the mirror under it shows neither.
+func (m *Model) agentScreen(key listedKey, w, rows int) string {
+	body := m.mirror.view(m.theme, key, w, rows-2) // the heading and the blank line before it
+	if rows-2 < 1 {
+		return ""
+	}
+	return heading(m.theme, "Screen", w) + body
 }
 
 // facts is the pane's first part: what this project is, then what is up,

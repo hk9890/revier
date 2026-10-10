@@ -102,14 +102,13 @@ func (i agentItem) FilterValue() string {
 	return i.text + " " + i.where()
 }
 
-// agentList is the surface's second list, and the mirror beside it.
+// agentList is the surface's second list.
 type agentList struct {
 	shown  bool            // the surface shows it in the project list's place
 	list   list.Model      // its rows
 	query  textinput.Model // its query, with its own cursor
 	filter string          // that query, held here so a refresh can re-apply it
 	top    bool            // it opened and the user has not acted on it: the cursor is on the first row whatever agent that is
-	mirror mirror          // the screen of the agent under the cursor (mirror.go)
 }
 
 func newAgentScreen(th theme.Theme) agentList {
@@ -468,14 +467,14 @@ func goAgent(c *core.Core, p core.Project, agent revier.AgentView) tea.Cmd {
 }
 
 // pane is the pane beside the list, rows lines high: the agent under the
-// cursor, then its terminal.
-func (al *agentList) pane(sf surface, now time.Time, rows int) string {
+// cursor, then its terminal as the mirror holds it.
+func (al *agentList) pane(sf surface, mi *mirror, now time.Time, rows int) string {
 	it, ok := al.selected()
 	if !ok {
 		return ""
 	}
 	facts := agentFacts(sf.spun, it, now, sf.pane)
-	return facts + al.mirrorView(sf.theme, sf.pane, rows-strings.Count(facts, "\n"))
+	return facts + mi.view(sf.theme, it.key(), sf.pane, rows-strings.Count(facts, "\n"))
 }
 
 // agentFacts is the head of the agent list's pane, laid out as a project's

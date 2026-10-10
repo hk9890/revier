@@ -196,8 +196,8 @@ type PanelFinder interface {
 
 // PanelReader is an optional capability of a Runtime. ReadPanel is what one
 // panel shows, a line per row, with the style of each run as SGR sequences,
-// and with the lines above the screen when scrollback is asked for: how the
-// agent list mirrors the agent under its cursor (D111), and what `revier
+// and with the lines above the screen when scrollback is asked for: how a
+// pane mirrors the agent under its cursor (D111, D123), and what `revier
 // agent read --screen` prints (D116). What of it is drawn is the surface's
 // decision.
 type PanelReader interface {
@@ -471,10 +471,10 @@ runtime's already or impossible for it, and in both cases revier adds nothing.
 ## Detailed
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe
-that implements it says what the agent in a panel said last, which the pane
-shows so the user can tell whether to go to it (D106), with the turn the agent
-is in (D122). A probe that does not leaves the pane saying nothing can be
-read.
+that implements it says what the agent in a panel said last and when, which
+orders the agents on the surface and is what `revier agent read` prints
+(D106), with the turn the agent is in, which nothing in revier draws (D123). A
+probe that does not leaves its agents with no age.
 
 ```go
 // AgentDetail is what an agent said last, and when, with the turn it is in:

@@ -171,27 +171,16 @@ running an ssh is the probe's business and the host names that agent under
 the tag the panel gave it. They are told apart by the panel each landed on,
 not by assuming they cannot meet, and the local reading stands.
 
-The pane ends in what one of the project's agents said last, and how long ago
-(D106, D107). Without a keypress it shows the agent that needs the user; else
-one with a message to show, at rest before working; the latest to speak among
-equals. Moving the agent cursor chooses, and the choice holds until another
-project is under the list's cursor. A message longer than the room keeps its
-end, under an ellipsis. Its text is set no wider than 100 columns, and a wide
-pane lays it beside the facts, level with the name, once it has all 100. It is
-drawn as text and styled in revier's own colours: nothing the message carries
-is styling, and nothing in it speaks to the terminal (D108). A remote project's
-agent is not read, and the pane says so.
-
-Above the message stands the turn the agent is in, a line each (D122): what
-the user asked last; the tools the agent called since, counted by name with
-the most called first, and how many failed; and the call with no result yet,
-worded `waiting on` for an agent that needs the user and `running` for a
-working one. An agent at rest runs nothing, so a call it was cut off in is
-counted and not named. A line the harness gives nothing for is left out, and
-the three are drawn as text, as the message is. The message comes first: a
-pane too short for the turn and four rows of the message drops the turn's
-lines from the top, and a turn read with no message keeps the message shown
-before it.
+The pane ends in the screen of one of the project's agents, under the heading
+`Screen`: the mirror the agent list's pane shows, described below (D123).
+Without a keypress it mirrors the agent that needs the user; else one at rest
+before one working, and one whose state is unknown last; the latest to speak
+among equals. Moving the agent cursor chooses, and the choice holds until
+another project is under the list's cursor. The mirror takes the rows the
+facts leave, and a pane with none left shows no mirror. A wide pane lays it
+beside the facts, level with the name, once that leaves it 100 columns. The
+wheel over the pane scrolls the mirror and the facts stay; over a pane with no
+mirror it scrolls the pane.
 
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button
@@ -219,7 +208,9 @@ line wider than the pane continues on the next. The wheel scrolls back into the
 panel's scrollback, which is read only while the view is scrolled into it, and
 the view holds its lines as more are written under them. A link's agent is
 mirrored as any other, since the panel is here. A panel no runtime here can
-read leaves a note in the mirror's place.
+read leaves a note in the mirror's place. Nothing a screen carries but its
+colour reaches the terminal, and the first line of a message that a row shows
+is drawn as text (D108).
 
 The list and the pane's agents each have a query over their rows, kept while
 their project is, until a press opens something; then both end, and each

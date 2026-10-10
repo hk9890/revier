@@ -253,7 +253,7 @@ const briefRunes = 300
 // lastSaid walks the lines back from the end: through the turn the agent is
 // in, which is every tool it called since the user last wrote, and on to the
 // last text the agent wrote in its own conversation, which can be older than
-// the turn (decisions.md D122). A subagent's lines (isSidechain) are its
+// the turn. A subagent's lines (isSidechain) are its
 // work, not the agent's. A line Claude Code wrote into the conversation
 // itself (isMeta), and the summary it put in a compacted conversation's place
 // (isCompactSummary), are not the user's: the turn goes on through both.

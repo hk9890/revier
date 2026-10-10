@@ -1,19 +1,20 @@
 // Package tui is the one surface: every project with its agent state, sorted
 // so the ones needing attention come first, and beside it a pane with the
-// project's targets, attached instances and agents, and what one of its agents
-// said last. Tab moves the cursor between the projects and the agents, and
-// alt+t to the targets. Enter activates. It is the picker and the monitor at
-// once (decisions.md D8, D105, D107). The key that opens it puts a second list
-// in the first one's place: every agent of every project, with the terminal of
-// the one under the cursor mirrored beside it (D110, D111).
+// project's targets, attached instances and agents, and the terminal of one of
+// its agents, mirrored. Tab moves the cursor between the projects and the
+// agents, and alt+t to the targets. Enter activates. It is the picker and the
+// monitor at once (decisions.md D8, D105, D123). The key that opens it puts a
+// second list in the first one's place: every agent of every project, with
+// the terminal of the one under the cursor mirrored beside it as the project
+// pane mirrors it (D110, D111).
 //
 // Every project, target and agent it draws comes from core.SurveyLocal,
 // refreshed on a timer that never overlaps itself, with what core.AskRemotes
 // last brought from the linked hosts laid over it (D114), and every action
 // goes through the same core paths the CLI commands use. The two reads
-// outside that path are core.Details, what an agent said last, which the
-// surface asks for on its own and no survey carries (D106), and core.Screen,
-// the mirror's.
+// outside that path are core.Details, when an agent spoke last and what it
+// said, which the surface asks for on its own and no survey carries (D106),
+// and core.Screen, the mirror's.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -173,7 +174,7 @@ type Model struct {
 	atook    int                              // the number of the ask whose answer the pane holds
 	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
 	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
-	amessage setMessage                       // the message the pane last set, as it set it
+	mirror   mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
 	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
 	press    *press                           // where the left button went down, while it is down
 	sel      selection                        // the box a drag is selecting
@@ -511,15 +512,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mm.redrawSpin()
 		return mm, cmd
 	}
-	// The mirror is asked for before the pane is drawn: an agent that came
-	// under the cursor is drawn with its own screen pending, and not over the
-	// screen of the agent the cursor left.
-	var read tea.Cmd
-	if mm.mirroring() {
-		read = mm.agents.askMirror(mm.core, msg)
-	}
 	mm.syncDetail()
 	mm.syncBody()
+	// The mirror is asked for once the pane has its cursor: beside the
+	// project list the pane chooses the agent as it is drawn (chooseAgent).
+	var read tea.Cmd
+	if key, a, ok := mm.mirrored(); ok {
+		read = mm.mirror.ask(mm.core, key, a, msg)
+	}
 	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
 	// A key, a survey or a screen change can move what is under a pointer
 	// that stayed where it was, so what it is over is asked again.
@@ -555,14 +555,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.took(msg)
 		return m, nil
 	case mirroredMsg:
-		m.agents.tookScreen(msg, m.paneCols()-paneChrome)
+		m.mirror.take(msg, m.mirrorWidth())
 		return m, nil
 	case mirrorTickMsg:
-		// The tick ends with the mirror off the screen, and askMirror starts
-		// it again when the mirror comes back; the read it is for is
-		// askMirror's too.
-		if !m.mirroring() {
-			m.agents.mirror.ticking = false
+		// The tick ends with the mirror off the screen, and the mirror's ask
+		// starts it again when the mirror comes back; the read it is for is
+		// the ask's too.
+		if _, _, ok := m.mirrored(); !ok {
+			m.mirror.ticking = false
 			return m, nil
 		}
 		return m, mirrorTick()

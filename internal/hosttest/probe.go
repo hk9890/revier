@@ -113,7 +113,7 @@ func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.Sess
 }
 
 // FakeDetailedProbe is a FakeProbe that can also say what the agent in a panel
-// said last, so a test can exercise the pane's message without a transcript.
+// said last, so a test can exercise what the surface reads without a transcript.
 // The answer is Said's entry for the panel's id, and the zero detail for a
 // panel it has none for.
 type FakeDetailedProbe struct {

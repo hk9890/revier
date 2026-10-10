@@ -6,6 +6,18 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **The pane beside the project list shows the terminal of one agent, as the
+  pane beside the agent list does.** The section is headed `Screen`, follows
+  the agent each second in its own colours, and the wheel scrolls back
+  through it. It showed the agent's last message, set again from Markdown,
+  with the turn above it; both are gone. An agent of any harness is shown
+  now, and so is an agent of a linked project in a terminal here.
+- **The pane no longer puts an agent with a message before one without.** It
+  shows the agent that needs you, else one at rest before one working, and
+  the last to speak among equals.
+
 ## v0.14.0
 
 - **The pane shows the turn an agent is in, above its last message:** your

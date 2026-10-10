@@ -48,3 +48,22 @@ func TestTheNewestAnswerForTheProjectShownIsTaken(t *testing.T) {
 		t.Errorf("the other agent holds %q, want its new word", got)
 	}
 }
+
+func TestAgoSaysTheLargestWholeUnit(t *testing.T) {
+	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		before time.Duration
+		want   string
+	}{
+		{20 * time.Second, "just now"},
+		{time.Minute, "1 minute ago"},
+		{14 * time.Minute, "14 minutes ago"},
+		{90 * time.Minute, "1 hour ago"},
+		{5 * time.Hour, "5 hours ago"},
+		{50 * time.Hour, "2 days ago"},
+	} {
+		if got := ago(now, now.Add(-tc.before)); got != tc.want {
+			t.Errorf("ago(%v before) = %q, want %q", tc.before, got, tc.want)
+		}
+	}
+}
