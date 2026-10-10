@@ -20,8 +20,8 @@ import (
 // config.toml (decisions.md D59), one row each, and a row that adds one.
 // Enter opens a target's form: its name, key and home flag, then its runtime
 // and its window realization, each launch, match and place, the target the
-// runtime's is a tab of, and the panels of that tab as a list with a form of
-// their own. alt+d deletes a
+// runtime's is a tab of, the tabs it opens with and the active one, and the
+// panels of a tab as a list with a form of their own. alt+d deletes a
 // target after a y. A change is written as it is saved
 // (config.AddTarget, ReplaceTarget, RemoveTarget), and the projects are
 // loaded again with it, so the surface has the new targets at once. The
@@ -38,6 +38,8 @@ const (
 	tfRuntimeClass
 	tfRuntimePlace
 	tfRuntimeInside
+	tfRuntimeTabs
+	tfRuntimeActive
 	tfWindowName
 	tfWindowCommand
 	tfWindowTitle
@@ -115,9 +117,30 @@ func valuesOf(t revier.Target) targetValues {
 	fill(t.Window, tfWindowName, tfWindowCommand, tfWindowTitle, tfWindowClass, tfWindowPlace)
 	if t.Runtime != nil {
 		v.fields[tfRuntimeInside] = string(t.Runtime.Inside)
+		v.fields[tfRuntimeTabs] = joinTabs(t.Runtime.Tabs)
+		v.fields[tfRuntimeActive] = string(t.Runtime.Active)
 		v.panels = t.Runtime.Panels
 	}
 	return v
+}
+
+// joinTabs is a list of tabs as the form and a target's row show it.
+func joinTabs(tabs []revier.TargetName) string {
+	names := make([]string, len(tabs))
+	for i, tab := range tabs {
+		names[i] = string(tab)
+	}
+	return strings.Join(names, ", ")
+}
+
+// splitTabs is the list of tabs a field holds: names with a comma or a space
+// between them.
+func splitTabs(s string) []revier.TargetName {
+	var tabs []revier.TargetName
+	for _, name := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
+		tabs = append(tabs, revier.TargetName(name))
+	}
+	return tabs
 }
 
 // The fields of the panel form.
@@ -221,6 +244,8 @@ func (f targetForm) rows() []formRow {
 		{kind: rowField, field: tfRuntimeClass, label: "match class", note: "a regexp"},
 		{kind: rowField, field: tfRuntimePlace, label: "place", note: "x y width height"},
 		{kind: rowField, field: tfRuntimeInside, label: "inside", note: "the target it is a tab of, which is what has panels; empty for none"},
+		{kind: rowField, field: tfRuntimeTabs, label: "tabs", note: "the tabs it opens with, in order: names with a comma between"},
+		{kind: rowField, field: tfRuntimeActive, label: "active", note: "the tab that has the focus; empty for the first"},
 	}
 	for i := range f.panels {
 		out = append(out, formRow{kind: rowPanel, field: i, label: "panel"})
@@ -364,12 +389,14 @@ func (f targetForm) target() (revier.Target, []int, error) {
 		from = append(from, p.from)
 	}
 	inside := revier.TargetName(strings.TrimSpace(f.fields[tfRuntimeInside].Value()))
+	tabs := splitTabs(f.fields[tfRuntimeTabs].Value())
+	active := revier.TargetName(strings.TrimSpace(f.fields[tfRuntimeActive].Value()))
 	var err error
-	if t.Runtime, err = f.realization(f.base.Runtime, tfRuntimeName, inside != "", panels); err != nil {
+	if t.Runtime, err = f.realization(f.base.Runtime, tfRuntimeName, inside != "" || len(tabs) > 0 || active != "", panels); err != nil {
 		return t, nil, fmt.Errorf("runtime: %w", err)
 	}
 	if t.Runtime != nil {
-		t.Runtime.Inside = inside
+		t.Runtime.Inside, t.Runtime.Tabs, t.Runtime.Active = inside, tabs, active
 	}
 	if t.Window, err = f.realization(f.base.Window, tfWindowName, false, nil); err != nil {
 		return t, nil, fmt.Errorf("window: %w", err)
@@ -381,15 +408,15 @@ func (f targetForm) target() (revier.Target, []int, error) {
 }
 
 // realization is one realization as the form holds it, from its five fields
-// starting at first: none when every field is empty, it has no panels and it
-// is no tab.
-func (f targetForm) realization(old *revier.Realization, first int, tab bool, panels []revier.PanelSpec) (*revier.Realization, error) {
+// starting at first: none when every field is empty, it has no panels, and
+// more says nothing else is set on it.
+func (f targetForm) realization(old *revier.Realization, first int, more bool, panels []revier.PanelSpec) (*revier.Realization, error) {
 	value := func(field int) string { return strings.TrimSpace(f.fields[first+field].Value()) }
 	command, err := splitCommand(value(1))
 	if err != nil {
 		return nil, err
 	}
-	if value(0) == "" && len(command) == 0 && value(2) == "" && value(3) == "" && value(4) == "" && len(panels) == 0 && !tab {
+	if value(0) == "" && len(command) == 0 && value(2) == "" && value(3) == "" && value(4) == "" && len(panels) == 0 && !more {
 		return nil, nil
 	}
 	r := revier.Realization{}
@@ -484,11 +511,7 @@ func describeTarget(t revier.Target) string {
 		}
 		switch {
 		case len(r.Tabs) > 0:
-			tabs := make([]string, len(r.Tabs))
-			for i, tab := range r.Tabs {
-				tabs[i] = string(tab)
-			}
-			parts = append(parts, where+", tabs: "+strings.Join(tabs, ", "))
+			parts = append(parts, where+", tabs: "+joinTabs(r.Tabs))
 		case len(r.Panels) == 1:
 			parts = append(parts, where+", 1 panel")
 		case len(r.Panels) > 1:

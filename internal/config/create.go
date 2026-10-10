@@ -93,7 +93,35 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 	if err != nil {
 		return core.Project{}, err
 	}
+	if err := agentTabFree(shared); err != nil {
+		return core.Project{}, err
+	}
 	return write(root, name, projectTOML(name, dir, gitURL, shared), shared)
+}
+
+// agentTabFree refuses a new project whose agent tab would merge with a
+// shared target of its name that is no tab: one with a window, or with a
+// runtime that launches or lists tabs of its own. A shared target that starts
+// nothing merges into the tab. A shared home leaves the file with no tab of
+// its own, so no name can collide.
+func agentTabFree(shared []map[string]any) error {
+	if SharedHome(shared) {
+		return nil
+	}
+	targets, err := targetsFor(shared, false)
+	if err != nil {
+		return err
+	}
+	i := findTarget(targets, agentTab)
+	if i < 0 {
+		return nil
+	}
+	t := targets[i]
+	starts := t.Runtime != nil && t.Runtime.Inside == "" && (len(t.Runtime.Launch) > 0 || len(t.Runtime.Tabs) > 0)
+	if t.Window != nil || starts {
+		return fmt.Errorf("config.toml has a shared target named %q that is no tab, and a new project gives that name to the tab of its agent; rename the shared target", agentTab)
+	}
+	return nil
 }
 
 // SharedHome is whether the usable shared targets give a local project its
@@ -216,10 +244,10 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[strin
 	p("  [target.runtime]\n")
 	p("  name = \"session:{{.Name}}\"\n")
 	p("  match = { title = %s }\n", quote("^session:"+namePattern(name)+"$"))
-	p("  tabs = [\"agent\"]\n")
+	p("  tabs = [%s]\n", quote(string(agentTab)))
 	p("\n")
 
-	p("[[target]]\nname = \"agent\"\n")
+	p("[[target]]\nname = %s\n", quote(string(agentTab)))
 	p("  [target.runtime]\n")
 	p("  inside = \"home\"\n")
 	p("    [[target.runtime.panels]]\n")

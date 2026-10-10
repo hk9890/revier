@@ -32,8 +32,9 @@ func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 	return b.String()
 }
 
-// linkTab is the name of the tab a link's workspace opens with.
-const linkTab revier.TargetName = "agent"
+// agentTab is the name of the tab a link's workspace opens with, and of the
+// tab `revier new` writes.
+const agentTab revier.TargetName = "agent"
 
 // link fills in what a link file leaves to be derived (decisions.md D41).
 // The project's name on the host is the link's own name unless the file
@@ -62,7 +63,8 @@ const linkTab revier.TargetName = "agent"
 // A target named agent the link already has is the tab when it is inside the
 // home: it keeps its launch or its panels, and gets the two panels when it
 // has neither. Any other target of that name is left as it is, and the home
-// that lists it is refused with the reason.
+// that lists it is refused with the reason. A home that has the name itself
+// gets no tab, and is refused for the name.
 //
 // A link has no list of tabs of its own (D128): one a runtime
 // realization declares is dropped, with its active tab, before the home gets
@@ -92,19 +94,19 @@ func link(p *revier.Project) {
 	if r.Match.IsZero() {
 		r.Match = revier.Match{Title: "^" + regexp.QuoteMeta(title) + "$"}
 	}
-	if len(r.Launch) > 0 || len(r.Panels) > 0 || home.Window != nil {
+	if len(r.Launch) > 0 || len(r.Panels) > 0 || home.Window != nil || home.Name == agentTab {
 		return
 	}
-	r.Tabs = []revier.TargetName{linkTab}
+	r.Tabs = []revier.TargetName{agentTab}
 	panels := []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}
-	if j := findTarget(p.Targets, linkTab); j >= 0 {
+	if j := findTarget(p.Targets, agentTab); j >= 0 {
 		if tab := p.Targets[j].Runtime; tab != nil && tab.Inside == home.Name && len(tab.Launch) == 0 && len(tab.Panels) == 0 {
 			tab.Panels = panels
 		}
 		return
 	}
 	p.Targets = slices.Insert(p.Targets, i+1, revier.Target{
-		Name: linkTab, Runtime: &revier.Realization{Inside: home.Name, Panels: panels},
+		Name: agentTab, Runtime: &revier.Realization{Inside: home.Name, Panels: panels},
 	})
 }
 

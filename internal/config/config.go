@@ -572,7 +572,7 @@ func validateTargets(p revier.Project) []error {
 				errs = append(errs, fmt.Errorf("target %q %s realization has an empty match", t.Name, kind))
 			}
 			if len(r.Launch) == 0 && len(r.Panels) == 0 && len(r.Tabs) == 0 {
-				errs = append(errs, fmt.Errorf("target %q %s realization has no launch argv and no tabs", t.Name, kind))
+				errs = append(errs, nothingToStart(p, t, kind))
 			}
 			if len(r.Panels) > 0 && kind == revier.HostWindow {
 				errs = append(errs, fmt.Errorf("target %q window realization declares panels; only a runtime has them", t.Name))
@@ -580,7 +580,7 @@ func validateTargets(p revier.Project) []error {
 			if len(r.Panels) > 0 && kind == revier.HostRuntime {
 				// Panels are what a tab starts, and a realization that is no
 				// tab has none (decisions.md D128).
-				errs = append(errs, fmt.Errorf("target %q runtime realization declares panels; only a tab has them, so move them into a target with inside = %q and list it in tabs", t.Name, t.Name))
+				errs = append(errs, panelsOffATab(p, t))
 			}
 			if r.Name == "" && kind == revier.HostRuntime {
 				// A runtime host gives the instance it opens this name, and
@@ -602,6 +602,46 @@ func validateTargets(p revier.Project) []error {
 		out[i] = errors.Join(errs...)
 	}
 	return out
+}
+
+// nothingToStart refuses a realization of t with no launch and no tabs. On a
+// link the reason is the link's: the home alone has a list of tabs, the
+// derived one (decisions.md D128). A home with the name of the derived tab
+// gets none; one that also has a window gets none under any name.
+func nothingToStart(p revier.Project, t revier.Target, kind revier.HostKind) error {
+	if p.Remote != nil && kind == revier.HostRuntime {
+		switch {
+		case !t.Home:
+			return fmt.Errorf("target %q runtime realization has no launch argv, and on a link only the home has tabs", t.Name)
+		case t.Name == agentTab && t.Window == nil:
+			return fmt.Errorf("target %q is the home of a link, and %q is the name of the tab a link opens with; give the home another name", t.Name, agentTab)
+		}
+	}
+	return fmt.Errorf("target %q %s realization has no launch argv and no tabs", t.Name, kind)
+}
+
+// panelsOffATab refuses panels on a runtime realization of t that is no tab,
+// with the move that repairs it. On a link the move is another one: the home
+// lists the tab named agent alone, and no other target lists tabs. A home
+// that also has a window opens no tab, and a home named agent cannot hold the
+// tab of that name, so neither is told to move panels into one.
+func panelsOffATab(p revier.Project, t revier.Target) error {
+	const what = "target %q runtime realization declares panels; only a tab has them, "
+	if p.Remote == nil {
+		return fmt.Errorf(what+"so move them into a target with inside = %q and list it in tabs", t.Name, t.Name)
+	}
+	home, ok := p.Home()
+	switch {
+	case !ok || home.Runtime == nil:
+		return fmt.Errorf(what+"and the home of this link has no runtime realization to open a tab in", t.Name)
+	case home.Window != nil:
+		return fmt.Errorf(what+"and the home of this link also has a window realization, so no tab opens in it", t.Name)
+	case t.Name != home.Name:
+		return fmt.Errorf(what+"and on a link only the home has tabs, so move them into a target with inside = %q", t.Name, home.Name)
+	case t.Name == agentTab:
+		return fmt.Errorf(what+"and a link opens with the tab %q, so give the home another name, and move them into a target named %q inside it", t.Name, agentTab, agentTab)
+	}
+	return fmt.Errorf(what+"and a link opens with the tab %q, so move them into a target named %q with inside = %q", t.Name, agentTab, agentTab, t.Name)
 }
 
 // validateTab checks a target declared inside another. Each rule is a tab
@@ -673,6 +713,9 @@ func validateTabs(p revier.Project, t revier.Target, kind revier.HostKind, r *re
 		switch {
 		case !ok:
 			errs = append(errs, fmt.Errorf("target %q lists tab %q, which the project does not declare", t.Name, name))
+		case p.Remote != nil && name == agentTab && (entry.Runtime == nil || entry.Runtime.Inside != t.Name):
+			// The list is the derived one, so the fix is on the other target.
+			errs = append(errs, fmt.Errorf("target %q opens a link with the tab %q, and target %q is not a tab of it; give that target another name, or inside = %q", t.Name, name, name, t.Name))
 		case entry.Runtime == nil || entry.Runtime.Inside != t.Name:
 			errs = append(errs, fmt.Errorf("target %q lists tab %q, which is not inside it; give that target inside = %q", t.Name, name, t.Name))
 		}

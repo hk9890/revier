@@ -40,6 +40,16 @@ Each section is also the text of its release on the
   and the shell from the listed tabs, so the conversation in the `agent` tab
   is resumed. A linked project opens with one tab, `agent`, which holds its
   agent and its shell.
+- **The target form has `tabs` and `active`.** The config screen and the
+  project screen can make the target that lists its tabs, and change the
+  order and the tab that has the focus. A target that lists a tab is saved
+  after the tab exists.
+- **A refusal on a linked project names a fix that works there.** Panels on a
+  target of a link go into a tab of its home, and panels on the home go into
+  the tab `agent`. A link whose home has the name `agent` is refused for the
+  name. `revier new` is refused beside a shared target named `agent` that is
+  no tab. The project screen refuses `tabs` and `active` on a link, where it
+  dropped them with no message.
 - **The mouse works after an action or a clone.** After a key ran an action,
   or Enter cloned a missing project, a click did nothing, and a drag selected
   text that was lost at once while an agent worked.

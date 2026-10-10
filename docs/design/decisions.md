@@ -792,5 +792,6 @@ were two forms of one workspace, and every reader of the agent panel and the
 shell panel had a branch for each. A file has `panels` only on a target with
 `inside`, and a load refuses any other with the fix. The layout of a workspace
 is the panels of its listed tabs, in order; a target that lists none has no
-agent panel. A link derives a home that lists one tab, `agent`. The agents are
+agent panel. A link has one list of tabs, the derived one: its home lists
+`agent`, and a list a target of the link declares is dropped. The agents are
 saved under the workspace, in the file shape of 0.14.0, so an old file restores.

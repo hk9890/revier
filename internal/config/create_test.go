@@ -84,3 +84,55 @@ name = "editor"
 		t.Errorf("Problems = %v, want none", probs)
 	}
 }
+
+// The tab of a new project has the name agent. A shared target of that name
+// that is no tab would merge with it, so the project is refused before a file
+// is written, with the name as the reason. A shared home leaves the file with
+// no tab, and a shared target of the name that starts nothing is the tab.
+func TestCreateRefusesASharedTargetWithTheNameOfTheAgentTab(t *testing.T) {
+	const window = `
+[[target]]
+name = "agent"
+  [target.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+`
+	root := projectsRoot(t, window, nil)
+	const want = `config.toml has a shared target named "agent" that is no tab, and a new project gives that name to the tab of its agent; rename the shared target`
+	if _, err := config.Create(root, "demo", "/tmp/demo", ""); err == nil || err.Error() != want {
+		t.Errorf("err = %v\nwant %s", err, want)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "demo")); err == nil {
+		t.Error("a refused project left a file behind")
+	}
+
+	const home = `
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "home"
+  launch = ["zsh"]
+  match = { title = "^home$" }
+`
+	root = projectsRoot(t, window+home, nil)
+	if _, err := config.Create(root, "demo", "/tmp/demo", ""); err != nil {
+		t.Errorf("Create beside a shared home: %v", err)
+	}
+
+	const startsNothing = `
+[[target]]
+name = "agent"
+key = "ctrl-shift-a"
+  [target.runtime]
+  dir = "/tmp/elsewhere"
+`
+	root = projectsRoot(t, startsNothing, nil)
+	p, err := config.Create(root, "demo", "/tmp/demo", "")
+	if err != nil {
+		t.Fatalf("Create beside a shared target that starts nothing: %v", err)
+	}
+	if tab := target(t, p, "agent"); tab.Key != "ctrl-shift-a" || tab.Runtime.Inside != "home" || tab.Runtime.Dir != "/tmp/elsewhere" {
+		t.Errorf("agent = %+v, want the tab with the shared key and directory", tab)
+	}
+}
