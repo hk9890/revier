@@ -22,8 +22,8 @@ Each section is also the text of its release on the
       # the [[target.runtime.panels]] tables go here, as they were
   ```
 
-  A machine that a link reaches must have its project files in this form too,
-  and so must a link file whose home declares `panels`. A session saved before
+  A machine that a link reaches must have this version and its project files
+  in this form too, and so must a link file whose home declares `panels`. A session saved before
   the change restores after it. `revier new` writes the new form, and
   `revier assist --reference` prints a whole file in it.
 - **A workspace opens with a list of tabs.** `tabs = ["tickets", "agent"]` on
