@@ -78,11 +78,11 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 		t.Fatalf("tabs = %+v, want two in %v", rt.Tabs, pane)
 	}
 	agent, shell := rt.Tabs[0].Real.Panels[0], rt.Tabs[1].Real.Panels[0]
-	if agent.Kind != revier.PanelAgent || !slices.Equal(agent.Command[len(agent.Command)-2:], []string{"--resume", "abc-123"}) {
-		t.Errorf("agent tab = %+v, want the agent panel resuming abc-123", agent)
+	if want := append(remote.PanelCommand("far", revier.PanelAgent), "--resume", "abc-123"); agent.Kind != revier.PanelAgent || !slices.Equal(agent.Command, want) {
+		t.Errorf("agent tab = %+v, want the agent panel running %q", agent, want)
 	}
-	if shell.Kind != revier.PanelShell || shell.Dir != "" {
-		t.Errorf("shell tab = %+v, want the shell panel with no directory here", shell)
+	if want := remote.PanelCommand("far", revier.PanelShell); shell.Kind != revier.PanelShell || shell.Dir != "" || !slices.Equal(shell.Command, want) {
+		t.Errorf("shell tab = %+v, want the shell panel running %q with no directory here", shell, want)
 	}
 	if len(remote.Asked) != 0 {
 		t.Errorf("the host was asked %v, want nothing", remote.Asked)

@@ -41,13 +41,16 @@ func demoProject(t *testing.T) core.Project {
 	return p
 }
 
-// remoteProject is a project on buildbox, its home target here the ssh pane
-// onto the workspace there.
+// remoteProject is a project on buildbox, as a link's file loads: its home
+// target here lists the tab agent, whose two panels are the ssh onto the
+// workspace there.
 func remoteProject(t *testing.T) core.Project {
 	t.Helper()
 	p := core.PrepareProject(revier.Project{Name: "far", Path: "~/dev/far", Remote: &revier.Link{Host: "buildbox", Project: "far"}, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
+			Name: "far", Match: revier.Match{Title: "^far$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
 	return p
 }

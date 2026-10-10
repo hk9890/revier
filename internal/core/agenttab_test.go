@@ -179,7 +179,7 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("far", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
 	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
@@ -192,12 +192,12 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, ref)
 	}
 	got := rt.Tabs[0].Real.Panels[0]
-	want := []string{"sh", "-c", "exec ssh far", "sh", "--resume", "abc-123", "--dir", "/srv/far/wt"}
+	want := sshArgv(revier.PanelAgent, "--resume", "abc-123", "--dir", "/srv/far/wt")
 	if !slices.Equal(got.Command, want) || got.Dir != "" {
 		t.Errorf("agent panel = %+v, want %q and no directory here", got, want)
 	}
 	// The shell beside it starts on the host too, in the same directory.
-	if shell := rt.Tabs[0].Real.Panels[1]; !slices.Equal(shell.Command, []string{"sh", "-c", "exec ssh far", "sh", "--dir", "/srv/far/wt"}) {
+	if shell := rt.Tabs[0].Real.Panels[1]; !slices.Equal(shell.Command, sshArgv(revier.PanelShell, "--dir", "/srv/far/wt")) {
 		t.Errorf("shell panel = %q, want the directory carried to the host", shell.Command)
 	}
 
@@ -208,9 +208,28 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 		if err != nil || outcome != core.AgentUnresumable {
 			t.Errorf("NewAgent(%+v) = %v, %v; want unresumable", r, outcome, err)
 		}
-		if got := rt.Tabs[len(rt.Tabs)-1].Real.Panels[0].Command; !slices.Equal(got, want[:4]) {
-			t.Errorf("agent panel = %q, want %q", got, want[:4])
+		if got := rt.Tabs[len(rt.Tabs)-1].Real.Panels[0].Command; !slices.Equal(got, sshArgv(revier.PanelAgent)) {
+			t.Errorf("agent panel = %q, want %q", got, sshArgv(revier.PanelAgent))
 		}
+	}
+}
+
+// A shell asked for a link opens here too, as the ssh that runs the shell on
+// the host: the shell panel of the tab the link's home lists.
+func TestAShellTabOfALinkIsTheSSHPanel(t *testing.T) {
+	c, rt, _, pane := linked(t)
+	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	if err := c.NewShell(context.Background(), w, ""); err != nil {
+		t.Fatalf("NewShell: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != pane {
+		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, pane)
+	}
+	if got := rt.Tabs[0].Real.Panels; len(got) != 1 || got[0].Kind != revier.PanelShell || !slices.Equal(got[0].Command, sshArgv(revier.PanelShell)) {
+		t.Errorf("shell tab = %+v, want the one shell panel running %q", got, sshArgv(revier.PanelShell))
 	}
 }
 

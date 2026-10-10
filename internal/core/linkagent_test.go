@@ -125,6 +125,94 @@ func TestALinksAgentIsAddressedByItsTarget(t *testing.T) {
 	}
 }
 
+// The panels of a link are in the tab its home lists, declared by kind alone.
+// The workspace opens as that tab, and each panel runs the ssh that reaches
+// the host: without it the two would be shells of this machine.
+func TestALinksWorkspaceOpensWithTheSSHOfEachPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	p := linkProject(t)
+
+	res, err := press(context.Background(), c, p, "home")
+	if err != nil || !res.Launched {
+		t.Fatalf("press = %+v, %v; want the workspace launched", res, err)
+	}
+	if len(rt.Opened) != 1 || len(rt.Tabs) != 0 {
+		t.Fatalf("opened = %+v, tabs = %+v; want the one tab as the instance itself", rt.Opened, rt.Tabs)
+	}
+	samePanels(t, "launch", rt.Opened[0].Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent)},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+	if got := p.Targets[2].Runtime.Panels; len(got[0].Command) != 0 || len(got[1].Command) != 0 {
+		t.Errorf("the project's panels = %+v, want them left as declared", got)
+	}
+}
+
+// A link whose host has no remote cannot build the ssh, and opens nothing: a
+// workspace of two local shells would look like the link and reach no host.
+func TestALinkWithNoRemoteForItsHostOpensNothing(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt}
+	if _, err := press(context.Background(), c, linkProject(t), "home"); err == nil || !strings.Contains(err.Error(), "buildbox") {
+		t.Errorf("err = %v, want the host with no remote named", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("opened = %+v, want nothing", rt.Opened)
+	}
+}
+
+// A restore of a link's workspace resumes on the host: the conversation and
+// its directory go to the ssh of the agent panel as arguments, and an agent
+// past the declared one opens as an agent tab built from the same ssh. The dry
+// run says the same of both.
+func TestARestoreOfALinkResumesThroughTheSSHOfItsAgentPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	p := linkProject(t)
+	resumes := []core.Resume{
+		{Session: "abc-123", Dir: "/srv/far/wt", Harness: "claude"},
+		{Session: "def-456", Harness: "claude"},
+	}
+	want := []core.AgentOutcome{core.AgentResumed, core.AgentResumed}
+	if got := c.Resumes(p, "home", resumes); !slices.Equal(got, want) {
+		t.Errorf("Resumes = %v, want %v", got, want)
+	}
+
+	res, err := pressResuming(context.Background(), c, p, "home", resumes)
+	if err != nil || res.AgentErr != nil || !slices.Equal(res.Agents, want) {
+		t.Fatalf("press = %+v, %v; want both agents resumed", res, err)
+	}
+	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 {
+		t.Fatalf("opened = %+v, tabs = %+v; want the workspace and one agent tab", rt.Opened, rt.Tabs)
+	}
+	samePanels(t, "launch", rt.Opened[0].Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent, "--resume", "abc-123", "--dir", "/srv/far/wt")},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+	samePanels(t, "agent tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent, "--resume", "def-456")},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+}
+
+// A tab of a link that its key opens in a workspace that is there gets the
+// ssh too: it is read from the target, not from the tabs the home lists.
+func TestAKeyOpenedTabOfALinkRunsTheSSHOfEachPanel(t *testing.T) {
+	c, rt, _, pane := linked(t)
+	res, err := press(context.Background(), c, linkProject(t), "agent")
+	if err != nil || !res.Launched || res.Tab != "agent" {
+		t.Fatalf("press = %+v, %v; want the tab agent opened", res, err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != pane {
+		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, pane)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent)},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+}
+
 // A host with a terminal of its own reports the agents in it too, in a runtime
 // that may be named as the one here. Only an agent a panel here shows is
 // here: the host's own is reached from nowhere here, and a shutdown leaves it

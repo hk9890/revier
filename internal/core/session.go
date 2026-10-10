@@ -470,7 +470,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	var outcomes []AgentOutcome
 	var extra []Resume
 	if opener != nil {
-		tabs, err := p.opening(name, real)
+		tabs, err := c.opening(p, name, real)
 		if err != nil {
 			return nil
 		}
@@ -478,7 +478,11 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	} else {
 		_, outcomes, extra = c.resuming(real, resumes, link)
 	}
-	_, added := c.agentTabs(host, p.layout(real), extra, link)
+	layout, err := c.layout(p, real)
+	if err != nil {
+		return nil
+	}
+	_, added := c.agentTabs(host, layout, extra, link)
 	return append(outcomes, added...)
 }
 

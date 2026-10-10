@@ -334,19 +334,26 @@ func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetNa
 	return c.NewAgent(context.Background(), w, r)
 }
 
-// linkProject is a link to far on buildbox: its home the agent and the shell
-// on the host, each through an ssh here, and logs a window of its own on this
-// machine.
+// linkProject is a link to far on buildbox, as a link's file loads: its home
+// lists the tab agent, whose panels are the agent and the shell on the host by
+// kind alone, so the core gives each the ssh that reaches it. logs is a window
+// of its own on this machine.
 func linkProject(t *testing.T) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-		}}},
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"},
+			Tabs: []revier.TargetName{"agent"}}},
 		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
+			Launch: []string{"zsh"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
+}
+
+// sshArgv is the argv hosttest.FakeRemote gives a panel of linkProject, with
+// what the core appended to it.
+func sshArgv(kind revier.PanelKind, appended ...string) []string {
+	return append([]string{"ssh", "buildbox", "revier", string(kind), "exec", "-p", "far-there"}, appended...)
 }
 
 // hostAgent is one agent as a link's host reports it: under the tag its panel
