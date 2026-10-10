@@ -43,6 +43,22 @@ that did not focus after `Open` passed L2 and failed L4.
 
 - Tests sit next to the code. A live test file ends in `live_test.go` and
   carries `//go:build live`.
+- Put a test file in the external `_test` package. When it needs an unexported
+  name, put it in the package and end its name in `_internal_test.go`, or in
+  `_internal_live_test.go` when it is live. Two exceptions: `export_test.go` is
+  in the package and has no suffix, and no test file in `cmd/revier` has the
+  suffix: all of them are in `package main`.
+- Put a helper or a fake that more than one test file uses in the
+  `helpers_test.go` of the package. Use `helpers_internal_test.go` when it
+  needs an unexported name, and `helpers_live_test.go` or
+  `helpers_integration_test.go`, with the build tag, when only tests of that
+  tag use it. Leave one that a single test file uses in that file; do not move
+  it to the helper file.
+- In `internal/tui`, feed a command that a key press or an `Update` returned
+  back to the model with a helper from `internal/tui/helpers_test.go`, not with
+  an inline `m.Update(cmd())`: `deliver` returns the commands the model answers
+  with, `run` drops them. Feed by hand only to assert between the run and the
+  feed, as `TestEnterOnATargetRunsGo` does.
 - An adapter test that needs no recorded output and no tool stays untagged, so
   `mise run test` runs it: `internal/adapter/kitty/ref_internal_test.go`,
   `internal/adapter/gnome/keyswrite_test.go`.

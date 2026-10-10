@@ -23,6 +23,8 @@ Use the `commit-commands:commit` skill for the standard flow.
 
 - Subject is `type(scope): <the behaviour after the change>`, e.g.
   `fix(tui): the detail pane wraps a long path and activity line`.
+  The scope is the package or the area the change is in, e.g. `tui`,
+  `changelog`. Leave it out when the change has no single one: `type: <...>`.
 - The body says why, in prose.
 - No emojis, in commit messages, PR titles, or PR bodies.
 - No `Co-Authored-By` trailer, and no model name or session link, in a commit
