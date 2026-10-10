@@ -159,6 +159,27 @@ func sharedOf(t *testing.T, root string) []map[string]any {
 	return cfg.Targets
 }
 
+// target is the named target of a loaded project.
+func target(t *testing.T, p core.Project, name revier.TargetName) revier.Target {
+	t.Helper()
+	for _, tg := range p.Targets {
+		if tg.Name == name {
+			return tg
+		}
+	}
+	t.Fatalf("project %s has no target %q", p.Name, name)
+	return revier.Target{}
+}
+
+// names is the names of a loaded project's targets, in order.
+func names(p core.Project) []revier.TargetName {
+	var out []revier.TargetName
+	for _, tg := range p.Targets {
+		out = append(out, tg.Name)
+	}
+	return out
+}
+
 // refusalOf is why the named target of a loaded project was refused, or nil.
 func refusalOf(p core.Project, name revier.TargetName) error {
 	for i, t := range p.Targets {

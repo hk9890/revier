@@ -28,25 +28,6 @@ func sharedRoot(t *testing.T, projects map[string]string) []core.Project {
 	return loaded
 }
 
-func target(t *testing.T, p core.Project, name revier.TargetName) revier.Target {
-	t.Helper()
-	for _, tg := range p.Targets {
-		if tg.Name == name {
-			return tg
-		}
-	}
-	t.Fatalf("project %s has no target %q", p.Name, name)
-	return revier.Target{}
-}
-
-func names(p core.Project) []revier.TargetName {
-	var out []revier.TargetName
-	for _, tg := range p.Targets {
-		out = append(out, tg.Name)
-	}
-	return out
-}
-
 // A project file with no targets has the shared ones, rendered for itself.
 func TestAProjectHasTheSharedTargets(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"demo": "path = \"/tmp/demo\"\n"})[0]

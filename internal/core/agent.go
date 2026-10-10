@@ -255,17 +255,21 @@ func (c *Core) running(snap snapshot, p Project, bound Bindings, only revier.Tar
 }
 
 // heldTab is the open tab of the i-th target: the instance that holds it,
-// narrowed to the panels that carry the tab's mark. Every one of them is kept,
-// so the agent of a tab that declares its shell first is found.
+// narrowed to the panels of the tab. Every one of them is kept, so the agent
+// of a tab that declares its shell first is found. They are the panels that
+// carry the tab's mark, and the ones the runtime lists in the tab of the first
+// of those: the mark of Open is best effort, so the panel that created the
+// instance can be without it while the one split in after it has it.
 func (c *Core) heldTab(snap snapshot, p Project, i int, bound Bindings) []held {
-	in, _, _, open, err := c.container(snap, p, i, bound)
+	in, _, tab, open, err := c.container(snap, p, i, bound)
 	if err != nil || !open {
 		return nil
 	}
 	name := p.Targets[i].Name
+	sameTab := tabAt(in, tab)
 	var panels []revier.Panel
 	for _, panel := range in.Panels {
-		if panel.Vars[PanelTargetVar] == string(name) {
+		if panel.Vars[PanelTargetVar] == string(name) || slices.Contains(sameTab, panel.ID) {
 			panels = append(panels, panel)
 		}
 	}

@@ -153,12 +153,15 @@ func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared 
 			if own, err = overrideOf(t, sharedTargets[s]); err != nil {
 				return nil, err
 			}
-			if i < 0 || panelCount(f.targets[i]) == 0 {
-				from = newPanels(panelCount(own))
-			}
 			if panelCount(own) == 0 {
 				from = nil
 			}
+		}
+		if i < 0 || panelCount(f.targets[i]) == 0 {
+			// The panels the target was shown with are not the file's:
+			// config.toml's, or the ones a link's agent tab derives. Each is
+			// new to the file.
+			from = newPanels(panelCount(own))
 		}
 		bare := own == revier.Target{Name: t.Name}
 		if i < 0 {

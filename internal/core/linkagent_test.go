@@ -125,6 +125,32 @@ func TestALinksAgentIsAddressedByItsTarget(t *testing.T) {
 	}
 }
 
+// A link's agent is addressed by its tab as a local one is: the name of the
+// tab is the agent in that tab's panels alone, while the workspace around it
+// also holds the agent of an agent tab and names two.
+func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
+	ssh := func(id string, pid int, vars map[string]string) revier.Panel {
+		return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, PID: pid, Command: []string{"ssh", "-t", "buildbox"}, Vars: vars}
+	}
+	tab := map[string]string{core.PanelTargetVar: "agent"}
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
+	rt := hosttest.NewRuntime("rt")
+	pane := rt.Add("far", "", ssh("9", 4242, tab), ssh("10", 4250, tab), ssh("11", 4300, nil), ssh("12", 4310, nil))
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
+
+	a, err := c.Agent(context.Background(), p, "agent")
+	if err != nil || a.Ref != pane || a.Panel.ID != "9" {
+		t.Errorf("Agent(far:agent) = %+v, %v; want panel 9 of %v", a, err, pane)
+	}
+	for _, addr := range []string{"home", ""} {
+		if _, err := c.Agent(context.Background(), p, addr); !errors.Is(err, core.ErrAmbiguous) {
+			t.Errorf("Agent(%q) err = %v, want ErrAmbiguous", addr, err)
+		}
+	}
+}
+
 // The panels of a link are in the tab its home lists, declared by kind alone.
 // The workspace opens as that tab, and each panel runs the ssh that reaches
 // the host: without it the two would be shells of this machine.

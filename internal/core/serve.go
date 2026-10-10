@@ -34,6 +34,8 @@ type Served struct {
 // panels all the same. A refused target is passed over, as
 // resolveAt passes over it: its realization is as written, not as rendered,
 // and nothing may run from an argv that did not render (decisions.md D85).
+// The panels are the listed tabs' as the file declares them, with no argv of a
+// link filled in: the machine that serves a panel is the one the project is on.
 func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.PanelSpec, error) {
 	var refused []error
 	for i, t := range p.Targets {
@@ -44,7 +46,7 @@ func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.Pan
 		if t.Runtime == nil || tabTarget(t) {
 			continue
 		}
-		if spec, ok := declared(p.layout(*t.Runtime), kind); ok {
+		if spec, ok := declared(panelsOf(p.listed(*t.Runtime)), kind); ok {
 			return *t.Runtime, spec, nil
 		}
 	}

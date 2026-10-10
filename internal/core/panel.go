@@ -115,13 +115,6 @@ func (c *Core) layout(p Project, real revier.Realization) ([]revier.PanelSpec, e
 	return panelsOf(tabs), nil
 }
 
-// layout is the workspace's layout as its file declares it, with no argv of a
-// link filled in: what a panel served to a link is read from, on the host,
-// where the project is not a link.
-func (p Project) layout(real revier.Realization) []revier.PanelSpec {
-	return panelsOf(p.listed(real))
-}
-
 // panelsOf is the panels of the tabs, in the order of the tabs.
 func panelsOf(tabs []revier.Target) []revier.PanelSpec {
 	var panels []revier.PanelSpec

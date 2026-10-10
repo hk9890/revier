@@ -393,6 +393,28 @@ func TestAnAgentAddressedByAPanelTabIsThatTabsAgent(t *testing.T) {
 	}
 }
 
+// The mark of Open is best effort: the panel that created the instance can be
+// without it while the shell split in after it has it. The agent is still the
+// tab's, because the runtime lists it in the tab of the marked panel.
+func TestAnAgentAddressedByAPanelTabIsFoundWithoutItsMark(t *testing.T) {
+	inRuntimeTab := func(p revier.Panel, tab string) revier.Panel {
+		p.Tab = tab
+		return p
+	}
+	marked := shellPanel("2")
+	marked.Vars = map[string]string{core.PanelTargetVar: "agent"}
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		inRuntimeTab(agentPanel("1", "idle"), "7"), inRuntimeTab(marked, "7"),
+		inRuntimeTab(agentPanel("3", "busy"), "8"), inRuntimeTab(shellPanel("4"), "8"))
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	a, err := c.Agent(context.Background(), prepared(t, listedTabsProject("")), "agent")
+	if err != nil || a.Panel.ID != "1" {
+		t.Errorf("Agent(agent) = %+v, %v; want the tab's panel 1", a, err)
+	}
+}
+
 // A tab opened for a target the project no longer declares is no tab target's
 // panel, so its agent stays with the instance rather than dropping out of the
 // save.
