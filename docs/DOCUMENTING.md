@@ -32,7 +32,7 @@ describing something absent from `internal/` is intent, not documentation drift.
 
 - Cite a decision as `` `docs/design/decisions.md` Dnn `` from `docs/`, as
   `(Dnn)` inside `docs/design/`, and from a Go comment as
-  [CODING.md](CODING.md#citing-a-decision) says.
+  [REVIEWING.md](REVIEWING.md#quality-rules) says.
 - No check runs on Markdown: `mise run quality` and CI test only Go. Check
   links and anchors by hand.
 
@@ -43,7 +43,6 @@ and return nothing:
 
 | File | Create when |
 |---|---|
-| `docs/REVIEWING.md` | this repository has a review rule the `code-review` skill cannot know |
 | `CONTRIBUTING.md` | someone other than the author builds from source |
 
 ## README scope

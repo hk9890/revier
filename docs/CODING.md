@@ -67,11 +67,3 @@ refuses the set. Add a rule to `config.validateTargets` unless it is about the
 project as a whole, in which case `config.validateProject`. Both keep the
 project loaded and listed, so every reason stays readable in the surface and in
 `revier doctor`.
-
-## Citing a decision
-
-- Cite a decision from a Go comment as `(decisions.md Dnn)`, several together
-  as `(decisions.md Dnn, Dnn)`, and a later one in the same comment as `(Dnn)`.
-- Give a number only to a fact that its entry or the design text tagged
-  `(Dnn)` carries; [OVERVIEW.md](OVERVIEW.md#finding-things) has the search.
-  State any other fact in the comment's own words.

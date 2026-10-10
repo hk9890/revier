@@ -46,6 +46,12 @@ your first `go test` or `mise run test*`, and before reporting a change as
 green.** The layer a test belongs in decides whether it can run at all on a
 machine with no display.
 
+### Reviewing a change
+
+**MUST read [docs/REVIEWING.md](docs/REVIEWING.md) before reviewing a PR or a
+diff.** It carries the quality rules that no tool checks: today, how a Go
+comment cites a decision.
+
 ### Running revier by hand
 
 **MUST read [docs/RUNNING.md](docs/RUNNING.md) before running anything that
