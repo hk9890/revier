@@ -77,6 +77,13 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	if err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
 	}
+	// The window the key was pressed over is in the launch's line, by its id
+	// alone, as its title is the user's: a launch with no window focused is
+	// what a popup that went away while it had the focus leaves behind.
+	over, err := c.Window.Focused(ctx)
+	if err != nil {
+		slog.Warn("popup: focused window", "err", err)
+	}
 	if _, err := c.Window.Open(ctx, revier.Realization{
 		Launch: argv(ctx),
 		Match:  revier.Match{Class: "^" + PopupClass + "$"},
@@ -95,7 +102,7 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	ref := w.Ref
 	geometry := popupGeometry(width)
-	slog.Info("popup: launched", "ref", ref, "workarea_width", width, "place", geometry)
+	slog.Info("popup: launched", "ref", ref, "over", over.ID, "workarea_width", width, "place", geometry)
 	// The raise goes first: the placement returns only once the frame has
 	// settled, and the window must not wait that long for the keyboard.
 	if err := c.Window.Focus(ctx, ref); err != nil {

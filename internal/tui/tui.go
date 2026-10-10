@@ -498,6 +498,10 @@ func tick(d time.Duration) tea.Cmd {
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Half of a mouse report changes nothing, so nothing is rebuilt for it.
+	if key, ok := msg.(tea.KeyMsg); ok && splitReport(key) {
+		return m, nil
+	}
 	next, cmd := m.update(msg)
 	mm, ok := next.(Model)
 	if !ok {

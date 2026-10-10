@@ -131,6 +131,11 @@ func main() {
 		return
 	}
 	status, say := outcome(err)
+	var ended signalEnd
+	if errors.As(err, &ended) {
+		logging.Op("command", start, nil, "args", args, "exit", status, "signal", ended.sig.String())
+		os.Exit(status)
+	}
 	logging.Op("command", start, err, "args", args, "exit", status)
 	if say {
 		fmt.Fprintln(os.Stderr, "revier:", err)
@@ -173,6 +178,7 @@ var invoked string
 // message is still to be printed.
 func outcome(err error) (status int, say bool) {
 	var exit *exec.ExitError
+	var ended signalEnd
 	switch {
 	// An action's own exit status passes through, so whatever bound the key
 	// sees the failure the command reported and not a generic one. The action
@@ -195,6 +201,9 @@ func outcome(err error) (status int, say bool) {
 		return exitEachFailed, false
 	case errors.Is(err, errNoAssistant):
 		return exitNoAssistant, true
+	// The surface a signal ended has no terminal left to say it on.
+	case errors.As(err, &ended):
+		return 128 + int(ended.sig), false
 	// `revier doctor` is its own report; a line here would add nothing to it.
 	case errors.Is(err, errSilent):
 		return 1, false

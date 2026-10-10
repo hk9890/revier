@@ -168,7 +168,7 @@ func TestDecodeFocused(t *testing.T) {
 // Nothing focused is a normal desktop state, so it must not error: the survey
 // still has to render.
 func TestDecodeFocusedEmpty(t *testing.T) {
-	for _, raw := range []string{"", "null", "[]", "  \n"} {
+	for _, raw := range []string{"", "null", "[]", "  \n", "No window focused\n"} {
 		ref, err := (&gnome.Host{}).DecodeFocused([]byte(raw))
 		if err != nil {
 			t.Errorf("DecodeFocused(%q) errored: %v", raw, err)
@@ -176,6 +176,14 @@ func TestDecodeFocusedEmpty(t *testing.T) {
 		if !ref.IsZero() {
 			t.Errorf("DecodeFocused(%q) = %+v, want zero", raw, ref)
 		}
+	}
+}
+
+// Only the text wctl prints for no focus is a normal state: any other output
+// that is not JSON is a wctl that misbehaved.
+func TestDecodeFocusedRejectsOtherText(t *testing.T) {
+	if _, err := (&gnome.Host{}).DecodeFocused([]byte("Error: extension not enabled\n")); err == nil {
+		t.Error("DecodeFocused took text that is not JSON for a window")
 	}
 }
 
