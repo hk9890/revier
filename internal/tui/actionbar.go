@@ -32,6 +32,7 @@ var barActions = []barAction{
 	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
 	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 	{label: "config", key: "alt+c", run: Model.openConfig},
+	{label: "assist", key: "alt+a", run: Model.openAssist},
 	{label: "help", key: helpBarKey, run: Model.openHelp},
 }
 

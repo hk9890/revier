@@ -241,7 +241,7 @@ var SurfaceKeys = []core.Chord{
 	"up", "down", "ctrl+p", "ctrl+n", "home", "end", "pgup", "pgdown",
 	"enter", "tab", "shift+tab", "alt+t", "alt+space", "esc", "ctrl+c",
 	"alt+e", "delete", "alt+delete", "alt+d",
-	"alt+n", "alt+r", "alt+s", "alt+q", "alt+c", "alt+h",
+	"alt+n", "alt+r", "alt+s", "alt+q", "alt+c", "alt+a", "alt+h",
 }
 
 // validateActions refuses an action the TUI can never run, one error per

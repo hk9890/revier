@@ -26,6 +26,7 @@ A findability map: where things live, and how to search for them.
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
+| `docs/design/embed.go` | The one design document the binary carries: `extending.md`, whose configuration part `revier assist --reference` prints. |
 | `cmd/revier/` | CLI entry point, and the one file that wires adapters (`adapters.go`). |
 
 ## The ports

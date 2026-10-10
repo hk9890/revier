@@ -269,19 +269,24 @@ type startMsg struct {
 // hiddenMsg follows the hide of the popup's window.
 type hiddenMsg struct{ err error }
 
-// reloadedMsg is the project files read again, on the raise of the popup:
-// what `revier new`, a link or an edit changed while it was hidden.
+// reloadedMsg is the project files read again: on the raise of the popup,
+// what `revier new`, a link or an edit changed while it was hidden, and after
+// the assistant, what it wrote.
 type reloadedMsg struct {
 	shared   []map[string]any
 	actions  []config.Action
 	projects []core.Project
 	err      error
+	assisted bool // read after the assistant, whose user is back to read the result
 }
 
 // reloadFiles reads the configuration again. Every press used to load it,
 // since the popup exited on Esc; a popup that hides must read it on the
 // raise, or a project added from a terminal is missing until it quits.
-func reloadFiles() tea.Msg {
+func reloadFiles() tea.Msg { return readFiles() }
+
+// readFiles is one read of config.toml and every project file.
+func readFiles() reloadedMsg {
 	var msg reloadedMsg
 	msg.err = withConfigRoot(func(root string) error {
 		cfg, projects, err := config.Load(root)
@@ -655,20 +660,32 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hidden, m.agents.shown = false, false
 		return m, reloadFiles
 	case reloadedMsg:
-		if msg.err != nil {
-			// The old list stands: a file broken while hidden must not
-			// empty the popup.
-			slog.Warn("reload on raise", "err", msg.err)
-		} else {
+		switch {
+		case msg.err == nil:
 			m.setFiles(msg.shared, msg.projects)
 			m.setActions(msg.actions)
 			m.reloadViews()
+		case msg.assisted:
+			// The old list stands here too, with the reason under it: the
+			// user is back to read what the assistant wrote, and a
+			// config.toml that no longer loads is the first thing to know.
+			m.err = msg.err
+		default:
+			// The old list stands: a file broken while hidden must not
+			// empty the popup.
+			slog.Warn("reload on raise", "err", msg.err)
 		}
 		if m.idle {
 			m.idle = false
 			return m, m.Survey()
 		}
 		return m, nil
+	case assistedMsg:
+		m.err = msg.err
+		// bubbletea turns mouse reporting off for a hand-over and leaves it
+		// off when the terminal is back, so the surface asks for it again,
+		// in the mode cmd/revier starts it in.
+		return m, tea.Batch(reloadAssisted, tea.EnableMouseAllMotion)
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends. An activation wrote
