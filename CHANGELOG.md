@@ -6,7 +6,7 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
-## Unreleased
+## v0.14.0
 
 - **The pane shows the turn an agent is in, above its last message:** your
   last prompt, the tools the agent called since with the failures counted,
@@ -87,9 +87,10 @@ Each section is also the text of its release on the
   `pwsh` as shells.** What the three entries above say of a `dash` and a
   `ksh` holds for each of them.
 - **`revier events` prints a line that a linked host recorded with `link`,**
-  the project here that links to the host's project. The line's `project` is
-  the name on the host, so a reader had to ask `revier list --json` to join
-  the two. Where two projects link to one, `link` is the first by name.
+  the project here that links to the host's project, where one does. The
+  line's `project` is the name on the host, so a reader had to ask `revier
+  list --json` to join the two. Where two projects link to one, `link` is the
+  first by name.
 
 ## v0.13.0
 
