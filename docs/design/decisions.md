@@ -763,3 +763,14 @@ name and names the one with no result. It is display, as D106 holds, and one
 turn: the pane reads and never answers, and the conversation stays in the
 harness. Rejected: drawing the whole conversation, a second interface for
 every harness; a typed event stream, which means running the agent.
+
+### D123 — revier starts one agent of its own, to write its configuration
+
+A user no longer fills in setup screens: they tell the coding agent they have
+what they want. `revier assist`, and alt+a, hand the terminal to Claude Code in
+a directory under the state root, briefed with the files, with `revier doctor`
+as its check and with the project under the cursor. It is a hand-over, as an
+action's is; the command needs no configuration to load, so it also repairs
+one. Only this agent is revier's: a project's agent is still only observed.
+Rejected: a terminal drawn in the surface, an emulator to maintain; a project
+of its own, which a configuration that does not load takes with it.

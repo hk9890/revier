@@ -336,7 +336,7 @@ The recheck adds and drops no step, which is what D78 holds fixed.
 - Projects on another machine, surveyed by the revier installed there (D40)
 
 Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
-(D32) and `revier events` (D112) extend it.
+(D32), `revier events` (D112) and `revier assist` (D123) extend it.
 
 **Out, deliberately**
 
@@ -352,7 +352,10 @@ revier is not a terminal multiplexer and does not replace one. It sits above
 whatever runtime you already use and gives it a project-shaped view.
 
 revier does not run your agent, wrap it, or proxy its output. It observes a
-panel and reports what it sees.
+panel and reports what it sees. The one agent it starts is its own:
+`revier assist`, and alt+a on the surface, hand the terminal to Claude Code,
+briefed to write revier's configuration and to find what is wrong with it, and
+the surface reads the files again when that agent exits (D123).
 
 ## What degrades, and how far
 
