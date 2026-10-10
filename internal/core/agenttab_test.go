@@ -15,27 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// openWorkspace is agentProject with its home open on a fresh runtime, holding
-// the given live panels.
-func openWorkspace(t *testing.T, panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime, core.Project, revier.TargetRef) {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	ref := rt.Add("session:revier", "", panels...)
-	return c, rt, prepared(t, agentProject()), ref
-}
-
-// newAgent is `revier agent new -p <project>:<target>`: the workspace found,
-// then the tab opened in it.
-func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetName, r core.Resume) (core.AgentOutcome, error) {
-	t.Helper()
-	w, err := c.AgentWorkspace(context.Background(), p, target)
-	if err != nil {
-		t.Fatalf("AgentWorkspace: %v", err)
-	}
-	return c.NewAgent(context.Background(), w, r)
-}
-
 // The key's tab: the project's agent panel on the conversation asked for, and
 // the project's shell, both in the directory asked for, opened in the open
 // workspace, with the new agent made current.
@@ -192,21 +171,6 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	if err := c.NewShell(context.Background(), w, ""); !errors.Is(err, core.ErrNoTabsToOpen) {
 		t.Errorf("err = %v, want ErrNoTabsToOpen", err)
 	}
-}
-
-// linkProject is a link to far on buildbox: its home the agent and the shell
-// on the host, each through an ssh here, and logs a window of its own on this
-// machine.
-func linkProject(t *testing.T) core.Project {
-	t.Helper()
-	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-		}}},
-		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
-	}})
 }
 
 // An agent asked for a link opens here, as a tab of the link's workspace: the

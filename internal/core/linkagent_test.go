@@ -13,29 +13,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// hostAgent is one agent as a link's host reports it: under the tag its panel
-// on the other machine gave it, in the instance of the served processes.
-func hostAgent(tag string, status revier.Status) revier.AgentView {
-	return revier.AgentView{
-		Panel: revier.PanelID(tag),
-		Ref:   revier.TargetRef{Host: "proc", ID: "session:far-there"},
-		State: revier.AgentState{Harness: "claude", Status: status},
-	}
-}
-
-// linked is the link's workspace open here with one ssh panel on pid 4242, and
-// the host answering with the agents given.
-func linked(t *testing.T, agents ...revier.AgentView) (*core.Core, *hosttest.FakeRuntime, *hosttest.FakeRemote, revier.TargetRef) {
-	t.Helper()
-	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true, Agents: agents})
-	rt := hosttest.NewRuntime("rt")
-	pane := rt.Add("far", "",
-		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Title: "fixing the build", Command: []string{"ssh", "-t", "buildbox"}},
-		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Command: []string{"ssh", "-t", "buildbox"}})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
-	return c, rt, remote, pane
-}
-
 // A machine serves a project's agent to a terminal elsewhere: no runtime here
 // holds the process, and the served processes list it under the workspace's
 // name. The survey probes it beside whatever the runtime holds, and on a

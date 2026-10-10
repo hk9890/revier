@@ -13,30 +13,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-const sharedConfig = `
-[[target]]
-name = "home"
-home = true
-key = "ctrl-shift-u"
-  [target.runtime]
-  name = "session:{{.Name}}"
-  match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
-    [[target.runtime.panels]]
-    kind = "shell"
-
-[[target]]
-name = "editor"
-key = "ctrl-shift-o"
-  [target.window]
-  launch = ["idea", "{{.Path}}"]
-  match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
-`
-
-// sharedRoot is a configuration root with the shared targets above and the
-// given project files, loaded.
+// sharedRoot is a configuration root with the shared targets of sharedConfig
+// and the given project files, loaded.
 func sharedRoot(t *testing.T, projects map[string]string) []core.Project {
 	t.Helper()
 	files := make(map[string]string, len(projects))

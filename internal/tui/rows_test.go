@@ -123,6 +123,13 @@ func TestTypingOnTheTargetsFiltersNothing(t *testing.T) {
 	}
 }
 
+// clocked gives the model a clock a test advances by hand, and returns the
+// hand: two clicks are as far apart as the test says, not as the machine ran.
+func clocked(m tui.Model) (tui.Model, *time.Time) {
+	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	return m.WithClock(func() time.Time { return now }), &now
+}
+
 // A double click opens a row as Enter does, so it ends the search as Enter
 // does.
 func TestADoubleClickClearsTheQuery(t *testing.T) {

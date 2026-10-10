@@ -2,32 +2,12 @@ package config_test
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 )
-
-// projectsRoot writes a configuration root whose projects directory holds each
-// of files, keyed by file name.
-func projectsRoot(t *testing.T, cfg string, files map[string]string) string {
-	t.Helper()
-	root := t.TempDir()
-	if cfg != "" {
-		write(t, root, "config.toml", cfg)
-	}
-	dir := filepath.Join(root, "projects")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, body := range files {
-		write(t, dir, name, body)
-	}
-	return root
-}
 
 func named(projects []core.Project, name string) (core.Project, bool) {
 	for _, p := range projects {
@@ -195,15 +175,4 @@ func TestABrokenTargetDoesNotCostAProjectItsVeto(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "demo") || !strings.Contains(err.Error(), "home") {
 		t.Errorf("err = %v, want the write refused for the home demo loses", err)
 	}
-}
-
-// sharedOf is the shared targets config.toml holds, as the caller of a write
-// has them.
-func sharedOf(t *testing.T, root string) []map[string]any {
-	t.Helper()
-	cfg, _, err := config.Load(root)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	return cfg.Targets
 }

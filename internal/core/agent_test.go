@@ -12,24 +12,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// agentPanel is a panel hosttest.TitleProbe claims for the harness "agent",
-// in the state its title names.
-func agentPanel(id, title string) revier.Panel {
-	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, Title: title, Command: []string{"agent"}}
-}
-
-func shellPanel(id string) revier.Panel {
-	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}}
-}
-
-// agentCore is a runtime holding the project's home workspace with the given
-// panels, and the core reading it with hosttest.TitleProbe.
-func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty", panels...)
-	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}, rt
-}
-
 func TestAgentIsTheProjectsOnlyAgent(t *testing.T) {
 	c, _ := agentCore(shellPanel("1"), agentPanel("2", "idle"))
 

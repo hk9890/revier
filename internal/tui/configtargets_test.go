@@ -1,14 +1,12 @@
 package tui_test
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
 )
 
@@ -17,21 +15,8 @@ import (
 // root.
 func targetsSurface(t *testing.T) (tui.Model, string) {
 	t.Helper()
-	root := configRoot(t, sharedTargets)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "projects", "demo.toml"), []byte("path = \"/tmp/demo\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, projects, err := config.Load(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, c, _ := world(t, 1)
-	m := tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "")
-	next, _ := m.Update(m.Survey()())
-	return resize(next.(tui.Model), 140, 60), root
+	m, file, _ := projectSurfaceOver(t, sharedTargets, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	return m, filepath.Dir(filepath.Dir(file))
 }
 
 // onTargetRow opens the config screen with the cursor on the i-th shared

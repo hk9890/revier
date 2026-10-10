@@ -12,39 +12,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-const valid = `
-path = "/home/user/dev/github/revier"
-
-[vars]
-url = "https://example.invalid/pulls"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "home"
-  match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
-
-[[target]]
-name = "editor"
-key = "ctrl-o"
-  [target.window]
-  launch = ["code", "{{.Path}}"]
-  match = { class = "^code$" }
-`
-
-func write(t *testing.T, dir, name, body string) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatalf("write %s: %v", name, err)
-	}
-	return path
-}
-
 func TestLoadProject(t *testing.T) {
 	dir := t.TempDir()
 	p := config.LoadProject(write(t, dir, "revier.toml", valid), nil)

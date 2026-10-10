@@ -11,31 +11,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// keyProject is a project with a home target and an editor target, each on a
-// chord that another program's shortcut holds in these tests.
-func keyProject(t *testing.T, name revier.ProjectName) core.Project {
-	t.Helper()
-	return prepared(t, revier.Project{
-		Name: name,
-		Path: "/home/user/dev/github/" + string(name),
-		Targets: []revier.Target{
-			{
-				Name: "home", Home: true, Key: "ctrl-shift-u",
-				Runtime: &revier.Realization{
-					Launch: []string{"kitty"},
-					Match:  revier.Match{Title: "^session:" + string(name) + "$"},
-				},
-			},
-			{
-				Name: "editor", Key: "ctrl-shift-o",
-				Window: &revier.Realization{
-					Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
-				},
-			},
-		},
-	})
-}
-
 func keysOf(t *testing.T, binder revier.KeyBinder, projects ...core.Project) core.KeyReport {
 	t.Helper()
 	c := &core.Core{KeyBinder: binder}

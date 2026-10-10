@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,36 +9,6 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/runlog"
 )
-
-const eachProjectTOML = `path = %q
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "home"
-  launch = ["true"]
-  match = { title = "^home$" }
-`
-
-// eachScratch points revier at a scratch config holding one project per entry,
-// name to directory, and at a scratch state root, which it returns. A
-// directory is created only when create names it, so the others are missing.
-func eachScratch(t *testing.T, dirs map[string]string, create ...string) string {
-	t.Helper()
-	files := map[string]string{}
-	for name, dir := range dirs {
-		files[name+".toml"] = fmt.Sprintf(eachProjectTOML, dir)
-	}
-	root := configRoot(t, "", files)
-	for _, name := range create {
-		if err := os.MkdirAll(dirs[name], 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	state := filepath.Join(root, "state")
-	t.Setenv("REVIER_STATE_HOME", state)
-	return state
-}
 
 // A dry run with no filter starts no process at all, which is why it can sit
 // in this layer: it reads the project list and stats directories.

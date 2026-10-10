@@ -1207,13 +1207,13 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	if hide == nil {
 		t.Fatal("esc returned no command")
 	}
-	next, cmd := m.Update(hide())
-	m = next.(tui.Model)
+	m, cmd := deliver(m, hide)
 	if cmd != nil || len(wm.Hidden) != 1 || wm.Hidden[0] != popup {
 		t.Fatalf("after esc: cmd %v, hidden %v; want the popup hidden and no quit", cmd, wm.Hidden)
 	}
 	// The survey that was running answers: the chain ends there.
-	if next, cmd = m.Update(m.Survey()()); cmd != nil {
+	next, cmd := m.Update(m.Survey()())
+	if cmd != nil {
 		t.Error("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)

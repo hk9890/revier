@@ -10,16 +10,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// agentsOf is the agents a survey reports for the one project.
-func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
-	t.Helper()
-	report, err := c.Survey(context.Background(), []core.Project{p})
-	if err != nil {
-		t.Fatalf("Survey: %v", err)
-	}
-	return report.Views[0].Agents
-}
-
 // An agent on this machine is reached by its tab: its instance is focused, the
 // tab becomes current and the OS window holding it is raised. On tmux the
 // instance's focus is what switches a terminal showing another session.

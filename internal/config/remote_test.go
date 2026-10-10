@@ -13,12 +13,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// link is a project on another machine, in the smallest file that says so.
-const link = `
-[remote]
-host = "buildbox"
-`
-
 func TestALinkDerivesItsPaneAndItsNameOnTheHost(t *testing.T) {
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
 	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {

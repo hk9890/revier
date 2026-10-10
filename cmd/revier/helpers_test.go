@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -84,3 +87,69 @@ func withState(t *testing.T, a *app, st *state.State) *app {
 	a.core.Ledger = ledger.File{Root: a.stateRoot}
 	return a
 }
+
+// cwd is the working directory with symlinks resolved, so it compares with a
+// temporary directory whatever the platform links /tmp to.
+func cwd(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved(t, dir)
+}
+
+func resolved(t *testing.T, dir string) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// tuiApp is an app that knows one local project, at dir.
+func tuiApp(dir string) *app {
+	return &app{cfg: &config.Config{}, projects: []core.Project{
+		core.PrepareProject(revier.Project{Name: "demo", Path: dir}),
+	}}
+}
+
+// eachScratch points revier at a scratch config holding one project per entry,
+// name to directory, and at a scratch state root, which it returns. A
+// directory is created only when create names it, so the others are missing.
+func eachScratch(t *testing.T, dirs map[string]string, create ...string) string {
+	t.Helper()
+	files := map[string]string{}
+	for name, dir := range dirs {
+		files[name+".toml"] = fmt.Sprintf(eachProjectTOML, dir)
+	}
+	root := configRoot(t, "", files)
+	for _, name := range create {
+		if err := os.MkdirAll(dirs[name], 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := filepath.Join(root, "state")
+	t.Setenv("REVIER_STATE_HOME", state)
+	return state
+}
+
+// recordingTo makes root the state root of this process, as openLog does for a
+// real one, and stops the recording when the test ends.
+func recordingTo(t *testing.T, root string) {
+	t.Helper()
+	t.Setenv("REVIER_STATE_HOME", root)
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+}
+
+const eachProjectTOML = `path = %q
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "home"
+  launch = ["true"]
+  match = { title = "^home$" }
+`

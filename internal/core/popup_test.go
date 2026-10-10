@@ -11,10 +11,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-func popupArgv(context.Context) []string {
-	return []string{"kitty", "--class", core.PopupClass, "-e", "revier"}
-}
-
 // A press with the popup open raises it where the user left it: no second
 // terminal, and no placement.
 func TestPopupRaisesTheOneAlreadyOpen(t *testing.T) {
@@ -171,21 +167,6 @@ func TestPopupRaisesAFocusedPopupTheRuntimeDoesNotHold(t *testing.T) {
 			t.Errorf("%s: sent = %+v, focuses = %v; want the popup raised", name, rt.Sent, wm.Focuses)
 		}
 	}
-}
-
-// surfaceTerminal is a window host and a runtime that pair one window with
-// one terminal, as kitty and GNOME do: the terminal's panels are the given
-// ones, and the second is the current one.
-func surfaceTerminal(panels ...revier.Panel) (*hosttest.Fake, *hosttest.FakeRuntime, revier.TargetRef, revier.TargetRef) {
-	wm := hosttest.New("wm")
-	rt := hosttest.NewRuntime("rt")
-	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
-	window := wm.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000})
-	terminal := rt.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000, Panels: panels})
-	wm.SetFocus(window)
-	_ = rt.FocusPanel(context.Background(), terminal, panels[len(panels)-1].ID)
-	rt.PanelFocuses = nil
-	return wm, rt, window, terminal
 }
 
 // A revier the user runs in a terminal of their own is a surface too, and the

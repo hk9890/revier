@@ -10,108 +10,11 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
-
-// fakeAgent is at rest until a line arrives, writes the line beside itself,
-// and works on it for a second. It starts a moment after the line arrives, as
-// a real agent does, so a prompt that returned without waiting for the turn
-// is caught still idle.
-const fakeAgent = `status() {
-  printf '{"pid": %s, "kind": "interactive", "status": "%s"}' $$ "$1" > "%SESSIONS%/$$.tmp"
-  mv "%SESSIONS%/$$.tmp" "%SESSIONS%/$$.json"
-}
-status idle
-while IFS= read -r line; do
-  printf '%s' "$line" > "$0.got"
-  sleep 0.3
-  status busy
-  sleep 1
-  status idle
-done
-`
-
-// The home workspace holds the agent beside a shell; notes is a plain pane;
-// asker is an agent that waits for the human, read by an external probe.
-const agentsTOML = `
-path = "%PATH%"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "agents"
-  match = { title = "^agents$" }
-  [[target.runtime.panels]]
-  kind = "agent"
-  command = ["bash", "-c", "exec -a claude bash \"$0\"", "%AGENT%"]
-  [[target.runtime.panels]]
-  kind = "shell"
-  command = ["sh", "-c", "sleep 300"]
-
-[[target]]
-name = "notes"
-  [target.runtime]
-  name = "agents-notes"
-  launch = ["sh", "-c", "sleep 300"]
-  match = { title = "^agents-notes$" }
-
-[[target]]
-name = "asker"
-  [target.runtime]
-  name = "agents-asker"
-  match = { title = "^agents-asker$" }
-  [[target.runtime.panels]]
-  kind = "agent"
-  title = "Waiting for you"
-  command = ["bash", "-c", "exec -a asker sleep 300"]
-`
-
-// askerProbe reports attention for a panel whose title says it is waiting.
-const askerProbe = `#!/bin/sh
-case "$(cat)" in *Waiting*) echo '{"status":"attention"}' ;; *) echo '{"status":"idle"}' ;; esac
-`
-
-// agents opens the agents project on the scratch tmux server and returns the
-// path the agent writes what it read to.
-func agents(t *testing.T) string {
-	t.Helper()
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash not installed; the stand-in agent needs exec -a")
-	}
-	workdir := scratch(t)
-	root := os.Getenv("REVIER_CONFIG_HOME")
-	dir := t.TempDir()
-	agent, probe := filepath.Join(dir, "agent.sh"), filepath.Join(dir, "asker-probe")
-	if err := os.WriteFile(agent, []byte(strings.ReplaceAll(fakeAgent, "%SESSIONS%", sessionsDir)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(probe, []byte(askerProbe), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.NewReplacer("%PATH%", workdir, "%AGENT%", agent).Replace(agentsTOML)
-	if err := os.WriteFile(filepath.Join(root, "projects", "agents.toml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := os.OpenFile(filepath.Join(root, "config.toml"), os.O_APPEND|os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = cfg.WriteString("[[probe]]\nname = \"asker\"\nexec = \"" + probe + "\"\n")
-	_ = cfg.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	capture(t, "open", "agents")
-	capture(t, "go", "notes", "-p", "agents")
-	capture(t, "go", "asker", "-p", "agents")
-	return agent + ".got"
-}
 
 func TestAgentWaitEndsOnTheStatusOrTimesOut(t *testing.T) {
 	agents(t)

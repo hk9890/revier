@@ -15,26 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// recording gives the test an event file of its own, and returns what is in
-// it when called.
-func recording(t *testing.T) func() []revier.Event {
-	t.Helper()
-	root := t.TempDir()
-	events.Setup(root)
-	t.Cleanup(func() { events.Setup("") })
-	return func() []revier.Event {
-		t.Helper()
-		got, err := events.Read(root, time.Time{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		for i := range got {
-			got[i].Time = time.Time{}
-		}
-		return got
-	}
-}
-
 func TestAPressThatLaunchesIsAGoEventThatSaysSo(t *testing.T) {
 	recorded := recording(t)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}

@@ -5,37 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/pkg/revier"
 )
-
-// cwd is the working directory with symlinks resolved, so it compares with a
-// temporary directory whatever the platform links /tmp to.
-func cwd(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resolved(t, dir)
-}
-
-func resolved(t *testing.T, dir string) string {
-	t.Helper()
-	dir, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-// tuiApp is an app that knows one local project, at dir.
-func tuiApp(dir string) *app {
-	return &app{cfg: &config.Config{}, projects: []core.Project{
-		core.PrepareProject(revier.Project{Name: "demo", Path: dir}),
-	}}
-}
 
 // The surface opens on the project of the directory it was started in, and
 // then runs in the home directory, so what it starts later never inherits a

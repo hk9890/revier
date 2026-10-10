@@ -16,43 +16,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// openDesktop is agentProject with every target open: the workspace holds a
-// shell and an agent in the given status, notes runs on its own, and the editor
-// is a window.
-func openDesktop(t *testing.T, status revier.Status) (*core.Core, *hosttest.FakeRuntime, *hosttest.Fake, []core.Project) {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
-		agent("2", "abc-123", ""),
-	)
-	rt.Add("notes:revier", "kitty", revier.Panel{ID: "3", Kind: revier.PanelTool, Title: "less"})
-	wm := hosttest.New("wm")
-	wm.Add("revier - code", "code")
-	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{probe}}
-	return c, rt, wm, []core.Project{prepared(t, agentProject())}
-}
-
-// reading is the close every test asks for that is not about the busy guard:
-// the normal path, whose recheck reads these projects again before it closes
-// anything.
-func reading(projects []core.Project) core.ShutdownOpts {
-	return core.ShutdownOpts{Projects: projects}
-}
-
-func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef) core.Report {
-	t.Helper()
-	if attached != nil {
-		c.Ledger = attachments(attached)
-	}
-	r, err := c.Survey(context.Background(), projects)
-	if err != nil {
-		t.Fatalf("Survey: %v", err)
-	}
-	return r
-}
-
 func stepNames(plan []core.CloseStep) []string {
 	var out []string
 	for _, s := range plan {
