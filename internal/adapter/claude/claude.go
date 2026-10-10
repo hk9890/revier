@@ -1,4 +1,5 @@
-// Package claude implements the AgentProbe for Claude Code.
+// Package claude implements the AgentProbe for Claude Code, and holds the
+// command line that starts it as revier's assistant (AssistArgv).
 //
 // The state is Claude Code's own word, read from `claude agents --json`: every
 // live session with the pid of its process and its status. A panel is matched

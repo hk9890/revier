@@ -83,6 +83,10 @@ revier attach [-p name]       bind the focused window to a project
 revier status [-p name]       which project this directory resolves to
 revier doctor                 every project file that did not load whole, with
                               the edit that fixes each problem
+revier assist [--print-brief] hand this terminal to Claude Code, briefed to
+                              configure revier and to find what is wrong with
+                              it; --print-brief prints the brief and starts
+                              nothing; exit 6 when no claude is on PATH
 revier keys status [--json]   the desktop keys revier wants, and who holds each
 revier keys install [--force] claim the desktop keys
 revier keys uninstall         release the keys revier holds
@@ -154,7 +158,7 @@ can read, which Claude Code does; `--screen` works for every harness.
 
 The projects and the agents each have a filter field over their rows; the
 targets have none. The rule over the list says how many projects the filter
-leaves. The top line holds a button for each screen that is not about one
+leaves. The top line holds a button for each thing that is not about one
 project, and the version running where the terminal is wide enough for it
 beside the buttons. A terminal too narrow for every button ends the line in
 `≡`; a click on it shows the remaining buttons.
