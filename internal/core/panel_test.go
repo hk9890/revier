@@ -13,29 +13,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// tabProject has a workspace and a ticket viewer declared as a tab of it.
-func tabProject() revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}},
-		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
-			Inside: "home", Launch: []string{"taskmgr-ui"}}},
-	}}
-}
-
-// tabHosts is a kitty-like runtime holding the workspace, and a window host
-// that lists its OS window.
-func tabHosts(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef) {
-	t.Helper()
-	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
-	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	wm := hosttest.New("wm")
-	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	return rt, wm, osw
-}
-
 func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
 	c := &core.Core{Runtime: rt, Window: wm}

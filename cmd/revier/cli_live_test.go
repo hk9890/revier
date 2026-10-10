@@ -10,115 +10,13 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-const projectTOML = `
-path = "%PATH%"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "home"
-  launch = ["sh", "-c", "sleep 300"]
-  match = { title = "^home$" }
-
-[[target]]
-name = "notes"
-key = "ctrl-n"
-  [target.runtime]
-  name = "notes"
-  launch = ["sh", "-c", "sleep 300"]
-  match = { title = "^notes$" }
-
-[[target]]
-name = "editor"
-key = "ctrl-o"
-  [target.window]
-  launch = ["true"]
-  match = { class = "^definitely-not-running$" }
-`
-
-// scratch builds an isolated config and state root and points the process at
-// them, and gives the test a tmux server of its own. The runtime here is the
-// default server, as a real `revier` gets it (adapters.go), so the default is
-// what moves: TMUX_TMPDIR puts its socket in the test's directory, and TMUX
-// is cleared, so a run from inside tmux does not reach the server it runs in.
-// The user's own sessions are never seen, and never killed.
-func scratch(t *testing.T) string {
-	t.Helper()
-	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("tmux not installed; the CLI live layer needs it")
-	}
-	// Short, and not t.TempDir: a socket path over 108 bytes cannot be bound.
-	sockets, err := os.MkdirTemp("", "rv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TMUX_TMPDIR", sockets)
-	t.Setenv("TMUX", "")
-	_ = os.Unsetenv("TMUX")
-	// Registered after the environment it needs, so it runs before that is
-	// restored: the server it kills is this test's.
-	t.Cleanup(func() {
-		_ = exec.Command("tmux", "kill-server").Run()
-		_ = os.RemoveAll(sockets)
-	})
-	root := t.TempDir()
-	projects := filepath.Join(root, "projects")
-	if err := os.MkdirAll(projects, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	workdir := t.TempDir()
-	body := strings.ReplaceAll(projectTOML, "%PATH%", workdir)
-	if err := os.WriteFile(filepath.Join(projects, "demo.toml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Pin the runtime to tmux and disable the window host. This machine may
-	// have a working kitty and a working GNOME adapter, and a test that
-	// behaves differently depending on the ambient desktop is not a test. It
-	// also keeps the suite from ever opening or touching a real window.
-	cfg := "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n" +
-		"[[action]]\nkey = \"ctrl-y\"\nname = \"say\"\nrun = [\"sh\", \"-c\", \"echo action:$0:$1\", \"{{.Name}}\", \"{{.Path}}\"]\n" +
-		"[[action]]\nkey = \"ctrl-x\"\nname = \"fail\"\nrun = [\"sh\", \"-c\", \"exit 3\"]\n"
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(cfg), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// A second project, so a command acting on the wrong one is detectable.
-	// Its directory exists: `open` on a missing one clones or fails.
-	elsewhere := filepath.Join(workdir, "elsewhere")
-	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	other := strings.ReplaceAll(projectTOML, "%PATH%", elsewhere)
-	other = strings.ReplaceAll(other, `name = "home"`, `name = "home"`)
-	if err := os.WriteFile(filepath.Join(projects, "second.toml"), []byte(other), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("REVIER_CONFIG_HOME", root)
-	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
-	fakeClaude(t)
-	return workdir
-}
-
-// capture runs the command and returns everything it printed.
-func capture(t *testing.T, args ...string) string {
-	t.Helper()
-	var b bytes.Buffer
-	if err := run(&b, args); err != nil {
-		t.Fatalf("revier %s: %v\n%s", strings.Join(args, " "), err, b.String())
-	}
-	return b.String()
-}
 
 func TestListWithNoProjectsRunning(t *testing.T) {
 	scratch(t)

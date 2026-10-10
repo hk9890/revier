@@ -7,35 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// call is one recorded kitten invocation.
-type call struct {
-	socket string
-	args   []string
-}
-
-// parents is the process tree behind every recorded listing here, child to
-// parent. The pids are made up, so the host must not read them from this
-// machine's /proc, where they belong to other processes.
-var parents = map[int]int{
-	4002: 4001, 4003: 4002,
-	5002: 5001, 5003: 5002, 5021: 5020,
-	6002: 6001, 6003: 6002, 6004: 6003,
-	7002: 7001, 7003: 1,
-}
-
-// newHost is a Host that reads the process tree from parents.
-func newHost() *kitty.Host {
-	h := &kitty.Host{}
-	h.SetParents(func(pid int) (int, bool) {
-		ppid, ok := parents[pid]
-		return ppid, ok
-	})
-	return h
-}
 
 // A realization with no name is refused before kitten is asked: an Open that
 // got as far as a launch fails as well, on the reply.

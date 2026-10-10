@@ -17,15 +17,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// recordingTo makes root the state root of this process, as openLog does for a
-// real one, and stops the recording when the test ends.
-func recordingTo(t *testing.T, root string) {
-	t.Helper()
-	t.Setenv("REVIER_STATE_HOME", root)
-	events.Setup(root)
-	t.Cleanup(func() { events.Setup("") })
-}
-
 // lines decodes what `revier events` printed, one event per line.
 func lines(t *testing.T, out string) []revier.Event {
 	t.Helper()

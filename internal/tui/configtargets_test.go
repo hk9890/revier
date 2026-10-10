@@ -14,7 +14,8 @@ import (
 
 // targetsSurface is the surface over a configuration root whose config.toml
 // holds sharedTargets and one project with no target of its own, and that
-// root.
+// root. Unlike projectSurfaceOver its core is the one of world, with a window
+// host and an agent probe beside the runtime.
 func targetsSurface(t *testing.T) (tui.Model, string) {
 	t.Helper()
 	root := configRoot(t, sharedTargets)

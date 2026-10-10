@@ -68,13 +68,6 @@ func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string,
 	return survey(m)
 }
 
-// clocked gives the model a clock a test advances by hand, and returns the
-// hand: two clicks are as far apart as the test says, not as the machine ran.
-func clocked(m tui.Model) (tui.Model, *time.Time) {
-	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
-	return m.WithClock(func() time.Time { return now }), &now
-}
-
 // survey applies one whole refresh: the survey of this machine, then what
 // the linked hosts say.
 func survey(m tui.Model) tui.Model {
@@ -335,16 +328,6 @@ func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 func run(m tui.Model, cmd tea.Cmd) tui.Model {
 	m, _ = deliver(m, cmd)
 	return m
-}
-
-// step presses a key and delivers the command it returns, when it returns
-// one.
-func step(m tui.Model, key string) tui.Model {
-	m, cmd := press(m, key)
-	if cmd == nil {
-		return m
-	}
-	return run(m, cmd)
 }
 
 // runAll runs a command for what it does to the world; its messages are

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -63,17 +65,6 @@ func project() revier.Project {
 			},
 		},
 	}
-}
-
-// osWindowProject is a workspace and a runtime-only diff target, as a kitty
-// user has them: both are OS windows a window host also lists.
-func osWindowProject() revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
-		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
-			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
-	}}
 }
 
 // osWindowHosts builds a runtime that reports OSWindows and a window host that
@@ -181,19 +172,6 @@ func landed(t *testing.T, c *core.Core, name revier.TargetName) revier.TargetRef
 	return c.Ledger.State().Bound["revier"][name]
 }
 
-// detached is a window host whose launch names no window, as a real one's
-// does not, and whose windows appear by themselves: appear runs in place of
-// the fake's own new window.
-type detached struct {
-	*hosttest.Fake
-	appear func()
-}
-
-func (d detached) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
-	d.appear()
-	return revier.TargetRef{}, nil
-}
-
 // shortBindWait makes the wait for a detached launch's window short, for a
 // test whose window never comes.
 func shortBindWait(t *testing.T) {
@@ -223,4 +201,386 @@ func attachedAfterAction(t *testing.T, c *core.Core, wm *hosttest.Fake, p core.P
 		}
 	}
 	return c.Ledger.State().Attached[p.Name]
+}
+
+// agentProject is a workspace whose home holds an agent beside a shell, which
+// is the layout a resume has to find its way back into.
+func agentProject() revier.Project {
+	return revier.Project{
+		Name: "revier",
+		Path: "/home/user/dev/github/revier",
+		Targets: []revier.Target{
+			{
+				Name: "home", Home: true,
+				Runtime: &revier.Realization{
+					Name:  "session:revier",
+					Match: revier.Match{Title: "^session:revier$"},
+					Panels: []revier.PanelSpec{
+						{Kind: revier.PanelShell, Command: []string{"zsh"}},
+						{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}},
+					},
+				},
+			},
+			{
+				Name: "notes",
+				Runtime: &revier.Realization{
+					Name: "notes:revier", Launch: []string{"less"},
+					Match: revier.Match{Title: "^notes:revier$"},
+				},
+			},
+			{
+				Name: "editor",
+				Window: &revier.Realization{
+					Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
+				},
+			},
+		},
+	}
+}
+
+func resumable() *hosttest.FakeResumableProbe { return hosttest.NewResumableProbe("claude", "claude") }
+
+// agent is a live panel the fake probe claims, holding a conversation when id
+// is not empty, in dir when dir is not empty.
+func agent(panel revier.PanelID, id, dir string) revier.Panel {
+	vars := map[string]string{}
+	if id != "" {
+		vars["session"] = id
+	}
+	if dir != "" {
+		vars["dir"] = dir
+	}
+	return revier.Panel{ID: panel, Kind: revier.PanelTool, Title: "claude", Vars: vars}
+}
+
+// launched restores one target from a recording and returns the panels the
+// host was asked to open.
+func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) []revier.PanelSpec {
+	t.Helper()
+	return restored(t, c, proj, resumes).Opened[0].Panels
+}
+
+// samePanels reports every difference between two panel lists.
+func samePanels(t *testing.T, what string, got, want []revier.PanelSpec) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s = %+v, want %d panels", what, got, len(want))
+	}
+	for i := range want {
+		if !slices.Equal(got[i].Command, want[i].Command) || got[i].Dir != want[i].Dir ||
+			got[i].Kind != want[i].Kind || got[i].Title != want[i].Title {
+			t.Errorf("%s panel %d = %+v, want %+v", what, i, got[i], want[i])
+		}
+	}
+}
+
+// agentPanel is a panel hosttest.TitleProbe claims for the harness "agent",
+// in the state its title names.
+func agentPanel(id, title string) revier.Panel {
+	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, Title: title, Command: []string{"agent"}}
+}
+
+func shellPanel(id string) revier.Panel {
+	return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}}
+}
+
+// agentCore is a runtime holding the project's home workspace with the given
+// panels, and the core reading it with hosttest.TitleProbe.
+func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", panels...)
+	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}, rt
+}
+
+// agentsOf is the agents a survey reports for the one project.
+func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
+	t.Helper()
+	report, err := c.Survey(context.Background(), []core.Project{p})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	return report.Views[0].Agents
+}
+
+// openWorkspace is agentProject with its home open on a fresh runtime, holding
+// the given live panels.
+func openWorkspace(t *testing.T, panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime, core.Project, revier.TargetRef) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	ref := rt.Add("session:revier", "", panels...)
+	return c, rt, prepared(t, agentProject()), ref
+}
+
+// newAgent is `revier agent new -p <project>:<target>`: the workspace found,
+// then the tab opened in it.
+func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetName, r core.Resume) (core.AgentOutcome, error) {
+	t.Helper()
+	w, err := c.AgentWorkspace(context.Background(), p, target)
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+	return c.NewAgent(context.Background(), w, r)
+}
+
+// linkProject is a link to far on buildbox: its home the agent and the shell
+// on the host, each through an ssh here, and logs a window of its own on this
+// machine.
+func linkProject(t *testing.T) core.Project {
+	t.Helper()
+	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
+			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
+		}}},
+		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
+			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
+	}})
+}
+
+// hostAgent is one agent as a link's host reports it: under the tag its panel
+// on the other machine gave it, in the instance of the served processes.
+func hostAgent(tag string, status revier.Status) revier.AgentView {
+	return revier.AgentView{
+		Panel: revier.PanelID(tag),
+		Ref:   revier.TargetRef{Host: "proc", ID: "session:far-there"},
+		State: revier.AgentState{Harness: "claude", Status: status},
+	}
+}
+
+// linked is the link's workspace open here with one ssh panel on pid 4242, and
+// the host answering with the agents given.
+func linked(t *testing.T, agents ...revier.AgentView) (*core.Core, *hosttest.FakeRuntime, *hosttest.FakeRemote, revier.TargetRef) {
+	t.Helper()
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true, Agents: agents})
+	rt := hosttest.NewRuntime("rt")
+	pane := rt.Add("far", "",
+		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Title: "fixing the build", Command: []string{"ssh", "-t", "buildbox"}},
+		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Command: []string{"ssh", "-t", "buildbox"}})
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	return c, rt, remote, pane
+}
+
+func stepFor(plan []core.CloseStep, ref revier.TargetRef) (core.CloseStep, bool) {
+	i := slices.IndexFunc(plan, func(s core.CloseStep) bool { return s.Ref == ref })
+	if i < 0 {
+		return core.CloseStep{}, false
+	}
+	return plan[i], true
+}
+
+// openDesktop is agentProject with every target open: the workspace holds a
+// shell and an agent in the given status, notes runs on its own, and the editor
+// is a window.
+func openDesktop(t *testing.T, status revier.Status) (*core.Core, *hosttest.FakeRuntime, *hosttest.Fake, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
+		agent("2", "abc-123", ""),
+	)
+	rt.Add("notes:revier", "kitty", revier.Panel{ID: "3", Kind: revier.PanelTool, Title: "less"})
+	wm := hosttest.New("wm")
+	wm.Add("revier - code", "code")
+	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
+	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{probe}}
+	return c, rt, wm, []core.Project{prepared(t, agentProject())}
+}
+
+// reading is the close every test asks for that is not about the busy guard:
+// the normal path, whose recheck reads these projects again before it closes
+// anything.
+func reading(projects []core.Project) core.ShutdownOpts {
+	return core.ShutdownOpts{Projects: projects}
+}
+
+func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[revier.ProjectName][]revier.TargetRef) core.Report {
+	t.Helper()
+	if attached != nil {
+		c.Ledger = attachments(attached)
+	}
+	r, err := c.Survey(context.Background(), projects)
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	return r
+}
+
+// tabProject has a workspace and a ticket viewer declared as a tab of it.
+func tabProject() revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}},
+		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
+			Inside: "home", Launch: []string{"taskmgr-ui"}}},
+	}}
+}
+
+// tabHosts is a kitty-like runtime holding the workspace, and a window host
+// that lists its OS window.
+func tabHosts(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef) {
+	t.Helper()
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
+	wm := hosttest.New("wm")
+	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	return rt, wm, osw
+}
+
+func popupArgv(context.Context) []string {
+	return []string{"kitty", "--class", core.PopupClass, "-e", "revier"}
+}
+
+// surfaceTerminal is a window host and a runtime that pair one window with
+// one terminal, as kitty and GNOME do: the terminal's panels are the given
+// ones, and the second is the current one.
+func surfaceTerminal(panels ...revier.Panel) (*hosttest.Fake, *hosttest.FakeRuntime, revier.TargetRef, revier.TargetRef) {
+	wm := hosttest.New("wm")
+	rt := hosttest.NewRuntime("rt")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	window := wm.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000})
+	terminal := rt.AddInstance(revier.Instance{Title: "work", Class: "kitty", PID: 4000, Panels: panels})
+	wm.SetFocus(window)
+	_ = rt.FocusPanel(context.Background(), terminal, panels[len(panels)-1].ID)
+	rt.PanelFocuses = nil
+	return wm, rt, window, terminal
+}
+
+// recording gives the test an event file of its own, and returns what is in
+// it when called.
+func recording(t *testing.T) func() []revier.Event {
+	t.Helper()
+	root := t.TempDir()
+	events.Setup(root)
+	t.Cleanup(func() { events.Setup("") })
+	return func() []revier.Event {
+		t.Helper()
+		got, err := events.Read(root, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range got {
+			got[i].Time = time.Time{}
+		}
+		return got
+	}
+}
+
+// remoteProject is a project on buildbox: its home target here is the ssh
+// pane onto the workspace there.
+func remoteProject(name string) revier.Project {
+	return revier.Project{
+		Name:   revier.ProjectName(name),
+		Path:   "~/dev/" + name,
+		Remote: &revier.Link{Host: "buildbox", Project: revier.ProjectName(name)},
+		Targets: []revier.Target{{
+			Name: "home", Home: true,
+			Runtime: &revier.Realization{
+				Name:   "session:" + name,
+				Launch: []string{"ssh", "-t", "buildbox", "revier", "open", name, "--attach"},
+				Match:  revier.Match{Title: "^session:" + name + "$"},
+			},
+		}},
+	}
+}
+
+// restoreOf surveys the agent project and restores s over it.
+func restoreOf(t *testing.T, c *core.Core, s session.Session) (core.Restored, *ledger, error) {
+	t.Helper()
+	projects := []core.Project{prepared(t, agentProject())}
+	report, err := c.Survey(context.Background(), projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &ledger{}
+	c.Ledger = l
+	out, back := c.Restore(context.Background(), s, report, projects)
+	return out, l, back
+}
+
+// keyProject is a project with a home target and an editor target, each on a
+// chord that another program's shortcut holds in these tests.
+func keyProject(t *testing.T, name revier.ProjectName) core.Project {
+	t.Helper()
+	return prepared(t, revier.Project{
+		Name: name,
+		Path: "/home/user/dev/github/" + string(name),
+		Targets: []revier.Target{
+			{
+				Name: "home", Home: true, Key: "ctrl-shift-u",
+				Runtime: &revier.Realization{
+					Launch: []string{"kitty"},
+					Match:  revier.Match{Title: "^session:" + string(name) + "$"},
+				},
+			},
+			{
+				Name: "editor", Key: "ctrl-shift-o",
+				Window: &revier.Realization{
+					Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
+				},
+			},
+		},
+	})
+}
+
+func benchProjects(n int) []revier.Project {
+	out := make([]revier.Project, n)
+	for i := range out {
+		out[i] = benchProject(i)
+	}
+	return out
+}
+
+// restored restores one target from a recording and returns the runtime, for
+// the panels it opened and the agent tabs it added after.
+func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) *hosttest.FakeRuntime {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c.Runtime = rt
+	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if len(rt.Opened) != 1 {
+		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
+	}
+	return rt
+}
+
+// benchProject mirrors the real shape: five targets, templated names, matches
+// and launch argv, two panels on home.
+func benchProject(i int) revier.Project {
+	name := revier.ProjectName(fmt.Sprintf("project-%03d", i))
+	return revier.Project{
+		Name: name,
+		Path: "/home/user/dev/" + string(name),
+		Vars: map[string]string{"url": "https://example.invalid/" + string(name)},
+		Targets: []revier.Target{
+			{Name: "home", Home: true, Key: "ctrl-shift-h", Runtime: &revier.Realization{
+				Name: "{{.Name}}", Launch: []string{"sh", "-c", "sleep 600"},
+				Match: revier.Match{Title: "^{{.Name}}$"},
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Command: []string{"claude"}},
+					{Kind: revier.PanelShell},
+				},
+			}},
+			{Name: "editor", Key: "ctrl-o", Window: &revier.Realization{
+				Launch: []string{"code", "{{.Path}}"},
+				Match:  revier.Match{Class: "^code$", Title: "{{.Name}}"},
+			}},
+			{Name: "pulls", Key: "ctrl-g", Window: &revier.Realization{
+				Launch: []string{"chrome", "--app={{.Vars.url}}", "--class=revier-{{.Name}}"},
+				Match:  revier.Match{Class: "^revier-{{.Name}}$"},
+			}},
+			{Name: "tickets", Key: "ctrl-t", Runtime: &revier.Realization{
+				Name: "tickets-{{.Name}}", Launch: []string{"taskmgr-ui"},
+				Match: revier.Match{Title: "^tickets-{{.Name}}$"},
+			}},
+			{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+				Name: "diff-{{.Name}}", Launch: []string{"nvim", "-d"},
+				Match: revier.Match{Title: "^diff-{{.Name}}$"},
+			}},
+		},
+	}
 }

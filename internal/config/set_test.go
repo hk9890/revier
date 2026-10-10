@@ -9,17 +9,6 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-// writeConfig puts text in config.toml under a fresh root.
-func writeConfig(t *testing.T, text string) string {
-	t.Helper()
-	return projectsRoot(t, text, nil)
-}
-
-func readConfig(t *testing.T, root string) string {
-	t.Helper()
-	return read(t, config.File(root))
-}
-
 // A value is replaced on its own line. Every comment stays, the one after the
 // value included.
 func TestSetReplacesAValueAndKeepsEveryComment(t *testing.T) {

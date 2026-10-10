@@ -15,20 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// restoreOf surveys the agent project and restores s over it.
-func restoreOf(t *testing.T, c *core.Core, s session.Session) (core.Restored, *ledger, error) {
-	t.Helper()
-	projects := []core.Project{prepared(t, agentProject())}
-	report, err := c.Survey(context.Background(), projects)
-	if err != nil {
-		t.Fatal(err)
-	}
-	l := &ledger{}
-	c.Ledger = l
-	out, back := c.Restore(context.Background(), s, report, projects)
-	return out, l, back
-}
-
 // A restore over a desktop that is half up opens what is missing and leaves
 // the rest alone, so running it twice opens nothing twice.
 func TestRestoreOpensOnlyWhatIsNotUp(t *testing.T) {

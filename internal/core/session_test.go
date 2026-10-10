@@ -17,78 +17,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// agentProject is a workspace whose home holds an agent beside a shell, which
-// is the layout a resume has to find its way back into.
-func agentProject() revier.Project {
-	return revier.Project{
-		Name: "revier",
-		Path: "/home/user/dev/github/revier",
-		Targets: []revier.Target{
-			{
-				Name: "home", Home: true,
-				Runtime: &revier.Realization{
-					Name:  "session:revier",
-					Match: revier.Match{Title: "^session:revier$"},
-					Panels: []revier.PanelSpec{
-						{Kind: revier.PanelShell, Command: []string{"zsh"}},
-						{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}},
-					},
-				},
-			},
-			{
-				Name: "notes",
-				Runtime: &revier.Realization{
-					Name: "notes:revier", Launch: []string{"less"},
-					Match: revier.Match{Title: "^notes:revier$"},
-				},
-			},
-			{
-				Name: "editor",
-				Window: &revier.Realization{
-					Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
-				},
-			},
-		},
-	}
-}
-
-func resumable() *hosttest.FakeResumableProbe { return hosttest.NewResumableProbe("claude", "claude") }
-
-// agent is a live panel the fake probe claims, holding a conversation when id
-// is not empty, in dir when dir is not empty.
-func agent(panel revier.PanelID, id, dir string) revier.Panel {
-	vars := map[string]string{}
-	if id != "" {
-		vars["session"] = id
-	}
-	if dir != "" {
-		vars["dir"] = dir
-	}
-	return revier.Panel{ID: panel, Kind: revier.PanelTool, Title: "claude", Vars: vars}
-}
-
-// launched restores one target from a recording and returns the panels the
-// host was asked to open.
-func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) []revier.PanelSpec {
-	t.Helper()
-	return restored(t, c, proj, resumes).Opened[0].Panels
-}
-
-// restored restores one target from a recording and returns the runtime, for
-// the panels it opened and the agent tabs it added after.
-func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) *hosttest.FakeRuntime {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	c.Runtime = rt
-	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
-		t.Fatalf("ActivateWaiting: %v", err)
-	}
-	if len(rt.Opened) != 1 {
-		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
-	}
-	return rt
-}
-
 // The recording is names: which project, which target, and what each agent was
 // doing. A target with no live instance was not open and is left out, so
 // restoring opens what was there and nothing else.
@@ -396,20 +324,6 @@ func TestRestoreLaunchesTheAgentOnItsConversation(t *testing.T) {
 	}
 	if panels[1].Dir != worktree {
 		t.Errorf("agent starts in %q, want its worktree %q", panels[1].Dir, worktree)
-	}
-}
-
-// samePanels reports every difference between two panel lists.
-func samePanels(t *testing.T, what string, got, want []revier.PanelSpec) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("%s = %+v, want %d panels", what, got, len(want))
-	}
-	for i := range want {
-		if !slices.Equal(got[i].Command, want[i].Command) || got[i].Dir != want[i].Dir ||
-			got[i].Kind != want[i].Kind || got[i].Title != want[i].Title {
-			t.Errorf("%s panel %d = %+v, want %+v", what, i, got[i], want[i])
-		}
 	}
 }
 

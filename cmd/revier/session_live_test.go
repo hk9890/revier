@@ -12,122 +12,12 @@ package main
 import (
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 )
-
-// The agent writes the arguments it was started with beside itself, which is
-// how the test reads back whether the restore resumed it, and adds a line with
-// its directory to a log every agent shares. It runs under the name claude so
-// the Claude probe claims it.
-const sessionAgent = `printf '%s' "$*" > "$0.args"
-printf '%s %s\n' "$PWD" "$*" >> "$0.started"
-sleep 300
-`
-
-const sessionTOML = `
-path = "%PATH%"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "work"
-  match = { title = "^work$" }
-  [[target.runtime.panels]]
-  kind = "shell"
-  command = ["sh", "-c", "sleep 300"]
-  [[target.runtime.panels]]
-  kind = "agent"
-  command = ["bash", "-c", "exec -a claude bash \"$0\" \"$@\"", "%AGENT%"]
-
-[[target]]
-name = "notes"
-  [target.runtime]
-  name = "work-notes"
-  launch = ["sh", "-c", "sleep 300"]
-  match = { title = "^work-notes$" }
-`
-
-// work builds a project whose workspace holds an agent, opens it and its notes
-// target, and returns the file the agent writes its arguments to.
-func work(t *testing.T) string {
-	t.Helper()
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash not installed; the stand-in agent needs exec -a")
-	}
-	workdir := scratch(t)
-	root := os.Getenv("REVIER_CONFIG_HOME")
-	agent := filepath.Join(t.TempDir(), "agent.sh")
-	if err := os.WriteFile(agent, []byte(sessionAgent), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.NewReplacer("%PATH%", workdir, "%AGENT%", agent).Replace(sessionTOML)
-	if err := os.WriteFile(filepath.Join(root, "projects", "work.toml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	capture(t, "open", "work")
-	capture(t, "go", "notes", "-p", "work")
-	return agent + ".args"
-}
-
-// claudeBin is the directory holding the fake claude, and sessionsDir the
-// sessions directory it answers from.
-var claudeBin, sessionsDir string
-
-// fakeClaude puts a claude first on PATH whose `agents --json` lists the files
-// in a scratch sessions directory, one session each, and points
-// CLAUDE_CONFIG_DIR at it. A stand-in agent reports its state the way Claude
-// Code does, by writing its file there, and the probe asks the real command
-// line it asks in use. It also keeps the suite from reading the user's real
-// sessions, and lets it run where Claude Code is not installed.
-func fakeClaude(t *testing.T) {
-	t.Helper()
-	claudeBin = t.TempDir()
-	home := t.TempDir()
-	sessionsDir = filepath.Join(home, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\n[ \"$1 $2\" = 'agents --json' ] || exit 2\n" +
-		"sep=''; printf '['\n" +
-		"for f in '" + sessionsDir + "'/*.json; do [ -e \"$f\" ] || continue; printf '%s' \"$sep\"; cat \"$f\"; sep=','; done\n" +
-		"printf ']'\n"
-	if err := os.WriteFile(filepath.Join(claudeBin, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", claudeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CLAUDE_CONFIG_DIR", home)
-}
-
-// tmuxRun runs a tmux command against the test's own server.
-func tmuxRun(t *testing.T, args ...string) string {
-	t.Helper()
-	out, err := exec.Command("tmux", args...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("tmux %s: %v: %s", strings.Join(args, " "), err, out)
-	}
-	return string(out)
-}
-
-// workspaces lists the names revier gave the sessions on the test's server. A
-// server that is not running has none, which is an answer and not a failure:
-// it is what the reboot leaves behind.
-func workspaces(t *testing.T) string {
-	t.Helper()
-	out, err := exec.Command("tmux", "list-sessions", "-F", "#{@revier-name}").CombinedOutput()
-	if err != nil && strings.Contains(string(out), "no server running") {
-		return ""
-	}
-	if err != nil {
-		t.Fatalf("tmux list-sessions: %v: %s", err, out)
-	}
-	return string(out)
-}
 
 // markConversation makes the fake claude list the agent's pane as holding a
 // conversation, by the pid tmux reports for that pane - the pid Claude Code
@@ -148,20 +38,6 @@ func markConversation(t *testing.T, id string) {
 	t.Fatalf("no pane is running the agent:\n%s", out)
 }
 
-// agentPanes lists the pids of the panes running the agent, in the window's
-// order: the order a save records agents in.
-func agentPanes(t *testing.T) []string {
-	t.Helper()
-	var pids []string
-	out := tmuxRun(t, "list-panes", "-s", "-t", "work", "-F", "#{pane_pid} #{pane_current_command}")
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if pid, cmd, ok := strings.Cut(line, " "); ok && cmd == "claude" {
-			pids = append(pids, pid)
-		}
-	}
-	return pids
-}
-
 // listConversation makes the fake claude list the process pid as holding the
 // conversation id, worked on in dir.
 func listConversation(t *testing.T, pid, id, dir string) {
@@ -169,31 +45,6 @@ func listConversation(t *testing.T, pid, id, dir string) {
 	session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "cwd": "` + dir + `", "status": "idle"}`
 	if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// reboot loses every window without touching the project files or the saved
-// session, which is the event the whole feature exists for. The bindings left
-// in state now point at windows that do not exist, exactly as they would after
-// a real restart.
-//
-// kill-server returns before the server has exited. A command sent in that
-// window reaches a server that is going away and fails with "server exited
-// unexpectedly", which is not what a restore after a real reboot meets. So the
-// reboot is over only when no server answers.
-func reboot(t *testing.T) {
-	t.Helper()
-	_ = exec.Command("tmux", "kill-server").Run()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		out, err := exec.Command("tmux", "list-sessions").CombinedOutput()
-		if err != nil && (strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting")) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the tmux server is still answering after kill-server: %v: %s", err, out)
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 

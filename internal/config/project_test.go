@@ -23,15 +23,6 @@ func projectRoot(t *testing.T, body string) (string, []map[string]any) {
 	return config.ProjectFile(root, "demo"), cfg.Targets
 }
 
-func read(t *testing.T, file string) string {
-	t.Helper()
-	b, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
 const overriding = `# demo
 path = "~/demo"
 

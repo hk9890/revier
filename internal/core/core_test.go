@@ -425,6 +425,17 @@ func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
 	}
 }
 
+// osWindowProject is a workspace and a runtime-only diff target, as a kitty
+// user has them: both are OS windows a window host also lists.
+func osWindowProject() revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
+		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
+	}}
+}
+
 // A terminal on Wayland cannot raise its own OS window, so focusing a runtime
 // target also raises that window through the window host.
 func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
@@ -1192,4 +1203,17 @@ func TestABindingIsTrustedWhenTheRuleNamesNoClass(t *testing.T) {
 	if res.Ref != anything || len(wm.Opened) != 0 {
 		t.Errorf("result = %+v, opened %d; want the binding trusted", res, len(wm.Opened))
 	}
+}
+
+// detached is a window host whose launch names no window, as a real one's
+// does not, and whose windows appear by themselves: appear runs in place of
+// the fake's own new window.
+type detached struct {
+	*hosttest.Fake
+	appear func()
+}
+
+func (d detached) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
+	d.appear()
+	return revier.TargetRef{}, nil
 }

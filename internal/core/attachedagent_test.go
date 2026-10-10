@@ -81,14 +81,6 @@ func TestAnAmbiguousWindowAttachesAlone(t *testing.T) {
 	}
 }
 
-func stepFor(plan []core.CloseStep, ref revier.TargetRef) (core.CloseStep, bool) {
-	i := slices.IndexFunc(plan, func(s core.CloseStep) bool { return s.Ref == ref })
-	if i < 0 {
-		return core.CloseStep{}, false
-	}
-	return plan[i], true
-}
-
 // A busy agent in an attached terminal is in the project's agents, and a
 // shutdown of the targets alone leaves the terminal open.
 func TestShutdownTargetsLeavesAnAttachedTerminalWithABusyAgent(t *testing.T) {

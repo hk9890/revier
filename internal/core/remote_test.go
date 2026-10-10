@@ -14,24 +14,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// remoteProject is a project on buildbox: its home target here is the ssh
-// pane onto the workspace there.
-func remoteProject(name string) revier.Project {
-	return revier.Project{
-		Name:   revier.ProjectName(name),
-		Path:   "~/dev/" + name,
-		Remote: &revier.Link{Host: "buildbox", Project: revier.ProjectName(name)},
-		Targets: []revier.Target{{
-			Name: "home", Home: true,
-			Runtime: &revier.Realization{
-				Name:   "session:" + name,
-				Launch: []string{"ssh", "-t", "buildbox", "revier", "open", name, "--attach"},
-				Match:  revier.Match{Title: "^session:" + name + "$"},
-			},
-		}},
-	}
-}
-
 // answer is what the remote revier says about a project: its checkout is
 // there, and one agent in it is in the given state.
 func answer(name string, status revier.Status) revier.ProjectView {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -400,4 +401,14 @@ func TestTheDialogOwnsTheKeys(t *testing.T) {
 	if f := footer(m); !strings.Contains(f, "list its projects") {
 		t.Errorf("footer = %q, want the dialog's own legend", f)
 	}
+}
+
+// step presses a key and delivers the command it returns, when it returns
+// one.
+func step(m tui.Model, key string) tui.Model {
+	m, cmd := press(m, key)
+	if cmd == nil {
+		return m
+	}
+	return run(m, cmd)
 }
