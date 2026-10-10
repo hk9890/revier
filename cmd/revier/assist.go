@@ -141,8 +141,9 @@ func runAgent(argv []string, dir string) error {
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	// The surface keeps this command's stderr to read why it failed. The
-	// agent draws on a terminal, so it gets the one stdout is.
-	if !term.IsTerminal(int(os.Stderr.Fd())) {
+	// agent draws on a terminal, so it gets the one stdout is, where stdout
+	// is one.
+	if !term.IsTerminal(int(os.Stderr.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
 		cmd.Stderr = os.Stdout
 	}
 	if err := cmd.Run(); err != nil {

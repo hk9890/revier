@@ -70,14 +70,15 @@ func (m Model) underCursor() (revier.ProjectName, bool) {
 }
 
 // assistErr is what the surface shows for how `revier assist` ended: the
-// reason the command gave, which is the last line it said. A command that
-// failed and said nothing is named, since a bare exit status says nothing
+// reason the command gave, which is the last line it said when that line is
+// its failure line. A command that ended without one - killed, or failed
+// after a warning alone - is named, since a bare exit status says nothing
 // about what ended.
 func assistErr(err error, said string) error {
 	if err == nil {
 		return nil
 	}
-	if reason := strings.TrimPrefix(lastLine(said), "revier: "); reason != "" {
+	if reason, ok := strings.CutPrefix(lastLine(said), "revier: "); ok && !strings.HasPrefix(reason, "warning: ") {
 		return errors.New(reason)
 	}
 	return fmt.Errorf("revier assist: %w", err)
