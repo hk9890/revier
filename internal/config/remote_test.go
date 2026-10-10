@@ -196,8 +196,9 @@ name = "agent"
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) || target(t, p, "agent").Runtime != nil {
 		t.Fatalf("targets = %+v, want the declared window target alone under the name", p.Targets)
 	}
-	if err := refusalOf(p, "home"); err == nil || !strings.Contains(err.Error(), `lists tab "agent", which is not inside it`) {
-		t.Errorf("home refused = %v, want it refused for the tab it cannot open", err)
+	want := `target "home" opens a link with the tab "agent", and target "agent" is not a tab of it; give that target another name, or inside = "home"`
+	if err := refusalOf(p, "home"); err == nil || err.Error() != want {
+		t.Errorf("home refused = %v\nwant %s", err, want)
 	}
 	if err := refusalOf(p, "agent"); err != nil {
 		t.Errorf("agent refused = %v, want the declared target whole", err)
@@ -428,7 +429,7 @@ home = true
     title = "shell"
 `
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
-	want := `target "home" runtime realization declares panels; only a tab has them, so move them into a target with inside = "home" and list it in tabs`
+	want := `target "home" runtime realization declares panels; only a tab has them, and a link opens with the tab "agent", so move them into a target named "agent" with inside = "home"`
 	if err := refusalOf(p, "home"); err == nil || err.Error() != want {
 		t.Errorf("home refused = %v\nwant %s", err, want)
 	}
@@ -437,6 +438,24 @@ home = true
 	}
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
 		t.Errorf("targets = %v, want no tab derived beside the declared panels", got)
+	}
+
+	// The move the refusal names loads: the panels are the tab's.
+	moved := link + `
+[[target]]
+name = "agent"
+  [target.remote.runtime]
+  inside = "home"
+    [[target.remote.runtime.panels]]
+    kind = "shell"
+    title = "shell"
+`
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none after the move", probs)
+	}
+	if tab := target(t, p, "agent"); len(tab.Runtime.Panels) != 1 {
+		t.Errorf("agent = %+v, want the declared panel alone", tab)
 	}
 }
 
@@ -547,6 +566,128 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 	}
 	if _, err := os.Stat(config.ProjectFile(root, "chained")); err == nil {
 		t.Error("a refused link left a file behind")
+	}
+}
+
+// On a link a target that is not home lists no tabs, so panels on it have one
+// place to go: a tab of the home, which its key opens. The refusal says that,
+// and the move it names loads.
+func TestALinkTargetThatIsNotHomeIsToldWhereItsPanelsGo(t *testing.T) {
+	const logs = `
+[[target]]
+name = "logs"
+  [target.remote.runtime]
+  name = "logs"
+  match = { title = "^logs$" }
+`
+	const panel = `    [[target.remote.runtime.panels]]
+    kind = "tool"
+    command = ["tail"]
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+panel), nil)
+	want := `target "logs" runtime realization declares panels; only a tab has them, and on a link only the home has tabs, so move them into a target with inside = "home"`
+	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
+		t.Errorf("logs refused = %v\nwant %s", err, want)
+	}
+
+	// A list of tabs it declares is dropped, and the refusal does not tell
+	// the user to write one.
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+"  tabs = [\"tail\"]\n"), nil)
+	want = `target "logs" runtime realization has no launch argv, and on a link only the home has tabs`
+	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
+		t.Errorf("logs refused = %v\nwant %s", err, want)
+	}
+
+	moved := link + `
+[[target]]
+name = "logs"
+  [target.remote.runtime]
+  inside = "home"
+` + panel
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none after the move", probs)
+	}
+}
+
+// A link whose home is a window has no target a tab can be inside, and the
+// refusal of panels does not name one.
+func TestALinkWithAWindowHomeHasNoPlaceForPanels(t *testing.T) {
+	body := link + `
+[[target]]
+name = "home"
+home = true
+  [target.remote.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+
+[[target]]
+name = "logs"
+  [target.remote.runtime]
+  name = "logs"
+  match = { title = "^logs$" }
+    [[target.remote.runtime.panels]]
+    kind = "tool"
+    command = ["tail"]
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	want := `target "logs" runtime realization declares panels; only a tab has them, and the home of this link has no runtime realization to open a tab in`
+	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
+		t.Errorf("logs refused = %v\nwant %s", err, want)
+	}
+}
+
+// The derived tab has the name agent, so a home of that name gets no tab and
+// is refused for the name. One that launches something needs no tab, and
+// keeps the name.
+func TestALinkHomeNamedAgentIsRefusedForTheName(t *testing.T) {
+	body := link + `
+[[target]]
+name = "agent"
+home = true
+  [target.remote.runtime]
+  place = "right top 75% 100%"
+`
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	want := `target "agent" is the home of a link, and "agent" is the name of the tab a link opens with; give the home another name`
+	if err := refusalOf(p, "agent"); err == nil || err.Error() != want {
+		t.Errorf("agent refused = %v\nwant %s", err, want)
+	}
+	if got := names(p); !slices.Equal(got, []revier.TargetName{"agent"}) {
+		t.Errorf("targets = %v, want no tab derived", got)
+	}
+
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want a home that launches whole under any name", probs)
+	}
+}
+
+// The form shows a link's home with the derived tab. Saved as shown, the list
+// is not written; another list, or an active tab, is refused where the load
+// would drop it without a word.
+func TestSaveProjectTargetOnALinkRefusesTabsOfItsOwn(t *testing.T) {
+	root := projectsRoot(t, "", map[string]string{"far.toml": link})
+	file := config.ProjectFile(root, "far")
+	p, err := config.ReadProject(file, nil)
+	if err != nil {
+		t.Fatalf("ReadProject: %v", err)
+	}
+	const want = `a link opens with the tab "agent" alone, and has no tabs or active of its own`
+	for _, change := range []func(*revier.Realization){
+		func(r *revier.Realization) { r.Tabs = []revier.TargetName{"tickets", "agent"} },
+		func(r *revier.Realization) { r.Active = "agent" },
+	} {
+		home := p.Targets[0].Target
+		r := *home.Runtime
+		change(&r)
+		home.Runtime = &r
+		if _, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, nil); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want %s", err, want)
+		}
+	}
+	if got := read(t, file); got != link {
+		t.Errorf("file =\n%s\nwant it unchanged", got)
 	}
 }
 

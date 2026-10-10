@@ -46,7 +46,7 @@ func TestTheConfigScreenListsTheSharedTargets(t *testing.T) {
 func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)
 	m, _ = press(onTargetRow(m, 1), "enter")
-	m = downs(m, 11) // name, key, home, the runtime's six fields, add a panel, the window's name: its command
+	m = downs(m, 13) // name, key, home, the runtime's eight fields, add a panel, the window's name: its command
 	m = typeInto(clearField(m), "code {{.Path}}")
 	m, _ = press(m, "enter")
 
@@ -64,7 +64,7 @@ func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 func TestTheConfigScreenEditsPanels(t *testing.T) {
 	m, root := targetsSurface(t)
 	m, _ = press(onTargetRow(m, 2), "enter")
-	m = downs(m, 9) // the agent panel
+	m = downs(m, 11) // the agent panel
 	m, _ = press(m, "alt+d")
 	m = downs(m, 1) // add a panel
 	m, _ = press(m, "enter")
@@ -78,7 +78,7 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 		t.Fatalf("config.toml changed before the target was saved:\n%s", got)
 	}
 	m, _ = press(m, "up")
-	m, _ = press(m, "up") // inside
+	m, _ = press(m, "up") // active
 	m, _ = press(m, "enter")
 	if !strings.Contains(screen(m), "tab of home, 2 panels") {
 		t.Errorf("config screen does not show the saved panels:\n%s", screen(m))
@@ -111,7 +111,7 @@ func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)
 	m, _ = press(onTargetRow(m, 3), "enter")
 	m = typeInto(m, "notes")
-	m = downs(m, 11) // the window's command
+	m = downs(m, 13) // the window's command
 	m = typeInto(m, "gedit")
 	m = downs(m, 2) // its match class
 	m = typeInto(m, "^gedit$")
@@ -138,7 +138,7 @@ func TestTheConfigScreenAddsATabWithAPanel(t *testing.T) {
 	m = typeInto(m, "tickets")
 	m = downs(m, 8) // inside
 	m = typeInto(m, "home")
-	m = downs(m, 1) // add a panel
+	m = downs(m, 3) // add a panel
 	m, _ = press(m, "enter")
 	m, _ = press(m, "right") // shell to tool
 	m, _ = press(m, "tab")
@@ -146,7 +146,7 @@ func TestTheConfigScreenAddsATabWithAPanel(t *testing.T) {
 	m, _ = press(m, "tab")
 	m = typeInto(m, "tt")
 	m, _ = press(m, "enter")
-	m, _ = press(m, "up") // inside
+	m, _ = press(m, "up") // active
 	m, _ = press(m, "enter")
 
 	want := sharedTargets + "\n[[target]]\nname = \"tickets\"\n  [target.runtime]\n  inside = \"home\"\n    [[target.runtime.panels]]\n    kind = \"tool\"\n    title = \"tests\"\n    command = [\"tt\"]\n"
@@ -217,6 +217,93 @@ name = "logs"
 	}
 	if !strings.Contains(screen(m), "tab of home, 1 panel") {
 		t.Errorf("config screen does not list logs as a tab:\n%s", screen(m))
+	}
+}
+
+// The form makes the target that lists its tabs: a home with a name, a match
+// and the tab it opens with, beside a tab that was inside no declared target.
+func TestTheConfigScreenAddsATargetThatListsItsTabs(t *testing.T) {
+	const tabAlone = `[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
+`
+	m, file, _ := projectSurfaceOver(t, tabAlone, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	root := filepath.Dir(filepath.Dir(file))
+
+	m, _ = press(onTargetRow(m, 1), "enter")
+	m = typeInto(m, "home")
+	m = downs(m, 2) // home
+	m, _ = press(m, "right")
+	m = downs(m, 1) // the runtime's name
+	m = typeInto(m, "session:{{.Name}}")
+	m = downs(m, 2) // its match title
+	m = typeInto(m, "^session:{{.Name}}$")
+	m = downs(m, 4) // tabs
+	m = typeInto(m, "agent")
+	m, _ = press(m, "enter")
+
+	want := tabAlone + "\n[[target]]\nname = \"home\"\nhome = true\n  [target.runtime]\n  name = \"session:{{.Name}}\"\n  tabs = [\"agent\"]\n  match = { title = \"^session:{{.Name}}$\" }\n"
+	if got := fileText(t, config.File(root)); got != want {
+		t.Fatalf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+	_, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probs := config.Problems(projects[0]); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+	if !strings.Contains(screen(m), "runtime, tabs: agent · home") {
+		t.Errorf("config screen does not list the tabs of home:\n%s", screen(m))
+	}
+}
+
+// The list of tabs and the active tab are fields of the form: a tab added to
+// the list and made the active one is written in place.
+func TestTheConfigScreenChangesTheTabsAndTheActiveTab(t *testing.T) {
+	const withNotes = sharedTargets + `
+[[target]]
+name = "notes"
+  [target.runtime]
+  inside = "home"
+  launch = ["vi", "notes.md"]
+`
+	m, file, _ := projectSurfaceOver(t, withNotes, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	root := filepath.Dir(filepath.Dir(file))
+
+	m, _ = press(onTargetRow(m, 0), "enter")
+	for _, want := range []string{"the tabs it opens with, in order", "the tab that has the focus"} {
+		if !strings.Contains(screen(m), want) {
+			t.Errorf("the form does not say %q:\n%s", want, screen(m))
+		}
+	}
+	m = downs(m, 9) // tabs
+	m = typeInto(clearField(m), "notes, agent")
+	m = downs(m, 1) // active
+	m = typeInto(m, "agent")
+	m, _ = press(m, "enter")
+
+	want := strings.Replace(withNotes, `  tabs = ["agent"]`, "  tabs = [\"notes\", \"agent\"]\n  active = \"agent\"", 1)
+	if got := fileText(t, config.File(root)); got != want {
+		t.Fatalf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+	if !strings.Contains(screen(m), "runtime, tabs: notes, agent · home") {
+		t.Errorf("config screen does not list the new order:\n%s", screen(m))
+	}
+
+	m, _ = press(m, "enter") // the cursor is on the target that was saved
+	m = downs(m, 10)         // active
+	m = typeInto(clearField(m), "editor")
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, `has active "editor", which is not an entry of its tabs`) {
+		t.Errorf("footer = %q, want the active tab refused", f)
+	}
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml changed:\n%s", got)
 	}
 }
 

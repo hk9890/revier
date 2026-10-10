@@ -84,3 +84,39 @@ name = "editor"
 		t.Errorf("Problems = %v, want none", probs)
 	}
 }
+
+// The tab of a new project has the name agent. A shared target of that name
+// that is no tab would merge with it, so the project is refused before a file
+// is written, with the name as the reason. A shared home leaves the file with
+// no tab, and a shared tab of the name is the tab.
+func TestCreateRefusesASharedTargetWithTheNameOfTheAgentTab(t *testing.T) {
+	const window = `
+[[target]]
+name = "agent"
+  [target.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+`
+	root := projectsRoot(t, window, nil)
+	const want = `config.toml has a shared target named "agent" that is no tab, and a new project gives that name to the tab of its agent; rename the shared target`
+	if _, err := config.Create(root, "demo", "/tmp/demo", ""); err == nil || err.Error() != want {
+		t.Errorf("err = %v\nwant %s", err, want)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "demo")); err == nil {
+		t.Error("a refused project left a file behind")
+	}
+
+	const home = `
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "home"
+  launch = ["zsh"]
+  match = { title = "^home$" }
+`
+	root = projectsRoot(t, window+home, nil)
+	if _, err := config.Create(root, "demo", "/tmp/demo", ""); err != nil {
+		t.Errorf("Create beside a shared home: %v", err)
+	}
+}
