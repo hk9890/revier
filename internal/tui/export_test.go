@@ -102,6 +102,7 @@ func (m Model) Acted(err error) (Model, tea.Cmd) {
 // Cloned is the model once the clone of p the surface handed the terminal to
 // has exited with err, and the command that follows.
 func (m Model) Cloned(p core.Project, err error) (Model, tea.Cmd) {
-	next, cmd := m.Update(clonedMsg{project: p, home: "home", err: err})
+	home, _ := p.Home()
+	next, cmd := m.Update(clonedMsg{project: p, home: home.Name, err: err})
 	return next.(Model), cmd
 }
