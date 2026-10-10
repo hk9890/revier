@@ -59,8 +59,59 @@ func TestAssistStartsOnAConfigurationThatDoesNotLoad(t *testing.T) {
 	if err := run(&out, []string{"doctor"}); err == nil {
 		t.Fatal("doctor loaded the broken configuration; the test proves nothing")
 	}
-	if err := run(&out, []string{"assist", "--print-brief"}); err != nil {
+	out.Reset()
+	if err := run(&out, []string{"assist", "--print-brief", "-p", "any"}); err != nil {
 		t.Errorf("assist on a broken configuration: %v", err)
+	}
+	// What is wrong is the first thing the agent is told: the user may say
+	// no more than "fix it".
+	if !strings.Contains(out.String(), "The configuration does not load") {
+		t.Errorf("brief does not say that the configuration does not load:\n%s", out.String())
+	}
+}
+
+// The agent is told the project the user was on and why it does not load
+// whole, so "this project" and "fix it" mean something to it.
+func TestTheBriefNamesTheProjectAndItsProblems(t *testing.T) {
+	cfg := configRoot(t, "", map[string]string{"demo.toml": "path = \"/tmp/demo\"\n", "sound.toml": sound})
+	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+
+	var out strings.Builder
+	if err := run(&out, []string{"assist", "--print-brief", "-p", "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`On the project "demo"`, filepath.Join(cfg, "projects", "demo.toml"), "does not load whole", "home"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("brief does not name %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	if err := run(&out, []string{"assist", "--print-brief", "-p", "sound"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "does not load") {
+		t.Errorf("brief reports a problem for a project that loads whole:\n%s", out.String())
+	}
+	if err := run(&out, []string{"assist", "--print-brief", "-p", "nosuch"}); err == nil {
+		t.Error("assist took a project nothing names")
+	}
+}
+
+// The format comes from the binary, so it is the one this version reads: the
+// configuration part of the document, without the parts about writing code.
+func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
+	var out strings.Builder
+	if err := run(&out, []string{"assist", "--reference"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[[target]]", "[target.runtime]", "config.toml"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("reference does not hold %q", want)
+		}
+	}
+	if strings.Contains(out.String(), "## Level 2") || strings.HasPrefix(out.String(), "# Extending") {
+		t.Errorf("reference holds more than the configuration level:\n%.200s", out.String())
 	}
 }
 

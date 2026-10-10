@@ -39,7 +39,13 @@ func (m Model) openAssist() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	return m, tea.ExecProcess(exec.Command(self, "assist"), func(err error) tea.Msg {
+	// The project under the cursor goes with it: the agent is told where the
+	// user was, so "this project" means something to it.
+	args := []string{"assist"}
+	if name, ok := m.selectedName(); ok {
+		args = append(args, "-p", string(name))
+	}
+	return m, tea.ExecProcess(exec.Command(self, args...), func(err error) tea.Msg {
 		return assistedMsg{err: assistErr(err)}
 	})
 }

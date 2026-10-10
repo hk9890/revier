@@ -490,13 +490,18 @@ func TestResumeCommandDoesNotEditTheSpec(t *testing.T) {
 // The brief is added to Claude Code's own system prompt, never put in its
 // place, and every directory is allowed by a flag of its own.
 func TestAssistArgv(t *testing.T) {
-	got := claude.AssistArgv("the brief", "/cfg", "/more")
+	got := claude.Assist{Brief: "the brief", Subject: "hans's", Dirs: []string{"/cfg", "/more"}}.Argv()
 	if len(got) != 9 || got[3] != "--settings" {
-		t.Fatalf("AssistArgv = %q, want the settings after the brief", got)
+		t.Fatalf("Argv = %q, want the settings after the brief", got)
 	}
 	want := []string{"claude", "--append-system-prompt", "the brief", "--settings", got[4], "--add-dir", "/cfg", "--add-dir", "/more"}
 	if !slices.Equal(got, want) {
-		t.Errorf("AssistArgv = %q, want %q", got, want)
+		t.Errorf("Argv = %q, want %q", got, want)
+	}
+	// Claude Code refuses --continue where no conversation was held, so the
+	// flag is there only when it is asked for.
+	if resumed := (claude.Assist{Brief: "the brief", Resume: true}).Argv(); !slices.Contains(resumed, "--continue") || slices.Contains(got, "--continue") {
+		t.Errorf("Argv = %q with Resume and %q without, want --continue on the first alone", resumed, got)
 	}
 	// The surface is off the screen during the hand-over, so the session
 	// itself says how to return to it.
@@ -508,5 +513,32 @@ func TestAssistArgv(t *testing.T) {
 	}
 	if s := settings.StatusLine; s.Type != "command" || !strings.Contains(s.Command, "returns to revier") {
 		t.Errorf("status line = %+v, want a command that says how to return", s)
+	}
+	// A shell runs the command, so the project's name is one word of it
+	// whatever it holds.
+	if s := settings.StatusLine.Command; !strings.Contains(s, `hans'\''s`) {
+		t.Errorf("status line command = %q, want the subject quoted for the shell", s)
+	}
+}
+
+// A conversation is one Claude Code filed for the directory, under the name
+// it gives that directory.
+func TestHasConversation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	dir := "/state/revier/assist"
+
+	if claude.HasConversation(dir) {
+		t.Fatal("a directory nothing was filed for has a conversation")
+	}
+	filed := filepath.Join(home, "projects", "-state-revier-assist")
+	if err := os.MkdirAll(filed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !claude.HasConversation(dir) {
+		t.Error("the conversation filed for the directory was not found")
 	}
 }

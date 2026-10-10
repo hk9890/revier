@@ -7,9 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 
+	"github.com/hk9890/revier/docs/design"
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
@@ -31,8 +35,7 @@ Where things are:
 - %[2]s is the global configuration: hosts, theme, keys, actions, and the [[target]] entries every project shares.
 - %[3]s holds one TOML file per project. A project file overrides fields of a shared target and adds targets of its own.
 - %[4]s holds the daily logs. Every revier process appends to the day's file.
-- The format, with a worked example: https://raw.githubusercontent.com/hk9890/revier/main/docs/design/extending.md
-- Usage: https://raw.githubusercontent.com/hk9890/revier/main/README.md
+- "%[1]s assist --reference" prints the format of both, with worked examples, as this version of revier reads it. Read it before your first edit.
 - Read the files that are there before you write one. They are the examples that work on this machine.
 
 How to work:
@@ -44,19 +47,29 @@ How to work:
 - The user reviews your changes in revier when you exit. End with the list of files you changed and what each change does, and say that /exit returns to revier, where the changes are on the screen.
 `
 
+const assistUsage = "usage: revier assist [-p name] [--print-brief | --reference]"
+
 // cmdAssist hands this terminal to a coding agent briefed to configure and
 // diagnose revier, and returns when the agent exits.
 //
 // No app, for the reason doctor has none and one more: this is the command
 // that repairs a configuration, so it must start on one that does not load.
-// It reads no file at all. The agent starts in a directory of its own under
-// the state root, so its conversations are found again there and nothing it
-// keeps beside them lands among the user's configuration.
+// It reads the configuration only to tell the agent what is wrong with it,
+// and a configuration that does not load is the first thing it tells. The
+// agent starts in a directory of its own under the state root, so the
+// conversation held there is the one the next start continues, and nothing
+// the agent keeps beside it lands among the user's configuration.
 func cmdAssist(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("assist", flag.ContinueOnError)
+	project := projectFlag(fs)
 	printBrief := fs.Bool("print-brief", false, "print what the agent is told, and start none")
-	if rest, err := parseArgs(fs, args); err != nil || len(rest) != 0 {
-		return fmt.Errorf("usage: revier assist [--print-brief]")
+	reference := fs.Bool("reference", false, "print the format of the configuration")
+	if rest, err := parseArgs(fs, args); err != nil || len(rest) != 0 || *printBrief && *reference {
+		return fmt.Errorf("%s", assistUsage)
+	}
+	if *reference {
+		_, err := fmt.Fprint(out, assistReference())
+		return err
 	}
 	cfgRoot, err := config.Root()
 	if err != nil {
@@ -78,20 +91,29 @@ func cmdAssist(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), filepath.Join(cfgRoot, "projects"), logging.Dir(stateRoot))
+	now, err := assistContext(cfgRoot, *project)
+	if err != nil {
+		return err
+	}
+	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), filepath.Join(cfgRoot, "projects"), logging.Dir(stateRoot)) + now
 	if *printBrief {
 		_, err := fmt.Fprint(out, brief)
 		return err
 	}
 
-	argv := claude.AssistArgv(brief, cfgRoot)
+	dir := filepath.Join(stateRoot, "assist")
+	argv := claude.Assist{
+		Brief:   brief,
+		Subject: *project,
+		Dirs:    []string{cfgRoot},
+		Resume:  claude.HasConversation(dir),
+	}.Argv()
 	path, err := exec.LookPath(argv[0])
 	if err != nil {
 		return errNoAssistant
 	}
 	// The configuration root is made with the agent's own directory: a new
 	// installation has none, and --add-dir names a directory that is there.
-	dir := filepath.Join(stateRoot, "assist")
 	for _, d := range []string{dir, cfgRoot} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
@@ -106,4 +128,48 @@ func cmdAssist(out io.Writer, args []string) error {
 		return fmt.Errorf("%s: %w", argv[0], err)
 	}
 	return nil
+}
+
+// assistContext is what the brief says about the moment the agent was started
+// in: the project the user was on, and everything that does not load. It is
+// in the brief and not a first prompt, so the user still speaks first, and
+// "fix this" then means something.
+func assistContext(cfgRoot, project string) (string, error) {
+	cfg, projects, err := config.Load(cfgRoot)
+	if err != nil {
+		return fmt.Sprintf("\nWhat is wrong now:\n- The configuration does not load, so no revier command but assist runs: %v\n", err), nil
+	}
+	var b strings.Builder
+	if project != "" {
+		i := slices.IndexFunc(projects, func(p core.Project) bool { return string(p.Name) == project })
+		if i < 0 {
+			return "", fmt.Errorf("no project named %q", project)
+		}
+		p := projects[i]
+		fmt.Fprintf(&b, "\nWhere the user started you:\n- On the project %q, the file %s. Take \"this project\" and \"here\" to mean it.\n", p.Name, p.File)
+		for _, problem := range config.Problems(p) {
+			fmt.Fprintf(&b, "- It does not load whole: %v\n", problem)
+		}
+	}
+	if len(cfg.Problems) > 0 {
+		b.WriteString("\nWhat is wrong now:\n")
+		for _, problem := range cfg.Problems {
+			fmt.Fprintf(&b, "- config.toml does not load whole: %v\n", problem)
+		}
+	}
+	return b.String(), nil
+}
+
+// assistReference is the configuration format as this build reads it: the
+// part of extending.md that needs no code. The rest is about writing a probe
+// or a host, which the agent that edits two TOML files has no use for.
+func assistReference() string {
+	text := design.Extending
+	if i := strings.Index(text, "## Level 1"); i >= 0 {
+		text = text[i:]
+	}
+	if i := strings.Index(text, "\n## Level 2"); i >= 0 {
+		text = text[:i+1]
+	}
+	return text
 }

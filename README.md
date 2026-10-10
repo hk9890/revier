@@ -83,10 +83,14 @@ revier attach [-p name]       bind the focused window to a project
 revier status [-p name]       which project this directory resolves to
 revier doctor                 every project file that did not load whole, with
                               the edit that fixes each problem
-revier assist [--print-brief] hand this terminal to Claude Code, briefed to
+revier assist [-p name] [--print-brief | --reference]
+                              hand this terminal to Claude Code, briefed to
                               configure revier and to find what is wrong with
-                              it; --print-brief prints the brief and starts
-                              nothing; exit 6 when no claude is on PATH
+                              it, on the conversation it held last; -p tells
+                              it which project you mean; --print-brief prints
+                              the brief and --reference the configuration
+                              format, and neither starts anything; exit 6
+                              when no claude is on PATH
 revier keys status [--json]   the desktop keys revier wants, and who holds each
 revier keys install [--force] claim the desktop keys
 revier keys uninstall         release the keys revier holds
@@ -190,7 +194,7 @@ projects.
 | alt+s | **sessions**: save and restore the set of open projects. |
 | alt+q | **shutdown**: close every project, or one, after a confirm. |
 | alt+c | **config**: set the theme, the glyphs, the trigger key and the runtime host, and add, change and delete shared targets and actions. Each change is written to `config.toml` and applied at once, comments kept. |
-| alt+a | **assist**: hand the terminal to Claude Code, started in a folder of its own and briefed to change the configuration and to find what is wrong with it. Tell it what you want; when it exits, the surface is back with the files read again. `revier assist` does the same from a shell, and starts on a configuration that does not load. |
+| alt+a | **assist**: hand the terminal to Claude Code, started in a folder of its own and briefed to change the configuration and to find what is wrong with it. It knows which project the cursor was on and what does not load, and it continues the conversation you held with it last; `/clear` there starts a new one. Tell it what you want; when it exits, the surface is back with the files read again. `revier assist` does the same from a shell, and starts on a configuration that does not load. |
 | alt+h | **help**: every key, the surface's own, the target keys, the configured actions and the desktop keys. |
 
 **new** takes one of three things:

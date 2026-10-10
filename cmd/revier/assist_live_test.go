@@ -15,9 +15,15 @@ func TestAssistStartsTheAgentBriefedInItsOwnDirectory(t *testing.T) {
 	cfg := configRoot(t, "", nil)
 	st := t.TempDir()
 	t.Setenv("REVIER_STATE_HOME", st)
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	record := filepath.Join(t.TempDir(), "record")
 	t.Setenv("ASSIST_RECORD", record)
-	onPath(t, "claude", `{ pwd; printf '%s\n' "$@"; } > "$ASSIST_RECORD"`)
+	// The stand-in files a conversation for the directory it ran in, as
+	// Claude Code does once the user has said something.
+	onPath(t, "claude", `{ pwd; printf '%s\n' "$@"; } > "$ASSIST_RECORD"
+filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
+mkdir -p "$filed" && : > "$filed/abc.jsonl"`)
 
 	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
 		t.Fatal(err)
@@ -25,6 +31,16 @@ func TestAssistStartsTheAgentBriefedInItsOwnDirectory(t *testing.T) {
 	got, err := os.ReadFile(record)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "--continue") {
+		t.Errorf("the first start continues a conversation nobody held:\n%s", got)
+	}
+	// The next start is on the conversation the first one left.
+	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(record); !strings.Contains(string(again), "\n--continue\n") {
+		t.Errorf("the second start does not continue the conversation of the first:\n%s", again)
 	}
 	lines := strings.Split(string(got), "\n")
 	if want := filepath.Join(st, "assist"); lines[0] != want {
