@@ -28,6 +28,7 @@ import (
 	"errors"
 	"log/slog"
 	"os/exec"
+	"reflect"
 	"slices"
 	"sort"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -498,6 +500,9 @@ func tick(d time.Duration) tea.Cmd {
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if focusBeforeInput(msg) {
+		msg = tea.FocusMsg{}
+	}
 	// Half of a mouse report changes nothing, so nothing is rebuilt for it.
 	if key, ok := msg.(tea.KeyMsg); ok && splitReport(key) {
 		return m, nil
@@ -544,6 +549,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return mm, cmd
+}
+
+// focusBeforeInput reports the terminal's focus report as bubbletea hands it
+// over when other input is behind it in the same read: an unknown sequence of
+// an unexported type, told here by its bytes. bubbletea makes a tea.FocusMsg
+// only of a report that ends a read, and a raise under the pointer puts a
+// mouse report behind it, so without this the popup stayed hidden in its own
+// count while on the screen, and nothing surveyed.
+func focusBeforeInput(msg tea.Msg) bool {
+	v := reflect.ValueOf(msg)
+	return v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 && string(v.Bytes()) == ansi.Focus
 }
 
 // loggedAlready reports a message whose error the operation behind it has

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1244,6 +1245,68 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 	if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
 		t.Error("a focus report while shown started a second chain")
+	}
+}
+
+// recorder keeps what a bubbletea program hands to Update, and quits on the
+// mouse report that ends the input.
+type recorder struct{ got *[]tea.Msg }
+
+func (r recorder) Init() tea.Cmd { return nil }
+
+func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	*r.got = append(*r.got, msg)
+	if _, ok := msg.(tea.MouseMsg); ok {
+		return r, tea.Quit
+	}
+	return r, nil
+}
+
+func (r recorder) View() string { return "" }
+
+// A raise under the pointer puts a mouse report behind the terminal's focus
+// report in the same read, and bubbletea then hands the focus report over as
+// something other than a tea.FocusMsg. It is the raise all the same: the
+// files are read and the surveys resume. The messages are the ones bubbletea
+// itself makes of those bytes, so its next version cannot change them unseen.
+func TestAFocusReportWithAMouseReportBehindItIsTheRaise(t *testing.T) {
+	var read []tea.Msg
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	program := tea.NewProgram(recorder{&read}, tea.WithContext(ctx), tea.WithoutSignalHandler(),
+		tea.WithInput(strings.NewReader("\x1b[I\x1b[<35;10;10M")), tea.WithOutput(io.Discard))
+	if _, err := program.Run(); err != nil {
+		t.Fatalf("bubbletea read no mouse report behind the focus report: %v", err)
+	}
+
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m, hide := press(m, "esc")
+	m = run(m, hide)
+	// The survey that was running answers: the chain ends there.
+	next, cmd := m.Update(m.Survey()())
+	if cmd != nil {
+		t.Fatal("a survey answered while hidden scheduled the next one")
+	}
+	m = next.(tui.Model)
+
+	var reload tea.Cmd
+	for _, msg := range read {
+		if next, cmd = m.Update(msg); cmd != nil && reload == nil {
+			reload = cmd
+		}
+		m = next.(tui.Model)
+	}
+	if reload == nil {
+		t.Fatalf("the raise read nothing; bubbletea handed over %#v", read)
+	}
+	if m, cmd = deliver(m, reload); cmd == nil {
+		t.Fatal("the raise started no survey")
+	}
+	if _, cmd = deliver(m, cmd); cmd == nil {
+		t.Error("the survey after the raise scheduled no refresh")
 	}
 }
 
