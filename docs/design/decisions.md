@@ -299,7 +299,7 @@ the unnamed window would take its title.
 
 Recorded under the workspace, it was restored twice. The argv of a launch is
 not known to be the agent, so a resume could run `taskmgr-ui --resume <id>`. A
-panel of kind agent in a listed tab is known to be one, and is resumed (D127).
+panel of kind agent in a listed tab is known to be one, and is resumed (D128).
 
 ### D69 — the log is slog's default logger, one JSON file per day under the state root
 
@@ -453,12 +453,12 @@ built; its design is in git history.
 
 ### D88 — a link's panel argv is the remote port's
 
-`internal/config` derived a link's home panels by calling the ssh adapter for
+`internal/config` derived a link's panels by calling the ssh adapter for
 their argv, the one store-to-adapter import, and the core appended resume
 arguments to that argv on an unstated assumption about its shell form. The
-argv is `Remote.PanelCommand`, and the core asks the port for it when the
-target resolves: config derives the panel kinds alone, one seam holds the
-contract, and a second transport plugs in without touching config.
+argv is `Remote.PanelCommand`, and the core asks the port for it when it reads
+the tab: config derives the panel kinds alone, one seam holds the contract,
+and a second transport plugs in without touching config.
 
 ### D89 — a host that cannot list costs its own targets and no other's
 
@@ -779,16 +779,18 @@ shows already. Replaces D107 and D122.
 
 A workspace opens with the ticket viewer on tab 1 and the agent on tab 2, in
 focus. The target that owns the instance says so: `tabs` is the order, `active`
-the focus. A tab is then a target like any other, panels included, and the home
-target is only the window. Both apply when revier creates the instance.
+the focus. A tab is a target like any other, and the target that lists the
+tabs is only the window. Both apply when revier creates the instance.
 Replaces D124. Rejected: a position flag on the tab, one flag for each
 position; the order of `[[target]]` in the file, since shared targets merge
 before a project's, and a file could not say which tabs open at the start.
 
-### D127 — the panels of a workspace that lists its tabs are the panels of those tabs
+### D128 — panels are on a tab target only
 
-With D126 the home target holds no panels, so every reader of the agent panel
-and the shell panel found none: `agent new`, `shell new`, a link's served
-panel, a restore. One function gives the layout: the target's own panels, or
-those of its listed tabs in order. The agents in them are saved under the
-workspace, in the file shape of 0.14.0, so a file restores across both forms.
+Replaces D127. Panels on a target's own realization and panels on a listed tab
+were two forms of one workspace, and every reader of the agent panel and the
+shell panel had a branch for each. A file has `panels` only on a target with
+`inside`, and a load refuses any other with the fix. The layout of a workspace
+is the panels of its listed tabs, in order; a target that lists none has no
+agent panel. A link derives a home that lists one tab, `agent`. The agents are
+saved under the workspace, in the file shape of 0.14.0, so an old file restores.

@@ -102,9 +102,9 @@ func (c *Core) listedTabs(p Project, real revier.Realization) ([]revier.Target, 
 
 // layout is the panels a workspace declares, which is where its agent panel
 // and its shell panel are read from: the panels of the tabs it lists, in
-// their order (decisions.md D127). So the first panel of a kind is the one of
+// their order (decisions.md D128). So the first panel of a kind is the one of
 // the first listed tab that declares it, and a target that lists no tab has
-// no layout: panels are on a tab alone (D128). Every reader of a workspace's
+// no layout: panels are on a tab alone. Every reader of a workspace's
 // declared panels that starts one here takes them from here: an agent tab, a
 // shell tab, a restore.
 func (c *Core) layout(p Project, real revier.Realization) ([]revier.PanelSpec, error) {
@@ -138,7 +138,7 @@ func listedTab(p revier.Project, t revier.Target) bool {
 }
 
 // panelTab reports whether t is a listed tab that holds panels: a part of its
-// workspace's layout (decisions.md D127), and not a tab that runs a launch.
+// workspace's layout (decisions.md D128), and not a tab that runs a launch.
 func panelTab(p revier.Project, t revier.Target) bool {
 	return tabTarget(t) && len(t.Runtime.Panels) > 0 && listedTab(p, t)
 }

@@ -191,7 +191,7 @@ func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, p
 
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`. A listed tab that holds panels names the workspace it is
-// inside: the tab is a part of that workspace's layout (decisions.md D127).
+// inside: the tab is a part of that workspace's layout (decisions.md D128).
 func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName) (Workspace, error) {
 	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)

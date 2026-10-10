@@ -499,7 +499,7 @@ func openListedTabs(t *testing.T) (*core.Core, *hosttest.FakeRuntime, core.Proje
 }
 
 // The agent panel and the shell panel of a workspace that lists its tabs are
-// the ones of its tabs (decisions.md D127). `revier agent new` opens a copy of
+// the ones of its tabs (decisions.md D128). `revier agent new` opens a copy of
 // them as a tab of the workspace, whether the command names the workspace or
 // the tab that holds the panels, and returns the new agent's panel.
 func TestAgentNewOpensAnAgentTabInAWorkspaceThatListsItsTabs(t *testing.T) {
@@ -921,7 +921,7 @@ func twoAgentTabsProject() revier.Project {
 }
 
 // The first panel of a kind is the one of the first listed tab that declares
-// it, in the order of `tabs` and not of the file (decisions.md D127): an agent
+// it, in the order of `tabs` and not of the file (decisions.md D128): an agent
 // tab and a served agent copy that one.
 func TestTheAgentPanelOfAWorkspaceIsTheOneOfItsFirstListedTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")

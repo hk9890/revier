@@ -8,18 +8,34 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
-- **A workspace can open with a list of tabs.** Add `tabs = ["tickets", "agent"]`
-  to the runtime of the home target, and `active = "agent"` for the tab that
-  has the focus. Each name is a target with `inside = "home"`. Such a target
-  can now hold `panels` in place of a `launch`, so the agent and the shell are
-  a tab like any other. The key of a listed tab goes to that tab and opens no
-  second one, also after the first panel of the tab has ended. A workspace
-  that is open already keeps its tabs as they are.
+- **Action required: `panels` are on a tab target only.** A project file or a
+  `config.toml` with `[[target.runtime.panels]]` on a target that has no
+  `inside` is refused at load, and `revier doctor` names each file with the
+  fix. Give the target the line `tabs = ["agent"]` in its `[target.runtime]`,
+  and move the panels into a new target:
+
+  ```toml
+  [[target]]
+  name = "agent"
+    [target.runtime]
+    inside = "home"   # the name of the target the panels were on
+      # the [[target.runtime.panels]] tables go here, as they were
+  ```
+
+  A machine that a link reaches must have its project files in this form too,
+  and so must a link file whose home declares `panels`. A session saved before
+  the change restores after it. `revier new` writes the new form, and
+  `revier assist --reference` prints a whole file in it.
+- **A workspace opens with a list of tabs.** `tabs = ["tickets", "agent"]` on
+  the runtime of the home target is the order, and `active = "agent"` is the
+  tab that has the focus. Each name is a target with `inside = "home"`, which
+  holds `panels` or a `launch`. The key of a listed tab goes to that tab and
+  opens no second one, also after the first panel of the tab has ended. A
+  workspace that is open already keeps its tabs as they are.
   `revier agent new`, `revier shell new`, a save and a restore take the agent
   and the shell from the listed tabs, so the conversation in the `agent` tab
-  is resumed. A session saved before the change to `tabs` restores after it.
-  Panels directly on the home target, with no `tabs`, work as before. A linked
-  project opens without the listed tabs.
+  is resumed. A linked project opens with one tab, `agent`, which holds its
+  agent and its shell.
 - **Fast pointer motion no longer types into a filter.** Text such as
   `<35;76;40M` appeared in the project filter with no key pressed, and the
   list then matched nothing.

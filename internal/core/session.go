@@ -169,7 +169,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			// its conversation is neither asked for nor counted as recorded.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				// A listed tab that holds panels is a part of the workspace's
-				// layout (decisions.md D127): its agents are recorded below,
+				// layout (decisions.md D128): its agents are recorded below,
 				// under the instance, with their conversations.
 				if panelTab(v.Project, t) {
 					continue
@@ -248,7 +248,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 // view records as its own. A panel that names a target no longer a tab, or a
 // tab open in another instance, stays with its instance, so its agent is not
 // left out of the save. So does every panel of a listed tab that holds panels:
-// a restore resumes its agents with the instance (decisions.md D127).
+// a restore resumes its agents with the instance (decisions.md D128).
 func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
 	name := revier.TargetName(panel.Vars[PanelTargetVar])
 	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) || panelTab(v.Project, t) {

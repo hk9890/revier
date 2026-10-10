@@ -42,10 +42,15 @@ type Realization struct {
     // a host that assigns its own identity satisfies the Open invariant.
     Name string
 
-    Launch []string   // argv, used when Match finds nothing; a runtime realization with Panels or Tabs omits it
+    Launch []string   // argv, used when Match finds nothing; a tab with Panels and a realization with Tabs omit it
     Dir    string     // working directory for Launch and every panel; the project path when empty
     Match  Match      // how to recognise an existing instance
-    Panels []PanelSpec // runtime hosts only: the layout of the instance, or of a tab when Inside is set
+
+    // Panels is the layout of a tab. A project file declares them on a
+    // realization that has Inside and on no other (D128). The realization
+    // Open receives holds the panels of the first tab the instance opens
+    // with: the core puts them there. Runtime hosts only.
+    Panels []PanelSpec
 
     // Vars are the panel variables the host sets on every panel Open makes
     // and reports back as Panel.Vars. For a realization with Tabs those are
@@ -66,8 +71,8 @@ type Realization struct {
 
     // Tabs lists, in order, the tab targets a new instance opens with. Each
     // entry is a target that is Inside this one, and the realization then has
-    // no Launch and no Panels of its own. Runtime realizations only, and never
-    // one with Inside. An open instance is not changed (D126).
+    // no Launch of its own. Runtime realizations only, and never one with
+    // Inside. An open instance is not changed (D126).
     Tabs []TargetName
 
     // Active names the entry of Tabs that has the focus in a new instance.
