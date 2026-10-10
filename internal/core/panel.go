@@ -193,7 +193,8 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	}
 	// An instance opened for the tab was focused by that goTo, and the window
 	// host may not list its OS window yet: it is raised by the launch, not here.
-	// It holds no tab yet, so only its ref is needed.
+	// It holds no tab yet, unless this tab opened it as its first, so only its
+	// ref is needed.
 	opened := !found
 	// withInstance says the tab opened with the instance, as its first tab.
 	withInstance := false
