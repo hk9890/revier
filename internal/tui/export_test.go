@@ -6,6 +6,8 @@ import (
 	bcursor "github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/hk9890/revier/internal/core"
 )
 
 // LookupStart exposes the command Init runs for the starting project, so a
@@ -87,5 +89,20 @@ func (m Model) AssistArgs() []string { return m.assistArgs() }
 // has exited with err, and the command that follows.
 func (m Model) Assisted(err error) (Model, tea.Cmd) {
 	next, cmd := m.Update(assistedMsg{err: err})
+	return next.(Model), cmd
+}
+
+// Acted is the model once an action the surface handed the terminal to has
+// exited with err, and the command that follows.
+func (m Model) Acted(err error) (Model, tea.Cmd) {
+	next, cmd := m.Update(actedMsg{err: err})
+	return next.(Model), cmd
+}
+
+// Cloned is the model once the clone of p the surface handed the terminal to
+// has exited with err, and the command that follows.
+func (m Model) Cloned(p core.Project, err error) (Model, tea.Cmd) {
+	home, _ := p.Home()
+	next, cmd := m.Update(clonedMsg{project: p, home: home.Name, err: err})
 	return next.(Model), cmd
 }

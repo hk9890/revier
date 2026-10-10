@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,5 +105,24 @@ func TestTheSurfaceTakesTheMouseBackAfterTheAssistant(t *testing.T) {
 	each(cmd, func(msg tea.Msg) { asked = asked || msg == tea.EnableMouseAllMotion() })
 	if !asked {
 		t.Error("the assistant's exit did not turn mouse reporting on again")
+	}
+}
+
+// An action and a clone have the terminal as the assistant has, and give it
+// back the same way. Without the mouse a drag is the terminal's own
+// selection, which the next redraw clears.
+func TestTheSurfaceTakesTheMouseBackAfterAnActionAndAClone(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+
+	_, acted := m.Acted(nil)
+	_, cloned := m.Cloned(projects[0], nil)
+	_, failed := m.Cloned(projects[0], errors.New("no such repository"))
+	for name, cmd := range map[string]tea.Cmd{"an action": acted, "a clone": cloned, "a clone that failed": failed} {
+		asked := false
+		each(cmd, func(msg tea.Msg) { asked = asked || msg == tea.EnableMouseAllMotion() })
+		if !asked {
+			t.Errorf("the exit of %s did not turn mouse reporting on again", name)
+		}
 	}
 }

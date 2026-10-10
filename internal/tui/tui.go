@@ -716,7 +716,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// where it landed through the ledger, so the surface takes state in.
 		m.err = msg.err
 		m.takeState()
-		return m, nil
+		// An action had the terminal, and it comes back with mouse reporting
+		// off, as it does from the assistant. After a press that handed
+		// nothing over the mode is on already, and asking changes nothing.
+		return m, tea.EnableMouseAllMotion
 	case askedMsg:
 		return m.asked(msg)
 	case savedMsg:
@@ -734,11 +737,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
+		// The clone had the terminal, as the assistant has.
 		if msg.err != nil {
 			m.err = msg.err
-			return m, nil
+			return m, tea.EnableMouseAllMotion
 		}
-		return m, m.goTarget(msg.project, msg.home)
+		return m, tea.Batch(m.goTarget(msg.project, msg.home), tea.EnableMouseAllMotion)
 	case tea.KeyMsg:
 		m.copied = 0
 		if m.sel.active {
