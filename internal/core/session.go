@@ -179,7 +179,12 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
-				tabs = append(tabs, tab)
+				// A first tab comes back with its instance, so it is no step
+				// of a restore: a step would leave it the current tab
+				// (decisions.md D124).
+				if !leads(v.Project, t) {
+					tabs = append(tabs, tab)
+				}
 				continue
 			}
 			targets = append(targets, session.Target{Name: tv.Name})
