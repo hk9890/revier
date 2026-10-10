@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1247,102 +1248,65 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 }
 
-// A raise whose focus report bubbletea lost leaves the popup counting itself
-// hidden while it is on the screen. A minimized window gets no input, so a
-// key or the pointer is the raise, as the focus report is: the projects, the
-// files read again, one survey and the refresh. The input does what it does
-// on a shown popup.
-func TestInputToAPopupThatCountsItselfHiddenIsTheRaise(t *testing.T) {
-	for name, input := range map[string]tea.Msg{
-		"key":     tea.KeyMsg{Type: tea.KeyDown},
-		"pointer": tea.MouseMsg{X: 2, Y: 6, Action: tea.MouseActionMotion},
-	} {
-		t.Run(name, func(t *testing.T) {
-			root := t.TempDir()
-			t.Setenv("REVIER_CONFIG_HOME", root)
-			_, wm, c, projects := world(t, 3)
-			wm.Add("revier", core.PopupClass)
-			now := time.Now()
-			m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
-			m = resize(survey(m.WithClock(func() time.Time { return now })), 140, 20)
-			before := selectedRow(t, m)
-			m, hide := press(switched(m), "esc")
-			m = run(m, hide)
-			// The survey that was running answers: the chain ends there.
-			next, cmd := m.Update(m.Survey()())
-			if cmd != nil {
-				t.Fatal("a survey answered while hidden scheduled the next one")
-			}
-			m = next.(tui.Model)
-			if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(root, "projects", "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			now = now.Add(time.Minute)
+// recorder keeps what a bubbletea program hands to Update, and quits on the
+// mouse report that ends the input.
+type recorder struct{ got *[]tea.Msg }
 
-			next, cmd = m.Update(input)
-			if cmd == nil {
-				t.Fatal("the input read nothing")
-			}
-			m = next.(tui.Model)
-			if q := query(m); !strings.Contains(q, "filter projects") {
-				t.Errorf("query line = %q after the input, want the projects", q)
-			}
-			if _, isKey := input.(tea.KeyMsg); isKey && selectedRow(t, m) == before {
-				t.Errorf("the key that raised the popup moved no cursor: still on %q", before)
-			}
-			if m, cmd = deliver(m, cmd); cmd == nil {
-				t.Fatal("the input started no survey")
-			}
-			if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
-				t.Errorf("the popup lists no project written while hidden:\n%s", body)
-			}
-			if m, cmd = deliver(m, cmd); cmd == nil {
-				t.Error("the survey after the input scheduled no refresh")
-			}
-			if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
-				t.Error("a focus report after the input started a second chain")
-			}
-		})
+func (r recorder) Init() tea.Cmd { return nil }
+
+func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	*r.got = append(*r.got, msg)
+	if _, ok := msg.(tea.MouseMsg); ok {
+		return r, tea.Quit
 	}
+	return r, nil
 }
 
-// The survey chain that still runs when the input arrives goes on by itself:
-// the files are read, and their answer starts no second chain.
-func TestInputWhileTheSurveyChainRunsStartsNoSecondChain(t *testing.T) {
+func (r recorder) View() string { return "" }
+
+// A raise under the pointer puts a mouse report behind the terminal's focus
+// report in the same read, and bubbletea then hands the focus report over as
+// something other than a tea.FocusMsg. It is the raise all the same: the
+// files are read and the surveys resume. The messages are the ones bubbletea
+// itself makes of those bytes, so its next version cannot change them unseen.
+func TestAFocusReportWithAMouseReportBehindItIsTheRaise(t *testing.T) {
+	var read []tea.Msg
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	program := tea.NewProgram(recorder{&read}, tea.WithContext(ctx), tea.WithoutSignalHandler(),
+		tea.WithInput(strings.NewReader("\x1b[I\x1b[<35;10;10M")), tea.WithOutput(io.Discard))
+	if _, err := program.Run(); err != nil {
+		t.Fatalf("bubbletea read no mouse report behind the focus report: %v", err)
+	}
+
 	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
 	_, wm, c, projects := world(t, 3)
 	wm.Add("revier", core.PopupClass)
 	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	m, hide := press(m, "esc")
 	m = run(m, hide)
+	// The survey that was running answers: the chain ends there.
+	next, cmd := m.Update(m.Survey()())
+	if cmd != nil {
+		t.Fatal("a survey answered while hidden scheduled the next one")
+	}
+	m = next.(tui.Model)
 
-	m, reload := press(m, "down")
+	var reload tea.Cmd
+	for _, msg := range read {
+		if next, cmd = m.Update(msg); cmd != nil && reload == nil {
+			reload = cmd
+		}
+		m = next.(tui.Model)
+	}
 	if reload == nil {
-		t.Fatal("the key read nothing")
+		t.Fatalf("the raise read nothing; bubbletea handed over %#v", read)
 	}
-	if _, cmd := deliver(m, reload); cmd != nil {
-		t.Error("the files read on the raise started a survey beside the one that runs")
+	if m, cmd = deliver(m, reload); cmd == nil {
+		t.Fatal("the raise started no survey")
 	}
-}
-
-// A terminal reports the pointer on every cell, and a report sent as the
-// window left the screen can arrive behind the hide's answer. It is the
-// hide's own, not a raise.
-func TestPointerMotionJustAfterTheHideIsNoRaise(t *testing.T) {
-	_, wm, c, projects := world(t, 3)
-	wm.Add("revier", core.PopupClass)
-	now := time.Now()
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
-	m = survey(m.WithClock(func() time.Time { return now }))
-	m, hide := press(m, "esc")
-	m = run(m, hide)
-
-	now = now.Add(100 * time.Millisecond)
-	if _, cmd := m.Update(tea.MouseMsg{X: 2, Y: 6, Action: tea.MouseActionMotion}); cmd != nil {
-		t.Error("pointer motion 100 ms after the hide raised the popup")
+	if _, cmd = deliver(m, cmd); cmd == nil {
+		t.Error("the survey after the raise scheduled no refresh")
 	}
 }
 

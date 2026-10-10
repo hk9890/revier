@@ -40,8 +40,7 @@ func cmdTUI(a *app) error {
 	// from the terminal; shift-drag still selects in kitty and most others.
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
 	if popup {
-		// Focus reports are how the hidden popup learns it was raised; input
-		// says so too where a report is lost.
+		// Focus reports are how the hidden popup learns it was raised.
 		m = m.WithPopup()
 		opts = append(opts, tea.WithReportFocus())
 	} else {

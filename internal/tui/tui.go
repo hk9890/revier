@@ -28,6 +28,7 @@ import (
 	"errors"
 	"log/slog"
 	"os/exec"
+	"reflect"
 	"slices"
 	"sort"
 	"time"
@@ -158,7 +159,6 @@ type Model struct {
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised
-	hiddenAt  time.Time                        // when the popup was hidden; pointer motion just after is the hide's own
 	idle      bool                             // the survey chain ended while hidden; the raise starts it again
 	local     core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers   core.RemoteAnswers               // what the linked hosts said last
@@ -499,6 +499,9 @@ func tick(d time.Duration) tea.Cmd {
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if focusBeforeInput(msg) {
+		msg = tea.FocusMsg{}
+	}
 	// Half of a mouse report changes nothing, so nothing is rebuilt for it.
 	if key, ok := msg.(tea.KeyMsg); ok && splitReport(key) {
 		return m, nil
@@ -545,6 +548,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return mm, cmd
+}
+
+// focusBeforeInput reports the terminal's focus report as bubbletea hands it
+// over when other input is behind it in the same read: an unknown sequence of
+// an unexported type, told here by its bytes. bubbletea makes a tea.FocusMsg
+// only of a report that ends a read, and a raise under the pointer puts a
+// mouse report behind it, so without this the popup stayed hidden in its own
+// count while on the screen, and nothing surveyed.
+func focusBeforeInput(msg tea.Msg) bool {
+	v := reflect.ValueOf(msg)
+	return v.IsValid() && v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 && string(v.Bytes()) == "\x1b[I"
 }
 
 // loggedAlready reports a message whose error the operation behind it has
@@ -656,10 +670,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
 			return m, tea.Quit
 		}
-		m.hidden, m.hiddenAt = true, m.now()
+		m.hidden = true
 		return m, nil
 	case tea.FocusMsg:
-		return m, m.raise()
+		// The raise: the files again, then one survey, then the chain as
+		// before. A chain still running while hidden goes on by itself.
+		if !m.hidden {
+			return m, nil
+		}
+		// The surface opens on the projects, a raise included: the press that
+		// raises it is the one that opened it (decisions.md D110).
+		m.hidden, m.agents.shown = false, false
+		return m, reloadFiles
 	case reloadedMsg:
 		switch {
 		case msg.err == nil:
@@ -717,21 +739,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
-		raise := m.raise()
 		m.copied = 0
 		if m.sel.active {
-			next, cmd := m.selectingKey(msg)
-			return next, tea.Batch(raise, cmd)
+			return m.selectingKey(msg)
 		}
-		next, cmd := m.key(msg)
-		return next, tea.Batch(raise, cmd)
+		return m.key(msg)
 	case tea.MouseMsg:
-		var raise tea.Cmd
-		if msg.Action != tea.MouseActionMotion || m.now().Sub(m.hiddenAt) >= hideSettles {
-			raise = m.raise()
-		}
-		next, cmd := m.mouse(msg)
-		return next, tea.Batch(raise, cmd)
+		return m.mouse(msg)
 	}
 	// A blink is a field's own timer message; the field it is not for
 	// ignores it.
@@ -740,27 +754,6 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ainput, cmds[1] = m.ainput.Update(msg)
 	m.agents.query, cmds[2] = m.agents.query.Update(msg)
 	return m, tea.Batch(cmds[:]...)
-}
-
-// hideSettles is how long after a hide pointer motion is not taken as a
-// raise: a report the terminal sent as the window left the screen can arrive
-// behind the hide's answer.
-const hideSettles = 500 * time.Millisecond
-
-// raise is the popup back on the screen: the files again, then one survey,
-// then the chain as before. A chain still running while hidden goes on by
-// itself. The terminal's focus report says so, and so does a key or the
-// pointer: a minimized window gets neither, and a focus report can be lost
-// (decisions.md D86). bubbletea knows a focus report only when a read ends
-// with it, so one with a mouse report behind it in the same read is lost.
-func (m *Model) raise() tea.Cmd {
-	if !m.hidden {
-		return nil
-	}
-	// The surface opens on the projects, a raise included: the press that
-	// raises it is the one that opened it (decisions.md D110).
-	m.hidden, m.agents.shown = false, false
-	return reloadFiles
 }
 
 // keep holds the parts of state the surface reads between refreshes. The
