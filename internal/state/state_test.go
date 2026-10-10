@@ -3,6 +3,7 @@ package state_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -63,6 +64,33 @@ func TestAttachIsIdempotent(t *testing.T) {
 	s.Attach("p", ref)
 	if len(s.Attached["p"]) != 1 {
 		t.Errorf("got %d attachments, want 1", len(s.Attached["p"]))
+	}
+}
+
+// A clone holds all the state holds and shares none of it: the ledger keeps
+// one while its caller changes the other. Every field has a value here, so a
+// field Clone leaves behind is a difference.
+func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
+	ref := revier.TargetRef{Host: "gnome", ID: "7"}
+	s := &state.State{}
+	s.Attach("p", ref)
+	s.Bind("p", "editor", ref)
+	s.Launched("p", "home", time.Now())
+	fields := reflect.ValueOf(*s)
+	for i := range fields.NumField() {
+		if fields.Field(i).IsZero() {
+			t.Fatalf("the test gives %s no value: give it one, and copy it in Clone", fields.Type().Field(i).Name)
+		}
+	}
+
+	c := s.Clone()
+	if !reflect.DeepEqual(c, s) {
+		t.Fatalf("clone = %+v, want %+v", c, s)
+	}
+	other := revier.TargetRef{Host: "gnome", ID: "9"}
+	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project = other, other, "q"
+	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" {
+		t.Errorf("state = %+v, launch = %+v after its clone changed, want it as it was", s, s.Launch)
 	}
 }
 

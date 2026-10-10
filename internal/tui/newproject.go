@@ -205,6 +205,11 @@ func (s *createScreen) mkdirKey(sf surface, msg tea.KeyMsg) (createResult, tea.C
 		s.step = newRoot
 		return createResult{}, nil
 	case key.Matches(msg, sf.keys.Enter):
+		// A folder that appeared since the question is added as one that was
+		// there, so a clone URL it does not come from is named, not dropped.
+		if _, err := os.Stat(s.dir); !os.IsNotExist(err) {
+			return s.addOrAsk(sf, s.dir), nil
+		}
 		if url := s.typed(); isCloneURL(url) {
 			return s.cloneInto(sf, s.dir, url), nil
 		}

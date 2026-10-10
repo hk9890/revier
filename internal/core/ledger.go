@@ -17,8 +17,9 @@ import (
 // a second ledger cannot hold a second form of one.
 type Ledger interface {
 	// State is the state as it is now, and never nil; a store that cannot be
-	// read is an empty state. It is a copy of the caller's own: Settle
-	// changes the one it reads, and that must not reach the store.
+	// read is the state it held last, or an empty one. It is a copy of the
+	// caller's own: Settle changes the one it reads, and that must not reach
+	// the store.
 	State() *state.State
 	// Update applies a change under the store's lock and returns the state
 	// after it. apply reports whether it changed anything.

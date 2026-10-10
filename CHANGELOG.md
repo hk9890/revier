@@ -59,6 +59,12 @@ Each section is also the text of its release on the
   target's window.
 - **A state file that cannot be read no longer stops a command.** The command
   runs with nothing remembered and the log says why, as the surface does.
+- **A theme change repaints the query of the agent list and the name field of
+  a session.** Both kept the colours of the theme before.
+- **A folder that appears while the surface asks to clone into it is added as
+  it is, and the footer says the clone URL is ignored.** Nothing was cloned
+  and nothing said so: the project recorded the URL as its repository and was
+  opened as if it were cloned.
 - **A press and `revier list` say `could not save state` on stderr when the
   state file cannot be written.** Only the log said it; `revier attach` and
   `revier run` already did.
