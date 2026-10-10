@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 
@@ -20,6 +21,14 @@ var ErrNoAssistant = errors.New("no coding agent to brief: install Claude Code, 
 // so they are read again, as on the raise of the popup.
 type assistedMsg struct{ err error }
 
+// reloadAssisted is reloadFiles after the assistant. A configuration it left
+// that does not load is said on the surface, where a raise only logs one.
+func reloadAssisted() tea.Msg {
+	msg := readFiles()
+	msg.assisted = true
+	return msg
+}
+
 // openAssist hands the terminal to `revier assist`, as an action is handed
 // it. The surface runs the command rather than starting the agent itself, so
 // the key and the shell reach one thing, and that thing still starts when the
@@ -35,11 +44,16 @@ func (m Model) openAssist() (tea.Model, tea.Cmd) {
 	})
 }
 
-// assistErr is what the surface shows for how `revier assist` ended.
+// assistErr is what the surface shows for how `revier assist` ended. Any
+// other failure names the command: its own message left the screen with the
+// hand-over, and a bare exit status says nothing about what ended.
 func assistErr(err error) error {
 	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == ExitNoAssistant {
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &exit) && exit.ExitCode() == ExitNoAssistant:
 		return ErrNoAssistant
 	}
-	return err
+	return fmt.Errorf("revier assist: %w", err)
 }

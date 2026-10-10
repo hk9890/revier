@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,6 +22,27 @@ func TestTheBriefNamesTheConfigurationAndTheLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{filepath.Join(cfg, "config.toml"), filepath.Join(cfg, "projects"), filepath.Join(st, "logs"), " doctor"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("brief does not name %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// The agent starts in a directory of its own, where a root given relative to
+// this one would name another place: the brief names every path in full.
+func TestTheBriefNamesARelativeRootInFull(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", "cfg")
+	t.Setenv("REVIER_STATE_HOME", "state")
+	here, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	if err := run(&out, []string{"assist", "--print-brief"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{filepath.Join(here, "cfg", "config.toml"), filepath.Join(here, "state", "logs")} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("brief does not name %q:\n%s", want, out.String())
 		}

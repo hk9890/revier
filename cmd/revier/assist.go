@@ -38,7 +38,7 @@ Where things are:
 How to work:
 - Run "%[1]s doctor" after every edit. It names each file and target that did not load whole, and exits 1 when there is one. Do not report a change as done while it reports a problem you caused.
 - "%[1]s help", "%[1]s list --json", "%[1]s status" and "%[1]s keys status" only read. Use them freely.
-- "%[1]s open", "go", "popup", "run", "shutdown", "session restore", "agent prompt", "agent send-keys" and "keys install" act on the user's desktop or on their agents. Run one only when the user asks for it.
+- "%[1]s open", "go", "popup", "run", "each", "attach", "shutdown", "session restore", "agent new", "agent prompt", "agent send-keys", "shell new", "keys install" and "keys uninstall" act on the user's desktop, on their projects or on their agents. Run one only when the user asks for it.
 - Keep the comments and the order of a file you edit. Change the smallest thing that does what was asked.
 - When the cause is a fault in revier and not in the configuration, do not work around it. Write the user an issue report: what they did, what happened, the doctor output, and the log lines.
 - The user reviews your changes in revier when you exit. End with the list of files you changed and what each change does.
@@ -66,6 +66,14 @@ func cmdAssist(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
+	// The agent starts in a directory of its own, where a root given relative
+	// to this one would name another place.
+	if cfgRoot, err = filepath.Abs(cfgRoot); err != nil {
+		return err
+	}
+	if stateRoot, err = filepath.Abs(stateRoot); err != nil {
+		return err
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
@@ -81,12 +89,21 @@ func cmdAssist(out io.Writer, args []string) error {
 	if err != nil {
 		return errNoAssistant
 	}
+	// The configuration root is made with the agent's own directory: a new
+	// installation has none, and --add-dir names a directory that is there.
 	dir := filepath.Join(stateRoot, "assist")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+	for _, d := range []string{dir, cfgRoot} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
 	}
 	cmd := exec.Command(path, argv[1:]...)
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// The agent is named: the line revier prints would otherwise be an
+		// exit status of nobody's.
+		return fmt.Errorf("%s: %w", argv[0], err)
+	}
+	return nil
 }

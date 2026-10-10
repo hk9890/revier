@@ -37,3 +37,16 @@ func TestAssistStartsTheAgentBriefedInItsOwnDirectory(t *testing.T) {
 		t.Errorf("the agent was not allowed into %s:\n%s", cfg, got)
 	}
 }
+
+// A new installation has no configuration root, and the agent is allowed
+// into a directory that is there: the command makes it before the agent
+// starts.
+func TestAssistMakesTheConfigurationRootOfANewInstallation(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", filepath.Join(t.TempDir(), "revier"))
+	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+	onPath(t, "claude", `test -d "$REVIER_CONFIG_HOME"`)
+
+	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
+		t.Errorf("the agent found no configuration root: %v", err)
+	}
+}
