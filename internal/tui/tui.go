@@ -39,6 +39,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -558,7 +559,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // count while on the screen, and nothing surveyed.
 func focusBeforeInput(msg tea.Msg) bool {
 	v := reflect.ValueOf(msg)
-	return v.IsValid() && v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 && string(v.Bytes()) == "\x1b[I"
+	return v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 && string(v.Bytes()) == ansi.Focus
 }
 
 // loggedAlready reports a message whose error the operation behind it has
