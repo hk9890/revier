@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/hk9890/revier/internal/tui"
 )
 
 // The brief names the files of the configuration revier reads, so the agent
@@ -115,18 +113,18 @@ func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
 	}
 }
 
-// With no agent installed the command ends with the status the surface reads
-// after the hand-over, and names what to install.
+// With no agent installed the command ends with a status of its own, and
+// names what to install: the surface shows that line after the hand-over.
 func TestAssistWithNoAgentInstalledSaysSo(t *testing.T) {
 	configRoot(t, "", nil)
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 
 	err := run(&strings.Builder{}, []string{"assist"})
-	if !errors.Is(err, tui.ErrNoAssistant) {
-		t.Fatalf("assist with no agent on PATH: %v, want %v", err, tui.ErrNoAssistant)
+	if !errors.Is(err, errNoAssistant) {
+		t.Fatalf("assist with no agent on PATH: %v, want %v", err, errNoAssistant)
 	}
-	if status, say := outcome(err); status != tui.ExitNoAssistant || !say {
-		t.Errorf("outcome = %d, %v; want %d and the message printed", status, say, tui.ExitNoAssistant)
+	if status, say := outcome(err); status != exitNoAssistant || !say {
+		t.Errorf("outcome = %d, %v; want %d and the message printed", status, say, exitNoAssistant)
 	}
 }

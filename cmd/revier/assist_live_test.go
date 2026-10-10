@@ -66,3 +66,36 @@ func TestAssistMakesTheConfigurationRootOfANewInstallation(t *testing.T) {
 		t.Errorf("the agent found no configuration root: %v", err)
 	}
 }
+
+// A file can be filed for the directory and hold nothing Claude Code will
+// continue. It then ends at once, and the user must not be left with a key
+// that fails until they delete a file: the agent starts once more, new.
+func TestAssistStartsNewWhenTheAgentRefusesToContinue(t *testing.T) {
+	configRoot(t, "", nil)
+	st := t.TempDir()
+	t.Setenv("REVIER_STATE_HOME", st)
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	record := filepath.Join(t.TempDir(), "record")
+	t.Setenv("ASSIST_RECORD", record)
+	onPath(t, "claude", `filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
+case " $* " in *" --continue "*) echo refused >> "$ASSIST_RECORD"; exit 1;; esac
+if [ ! -e "$filed/abc.jsonl" ]; then mkdir -p "$filed" && : > "$filed/abc.jsonl"; exit 0; fi
+echo started >> "$ASSIST_RECORD"`)
+
+	// The first start files the conversation, as the stand-in in the test
+	// above does; the second finds it and is refused.
+	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
+		t.Fatalf("assist after a refused continue: %v", err)
+	}
+	got, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "refused\nstarted\n" {
+		t.Errorf("the agent's starts were %q, want one refused and then one new", got)
+	}
+}

@@ -24,7 +24,6 @@ import (
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
-	"github.com/hk9890/revier/internal/tui"
 )
 
 const usage = `revier - a project-grouped control surface for running agents
@@ -118,9 +117,9 @@ const exitTimeout = 2
 const exitEachFailed = 5
 
 // exitNoAssistant is returned when `revier assist` found no coding agent to
-// start. The surface reads it after a hand-over, so the number is the
-// surface's.
-const exitNoAssistant = tui.ExitNoAssistant
+// start. It is not 1, so a script can tell a machine with no agent from an
+// agent that failed.
+const exitNoAssistant = 6
 
 func main() {
 	start := time.Now()

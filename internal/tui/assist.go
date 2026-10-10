@@ -1,23 +1,17 @@
 package tui
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// ExitNoAssistant is the status `revier assist` ends with when no coding
-// agent is installed. It is declared here because the surface is what reads
-// it: the command's own message left the screen with the hand-over.
-const ExitNoAssistant = 6
-
-// ErrNoAssistant is that outcome, as the command and the surface both say it.
-var ErrNoAssistant = errors.New("no coding agent to brief: install Claude Code, so that `claude` is on PATH")
 
 // assistedMsg follows the assistant's exit. What it changed is in the files,
 // so they are read again, as on the raise of the popup.
@@ -41,8 +35,15 @@ func (m Model) openAssist() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	return m, tea.ExecProcess(exec.Command(self, m.assistArgs()...), func(err error) tea.Msg {
-		return assistedMsg{err: assistErr(err)}
+	// What the command says on stderr is kept and not shown: the screen is
+	// the surface's again the moment the command ends, so the reason it
+	// failed has to reach the footer. The agent is not on this stream; the
+	// command gives it the terminal.
+	var said bytes.Buffer
+	cmd := exec.Command(self, m.assistArgs()...)
+	cmd.Stderr = &said
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return assistedMsg{err: assistErr(err, said.String())}
 	})
 }
 
@@ -68,16 +69,16 @@ func (m Model) underCursor() (revier.ProjectName, bool) {
 	return m.selectedName()
 }
 
-// assistErr is what the surface shows for how `revier assist` ended. Any
-// other failure names the command: its own message left the screen with the
-// hand-over, and a bare exit status says nothing about what ended.
-func assistErr(err error) error {
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
+// assistErr is what the surface shows for how `revier assist` ended: the
+// reason the command gave, which is the last line it said. A command that
+// failed and said nothing is named, since a bare exit status says nothing
+// about what ended.
+func assistErr(err error, said string) error {
+	if err == nil {
 		return nil
-	case errors.As(err, &exit) && exit.ExitCode() == ExitNoAssistant:
-		return ErrNoAssistant
+	}
+	if reason := strings.TrimPrefix(lastLine(said), "revier: "); reason != "" {
+		return errors.New(reason)
 	}
 	return fmt.Errorf("revier assist: %w", err)
 }

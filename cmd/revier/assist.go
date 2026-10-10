@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	"golang.org/x/term"
 
 	"github.com/hk9890/revier/docs/design"
 	"github.com/hk9890/revier/internal/adapter/claude"
@@ -16,13 +20,17 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
-	"github.com/hk9890/revier/internal/tui"
 )
 
 // errNoAssistant is returned when no coding agent is installed to brief. It
-// has its own exit status, so the surface can say it after the hand-over: what
-// this command printed left the screen with it.
-var errNoAssistant = tui.ErrNoAssistant
+// has its own exit status.
+var errNoAssistant = errors.New("no coding agent to brief: install Claude Code, so that `claude` is on PATH")
+
+// resumeGrace is how soon a continued agent must fail for the failure to be
+// the continuing: Claude Code ends at once, with status 1, when it finds no
+// conversation to continue in the files HasConversation saw. An agent that
+// ran longer was used, and how it ended is its own.
+const resumeGrace = 5 * time.Second
 
 // assistBrief is what the agent is told on top of its own system prompt. It
 // names commands and paths rather than describing the format: the commands
@@ -102,14 +110,13 @@ func cmdAssist(out io.Writer, args []string) error {
 	}
 
 	dir := filepath.Join(stateRoot, "assist")
-	argv := claude.Assist{
+	agent := claude.Assist{
 		Brief:   brief,
 		Subject: *project,
 		Dirs:    []string{cfgRoot},
 		Resume:  claude.HasConversation(dir),
-	}.Argv()
-	path, err := exec.LookPath(argv[0])
-	if err != nil {
+	}
+	if _, err := exec.LookPath(agent.Argv()[0]); err != nil {
 		return errNoAssistant
 	}
 	// The configuration root is made with the agent's own directory: a new
@@ -119,9 +126,25 @@ func cmdAssist(out io.Writer, args []string) error {
 			return err
 		}
 	}
-	cmd := exec.Command(path, argv[1:]...)
+	start := time.Now()
+	err = runAgent(agent.Argv(), dir)
+	if err != nil && agent.Resume && time.Since(start) < resumeGrace {
+		agent.Resume = false
+		err = runAgent(agent.Argv(), dir)
+	}
+	return err
+}
+
+// runAgent gives the terminal to the agent, in dir, until it exits.
+func runAgent(argv []string, dir string) error {
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// The surface keeps this command's stderr to read why it failed. The
+	// agent draws on a terminal, so it gets the one stdout is.
+	if !term.IsTerminal(int(os.Stderr.Fd())) {
+		cmd.Stderr = os.Stdout
+	}
 	if err := cmd.Run(); err != nil {
 		// The agent is named: the line revier prints would otherwise be an
 		// exit status of nobody's.
