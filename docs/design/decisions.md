@@ -295,10 +295,11 @@ mutter has not shown yet is dropped.
 Narrows D63. A named window the host does not list may be the one left over, and
 the unnamed window would take its title.
 
-### D68 — a tab target's agent is recorded under the tab, and not resumed
+### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
 
-Recorded under the workspace, it was restored twice. A tab target's argv is not
-known to be the agent, so a resume could run `taskmgr-ui --resume <id>`.
+Recorded under the workspace, it was restored twice. The argv of a launch is
+not known to be the agent, so a resume could run `taskmgr-ui --resume <id>`. A
+panel of kind agent in a listed tab is known to be one, and is resumed (D127).
 
 ### D69 — the log is slog's default logger, one JSON file per day under the state root
 
@@ -783,3 +784,11 @@ target is only the window. Both apply when revier creates the instance.
 Replaces D124. Rejected: a position flag on the tab, one flag for each
 position; the order of `[[target]]` in the file, since shared targets merge
 before a project's, and a file could not say which tabs open at the start.
+
+### D127 — the panels of a workspace that lists its tabs are the panels of those tabs
+
+With D126 the home target holds no panels, so every reader of the agent panel
+and the shell panel found none: `agent new`, `shell new`, a link's served
+panel, a restore. One function gives the layout: the target's own panels, or
+those of its listed tabs in order. The agents in them are saved under the
+workspace, in the file shape of 0.14.0, so a file restores across both forms.

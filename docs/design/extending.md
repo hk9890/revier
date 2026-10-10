@@ -150,6 +150,13 @@ open with the tabs it has, and the press reports it with the error (D126). A
 save records no step for a listed tab, because it comes back with its
 instance.
 
+The agent panel and the shell panel of a workspace with `tabs` are the first
+of each kind in its listed tabs, in order (D127). `revier agent new` and
+`revier shell new` copy those, and `-p <project>:agent` names the workspace as
+`-p <project>:home` does. A save records the agents in the panels of a listed
+tab under the workspace with their conversations, and a restore resumes them
+in those panels; a tab that runs a `launch` is opened without a resume (D68).
+
 Targets most projects have in common are declared once, in
 `~/.config/revier/config.toml`, in the same form (D59). Every
 project with a realization of its kind in them gets them, and its file then

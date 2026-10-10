@@ -147,9 +147,9 @@ func TestAReturnHomeLandsInTheFirstPanelOfTheMarkedTab(t *testing.T) {
 	}
 }
 
-// An instance revier opens is marked at its own first panel with the target
-// it was opened for, so the panel a return home lands in is identified and
-// not guessed at (decisions.md D100).
+// The panels of an instance revier opens are marked with the target it was
+// opened for, so the panel a return home lands in, the first of them, is
+// identified and not guessed at (decisions.md D100).
 func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt}

@@ -60,6 +60,68 @@ type opening struct {
 	target revier.TargetName
 	tabs   []revier.Target
 	active revier.TargetName
+	// laid counts the recorded agents laid over each tab and the tabs before
+	// it, so a tab that fails leaves the agents of the opened ones as they
+	// started.
+	laid []int
+}
+
+// listed is the tab targets a realization lists, in its order, without the
+// ones this project refuses.
+func (p Project) listed(real revier.Realization) []revier.Target {
+	var tabs []revier.Target
+	for _, entry := range real.Tabs {
+		if i, ok := p.index(entry); ok && p.compiled[i].err == nil {
+			tabs = append(tabs, p.Targets[i])
+		}
+	}
+	return tabs
+}
+
+// layout is the panels a workspace declares, which is where its agent panel
+// and its shell panel are read from: the realization's own, or the panels of
+// the tabs it lists, in their order (decisions.md D127). So the first panel of
+// a kind is the one of the first listed tab that declares it. Every reader of
+// a workspace's declared panels takes them from here: an agent tab, a shell
+// tab, a panel served to a link, a restore.
+func (p Project) layout(real revier.Realization) []revier.PanelSpec {
+	if len(real.Tabs) == 0 {
+		return real.Panels
+	}
+	var panels []revier.PanelSpec
+	for _, tab := range p.listed(real) {
+		panels = append(panels, tab.Runtime.Panels...)
+	}
+	return panels
+}
+
+// listedTab reports whether the target it is inside lists the tab t.
+func listedTab(p revier.Project, t revier.Target) bool {
+	in, ok := p.Target(t.Runtime.Inside)
+	return ok && in.Runtime != nil && slices.Contains(in.Runtime.Tabs, t.Name)
+}
+
+// panelTab reports whether t is a listed tab that holds panels: a part of its
+// workspace's layout (decisions.md D127), and not a tab that runs a launch.
+func panelTab(p revier.Project, t revier.Target) bool {
+	return tabTarget(t) && len(t.Runtime.Panels) > 0 && listedTab(p, t)
+}
+
+// resumingTabs is the opening with the recorded agents laid over the agent
+// panels of its tabs, in the order of the tabs, what became of each, and the
+// recorded agents past them. The tabs are copied before a resume is written
+// into one: they arrive sharing the prepared project's realizations.
+func (c *Core) resumingTabs(o opening, resumes []Resume, link bool) (opening, []AgentOutcome, []Resume) {
+	o.tabs = slices.Clone(o.tabs)
+	o.laid = make([]int, len(o.tabs))
+	var outcomes []AgentOutcome
+	for i := range o.tabs {
+		real, laid, rest := c.resuming(*o.tabs[i].Runtime, resumes, link)
+		o.tabs[i].Runtime, resumes = &real, rest
+		outcomes = append(outcomes, laid...)
+		o.laid[i] = len(outcomes)
+	}
+	return o, outcomes, resumes
 }
 
 // opening is the tabs a new instance of the named target opens with. An entry
@@ -67,12 +129,7 @@ type opening struct {
 // one, and the first that opens when none is declared or the declared one is
 // skipped.
 func (p Project) opening(name revier.TargetName, real revier.Realization) (opening, error) {
-	o := opening{target: name}
-	for _, entry := range real.Tabs {
-		if i, ok := p.index(entry); ok && p.compiled[i].err == nil {
-			o.tabs = append(o.tabs, p.Targets[i])
-		}
-	}
+	o := opening{target: name, tabs: p.listed(real)}
 	if len(o.tabs) == 0 {
 		return o, fmt.Errorf("target %q: every tab it lists is refused, so it has nothing to open", name)
 	}
@@ -353,7 +410,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	}
 	if !open {
 		res.Agents = inTab(resumes)
-		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, map[string]string{PanelTargetVar: string(t.Name)}); err != nil {
+		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, c.tabVars(p, t, in, opened)); err != nil {
 			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
 		res.Launched = true
@@ -373,6 +430,25 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// tabVars is the mark on the panels of a tab its key opens: the tab's own. The
+// active tab of an instance that was there, and that has lost every panel
+// with the home mark, gets that mark again: every other tab of such an
+// instance carries a target mark, so nothing else names where a return home
+// lands (decisions.md D100). An instance this press opened has its mark.
+func (c *Core) tabVars(p Project, t revier.Target, in revier.Instance, opened bool) map[string]string {
+	vars := map[string]string{PanelTargetVar: string(t.Name)}
+	if opened || slices.ContainsFunc(in.Panels, func(panel revier.Panel) bool { return panel.Vars[PanelHomeVar] != "" }) {
+		return vars
+	}
+	j, _ := p.index(t.Runtime.Inside)
+	if _, real, _, err := c.resolveAt(p, j); err == nil {
+		if o, err := p.opening(t.Runtime.Inside, real); err == nil {
+			return o.vars(t.Name)
+		}
+	}
+	return vars
 }
 
 // inTab is what a tab target's restore does with its recorded agent: nothing.
