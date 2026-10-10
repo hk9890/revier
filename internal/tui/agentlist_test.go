@@ -10,87 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// listed is one agent of listedWorld: the project a panel of which shows it,
-// its state, what it is on, what it said last and when, the directory it
-// works in, and what its panel shows.
-type listed struct {
-	project string
-	status  revier.Status
-	on      string
-	said    string
-	at      time.Time
-	dir     string
-	screen  string
-}
-
-// listedWorld is listedSurface with the agent list in view and its asks
-// answered.
-func listedWorld(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
-	t.Helper()
-	m, rt, fakes := listedSurface(t, width, height, agents...)
-	return switched(m).Said().Mirrored(), rt, fakes
-}
-
-// listedSurface is the given agents in running projects, one probe to each,
-// surveyed, with the project list in view and nothing read of what an agent
-// said. The projects are named as given and stand in that order in the
-// configuration. Agent i is panel i+1 of its project's workspace.
-func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	rt.Screens = map[revier.PanelID]string{}
-	var probes []revier.AgentProbe
-	var fakes []*hosttest.FakeDetailedProbe
-	var names []string
-	panels := map[string][]revier.Panel{}
-	for i, a := range agents {
-		marker := fmt.Sprintf("agent-%d", i)
-		id := revier.PanelID(fmt.Sprint(i + 1))
-		p := hosttest.NewDetailedProbe("claude", marker)
-		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
-		probes, fakes = append(probes, p), append(fakes, p)
-		if !slices.Contains(names, a.project) {
-			names = append(names, a.project)
-		}
-		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
-		rt.Screens[id] = a.screen
-	}
-	var raw []revier.Project
-	for _, name := range names {
-		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, GitURL: "https://example.com/" + name + ".git",
-			Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}})
-		rt.Add("session:"+name, "kitty", panels[name]...)
-	}
-	c := &core.Core{Runtime: rt, Probes: probes}
-	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
-}
-
-// switched is the model after the key that switches between the two lists.
-func switched(m tui.Model) tui.Model {
-	m, _ = send(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: true})
-	return m
-}
-
-// listColumnRows is the first line of every row of the list in view, in
-// order: the line a row's state and summary are on.
-func listedRows(m tui.Model) []string {
-	var out []string
-	all := lines(m)
-	for i := 4; i < len(all)-1; i += 2 {
-		left, _, _ := strings.Cut(all[i], "│")
-		if strings.TrimSpace(left) != "" {
-			out = append(out, strings.TrimSpace(left))
-		}
-	}
-	return out
-}
 
 // The key that opens the surface switches it to the agents and back, and the
 // bar's first button names where it goes.
@@ -451,8 +373,7 @@ func TestAWheelWithNothingAboveTheScreenLeavesTheMirrorFollowing(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
-	next, _ = next.Update(cmd())
-	m = next.(tui.Model)
+	m = run(next.(tui.Model), cmd)
 
 	var screen []string
 	for i := range 80 {
@@ -491,8 +412,7 @@ func TestTheWheelScrollsTheMirrorIntoTheScrollback(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
-	next, _ = next.Update(cmd())
-	m = next.(tui.Model)
+	m = run(next.(tui.Model), cmd)
 	if last := rt.ScreenReads[len(rt.ScreenReads)-1]; !last.Scrollback {
 		t.Errorf("last read = %+v, want the scrollback", last)
 	}

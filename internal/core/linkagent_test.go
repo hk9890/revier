@@ -71,6 +71,11 @@ func TestALinksAgentTakesItsActivityFromThePanelHere(t *testing.T) {
 
 // activityProbe reads the activity from a title and nothing from a panel, as
 // the Claude probe does for a panel whose process is not on this machine.
+// hosttest.TitleProbe does not fit: it is not a revier.Titled, the capability
+// the core asks a link's agent for its activity through, so the title would
+// never be read. Its Inspect takes the activity from a title too, but the core
+// inspects a link's panel only in a terminal attached by hand (decisions.md
+// D101), which this workspace is not.
 type activityProbe struct{}
 
 func (activityProbe) Name() string            { return "claude" }

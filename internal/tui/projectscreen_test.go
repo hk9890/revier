@@ -5,62 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
-	"github.com/hk9890/revier/internal/theme"
-	"github.com/hk9890/revier/internal/tui"
 )
-
-const demoProject = `# demo
-path = "/tmp/demo"
-
-[[target]]
-name = "editor"
-key = "ctrl-o"
-`
-
-// projectSurface is the surface over a configuration root with the shared
-// targets of sharedTargets and one project, demo, written as body; the
-// runtime is rt. It returns the project file and the state root too.
-func projectSurface(t *testing.T, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
-	t.Helper()
-	return projectSurfaceOver(t, sharedTargets, body, rt)
-}
-
-// projectSurfaceOver is projectSurface with shared as config.toml.
-func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
-	t.Helper()
-	root := configRoot(t, shared)
-	dir := filepath.Join(root, "projects")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	file := filepath.Join(dir, "demo.toml")
-	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, projects, err := config.Load(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateRoot := stateWith(t, nil)
-	m := tui.New(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), "")
-	next, _ := m.Update(m.Survey()())
-	return resize(next.(tui.Model), 140, 60), file, stateRoot
-}
-
-func fileText(t *testing.T, file string) string {
-	t.Helper()
-	b, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
 
 // alt+e opens the screen on the highlighted project: its values, and every
 // target it has with where each comes from. alt+e and Esc both leave it.

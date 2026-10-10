@@ -29,13 +29,6 @@ func openWorld(t *testing.T, n int, open ...string) (*hosttest.FakeRuntime, tui.
 	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30), refs
 }
 
-func wantSelected(t *testing.T, m tui.Model, name, why string) {
-	t.Helper()
-	if row := selectedRow(t, m); !strings.Contains(row, name) {
-		t.Errorf("selected %q, want %s: %s", row, name, why)
-	}
-}
-
 // A project that closes goes down among the stopped rows, and the cursor
 // stays where it was: on the row that moved up into its place.
 func TestAClosedProjectLeavesTheCursorOnTheRowThatTookItsPlace(t *testing.T) {

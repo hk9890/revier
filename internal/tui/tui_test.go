@@ -681,7 +681,7 @@ func TestEnterPinsTheTarget(t *testing.T) {
 	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
 	_, cmd := press(m, "enter")
-	m.Update(cmd()) // applies the binding on the update loop
+	run(m, cmd) // applies the binding on the update loop
 	got, _ := state.Load(root)
 	if ref := got.Bound["project-00"]["editor"]; ref.IsZero() {
 		t.Fatalf("bound = %+v, want the editor pinned after Enter", got.Bound)
@@ -704,7 +704,7 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor
 	_, cmd := press(m, "enter")
-	m.Update(cmd())
+	run(m, cmd)
 
 	got, _ := state.Load(root)
 	if ref := got.Bound["project-00"]["editor"]; !ref.IsZero() {
@@ -731,8 +731,7 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 	m, cmd := press(m, "enter")
 	// The activation runs whole in its command, the wait for the window
 	// included; the launch is on disk from before that wait.
-	next, _ := m.Update(cmd())
-	m = next.(tui.Model)
+	m = run(m, cmd)
 	if got, _ := state.Load(root); got.Launch == nil || got.Launch.Target != "editor" {
 		t.Fatalf("launch = %+v, want the editor recorded", got.Launch)
 	}
@@ -1054,8 +1053,7 @@ func TestAnActionThatRunsNothingSaysSo(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
 	}
-	next, _ := m.Update(cmd())
-	f := footer(next.(tui.Model))
+	f := footer(run(m, cmd))
 	if !strings.Contains(f, `action "sync"`) || strings.Contains(f, "%!") {
 		t.Errorf("footer = %q, want the action named and no formatting verb", f)
 	}
@@ -1238,10 +1236,9 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
 		t.Errorf("the raised popup lists no project written while hidden before the survey:\n%s", body)
 	}
-	if next, cmd = m.Update(cmd()); cmd == nil {
+	if m, cmd = deliver(m, cmd); cmd == nil {
 		t.Error("the survey after the raise scheduled no refresh")
 	}
-	m = next.(tui.Model)
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
 		t.Errorf("the raised popup lists no project written while hidden after the survey:\n%s", body)
 	}
@@ -1265,8 +1262,7 @@ func TestTheSpinnerStopsWhileThePopupIsHidden(t *testing.T) {
 	}
 
 	m, hide := press(m, "esc")
-	next, _ := m.Update(hide())
-	m = next.(tui.Model)
+	m = run(m, hide)
 	if _, cmd := m.Update(tui.Spin()); cmd != nil {
 		t.Error("the spinner went on while hidden")
 	}
@@ -1287,7 +1283,7 @@ func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
 	wm.HideErr = fmt.Errorf("wctl: no such window")
 	m = survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	m, hide := press(m, "esc")
-	if _, cmd := m.Update(hide()); cmd == nil || cmd() != (tea.QuitMsg{}) {
+	if _, cmd := deliver(m, hide); cmd == nil || cmd() != (tea.QuitMsg{}) {
 		t.Error("a hide that failed did not quit")
 	}
 }

@@ -232,8 +232,7 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("enter on a project returned no command")
 	}
-	next, _ := m.Update(cmd())
-	m = next.(tui.Model)
+	m = run(m, cmd)
 	if f := footer(m); !strings.Contains(f, "kitty is not running") {
 		t.Errorf("footer = %q, want the launch failure said", f)
 	}
@@ -532,26 +531,6 @@ func TestASecondClickAfterTheWindowOpensNothing(t *testing.T) {
 	if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
 		t.Errorf("selected %q, want the clicked row kept", row)
 	}
-}
-
-// clickAt is one press of the left button on a terminal cell.
-func clickAt(m tui.Model, x, y int) tui.Model {
-	m, _ = clickCell(m, x, y)
-	return m
-}
-
-// margins reads the frame's margin off the rendered surface: the rows above
-// its top border and the columns left of it.
-func margins(m tui.Model) (rows, cols int) {
-	for i, line := range strings.Split(m.View(), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		// Every line of the surface starts with a gutter space of its own,
-		// which is not margin.
-		return i, len(line) - len(strings.TrimLeft(line, " ")) - 1
-	}
-	return 0, 0
 }
 
 // A target with nothing up says "stopped", where it said "-".
