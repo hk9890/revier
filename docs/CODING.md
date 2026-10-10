@@ -17,7 +17,7 @@ the behaviour associated with it.
 | Any decision: which realization wins, what matches, when to toggle | `internal/core` |
 | Speaking to one tool | `internal/adapter/<tool>` |
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
-| A fake that one case needs, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
+| Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
 
 Adding a public type to `pkg/revier` widens the surface an out-of-tree adapter
 depends on. Put it in `internal/` unless an adapter must name it.

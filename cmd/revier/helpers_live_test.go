@@ -101,7 +101,6 @@ func scratch(t *testing.T) string {
 		t.Fatal(err)
 	}
 	other := strings.ReplaceAll(projectTOML, "%PATH%", elsewhere)
-	other = strings.ReplaceAll(other, `name = "home"`, `name = "home"`)
 	if err := os.WriteFile(filepath.Join(projects, "second.toml"), []byte(other), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -181,6 +180,10 @@ func work(t *testing.T) string {
 	return agent + ".args"
 }
 
+// claudeBin is the directory holding the fake claude, and sessionsDir the
+// sessions directory it answers from.
+var claudeBin, sessionsDir string
+
 // fakeClaude puts a claude first on PATH whose `agents --json` lists the files
 // in a scratch sessions directory, one session each, and points
 // CLAUDE_CONFIG_DIR at it. A stand-in agent reports its state the way Claude
@@ -246,7 +249,7 @@ func agentPanes(t *testing.T) []string {
 }
 
 // reboot loses every window without touching the project files or the saved
-// session, which is the event the whole feature exists for. The bindings left
+// session, which is the event `revier session` exists for. The bindings left
 // in state now point at windows that do not exist, exactly as they would after
 // a real restart.
 //
@@ -361,7 +364,3 @@ name = "notes"
   launch = ["sh", "-c", "sleep 300"]
   match = { title = "^work-notes$" }
 `
-
-// claudeBin is the directory holding the fake claude, and sessionsDir the
-// sessions directory it answers from.
-var claudeBin, sessionsDir string

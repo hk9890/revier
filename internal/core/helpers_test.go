@@ -260,6 +260,21 @@ func launched(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Re
 	return restored(t, c, proj, resumes).Opened[0].Panels
 }
 
+// restored restores one target from a recording and returns the runtime, for
+// the panels it opened and the agent tabs it added after.
+func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) *hosttest.FakeRuntime {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	c.Runtime = rt
+	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if len(rt.Opened) != 1 {
+		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
+	}
+	return rt
+}
+
 // samePanels reports every difference between two panel lists.
 func samePanels(t *testing.T, what string, got, want []revier.PanelSpec) {
 	t.Helper()
@@ -295,11 +310,7 @@ func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
 // agentsOf is the agents a survey reports for the one project.
 func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
 	t.Helper()
-	report, err := c.Survey(context.Background(), []core.Project{p})
-	if err != nil {
-		t.Fatalf("Survey: %v", err)
-	}
-	return report.Views[0].Agents
+	return survey(t, c, []core.Project{p}, nil).Views[0].Agents
 }
 
 // openWorkspace is agentProject with its home open on a fresh runtime, holding
@@ -490,10 +501,7 @@ func remoteProject(name string) revier.Project {
 func restoreOf(t *testing.T, c *core.Core, s session.Session) (core.Restored, *ledger, error) {
 	t.Helper()
 	projects := []core.Project{prepared(t, agentProject())}
-	report, err := c.Survey(context.Background(), projects)
-	if err != nil {
-		t.Fatal(err)
-	}
+	report := survey(t, c, projects, nil)
 	l := &ledger{}
 	c.Ledger = l
 	out, back := c.Restore(context.Background(), s, report, projects)
@@ -531,21 +539,6 @@ func benchProjects(n int) []revier.Project {
 		out[i] = benchProject(i)
 	}
 	return out
-}
-
-// restored restores one target from a recording and returns the runtime, for
-// the panels it opened and the agent tabs it added after.
-func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Resume) *hosttest.FakeRuntime {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	c.Runtime = rt
-	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
-		t.Fatalf("ActivateWaiting: %v", err)
-	}
-	if len(rt.Opened) != 1 {
-		t.Fatalf("Opened = %+v, want one launch", rt.Opened)
-	}
-	return rt
 }
 
 // benchProject mirrors the real shape: five targets, templated names, matches

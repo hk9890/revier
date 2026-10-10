@@ -2,7 +2,7 @@
 
 // Layer L4 for `revier agent read`, `send-keys` and `new --no-focus`, against
 // real tmux panes with no window host. The agents are the stand-ins of
-// agent_live_test.go and session_live_test.go.
+// helpers_live_test.go.
 package main
 
 import (
