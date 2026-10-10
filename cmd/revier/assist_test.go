@@ -80,7 +80,7 @@ func TestTheBriefNamesTheProjectAndItsProblems(t *testing.T) {
 	if err := run(&out, []string{"assist", "--print-brief", "-p", "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`On the project "demo"`, filepath.Join(cfg, "projects", "demo.toml"), "does not load whole", "home"} {
+	for _, want := range []string{`On the project "demo"`, filepath.Join(cfg, "projects", "demo.toml"), "does not load whole", "no target is marked home"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("brief does not name %q:\n%s", want, out.String())
 		}

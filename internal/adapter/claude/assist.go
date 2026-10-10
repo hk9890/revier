@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -61,19 +62,19 @@ func shellQuote(s string) string {
 // HasConversation reports whether Claude Code has filed a conversation that
 // was held in dir, which is what --continue there continues.
 func HasConversation(dir string) bool {
-	home := os.Getenv("CLAUDE_CONFIG_DIR")
+	home := configDir()
 	if home == "" {
-		user, err := os.UserHomeDir()
-		if err != nil {
-			return false
-		}
-		home = filepath.Join(user, ".claude")
+		return false
 	}
 	// Claude Code files a session under the directory as the kernel names
 	// it, so a link on the way to dir is followed first.
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = real
 	}
-	filed, _ := filepath.Glob(filepath.Join(home, "projects", projectDir(dir), "*.jsonl"))
-	return len(filed) > 0
+	// The directory is read and not matched as a pattern: a home directory
+	// may hold a character a pattern gives a meaning to.
+	filed, _ := os.ReadDir(filepath.Join(home, "projects", projectDir(dir)))
+	return slices.ContainsFunc(filed, func(f os.DirEntry) bool {
+		return !f.IsDir() && strings.HasSuffix(f.Name(), ".jsonl")
+	})
 }

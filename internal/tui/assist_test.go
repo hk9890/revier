@@ -3,6 +3,7 @@ package tui_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +26,24 @@ func TestAltAHandsTheTerminalToTheAssistant(t *testing.T) {
 	}
 	if m.View() != before {
 		t.Error("alt+a changed the surface before the hand-over")
+	}
+}
+
+// The assistant is told the project of the row under the cursor. On the agent
+// list that row is an agent, and the project list's cursor is off the screen:
+// its project is not the one the user is looking at.
+func TestTheAssistantIsToldTheProjectUnderTheCursor(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 160, 20)
+
+	// The one agent is project-01's, which leads the list for it.
+	m, _ = press(m, "down")
+	if got, want := m.AssistArgs(), []string{"assist", "-p", "project-00"}; !slices.Equal(got, want) {
+		t.Fatalf("on the project list: %q, want %q", got, want)
+	}
+	m = switched(m)
+	if got, want := m.AssistArgs(), []string{"assist", "-p", "project-01"}; !slices.Equal(got, want) {
+		t.Errorf("on the agent list: %q, want %q, the project of the agent under the cursor", got, want)
 	}
 }
 

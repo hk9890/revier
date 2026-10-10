@@ -7,6 +7,8 @@ import (
 	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // ExitNoAssistant is the status `revier assist` ends with when no coding
@@ -39,15 +41,31 @@ func (m Model) openAssist() (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	// The project under the cursor goes with it: the agent is told where the
-	// user was, so "this project" means something to it.
-	args := []string{"assist"}
-	if name, ok := m.selectedName(); ok {
-		args = append(args, "-p", string(name))
-	}
-	return m, tea.ExecProcess(exec.Command(self, args...), func(err error) tea.Msg {
+	return m, tea.ExecProcess(exec.Command(self, m.assistArgs()...), func(err error) tea.Msg {
 		return assistedMsg{err: assistErr(err)}
 	})
+}
+
+// assistArgs is `revier assist` as the surface runs it. The project under the
+// cursor goes with it: the agent is told where the user was, so "this
+// project" means something to it.
+func (m Model) assistArgs() []string {
+	args := []string{"assist"}
+	if name, ok := m.underCursor(); ok {
+		args = append(args, "-p", string(name))
+	}
+	return args
+}
+
+// underCursor is the project of the row under the cursor. On the agent list
+// that is the project of the agent there: the project list is off the screen,
+// and its cursor is wherever the user left it.
+func (m Model) underCursor() (revier.ProjectName, bool) {
+	if m.agents.shown {
+		it, ok := m.agents.selected()
+		return it.project.Name, ok
+	}
+	return m.selectedName()
 }
 
 // assistErr is what the surface shows for how `revier assist` ended. Any

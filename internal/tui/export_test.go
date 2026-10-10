@@ -79,6 +79,10 @@ func (m Model) StaticCursors() Model {
 	return m
 }
 
+// AssistArgs is `revier assist` as the surface runs it, after the binary's
+// own path.
+func (m Model) AssistArgs() []string { return m.assistArgs() }
+
 // Assisted is the model once the assistant the surface handed the terminal to
 // has exited with err, and the command that follows.
 func (m Model) Assisted(err error) (Model, tea.Cmd) {

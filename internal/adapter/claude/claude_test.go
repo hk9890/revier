@@ -524,7 +524,9 @@ func TestAssistArgv(t *testing.T) {
 // A conversation is one Claude Code filed for the directory, under the name
 // it gives that directory.
 func TestHasConversation(t *testing.T) {
-	home := t.TempDir()
+	// Claude Code's directory is a path and not a pattern, whatever
+	// characters it holds.
+	home := filepath.Join(t.TempDir(), "claude[1]")
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	dir := "/state/revier/assist"
 

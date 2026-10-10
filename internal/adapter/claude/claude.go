@@ -1,5 +1,5 @@
 // Package claude implements the AgentProbe for Claude Code, and holds the
-// command line that starts it as revier's assistant (AssistArgv).
+// command line that starts it as revier's assistant (Assist).
 //
 // The state is Claude Code's own word, read from `claude agents --json`: every
 // live session with the pid of its process and its status. A panel is matched
@@ -181,14 +181,24 @@ func (p *Probe) sessionsDir() string {
 	if p.SessionsDir != "" {
 		return p.SessionsDir
 	}
-	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+	if dir := configDir(); dir != "" {
 		return filepath.Join(dir, "sessions")
+	}
+	return ""
+}
+
+// configDir is the directory Claude Code keeps its own files in:
+// $CLAUDE_CONFIG_DIR, or ~/.claude without it. It is empty where no home
+// directory is known.
+func configDir() string {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return dir
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".claude", "sessions")
+	return filepath.Join(home, ".claude")
 }
 
 func (p *Probe) now() time.Time {

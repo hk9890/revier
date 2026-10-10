@@ -131,9 +131,10 @@ func cmdAssist(out io.Writer, args []string) error {
 }
 
 // assistContext is what the brief says about the moment the agent was started
-// in: the project the user was on, and everything that does not load. It is
-// in the brief and not a first prompt, so the user still speaks first, and
-// "fix this" then means something.
+// in: the project the user was on with what does not load of it, and what
+// does not load of config.toml. What does not load of any other project is
+// doctor's to name. It is in the brief and not a first prompt, so the user
+// still speaks first, and "fix this" then means something.
 func assistContext(cfgRoot, project string) (string, error) {
 	cfg, projects, err := config.Load(cfgRoot)
 	if err != nil {
