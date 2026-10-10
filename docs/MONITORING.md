@@ -37,7 +37,7 @@ doc reads what it already did.
 
 | `msg` | Written when |
 |---|---|
-| `command` | a CLI process ends, with `args` and `exit`. A surface that a signal ended, as a closed terminal does, has `signal` (`hangup`, `terminated`, `interrupt`) and `exit` 128 plus its number. A process with no `command` line was killed, or is still running. |
+| `command` | a CLI process ends, with `args` and `exit`. A surface that a signal ended, as a closed terminal does, has `signal` (`hangup` or `terminated`) and `exit` 128 plus its number. A surface with no `command` line was killed, or is still running. |
 | `resolve` | a command picks its project, `by` flag, directory, focused window or last project |
 | `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. |
 | `bind` | the wait for a launched window ends |

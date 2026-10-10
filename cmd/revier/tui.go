@@ -49,7 +49,7 @@ func cmdTUI(a *app) error {
 			return p.Name, ok
 		})
 	}
-	return runSurface(tea.NewProgram(m, append(opts, tea.WithoutSignalHandler())...))
+	return runSurface(m, opts...)
 }
 
 // signalEnd is the surface ended by a signal: its terminal closed, or
@@ -59,31 +59,44 @@ type signalEnd struct{ sig syscall.Signal }
 
 func (e signalEnd) Error() string { return "ended by signal: " + e.sig.String() }
 
+// killWait is how long a surface that a signal ended has to give the
+// terminal back. A command that holds the terminal and outlives the signal
+// would hold the surface with it.
+const killWait = time.Second
+
 // runSurface runs the surface until it quits or a signal ends it, and names
-// the signal. The program is started without bubbletea's own handler, which
-// does not catch a hangup and turns the others into a quit that names none:
-// a surface whose terminal closed ended with no line in the log.
-func runSurface(p *tea.Program) error {
+// the signal. The program runs without bubbletea's own handler, which does
+// not catch a hangup and turns a termination into a quit that names no
+// signal: a surface whose terminal closed ended with no line in the log.
+//
+// An interrupt ends nothing. The surface reads ctrl+c as a key, so the
+// terminal sends an interrupt only while an action, a clone or the assistant
+// holds it, and that one is for the command.
+func runSurface(m tea.Model, opts ...tea.ProgramOption) error {
+	p := tea.NewProgram(m, append(opts, tea.WithoutSignalHandler())...)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
-	ended := make(chan syscall.Signal, 1)
-	quit := make(chan struct{})
-	defer close(quit)
+	quit := make(chan error, 1)
 	go func() {
-		select {
-		case sig := <-signals:
-			ended <- sig.(syscall.Signal)
-			p.Kill()
-		case <-quit:
-		}
+		_, err := p.Run()
+		quit <- err
 	}()
-	_, err := p.Run()
-	select {
-	case sig := <-ended:
-		return signalEnd{sig}
-	default:
-		return err
+	for {
+		select {
+		case err := <-quit:
+			return err
+		case sig := <-signals:
+			if sig == syscall.SIGINT {
+				continue
+			}
+			p.Kill()
+			select {
+			case <-quit:
+			case <-time.After(killWait):
+			}
+			return signalEnd{sig.(syscall.Signal)}
+		}
 	}
 }
 
