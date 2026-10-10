@@ -106,7 +106,7 @@ func (m *Model) took(msg detailsMsg) {
 	if msg.project != m.aasked || msg.seq <= m.atook {
 		return
 	}
-	m.atook = msg.seq
+	m.atook, m.aanswered = msg.seq, msg.project
 	said := make(map[agentKey]revier.AgentDetail, len(msg.said))
 	for k, d := range msg.said {
 		// A turn with no message is one whose last message is further back
@@ -144,29 +144,60 @@ func (m *Model) pickAgent(i int) {
 // chooseAgent puts the pane's cursor on the agent to mirror: the one the user
 // last chose while it is still there, and otherwise the one most worth a look
 // (firstAgent).
+//
+// The pane keeps the agent it chose while no other is more worth a look: an
+// agent that speaks does not take the mirror, and the scroll in it, from its
+// equal. And it does not choose among equals before it knows when each spoke,
+// so the mirror is not read for one agent and then for another.
 func (m *Model) chooseAgent() {
 	rows := m.agentRows()
-	if at := slices.IndexFunc(rows, func(r agentRow) bool { return keyOf(r.agent) == m.achosen }); at >= 0 {
-		m.acursor = at
+	at := func(k agentKey) int {
+		return slices.IndexFunc(rows, func(r agentRow) bool { return keyOf(r.agent) == k })
+	}
+	m.apending = false
+	if i := at(m.achosen); i >= 0 {
+		m.acursor = i
 		return
 	}
 	m.acursor = m.firstAgent(rows)
+	if len(rows) == 0 {
+		return
+	}
+	rank := agentRank[rows[m.acursor].agent.State.Status]
+	if i := at(m.akept); i >= 0 && agentRank[rows[i].agent.State.Status] == rank {
+		m.acursor = i
+		return
+	}
+	equals := 0
+	for _, r := range rows {
+		if agentRank[r.agent.State.Status] == rank {
+			equals++
+		}
+	}
+	if name, _ := m.detailsWanted(); equals > 1 && name != "" && name != m.aanswered {
+		m.apending = true
+		return
+	}
+	m.akept = keyOf(rows[m.acursor].agent)
 }
 
-// firstAgent is the row most worth a look: an agent that needs the user, then
-// one at rest, then one still working, then one whose state is unknown. Among
-// equals, the one that spoke last (decisions.md D124).
+// agentRank orders the agents by how much each is worth a look: one that
+// needs the user, then one at rest, then one still working, then one whose
+// state is unknown.
+var agentRank = map[revier.Status]int{
+	revier.StatusAttention: 0,
+	revier.StatusIdle:      1,
+	revier.StatusRunning:   2,
+	revier.StatusUnknown:   3,
+}
+
+// firstAgent is the row most worth a look, by agentRank. Among equals, the
+// one that spoke last (decisions.md D124).
 func (m Model) firstAgent(rows []agentRow) int {
-	rank := map[revier.Status]int{
-		revier.StatusAttention: 0,
-		revier.StatusIdle:      1,
-		revier.StatusRunning:   2,
-		revier.StatusUnknown:   3,
-	}
 	best := 0
 	for i := range rows {
 		a, b := rows[i].agent, rows[best].agent
-		by := rank[a.State.Status] - rank[b.State.Status]
+		by := agentRank[a.State.Status] - agentRank[b.State.Status]
 		if by < 0 || by == 0 && m.adetails[keyOf(a)].At.After(m.adetails[keyOf(b)].At) {
 			best = i
 		}

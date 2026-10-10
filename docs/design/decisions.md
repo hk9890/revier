@@ -611,8 +611,9 @@ every user would install.
 A message is whatever the agent wrote, and agents quote what tools print: a
 captured `git diff --color`, a progress line rewritten with a carriage return,
 a title an OSC set. Passed through, each of those repaints the surface that is
-showing it. So every escape and control character comes off before the pane
-measures or styles a line, and the message is set in revier's own colours.
+showing it. So every escape and control character comes off before a row of
+the agent list or `revier agent read` shows a line of it, and the row is set
+in revier's own colours.
 Rejected: trusting the harness, which does not own what a tool wrote into the
 transcript it keeps.
 
@@ -763,7 +764,7 @@ of its own, which a configuration that does not load takes with it.
 One agent drawn two ways, its message set from the transcript beside the
 projects and its panel beside the agents, read as two agents, and a transcript
 is one harness's (D106). So one mirror (D111) serves both panes. The project
-pane mirrors an agent before any keypress: one that needs the user, then one
-at rest, working, unknown, the latest to speak among equals; the user's choice
-overrides the pane's. Rejected: the turn an agent is in above the mirror,
-which the screen shows already. Replaces D107 and D122.
+pane mirrors an agent before any keypress, and keeps it while no other is more
+worth a look: a mirror that changed hands when an equal spoke lost the scroll
+in it. Rejected: the turn an agent is in above the mirror, which the screen
+shows already. Replaces D107 and D122.

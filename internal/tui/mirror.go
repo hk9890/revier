@@ -99,10 +99,11 @@ func (m Model) mirrored() (listedKey, revier.AgentView, bool) {
 
 // mirroring is mirrored for a pane that had a row for the mirror when it was
 // last drawn. A pane with none shows no mirror: nothing is read for it, and
-// the wheel over it scrolls the pane.
+// the wheel over it scrolls the pane. Nothing is read either for an agent the
+// project pane has not settled on (chooseAgent).
 func (m Model) mirroring() (listedKey, revier.AgentView, bool) {
 	key, a, ok := m.mirrored()
-	return key, a, ok && m.mirror.room > 0
+	return key, a, ok && m.mirror.room > 0 && (m.agents.shown || !m.apending)
 }
 
 // ask sends for the screen of the agent the pane mirrors: at once when

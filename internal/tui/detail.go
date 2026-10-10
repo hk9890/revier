@@ -172,7 +172,11 @@ func (m *Model) followPane(line int) {
 func (m *Model) detailContent(v revier.ProjectView) string {
 	w := m.paneCols() - paneChrome
 	key, _, mirrored := m.mirrored()
-	if m.paneCols() < widePaneWidth {
+	// An agent the pane has not settled on has no screen to show yet.
+	if m.apending {
+		key = listedKey{}
+	}
+	if !m.besideFacts() {
 		facts := m.facts(v, w)
 		if !mirrored {
 			return facts
@@ -189,6 +193,12 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),
 		strings.TrimPrefix(m.agentScreen(key, w-gridGap-maxFactsWidth, m.detail.Height+1), "\n"))
+}
+
+// besideFacts reports the wide layout of the project pane: the mirror beside
+// the facts, and not under them.
+func (m Model) besideFacts() bool {
+	return !m.agents.shown && m.paneCols() >= widePaneWidth
 }
 
 // agentScreen is the project pane's part below the facts: the mirror of the

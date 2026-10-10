@@ -31,6 +31,14 @@ type shownAgent struct {
 // "agent-i task", and its panel is i+1.
 func shownWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
 	t.Helper()
+	m, rt, fakes := unsaidWorld(t, width, height, agents...)
+	return m.Said().Mirrored(), rt, fakes
+}
+
+// unsaidWorld is shownWorld with neither ask answered: the pane as it stands
+// when the project has just come under the cursor.
+func unsaidWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Screens = map[revier.PanelID]string{}
 	var probes []revier.AgentProbe
@@ -52,7 +60,7 @@ func shownWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Mode
 	}}})
 	rt.Add("session:duo", "kitty", panels...)
 	c := &core.Core{Runtime: rt, Probes: probes}
-	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height).Said().Mirrored(), rt, fakes
+	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height), rt, fakes
 }
 
 // The pane mirrors an agent's panel without the cursor going there: the one
@@ -86,6 +94,69 @@ func TestAmongEqualsTheAgentThatSpokeLastIsMirrored(t *testing.T) {
 		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
 	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
 		t.Errorf("pane = %q, want the agent that spoke last", body)
+	}
+}
+
+// The pane keeps the agent it chose while no other is more worth a look: an
+// equal that speaks does not take the mirror, and the scroll in it.
+func TestAnAgentThatSpeaksDoesNotTakeTheMirrorFromItsEqual(t *testing.T) {
+	now := time.Now()
+	m, _, fakes := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	fakes[0].Said["1"] = revier.AgentDetail{At: now}
+	m = survey(m).Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
+		t.Errorf("pane = %q, want the agent the pane chose kept", body)
+	}
+}
+
+// An agent that comes to be more worth a look than the one the pane chose
+// takes the mirror.
+func TestAnAgentThatComesToNeedYouTakesTheMirror(t *testing.T) {
+	m, _, fakes := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusRunning, screen: "second agent's screen"})
+	fakes[1].State.Status = revier.StatusAttention
+	m = survey(m).Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "second agent's screen") || strings.Contains(body, "first agent's screen") {
+		t.Errorf("pane = %q, want the agent that needs the user", body)
+	}
+}
+
+// Among equals the pane does not choose before it knows when each spoke, so
+// no panel is read for an agent the pane then leaves.
+func TestNoPanelIsReadBeforeThePaneChoosesAmongEquals(t *testing.T) {
+	now := time.Now()
+	m, rt, _ := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	m = m.Mirrored()
+	if len(rt.ScreenReads) != 0 || m.MirrorAsked() != 0 {
+		t.Fatalf("reads = %v, asked = %d before the pane chose, want none", rt.ScreenReads, m.MirrorAsked())
+	}
+	if body := pane(m); !strings.Contains(body, "reading...") {
+		t.Errorf("pane = %q, want the mirror pending", body)
+	}
+	m = m.Said().Mirrored()
+	for _, read := range rt.ScreenReads {
+		if read.Panel != "2" {
+			t.Errorf("reads = %v, want the panel of the agent that spoke last alone", rt.ScreenReads)
+		}
+	}
+	if body := pane(m); !strings.Contains(body, "the newer screen") {
+		t.Errorf("pane = %q, want the agent that spoke last", body)
+	}
+}
+
+// One agent more worth a look than the rest is mirrored at once: when each
+// spoke decides nothing.
+func TestTheOneAgentMostWorthALookIsMirroredAtOnce(t *testing.T) {
+	m, _, _ := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "resting now"},
+		shownAgent{status: revier.StatusAttention, screen: "merge now or wait?"})
+	if body := pane(m.Mirrored()); !strings.Contains(body, "merge now or wait?") {
+		t.Errorf("pane = %q, want the agent that needs the user before any answer", body)
 	}
 }
 
@@ -213,6 +284,30 @@ func TestAWidePaneLaysTheMirrorBesideTheFacts(t *testing.T) {
 	}
 	if w, s := strings.Count(pane(wide), "line "), strings.Count(pane(stacked), "line "); w <= s {
 		t.Errorf("the mirror beside the facts shows %d lines and the one under them %d, want more beside", w, s)
+	}
+}
+
+// Beside the facts the mirror has its own columns: the wheel over it scrolls
+// it, and the wheel over the facts scrolls the pane, which is the one way to
+// facts taller than the pane.
+func TestTheWheelOverTheFactsBesideTheMirrorScrollsThePane(t *testing.T) {
+	agents := make([]shownAgent, 8)
+	for i := range agents {
+		agents[i] = shownAgent{status: revier.StatusRunning, screen: "at work"}
+	}
+	agents[0].status = revier.StatusIdle
+	m, _, _ := shownWorld(t, 300, 12, agents...)
+	border := paneBorder(t, m)
+
+	next, _ := m.Update(tea.MouseMsg{X: border + 4, Y: 8, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = next.(tui.Model)
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
+		t.Errorf("the wheel over the facts did not scroll the pane:\n%s", body)
+	}
+
+	_, cmd := m.Update(tea.MouseMsg{X: border + 120, Y: 8, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if cmd == nil {
+		t.Error("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
 }
 

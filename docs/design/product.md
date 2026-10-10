@@ -175,12 +175,14 @@ The pane ends in the screen of one of the project's agents, under the heading
 `Screen`: the mirror the agent list's pane shows, described below (D124).
 Without a keypress it mirrors the agent that needs the user; else one at rest
 before one working, and one whose state is unknown last; the latest to speak
-among equals. Moving the agent cursor chooses, and the choice holds until
+among equals, which the pane waits to know before it reads a panel. It keeps
+that agent while no other is more worth a look: an equal that speaks does not
+take the mirror. Moving the agent cursor chooses, and the choice holds until
 another project is under the list's cursor. The mirror takes the rows the
 facts leave, and a pane with none left shows no mirror. A wide pane lays it
 beside the facts, level with the name, once that leaves it 100 columns. The
-wheel over the pane scrolls the mirror and the facts stay; over a pane with no
-mirror it scrolls the pane.
+wheel over the mirror scrolls it and the facts stay; over a pane with no
+mirror, or over the facts beside one, it scrolls the pane.
 
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button

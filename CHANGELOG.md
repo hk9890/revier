@@ -16,7 +16,8 @@ Each section is also the text of its release on the
   now, and so is an agent of a linked project in a terminal here.
 - **The pane no longer puts an agent with a message before one without.** It
   shows the agent that needs you, else one at rest before one working, and
-  the last to speak among equals.
+  the last to speak among equals. It keeps that agent until another needs you
+  more, so an agent that speaks does not take the screen from its equal.
 
 ## v0.14.0
 

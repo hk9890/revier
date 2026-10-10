@@ -146,39 +146,42 @@ type Model struct {
 	// The project list. Cursor, paging and filtering are the component's;
 	// the order of the rows a query leaves is ranked's, and what a row looks
 	// like is the delegate's.
-	plist    list.Model
-	filter   string // the query, held here so a refresh can re-apply it
-	keys     keyMap
-	help     help.Model
-	detail   viewport.Model
-	shown    revier.ProjectName               // the project the pane holds, so a new one starts at its top
-	tkeys    map[core.Chord]revier.TargetName // press to target name, over every project
-	start    revier.ProjectName               // the project to open on, from the working directory
-	placing  bool                             // the cursor was put on the starting project; the next body sync places the list around it
-	lookup   StartLookup                      // the project to open on when start is none, asked once the surface shows
-	popup    bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	hidden   bool                             // the popup is off the screen; nothing surveys until it is raised
-	idle     bool                             // the survey chain ended while hidden; the raise starts it again
-	local    core.Report                      // the last survey of this machine, with no host's answer laid over
-	answers  core.RemoteAnswers               // what the linked hosts said last
-	polling  []string                         // the linked hosts that are being asked
-	onTop    bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
-	input    textinput.Model                  // the filter query, with its own cursor
-	over     hovered                          // what the pointer is on
-	cell     *pointerCell                     // where the pointer last was, nil before it moved
-	body     viewport.Model                   // the scrolling window over the list
-	last     click                            // the last click on a row, for telling a double click
-	pclick   paneClick                        // the last click on a pane row, the same for the pane's targets and agents
-	aasked   revier.ProjectName               // the project whose agents' details are out, empty with none
-	aseq     int                              // the number of the last ask for details
-	atook    int                              // the number of the ask whose answer the pane holds
-	adetails map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
-	achosen  agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
-	mirror   mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
-	barMore  bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
-	press    *press                           // where the left button went down, while it is down
-	sel      selection                        // the box a drag is selecting
-	copied   int                              // the characters the last selection copied, shown until the next press
+	plist     list.Model
+	filter    string // the query, held here so a refresh can re-apply it
+	keys      keyMap
+	help      help.Model
+	detail    viewport.Model
+	shown     revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys     map[core.Chord]revier.TargetName // press to target name, over every project
+	start     revier.ProjectName               // the project to open on, from the working directory
+	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
+	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
+	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised
+	idle      bool                             // the survey chain ended while hidden; the raise starts it again
+	local     core.Report                      // the last survey of this machine, with no host's answer laid over
+	answers   core.RemoteAnswers               // what the linked hosts said last
+	polling   []string                         // the linked hosts that are being asked
+	onTop     bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
+	input     textinput.Model                  // the filter query, with its own cursor
+	over      hovered                          // what the pointer is on
+	cell      *pointerCell                     // where the pointer last was, nil before it moved
+	body      viewport.Model                   // the scrolling window over the list
+	last      click                            // the last click on a row, for telling a double click
+	pclick    paneClick                        // the last click on a pane row, the same for the pane's targets and agents
+	aasked    revier.ProjectName               // the project whose agents' details are out, empty with none
+	aseq      int                              // the number of the last ask for details
+	atook     int                              // the number of the ask whose answer the pane holds
+	adetails  map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
+	achosen   agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
+	akept     agentKey                         // the agent the pane chose itself, kept while no other is more worth a look
+	apending  bool                             // the pane waits for when each agent spoke before it chooses among equals
+	aanswered revier.ProjectName               // the project the details the pane holds are for
+	mirror    mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
+	barMore   bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
+	press     *press                           // where the left button went down, while it is down
+	sel       selection                        // the box a drag is selecting
+	copied    int                              // the characters the last selection copied, shown until the next press
 	// tdeclared is every chord a target of any project declares as itself.
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.

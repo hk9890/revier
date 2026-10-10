@@ -30,7 +30,7 @@ func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 	}
 	projects := core.Prepare(raw)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
-	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30)
+	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30).Said()
 }
 
 // Beside the list the pane starts level with the project query, and its
