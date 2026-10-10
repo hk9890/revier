@@ -669,6 +669,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.Survey()
 		}
 		return m, nil
+	case assistedMsg:
+		m.err = msg.err
+		return m, reloadFiles
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends. An activation wrote

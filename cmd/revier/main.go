@@ -24,6 +24,7 @@ import (
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/tui"
 )
 
 const usage = `revier - a project-grouped control surface for running agents
@@ -47,6 +48,10 @@ usage:
   revier status                 which project this directory resolves to
   revier doctor                 every project file that did not load whole, and
                                 what to do about each problem
+  revier assist [--print-brief] hand this terminal to Claude Code, briefed to
+                                configure revier and to find what is wrong with
+                                it; --print-brief prints the brief and starts
+                                nothing
   revier keys status [--json]   the desktop chords revier wants, and who holds them
   revier agent wait <agent> --until <status> [--timeout s]
                                 block until an agent reaches a status
@@ -108,6 +113,11 @@ const exitTimeout = 2
 // at least one project. It is not 1, so a script can tell a failed project from
 // a revier that could not run at all.
 const exitEachFailed = 5
+
+// exitNoAssistant is returned when `revier assist` found no coding agent to
+// start. The surface reads it after a hand-over, so the number is the
+// surface's.
+const exitNoAssistant = tui.ExitNoAssistant
 
 func main() {
 	start := time.Now()
@@ -181,6 +191,8 @@ func outcome(err error) (status int, say bool) {
 	// `revier each` has already named every project it failed in.
 	case errors.Is(err, errEachFailed):
 		return exitEachFailed, false
+	case errors.Is(err, errNoAssistant):
+		return exitNoAssistant, true
 	// `revier doctor` is its own report; a line here would add nothing to it.
 	case errors.Is(err, errSilent):
 		return 1, false
@@ -214,6 +226,9 @@ func run(out io.Writer, args []string) error {
 		// files, and probing the desktop for hosts would be a second way for
 		// the command that diagnoses failures to fail.
 		return cmdDoctor(out, args)
+	case "assist":
+		// No app either: see cmdAssist.
+		return cmdAssist(out, args)
 	case "events":
 		// No app, for the reason each has none: the file and the hosts the
 		// project files name are all it reads.

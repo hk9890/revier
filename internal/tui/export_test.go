@@ -78,3 +78,10 @@ func (m Model) StaticCursors() Model {
 	}
 	return m
 }
+
+// Assisted is the model once the assistant the surface handed the terminal to
+// has exited with err, and the command that follows.
+func (m Model) Assisted(err error) (Model, tea.Cmd) {
+	next, cmd := m.Update(assistedMsg{err: err})
+	return next.(Model), cmd
+}

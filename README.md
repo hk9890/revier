@@ -186,6 +186,7 @@ projects.
 | alt+s | **sessions**: save and restore the set of open projects. |
 | alt+q | **shutdown**: close every project, or one, after a confirm. |
 | alt+c | **config**: set the theme, the glyphs, the trigger key and the runtime host, and add, change and delete shared targets and actions. Each change is written to `config.toml` and applied at once, comments kept. |
+| alt+a | **assist**: hand the terminal to Claude Code, started in a folder of its own and briefed to change the configuration and to find what is wrong with it. Tell it what you want; when it exits, the surface is back with the files read again. `revier assist` does the same from a shell, and starts on a configuration that does not load. |
 | alt+h | **help**: every key, the surface's own, the target keys, the configured actions and the desktop keys. |
 
 **new** takes one of three things:

@@ -484,3 +484,13 @@ func TestResumeCommandDoesNotEditTheSpec(t *testing.T) {
 		t.Errorf("the spec now reads %v, want it untouched", spec.Command)
 	}
 }
+
+// The brief is added to Claude Code's own system prompt, never put in its
+// place, and every directory is allowed by a flag of its own.
+func TestAssistArgv(t *testing.T) {
+	got := claude.AssistArgv("the brief", "/cfg", "/more")
+	want := []string{"claude", "--append-system-prompt", "the brief", "--add-dir", "/cfg", "--add-dir", "/more"}
+	if !slices.Equal(got, want) {
+		t.Errorf("AssistArgv = %q, want %q", got, want)
+	}
+}
