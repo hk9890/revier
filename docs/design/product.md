@@ -250,7 +250,9 @@ attachment is (D95); there no popup opens. A runtime that cannot type into the
 panel leaves the press what it was: the popup, raised or opened. Hidden, it
 surveys nothing and asks no linked host, since nobody reads the answer; the
 terminal's focus report on the raise reads the project files again, since a
-press used to load them, then runs one survey and resumes the refresh. The surface knows it is
+press used to load them, then runs one survey and resumes the refresh. A key or
+the pointer in a popup that still counts itself hidden is the same raise: a
+minimized window gets no input, and a focus report can be lost (D86). The surface knows it is
 the popup, and which project to open on, from the environment its terminal is
 started with, read and dropped at start so nothing it launches inherits it.
 The project is resolved at the keypress, while the focused window is still the

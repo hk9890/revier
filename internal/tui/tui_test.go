@@ -1247,6 +1247,105 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 }
 
+// A raise whose focus report bubbletea lost leaves the popup counting itself
+// hidden while it is on the screen. A minimized window gets no input, so a
+// key or the pointer is the raise, as the focus report is: the projects, the
+// files read again, one survey and the refresh. The input does what it does
+// on a shown popup.
+func TestInputToAPopupThatCountsItselfHiddenIsTheRaise(t *testing.T) {
+	for name, input := range map[string]tea.Msg{
+		"key":     tea.KeyMsg{Type: tea.KeyDown},
+		"pointer": tea.MouseMsg{X: 2, Y: 6, Action: tea.MouseActionMotion},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("REVIER_CONFIG_HOME", root)
+			_, wm, c, projects := world(t, 3)
+			wm.Add("revier", core.PopupClass)
+			now := time.Now()
+			m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
+			m = resize(survey(m.WithClock(func() time.Time { return now })), 140, 20)
+			before := selectedRow(t, m)
+			m, hide := press(switched(m), "esc")
+			m = run(m, hide)
+			// The survey that was running answers: the chain ends there.
+			next, cmd := m.Update(m.Survey()())
+			if cmd != nil {
+				t.Fatal("a survey answered while hidden scheduled the next one")
+			}
+			m = next.(tui.Model)
+			if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "projects", "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			now = now.Add(time.Minute)
+
+			next, cmd = m.Update(input)
+			if cmd == nil {
+				t.Fatal("the input read nothing")
+			}
+			m = next.(tui.Model)
+			if q := query(m); !strings.Contains(q, "filter projects") {
+				t.Errorf("query line = %q after the input, want the projects", q)
+			}
+			if _, isKey := input.(tea.KeyMsg); isKey && selectedRow(t, m) == before {
+				t.Errorf("the key that raised the popup moved no cursor: still on %q", before)
+			}
+			if m, cmd = deliver(m, cmd); cmd == nil {
+				t.Fatal("the input started no survey")
+			}
+			if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "written-while-hidden") {
+				t.Errorf("the popup lists no project written while hidden:\n%s", body)
+			}
+			if m, cmd = deliver(m, cmd); cmd == nil {
+				t.Error("the survey after the input scheduled no refresh")
+			}
+			if _, cmd = m.Update(tea.FocusMsg{}); cmd != nil {
+				t.Error("a focus report after the input started a second chain")
+			}
+		})
+	}
+}
+
+// The survey chain that still runs when the input arrives goes on by itself:
+// the files are read, and their answer starts no second chain.
+func TestInputWhileTheSurveyChainRunsStartsNoSecondChain(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m, hide := press(m, "esc")
+	m = run(m, hide)
+
+	m, reload := press(m, "down")
+	if reload == nil {
+		t.Fatal("the key read nothing")
+	}
+	if _, cmd := deliver(m, reload); cmd != nil {
+		t.Error("the files read on the raise started a survey beside the one that runs")
+	}
+}
+
+// A terminal reports the pointer on every cell, and a report sent as the
+// window left the screen can arrive behind the hide's answer. It is the
+// hide's own, not a raise.
+func TestPointerMotionJustAfterTheHideIsNoRaise(t *testing.T) {
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	now := time.Now()
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
+	m = survey(m.WithClock(func() time.Time { return now }))
+	m, hide := press(m, "esc")
+	m = run(m, hide)
+
+	now = now.Add(100 * time.Millisecond)
+	if _, cmd := m.Update(tea.MouseMsg{X: 2, Y: 6, Action: tea.MouseActionMotion}); cmd != nil {
+		t.Error("pointer motion 100 ms after the hide raised the popup")
+	}
+}
+
 // The working spinner redraws the surface every tick; hidden, nobody sees
 // it, so it stops with the surveys, and the survey after the raise starts it
 // again.

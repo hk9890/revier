@@ -17,6 +17,10 @@ Each section is also the text of its release on the
 - **Fast pointer motion no longer types into a filter.** Text such as
   `<35;76;40M` appeared in the project filter with no key pressed, and the
   list then matched nothing.
+- **A raised popup no longer shows the states of the moment it was hidden.**
+  The list stopped refreshing when the pointer was over the popup at the
+  raise, so a closed project stayed listed as open until the next Esc and
+  raise.
 - **The log says how a surface ended when its terminal closed.** The
   `command` line of the process has `signal`, and the process exits with 128
   plus the number of the signal. Before, a surface whose terminal closed

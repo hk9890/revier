@@ -158,6 +158,7 @@ type Model struct {
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised
+	hiddenAt  time.Time                        // when the popup was hidden; pointer motion just after is the hide's own
 	idle      bool                             // the survey chain ended while hidden; the raise starts it again
 	local     core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers   core.RemoteAnswers               // what the linked hosts said last
@@ -655,18 +656,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
 			return m, tea.Quit
 		}
-		m.hidden = true
+		m.hidden, m.hiddenAt = true, m.now()
 		return m, nil
 	case tea.FocusMsg:
-		// The raise: the files again, then one survey, then the chain as
-		// before. A chain still running while hidden goes on by itself.
-		if !m.hidden {
-			return m, nil
-		}
-		// The surface opens on the projects, a raise included: the press that
-		// raises it is the one that opened it (decisions.md D110).
-		m.hidden, m.agents.shown = false, false
-		return m, reloadFiles
+		return m, m.raise()
 	case reloadedMsg:
 		switch {
 		case msg.err == nil:
@@ -724,13 +717,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
+		raise := m.raise()
 		m.copied = 0
 		if m.sel.active {
-			return m.selectingKey(msg)
+			next, cmd := m.selectingKey(msg)
+			return next, tea.Batch(raise, cmd)
 		}
-		return m.key(msg)
+		next, cmd := m.key(msg)
+		return next, tea.Batch(raise, cmd)
 	case tea.MouseMsg:
-		return m.mouse(msg)
+		var raise tea.Cmd
+		if msg.Action != tea.MouseActionMotion || m.now().Sub(m.hiddenAt) >= hideSettles {
+			raise = m.raise()
+		}
+		next, cmd := m.mouse(msg)
+		return next, tea.Batch(raise, cmd)
 	}
 	// A blink is a field's own timer message; the field it is not for
 	// ignores it.
@@ -739,6 +740,27 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ainput, cmds[1] = m.ainput.Update(msg)
 	m.agents.query, cmds[2] = m.agents.query.Update(msg)
 	return m, tea.Batch(cmds[:]...)
+}
+
+// hideSettles is how long after a hide pointer motion is not taken as a
+// raise: a report the terminal sent as the window left the screen can arrive
+// behind the hide's answer.
+const hideSettles = 500 * time.Millisecond
+
+// raise is the popup back on the screen: the files again, then one survey,
+// then the chain as before. A chain still running while hidden goes on by
+// itself. The terminal's focus report says so, and so does a key or the
+// pointer: a minimized window gets neither, and bubbletea knows a focus
+// report only when a read ends with it, so one with a mouse report behind it
+// in the same read is lost (decisions.md D86).
+func (m *Model) raise() tea.Cmd {
+	if !m.hidden {
+		return nil
+	}
+	// The surface opens on the projects, a raise included: the press that
+	// raises it is the one that opened it (decisions.md D110).
+	m.hidden, m.agents.shown = false, false
+	return reloadFiles
 }
 
 // keep holds the parts of state the surface reads between refreshes. The
