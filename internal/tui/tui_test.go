@@ -1754,3 +1754,25 @@ func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testin
 		t.Errorf("selected %q, want project-43, the row the cursor was on", row)
 	}
 }
+
+// A burst of pointer motion fills a read of the input, and the report the
+// read cut arrives as alt+[ and then its rest as typed text. Neither is a
+// key: the filter stays empty. The same text pasted is the user's.
+func TestAMouseReportCutByAReadTypesNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	empty := query(m)
+
+	for _, tail := range []string{"<35;31;40M", "<35;107;28M", "<0;12;7m"} {
+		m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("["), Alt: true})
+		m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tail)})
+	}
+	if got := query(m); got != empty {
+		t.Errorf("query = %q, want it empty as before:\n%s", got, m.View())
+	}
+
+	m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<35;31;40M"), Paste: true})
+	if got := query(m); !strings.Contains(got, "<35;31;40M") {
+		t.Errorf("query = %q, want the pasted text in it", got)
+	}
+}

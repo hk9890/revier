@@ -716,6 +716,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(msg.project, msg.home)
 	case tea.KeyMsg:
+		if splitReport(msg) {
+			return m, nil
+		}
 		m.copied = 0
 		if m.sel.active {
 			return m.selectingKey(msg)
