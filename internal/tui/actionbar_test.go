@@ -682,7 +682,7 @@ func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
 	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
 
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 160, 20)
 
 	bar := barLine(m)
 	dim := theme.Default().Help.Render(build.Version)
@@ -709,7 +709,7 @@ func TestANarrowBarDropsTheVersion(t *testing.T) {
 
 	_, _, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
-	wide := resize(m, 140, 20)
+	wide := resize(m, 160, 20)
 	// The buttons that fit in 58 columns, and the burger after them, end
 	// three columns short of the edge: less than the version and its air.
 	narrow := resize(m, 58, 20)

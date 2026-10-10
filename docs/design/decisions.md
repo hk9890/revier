@@ -598,7 +598,7 @@ pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
 ### D106 — what an agent said last is read from its transcript, for display only
 
-When an agent spoke last orders the agents (D110, D123), and `revier agent
+When an agent spoke last orders the agents (D110, D124), and `revier agent
 read` prints what it said (D116). The Claude probe reads both from the
 session's transcript, whose format is Claude Code's own and changes between
 releases, so the read is display only (`Detailed`). Rejected: the agent view's
@@ -747,7 +747,18 @@ free of files, so the sequences are not there. The event of a use is recorded
 by the operation that did the thing, through the ledger (D120); a surface
 records only the conversations its survey saw.
 
-### D123 — the project pane mirrors one agent's panel, as the agent list's pane does
+### D123 — revier starts one agent of its own, to write its configuration
+
+A user no longer fills in setup screens: they tell the coding agent they have
+what they want. `revier assist`, and alt+a, hand the terminal to Claude Code in
+a directory under the state root, briefed with the files, with `revier doctor`
+as its check and with the project under the cursor. It is a hand-over, as an
+action's is; the command needs no configuration to load, so it also repairs
+one. Only this agent is revier's: a project's agent is still only observed.
+Rejected: a terminal drawn in the surface, an emulator to maintain; a project
+of its own, which a configuration that does not load takes with it.
+
+### D124 — the project pane mirrors one agent's panel, as the agent list's pane does
 
 One agent drawn two ways, its message set from the transcript beside the
 projects and its panel beside the agents, read as two agents, and a transcript

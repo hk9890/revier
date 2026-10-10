@@ -120,7 +120,7 @@ type PanelWriter interface {
 // PanelReader is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can say what one of its panels
 // shows, which is how a pane mirrors the agent under its cursor
-// (decisions.md D111, D123) and what `revier agent read --screen` prints (D116).
+// (decisions.md D111, D124) and what `revier agent read --screen` prints (D116).
 // One that does not leaves the mirror empty and the screen unread.
 //
 // ReadPanel is the panel's screen as text, a line per row, with the colour

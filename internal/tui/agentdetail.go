@@ -38,7 +38,7 @@ type detailsMsg struct {
 
 // askDetails sends for what every agent of the project under the list's
 // cursor said last, and when: when another project comes under it, and again
-// on every survey. The pane draws none of it (decisions.md D123): which agent
+// on every survey. The pane draws none of it (decisions.md D124): which agent
 // it mirrors first depends on when each spoke. The read runs off the update
 // loop, so the screen never waits on it (D106).
 //
@@ -155,7 +155,7 @@ func (m *Model) chooseAgent() {
 
 // firstAgent is the row most worth a look: an agent that needs the user, then
 // one at rest, then one still working, then one whose state is unknown. Among
-// equals, the one that spoke last (decisions.md D123).
+// equals, the one that spoke last (decisions.md D124).
 func (m Model) firstAgent(rows []agentRow) int {
 	rank := map[revier.Status]int{
 		revier.StatusAttention: 0,

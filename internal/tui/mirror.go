@@ -22,7 +22,7 @@ import (
 // agent under the cursor shows, read from its terminal once a second, so the
 // user watches the agent work without going to it (decisions.md D111). The
 // agent list's pane and the project list's pane draw it alike, each for the
-// agent under its own cursor (D123).
+// agent under its own cursor (D124).
 //
 // It is the terminal's own drawing, laid out for the agent's window, and that
 // window is wider than the pane: a line that does not fit continues on the
