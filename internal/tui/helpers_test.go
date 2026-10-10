@@ -307,8 +307,8 @@ func each(cmd tea.Cmd, do func(tea.Msg)) {
 
 // deliver runs a command and feeds what it answers back, and returns the
 // commands the model answers with: a close that needs no confirm plans, then
-// runs. run and step are deliver for a caller that wants less back; runAll
-// walks the same commands and feeds nothing back.
+// runs. run is deliver for a caller that wants less back; runAll walks the
+// same commands and feeds nothing back.
 func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 	if cmd == nil {
 		// A test that delivers a command expects one: with none, what it

@@ -48,12 +48,13 @@ that did not focus after `Open` passed L2 and failed L4.
   `_internal_live_test.go` when it is live. Two exceptions: `export_test.go` is
   in the package and has no suffix, and no test file in `cmd/revier` has the
   suffix: all of them are in `package main`.
-- Put a helper or a fake that more than one test file uses in the
-  `helpers_test.go` of the package. Use `helpers_internal_test.go` when it
-  needs an unexported name, and `helpers_live_test.go` or
-  `helpers_integration_test.go`, with the build tag, when only tests of that
-  tag use it. Leave one that a single test file uses in that file; do not move
-  it to the helper file.
+- Put a helper or a fake that more than one test file uses, or that a helper
+  there uses, in the `helpers_test.go` of the package. Use
+  `helpers_internal_test.go` when in-package test files use it, `export_test.go`
+  when the external test package needs something from inside the package, and
+  `helpers_live_test.go` or `helpers_integration_test.go`, with the build tag,
+  when only tests of that tag use it. Leave one that a single test file uses in
+  that file.
 - In `internal/tui`, feed a command that a key press or an `Update` returned
   back to the model with a helper from `internal/tui/helpers_test.go`, not with
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers
