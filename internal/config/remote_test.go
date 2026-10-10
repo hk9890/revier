@@ -637,9 +637,45 @@ name = "logs"
 	}
 }
 
+// A tab is refused inside a target that also has a window, so a link whose
+// home has both realizations has no place for panels: the home's own and
+// another target's are refused for the window, and no move is named.
+func TestALinkHomeWithAWindowAndARuntimeHasNoPlaceForPanels(t *testing.T) {
+	const home = `
+[[target]]
+name = "home"
+home = true
+  [target.remote.window]
+  launch = ["code"]
+  match = { class = "^Code$" }
+  [target.remote.runtime]
+  launch = ["ssh", "buildbox"]
+`
+	const logs = `
+[[target]]
+name = "logs"
+  [target.remote.runtime]
+  name = "logs"
+  match = { title = "^logs$" }
+`
+	const panel = `    [[target.remote.runtime.panels]]
+    kind = "tool"
+    command = ["tail"]
+`
+	const why = ` runtime realization declares panels; only a tab has them, and the home of this link also has a window realization, so no tab opens in it`
+	for name, body := range map[revier.TargetName]string{"home": link + home + panel, "logs": link + home + logs + panel} {
+		p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+		want := `target "` + string(name) + `"` + why
+		if err := refusalOf(p, name); err == nil || err.Error() != want {
+			t.Errorf("%s refused = %v\nwant %s", name, err, want)
+		}
+	}
+}
+
 // The derived tab has the name agent, so a home of that name gets no tab and
 // is refused for the name. One that launches something needs no tab, and
-// keeps the name.
+// keeps the name. Panels on such a home are told the name first, then the
+// move, and the two together load.
 func TestALinkHomeNamedAgentIsRefusedForTheName(t *testing.T) {
 	body := link + `
 [[target]]
@@ -661,32 +697,64 @@ home = true
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Errorf("Problems = %v, want a home that launches whole under any name", probs)
 	}
+
+	const panel = `    [[target.remote.runtime.panels]]
+    kind = "shell"
+`
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+panel), nil)
+	want = `target "agent" runtime realization declares panels; only a tab has them, and a link opens with the tab "agent", so give the home another name, and move them into a target named "agent" inside it`
+	if err := refusalOf(p, "agent"); err == nil || err.Error() != want {
+		t.Errorf("agent refused = %v\nwant %s", err, want)
+	}
+	moved := strings.Replace(body, `name = "agent"`, `name = "work"`, 1) + `
+[[target]]
+name = "agent"
+  [target.remote.runtime]
+  inside = "work"
+` + panel
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	if probs := config.Problems(p); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none after the name and the move", probs)
+	}
 }
 
 // The form shows a link's home with the derived tab. Saved as shown, the list
-// is not written; another list, or an active tab, is refused where the load
-// would drop it without a word.
+// is not written; another list, an active tab, or the derived list on a
+// target that is not home is refused where the load would drop it without a
+// word.
 func TestSaveProjectTargetOnALinkRefusesTabsOfItsOwn(t *testing.T) {
-	root := projectsRoot(t, "", map[string]string{"far.toml": link})
+	const body = link + `
+[[target]]
+name = "logs"
+  [target.remote.runtime]
+  name = "logs"
+  launch = ["ssh", "buildbox", "tail"]
+  match = { title = "^logs$" }
+`
+	root := projectsRoot(t, "", map[string]string{"far.toml": body})
 	file := config.ProjectFile(root, "far")
 	p, err := config.ReadProject(file, nil)
 	if err != nil {
 		t.Fatalf("ReadProject: %v", err)
 	}
 	const want = `a link opens with the tab "agent" alone, and has no tabs or active of its own`
-	for _, change := range []func(*revier.Realization){
-		func(r *revier.Realization) { r.Tabs = []revier.TargetName{"tickets", "agent"} },
-		func(r *revier.Realization) { r.Active = "agent" },
+	for _, c := range []struct {
+		target int
+		change func(*revier.Realization)
+	}{
+		{0, func(r *revier.Realization) { r.Tabs = []revier.TargetName{"tickets", "agent"} }},
+		{0, func(r *revier.Realization) { r.Active = "agent" }},
+		{2, func(r *revier.Realization) { r.Tabs = []revier.TargetName{"agent"} }},
 	} {
-		home := p.Targets[0].Target
-		r := *home.Runtime
-		change(&r)
-		home.Runtime = &r
-		if _, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, nil); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("err = %v, want %s", err, want)
+		edited := p.Targets[c.target].Target
+		r := *edited.Runtime
+		c.change(&r)
+		edited.Runtime = &r
+		if _, err := config.SaveProjectTarget(file, edited.Name, config.TargetEdit{Target: edited}, nil); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %s", edited.Name, err, want)
 		}
 	}
-	if got := read(t, file); got != link {
+	if got := read(t, file); got != body {
 		t.Errorf("file =\n%s\nwant it unchanged", got)
 	}
 }

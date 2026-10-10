@@ -88,7 +88,7 @@ name = "editor"
 // The tab of a new project has the name agent. A shared target of that name
 // that is no tab would merge with it, so the project is refused before a file
 // is written, with the name as the reason. A shared home leaves the file with
-// no tab, and a shared tab of the name is the tab.
+// no tab, and a shared target of the name that starts nothing is the tab.
 func TestCreateRefusesASharedTargetWithTheNameOfTheAgentTab(t *testing.T) {
 	const window = `
 [[target]]
@@ -118,5 +118,21 @@ home = true
 	root = projectsRoot(t, window+home, nil)
 	if _, err := config.Create(root, "demo", "/tmp/demo", ""); err != nil {
 		t.Errorf("Create beside a shared home: %v", err)
+	}
+
+	const startsNothing = `
+[[target]]
+name = "agent"
+key = "ctrl-shift-a"
+  [target.runtime]
+  dir = "/tmp/elsewhere"
+`
+	root = projectsRoot(t, startsNothing, nil)
+	p, err := config.Create(root, "demo", "/tmp/demo", "")
+	if err != nil {
+		t.Fatalf("Create beside a shared target that starts nothing: %v", err)
+	}
+	if tab := target(t, p, "agent"); tab.Key != "ctrl-shift-a" || tab.Runtime.Inside != "home" || tab.Runtime.Dir != "/tmp/elsewhere" {
+		t.Errorf("agent = %+v, want the tab with the shared key and directory", tab)
 	}
 }

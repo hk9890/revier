@@ -100,8 +100,10 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 }
 
 // agentTabFree refuses a new project whose agent tab would merge with a
-// shared target of its name that is no tab. A shared home leaves the file with
-// no tab of its own, so no name can collide.
+// shared target of its name that is no tab: one with a window, or with a
+// runtime that launches or lists tabs of its own. A shared target that starts
+// nothing merges into the tab. A shared home leaves the file with no tab of
+// its own, so no name can collide.
 func agentTabFree(shared []map[string]any) error {
 	if SharedHome(shared) {
 		return nil
@@ -114,7 +116,9 @@ func agentTabFree(shared []map[string]any) error {
 	if i < 0 {
 		return nil
 	}
-	if t := targets[i]; t.Window != nil || t.Runtime == nil || t.Runtime.Inside == "" {
+	t := targets[i]
+	starts := t.Runtime != nil && t.Runtime.Inside == "" && (len(t.Runtime.Launch) > 0 || len(t.Runtime.Tabs) > 0)
+	if t.Window != nil || starts {
 		return fmt.Errorf("config.toml has a shared target named %q that is no tab, and a new project gives that name to the tab of its agent; rename the shared target", agentTab)
 	}
 	return nil

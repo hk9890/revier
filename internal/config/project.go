@@ -132,8 +132,10 @@ func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared 
 		if f.link && t.Runtime != nil {
 			// The list of tabs a link's home was shown with is the derived
 			// one, which loading drops and derives again: it is not written,
-			// and another one is refused where it would be dropped.
-			if t.Runtime.Active != "" || len(t.Runtime.Tabs) > 0 && !slices.Equal(t.Runtime.Tabs, []revier.TargetName{agentTab}) {
+			// and another one, or one on another target, is refused where it
+			// would be dropped.
+			derived := t.Home && slices.Equal(t.Runtime.Tabs, []revier.TargetName{agentTab})
+			if t.Runtime.Active != "" || len(t.Runtime.Tabs) > 0 && !derived {
 				return nil, fmt.Errorf("target %q: a link opens with the tab %q alone, and has no tabs or active of its own", t.Name, agentTab)
 			}
 			r := *t.Runtime
