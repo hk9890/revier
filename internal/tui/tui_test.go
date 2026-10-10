@@ -1262,8 +1262,7 @@ func TestTheSpinnerStopsWhileThePopupIsHidden(t *testing.T) {
 	}
 
 	m, hide := press(m, "esc")
-	next, _ := m.Update(hide())
-	m = next.(tui.Model)
+	m = run(m, hide)
 	if _, cmd := m.Update(tui.Spin()); cmd != nil {
 		t.Error("the spinner went on while hidden")
 	}
@@ -1284,7 +1283,7 @@ func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
 	wm.HideErr = fmt.Errorf("wctl: no such window")
 	m = survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	m, hide := press(m, "esc")
-	if _, cmd := m.Update(hide()); cmd == nil || cmd() != (tea.QuitMsg{}) {
+	if _, cmd := deliver(m, hide); cmd == nil || cmd() != (tea.QuitMsg{}) {
 		t.Error("a hide that failed did not quit")
 	}
 }

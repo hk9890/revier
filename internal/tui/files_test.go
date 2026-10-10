@@ -46,8 +46,7 @@ func TestDeleteAsksAndThenRemovesTheFile(t *testing.T) {
 	if got := strings.Join(rows(m), "\n"); strings.Contains(got, "alpha") || !strings.Contains(got, "beta") {
 		t.Errorf("rows = %q, want alpha gone and beta kept", got)
 	}
-	next, _ := m.Update(inFlight())
-	if got := strings.Join(rows(next.(tui.Model)), "\n"); strings.Contains(got, "alpha") {
+	if got := strings.Join(rows(run(m, inFlight)), "\n"); strings.Contains(got, "alpha") {
 		t.Errorf("rows after the late survey = %q, want alpha to stay gone", got)
 	}
 }

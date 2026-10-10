@@ -373,8 +373,7 @@ func TestAWheelWithNothingAboveTheScreenLeavesTheMirrorFollowing(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
-	next, _ = next.Update(cmd())
-	m = next.(tui.Model)
+	m = run(next.(tui.Model), cmd)
 
 	var screen []string
 	for i := range 80 {
@@ -413,8 +412,7 @@ func TestTheWheelScrollsTheMirrorIntoTheScrollback(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
-	next, _ = next.Update(cmd())
-	m = next.(tui.Model)
+	m = run(next.(tui.Model), cmd)
 	if last := rt.ScreenReads[len(rt.ScreenReads)-1]; !last.Scrollback {
 		t.Errorf("last read = %+v, want the scrollback", last)
 	}

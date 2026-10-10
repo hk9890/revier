@@ -385,7 +385,7 @@ func typeInto(m tui.Model, text string) tui.Model {
 // rowTop is the terminal row the first row of the list is on.
 func rowTop(m tui.Model) int {
 	mr, _ := margins(m)
-	return mr + 4
+	return mr + chromeLines
 }
 
 // listed is one agent of listedWorld: the project a panel of which shows it,
@@ -409,12 +409,54 @@ func listedWorld(t *testing.T, width, height int, agents ...listed) (tui.Model, 
 	return switched(m).Said().Mirrored(), rt, fakes
 }
 
-// listColumnRows is the first line of every row of the list in view, in
-// order: the line a row's state and summary are on.
+// listedSurface is the given agents in running projects, one probe to each,
+// surveyed, with the project list in view and nothing read of what an agent
+// said. The projects are named as given and stand in that order in the
+// configuration. Agent i is panel i+1 of its project's workspace.
+func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Screens = map[revier.PanelID]string{}
+	var probes []revier.AgentProbe
+	var fakes []*hosttest.FakeDetailedProbe
+	var names []string
+	panels := map[string][]revier.Panel{}
+	for i, a := range agents {
+		marker := fmt.Sprintf("agent-%d", i)
+		id := revier.PanelID(fmt.Sprint(i + 1))
+		p := hosttest.NewDetailedProbe("claude", marker)
+		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir}
+		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
+		probes, fakes = append(probes, p), append(fakes, p)
+		if !slices.Contains(names, a.project) {
+			names = append(names, a.project)
+		}
+		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
+		rt.Screens[id] = a.screen
+	}
+	var raw []revier.Project
+	for _, name := range names {
+		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, GitURL: "https://example.com/" + name + ".git",
+			Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}})
+		rt.Add("session:"+name, "kitty", panels[name]...)
+	}
+	c := &core.Core{Runtime: rt, Probes: probes}
+	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
+}
+
+// switched is the model after the key that switches between the two lists.
+func switched(m tui.Model) tui.Model {
+	m, _ = send(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: true})
+	return m
+}
+
+// listedRows is the first line of every row of the list in view, in order:
+// the line a row's state and summary are on.
 func listedRows(m tui.Model) []string {
 	var out []string
 	all := lines(m)
-	for i := 4; i < len(all)-1; i += 2 {
+	for i := chromeLines; i < len(all)-1; i += 2 {
 		left, _, _ := strings.Cut(all[i], "│")
 		if strings.TrimSpace(left) != "" {
 			out = append(out, strings.TrimSpace(left))
@@ -602,8 +644,7 @@ host = "buildbox"
 func remoteOnDisk(t *testing.T, name string) []core.Project {
 	t.Helper()
 	dir := t.TempDir()
-	body := strings.ReplaceAll(remoteFile, "%NAME%", name)
-	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(remoteFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	projects, err := config.LoadProjects(dir, nil)
@@ -657,45 +698,3 @@ func margins(m tui.Model) (rows, cols int) {
 // probeOf is the world's one agent probe, whose state a test changes between
 // the plan and the confirm.
 func probeOf(c *core.Core) *hosttest.FakeProbe { return c.Probes[0].(*hosttest.FakeProbe) }
-
-// listedSurface is the given agents in running projects, one probe to each,
-// surveyed, with the project list in view and nothing read of what an agent
-// said. The projects are named as given and stand in that order in the
-// configuration. Agent i is panel i+1 of its project's workspace.
-func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	rt.Screens = map[revier.PanelID]string{}
-	var probes []revier.AgentProbe
-	var fakes []*hosttest.FakeDetailedProbe
-	var names []string
-	panels := map[string][]revier.Panel{}
-	for i, a := range agents {
-		marker := fmt.Sprintf("agent-%d", i)
-		id := revier.PanelID(fmt.Sprint(i + 1))
-		p := hosttest.NewDetailedProbe("claude", marker)
-		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
-		probes, fakes = append(probes, p), append(fakes, p)
-		if !slices.Contains(names, a.project) {
-			names = append(names, a.project)
-		}
-		panels[a.project] = append(panels[a.project], revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
-		rt.Screens[id] = a.screen
-	}
-	var raw []revier.Project
-	for _, name := range names {
-		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, GitURL: "https://example.com/" + name + ".git",
-			Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}})
-		rt.Add("session:"+name, "kitty", panels[name]...)
-	}
-	c := &core.Core{Runtime: rt, Probes: probes}
-	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
-}
-
-// switched is the model after the key that switches between the two lists.
-func switched(m tui.Model) tui.Model {
-	m, _ = send(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: true})
-	return m
-}

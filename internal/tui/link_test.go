@@ -9,7 +9,6 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
-	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -380,8 +379,7 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 	m = step(m, "enter")
 	m = step(m, "enter")
 
-	next, _ := m.Update(stale())
-	m = next.(tui.Model)
+	m = run(m, stale)
 	if row := selectedRow(t, m); !strings.Contains(row, "beta") {
 		t.Errorf("selected %q, want the new link still on the cursor", row)
 	}
