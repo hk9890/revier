@@ -622,7 +622,8 @@ func fileText(t *testing.T, file string) string {
 }
 
 // remoteFile is a project on buildbox: its path is in that machine's terms,
-// and the home target here is the ssh pane onto the workspace there.
+// and the home target here is the derived one, whose tab reaches the
+// workspace there over ssh.
 const remoteFile = `
 [remote]
 host = "buildbox"

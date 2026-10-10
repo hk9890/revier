@@ -13,23 +13,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// listedTabsProject is a workspace that is only the window: tickets is its
-// first tab, and the agent and the shell are its second.
-func listedTabsProject(active revier.TargetName) revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-			Tabs: []revier.TargetName{"tickets", "agent"}, Active: active}},
-		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
-			Inside: "home", Launch: []string{"taskmgr-ui"}, Dir: "/p/tickets"}},
-		{Name: "agent", Runtime: &revier.Realization{
-			Inside: "home", Panels: []revier.PanelSpec{
-				{Kind: revier.PanelAgent, Command: []string{"claude"}},
-				{Kind: revier.PanelShell},
-			}}},
-	}}
-}
-
 // marks is the target and the home mark of each panel that carries one, in
 // the order the runtime lists the panels of its one instance.
 func marks(t *testing.T, rt *hosttest.FakeRuntime) []string {
@@ -617,8 +600,7 @@ func restoredInto(t *testing.T, project revier.Project, s session.Session) (*hos
 }
 
 // The agent in a panel of a listed tab is recorded under the workspace, with
-// its conversation, in the shape a workspace with its own panels is recorded
-// in. A restore lays it over the agent panel of that tab, and opens the agent
+// its conversation, in the file shape of 0.14.0. A restore lays it over the agent panel of that tab, and opens the agent
 // past it as an agent tab.
 func TestSaveThenRestoreResumesTheAgentOfAListedTab(t *testing.T) {
 	dir := t.TempDir()
@@ -684,9 +666,9 @@ func TestASessionOfAWorkspaceWithItsOwnPanelsRestoresIntoItsListedTabs(t *testin
 	}
 }
 
-// The reverse: a file saved from listed tabs restores into a workspace that
-// holds its own panels.
-func TestASessionOfListedTabsRestoresIntoAWorkspaceWithItsOwnPanels(t *testing.T) {
+// A file saved from two listed tabs restores into a workspace that lists the
+// agent tab alone: both agents are resumed, one in the tab and one past it.
+func TestASessionOfListedTabsRestoresIntoAWorkspaceThatListsTheAgentTabAlone(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := savedListedTabs(t, dir)
 

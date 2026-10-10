@@ -1,11 +1,14 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 const valid = `
@@ -154,4 +157,14 @@ func sharedOf(t *testing.T, root string) []map[string]any {
 		t.Fatalf("Load: %v", err)
 	}
 	return cfg.Targets
+}
+
+// refusalOf is why the named target of a loaded project was refused, or nil.
+func refusalOf(p core.Project, name revier.TargetName) error {
+	for i, t := range p.Targets {
+		if t.Name == name {
+			return p.TargetErr(i)
+		}
+	}
+	return errors.New("no such target")
 }

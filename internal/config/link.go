@@ -40,12 +40,12 @@ const linkTab revier.TargetName = "agent"
 // says otherwise. The home target is the workspace as it is laid out here: a
 // container that lists one tab, and that tab, a target named agent inside it
 // with an agent panel and a shell panel, each reaching the host to run
-// `revier agent exec` or `revier shell exec` there (decisions.md D84, D128).
+// `revier agent exec` or `revier shell exec` there (D84, D128).
 // What argv reaches the host is the remote port's to say, and the core asks
 // it where the tabs are read: a panel here carries its kind and no command.
 // Which harness and which directory is the host's project file's to say. A
 // link may declare further targets, which run here and reach the host
-// themselves - an editor over ssh, a page (decisions.md D82).
+// themselves - an editor over ssh, a page (D82).
 //
 // A home target the link already has - its own, or the remote part of the
 // shared one - keeps every field it sets, and the derived name and match
@@ -64,7 +64,7 @@ const linkTab revier.TargetName = "agent"
 // has neither. Any other target of that name is left as it is, and the home
 // that lists it is refused with the reason.
 //
-// A link has no list of tabs of its own (decisions.md D126): one a runtime
+// A link has no list of tabs of its own (D128): one a runtime
 // realization declares is dropped, with its active tab, before the home gets
 // the derived one.
 func link(p *revier.Project) {

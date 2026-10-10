@@ -23,7 +23,10 @@ Each section is also the text of its release on the
   ```
 
   A machine that a link reaches must have this version and its project files
-  in this form too, and so must a link file whose home declares `panels`. A session saved before
+  in this form too, and so must a link file whose home declares `panels`. A
+  link home with a window part and a runtime part that has no `launch` is
+  refused as well: give the runtime part a `launch`, or remove one of the two
+  parts. A session saved before
   the change restores after it. `revier new` writes the new form, and
   `revier assist --reference` prints a whole file in it.
 - **A workspace opens with a list of tabs.** `tabs = ["tickets", "agent"]` on

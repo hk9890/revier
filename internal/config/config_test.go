@@ -307,8 +307,8 @@ func containerProject(edit func(p *revier.Project)) revier.Project {
 	return p
 }
 
-// A target that lists tabs is launched by them, so it needs no launch and no
-// panels, and a tab holds panels as well as a launch (decisions.md D126).
+// A target that lists tabs is launched by them, so it needs no launch, and a
+// tab holds panels or a launch (decisions.md D126).
 func TestValidateAcceptsATargetThatListsItsTabs(t *testing.T) {
 	if err := config.Validate(containerProject(func(*revier.Project) {})); err != nil {
 		t.Fatalf("Validate: %v", err)

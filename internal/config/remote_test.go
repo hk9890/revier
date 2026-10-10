@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -45,7 +44,7 @@ func TestALinkDerivesItsHomeItsAgentTabAndItsNameOnTheHost(t *testing.T) {
 		t.Errorf("commands = %q, %q; want none: the transport is the core's to ask", panels[0].Command, panels[1].Command)
 	}
 	if home.Runtime.Name != "session:far" || home.Runtime.Match.Title != "^session:far$" {
-		t.Errorf("name %q, match %q: the pane must be found again by its title", home.Runtime.Name, home.Runtime.Match.Title)
+		t.Errorf("name %q, match %q: the workspace must be found again by its title", home.Runtime.Name, home.Runtime.Match.Title)
 	}
 	if home.Runtime.Dir != "" {
 		t.Errorf("dir = %q, want none: nothing of the project is here", home.Runtime.Dir)
@@ -125,7 +124,7 @@ home = true
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
 	home, ok := p.Home()
 	if !ok || home.Runtime == nil {
-		t.Fatalf("home = %+v, want the derived pane under the declared target", home)
+		t.Fatalf("home = %+v, want the derived home under the declared target", home)
 	}
 	if home.Runtime.Place != "right top 75% 100%" {
 		t.Errorf("place = %q, want the one the link declared", home.Runtime.Place)
@@ -344,16 +343,6 @@ name = "pages"
 	}
 }
 
-// refusalOf is why the named target of a loaded project was refused, or nil.
-func refusalOf(p core.Project, name revier.TargetName) error {
-	for i, t := range p.Targets {
-		if t.Name == name {
-			return p.TargetErr(i)
-		}
-	}
-	return errors.New("no such target")
-}
-
 // The drop rule runs both ways: a shared target with only a remote part is a
 // link's, and a local project is not left holding a target with nothing to
 // open.
@@ -562,7 +551,7 @@ func TestCreateLinkWritesTheRemoteTableAndLoadsItBack(t *testing.T) {
 }
 
 // A link has no list of tabs of its own: the one its home declares is
-// dropped, and the home lists the derived tab alone (decisions.md D126).
+// dropped, and the home lists the derived tab alone (decisions.md D128).
 func TestALinkHomeDropsItsTabs(t *testing.T) {
 	body := link + `
 [[target]]

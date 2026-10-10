@@ -598,3 +598,20 @@ func benchProject(i int) revier.Project {
 		},
 	}
 }
+
+// listedTabsProject is a workspace that is only the window: tickets is its
+// first tab, and the agent and the shell are its second.
+func listedTabsProject(active revier.TargetName) revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
+			Tabs: []revier.TargetName{"tickets", "agent"}, Active: active}},
+		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
+			Inside: "home", Launch: []string{"taskmgr-ui"}, Dir: "/p/tickets"}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home", Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude"}},
+				{Kind: revier.PanelShell},
+			}}},
+	}}
+}

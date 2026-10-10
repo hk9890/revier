@@ -170,7 +170,7 @@ func TestTheProjectScreenDropsAnOverride(t *testing.T) {
 }
 
 // A link shows its host and its name there, and offers only its name; its
-// home is the derived pane until the file declares one.
+// home and its tab are the derived ones until the file declares them.
 func TestTheProjectScreenShowsALink(t *testing.T) {
 	m, _, _ := projectSurface(t, "[remote]\nhost = \"buildbox\"\nproject = \"far\"\n", hosttest.NewRuntime("rt"))
 	m, _ = press(m, "alt+e")
