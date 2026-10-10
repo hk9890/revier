@@ -213,8 +213,10 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 			if snap, err = c.answered(ctx, nameOf(c.Runtime)); err != nil {
 				return Result{Target: res.Target, Ref: res.Ref}, err
 			}
-			if listed, found, id, isOpen, err := c.container(snap, p, i, bound); err == nil && found && isOpen {
-				in, tab, open, withInstance = listed, id, true, true
+			if listed, ok := byRef(snap, res.Ref); ok {
+				if id, isOpen := tabOf(listed, t.Name); isOpen {
+					tab, open, withInstance = id, true, true
+				}
 			}
 		}
 	}

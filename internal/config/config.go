@@ -548,15 +548,6 @@ func validateTargets(p revier.Project) []error {
 		if tab {
 			errs = append(errs, validateTab(p, t)...)
 		}
-		for kind, r := range map[revier.HostKind]*revier.Realization{
-			revier.HostWindow: t.Window, revier.HostRuntime: t.Runtime,
-		} {
-			if r != nil && r.First && r.Inside == "" {
-				// Ignored, the target would open as an instance of its own
-				// and never with another, which is what first was written for.
-				errs = append(errs, fmt.Errorf("target %q %s realization is first and inside nothing; first is the place of a tab, so give it inside", t.Name, kind))
-			}
-		}
 		if t.Window != nil && t.Window.Inside != "" {
 			// Only a runtime opens tabs. Ignored, it would open a window of its
 			// own, which is the choice inside was written to refuse.
@@ -572,6 +563,11 @@ func validateTargets(p revier.Project) []error {
 				// A tab is found by its target's name, so it needs no match
 				// and no name; validateTab has checked the rest.
 				continue
+			}
+			if r.First && r.Inside == "" {
+				// Ignored, the target would open as an instance of its own
+				// and never with another, which is what first was written for.
+				errs = append(errs, fmt.Errorf("target %q %s realization is first and inside nothing; first is the place of a tab, so give it inside", t.Name, kind))
 			}
 			if r.Match.IsZero() {
 				// An unconstrained match selects whichever instance the host

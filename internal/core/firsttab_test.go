@@ -15,16 +15,10 @@ import (
 // firstTabProject is a workspace of an agent and a shell, with tickets as the
 // first tab of it.
 func firstTabProject() revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-			Panels: []revier.PanelSpec{
-				{Kind: revier.PanelAgent, Command: []string{"claude"}},
-				{Kind: revier.PanelShell},
-			}}},
-		{Name: "tickets", Runtime: &revier.Realization{
-			Inside: "home", First: true, Launch: []string{"taskmgr-ui"}}},
-	}}
+	p := tabProject()
+	p.Targets[0].Runtime.Panels = append(p.Targets[0].Runtime.Panels, revier.PanelSpec{Kind: revier.PanelShell})
+	p.Targets[1].Runtime.First = true
+	return p
 }
 
 // The order of the tabs is the order they are opened in: the first tab opens
