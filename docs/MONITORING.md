@@ -48,7 +48,7 @@ doc reads what it already did.
 | `event line skipped` | one `WARN` per line of the event file that is not an event, with `line` |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
 | `probe` | an agent probe failed, and the agent shows unknown |
-| `panel mark` | one `WARN` per launch whose first panel could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
+| `panel mark` | one `WARN` per panel of a launch that could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps |
 | `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
 | `shutdown survey`, `shutdown recheck`, `shutdown save` | the phases of a close before its first step, each with `duration_ms`: the plan's survey, the reading of its agents again, the session save. The two surveys carry `asked`, the linked hosts waited for, and `unanswered`, why a host gave no answer for a link (`docs/design/decisions.md` D115) |

@@ -173,8 +173,8 @@ type Tab struct {
 }
 
 // Open is Fake.Open with the panels a runtime gives what it opens: one per
-// panel spec, and the realization's vars on the first, which is how a real
-// runtime reports back the mark the core set on it. Only a runtime's
+// panel spec, and the realization's vars on each, which is how a real
+// runtime reports back the mark the core set on them. Only a runtime's
 // instances carry panels, so only a runtime's Open makes them.
 func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	ref, err := f.Fake.Open(ctx, r)
@@ -188,16 +188,13 @@ func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.Ta
 			continue
 		}
 		var panels []revier.Panel
-		for n, spec := range r.PanelSpecs() {
+		for _, spec := range r.PanelSpecs() {
 			f.nextID++
-			panel := revier.Panel{
+			panels = append(panels, revier.Panel{
 				ID: revier.PanelID("p" + strconv.Itoa(f.nextID)), Kind: liveKind(spec),
 				Title: spec.Title, Command: spec.Command, PID: 2000 + f.nextID,
-			}
-			if n == 0 {
-				panel.Vars = r.Vars
-			}
-			panels = append(panels, panel)
+				Vars: r.Vars,
+			})
 		}
 		f.instances[i].Panels = panels
 		if f.current == nil {
@@ -219,7 +216,7 @@ func liveKind(spec revier.PanelSpec) revier.PanelKind {
 }
 
 // OpenTab adds the tab's panels to the instance, in a tab of their own with
-// vars on the first, and records the call.
+// vars on each, and records the call.
 // FakeRuntime implements revier.PanelOpener; a runtime without the capability
 // is a different double.
 func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
@@ -242,9 +239,9 @@ func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.
 		tab := "tab" + strconv.Itoa(f.nextID)
 		for n, spec := range specs {
 			f.nextID++
-			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: liveKind(spec), Title: spec.Title, Command: spec.Command, Tab: tab}
+			panel := revier.Panel{ID: revier.PanelID("tab" + strconv.Itoa(f.nextID)), Kind: liveKind(spec), Title: spec.Title, Command: spec.Command, Tab: tab, Vars: vars}
 			if n == 0 {
-				first, panel.Vars = panel.ID, vars
+				first = panel.ID
 			}
 			live = append(live, panel)
 		}

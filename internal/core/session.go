@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/hk9890/revier/internal/session"
@@ -169,6 +168,12 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			// harness alone: a restore never resumes it (decisions.md D68), so
 			// its conversation is neither asked for nor counted as recorded.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
+				// A listed tab that holds panels is a part of the workspace's
+				// layout (decisions.md D127): its agents are recorded below,
+				// under the instance, with their conversations.
+				if panelTab(v.Project, t) {
+					continue
+				}
 				tab := session.Target{Name: tv.Name}
 				id, open := tabOf(inst, tv.Name)
 				for _, panel := range inst.Panels {
@@ -183,7 +188,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 				// A tab its target lists comes back with the instance, so it
 				// is no step of a restore: a step would leave it the current
 				// tab (decisions.md D126).
-				if in, _ := v.Project.Target(t.Runtime.Inside); in.Runtime == nil || !slices.Contains(in.Runtime.Tabs, tv.Name) {
+				if !listedTab(v.Project, t) {
 					tabs = append(tabs, tab)
 				}
 				continue
@@ -208,7 +213,8 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			}
 			for _, panel := range inst.Panels {
 				// A tab's panel is its tab target's, and a restore of the
-				// instance would otherwise open it a second time.
+				// instance would otherwise open it a second time. The panels
+				// of a listed tab that holds panels stay here.
 				if recordedAsTab(v, inst, panel) {
 					continue
 				}
@@ -241,10 +247,11 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 // recordedAsTab reports whether the panel is the one an open tab target of the
 // view records as its own. A panel that names a target no longer a tab, or a
 // tab open in another instance, stays with its instance, so its agent is not
-// left out of the save.
+// left out of the save. So does every panel of a listed tab that holds panels:
+// a restore resumes its agents with the instance (decisions.md D127).
 func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
 	name := revier.TargetName(panel.Vars[PanelTargetVar])
-	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) {
+	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) || panelTab(v.Project, t) {
 		return false
 	}
 	tv, _ := targetView(v, name)
@@ -371,6 +378,13 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 	for _, p := range s.Projects {
 		v, known := views[p.Name]
 		for _, t := range p.Targets {
+			// A file saved before the target listed its tabs holds a step for
+			// one of them. The tab opens with its instance now, and a step
+			// for it would leave it the current tab, not the active one
+			// (decisions.md D126).
+			if tab, ok := v.Project.Target(t.Name); ok && tabTarget(tab) && listedTab(v.Project, tab) {
+				continue
+			}
 			// Every step carries its recorded agents, so a step stepped
 			// over can still say which conversations it held.
 			step := RestoreStep{Project: p.Name, Target: t.Name, Resumes: resumesOf(t)}
@@ -433,8 +447,9 @@ func (c *Core) resuming(real revier.Realization, resumes []Resume, link bool) (r
 
 // Resumes is what a launch of the target would do with a step's recorded
 // agents now, for a dry run that says what a restore would do. It lays them
-// over the realization a launch resolves, and builds the agent tabs a launch
-// would add, so the two cannot disagree.
+// over the realization a launch resolves, or over the tabs it lists, and
+// builds the agent tabs a launch would add, so the two cannot disagree. A
+// target the launch refuses starts no agent, and has no outcome.
 func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []AgentOutcome {
 	i, ok := p.index(name)
 	if !ok {
@@ -447,9 +462,23 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if err != nil {
 		return nil
 	}
+	opener, err := c.tabsHost(name, real, host)
+	if err != nil {
+		return nil
+	}
 	link := p.Remote != nil
-	_, outcomes, extra := c.resuming(real, resumes, link)
-	_, added := c.agentTabs(host, real, extra, link)
+	var outcomes []AgentOutcome
+	var extra []Resume
+	if opener != nil {
+		tabs, err := p.opening(name, real)
+		if err != nil {
+			return nil
+		}
+		_, outcomes, extra = c.resumingTabs(tabs, resumes, link)
+	} else {
+		_, outcomes, extra = c.resuming(real, resumes, link)
+	}
+	_, added := c.agentTabs(host, p.layout(real), extra, link)
 	return append(outcomes, added...)
 }
 

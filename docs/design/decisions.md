@@ -268,9 +268,12 @@ raise becomes a GNOME "is ready" notice, so the press fails with
 ### D64 — a target can be a tab inside another target
 
 `inside` places the ticket viewer on a workspace tab. The tab's identity is a
-variable revier sets, because a title or a position is not one. `PanelOpener` is
-optional, and a runtime without it refuses; it does not open a window the user
-did not choose.
+variable revier sets, because a title or a position is not one. Every panel of
+the tab carries it: the first panel of a tab that holds panels is the agent,
+and a mark on that panel alone ended with the agent, so the key opened a second
+tab. The tab is the first panel that carries the mark, and a second press on
+its key goes home from any panel of it. `PanelOpener` is optional, and a
+runtime without it refuses; it does not open a window the user did not choose.
 
 ### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore
 
@@ -292,10 +295,11 @@ mutter has not shown yet is dropped.
 Narrows D63. A named window the host does not list may be the one left over, and
 the unnamed window would take its title.
 
-### D68 — a tab target's agent is recorded under the tab, and not resumed
+### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
 
-Recorded under the workspace, it was restored twice. A tab target's argv is not
-known to be the agent, so a resume could run `taskmgr-ui --resume <id>`.
+Recorded under the workspace, it was restored twice. The argv of a launch is
+not known to be the agent, so a resume could run `taskmgr-ui --resume <id>`. A
+panel of kind agent in a listed tab is known to be one, and is resumed (D127).
 
 ### D69 — the log is slog's default logger, one JSON file per day under the state root
 
@@ -545,11 +549,11 @@ remote host stop eighty-nine projects until `--force` turned the guard off.
 `ownPanel` took the first panel carrying no tab mark, so in a workspace whose
 tab holds a shell beside the tab target's panel it picked that shell: a return
 home from a tab landed in the wrong pane, and the own-tab rule of a shutdown
-(D94) read the same guess. revier now marks the first panel of every instance
-it opens with the target it was opened for, through `Realization.Vars`, as
-`OpenTab` already marks a tab's. In an instance that opens with its tabs
-(D126), that panel is the first one of the active tab. The guess stays only
-for an instance opened before the mark.
+(D94) read the same guess. revier now marks the panels `Open` makes with the
+target the instance was opened for, through `Realization.Vars`, as `OpenTab`
+marks a tab's (D64); the own panel is the first one of the marked tab. In an
+instance that opens with its tabs (D126), that tab is the active one. The
+guess stays only for an instance opened before the mark.
 
 ### D101 — a link's view is the host's agents and this machine's, added together
 
@@ -780,3 +784,11 @@ target is only the window. Both apply when revier creates the instance.
 Replaces D124. Rejected: a position flag on the tab, one flag for each
 position; the order of `[[target]]` in the file, since shared targets merge
 before a project's, and a file could not say which tabs open at the start.
+
+### D127 — the panels of a workspace that lists its tabs are the panels of those tabs
+
+With D126 the home target holds no panels, so every reader of the agent panel
+and the shell panel found none: `agent new`, `shell new`, a link's served
+panel, a restore. One function gives the layout: the target's own panels, or
+those of its listed tabs in order. The agents in them are saved under the
+workspace, in the file shape of 0.14.0, so a file restores across both forms.

@@ -26,8 +26,8 @@ type Served struct {
 	Outcome AgentOutcome
 }
 
-// workspace is the first runtime realization of the project that declares a
-// panel of that kind, or its home's when none does. It is read from the
+// workspace is the first runtime realization of the project whose layout
+// declares a panel of that kind, or its home's when none does. It is read from the
 // project and not resolved: a machine reached over ssh alone has no runtime,
 // and serves its panels all the same. A refused target is passed over, as
 // resolveAt passes over it: its realization is as written, not as rendered,
@@ -42,7 +42,7 @@ func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.Pan
 		if t.Runtime == nil || tabTarget(t) {
 			continue
 		}
-		if spec, ok := declared(t.Runtime.Panels, kind); ok {
+		if spec, ok := declared(p.layout(*t.Runtime), kind); ok {
 			return *t.Runtime, spec, nil
 		}
 	}

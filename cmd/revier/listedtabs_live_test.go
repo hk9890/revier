@@ -8,6 +8,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -108,6 +109,25 @@ func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnTmux(t *testing.T) {
 	capture(t, "go", "tickets", "-p", "lead")
 	if got := leadPanes(t); !slices.Equal(got, leadAtTickets) {
 		t.Errorf("panes = %q, want %q", got, leadAtTickets)
+	}
+}
+
+// `revier agent new` finds the agent panel and the shell panel in the tab the
+// workspace lists (decisions.md D127): the new tab is a third window that
+// holds a copy of both, and the command prints the address of its agent.
+func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnTmux(t *testing.T) {
+	lead(t)
+	capture(t, "open", "lead")
+
+	address := strings.TrimSpace(capture(t, "agent", "new", "-p", "lead", "--no-focus"))
+	if !regexp.MustCompile(`^lead:%\d+$`).MatchString(address) {
+		t.Fatalf("printed %q, want lead:<pane>", address)
+	}
+	pane := strings.TrimPrefix(address, "lead:")
+	got := strings.ReplaceAll(strings.TrimSpace(tmuxRun(t, "display-message", "-p", "-t", pane, "#{pane_start_command} panes=#{window_panes} index=#{window_index}")), `"`, "")
+	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "lead", "-F", "#{window_index}")), "\n")
+	if want := "sh -c sleep 300 panes=2 index=" + windows[len(windows)-1]; len(windows) != 3 || got != want {
+		t.Errorf("pane %s = %q in windows %q, want %q in a third window", pane, got, windows, want)
 	}
 }
 

@@ -620,22 +620,30 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		if c.Window != nil {
 			res.Before = snap[c.Window.Name()]
 		}
-		// The agent tabs are copies of the realization as declared, not of
-		// the launch the first agents were written into.
-		launch, agents, extra := c.resuming(real, resumes, p.Remote != nil)
-		// The instance's own first panel is marked with the target it was
-		// opened for, so a return home from a tab lands in it rather than in
-		// the first panel that happens to carry no tab mark (decisions.md D100).
-		launch.Vars = map[string]string{PanelHomeVar: string(name)}
-		// A target that lists its tabs opens as the first of them, under that
-		// tab's mark, and the others open after it: the order of the tabs is
-		// the order they are opened in (decisions.md D126).
-		var tabs opening
+		var (
+			launch revier.Realization
+			agents []AgentOutcome
+			extra  []Resume
+			tabs   opening
+		)
 		if opener != nil {
+			// A target that lists its tabs opens as the first of them, under
+			// that tab's mark, and the others open after it: the order of the
+			// tabs is the order they are opened in (decisions.md D126).
 			if tabs, err = p.opening(name, real); err != nil {
 				return Result{}, err
 			}
+			tabs, agents, extra = c.resumingTabs(tabs, resumes, p.Remote != nil)
 			launch = tabs.first(real)
+		} else {
+			// The agent tabs are copies of the realization as declared, not of
+			// the launch the first agents were written into.
+			launch, agents, extra = c.resuming(real, resumes, p.Remote != nil)
+			// The instance's own panels are marked with the target it was
+			// opened for, so a return home from a tab lands in the first of
+			// them rather than in the first panel that happens to carry no tab
+			// mark (decisions.md D100).
+			launch.Vars = map[string]string{PanelHomeVar: string(name)}
 		}
 		ref, err := host.Open(ctx, launch)
 		if err != nil {
@@ -660,12 +668,13 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
 				// The instance stays open with the tabs it has, and is reported
 				// with the failure, so the caller pins it and the next press
-				// raises it instead of opening another. No agent started.
-				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), 0)
+				// raises it instead of opening another. The agents of the tabs
+				// that opened started; no other did.
+				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), tabs.laid[len(res.Tabs)-1])
 				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
-		added, err := c.addAgents(ctx, host, real, ref, extra, p.Remote != nil)
+		added, err := c.addAgents(ctx, host, p.layout(real), ref, extra, p.Remote != nil)
 		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by

@@ -594,8 +594,8 @@ func isRunShell(cmdline []string) bool {
 // when there are no panels, as a `kitten @ launch` sequence: the first panel
 // opens the OS window and every later one splits into its first tab. With no
 // kitty answering it starts one, on a socket that discovery finds again.
-// r.Vars become user vars of that first window, which ls reports back as the
-// panel's Vars, as OpenTab's do for a tab.
+// r.Vars become user vars of every window it opens, which ls reports back as
+// the panel's Vars, as OpenTab's do for a tab.
 //
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
@@ -621,7 +621,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", first, "err", err)
 	}
 	for _, p := range panels[1:] {
-		args := []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+		args := append([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}, varArgs(r.Vars)...)
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
 		}
@@ -651,10 +651,10 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
 }
 
-// setVars marks a window kitty has already opened with its user vars. A
-// launch takes them as --var, but the kitty process started for the first
-// window of a new OS window takes no such option, so both paths set them
-// here, in the one call set-user-vars takes every pair in.
+// setVars marks the first window of a new OS window with its user vars. A
+// launch takes them as --var, but the kitty process started for that window
+// takes no such option, so both paths that open it set them here, in the one
+// call set-user-vars takes every pair in.
 func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
 	if len(vars) == 0 {
 		return nil
@@ -670,6 +670,15 @@ func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[stri
 // varNames are the variable names in a fixed order, so a launch's arguments
 // and a set-user-vars call are the same from one run to the next.
 func varNames(vars map[string]string) []string { return slices.Sorted(maps.Keys(vars)) }
+
+// varArgs are the launch options that give a new window its user vars.
+func varArgs(vars map[string]string) []string {
+	var args []string
+	for _, name := range varNames(vars) {
+		args = append(args, "--var", name+"="+vars[name])
+	}
+	return args
+}
 
 // title gives a new window its panel title without taking the title away from
 // the program inside. `launch --title` pins a title for good, and a pinned
@@ -824,7 +833,7 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (socket string,
 // with the first as the tab and every later one split into it. `launch
 // --match` names the OS window through the window current in it, and the tab
 // goes last so the panels keep their order in the listing a save records
-// agents by. The vars become user vars of the tab's first window, which ls
+// agents by. The vars become user vars of every window of the tab, which ls
 // reports back as the panel's Vars.
 //
 // The keyboard stays where it is, which is what revier.PanelOpener asks.
@@ -864,14 +873,12 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bo
 	panels := r.PanelSpecs()
 
 	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
-	for _, name := range varNames(vars) {
-		args = append(args, "--var", name+"="+vars[name])
-	}
 	first := 0
 	for i, p := range panels {
 		if i > 0 {
 			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
 		}
+		args = append(args, varArgs(vars)...)
 		if keepFocus {
 			args = append(args, "--keep-focus")
 		}

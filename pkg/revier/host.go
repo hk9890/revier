@@ -139,13 +139,13 @@ type PanelReader interface {
 // the runtime.
 //
 // Which tab belongs to which target is the core's decision. The runtime only
-// sets vars on the panel it opens and reports them back in Panel.Vars.
+// sets vars on the panels it opens and reports them back in Panel.Vars.
 type PanelOpener interface {
 	// OpenTab opens a new tab of the instance, after the ones it holds, and
 	// returns its first panel. The tab runs r.Launch, or holds r.Panels with
 	// every later panel split into the first, each panel started in its Dir,
-	// and r.Launch in r.Dir. vars are set on the first panel. An OpenTab that
-	// fails closes what it opened, so no half-built tab runs an agent the
+	// and r.Launch in r.Dir. vars are set on every panel of the tab, so the
+	// tab is found while any of them is open. An OpenTab that fails closes what it opened, so no half-built tab runs an agent the
 	// core names as not added. It is a tab target's tab (decisions.md D64),
 	// the agent tab of `revier agent new` and a restore (D65), and each tab
 	// after the first of a target that lists its tabs (D126).
