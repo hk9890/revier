@@ -29,11 +29,12 @@ func onTargetRow(m tui.Model, i int) tui.Model {
 	return m
 }
 
-// The screen lists every shared target with its key and where it opens.
+// The screen lists every shared target with its key and where it opens: a
+// target that lists its tabs with them, and a tab with the target it is inside.
 func TestTheConfigScreenListsTheSharedTargets(t *testing.T) {
 	m, _ := targetsSurface(t)
 	m, _ = press(m, "alt+c")
-	for _, want := range []string{"ctrl+shift+u", "runtime, 2 panels · home", "ctrl+shift+o", "window: idea {{.Path}}", "add a target"} {
+	for _, want := range []string{"ctrl+shift+u", "runtime, tabs: agent · home", "ctrl+shift+o", "window: idea {{.Path}}", "tab of home, 2 panels", "add a target"} {
 		if !strings.Contains(screen(m), want) {
 			t.Errorf("config screen does not say %q:\n%s", want, screen(m))
 		}
@@ -45,7 +46,7 @@ func TestTheConfigScreenListsTheSharedTargets(t *testing.T) {
 func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)
 	m, _ = press(onTargetRow(m, 1), "enter")
-	m = downs(m, 10) // name, key, home, the runtime's five fields, add a panel, the window's name: its command
+	m = downs(m, 11) // name, key, home, the runtime's six fields, add a panel, the window's name: its command
 	m = typeInto(clearField(m), "code {{.Path}}")
 	m, _ = press(m, "enter")
 
@@ -62,8 +63,8 @@ func TestTheConfigScreenChangesASharedTarget(t *testing.T) {
 // and a command, and all of it written when the target is saved.
 func TestTheConfigScreenEditsPanels(t *testing.T) {
 	m, root := targetsSurface(t)
-	m, _ = press(onTargetRow(m, 0), "enter")
-	m = downs(m, 8) // the agent panel
+	m, _ = press(onTargetRow(m, 2), "enter")
+	m = downs(m, 9) // the agent panel
 	m, _ = press(m, "alt+d")
 	m = downs(m, 1) // add a panel
 	m, _ = press(m, "enter")
@@ -77,9 +78,9 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 		t.Fatalf("config.toml changed before the target was saved:\n%s", got)
 	}
 	m, _ = press(m, "up")
-	m, _ = press(m, "up") // place
+	m, _ = press(m, "up") // inside
 	m, _ = press(m, "enter")
-	if !strings.Contains(screen(m), "runtime, 2 panels") {
+	if !strings.Contains(screen(m), "tab of home, 2 panels") {
 		t.Errorf("config screen does not show the saved panels:\n%s", screen(m))
 	}
 
@@ -108,9 +109,9 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 // A new target is written at the end and listed.
 func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)
-	m, _ = press(onTargetRow(m, 2), "enter")
+	m, _ = press(onTargetRow(m, 3), "enter")
 	m = typeInto(m, "notes")
-	m = downs(m, 10) // the window's command
+	m = downs(m, 11) // the window's command
 	m = typeInto(m, "gedit")
 	m = downs(m, 2) // its match class
 	m = typeInto(m, "^gedit$")
@@ -122,6 +123,100 @@ func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	}
 	if !strings.Contains(screen(m), "window: gedit") {
 		t.Errorf("config screen does not list the new target:\n%s", screen(m))
+	}
+}
+
+// The form makes a tab: the target it is inside is a field of the runtime,
+// and its panels are written under it. The command's note says what starts a
+// target that has none.
+func TestTheConfigScreenAddsATabWithAPanel(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 3), "enter")
+	if !strings.Contains(screen(m), "empty when tabs or panels are what starts") {
+		t.Errorf("the form does not say what starts a target with no command:\n%s", screen(m))
+	}
+	m = typeInto(m, "tickets")
+	m = downs(m, 8) // inside
+	m = typeInto(m, "home")
+	m = downs(m, 1) // add a panel
+	m, _ = press(m, "enter")
+	m, _ = press(m, "right") // shell to tool
+	m, _ = press(m, "tab")
+	m = typeInto(m, "tests")
+	m, _ = press(m, "tab")
+	m = typeInto(m, "tt")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "up") // inside
+	m, _ = press(m, "enter")
+
+	want := sharedTargets + "\n[[target]]\nname = \"tickets\"\n  [target.runtime]\n  inside = \"home\"\n    [[target.runtime.panels]]\n    kind = \"tool\"\n    title = \"tests\"\n    command = [\"tt\"]\n"
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+	if !strings.Contains(screen(m), "tab of home, 1 panel") {
+		t.Errorf("config screen does not list the new tab:\n%s", screen(m))
+	}
+}
+
+// A target that says only what it is inside is still a runtime realization:
+// the form hands it on, and the reason it is not written is the rule's, which
+// names what the tab lacks.
+func TestTheConfigScreenKeepsATabThatHasOnlyItsInside(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 3), "enter")
+	m = typeInto(m, "tickets")
+	m = downs(m, 8) // inside
+	m = typeInto(m, "home")
+	m, _ = press(m, "enter")
+	if f := footer(m); !strings.Contains(f, `is inside "home" and has no launch argv and no panels`) {
+		t.Errorf("footer = %q, want the tab refused for having nothing to run", f)
+	}
+	if got := fileText(t, config.File(root)); got != sharedTargets {
+		t.Errorf("config.toml changed:\n%s", got)
+	}
+}
+
+// A target of the form before tabs, panels on a runtime realization that is
+// no tab, is refused in every project. Naming the target it is inside
+// repairs it from the form.
+func TestTheConfigScreenRepairsPanelsOnATargetThatIsNoTab(t *testing.T) {
+	const oldForm = sharedTargets + `
+[[target]]
+name = "logs"
+  [target.runtime]
+  name = "logs:{{.Name}}"
+  match = { title = "^logs:{{.Name}}$" }
+    [[target.runtime.panels]]
+    kind = "tool"
+    command = ["tail"]
+`
+	m, file, _ := projectSurfaceOver(t, oldForm, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	root := filepath.Dir(filepath.Dir(file))
+	_, before, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probs := config.Problems(before[0]); len(probs) != 1 || !strings.Contains(probs[0].Error(), `target "logs" runtime realization declares panels; only a tab has them`) {
+		t.Fatalf("Problems = %v, want logs refused for its panels", probs)
+	}
+
+	m, _ = press(onTargetRow(m, 3), "enter")
+	m = downs(m, 8) // inside
+	m = typeInto(m, "home")
+	m, _ = press(m, "enter")
+
+	if got := fileText(t, config.File(root)); !strings.Contains(got, "  inside = \"home\"\n    [[target.runtime.panels]]\n    kind = \"tool\"") {
+		t.Errorf("config.toml =\n%s\nwant logs inside home, its panel kept", got)
+	}
+	_, after, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probs := config.Problems(after[0]); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+	if !strings.Contains(screen(m), "tab of home, 1 panel") {
+		t.Errorf("config screen does not list logs as a tab:\n%s", screen(m))
 	}
 }
 

@@ -113,9 +113,9 @@ type Realization struct {
 	Name string `toml:"name" json:"name,omitempty"`
 
 	// Launch is the argv used when Match finds nothing. It reaches a host
-	// already rendered: an adapter never sees a template. A runtime
-	// realization with Panels may leave it empty; the panels are then what is
-	// launched.
+	// already rendered: an adapter never sees a template. A tab that holds
+	// Panels leaves it empty, and so does a realization that lists Tabs: the
+	// tabs are then what is launched.
 	Launch []string `toml:"launch" json:"launch,omitempty"`
 
 	// Dir is the working directory Launch and every panel start in. The core
@@ -125,9 +125,11 @@ type Realization struct {
 
 	Match Match `toml:"match" json:"match"`
 
-	// Panels is the layout of the realization: of an instance, or of a tab
-	// when the realization has Inside. Runtime hosts only: a window host
-	// cannot see inside a terminal, and ignores it.
+	// Panels is the layout of a tab. A project file declares them on a
+	// realization that has Inside and on no other (decisions.md D128). The
+	// realization Open receives holds the panels of the first tab the
+	// instance opens with: the core puts them there. Runtime hosts only: a
+	// window host cannot see inside a terminal, and ignores it.
 	Panels []PanelSpec `toml:"panels" json:"panels,omitempty"`
 
 	// Vars are the panel variables the host sets on every panel Open makes,
@@ -157,10 +159,10 @@ type Realization struct {
 	Inside TargetName `toml:"inside" json:"inside,omitempty"`
 
 	// Tabs lists, in order, the tab targets a new instance opens with. The
-	// realization then has no Launch and no Panels of its own, and each
-	// entry is a target that is Inside this one (decisions.md D126). Runtime
-	// realizations only, and never one with Inside. It applies when the
-	// instance is created: an open instance is not changed.
+	// realization then has no Launch of its own, and each entry is a target
+	// that is Inside this one (decisions.md D126). Runtime realizations only,
+	// and never one with Inside. It applies when the instance is created: an
+	// open instance is not changed.
 	Tabs []TargetName `toml:"tabs" json:"tabs,omitempty"`
 
 	// Active names the entry of Tabs that has the focus in a new instance.

@@ -47,7 +47,7 @@ func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host re
 	}
 	opener, ok := host.(revier.PanelOpener)
 	if !ok {
-		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch or panels",
+		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch",
 			ErrNoTabs, name, host.Name())
 	}
 	return opener, nil
@@ -78,18 +78,47 @@ func (p Project) listed(real revier.Realization) []revier.Target {
 	return tabs
 }
 
-// layout is the panels a workspace declares, which is where its agent panel
-// and its shell panel are read from: the realization's own, or the panels of
-// the tabs it lists, in their order (decisions.md D127). So the first panel of
-// a kind is the one of the first listed tab that declares it. Every reader of
-// a workspace's declared panels takes them from here: an agent tab, a shell
-// tab, a panel served to a link, a restore.
-func (p Project) layout(real revier.Realization) []revier.PanelSpec {
-	if len(real.Tabs) == 0 {
-		return real.Panels
+// listedTabs is the listed tabs as this machine opens them: the panels of a
+// link's tabs carry the argv that reaches the host (linkPanels). Every reader
+// of a listed tab that starts a panel here takes it from this one place, so a
+// launch, an agent tab, a shell tab and a restore see one argv. The tabs are
+// copied before one is filled: they arrive sharing the prepared project's
+// realizations.
+func (c *Core) listedTabs(p Project, real revier.Realization) ([]revier.Target, error) {
+	tabs := p.listed(real)
+	if p.Remote == nil {
+		return tabs, nil
 	}
+	tabs = slices.Clone(tabs)
+	for i := range tabs {
+		filled, err := c.linkPanels(p, *tabs[i].Runtime)
+		if err != nil {
+			return nil, err
+		}
+		tabs[i].Runtime = &filled
+	}
+	return tabs, nil
+}
+
+// layout is the panels a workspace declares, which is where its agent panel
+// and its shell panel are read from: the panels of the tabs it lists, in
+// their order (decisions.md D128). So the first panel of a kind is the one of
+// the first listed tab that declares it, and a target that lists no tab has
+// no layout: panels are on a tab alone. Every reader of a workspace's
+// declared panels that starts one here takes them from here: an agent tab, a
+// shell tab, a restore.
+func (c *Core) layout(p Project, real revier.Realization) ([]revier.PanelSpec, error) {
+	tabs, err := c.listedTabs(p, real)
+	if err != nil {
+		return nil, err
+	}
+	return panelsOf(tabs), nil
+}
+
+// panelsOf is the panels of the tabs, in the order of the tabs.
+func panelsOf(tabs []revier.Target) []revier.PanelSpec {
 	var panels []revier.PanelSpec
-	for _, tab := range p.listed(real) {
+	for _, tab := range tabs {
 		panels = append(panels, tab.Runtime.Panels...)
 	}
 	return panels
@@ -102,22 +131,26 @@ func listedTab(p revier.Project, t revier.Target) bool {
 }
 
 // panelTab reports whether t is a listed tab that holds panels: a part of its
-// workspace's layout (decisions.md D127), and not a tab that runs a launch.
+// workspace's layout (decisions.md D128), and not a tab that runs a launch.
 func panelTab(p revier.Project, t revier.Target) bool {
 	return tabTarget(t) && len(t.Runtime.Panels) > 0 && listedTab(p, t)
 }
 
 // resumingTabs is the opening with the recorded agents laid over the agent
 // panels of its tabs, in the order of the tabs, what became of each, and the
-// recorded agents past them. The tabs are copied before a resume is written
-// into one: they arrive sharing the prepared project's realizations.
+// recorded agents past them, which the launch adds once the instance is open.
+// The tabs are copied before a resume is written into one: they arrive sharing
+// the prepared project's realizations, and a restore must not edit the project
+// every later keypress reads.
 func (c *Core) resumingTabs(o opening, resumes []Resume, link bool) (opening, []AgentOutcome, []Resume) {
 	o.tabs = slices.Clone(o.tabs)
 	o.laid = make([]int, len(o.tabs))
 	var outcomes []AgentOutcome
 	for i := range o.tabs {
-		real, laid, rest := c.resuming(*o.tabs[i].Runtime, resumes, link)
-		o.tabs[i].Runtime, resumes = &real, rest
+		real := *o.tabs[i].Runtime
+		var laid []AgentOutcome
+		real.Panels, laid, resumes = c.layAgents(real.Panels, resumes, link)
+		o.tabs[i].Runtime = &real
 		outcomes = append(outcomes, laid...)
 		o.laid[i] = len(outcomes)
 	}
@@ -128,8 +161,12 @@ func (c *Core) resumingTabs(o opening, resumes []Resume, link bool) (opening, []
 // that is refused in this project is skipped. The active tab is the declared
 // one, and the first that opens when none is declared or the declared one is
 // skipped.
-func (p Project) opening(name revier.TargetName, real revier.Realization) (opening, error) {
-	o := opening{target: name, tabs: p.listed(real)}
+func (c *Core) opening(p Project, name revier.TargetName, real revier.Realization) (opening, error) {
+	tabs, err := c.listedTabs(p, real)
+	if err != nil {
+		return opening{}, err
+	}
+	o := opening{target: name, tabs: tabs}
 	if len(o.tabs) == 0 {
 		return o, fmt.Errorf("target %q: every tab it lists is refused, so it has nothing to open", name)
 	}
@@ -410,7 +447,13 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	}
 	if !open {
 		res.Agents = inTab(resumes)
-		if tab, err = opener.OpenTab(ctx, in.Ref, *t.Runtime, c.tabVars(p, t, in, opened)); err != nil {
+		// A tab its key opens is not read through the listed tabs, so the
+		// panels of a link's tab get their argv here.
+		real, err := c.linkPanels(p, *t.Runtime)
+		if err != nil {
+			return failed, err
+		}
+		if tab, err = opener.OpenTab(ctx, in.Ref, real, c.tabVars(p, t, in, opened)); err != nil {
 			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, err)
 		}
 		res.Launched = true
@@ -444,7 +487,7 @@ func (c *Core) tabVars(p Project, t revier.Target, in revier.Instance, opened bo
 	}
 	j, _ := p.index(t.Runtime.Inside)
 	if _, real, _, err := c.resolveAt(p, j); err == nil {
-		if o, err := p.opening(t.Runtime.Inside, real); err == nil {
+		if o, err := c.opening(p, t.Runtime.Inside, real); err == nil {
 			return o.vars(t.Name)
 		}
 	}

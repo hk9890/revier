@@ -290,6 +290,30 @@ func TestResumesSaysWhatBecomesOfEachAgent(t *testing.T) {
 	}
 }
 
+// A target that lists no tab has no agent panel: its launch runs as declared
+// and drops the recorded agents, and the dry run says the same.
+func TestARestoreOfATargetWithNoTabsDropsItsAgents(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	p := prepared(t, agentProject())
+	resumes := []core.Resume{{Harness: "claude", Session: "abc-123"}}
+
+	res, err := pressResuming(context.Background(), c, p, "notes", resumes)
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	want := []core.AgentOutcome{core.AgentDropped}
+	if !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
+	}
+	if dry := c.Resumes(p, "notes", resumes); !slices.Equal(dry, want) {
+		t.Errorf("dry run = %v, want %v", dry, want)
+	}
+	if len(rt.Opened) != 1 || !slices.Equal(rt.Opened[0].Launch, []string{"less"}) || len(rt.Opened[0].Panels) != 0 || len(rt.Tabs) != 0 {
+		t.Errorf("opened = %+v, tabs = %+v; want the launch alone", rt.Opened, rt.Tabs)
+	}
+}
+
 // A target a window host realizes here has no panels, whatever its runtime
 // realization declares: the launch drops its agents, and the dry run says so.
 func TestResumesLaysAgentsOverTheRealizationThatWins(t *testing.T) {
@@ -479,7 +503,7 @@ func TestResumeDoesNotEditTheProject(t *testing.T) {
 	if _, err := pressResuming(context.Background(), c, p, "home", resumes); err != nil {
 		t.Fatal(err)
 	}
-	panels := p.Targets[0].Runtime.Panels
+	panels := p.Targets[3].Runtime.Panels
 	if len(panels) != 2 {
 		t.Errorf("the project now has %d panels, want its 2: a tab was added to it", len(panels))
 	}

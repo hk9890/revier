@@ -19,18 +19,22 @@ func TestLoadProject(t *testing.T) {
 	if p.Name != "revier" || p.Path == "" {
 		t.Fatalf("project = %+v", p)
 	}
-	if len(p.Targets) != 2 {
-		t.Fatalf("got %d targets, want 2", len(p.Targets))
+	if len(p.Targets) != 3 {
+		t.Fatalf("got %d targets, want 3", len(p.Targets))
 	}
 	home, ok := p.Home()
 	if !ok || home.Name != "home" {
 		t.Fatal("home target not found")
 	}
-	if home.Runtime == nil || len(home.Runtime.Panels) != 1 {
-		t.Fatalf("home runtime panels = %+v", home.Runtime)
+	if home.Runtime == nil || !slices.Equal(home.Runtime.Tabs, []revier.TargetName{"agent"}) {
+		t.Fatalf("home runtime = %+v, want it to list the agent tab", home.Runtime)
 	}
-	if home.Runtime.Panels[0].Kind != revier.PanelAgent {
-		t.Errorf("panel kind = %q", home.Runtime.Panels[0].Kind)
+	tab := target(t, p, "agent").Runtime
+	if tab.Inside != "home" || len(tab.Panels) != 1 {
+		t.Fatalf("agent runtime = %+v, want a tab of home with one panel", tab)
+	}
+	if tab.Panels[0].Kind != revier.PanelAgent {
+		t.Errorf("panel kind = %q", tab.Panels[0].Kind)
 	}
 	if p.Vars["url"] == "" {
 		t.Error("vars not decoded")
@@ -226,14 +230,14 @@ func TestValidateRejects(t *testing.T) {
 			`target "home" runtime realization has active "agent" and no tabs`,
 		},
 		{
-			"tabs beside panels",
+			"panels on a target that lists tabs",
 			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelShell}} }),
-			`target "home" runtime realization has tabs beside launch or panels`,
+			`target "home" runtime realization declares panels; only a tab has them`,
 		},
 		{
 			"tabs beside a launch",
 			containerProject(func(p *revier.Project) { p.Targets[0].Runtime.Launch = []string{"x"} }),
-			`target "home" runtime realization has tabs beside launch or panels`,
+			`target "home" runtime realization has tabs beside launch; the tabs are what is launched`,
 		},
 		{
 			"tabs on a tab target",
@@ -303,8 +307,8 @@ func containerProject(edit func(p *revier.Project)) revier.Project {
 	return p
 }
 
-// A target that lists tabs is launched by them, so it needs no launch and no
-// panels, and a tab holds panels as well as a launch (decisions.md D126).
+// A target that lists tabs is launched by them, so it needs no launch, and a
+// tab holds panels or a launch (decisions.md D126).
 func TestValidateAcceptsATargetThatListsItsTabs(t *testing.T) {
 	if err := config.Validate(containerProject(func(*revier.Project) {})); err != nil {
 		t.Fatalf("Validate: %v", err)
@@ -372,15 +376,41 @@ func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
 	}
 }
 
-// The form of 0.14.0, panels on the home target and no tabs, loads as it did.
-func TestLoadProjectReadsPanelsOnATargetWithNoTabs(t *testing.T) {
-	body := "path = \"/p\"\n" + sharedConfig
+// The form of 0.14.0, panels on a target that is no tab, is refused with the
+// fix (decisions.md D128). The refusal costs that target alone: the project
+// stays listed, and its other targets open.
+func TestLoadProjectRefusesPanelsOnATargetThatIsNoTab(t *testing.T) {
+	const body = `
+path = "/p"
+
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
+    [[target.runtime.panels]]
+    kind = "shell"
+
+[[target]]
+name = "editor"
+  [target.window]
+  launch = ["idea"]
+  match = { class = "^jetbrains-idea" }
+`
 	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), nil)
-	if probs := config.Problems(p); len(probs) > 0 {
-		t.Fatalf("Problems = %v, want none", probs)
+	if p.Invalid != nil {
+		t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 	}
-	if home := target(t, p, "home").Runtime; len(home.Panels) != 2 || len(home.Tabs) != 0 || home.Active != "" {
-		t.Errorf("home runtime = %+v, want its two panels and no tabs", home)
+	want := `target "home" runtime realization declares panels; only a tab has them, so move them into a target with inside = "home" and list it in tabs`
+	if err := refusalOf(p, "home"); err == nil || err.Error() != want {
+		t.Errorf("home refused = %v\nwant %s", err, want)
+	}
+	if err := refusalOf(p, "editor"); err != nil {
+		t.Errorf("editor refused = %v, want only home refused", err)
 	}
 }
 
@@ -541,29 +571,39 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 	}
 }
 
-// A home target is its panels; it needs no launch of its own. A window
-// realization cannot have panels, because a window host cannot see inside.
-func TestValidatePanelsStandInForLaunch(t *testing.T) {
+// A tab is its panels; it needs no launch of its own, and it need not be
+// listed. A window realization cannot have panels, because a window host
+// cannot see inside, and a runtime realization that is no tab has none
+// either, home or not (decisions.md D128).
+func TestValidatePanelsStandInForLaunchOnATabAlone(t *testing.T) {
 	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}
-	ok := revier.Project{Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Match: revier.Match{Title: "^h$"}, Panels: panels}},
-	}}
-	if err := config.Validate(ok); err != nil {
-		t.Errorf("a runtime realization with panels and no launch should validate: %v", err)
+	unlisted := tabProject(func(tab *revier.Target) { tab.Runtime.Launch, tab.Runtime.Panels = nil, panels })
+	if err := config.Validate(unlisted); err != nil {
+		t.Errorf("a tab with panels and no launch should validate: %v", err)
 	}
 	bad := revier.Project{Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Window: &revier.Realization{Launch: []string{"x"}, Match: revier.Match{Class: "^x$"}, Panels: panels}},
 	}}
-	if err := config.Validate(bad); err == nil || !strings.Contains(err.Error(), "panels") {
+	if err := config.Validate(bad); err == nil || !strings.Contains(err.Error(), "window realization declares panels") {
 		t.Errorf("a window realization with panels should be rejected, got %v", err)
+	}
+	const refusal = `target "logs" runtime realization declares panels; only a tab has them, so move them into a target with inside = "logs" and list it in tabs`
+	for name, launch := range map[string][]string{"with no launch": nil, "beside a launch": {"tail"}} {
+		standalone := tabProject(func(*revier.Target) {})
+		standalone.Targets = append(standalone.Targets, revier.Target{Name: "logs", Runtime: &revier.Realization{
+			Name: "logs", Launch: launch, Match: revier.Match{Title: "^logs$"}, Panels: panels,
+		}})
+		// One reason, the one that says where the panels go: not a second
+		// one about the launch the target lacks or has beside them.
+		if err := config.Validate(standalone); err == nil || err.Error() != refusal {
+			t.Errorf("panels %s on a target that is no tab: got %v\nwant %s", name, err, refusal)
+		}
 	}
 	// A launch beside panels would be dropped silently by every host, and
 	// the agent it named never started; it is refused instead.
-	both := revier.Project{Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "h", Launch: []string{"claude"}, Match: revier.Match{Title: "^h$"}, Panels: panels}},
-	}}
+	both := tabProject(func(tab *revier.Target) { tab.Runtime.Panels = panels })
 	if err := config.Validate(both); err == nil || !strings.Contains(err.Error(), "both launch and panels") {
-		t.Errorf("launch beside panels should be rejected, got %v", err)
+		t.Errorf("launch beside panels in a tab should be rejected, got %v", err)
 	}
 }
 

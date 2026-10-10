@@ -229,11 +229,6 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	if err != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, err
 	}
-	if kind == revier.HostRuntime && p.Remote != nil {
-		if real, err = c.linkPanels(p, real); err != nil {
-			return nil, revier.Realization{}, revier.CompiledMatch{}, err
-		}
-	}
 	m := p.compiled[i].runtime
 	if kind == revier.HostWindow {
 		m = p.compiled[i].window
@@ -241,12 +236,15 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	return host, real, m, nil
 }
 
-// linkPanels gives a link's panels the argv that reaches the host: the
-// remote port's, asked here so that config, which derives the panels, knows
-// no transport, and every consumer of the realization - a launch, a tab, a
-// resume - sees one argv. A panel the link declared with a command of its own
-// keeps it.
+// linkPanels gives the panels of a link's tab the argv that reaches the host:
+// the remote port's, asked here so that config, which derives the panels,
+// knows no transport, and every consumer of the tab - a launch, an agent tab,
+// a resume - sees one argv. A panel the link declared with a command of its own
+// keeps it, and a project that is not a link keeps every panel as declared.
 func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realization, error) {
+	if p.Remote == nil {
+		return real, nil
+	}
 	fill := false
 	for _, spec := range real.Panels {
 		if len(spec.Command) == 0 && (spec.Kind == revier.PanelAgent || spec.Kind == revier.PanelShell) {
@@ -626,23 +624,26 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			extra  []Resume
 			tabs   opening
 		)
+		layout, err := c.layout(p, real)
+		if err != nil {
+			return Result{}, err
+		}
 		if opener != nil {
 			// A target that lists its tabs opens as the first of them, under
 			// that tab's mark, and the others open after it: the order of the
 			// tabs is the order they are opened in (decisions.md D126).
-			if tabs, err = p.opening(name, real); err != nil {
+			if tabs, err = c.opening(p, name, real); err != nil {
 				return Result{}, err
 			}
 			tabs, agents, extra = c.resumingTabs(tabs, resumes, p.Remote != nil)
 			launch = tabs.first(real)
 		} else {
-			// The agent tabs are copies of the realization as declared, not of
-			// the launch the first agents were written into.
-			launch, agents, extra = c.resuming(real, resumes, p.Remote != nil)
-			// The instance's own panels are marked with the target it was
-			// opened for, so a return home from a tab lands in the first of
-			// them rather than in the first panel that happens to carry no tab
-			// mark (decisions.md D100).
+			// A target that lists no tab has no agent panel to lay a recorded
+			// agent over (decisions.md D128). The panel its launch runs in is
+			// marked with the target it was opened for, so a return home from
+			// a tab lands in it rather than in the first panel that happens to
+			// carry no tab mark (D100).
+			launch, extra = real, resumes
 			launch.Vars = map[string]string{PanelHomeVar: string(name)}
 		}
 		ref, err := host.Open(ctx, launch)
@@ -674,7 +675,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
-		added, err := c.addAgents(ctx, host, p.layout(real), ref, extra, p.Remote != nil)
+		added, err := c.addAgents(ctx, host, layout, ref, extra, p.Remote != nil)
 		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by

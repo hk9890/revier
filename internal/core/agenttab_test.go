@@ -67,7 +67,7 @@ func TestNewAgentStartsEmptyInTheProject(t *testing.T) {
 // another harness's resume flag.
 func TestNewAgentResumesOnlyTheHarnessTheAgentPanelRuns(t *testing.T) {
 	proj := agentProject()
-	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 	rt.Add("session:revier", "")
@@ -179,7 +179,7 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("far", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
 	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
@@ -192,12 +192,12 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, ref)
 	}
 	got := rt.Tabs[0].Real.Panels[0]
-	want := []string{"sh", "-c", "exec ssh far", "sh", "--resume", "abc-123", "--dir", "/srv/far/wt"}
+	want := sshArgv(revier.PanelAgent, "--resume", "abc-123", "--dir", "/srv/far/wt")
 	if !slices.Equal(got.Command, want) || got.Dir != "" {
 		t.Errorf("agent panel = %+v, want %q and no directory here", got, want)
 	}
 	// The shell beside it starts on the host too, in the same directory.
-	if shell := rt.Tabs[0].Real.Panels[1]; !slices.Equal(shell.Command, []string{"sh", "-c", "exec ssh far", "sh", "--dir", "/srv/far/wt"}) {
+	if shell := rt.Tabs[0].Real.Panels[1]; !slices.Equal(shell.Command, sshArgv(revier.PanelShell, "--dir", "/srv/far/wt")) {
 		t.Errorf("shell panel = %q, want the directory carried to the host", shell.Command)
 	}
 
@@ -208,30 +208,28 @@ func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 		if err != nil || outcome != core.AgentUnresumable {
 			t.Errorf("NewAgent(%+v) = %v, %v; want unresumable", r, outcome, err)
 		}
-		if got := rt.Tabs[len(rt.Tabs)-1].Real.Panels[0].Command; !slices.Equal(got, want[:4]) {
-			t.Errorf("agent panel = %q, want %q", got, want[:4])
+		if got := rt.Tabs[len(rt.Tabs)-1].Real.Panels[0].Command; !slices.Equal(got, sshArgv(revier.PanelAgent)) {
+			t.Errorf("agent panel = %q, want %q", got, sshArgv(revier.PanelAgent))
 		}
 	}
 }
 
-// On a runtime without tabs, a restore still opens the workspace with its
-// declared agents, and names the agents past them as not restored.
-func TestRestoreDropsTheAgentsPastTheLayoutWithoutTabs(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
-	p := prepared(t, agentProject())
-	resumes := []core.Resume{{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}}
-
-	res, err := pressResuming(context.Background(), c, p, "home", resumes)
+// A shell asked for a link opens here too, as the ssh that runs the shell on
+// the host: the shell panel of the tab the link's home lists.
+func TestAShellTabOfALinkIsTheSSHPanel(t *testing.T) {
+	c, rt, _, pane := linked(t)
+	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
 	if err != nil {
-		t.Fatalf("ActivateWaiting: %v", err)
+		t.Fatalf("AgentWorkspace: %v", err)
 	}
-	want := []core.AgentOutcome{core.AgentResumed, core.AgentDropped}
-	if !slices.Equal(res.Agents, want) {
-		t.Errorf("Agents = %v, want %v", res.Agents, want)
+	if err := c.NewShell(context.Background(), w, ""); err != nil {
+		t.Fatalf("NewShell: %v", err)
 	}
-	if dry := c.Resumes(p, "home", resumes); !slices.Equal(dry, want) {
-		t.Errorf("dry run = %v, want %v", dry, want)
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != pane {
+		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, pane)
+	}
+	if got := rt.Tabs[0].Real.Panels; len(got) != 1 || got[0].Kind != revier.PanelShell || !slices.Equal(got[0].Command, sshArgv(revier.PanelShell)) {
+		t.Errorf("shell tab = %+v, want the one shell panel running %q", got, sshArgv(revier.PanelShell))
 	}
 }
 
@@ -393,7 +391,7 @@ func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
 // instead, and the restore says why.
 func TestRestoreDoesNotResumeAConversationIntoAnotherHarness(t *testing.T) {
 	proj := agentProject()
-	proj.Targets[0].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 
 	resumes := []core.Resume{{Harness: "claude", Session: "abc-123"}}

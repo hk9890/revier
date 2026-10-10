@@ -47,7 +47,7 @@ func TestReadProjectSaysWhereEachTargetComesFrom(t *testing.T) {
 	if p.Path != "~/demo" {
 		t.Errorf("path = %q, want it as written", p.Path)
 	}
-	want := map[revier.TargetName]config.Source{"home": config.FromShared, "editor": config.Overridden, "pulls": config.FromProject}
+	want := map[revier.TargetName]config.Source{"home": config.FromShared, "editor": config.Overridden, "agent": config.FromShared, "pulls": config.FromProject}
 	if len(p.Targets) != len(want) {
 		t.Fatalf("targets = %+v", p.Targets)
 	}
@@ -74,8 +74,9 @@ func TestReadProjectMarksALinksDerivedHome(t *testing.T) {
 	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "demo" {
 		t.Errorf("remote = %+v, want the host and the derived name there", p.Remote)
 	}
-	if len(p.Targets) != 1 || p.Targets[0].Source != config.Derived || !p.Targets[0].Target.Home {
-		t.Errorf("targets = %+v, want only the derived home: no shared target here has a remote part", p.Targets)
+	if len(p.Targets) != 2 || p.Targets[0].Source != config.Derived || !p.Targets[0].Target.Home ||
+		p.Targets[1].Source != config.Derived || p.Targets[1].Target.Name != "agent" {
+		t.Errorf("targets = %+v, want only the derived home and its tab: no shared target here has a remote part", p.Targets)
 	}
 }
 
@@ -116,7 +117,7 @@ func TestSaveProjectTargetDropsAnOverrideEqualToShared(t *testing.T) {
 func TestSaveProjectTargetChangesAnOwnTargetInPlace(t *testing.T) {
 	file, shared := projectRoot(t, overriding)
 	p, _ := config.ReadProject(file, shared)
-	pulls := p.Targets[2].Target
+	pulls := p.Targets[3].Target
 	pulls.Name, pulls.Key = "prs", "ctrl-g"
 
 	if _, err := config.SaveProjectTarget(file, "pulls", config.TargetEdit{Target: pulls}, shared); err != nil {
@@ -193,8 +194,9 @@ func TestAProjectIsRepairedOneTargetAtATime(t *testing.T) {
 	}
 }
 
-// Editing a link's derived home declares one, which replaces the derived
-// pane.
+// Editing a link's derived home declares one, which the derived name, match
+// and tab still fill. The list of tabs it was shown with is derived again at
+// every load, so it is not written.
 func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 	file, shared := projectRoot(t, link)
 	p, _ := config.ReadProject(file, shared)
@@ -205,14 +207,69 @@ func TestSaveProjectTargetDeclaresALinksHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
-	if got, _ := loaded.Home(); got.Key != "ctrl-h" {
-		t.Errorf("home = %+v, want the declared one", got)
+	if got, _ := loaded.Home(); got.Key != "ctrl-h" || !slices.Equal(got.Runtime.Tabs, []revier.TargetName{"agent"}) {
+		t.Errorf("home = %+v, want the declared one, with the derived tab", got)
 	}
-	// The panels are written by kind alone: the argv that reaches the host
-	// is the remote port's, and a declared home with kind-only panels gets
-	// it as the derived one does.
-	if got := read(t, file); !strings.Contains(got, "[[target]]") || !strings.Contains(got, `kind = "agent"`) || strings.Contains(got, "ssh") {
-		t.Errorf("file =\n%s\nwant the home written whole, by panel kind", got)
+	if probs := config.Problems(loaded); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+	want := link + "\n[[target]]\nname = \"home\"\nkey = \"ctrl-h\"\nhome = true\n    [target.remote.runtime]\n    name = \"session:demo\"\n    match = { title = \"^session:demo$\" }\n"
+	if got := read(t, file); got != want {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// Editing a link's derived agent tab declares it, with its panels by kind
+// alone: the argv that reaches the host is the remote port's, and a declared
+// tab with kind-only panels gets it as the derived one does.
+func TestSaveProjectTargetDeclaresALinksAgentTab(t *testing.T) {
+	file, shared := projectRoot(t, link)
+	p, _ := config.ReadProject(file, shared)
+	tab := p.Targets[1].Target
+	tab.Key = "ctrl-a"
+
+	loaded, err := config.SaveProjectTarget(file, "agent", config.TargetEdit{Target: tab, PanelFrom: []int{-1, -1}}, shared)
+	if err != nil {
+		t.Fatalf("SaveProjectTarget: %v", err)
+	}
+	if probs := config.Problems(loaded); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+	if got := target(t, loaded, "agent"); got.Key != "ctrl-a" || got.Runtime.Inside != "home" || len(got.Runtime.Panels) != 2 {
+		t.Errorf("agent = %+v, want the declared tab of home", got)
+	}
+	got := read(t, file)
+	if !strings.Contains(got, "[target.remote.runtime]\n    inside = \"home\"\n") || !strings.Contains(got, "[[target.remote.runtime.panels]]\n      kind = \"agent\"") || strings.Contains(got, "ssh") {
+		t.Errorf("file =\n%s\nwant the tab written under [target.remote.runtime], by panel kind", got)
+	}
+}
+
+// A link's agent tab that the file declares with no panels is shown with the
+// derived two, and the form says each came from the file. The file has none,
+// so a save writes both as new and does not read a panel the file lacks.
+func TestSaveProjectTargetWritesTheDerivedPanelsOfALinksDeclaredAgentTab(t *testing.T) {
+	file, shared := projectRoot(t, link+"\n[[target]]\nname = \"agent\"\nkey = \"ctrl-a\"\n  [target.remote.runtime]\n  inside = \"home\"\n")
+	p, _ := config.ReadProject(file, shared)
+	tab := p.Targets[1]
+	if tab.Target.Name != "agent" || tab.Source != config.FromProject || len(tab.Target.Runtime.Panels) != 2 {
+		t.Fatalf("agent = %+v, want the file's tab shown with the derived panels", tab)
+	}
+	edited := tab.Target
+	edited.Key = "ctrl-b"
+
+	loaded, err := config.SaveProjectTarget(file, "agent", config.TargetEdit{Target: edited, PanelFrom: []int{0, 1}}, shared)
+	if err != nil {
+		t.Fatalf("SaveProjectTarget: %v", err)
+	}
+	if probs := config.Problems(loaded); len(probs) > 0 {
+		t.Errorf("Problems = %v, want none", probs)
+	}
+	if got := target(t, loaded, "agent"); got.Key != "ctrl-b" || len(got.Runtime.Panels) != 2 {
+		t.Errorf("agent = %+v, want the new key and the two panels", got)
+	}
+	got := read(t, file)
+	if !strings.Contains(got, "kind = \"agent\"") || !strings.Contains(got, "kind = \"shell\"") || strings.Contains(got, "ssh") {
+		t.Errorf("file =\n%s\nwant the two panels written by kind", got)
 	}
 }
 

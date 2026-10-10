@@ -86,8 +86,8 @@ func CanCreate(projects []core.Project, name revier.ProjectName, dir string) err
 // nothing at all. gitURL may be empty; a non-empty one must pass
 // ValidateGitURL. When config.toml has shared targets, the file has no
 // targets of its own: the project has the shared ones. When none of them is
-// home, the file writes the template's home target alone, since a project
-// with no home is refused at load.
+// home, the file writes the template's home target and its agent tab alone,
+// since a project with no home is refused at load.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
 	shared, err := sharedTargets(root)
 	if err != nil {
@@ -184,18 +184,20 @@ func writeUnless(root string, name revier.ProjectName, body string, shared []map
 	return p, nil
 }
 
-// projectTOML is a new project: a workspace with an agent beside a shell, and
-// an editor: the shape of the ninety projects converted from the shell
-// .session files, so a new project looks like the ones before it.
+// projectTOML is a new project: a workspace whose one tab has an agent beside
+// a shell, and an editor: the shape of the ninety projects converted from the
+// shell .session files, so a new project looks like the ones before it. The
+// panels are on the tab target, the one place a file has them (decisions.md
+// D128).
 //
-// Neither target carries a key. A key means the same target in every project,
+// No target carries a key. A key means the same target in every project,
 // and one written here would either repeat the user's own choice or conflict
 // with it; without one, the desktop chords the other projects declare still
 // reach these targets by name.
 //
 // With shared targets the file leaves the editor out, and the home target
-// too when a shared target is home: the shared targets give the project the
-// rest.
+// and its tab too when a shared target is home: the shared targets give the
+// project the rest.
 func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[string]any) string {
 	var b strings.Builder
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
@@ -214,6 +216,12 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[strin
 	p("  [target.runtime]\n")
 	p("  name = \"session:{{.Name}}\"\n")
 	p("  match = { title = %s }\n", quote("^session:"+namePattern(name)+"$"))
+	p("  tabs = [\"agent\"]\n")
+	p("\n")
+
+	p("[[target]]\nname = \"agent\"\n")
+	p("  [target.runtime]\n")
+	p("  inside = \"home\"\n")
 	p("    [[target.runtime.panels]]\n")
 	p("    kind = \"agent\"\n    title = \"claude\"\n    command = [\"claude\"]\n")
 	p("    [[target.runtime.panels]]\n")

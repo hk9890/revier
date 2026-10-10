@@ -169,7 +169,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 			// its conversation is neither asked for nor counted as recorded.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				// A listed tab that holds panels is a part of the workspace's
-				// layout (decisions.md D127): its agents are recorded below,
+				// layout (decisions.md D128): its agents are recorded below,
 				// under the instance, with their conversations.
 				if panelTab(v.Project, t) {
 					continue
@@ -248,7 +248,7 @@ func (c *Core) Session(ctx context.Context, r Report, current revier.ProjectName
 // view records as its own. A panel that names a target no longer a tab, or a
 // tab open in another instance, stays with its instance, so its agent is not
 // left out of the save. So does every panel of a listed tab that holds panels:
-// a restore resumes its agents with the instance (decisions.md D127).
+// a restore resumes its agents with the instance (decisions.md D128).
 func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
 	name := revier.TargetName(panel.Vars[PanelTargetVar])
 	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) || panelTab(v.Project, t) {
@@ -429,27 +429,12 @@ func resumesOf(t session.Target) []Resume {
 	return out
 }
 
-// resuming returns the realization with the recorded agents laid over its
-// declared agent panels, what became of each of those, and the recorded agents
-// past them, which the launch adds once the instance is open. The panel slice
-// is copied before anything is written to it: the realization arrives sharing
-// the prepared project's panels, and a restore must not edit the project every
-// later keypress reads.
-func (c *Core) resuming(real revier.Realization, resumes []Resume, link bool) (revier.Realization, []AgentOutcome, []Resume) {
-	if len(resumes) == 0 {
-		return real, nil, nil
-	}
-	var outcomes []AgentOutcome
-	var extra []Resume
-	real.Panels, outcomes, extra = c.layAgents(real.Panels, resumes, link)
-	return real, outcomes, extra
-}
-
 // Resumes is what a launch of the target would do with a step's recorded
 // agents now, for a dry run that says what a restore would do. It lays them
-// over the realization a launch resolves, or over the tabs it lists, and
-// builds the agent tabs a launch would add, so the two cannot disagree. A
-// target the launch refuses starts no agent, and has no outcome.
+// over the tabs the target lists, as a launch does, and builds the agent tabs
+// a launch would add, so the two cannot disagree. A target that lists no tab
+// has no agent panel, and every agent is past its layout. A target the launch
+// refuses starts no agent, and has no outcome.
 func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []AgentOutcome {
 	i, ok := p.index(name)
 	if !ok {
@@ -468,17 +453,19 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	}
 	link := p.Remote != nil
 	var outcomes []AgentOutcome
-	var extra []Resume
+	extra := resumes
 	if opener != nil {
-		tabs, err := p.opening(name, real)
+		tabs, err := c.opening(p, name, real)
 		if err != nil {
 			return nil
 		}
 		_, outcomes, extra = c.resumingTabs(tabs, resumes, link)
-	} else {
-		_, outcomes, extra = c.resuming(real, resumes, link)
 	}
-	_, added := c.agentTabs(host, p.layout(real), extra, link)
+	layout, err := c.layout(p, real)
+	if err != nil {
+		return nil
+	}
+	_, added := c.agentTabs(host, layout, extra, link)
 	return append(outcomes, added...)
 }
 

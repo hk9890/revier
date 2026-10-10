@@ -203,8 +203,9 @@ func attachedAfterAction(t *testing.T, c *core.Core, wm *hosttest.Fake, p core.P
 	return c.Ledger.State().Attached[p.Name]
 }
 
-// agentProject is a workspace whose home holds an agent beside a shell, which
-// is the layout a resume has to find its way back into.
+// agentProject is a workspace whose home lists one tab, agent, that holds an
+// agent beside a shell, which is the layout a resume has to find its way back
+// into.
 func agentProject() revier.Project {
 	return revier.Project{
 		Name: "revier",
@@ -215,10 +216,7 @@ func agentProject() revier.Project {
 				Runtime: &revier.Realization{
 					Name:  "session:revier",
 					Match: revier.Match{Title: "^session:revier$"},
-					Panels: []revier.PanelSpec{
-						{Kind: revier.PanelShell, Command: []string{"zsh"}},
-						{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}},
-					},
+					Tabs:  []revier.TargetName{"agent"},
 				},
 			},
 			{
@@ -232,6 +230,16 @@ func agentProject() revier.Project {
 				Name: "editor",
 				Window: &revier.Realization{
 					Launch: []string{"code"}, Match: revier.Match{Class: "^code$"},
+				},
+			},
+			{
+				Name: "agent",
+				Runtime: &revier.Realization{
+					Inside: "home",
+					Panels: []revier.PanelSpec{
+						{Kind: revier.PanelShell, Command: []string{"zsh"}},
+						{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"claude", "--model", "opus"}},
+					},
 				},
 			},
 		},
@@ -334,19 +342,26 @@ func newAgent(t *testing.T, c *core.Core, p core.Project, target revier.TargetNa
 	return c.NewAgent(context.Background(), w, r)
 }
 
-// linkProject is a link to far on buildbox: its home the agent and the shell
-// on the host, each through an ssh here, and logs a window of its own on this
-// machine.
+// linkProject is a link to far on buildbox, as a link's file loads: its home
+// lists the tab agent, whose panels are the agent and the shell on the host by
+// kind alone, so the core gives each the ssh that reaches it. logs is a window
+// of its own on this machine.
 func linkProject(t *testing.T) core.Project {
 	t.Helper()
 	return prepared(t, revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far-there"}, Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"}, Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-			{Kind: revier.PanelShell, Command: []string{"sh", "-c", "exec ssh far", "sh"}},
-		}}},
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "far", Match: revier.Match{Title: "^far$"},
+			Tabs: []revier.TargetName{"agent"}}},
 		{Name: "logs", Runtime: &revier.Realization{Name: "far-logs", Match: revier.Match{Title: "^far-logs$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"zsh"}}}}},
+			Launch: []string{"zsh"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
+}
+
+// sshArgv is the argv hosttest.FakeRemote gives a panel of linkProject, with
+// what the core appended to it.
+func sshArgv(kind revier.PanelKind, appended ...string) []string {
+	return append([]string{"ssh", "buildbox", "revier", string(kind), "exec", "-p", "far-there"}, appended...)
 }
 
 // hostAgent is one agent as a link's host reports it: under the tag its panel
@@ -417,14 +432,17 @@ func survey(t *testing.T, c *core.Core, projects []core.Project, attached map[re
 	return r
 }
 
-// tabProject has a workspace and a ticket viewer declared as a tab of it.
+// tabProject has a workspace that lists its agent tab, and a ticket viewer
+// declared as a tab of it that it does not list.
 func tabProject() revier.Project {
 	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}},
+			Tabs: []revier.TargetName{"agent"}}},
 		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
 			Inside: "home", Launch: []string{"taskmgr-ui"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}}}},
 	}}
 }
 
@@ -541,8 +559,8 @@ func benchProjects(n int) []revier.Project {
 	return out
 }
 
-// benchProject mirrors the real shape: five targets, templated names, matches
-// and launch argv, two panels on home.
+// benchProject mirrors the real shape: templated names, matches and launch
+// argv, five targets a key reaches, and the tab of two panels home lists.
 func benchProject(i int) revier.Project {
 	name := revier.ProjectName(fmt.Sprintf("project-%03d", i))
 	return revier.Project{
@@ -551,12 +569,8 @@ func benchProject(i int) revier.Project {
 		Vars: map[string]string{"url": "https://example.invalid/" + string(name)},
 		Targets: []revier.Target{
 			{Name: "home", Home: true, Key: "ctrl-shift-h", Runtime: &revier.Realization{
-				Name: "{{.Name}}", Launch: []string{"sh", "-c", "sleep 600"},
-				Match: revier.Match{Title: "^{{.Name}}$"},
-				Panels: []revier.PanelSpec{
-					{Kind: revier.PanelAgent, Command: []string{"claude"}},
-					{Kind: revier.PanelShell},
-				},
+				Name: "{{.Name}}", Match: revier.Match{Title: "^{{.Name}}$"},
+				Tabs: []revier.TargetName{"agent"},
 			}},
 			{Name: "editor", Key: "ctrl-o", Window: &revier.Realization{
 				Launch: []string{"code", "{{.Path}}"},
@@ -574,6 +588,30 @@ func benchProject(i int) revier.Project {
 				Name: "diff-{{.Name}}", Launch: []string{"nvim", "-d"},
 				Match: revier.Match{Title: "^diff-{{.Name}}$"},
 			}},
+			{Name: "agent", Runtime: &revier.Realization{
+				Inside: "home",
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Command: []string{"claude"}},
+					{Kind: revier.PanelShell},
+				},
+			}},
 		},
 	}
+}
+
+// listedTabsProject is a workspace that is only the window: tickets is its
+// first tab, and the agent and the shell are its second.
+func listedTabsProject(active revier.TargetName) revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
+			Tabs: []revier.TargetName{"tickets", "agent"}, Active: active}},
+		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
+			Inside: "home", Launch: []string{"taskmgr-ui"}, Dir: "/p/tickets"}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home", Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude"}},
+				{Kind: revier.PanelShell},
+			}}},
+	}}
 }

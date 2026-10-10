@@ -125,6 +125,120 @@ func TestALinksAgentIsAddressedByItsTarget(t *testing.T) {
 	}
 }
 
+// A link's agent is addressed by its tab as a local one is: the name of the
+// tab is the agent in that tab's panels alone, while the workspace around it
+// also holds the agent of an agent tab and names two.
+func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
+	ssh := func(id string, pid int, vars map[string]string) revier.Panel {
+		return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, PID: pid, Command: []string{"ssh", "-t", "buildbox"}, Vars: vars}
+	}
+	tab := map[string]string{core.PanelTargetVar: "agent"}
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
+	rt := hosttest.NewRuntime("rt")
+	pane := rt.Add("far", "", ssh("9", 4242, tab), ssh("10", 4250, tab), ssh("11", 4300, nil), ssh("12", 4310, nil))
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
+
+	a, err := c.Agent(context.Background(), p, "agent")
+	if err != nil || a.Ref != pane || a.Panel.ID != "9" {
+		t.Errorf("Agent(far:agent) = %+v, %v; want panel 9 of %v", a, err, pane)
+	}
+	for _, addr := range []string{"home", ""} {
+		if _, err := c.Agent(context.Background(), p, addr); !errors.Is(err, core.ErrAmbiguous) {
+			t.Errorf("Agent(%q) err = %v, want ErrAmbiguous", addr, err)
+		}
+	}
+}
+
+// The panels of a link are in the tab its home lists, declared by kind alone.
+// The workspace opens as that tab, and each panel runs the ssh that reaches
+// the host: without it the two would be shells of this machine.
+func TestALinksWorkspaceOpensWithTheSSHOfEachPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	p := linkProject(t)
+
+	res, err := press(context.Background(), c, p, "home")
+	if err != nil || !res.Launched {
+		t.Fatalf("press = %+v, %v; want the workspace launched", res, err)
+	}
+	if len(rt.Opened) != 1 || len(rt.Tabs) != 0 {
+		t.Fatalf("opened = %+v, tabs = %+v; want the one tab as the instance itself", rt.Opened, rt.Tabs)
+	}
+	samePanels(t, "launch", rt.Opened[0].Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent)},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+	if got := p.Targets[2].Runtime.Panels; len(got[0].Command) != 0 || len(got[1].Command) != 0 {
+		t.Errorf("the project's panels = %+v, want them left as declared", got)
+	}
+}
+
+// A link whose host has no remote cannot build the ssh, and opens nothing: a
+// workspace of two local shells would look like the link and reach no host.
+func TestALinkWithNoRemoteForItsHostOpensNothing(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt}
+	if _, err := press(context.Background(), c, linkProject(t), "home"); err == nil || !strings.Contains(err.Error(), "buildbox") {
+		t.Errorf("err = %v, want the host with no remote named", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("opened = %+v, want nothing", rt.Opened)
+	}
+}
+
+// A restore of a link's workspace resumes on the host: the conversation and
+// its directory go to the ssh of the agent panel as arguments, and an agent
+// past the declared one opens as an agent tab built from the same ssh. The dry
+// run says the same of both.
+func TestARestoreOfALinkResumesThroughTheSSHOfItsAgentPanel(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	p := linkProject(t)
+	resumes := []core.Resume{
+		{Session: "abc-123", Dir: "/srv/far/wt", Harness: "claude"},
+		{Session: "def-456", Harness: "claude"},
+	}
+	want := []core.AgentOutcome{core.AgentResumed, core.AgentResumed}
+	if got := c.Resumes(p, "home", resumes); !slices.Equal(got, want) {
+		t.Errorf("Resumes = %v, want %v", got, want)
+	}
+
+	res, err := pressResuming(context.Background(), c, p, "home", resumes)
+	if err != nil || res.AgentErr != nil || !slices.Equal(res.Agents, want) {
+		t.Fatalf("press = %+v, %v; want both agents resumed", res, err)
+	}
+	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 {
+		t.Fatalf("opened = %+v, tabs = %+v; want the workspace and one agent tab", rt.Opened, rt.Tabs)
+	}
+	samePanels(t, "launch", rt.Opened[0].Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent, "--resume", "abc-123", "--dir", "/srv/far/wt")},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+	samePanels(t, "agent tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent, "--resume", "def-456")},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+}
+
+// A tab of a link that its key opens in a workspace that is there gets the
+// ssh too: it is read from the target, not from the tabs the home lists.
+func TestAKeyOpenedTabOfALinkRunsTheSSHOfEachPanel(t *testing.T) {
+	c, rt, _, pane := linked(t)
+	res, err := press(context.Background(), c, linkProject(t), "agent")
+	if err != nil || !res.Launched || res.Tab != "agent" {
+		t.Fatalf("press = %+v, %v; want the tab agent opened", res, err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != pane {
+		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, pane)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: sshArgv(revier.PanelAgent)},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+}
+
 // A host with a terminal of its own reports the agents in it too, in a runtime
 // that may be named as the one here. Only an agent a panel here shows is
 // here: the host's own is reached from nowhere here, and a shutdown leaves it
@@ -259,16 +373,22 @@ func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
 
 // A target its file refused is not served: the realization it keeps is as
 // written, not as rendered, so nothing may run from it (decisions.md D85),
-// and the reason is what the panel on the other machine prints.
+// and the reason is what the panel on the other machine prints. The shell of
+// a home whose listed tab is refused is refused with it, and is not a plain
+// shell in the place of the one the tab declares.
 func TestServeSkipsARefusedTarget(t *testing.T) {
-	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--add-dir", "{{.Vars.extra}}"}},
-			{Kind: revier.PanelShell},
-		}}}}})
-	if p.TargetErr(0) == nil {
-		t.Fatal("the target should be refused for the key it renders")
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude", "--add-dir", "{{.Vars.extra}}"}},
+				{Kind: revier.PanelShell},
+			}}},
+	}})
+	if p.TargetErr(0) != nil || p.TargetErr(1) == nil {
+		t.Fatalf("refused = %v, %v; want the tab alone refused, for the key it renders", p.TargetErr(0), p.TargetErr(1))
 	}
 	c := &core.Core{}
 	if _, err := c.ServeAgent(p, core.Resume{}); err == nil || !strings.Contains(err.Error(), "extra") {
@@ -284,9 +404,13 @@ func TestServeSkipsARefusedTarget(t *testing.T) {
 // into a panel that runs another harness, which would start
 // `opencode --resume <claude id>`.
 func TestServeResumesOnlyIntoThePanelsOwnHarness(t *testing.T) {
-	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}}}}}})
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}}}},
+	}})
 	c := &core.Core{Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 	s, err := c.ServeAgent(p, core.Resume{Session: "abc-123"})
 	if err != nil || s.Outcome != core.AgentUnresumable || !slices.Equal(s.Argv, []string{"opencode"}) {
@@ -299,12 +423,16 @@ func TestServeResumesOnlyIntoThePanelsOwnHarness(t *testing.T) {
 // the declared shell.
 func TestServeStartsTheDeclaredPanels(t *testing.T) {
 	dir := t.TempDir()
-	p := prepared(t, revier.Project{Name: "demo", Path: dir, Targets: []revier.Target{{Name: "home", Home: true, Runtime: &revier.Realization{
-		Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"},
-		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"claude", "--model", "opus"}},
-			{Kind: revier.PanelShell, Command: []string{"zsh", "-l"}},
-		}}}}})
+	p := prepared(t, revier.Project{Name: "demo", Path: dir, Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Dir: dir, Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Command: []string{"claude", "--model", "opus"}},
+				{Kind: revier.PanelShell, Command: []string{"zsh", "-l"}},
+			}}},
+	}})
 	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
 
 	agent, err := c.ServeAgent(p, core.Resume{Session: "abc-123", Dir: dir})

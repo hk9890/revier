@@ -273,8 +273,9 @@ func reboot(t *testing.T) {
 	}
 }
 
-// The home workspace holds the agent beside a shell; notes is a plain pane;
-// asker is an agent that waits for the human, read by an external probe.
+// The home workspace lists the tab that holds the agent beside a shell; notes
+// is a plain pane; asker lists the tab of an agent that waits for the human,
+// read by an external probe.
 const agentsTOML = `
 path = "%PATH%"
 
@@ -284,6 +285,12 @@ home = true
   [target.runtime]
   name = "agents"
   match = { title = "^agents$" }
+  tabs = ["agent"]
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
   [[target.runtime.panels]]
   kind = "agent"
   command = ["bash", "-c", "exec -a claude bash \"$0\"", "%AGENT%"]
@@ -303,6 +310,12 @@ name = "asker"
   [target.runtime]
   name = "agents-asker"
   match = { title = "^agents-asker$" }
+  tabs = ["asking"]
+
+[[target]]
+name = "asking"
+  [target.runtime]
+  inside = "asker"
   [[target.runtime.panels]]
   kind = "agent"
   title = "Waiting for you"
@@ -350,6 +363,12 @@ home = true
   [target.runtime]
   name = "work"
   match = { title = "^work$" }
+  tabs = ["agent"]
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
   [[target.runtime.panels]]
   kind = "shell"
   command = ["sh", "-c", "sleep 300"]

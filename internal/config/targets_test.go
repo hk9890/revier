@@ -22,6 +22,19 @@ key = "ctrl-shift-u"
   name = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
   place = "right top 75% 100%"
+  tabs = ["agent"]
+
+[[target]]
+name = "editor"
+key = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"] # IntelliJ
+  match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
     # the agent
     [[target.runtime.panels]]
     kind = "agent"
@@ -30,13 +43,6 @@ key = "ctrl-shift-u"
     [[target.runtime.panels]]
     kind = "shell"
     title = "shell"
-
-[[target]]
-name = "editor"
-key = "ctrl-shift-o"
-  [target.window]
-  launch = ["idea", "{{.Path}}"] # IntelliJ
-  match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
 `
 
 // targetsRoot is a configuration root holding text as config.toml and one
@@ -84,13 +90,13 @@ func TestReplaceTargetWritesOnlyWhatChanged(t *testing.T) {
 // changed value by value, and a new one comes after the last.
 func TestReplaceTargetEditsPanels(t *testing.T) {
 	root, shared := targetsRoot(t, targetsConfig)
-	home := sharedTyped(t, shared)[0]
-	home.Runtime.Panels = []revier.PanelSpec{
+	tab := sharedTyped(t, shared)[2]
+	tab.Runtime.Panels = []revier.PanelSpec{
 		{Kind: revier.PanelShell, Title: "zsh"},
 		{Kind: revier.PanelTool, Title: "tests", Command: []string{"mise", "watch"}},
 	}
-	edit := config.TargetEdit{Target: home, PanelFrom: []int{1, -1}}
-	if _, err := config.ReplaceTarget(root, 0, shared, edit); err != nil {
+	edit := config.TargetEdit{Target: tab, PanelFrom: []int{1, -1}}
+	if _, err := config.ReplaceTarget(root, 2, shared, edit); err != nil {
 		t.Fatal(err)
 	}
 	want := strings.Replace(targetsConfig, `    # the agent
@@ -151,8 +157,7 @@ func TestAddTargetWritesAnEntry(t *testing.T) {
 	tickets := revier.Target{
 		Name: "tickets",
 		Runtime: &revier.Realization{
-			Name:   "tickets:{{.Name}}",
-			Match:  revier.Match{Title: "^tickets:{{.Name}}$"},
+			Inside: "home",
 			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"tt"}}},
 		},
 	}
@@ -164,8 +169,7 @@ func TestAddTargetWritesAnEntry(t *testing.T) {
 [[target]]
 name = "tickets"
   [target.runtime]
-  name = "tickets:{{.Name}}"
-  match = { title = "^tickets:{{.Name}}$" }
+  inside = "home"
     [[target.runtime.panels]]
     kind = "tool"
     command = ["tt"]
@@ -173,8 +177,11 @@ name = "tickets"
 	if got := readConfig(t, root); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
-	if len(written.Shared) != 3 || len(written.Projects) != 1 || len(written.Projects[0].Targets) != 3 {
-		t.Errorf("written = %d shared, projects %+v; want 3 shared and demo with 3 targets", len(written.Shared), written.Projects)
+	if len(written.Shared) != 4 || len(written.Projects) != 1 || len(written.Projects[0].Targets) != 4 {
+		t.Errorf("written = %d shared, projects %+v; want 4 shared and demo with 4 targets", len(written.Shared), written.Projects)
+	}
+	if probs := config.Problems(written.Projects[0]); len(probs) > 0 {
+		t.Errorf("Problems = %v, want the unlisted tab whole", probs)
 	}
 }
 
@@ -224,7 +231,7 @@ func TestATargetEditOverAChangedFileIsRefused(t *testing.T) {
 	}
 }
 
-// refusedConfig is targetsConfig with a third shared target that Load
+// refusedConfig is targetsConfig with a fourth shared target that Load
 // refuses for a value of the wrong type: launch is a list.
 const refusedConfig = targetsConfig + `
 [[target]]
@@ -239,10 +246,10 @@ name = "web"
 func TestARefusedSharedTargetCanBeRemoved(t *testing.T) {
 	root, shared := targetsRoot(t, refusedConfig)
 	listed := config.ListTargets(shared)
-	if len(listed) != 3 || listed[2].Name != "web" {
+	if len(listed) != 4 || listed[3].Name != "web" {
 		t.Fatalf("ListTargets = %+v, want the refused web last, by name", listed)
 	}
-	if _, err := config.RemoveTarget(root, 2, shared); err != nil {
+	if _, err := config.RemoveTarget(root, 3, shared); err != nil {
 		t.Fatalf("RemoveTarget(web) = %v, want the refused target deleted", err)
 	}
 	if got := readConfig(t, root); strings.Contains(got, `name = "web"`) {
@@ -255,7 +262,7 @@ func TestARefusedSharedTargetDoesNotBlockAnotherEdit(t *testing.T) {
 	root, shared := targetsRoot(t, refusedConfig)
 	edit := sharedTyped(t, shared[:1])[0]
 	edit.Key = "ctrl-shift-h"
-	if _, err := config.ReplaceTarget(root, 0, shared, config.TargetEdit{Target: edit, PanelFrom: []int{0, 1}}); err != nil {
+	if _, err := config.ReplaceTarget(root, 0, shared, config.TargetEdit{Target: edit}); err != nil {
 		t.Errorf("ReplaceTarget(home) = %v, want it written", err)
 	}
 }

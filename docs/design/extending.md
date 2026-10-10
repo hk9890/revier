@@ -16,7 +16,8 @@ path = "~/dev/github/revier"
 # Optional. Opening the project clones it here when path is missing.
 git_url = "git@github.com:hk9890/revier.git"
 
-# The workspace. Home is where toggle-back returns.
+# The workspace. Home is where toggle-back returns. It is the window alone:
+# what runs in it is the tabs it lists.
 [[target]]
 name = "home"
 key  = "ctrl-shift-h"
@@ -25,6 +26,14 @@ home = true
   [target.runtime]
   name  = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
+  tabs  = ["agent"]
+
+# The tab of the workspace: an agent beside a shell.
+[[target]]
+name = "agent"
+
+  [target.runtime]
+  inside = "home"
 
     [[target.runtime.panels]]
     kind    = "agent"
@@ -82,9 +91,11 @@ both hosts are available.
 Set `inside` on a runtime realization to open the target as a tab of another
 target's instance, not as an instance of its own (D64). The tab
 takes a `launch` or `panels`, one of the two, and no `match` or `name`: revier
-marks the tab it opens and finds it again by that mark. It needs a runtime with tabs: kitty, where it is
-a tab of the OS window, or tmux, where it is a window of the session (D70). On
-any other runtime the key is refused with the reason.
+marks the tab it opens and finds it again by that mark. A tab is the one place
+a file has `panels`: on a runtime realization with no `inside` they are
+refused at load, with the fix (D128). A tab needs a runtime with tabs: kitty,
+where it is a tab of the OS window, or tmux, where it is a window of the
+session (D70). On any other runtime the key is refused with the reason.
 
 ```toml
 [[target]]
@@ -96,62 +107,34 @@ key  = "ctrl-shift-t"
   launch = ["taskmgr-ui"]
 ```
 
-Set `tabs` on the target the tabs are inside to open its instance with them
-(D126). `tabs` lists the tab targets in the order they open, and `active` names
-the one that has the focus; with no `active` it is the first entry. The target
-is then only the window: it has no `launch` and no `panels`, and the agent and
-the shell are a tab target as the ticket viewer is.
+`tabs` on the target the tabs are inside opens its instance with them (D126).
+It lists the tab targets in the order they open, and `active` names the one
+that has the focus; with no `active` it is the first entry. The target is then
+only the window, and has no `launch`. To open the `home` above with the ticket
+viewer first and the agent in focus:
 
 ```toml
-[[target]]
-name = "home"
-key  = "ctrl-shift-h"
-home = true
-
   [target.runtime]
   name   = "session:{{.Name}}"
   match  = { title = "^session:{{.Name}}$" }
   tabs   = ["tickets", "agent"]
   active = "agent"
-
-[[target]]
-name = "agent"
-
-  [target.runtime]
-  inside = "home"
-
-    [[target.runtime.panels]]
-    kind    = "agent"
-    title   = "claude"
-    command = ["claude"]
-
-    [[target.runtime.panels]]
-    kind = "shell"
-
-[[target]]
-name = "tickets"
-key  = "ctrl-shift-t"
-
-  [target.runtime]
-  inside = "home"
-  launch = ["taskmgr-ui"]
 ```
 
 Both keys apply only when revier creates the instance: one that is open keeps
 its tabs and its focus. A press on the key of a listed tab that creates the
 instance leaves the focus on that tab. A tab that is not listed opens at its
-key, as before. The `home` of the first example, with `panels` on the target
-and no `tabs`, is the same workspace with one tab, and still works. A link
-opens without the listed tabs. On a runtime with no tabs the key of a target
-with `tabs` is refused with the reason.
+key. A target with no `tabs` runs its `launch`. On a runtime with no tabs the
+key of a target with `tabs` is refused with the reason, so such a runtime
+opens a `launch` alone.
 
 A listed tab that fails to open stops the ones after it: the instance stays
 open with the tabs it has, and the press reports it with the error (D126). A
 save records no step for a listed tab, because it comes back with its
 instance.
 
-The agent panel and the shell panel of a workspace with `tabs` are the first
-of each kind in its listed tabs, in order (D127). `revier agent new` and
+The agent panel and the shell panel of a workspace are the first of each kind
+in its listed tabs, in order (D128). `revier agent new` and
 `revier shell new` copy those, and `-p <project>:agent` names the workspace as
 `-p <project>:home` does. A save records the agents in the panels of a listed
 tab under the workspace with their conversations, and a restore resumes them
@@ -192,7 +175,7 @@ name = "pulls"
 ```
 
 A table merges key by key, at any depth. Any other value - a string, a list
-such as `panels` or `launch` - replaces the shared one whole.
+such as `tabs`, `panels` or `launch` - replaces the shared one whole.
 
 A link, in the same directory, is a project on another machine
 (D41). It has a `[remote]` table and no directory here:
@@ -213,8 +196,10 @@ host = "buildbox"   # the ssh destination
 project = "far"     # its name there; defaults to this file's name
 
 # Optional: further targets, windows here that reach the project there. The
-# home target, the ssh pane onto the workspace, is derived; a declared one
-# takes the pane for every field it leaves out - a placement alone is enough.
+# home target and its one tab, agent, are derived: an agent panel and a shell
+# panel, each an ssh onto the workspace (D84, D128). A declared home keeps
+# every field it sets - a placement alone is enough - and a tabs it sets is
+# dropped.
 [[target]]
 name = "editor"
 key  = "ctrl-shift-o"

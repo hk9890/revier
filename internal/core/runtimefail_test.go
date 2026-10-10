@@ -82,13 +82,16 @@ func TestSendKeysThatStopPartWaySayHowManyArrived(t *testing.T) {
 
 // A workspace this press opened for a tab is reported when the tab cannot be
 // focused, as it is when the tab cannot be opened: the caller pins it and the
-// next press does not open another.
+// next press does not open another. The workspace lists no tab here, so the
+// focus that fails is the tab's and not the one of the workspace's own tabs.
 func TestATabThatCannotBeFocusedInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.FocusPanelErr = errRuntimeGone
 	c := &core.Core{Runtime: rt}
+	proj := tabProject()
+	proj.Targets[0].Runtime.Tabs, proj.Targets[0].Runtime.Launch = nil, []string{"zsh"}
 
-	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
+	res, err := press(context.Background(), c, prepared(t, proj), "tickets")
 	if !errors.Is(err, errRuntimeGone) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
@@ -143,8 +146,9 @@ func TestAReturnHomeFromATabThatCannotBeFocusedIsAFailure(t *testing.T) {
 }
 
 // restoreWithAgentTabs is agentProject restored on a fresh runtime with one agent in the
-// layout and two past it, after the runtime was set up to fail.
-func restoreWithAgentTabs(t *testing.T, fail func(*hosttest.FakeRuntime)) (core.Result, *hosttest.FakeRuntime) {
+// layout and two past it, after the runtime was set up to fail. The error is
+// the launch's: the workspace is reported with it or without it.
+func restoreWithAgentTabs(t *testing.T, fail func(*hosttest.FakeRuntime)) (core.Result, *hosttest.FakeRuntime, error) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	fail(rt)
@@ -154,21 +158,21 @@ func restoreWithAgentTabs(t *testing.T, fail func(*hosttest.FakeRuntime)) (core.
 		{Harness: "claude", Session: "second"},
 		{Harness: "claude", Session: "third"},
 	})
-	if err != nil {
-		t.Fatalf("ActivateWaiting: %v; the workspace opened, so a tab's failure is not the launch's", err)
-	}
 	if res.Ref.IsZero() {
-		t.Fatal("the opened workspace is not reported")
+		t.Fatalf("the opened workspace is not reported: %v", err)
 	}
-	return res, rt
+	return res, rt, err
 }
 
 // A restore reads the current panel before its first agent tab, to make it
 // current again after them. When that read fails no tab is opened: every agent
 // past the layout is named as not added, with the reason beside them.
 func TestARestoreThatCannotReadTheCurrentPanelAddsNoAgentTab(t *testing.T) {
-	res, rt := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) { rt.FocusedPanelErr = errRuntimeGone })
+	res, rt, err := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) { rt.FocusedPanelErr = errRuntimeGone })
 
+	if err != nil {
+		t.Errorf("ActivateWaiting: %v; the workspace opened, so an agent tab's failure is not the launch's", err)
+	}
 	if !errors.Is(res.AgentErr, errRuntimeGone) {
 		t.Errorf("AgentErr = %v, want the runtime's failure", res.AgentErr)
 	}
@@ -182,10 +186,17 @@ func TestARestoreThatCannotReadTheCurrentPanelAddsNoAgentTab(t *testing.T) {
 
 // The tabs opened and the workspace's own panel could not be made current
 // again. The agents run, so each keeps its outcome, and the failure is told.
+// The active tab cannot be made current either, which is the launch's failure.
 func TestARestoreThatCannotFocusTheWorkspaceAgainKeepsItsAgents(t *testing.T) {
-	whole, _ := restoreWithAgentTabs(t, func(*hosttest.FakeRuntime) {})
-	res, rt := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) { rt.FocusPanelErr = errRuntimeGone })
+	whole, _, err := restoreWithAgentTabs(t, func(*hosttest.FakeRuntime) {})
+	if err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	res, rt, err := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) { rt.FocusPanelErr = errRuntimeGone })
 
+	if !errors.Is(err, errRuntimeGone) || !strings.Contains(err.Error(), "focus tab agent of home") {
+		t.Errorf("err = %v, want the failure to focus the active tab", err)
+	}
 	if !errors.Is(res.AgentErr, errRuntimeGone) || !strings.Contains(res.AgentErr.Error(), "focus the workspace after its agent tabs") {
 		t.Errorf("AgentErr = %v, want the focus failure after the tabs", res.AgentErr)
 	}
@@ -202,10 +213,13 @@ func TestARestoreThatCannotFocusTheWorkspaceAgainKeepsItsAgents(t *testing.T) {
 // the agents are named as not added.
 func TestARestoreTellsTheTabFailureWithTheFocusFailureAfterIt(t *testing.T) {
 	errNoTab := errors.New("the tab did not open")
-	res, _ := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) {
+	res, _, err := restoreWithAgentTabs(t, func(rt *hosttest.FakeRuntime) {
 		rt.OpenTabErr, rt.FocusPanelErr = errNoTab, errRuntimeGone
 	})
 
+	if !errors.Is(err, errRuntimeGone) || errors.Is(err, errNoTab) {
+		t.Errorf("err = %v, want the failure to focus the active tab alone: an agent tab's failure is not the launch's", err)
+	}
 	if !errors.Is(res.AgentErr, errNoTab) || !errors.Is(res.AgentErr, errRuntimeGone) {
 		t.Errorf("AgentErr = %v, want the tab's failure and the focus failure", res.AgentErr)
 	}

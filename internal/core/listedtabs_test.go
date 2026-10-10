@@ -13,23 +13,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// listedTabsProject is a workspace that is only the window: tickets is its
-// first tab, and the agent and the shell are its second.
-func listedTabsProject(active revier.TargetName) revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Match: revier.Match{Title: "^session:revier$"},
-			Tabs: []revier.TargetName{"tickets", "agent"}, Active: active}},
-		{Name: "tickets", Key: "ctrl-shift-t", Runtime: &revier.Realization{
-			Inside: "home", Launch: []string{"taskmgr-ui"}, Dir: "/p/tickets"}},
-		{Name: "agent", Runtime: &revier.Realization{
-			Inside: "home", Panels: []revier.PanelSpec{
-				{Kind: revier.PanelAgent, Command: []string{"claude"}},
-				{Kind: revier.PanelShell},
-			}}},
-	}}
-}
-
 // marks is the target and the home mark of each panel that carries one, in
 // the order the runtime lists the panels of its one instance.
 func marks(t *testing.T, rt *hosttest.FakeRuntime) []string {
@@ -402,28 +385,6 @@ func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
 	}
 }
 
-// A target with panels and no tabs opens as it did before a target could list
-// its tabs: the panels are the instance, and its first panel has the home
-// mark.
-func TestAWorkspaceThatListsNoTabsOpensItsOwnPanels(t *testing.T) {
-	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
-
-	res, err := press(context.Background(), c, prepared(t, tabProject()), "home")
-	if err != nil {
-		t.Fatalf("Go: %v", err)
-	}
-	if len(rt.Opened) != 1 || len(rt.Opened[0].Panels) != 1 || len(rt.Tabs) != 0 || len(rt.PanelFocuses) != 0 {
-		t.Fatalf("opened = %+v, tabs = %+v, panel focuses = %v; want the declared panels alone", rt.Opened, rt.Tabs, rt.PanelFocuses)
-	}
-	if got, want := marks(t, rt), []string{"/home"}; !slices.Equal(got, want) {
-		t.Errorf("marks = %q, want %q", got, want)
-	}
-	if len(res.Tabs) != 0 {
-		t.Errorf("tabs = %v, want none", res.Tabs)
-	}
-}
-
 // markedPanels is the panels of the instance that carry the mark of the named
 // tab target, in listing order, and the tabs that hold them.
 func markedPanels(t *testing.T, rt *hosttest.FakeRuntime, name revier.TargetName) (panels []revier.PanelID, tabs []string) {
@@ -521,7 +482,7 @@ func openListedTabs(t *testing.T) (*core.Core, *hosttest.FakeRuntime, core.Proje
 }
 
 // The agent panel and the shell panel of a workspace that lists its tabs are
-// the ones of its tabs (decisions.md D127). `revier agent new` opens a copy of
+// the ones of its tabs (decisions.md D128). `revier agent new` opens a copy of
 // them as a tab of the workspace, whether the command names the workspace or
 // the tab that holds the panels, and returns the new agent's panel.
 func TestAgentNewOpensAnAgentTabInAWorkspaceThatListsItsTabs(t *testing.T) {
@@ -639,8 +600,7 @@ func restoredInto(t *testing.T, project revier.Project, s session.Session) (*hos
 }
 
 // The agent in a panel of a listed tab is recorded under the workspace, with
-// its conversation, in the shape a workspace with its own panels is recorded
-// in. A restore lays it over the agent panel of that tab, and opens the agent
+// its conversation, in the file shape of 0.14.0. A restore lays it over the agent panel of that tab, and opens the agent
 // past it as an agent tab.
 func TestSaveThenRestoreResumesTheAgentOfAListedTab(t *testing.T) {
 	dir := t.TempDir()
@@ -706,9 +666,9 @@ func TestASessionOfAWorkspaceWithItsOwnPanelsRestoresIntoItsListedTabs(t *testin
 	}
 }
 
-// The reverse: a file saved from listed tabs restores into a workspace that
-// holds its own panels.
-func TestASessionOfListedTabsRestoresIntoAWorkspaceWithItsOwnPanels(t *testing.T) {
+// A file saved from two listed tabs restores into a workspace that lists the
+// agent tab alone: both agents are resumed, one in the tab and one past it.
+func TestASessionOfListedTabsRestoresIntoAWorkspaceThatListsTheAgentTabAlone(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := savedListedTabs(t, dir)
 
@@ -943,7 +903,7 @@ func twoAgentTabsProject() revier.Project {
 }
 
 // The first panel of a kind is the one of the first listed tab that declares
-// it, in the order of `tabs` and not of the file (decisions.md D127): an agent
+// it, in the order of `tabs` and not of the file (decisions.md D128): an agent
 // tab and a served agent copy that one.
 func TestTheAgentPanelOfAWorkspaceIsTheOneOfItsFirstListedTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")

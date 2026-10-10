@@ -148,8 +148,8 @@ func (c *Core) hostAgents(ctx context.Context, p Project) ([]revier.AgentView, e
 
 // linkAgent finds the agent addr names in a link, among those a panel here
 // shows: with addr empty, the link's only agent; with a target name, the only
-// agent in that target's instance, which scope lists; otherwise the panel
-// here with that id.
+// agent in the panels scope lists for that target, which are its instance's or,
+// for a tab, the tab's alone; otherwise the panel here with that id.
 func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revier.TargetName, scope []held, snap snapshot) (Agent, error) {
 	agents, err := c.hostAgents(ctx, p)
 	if err != nil {
@@ -162,7 +162,9 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 	}
 	in := map[string]bool{}
 	for _, h := range scope {
-		in[key(h.inst.Ref)] = true
+		for _, panel := range h.inst.Panels {
+			in[key(h.inst.Ref)+"\x00"+string(panel.ID)] = true
+		}
 	}
 	var found []Agent
 	elsewhere := 0
@@ -171,7 +173,7 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 			elsewhere++
 			continue
 		}
-		if (only != "" && !in[key(a.Ref)]) || (only == "" && addr != "" && string(a.Panel) != addr) {
+		if (only != "" && !in[key(a.Ref)+"\x00"+string(a.Panel)]) || (only == "" && addr != "" && string(a.Panel) != addr) {
 			continue
 		}
 		inst, _ := byRef(snap, a.Ref)

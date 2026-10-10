@@ -183,7 +183,8 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "home", Match: revier.Match{Title: "^home$"}, Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
+			Name: "home", Match: revier.Match{Title: "^home$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
 

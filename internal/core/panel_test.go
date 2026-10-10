@@ -358,6 +358,63 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 	}
 }
 
+// A tab that holds panels is addressed as a launch tab is: the name is the
+// agent of that tab alone, whichever of its panels the agent is, while the
+// workspace around it also holds the agent of an agent tab and names two.
+func TestAnAgentAddressedByAPanelTabIsThatTabsAgent(t *testing.T) {
+	inTab := func(p revier.Panel) revier.Panel {
+		p.Vars = map[string]string{core.PanelTargetVar: "agent"}
+		return p
+	}
+	for name, tab := range map[string][]revier.Panel{
+		"the agent declared first": {inTab(agentPanel("1", "idle")), inTab(shellPanel("2"))},
+		"the shell declared first": {inTab(shellPanel("2")), inTab(agentPanel("1", "idle"))},
+	} {
+		rt := hosttest.NewRuntime("kitty")
+		rt.Add("session:revier", "kitty", append(tab, agentPanel("3", "busy"), shellPanel("4"))...)
+		c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+		p := prepared(t, listedTabsProject(""))
+
+		a, err := c.Agent(context.Background(), p, "agent")
+		if err != nil || a.Panel.ID != "1" {
+			t.Fatalf("%s: Agent(agent) = %+v, %v; want the tab's panel 1", name, a, err)
+		}
+		for _, addr := range []string{"home", ""} {
+			if _, err := c.Agent(context.Background(), p, addr); !errors.Is(err, core.ErrAmbiguous) {
+				t.Errorf("%s: Agent(%q) err = %v, want ErrAmbiguous", name, addr, err)
+			}
+		}
+		if err := c.SendKeys(context.Background(), a, []string{"x"}, 0); err != nil {
+			t.Fatalf("%s: SendKeys: %v", name, err)
+		}
+		if len(rt.Sent) != 1 || rt.Sent[0].Panel != "1" {
+			t.Errorf("%s: sent = %+v, want the key in panel 1 alone", name, rt.Sent)
+		}
+	}
+}
+
+// The mark of Open is best effort: the panel that created the instance can be
+// without it while the shell split in after it has it. The agent is still the
+// tab's, because the runtime lists it in the tab of the marked panel.
+func TestAnAgentAddressedByAPanelTabIsFoundWithoutItsMark(t *testing.T) {
+	inRuntimeTab := func(p revier.Panel, tab string) revier.Panel {
+		p.Tab = tab
+		return p
+	}
+	marked := shellPanel("2")
+	marked.Vars = map[string]string{core.PanelTargetVar: "agent"}
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		inRuntimeTab(agentPanel("1", "idle"), "7"), inRuntimeTab(marked, "7"),
+		inRuntimeTab(agentPanel("3", "busy"), "8"), inRuntimeTab(shellPanel("4"), "8"))
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	a, err := c.Agent(context.Background(), prepared(t, listedTabsProject("")), "agent")
+	if err != nil || a.Panel.ID != "1" {
+		t.Errorf("Agent(agent) = %+v, %v; want the tab's panel 1", a, err)
+	}
+}
+
 // A tab opened for a target the project no longer declares is no tab target's
 // panel, so its agent stays with the instance rather than dropping out of the
 // save.

@@ -14,7 +14,7 @@ import (
 //
 // The fields available are those of revier.Project: {{.Name}}, {{.Path}}, and
 // {{.Vars.<key>}}. A realization that names no Dir gets the project path, and
-// every panel gets the realization's Dir.
+// every panel of a tab gets the tab's Dir.
 //
 // A target whose templates do not render is returned as it was written, and
 // its error sits at the same index of the returned slice. The other targets

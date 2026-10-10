@@ -11,7 +11,7 @@ import (
 
 type PanelID string
 
-// PanelSpec declares one pane of a Home target's layout.
+// PanelSpec declares one pane of a tab's layout.
 type PanelSpec struct {
 	Kind    PanelKind `toml:"kind" json:"kind"`
 	Title   string    `toml:"title" json:"title,omitempty"`

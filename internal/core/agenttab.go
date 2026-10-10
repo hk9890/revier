@@ -143,7 +143,7 @@ func notAdded(outcomes []AgentOutcome, n int) []AgentOutcome {
 	return outcomes
 }
 
-// AgentTarget is the target of a project whose layout declares an agent
+// AgentTarget is the target of a project whose listed tabs declare an agent
 // panel: the one `revier agent new -p <project>` opens its tab in. A
 // workspace that lists two tabs with an agent panel is one target, and its
 // agent is the one of the first of them.
@@ -151,8 +151,10 @@ func (c *Core) AgentTarget(p Project) (revier.TargetName, error) {
 	var found []revier.TargetName
 	for i, t := range p.Targets {
 		if _, real, _, err := c.resolveAt(p, i); err == nil {
-			if _, ok := declared(p.layout(real), revier.PanelAgent); ok {
-				found = append(found, t.Name)
+			if layout, err := c.layout(p, real); err == nil {
+				if _, ok := declared(layout, revier.PanelAgent); ok {
+					found = append(found, t.Name)
+				}
 			}
 		}
 	}
@@ -189,7 +191,7 @@ func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, p
 
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`. A listed tab that holds panels names the workspace it is
-// inside: the tab is a part of that workspace's layout (decisions.md D127).
+// inside: the tab is a part of that workspace's layout (decisions.md D128).
 func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName) (Workspace, error) {
 	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)
@@ -272,7 +274,11 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 				continue
 			}
 			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap}
-			if _, ok := declared(p.layout(real), revier.PanelAgent); ok {
+			layout, err := c.layout(p, real)
+			if err != nil {
+				continue
+			}
+			if _, ok := declared(layout, revier.PanelAgent); ok {
 				return w, nil
 			}
 			if owner.Ref.IsZero() {
@@ -396,7 +402,11 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 	if !ok {
 		return tabRuntime{}, fmt.Errorf("%s: %w", host.Name(), ErrNoTabsToOpen)
 	}
-	return tabRuntime{host: host, opener: opener, real: real, layout: w.Project.layout(real)}, nil
+	layout, err := c.layout(w.Project, real)
+	if err != nil {
+		return tabRuntime{}, err
+	}
+	return tabRuntime{host: host, opener: opener, real: real, layout: layout}, nil
 }
 
 // openTab opens the tab in the workspace and returns its first panel, which

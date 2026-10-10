@@ -1,11 +1,14 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 const valid = `
@@ -20,9 +23,7 @@ home = true
   [target.runtime]
   name = "home"
   match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
+  tabs = ["agent"]
 
 [[target]]
 name = "editor"
@@ -30,6 +31,14 @@ key = "ctrl-o"
   [target.window]
   launch = ["code", "{{.Path}}"]
   match = { class = "^code$" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
 `
 
 const sharedConfig = `
@@ -40,11 +49,7 @@ key = "ctrl-shift-u"
   [target.runtime]
   name = "session:{{.Name}}"
   match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "agent"
-    command = ["claude"]
-    [[target.runtime.panels]]
-    kind = "shell"
+  tabs = ["agent"]
 
 [[target]]
 name = "editor"
@@ -52,6 +57,16 @@ key = "ctrl-shift-o"
   [target.window]
   launch = ["idea", "{{.Path}}"]
   match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    [[target.runtime.panels]]
+    kind = "agent"
+    command = ["claude"]
+    [[target.runtime.panels]]
+    kind = "shell"
 `
 
 // link is a project on another machine, in the smallest file that says so.
@@ -142,4 +157,35 @@ func sharedOf(t *testing.T, root string) []map[string]any {
 		t.Fatalf("Load: %v", err)
 	}
 	return cfg.Targets
+}
+
+// target is the named target of a loaded project.
+func target(t *testing.T, p core.Project, name revier.TargetName) revier.Target {
+	t.Helper()
+	for _, tg := range p.Targets {
+		if tg.Name == name {
+			return tg
+		}
+	}
+	t.Fatalf("project %s has no target %q", p.Name, name)
+	return revier.Target{}
+}
+
+// names is the names of a loaded project's targets, in order.
+func names(p core.Project) []revier.TargetName {
+	var out []revier.TargetName
+	for _, tg := range p.Targets {
+		out = append(out, tg.Name)
+	}
+	return out
+}
+
+// refusalOf is why the named target of a loaded project was refused, or nil.
+func refusalOf(p core.Project, name revier.TargetName) error {
+	for i, t := range p.Targets {
+		if t.Name == name {
+			return p.TargetErr(i)
+		}
+	}
+	return errors.New("no such target")
 }

@@ -40,6 +40,11 @@ home = true
   [target.runtime]
   name = "home"
   match = { title = "^home$" }
+  tabs = ["agent"]
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"                                         # panels are on a tab alone
     [[target.runtime.panels]]
     kind = "agent"
     command = ["bash", "-c", "exec -a claude sleep 600"]   # the Claude probe claims a pane named claude

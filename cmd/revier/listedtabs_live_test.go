@@ -113,7 +113,7 @@ func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnTmux(t *testing.T) {
 }
 
 // `revier agent new` finds the agent panel and the shell panel in the tab the
-// workspace lists (decisions.md D127): the new tab is a third window that
+// workspace lists (decisions.md D128): the new tab is a third window that
 // holds a copy of both, and the command prints the address of its agent.
 func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnTmux(t *testing.T) {
 	lead(t)

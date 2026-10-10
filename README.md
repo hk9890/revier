@@ -315,9 +315,9 @@ host = "buildbox"
 project = "far"
 ```
 
-The workspace is derived: an agent panel and a shell panel, each an ssh that
-runs `revier agent exec -p far` or `revier shell exec -p far` on the host, so
-the host's project file says which agent runs and where. A link may add
+The workspace is derived: one tab with an agent panel and a shell panel, each
+an ssh that runs `revier agent exec -p far` or `revier shell exec -p far` on
+the host, so the host's project file says which agent runs and where. A link may add
 `[[target]]` entries of its own, such as an editor over ssh, which render that
 path and that repository. Neither names anything on this machine: the link has
 no directory here, and the checkout stays the host's to clone.
