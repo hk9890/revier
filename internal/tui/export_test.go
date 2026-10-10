@@ -35,17 +35,17 @@ func (m Model) Said() Model {
 	return next.(Model)
 }
 
-// Mirrored is the model once the mirror's read of the agent under the agent
-// list's cursor has answered, as the command its tick sends would answer it:
-// at once, on this goroutine.
+// Mirrored is the model once the mirror's read of the agent the pane mirrors
+// has answered, as the command its tick sends would answer it: at once, on
+// this goroutine.
 func (m Model) Mirrored() Model {
 	next, _ := m.Update(mirrorTickMsg{})
 	m = next.(Model)
-	it, ok := m.agents.selected()
+	_, a, ok := m.mirroring()
 	if !ok {
 		return m
 	}
-	next, _ = m.Update(m.agents.readScreen(m.core, it.agent)())
+	next, _ = m.Update(m.mirror.readScreen(m.core, a)())
 	return next.(Model)
 }
 
@@ -56,7 +56,7 @@ func (m Model) MirrorTicked() Model {
 }
 
 // MirrorAsked is how many reads of a panel the mirror has sent for.
-func (m Model) MirrorAsked() int { return m.agents.mirror.seq }
+func (m Model) MirrorAsked() int { return m.mirror.seq }
 
 // ScreenLines exposes the mirror's setting of a panel's screen.
 func ScreenLines(text string, w int) []string { return screenLines(text, w) }

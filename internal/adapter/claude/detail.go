@@ -37,12 +37,12 @@ var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transc
 // The transcript's format is Claude Code's internal one, and it changes
 // between releases. So this is display only, as revier.Detailed says
 // (decisions.md D106): a line that does not parse is passed over, and a
-// transcript with no line that does is an error, which the pane shows as
+// transcript with no line that does is an error, which the surface shows as
 // nothing. A panel the listing does not hold, and a session with no
 // transcript yet, are ordinary and answer revier.ErrNoDetail; only a read
 // that failed is a failure.
 //
-// The pane asks every refresh, so a transcript is read again only when its
+// The surface asks every refresh, so a transcript is read again only when its
 // size or modification time changed since the last read.
 func (p *Probe) Detail(ctx context.Context, panel revier.Panel) (revier.AgentDetail, error) {
 	listed, err := p.listing(ctx)
@@ -247,13 +247,14 @@ type block struct {
 }
 
 // briefRunes is how much of a prompt or of a tool's input Detail keeps: the
-// pane draws a line of each, and a prompt can be a pasted file.
+// surface keeps every answer while the agent lives, and a prompt can be a
+// pasted file.
 const briefRunes = 300
 
 // lastSaid walks the lines back from the end: through the turn the agent is
 // in, which is every tool it called since the user last wrote, and on to the
 // last text the agent wrote in its own conversation, which can be older than
-// the turn (decisions.md D122). A subagent's lines (isSidechain) are its
+// the turn. A subagent's lines (isSidechain) are its
 // work, not the agent's. A line Claude Code wrote into the conversation
 // itself (isMeta), and the summary it put in a compacted conversation's place
 // (isCompactSummary), are not the user's: the turn goes on through both.

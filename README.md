@@ -136,13 +136,11 @@ revier version                what is installed
 
 In the TUI, projects whose agent is waiting for you sort first. Each project
 row counts its agents by state: needs you, working, idle, unknown. The pane
-beside the list shows the project's targets and agents, and the last message
-of one agent, how long ago it was written, and its end when it is too long to
-fit. That is the agent you moved the cursor to; until you do, the agent that
-needs you, else one with a message to show, one at rest before one working.
-Above the message the pane shows that agent's turn: your last prompt, the
-tools it called since, and the call it is running or waits on you for.
-For a project on another machine the last message is not shown yet.
+beside the list shows the project's targets and agents, and the terminal of
+one agent as it is now, in its own colours; the wheel scrolls back through
+it. That is the agent you moved the cursor to; until you do, the agent that
+needs you, else one at rest before one working. The agent of a project on
+another machine is shown from the terminal here that holds it.
 
 A script, or one agent that directs the others, drives an agent with `revier
 agent`. No command of this round trip raises a window or moves the keyboard:

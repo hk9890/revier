@@ -141,7 +141,6 @@ func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
 // The lists keep their items and cursors; only their styles change.
 func (m *Model) applyTheme(th theme.Theme) {
 	m.theme = th
-	m.amessage = setMessage{} // set in the old theme's colours
 	m.link.restyle(th)
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style

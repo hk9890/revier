@@ -596,30 +596,24 @@ stop put them two presses off; a project has a handful of targets, so a query
 over them found nothing a glance does not. The targets have no query, and a
 pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
-### D106 — the pane shows what an agent said last, read from its transcript for display only
+### D106 — what an agent said last is read from its transcript, for display only
 
-What an agent did last decides whether to go to it, and its title says only
-what it is on. The Claude probe reads it from the session's transcript, whose
-format is Claude Code's own and changes between releases, so the read is
-display only (`Detailed`). Rejected: the agent view's summary, which Claude Code
-writes for background sessions alone (3 of 27 when measured); `claude -p
---resume`, a model request per agent; a hook, which every user would install.
-
-### D107 — the pane always shows one agent's message, in place of the project tree
-
-The tree said which checkout this is, which the path above it says too. A
-message is what the pane is for, so one is shown before any keypress, and the
-user's choice overrides the pane's. A long message keeps its end, where an
-agent says what it did and needs; its width stays fixed across the wide
-layout's switch, so a resize moves the message and does not re-wrap it.
+When an agent spoke last orders the agents (D110, D125), and `revier agent
+read` prints what it said (D116). The Claude probe reads both from the
+session's transcript, whose format is Claude Code's own and changes between
+releases, so the read is display only (`Detailed`). Rejected: the agent view's
+summary, which Claude Code writes for background sessions alone (3 of 27 when
+measured); `claude -p --resume`, a model request per agent; a hook, which
+every user would install.
 
 ### D108 — an agent's message is drawn as text, never as instructions to the terminal
 
 A message is whatever the agent wrote, and agents quote what tools print: a
 captured `git diff --color`, a progress line rewritten with a carriage return,
 a title an OSC set. Passed through, each of those repaints the surface that is
-showing it. So every escape and control character comes off before the pane
-measures or styles a line, and the message is set in revier's own colours.
+showing it. So every escape and control character comes off before a row of
+the agent list or `revier agent read` shows a line of it, and the row is set
+in revier's own colours.
 Rejected: trusting the harness, which does not own what a tool wrote into the
 transcript it keeps.
 
@@ -754,16 +748,6 @@ free of files, so the sequences are not there. The event of a use is recorded
 by the operation that did the thing, through the ledger (D120); a surface
 records only the conversations its survey saw.
 
-### D122 — the pane shows the turn an agent is in, above what it said
-
-A message says what an agent did and not what it was asked, what it ran, or
-what it waits for, which is what decides whether to go to it. `Detailed` also
-answers the last prompt and the tool calls since; the pane counts the calls by
-name and names the one with no result. It is display, as D106 holds, and one
-turn: the pane reads and never answers, and the conversation stays in the
-harness. Rejected: drawing the whole conversation, a second interface for
-every harness; a typed event stream, which means running the agent.
-
 ### D123 — revier starts one agent of its own, to write its configuration
 
 A user no longer fills in setup screens: they tell the coding agent they have
@@ -784,3 +768,13 @@ order of opening: the tab's launch opens the instance under its tab mark
 put on the first panel of the instance. When the panels fail, the instance
 stays open and is reported with the error. A save records no step for the
 tab. Rejected: a tab number on a panel, which declares the tab a second time.
+
+### D125 — the project pane mirrors one agent's panel, as the agent list's pane does
+
+One agent drawn two ways, its message set from the transcript beside the
+projects and its panel beside the agents, read as two agents, and a transcript
+is one harness's (D106). So one mirror (D111) serves both panes. The project
+pane mirrors an agent before any keypress, and keeps it while no other is more
+worth a look: a mirror that changed hands when an equal spoke lost the scroll
+in it. Rejected: the turn an agent is in above the mirror, which the screen
+shows already. Replaces D107 and D122.

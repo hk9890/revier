@@ -220,10 +220,10 @@ type Titled interface {
 }
 
 // Detailed is an optional capability of an AgentProbe, detected by type
-// assertion. Detail is the last thing the agent in a panel said, for the pane
-// that shows one agent, for the agent list, which orders its rows by when
-// each spoke, and for `revier agent read`, which prints it (decisions.md
-// D116), with the turn the agent is in, which the pane alone shows (D122). It
+// assertion. Detail is the last thing the agent in a panel said, for the
+// surface, which orders its agents by when each spoke, and for `revier agent
+// read`, which prints it (decisions.md D116), with the turn the agent is in,
+// which nothing in revier draws (D125). It
 // is asked for every agent the surface shows - one project's beside the
 // project list, every project's on the agent list - each time the surface
 // refreshes, and never in a survey: keep it cheap, and read again only what
@@ -231,7 +231,7 @@ type Titled interface {
 //
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so
-// a probe that cannot read it returns an error, and the pane shows nothing:
+// a probe that cannot read it returns an error, and the surface shows nothing:
 // ErrNoDetail where there is nothing to read, any other error where reading it
 // failed.
 type Detailed interface {
@@ -245,16 +245,15 @@ type Detailed interface {
 var ErrNoDetail = errors.New("the probe has no detail for this panel")
 
 // AgentDetail is what an agent said last, and when, with the turn it is in:
-// what the user asked, and the tools the agent called since (decisions.md
-// D122). Any of them is empty when the harness does not say.
+// what the user asked, and the tools the agent called since. Any of them is
+// empty when the harness does not say.
 type AgentDetail struct {
 	Message string    `json:"message,omitempty"`
 	At      time.Time `json:"at,omitzero"`
 
 	// Prompt is what the user asked last, and Tools the calls the agent made
 	// since, in the order it made them. A probe hands both over short: the
-	// surface draws a line of each, and keeps every answer while the agent
-	// lives.
+	// surface keeps every answer while the agent lives.
 	Prompt string     `json:"prompt,omitempty"`
 	Tools  []ToolCall `json:"tools,omitempty"`
 }

@@ -26,6 +26,16 @@ Each section is also the text of its release on the
   key writes no `resolve: focused window` warning to the log. The
   `popup: launched` line has the id of the window the key was pressed over,
   as `over`, and an empty one when no window had the focus.
+- **The pane beside the project list shows the terminal of one agent, as the
+  pane beside the agent list does.** The section is headed `Screen`, follows
+  the agent each second in its own colours, and the wheel scrolls back
+  through it. It showed the agent's last message, set again from Markdown,
+  with the turn above it; both are gone. An agent of any harness is shown
+  now, and so is an agent of a linked project in a terminal here.
+- **The pane no longer puts an agent with a message before one without.** It
+  shows the agent that needs you, else one at rest before one working, and
+  the last to speak among equals. It keeps that agent until another needs you
+  more, so an agent that speaks does not take the screen from its equal.
 
 ## v0.14.0
 

@@ -82,7 +82,7 @@ func (m *Model) field() *textinput.Model {
 func (m *Model) query(f focus, q string) {
 	switch f {
 	case focusAgents:
-		m.afilter, m.achosen = q, agentKey{}
+		m.afilter, m.achosen, m.akept = q, agentKey{}, agentKey{}
 		m.ainput.SetValue(q)
 		if q != "" {
 			m.pickAgent(0)

@@ -3,13 +3,12 @@ package tui_test
 import (
 	"errors"
 	"fmt"
-	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hk9890/revier/internal/core"
@@ -18,21 +17,30 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// saidAgent is one agent of saidWorld: its state, and what it said last.
-type saidAgent struct {
+// shownAgent is one agent of shownWorld: its state, when it spoke last, and
+// what its panel shows.
+type shownAgent struct {
 	status revier.Status
-	said   string
 	at     time.Time
-	prompt string
-	tools  []revier.ToolCall
+	screen string
 }
 
-// saidWorld is one running project whose agents are in the given states and
-// said the given things, one probe to each, surveyed and with the pane's ask
-// for what they said answered. Agent i's row reads "agent-i task".
-func saidWorld(t *testing.T, width, height int, agents ...saidAgent) (tui.Model, []*hosttest.FakeDetailedProbe) {
+// shownWorld is one running project whose agents are in the given states,
+// one probe to each, surveyed, with the pane's ask for when each spoke and
+// the mirror's read of the agent the pane chose answered. Agent i's row reads
+// "agent-i task", and its panel is i+1.
+func shownWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
+	t.Helper()
+	m, rt, fakes := unsaidWorld(t, width, height, agents...)
+	return m.Said().Mirrored(), rt, fakes
+}
+
+// unsaidWorld is shownWorld with neither ask answered: the pane as it stands
+// when the project has just come under the cursor.
+func unsaidWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Model, *hosttest.FakeRuntime, []*hosttest.FakeDetailedProbe) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
+	rt.Screens = map[revier.PanelID]string{}
 	var probes []revier.AgentProbe
 	var fakes []*hosttest.FakeDetailedProbe
 	var panels []revier.Panel
@@ -41,9 +49,10 @@ func saidWorld(t *testing.T, width, height int, agents ...saidAgent) (tui.Model,
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: marker + " task"}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at, Prompt: a.prompt, Tools: a.tools}
+		p.Said[id] = revier.AgentDetail{At: a.at}
 		probes, fakes = append(probes, p), append(fakes, p)
 		panels = append(panels, revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
+		rt.Screens[id] = a.screen
 	}
 	projects := core.Prepare([]revier.Project{{Name: "duo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -51,328 +60,388 @@ func saidWorld(t *testing.T, width, height int, agents ...saidAgent) (tui.Model,
 	}}})
 	rt.Add("session:duo", "kitty", panels...)
 	c := &core.Core{Runtime: rt, Probes: probes}
-	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height).Said(), fakes
+	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height), rt, fakes
 }
 
-// The pane shows an agent's last message without the cursor going there: the
-// one that needs the user comes first, then one at rest, then one working.
-func TestTheAgentThatNeedsYouIsShownFirst(t *testing.T) {
-	m, _ := saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusIdle, said: "resting now"},
-		saidAgent{status: revier.StatusRunning, said: "still at it"},
-		saidAgent{status: revier.StatusAttention, said: "merge now or wait?"})
+// The pane mirrors an agent's panel without the cursor going there: the one
+// that needs the user comes first, then one at rest, then one working.
+func TestTheAgentThatNeedsYouIsMirroredFirst(t *testing.T) {
+	m, _, _ := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "resting now"},
+		shownAgent{status: revier.StatusRunning, screen: "still at it"},
+		shownAgent{status: revier.StatusAttention, screen: "merge now or wait?"})
 	body := pane(m)
-	if !strings.Contains(body, "Last turn") || !strings.Contains(body, "merge now or wait?") {
-		t.Errorf("pane shows no message of the agent that needs the user:\n%s", body)
+	if !strings.Contains(body, "Screen") || !strings.Contains(body, "merge now or wait?") {
+		t.Errorf("pane does not mirror the agent that needs the user:\n%s", body)
 	}
 	if strings.Contains(body, "resting now") || strings.Contains(body, "still at it") {
-		t.Errorf("pane shows another agent's message:\n%s", body)
-	}
-	if strings.Contains(body, "Project Snapshot") {
-		t.Errorf("pane still shows the project snapshot:\n%s", body)
+		t.Errorf("pane mirrors another agent's panel:\n%s", body)
 	}
 
-	m, _ = saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusRunning, said: "still at it"},
-		saidAgent{status: revier.StatusIdle, said: "resting now"})
+	m, _, _ = shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusRunning, screen: "still at it"},
+		shownAgent{status: revier.StatusIdle, screen: "resting now"})
 	if body := pane(m); !strings.Contains(body, "resting now") {
 		t.Errorf("pane = %q, want the agent at rest before the working one", body)
 	}
 }
 
-// Among agents in one state, the one that spoke last is shown.
-func TestAmongEqualsTheAgentThatSpokeLastIsShown(t *testing.T) {
+// Among agents in one state, the one that spoke last is mirrored.
+func TestAmongEqualsTheAgentThatSpokeLastIsMirrored(t *testing.T) {
 	now := time.Now()
-	m, _ := saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusIdle, said: "the older word", at: now.Add(-2 * time.Hour)},
-		saidAgent{status: revier.StatusIdle, said: "the newer word", at: now.Add(-5 * time.Minute)})
-	body := pane(m)
-	if !strings.Contains(body, "the newer word") || strings.Contains(body, "the older word") {
+	m, _, _ := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
 		t.Errorf("pane = %q, want the agent that spoke last", body)
 	}
-	if !strings.Contains(body, "5 minutes ago") {
-		t.Errorf("pane = %q, want how long ago it spoke", body)
+}
+
+// The pane keeps the agent it chose while no other is more worth a look: an
+// equal that speaks does not take the mirror, and the scroll in it.
+func TestAnAgentThatSpeaksDoesNotTakeTheMirrorFromItsEqual(t *testing.T) {
+	now := time.Now()
+	m, _, fakes := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	fakes[0].Said["1"] = revier.AgentDetail{At: now}
+	m = survey(m).Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
+		t.Errorf("pane = %q, want the agent the pane chose kept", body)
+	}
+}
+
+// An agent that comes to be more worth a look than the one the pane chose
+// takes the mirror.
+func TestAnAgentThatComesToNeedYouTakesTheMirror(t *testing.T) {
+	m, _, fakes := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusRunning, screen: "second agent's screen"})
+	fakes[1].State.Status = revier.StatusAttention
+	m = survey(m).Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "second agent's screen") || strings.Contains(body, "first agent's screen") {
+		t.Errorf("pane = %q, want the agent that needs the user", body)
+	}
+}
+
+// Among equals the pane does not choose before it knows when each spoke, so
+// no panel is read for an agent the pane then leaves.
+func TestNoPanelIsReadBeforeThePaneChoosesAmongEquals(t *testing.T) {
+	now := time.Now()
+	m, rt, _ := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	m = m.Mirrored()
+	if len(rt.ScreenReads) != 0 || m.MirrorAsked() != 0 {
+		t.Fatalf("reads = %v, asked = %d before the pane chose, want none", rt.ScreenReads, m.MirrorAsked())
+	}
+	if body := pane(m); !strings.Contains(body, "reading...") {
+		t.Errorf("pane = %q, want the mirror pending", body)
+	}
+	m = m.Said().Mirrored()
+	for _, read := range rt.ScreenReads {
+		if read.Panel != "2" {
+			t.Errorf("reads = %v, want the panel of the agent that spoke last alone", rt.ScreenReads)
+		}
+	}
+	if body := pane(m); !strings.Contains(body, "the newer screen") {
+		t.Errorf("pane = %q, want the agent that spoke last", body)
+	}
+}
+
+// One agent more worth a look than the rest is mirrored at once: when each
+// spoke decides nothing.
+func TestTheOneAgentMostWorthALookIsMirroredAtOnce(t *testing.T) {
+	m, _, _ := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "resting now"},
+		shownAgent{status: revier.StatusAttention, screen: "merge now or wait?"})
+	if body := pane(m.Mirrored()); !strings.Contains(body, "merge now or wait?") {
+		t.Errorf("pane = %q, want the agent that needs the user before any answer", body)
 	}
 }
 
 // Tab into the agents is not a choice: the cursor lands on the agent the
-// pane already shows. Moving it is, and a survey that brings another agent
-// forward leaves the chosen one shown.
+// pane already mirrors. Moving it is, and a survey that brings another agent
+// forward leaves the chosen one mirrored.
 func TestMovingTheAgentCursorChoosesThatAgent(t *testing.T) {
-	m, fakes := saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusIdle, said: "first agent speaking"},
-		saidAgent{status: revier.StatusAttention, said: "second agent speaking"})
+	m, _, fakes := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusAttention, screen: "second agent's screen"})
 	m, _ = press(m, "tab")
 	if row := paneCursor(m); !strings.Contains(row, "agent-1") {
-		t.Fatalf("pane cursor = %q after tab, want the agent the pane showed", row)
+		t.Fatalf("pane cursor = %q after tab, want the agent the pane mirrored", row)
 	}
 	m, _ = press(m, "up")
-	if body := pane(m); !strings.Contains(body, "first agent speaking") {
+	m = m.Mirrored()
+	if body := pane(m); !strings.Contains(body, "first agent's screen") || strings.Contains(body, "second agent's screen") {
 		t.Fatalf("pane = %q after up, want the agent moved to", body)
 	}
 	fakes[0].State.Status = revier.StatusRunning
-	m = survey(m).Said()
-	if body := pane(m); !strings.Contains(body, "first agent speaking") {
-		t.Errorf("pane = %q after a survey, want the chosen agent still shown", body)
+	m = survey(m).Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "first agent's screen") {
+		t.Errorf("pane = %q after a survey, want the chosen agent still mirrored", body)
 	}
 }
 
-// A message longer than the pane keeps its end, under an ellipsis: an agent
-// ends on what it did and what it needs. One that fits is shown whole.
-func TestTheMessageKeepsItsTailWhenItDoesNotFit(t *testing.T) {
-	var said []string
+// An agent that comes under the pane's cursor is drawn with its own screen
+// pending, and not over the screen of the agent the cursor left.
+func TestTheScreenOfTheAgentThePaneCursorLeftIsNotShownUnderTheNext(t *testing.T) {
+	m, _, _ := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusAttention, screen: "second agent's screen"})
+	m, _ = press(m, "tab")
+	m, _ = press(m, "up")
+	if body := pane(m); strings.Contains(body, "second agent's screen") || !strings.Contains(body, "reading...") {
+		t.Errorf("pane shows the screen of the agent the cursor left:\n%s", body)
+	}
+}
+
+// The mirror is of the project under the list's cursor: another project
+// under it is read anew, and its screen replaces the first one's.
+func TestAnotherProjectUnderTheCursorIsMirroredAnew(t *testing.T) {
+	m, _, _ := listedSurface(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusIdle, on: "one", screen: "alpha's screen"},
+		listed{project: "beta", status: revier.StatusIdle, on: "two", screen: "beta's screen"})
+	m = m.Mirrored()
+	if body := pane(m); !strings.Contains(body, "alpha's screen") || strings.Contains(body, "beta's screen") {
+		t.Fatalf("pane does not mirror the agent of the project under the cursor:\n%s", body)
+	}
+	m, _ = press(m, "down")
+	if body := pane(m); strings.Contains(body, "alpha's screen") {
+		t.Errorf("pane shows another project's screen:\n%s", body)
+	}
+	m = m.Mirrored()
+	if body := pane(m); !strings.Contains(body, "beta's screen") {
+		t.Errorf("pane does not mirror the project the cursor moved to:\n%s", body)
+	}
+}
+
+// A screen longer than the rows the pane leaves under the facts shows its
+// end, and the pane follows the panel as it writes on.
+func TestTheProjectPaneShowsTheEndOfTheScreenAndFollowsIt(t *testing.T) {
+	var screen []string
 	for i := range 40 {
-		said = append(said, fmt.Sprintf("line %02d", i))
+		screen = append(screen, fmt.Sprintf("line %02d", i))
 	}
-	agent := saidAgent{status: revier.StatusIdle, said: strings.Join(said, "\n")}
-
-	tall, _ := saidWorld(t, 140, 90, agent)
-	if body := pane(tall); !strings.Contains(body, "line 00") || !strings.Contains(body, "line 39") || strings.Contains(body, "...") {
-		t.Errorf("tall pane does not show the message whole:\n%s", body)
+	m, rt, _ := shownWorld(t, 140, 30, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
+	if body := pane(m); !strings.Contains(body, "line 39") || strings.Contains(body, "line 00") {
+		t.Fatalf("pane does not show the end of the screen:\n%s", body)
 	}
-	short, _ := saidWorld(t, 140, 30, agent)
-	body := pane(short)
-	if !strings.Contains(body, "line 39") || !strings.Contains(body, "...") || strings.Contains(body, "line 00") {
-		t.Errorf("short pane does not keep the message's end under an ellipsis:\n%s", body)
+	if body := pane(m); !strings.Contains(body, "agent-0 task") || !strings.Contains(body, "Targets") {
+		t.Errorf("the mirror took the rows of the facts above it:\n%s", body)
 	}
-	if strings.Index(body, "...") > strings.Index(body, "line 39") {
-		t.Errorf("the ellipsis is after the end it stands before:\n%s", body)
+	rt.Screens["1"] = "the screen moved on"
+	m = m.Mirrored()
+	if body := pane(m); !strings.Contains(body, "the screen moved on") || strings.Contains(body, "line 39") {
+		t.Errorf("pane does not follow the panel:\n%s", body)
 	}
 }
 
-// A wide pane puts the message beside the facts, level with the name, and
-// sets it as wide as the stacked pane just under the switch does: a resize
-// across the switch moves the message and does not re-wrap it.
-func TestAWidePaneLaysTheMessageBesideTheFactsWrappedAlike(t *testing.T) {
-	var words []string
+// The wheel over the project pane scrolls the mirror into the panel's
+// scrollback, as it does beside the agent list, and the facts above it stay.
+func TestTheWheelOverTheProjectPaneScrollsTheMirror(t *testing.T) {
+	var screen []string
+	for i := range 80 {
+		screen = append(screen, fmt.Sprintf("row %02d", i))
+	}
+	m, rt, _ := shownWorld(t, 140, 30, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen[60:], "\n")})
+	rt.Screens["1"] = strings.Join(screen, "\n")
+	border := paneBorder(t, m)
+	next, cmd := m.Update(tea.MouseMsg{X: border + 4, Y: 12, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if cmd == nil {
+		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
+	}
+	m = run(next.(tui.Model), cmd)
+	if last := rt.ScreenReads[len(rt.ScreenReads)-1]; !last.Scrollback {
+		t.Errorf("last read = %+v, want the scrollback", last)
+	}
+	body := pane(m)
+	if strings.Contains(body, "row 79") || !strings.Contains(body, "row 76") {
+		t.Errorf("pane is not scrolled up by a notch:\n%s", body)
+	}
+	if !strings.HasPrefix(body, "Project  duo") {
+		t.Errorf("the wheel moved the facts above the mirror:\n%s", body)
+	}
+}
+
+// A wide pane puts the mirror beside the facts, level with the name, where
+// it has the pane's whole height; a narrower one puts it under them.
+func TestAWidePaneLaysTheMirrorBesideTheFacts(t *testing.T) {
+	var screen []string
 	for i := range 60 {
-		words = append(words, fmt.Sprintf("w%03d", i))
+		screen = append(screen, fmt.Sprintf("line %02d", i))
 	}
-	agent := saidAgent{status: revier.StatusIdle, said: strings.Join(words, " ")}
+	agent := shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")}
 
-	wide, _ := saidWorld(t, 300, 40, agent)
+	wide, _, _ := shownWorld(t, 300, 40, agent)
 	top := strings.Split(pane(wide), "\n")[0]
-	if !strings.HasPrefix(top, "Project  duo") || !strings.Contains(top, "Last turn") {
-		t.Errorf("pane top = %q, want the name and the message's heading on one line", top)
+	if !strings.HasPrefix(top, "Project  duo") || !strings.Contains(top, "Screen") {
+		t.Errorf("pane top = %q, want the name and the mirror's heading on one line", top)
 	}
-	stacked, _ := saidWorld(t, 250, 40, agent)
-	if top := strings.Split(pane(stacked), "\n")[0]; strings.Contains(top, "Last turn") {
-		t.Fatalf("pane top = %q at 250 columns, want the message under the facts", top)
+	stacked, _, _ := shownWorld(t, 250, 40, agent)
+	if top := strings.Split(pane(stacked), "\n")[0]; strings.Contains(top, "Screen") {
+		t.Fatalf("pane top = %q at 250 columns, want the mirror under the facts", top)
 	}
-	if w, s := messageLines(wide), messageLines(stacked); len(w) < 2 || !slices.Equal(w, s) {
-		t.Errorf("the message wraps differently across the switch:\nwide    %q\nstacked %q", w, s)
-	}
-}
-
-// messageLines is the message's words on each pane line that carries them,
-// wherever on the line they stand.
-func messageLines(m tui.Model) []string {
-	words := regexp.MustCompile(`w\d{3}( w\d{3})*`)
-	var out []string
-	for _, line := range strings.Split(pane(m), "\n") {
-		if found := words.FindString(line); found != "" {
-			out = append(out, found)
-		}
-	}
-	return out
-}
-
-// An agent whose probe can say nothing of it says so, rather than leaving the
-// pane blank as if it were still reading.
-func TestAnAgentWithNothingReadableSaysSo(t *testing.T) {
-	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle})
-	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
-		t.Errorf("pane = %q, want it to say nothing can be read", body)
+	if w, s := strings.Count(pane(wide), "line "), strings.Count(pane(stacked), "line "); w <= s {
+		t.Errorf("the mirror beside the facts shows %d lines and the one under them %d, want more beside", w, s)
 	}
 }
 
-// Above the message the pane shows the turn: what the user asked, the tools
-// called since with the most called first and the failures counted, and the
-// call that is open, worded by the agent's state. Nothing a prompt, a command
-// or a tool's name carries reaches the terminal, and each stays on its line.
-func TestThePaneShowsTheTurnAboveTheMessage(t *testing.T) {
-	tools := []revier.ToolCall{
-		{Name: "Read", Input: "/src/a.go"},
-		{Name: "Bash", Input: "go test ./...", Failed: true},
-		{Name: "Bash", Input: "go vet ./..."},
-		{Name: "Bash", Input: "git push \x1b[31morigin", Pending: true},
+// Beside the facts the mirror has its own columns: the wheel over it scrolls
+// it, and the wheel over the facts scrolls the pane, which is the one way to
+// facts taller than the pane.
+func TestTheWheelOverTheFactsBesideTheMirrorScrollsThePane(t *testing.T) {
+	agents := make([]shownAgent, 8)
+	for i := range agents {
+		agents[i] = shownAgent{status: revier.StatusRunning, screen: "at work"}
 	}
-	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusAttention, said: "pushing next", prompt: "make it \x1b]0;x\x07green", tools: tools})
-	body := pane(m)
-	for _, want := range []string{"> make it green", "Bash ×3 · Read · 1 failed", "waiting on Bash git push origin", "pushing next"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("pane has no %q:\n%s", want, body)
-		}
-	}
-	if strings.Index(body, "waiting on") > strings.Index(body, "pushing next") {
-		t.Errorf("the turn is not above the message:\n%s", body)
+	agents[0].status = revier.StatusIdle
+	m, _, _ := shownWorld(t, 300, 12, agents...)
+	border := paneBorder(t, m)
+
+	next, _ := m.Update(tea.MouseMsg{X: border + 4, Y: 8, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = next.(tui.Model)
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
+		t.Errorf("the wheel over the facts did not scroll the pane:\n%s", body)
 	}
 
-	open := revier.ToolCall{Name: "Ba\x1b[31msh", Input: "git push\n\x1b[31morigin", Pending: true}
-	m, _ = saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, tools: []revier.ToolCall{open}})
-	if body := pane(m); !strings.Contains(body, "running Bash git push origin") || strings.Contains(body, "Nothing this agent said") {
-		t.Errorf("pane = %q, want the open call of a working agent that has said nothing", body)
+	_, cmd := m.Update(tea.MouseMsg{X: border + 120, Y: 8, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if cmd == nil {
+		t.Error("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
 }
 
-// The ellipsis stands for the start of a message that was cut. A turn with no
-// message under it carries none, however few rows the pane leaves it.
-func TestATurnWithNoMessageCarriesNoEllipsis(t *testing.T) {
-	agent := saidAgent{status: revier.StatusRunning, prompt: "make it green", tools: []revier.ToolCall{{Name: "Bash", Input: "go vet", Pending: true}}}
-	for height := 12; height <= 30; height++ {
-		m, _ := saidWorld(t, 140, height, agent)
-		if body := pane(m); strings.Contains(body, "...") {
-			t.Errorf("pane at %d rows elides a message the agent has not written:\n%s", height, body)
-		}
-	}
-}
-
-// A detail that carries a time and nothing to draw says so, as an empty one
-// does.
-func TestADetailWithNothingToDrawSaysSo(t *testing.T) {
-	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, at: time.Now()})
-	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
-		t.Errorf("pane = %q, want it to say nothing can be read", body)
-	}
-}
-
-// Markdown reads as text: the markers an agent writes are not shown, and a
-// table is set in columns. How each part is set is markdown's own test.
-func TestTheMessageIsSetFromItsMarkdown(t *testing.T) {
-	said := "## What I did\n\n| Step | Result |\n|---|---|\n| Merge | done |\n\n- **Tests:** `go test` passed\n\n```\ngit log -1\n```"
-	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, said: said})
-	body := pane(m)
-	for _, want := range []string{"What I did", "Step   Result", "Merge  done", "• Tests: go test passed", "git log -1"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("pane has no %q:\n%s", want, body)
-		}
-	}
-	for _, marker := range []string{"##", "**", "`", "|---", "```"} {
-		if strings.Contains(body, marker) {
-			t.Errorf("pane shows the markdown marker %q:\n%s", marker, body)
-		}
-	}
-}
-
-// A remote project's agent speaks on the other machine, and asking that
-// revier is not built: the pane says so, and nothing is read here. The agent
-// is in a panel here, so the pane shows it (decisions.md D104).
-func TestARemoteProjectsAgentSaysTheMessageIsNotImplemented(t *testing.T) {
-	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
-	c := &core.Core{Runtime: openHere("alpha"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
-	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 140, 30).Said()
-	if body := strings.Join(strings.Fields(pane(m)), " "); !strings.Contains(body, "on another machine is not implemented yet.") {
-		t.Errorf("pane = %q, want it to say the message is not implemented for a remote agent", body)
-	}
-}
-
-// An agent with a message the pane can show comes before one with none: a
-// working agent's word is worth more than an idle one's silence. One that
-// needs the user still comes first with nothing to show, since its row says
-// what matters.
-func TestAnAgentWithAMessageComesBeforeOneWithNone(t *testing.T) {
-	m, _ := saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusIdle},
-		saidAgent{status: revier.StatusRunning, said: "halfway through the tests"})
-	if body := pane(m); !strings.Contains(body, "halfway through the tests") {
-		t.Errorf("pane = %q, want the working agent's message before the idle agent's silence", body)
-	}
-
-	m, _ = saidWorld(t, 140, 30,
-		saidAgent{status: revier.StatusIdle, said: "resting now"},
-		saidAgent{status: revier.StatusAttention})
-	if body := pane(m); !strings.Contains(body, "Nothing this agent said can be read.") {
-		t.Errorf("pane = %q, want the agent that needs the user, though it says nothing", body)
-	}
-}
-
-// A read that fails once does not blank the message the pane was showing.
-func TestAReadThatFailsKeepsTheMessageShown(t *testing.T) {
-	m, fakes := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, said: "all tests pass"})
-	fakes[0].DetailErr = errors.New("claude agents timed out")
-	m = survey(m).Said()
-	if body := pane(m); !strings.Contains(body, "all tests pass") {
-		t.Errorf("pane = %q after a read that failed, want the message it showed", body)
-	}
-}
-
-// A turn read with no message in it keeps the message the pane showed: the
-// last one is further back than the probe reads, and still the last.
-func TestATurnReadWithNoMessageKeepsTheMessageShown(t *testing.T) {
-	m, fakes := saidWorld(t, 140, 30, saidAgent{status: revier.StatusRunning, said: "all tests pass"})
-	fakes[0].Said["1"] = revier.AgentDetail{Prompt: "now push it"}
-	m = survey(m).Said()
-	if body := pane(m); !strings.Contains(body, "all tests pass") || !strings.Contains(body, "> now push it") {
-		t.Errorf("pane = %q, want the new turn above the message it showed", body)
-	}
-}
-
-// A call with no result is what a working agent runs. An agent at rest runs
-// nothing, so its open call, cut off by a shutdown, is counted and not named.
-func TestAnAgentAtRestRunsNoOpenCall(t *testing.T) {
-	open := []revier.ToolCall{{Name: "Bash", Input: "npm test", Pending: true}}
-	m, _ := saidWorld(t, 140, 30, saidAgent{status: revier.StatusIdle, said: "resumed", tools: open})
-	if body := pane(m); strings.Contains(body, "npm test") || !strings.Contains(body, "Bash") {
-		t.Errorf("pane = %q, want the call counted and not named as running", body)
-	}
-}
-
-// The message is what the pane is for: where the turn would leave it under
-// four rows, the pane shows the message alone.
-func TestAShortPaneShowsTheMessageBeforeTheTurn(t *testing.T) {
-	agent := saidAgent{status: revier.StatusIdle, said: "one\n\ntwo\n\nthree\n\nfour\n\nthe end", prompt: "make it green"}
+// A pane with no row left under the facts shows no heading with nothing
+// under it.
+func TestAShortPaneShowsNoHeadingWithoutTheMirror(t *testing.T) {
 	shown := 0
-	for height := 14; height <= 30; height++ {
-		m, _ := saidWorld(t, 140, height, agent)
+	for height := 8; height <= 30; height++ {
+		m, _, _ := shownWorld(t, 140, height, shownAgent{status: revier.StatusIdle, screen: "the only line"})
 		body := pane(m)
-		if !strings.Contains(body, "Last turn") {
-			continue
-		}
-		if !strings.Contains(body, "> make it green") {
+		if !strings.Contains(body, "Screen") {
 			continue
 		}
 		shown++
-		for _, want := range []string{"four", "the end"} {
-			if !strings.Contains(body, want) {
-				t.Errorf("pane at %d rows shows the turn and no %q of the message:\n%s", height, want, body)
-			}
+		if !strings.Contains(body, "the only line") {
+			t.Errorf("pane at %d rows has the mirror's heading and no mirror:\n%s", height, body)
 		}
 	}
 	if shown == 0 {
-		t.Error("no height showed the turn")
+		t.Error("no height showed the mirror")
+	}
+}
+
+// A read that fails once does not blank the screen the pane was showing.
+func TestAReadThatFailsKeepsTheScreenShown(t *testing.T) {
+	m, rt, _ := shownWorld(t, 140, 30, shownAgent{status: revier.StatusIdle, screen: "all tests pass"})
+	rt.ScreenErr = errors.New("kitty timed out")
+	m = m.Mirrored()
+	if body := pane(m); !strings.Contains(body, "all tests pass") {
+		t.Errorf("pane = %q after a read that failed, want the screen it showed", body)
+	}
+}
+
+// A runtime that cannot read a panel leaves the mirror a note, and the facts
+// stand.
+func TestAPanelTheProjectPaneCannotReadLeavesANote(t *testing.T) {
+	m, rt, _ := shownWorld(t, 140, 30, shownAgent{status: revier.StatusIdle, screen: "never shown again"})
+	rt.ScreenErr = core.ErrNoScreen
+	m = m.Mirrored()
+	body := pane(m)
+	if !strings.Contains(body, "cannot be read") || !strings.Contains(body, "agent-0 task") {
+		t.Errorf("pane = %q, want the facts and a note in the mirror's place", body)
+	}
+}
+
+// A link's agent is in a panel here, so the pane mirrors it as any other
+// (decisions.md D104): the screen is this machine's terminal, and nothing is
+// asked of the agent's host for it.
+func TestALinksAgentIsMirroredFromItsPanelHere(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
+	rt := openHere("alpha")
+	rt.Screens = map[revier.PanelID]string{"9": "the far agent's screen"}
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 140, 30).Mirrored()
+	if body := pane(m); !strings.Contains(body, "the far agent's screen") {
+		t.Errorf("pane = %q, want the screen of the panel here that shows the link's agent", body)
 	}
 }
 
 // Nothing is read for a pane that is not on screen: on a terminal too narrow
 // for it beside the list, with the cursor on the list.
-func TestNoMessageIsReadWithoutAPaneToShowIt(t *testing.T) {
-	_, fakes := saidWorld(t, 80, 30, saidAgent{status: revier.StatusIdle, said: "unseen"})
+func TestNothingIsReadWithoutAPaneToShowIt(t *testing.T) {
+	m, rt, fakes := shownWorld(t, 80, 30, shownAgent{status: revier.StatusIdle, screen: "unseen"})
 	if n := fakes[0].DetailCalls(); n != 0 {
 		t.Errorf("the probe was asked %d times with no pane on screen, want none", n)
 	}
+	if n := len(rt.ScreenReads); n != 0 || m.MirrorAsked() != 0 {
+		t.Errorf("the panel was read %d times and asked for %d times with no pane on screen, want neither", n, m.MirrorAsked())
+	}
 }
 
-// In a wide pane the message stands beside the rows on the same lines; a
-// click on its text is a click on the message, not on the row it is level
-// with.
-func TestAClickOnTheMessageBesideARowRunsNothing(t *testing.T) {
-	var said []string
-	for i := range 30 {
-		said = append(said, fmt.Sprintf("line %02d", i))
+// crowd is n agents at rest: more rows than a short pane holds, so it has
+// none left for the mirror.
+func crowd(n int) []shownAgent {
+	agents := make([]shownAgent, n)
+	for i := range agents {
+		agents[i] = shownAgent{status: revier.StatusIdle, screen: "the only line"}
 	}
-	m, _ := saidWorld(t, 300, 40, saidAgent{status: revier.StatusIdle, said: strings.Join(said, "\n")})
+	return agents
+}
+
+// Nothing is read for a pane with no row left for the mirror either, however
+// often the timer fires. The read is sent once the pane has a row for it.
+func TestNothingIsReadForAPaneWithNoRowForTheMirror(t *testing.T) {
+	m, rt, _ := shownWorld(t, 140, 22, crowd(16)...)
+	if body := pane(m); strings.Contains(body, "Screen") {
+		t.Fatalf("the pane has a row for the mirror:\n%s", body)
+	}
+	m = m.MirrorTicked().MirrorTicked()
+	if n := len(rt.ScreenReads); n != 0 || m.MirrorAsked() != 0 {
+		t.Errorf("the panel was read %d times and asked for %d times with no row for the mirror, want neither", n, m.MirrorAsked())
+	}
+	m = resize(m, 140, 60)
+	if got := m.MirrorAsked(); got != 1 {
+		t.Errorf("reads asked for = %d once the pane has a row for the mirror, want 1", got)
+	}
+}
+
+// A pane scrolled while it had no row for the mirror stands at its top once
+// it fits: the wheel over a mirror scrolls the mirror, so nothing else would
+// bring the facts back.
+func TestAPaneThatFitsAgainStandsAtItsTop(t *testing.T) {
+	m, _, _ := shownWorld(t, 140, 22, crowd(16)...)
+	m = wheel(m, paneBorder(t, m)+4, tea.MouseButtonWheelDown)
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
+		t.Fatalf("the wheel did not scroll a pane with no row for the mirror:\n%s", body)
+	}
+	m = resize(m, 140, 60)
+	if body := pane(m); !strings.HasPrefix(body, "Project  duo") || !strings.Contains(body, "Screen") {
+		t.Errorf("the pane that fits again stands scrolled:\n%s", body)
+	}
+}
+
+// In a wide pane the mirror stands beside the rows on the same lines; a
+// click on its text is a click on the mirror, not on the row it is level
+// with.
+func TestAClickOnTheMirrorBesideARowRunsNothing(t *testing.T) {
+	var screen []string
+	for i := range 30 {
+		screen = append(screen, fmt.Sprintf("line %02d", i))
+	}
+	m, _, _ := shownWorld(t, 300, 40, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
 	_, y := paneCell(t, m, "agent-0 task")
 	raw := strings.Split(m.View(), "\n")[y]
 	parts := strings.Split(raw, "│")
 	at := strings.Index(parts[1], "line ")
 	if at < 0 {
-		t.Fatalf("no message text on the agent row's line %q", raw)
+		t.Fatalf("no mirror text on the agent row's line %q", raw)
 	}
 	x := paneBorder(t, m) + 1 + lipgloss.Width(parts[1][:at])
 	m, _ = clickCell(m, x, y)
 	m, _ = clickCell(m, x, y)
 	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q after a double click on the message, want it still on the list", row)
+		t.Errorf("pane cursor = %q after a double click on the mirror, want it still on the list", row)
 	}
 }
 
@@ -405,12 +474,12 @@ func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
 	}
 }
 
-// Only the message's text is held to its width: the facts, the rows and the
-// rules of a wide stacked pane run to its edge.
+// The facts, the rows and the rules of a stacked pane run to its edge,
+// however wide it is.
 func TestTheFactsRunToThePanesEdge(t *testing.T) {
-	m, _ := saidWorld(t, 250, 40, saidAgent{status: revier.StatusIdle, said: "short"})
+	m, _, _ := shownWorld(t, 250, 40, shownAgent{status: revier.StatusIdle, screen: "short"})
 	rule := strings.Split(pane(m), "\n")[1]
 	if n := utf8.RuneCountInString(rule); n <= 100 {
-		t.Errorf("the rule under the name is %d columns, want it past the message's 100", n)
+		t.Errorf("the rule under the name is %d columns, want it at the pane's edge", n)
 	}
 }

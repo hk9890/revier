@@ -77,14 +77,16 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.overPane(msg.X) {
-		// The wheel over the agent list's pane scrolls the mirror through
-		// the panel's scrollback; its head stays.
-		if m.agents.shown && m.dialog == dialogNone {
+		// The wheel over a pane that mirrors an agent scrolls the mirror
+		// through the panel's scrollback, and what stands over it stays. A
+		// pane too short for the mirror scrolls as a whole, and so does one
+		// with the mirror beside the facts while the pointer is on the facts.
+		if _, a, ok := m.mirroring(); ok && m.overMirror(msg.X) {
 			switch msg.Button {
 			case tea.MouseButtonWheelUp:
-				return m, m.agents.scrollMirror(m.core, mirrorNotch, m.paneCols()-paneChrome)
+				return m, m.mirror.scroll(m.core, a, mirrorNotch)
 			case tea.MouseButtonWheelDown:
-				return m, m.agents.scrollMirror(m.core, -mirrorNotch, m.paneCols()-paneChrome)
+				return m, m.mirror.scroll(m.core, a, -mirrorNotch)
 			}
 			return m, nil
 		}
@@ -236,6 +238,17 @@ func splitReport(msg tea.KeyMsg) bool {
 		return string(msg.Runes) == "["
 	}
 	return reportTail.MatchString(string(msg.Runes))
+}
+
+// overMirror reports whether a column of the pane is the mirror's: every one
+// where the mirror stands under the facts, and those right of the facts where
+// it stands beside them.
+func (m Model) overMirror(x int) bool {
+	if !m.besideFacts() {
+		return true
+	}
+	_, mc := m.margins()
+	return x >= mc+m.listWidth()+paneChrome+maxFactsWidth
 }
 
 // overPane reports whether a column is inside the detail pane: right of the
