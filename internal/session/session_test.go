@@ -212,6 +212,40 @@ func TestListSkipsAFileThatDoesNotParse(t *testing.T) {
 	}
 }
 
+// A file holds a table this version does not read, written by another version
+// or by hand. The session is still listed with what this version reads, and
+// the table adds nothing to it.
+func TestListKeepsASessionWithATableItDoesNotRead(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const body = `id = "2026-09-01T10-00-00"
+at = 2026-09-01T10:00:00Z
+
+[[project]]
+name = "revier"
+
+[[project.target]]
+name = "home"
+
+[[project.target.panel]]
+index = 1
+harness = "claude"
+session = "first"
+`
+	if err := os.WriteFile(filepath.Join(session.Dir(root), "2026-09-01T10-00-00.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	all, err := session.List(root)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 1 || all[0].Targets() != 1 || all[0].Conversations() != 0 {
+		t.Errorf("List = %+v, want the one session with its target and no conversation", all)
+	}
+}
+
 func TestListOfMissingStore(t *testing.T) {
 	all, err := session.List(filepath.Join(t.TempDir(), "never-written"))
 	if err != nil {
