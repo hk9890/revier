@@ -376,9 +376,9 @@ func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
 	}
 }
 
-// The form of 0.14.0, panels on a target that is no tab, is refused with the
-// fix (decisions.md D128). The refusal costs that target alone: the project
-// stays listed, and its other targets open.
+// Panels on a target that is no tab are refused with the fix (decisions.md
+// D128). The refusal costs that target alone: the project stays listed, and
+// its other targets open.
 func TestLoadProjectRefusesPanelsOnATargetThatIsNoTab(t *testing.T) {
 	const body = `
 path = "/p"
