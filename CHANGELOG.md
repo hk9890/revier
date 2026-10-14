@@ -6,8 +6,43 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
-## Unreleased
+## v0.16.0
 
+- **The surface no longer keeps a CPU core busy.** A TUI or popup left on
+  the screen used 60 to 70 percent of a core all the time, with or without
+  the focus. With the focus it now uses about 10 percent. In a terminal
+  that reports the focus, such as kitty, or tmux with `focus-events` on, a
+  surface without the focus refreshes every ten seconds, the working
+  spinner stands still, and the hover does not follow the pointer. When
+  the focus comes back, it refreshes at once. A launch that is still coming
+  up keeps the one-second refresh until its window appears, for at most a
+  minute.
+- **Enter in the popup hides the popup.** A press that brings a target or an
+  agent to the front takes the popup off the screen; the popup key brings
+  it back with fresh rows. A press that fails leaves the popup on the screen
+  to show why. If you hide and raise the popup again before a slow launch
+  lands, the popup stays.
+- **A linked host is no longer asked every second.** Before, a linked host
+  spent a third of a core answering each surface. Now it is asked at most
+  once in five seconds, and a press, or the focus coming back, asks a host
+  that answers at once. A host that does not answer is asked less often
+  after each round it misses, up to once a minute, and a press or the
+  focus that comes back does not ask it again before then. A round to a
+  host that stops answering ends after about ten seconds, not after more
+  than a minute.
+- **A link to the machine revier runs on is left out.** The project files
+  are shared between machines, so a link that one machine writes to another
+  is read on that other machine too, where it names the machine itself.
+  There, revier asked itself over ssh every second for what it lists
+  already. Such a link is now left out of every command on that machine,
+  by the host's name or by the HostName in `~/.ssh/config`. Only the part
+  of a name before the first dot counts, so a link to a machine with the
+  same short name in another domain is left out too. `revier doctor` names
+  each file it skipped. `revier link` and alt+r do not offer this machine,
+  and refuse it as a host.
+- **`revier link` and alt+r list a host whose `~/.ssh/config` line uses a
+  tab.** A `Host` or `Include` line that separated the keyword from its
+  value with a tab was not read.
 - **A ctrl+shift target key works inside revier in kitty.** In a terminal that
   reports key disambiguation, such as kitty, pressing ctrl+shift+o in the
   surface runs the target bound to it, as the desktop key does outside, and
@@ -18,6 +53,10 @@ Each section is also the text of its release on the
 - **With `NO_COLOR` set, the selected row is bold and a text field shows its
   cursor.** Colour stays off, for any value of `NO_COLOR` that is not empty.
   Before, the surface drew no emphasis at all, and the cursor was invisible.
+- **A session saved by v0.3.0 restores without its conversations.** It
+  opens its projects as before but resumes no agent conversation. Renaming
+  a project that such a session holds rewrites the session, and its
+  conversations are then gone for good.
 
 ## v0.15.0
 
