@@ -235,7 +235,7 @@ func (s *linkScreen) open() error {
 	if err != nil {
 		return err
 	}
-	hosts = slices.DeleteFunc(hosts, config.OnThisMachine)
+	hosts = slices.DeleteFunc(hosts, config.ThisMachine().Is)
 	if len(hosts) == 0 {
 		return fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
 	}

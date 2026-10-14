@@ -75,7 +75,10 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// Not a problem: the files are shared between machines, and the link is
 	// right on the other one (decisions.md D131).
 	if n := len(cfg.SelfLinks); n > 0 {
-		_, _ = fmt.Fprintf(out, "skipped %s to this machine\n", core.Count(n, "link"))
+		_, _ = fmt.Fprintf(out, "skipped %s to this machine:\n", core.Count(n, "link"))
+		for _, file := range cfg.SelfLinks {
+			_, _ = fmt.Fprintf(out, "  %s\n", file)
+		}
 	}
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.

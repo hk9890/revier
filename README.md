@@ -72,8 +72,9 @@ revier list [--json [--conversations]] [name..]
 revier open [name] [--attach] run-or-raise a project's workspace; --attach ends
                               with this terminal on it (tmux)
 revier new [name]             write a project file for this directory
-revier link [host [project]]  the ssh hosts; a host's projects; or a link to one,
-                              written here under --name or the project's own
+revier link [host [project]]  the ssh hosts other than this machine; a host's
+                              projects; or a link to one, written here under
+                              --name or the project's own
 revier go <target> [-p name] [--picker]
                               run-or-raise a target; pressing it again returns home;
                               --picker opens the popup when no project resolves
@@ -189,7 +190,7 @@ projects.
 | a target's key | Run-or-raise that target of the selected project. In a terminal that reports key disambiguation, such as kitty, a ctrl+shift key arrives as itself. Elsewhere it arrives as ctrl and its letter, and runs the target only where that key means nothing else here. |
 | an action key | Run the configured action against the selected project. |
 | alt+n | **new**: add a project on this machine. |
-| alt+r | **remote**: link a project on another machine, from the hosts `~/.ssh/config` names and the projects the revier on the chosen host has. |
+| alt+r | **remote**: link a project on another machine, from the hosts `~/.ssh/config` names other than this machine and the projects the revier on the chosen host has. |
 | alt+s | **sessions**: save and restore the set of open projects. |
 | alt+q | **shutdown**: close every project, or one, after a confirm. |
 | alt+c | **config**: set the theme, the glyphs, the trigger key and the runtime host, and add, change and delete shared targets and actions. Each change is written to `config.toml` and applied at once, comments kept. |
@@ -326,7 +327,7 @@ no directory here, and the checkout stays the host's to clone.
 revier must be installed on the host, a Linux machine, with the project's own
 file under its `~/.config/revier/projects/`; it needs no tmux there. On the
 host itself the link is left out, so one set of project files serves both
-machines; `revier doctor` says how many it skipped. The list
+machines; `revier doctor` names the files it skipped. The list
 shows the link as `far@buildbox` with what each agent there is doing, read
 from the revier there. Enter opens the workspace. Its tabs are tabs of your
 terminal: `revier agent new`, `revier shell new`, `revier agent prompt`,

@@ -221,8 +221,8 @@ func TestALinkedHostIsAskedOnceAGap(t *testing.T) {
 	}
 }
 
-// The focus regained asks every linked host at once, whatever its gap: the
-// rows aged while nobody looked.
+// The focus regained asks every linked host that answered its last round at
+// once, whatever its gap: the rows aged while nobody looked.
 func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 	m, _, remote := besideALink(t)
 	now := time.Now()
@@ -236,6 +236,46 @@ func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 	deliver(m, cmd)
 	if len(remote.Asked) != 2 {
 		t.Errorf("the host was asked %d times, want a second round at the focus regained", len(remote.Asked))
+	}
+}
+
+// A host that gave no answer keeps its gap at the focus regained: asking it
+// at once would wait on it again (decisions.md D130).
+func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
+	m, _, remote := besideALink(t)
+	remote.Err = errors.New("buildbox: no answer")
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	m, _ = surveyedHere(m)
+	m = run(m, m.AskRemotes("buildbox"))
+
+	now = now.Add(5 * time.Second)
+	m, _ = update(m, tea.BlurMsg{})
+	m, cmd := update(m, tea.FocusMsg{})
+	m, cmd = deliver(m, cmd)
+	deliver(m, cmd)
+	if len(remote.Asked) != 1 {
+		t.Errorf("the host was asked %d times, want no second round within its doubled gap", len(remote.Asked))
+	}
+}
+
+// A press while a round is out lets the next survey ask its host again. A
+// round that then gives no answer still starts the host's gap: the next
+// survey does not wait on it again (decisions.md D130).
+func TestARoundThatFailsAfterAPressStillWaitsItsGap(t *testing.T) {
+	m, _, remote := besideALink(t)
+	remote.Err = errors.New("buildbox: no answer")
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	m, round := surveyedHere(m)
+	m, _ = m.Acted(nil)
+	m, _ = deliver(m, round)
+
+	now = now.Add(time.Second)
+	m, next := surveyedHere(m)
+	deliver(m, next)
+	if len(remote.Asked) != 1 {
+		t.Errorf("the host was asked %d times, want no second round a second after it gave no answer", len(remote.Asked))
 	}
 }
 

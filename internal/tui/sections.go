@@ -177,7 +177,7 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return goAgent(m.core, p, rows[i].agent)
+	return goAgent(m.core, p, rows[i].agent, m.raises)
 }
 
 // lineSpan is the pane lines a row takes, start inclusive and end exclusive:

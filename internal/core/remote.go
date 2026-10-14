@@ -106,10 +106,13 @@ var HostWait = 10 * time.Second
 
 // remoteAnswer is what a host said about one of its projects, or why it
 // said nothing. link is the host and the project the question named.
+// unreached is a host that gave no answer at all, as against one that
+// answered and did not list the project.
 type remoteAnswer struct {
-	link revier.Link
-	view revier.ProjectView
-	err  error
+	link      revier.Link
+	view      revier.ProjectView
+	err       error
+	unreached bool
 }
 
 // RemoteAnswers is what the linked hosts said, by the name each link has
@@ -138,11 +141,11 @@ func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
 	return RemoteAnswers{by: by}
 }
 
-// Failed reports answers in which the host gave no answer at all: every
-// link it was asked about holds a failure.
+// Failed reports answers in which the host gave no answer at all. A host
+// that answered and did not list a project is reachable, and has not failed.
 func (a RemoteAnswers) Failed() bool {
 	for _, answer := range a.by {
-		if answer.err == nil {
+		if !answer.unreached {
 			return false
 		}
 	}
@@ -239,7 +242,7 @@ func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[
 	logging.Poll("remote survey "+host, "remote survey", start, err, "host", host, "projects", len(names))
 	if err != nil {
 		for _, p := range links {
-			out[p.Name] = remoteAnswer{link: *p.Remote, err: err}
+			out[p.Name] = remoteAnswer{link: *p.Remote, err: err, unreached: true}
 		}
 		return out
 	}

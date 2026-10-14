@@ -1,10 +1,12 @@
 // Package sshconfig reads the hosts an ssh configuration names: the list
 // `ssh <tab>` offers, and the list the link dialog offers (decisions.md
-// D45).
+// D45). It also reads the HostName ssh connects to for a host, by which
+// revier knows a link host that is this machine (D131).
 package sshconfig
 
 import (
 	"bufio"
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,40 +33,20 @@ func Path() (string, error) {
 // relative one is against the file's own directory. A file that does not
 // exist names nothing.
 func Hosts(path string) ([]string, error) {
-	seen := map[string]bool{}
+	f, err := Read(path)
+	if err != nil {
+		return nil, err
+	}
 	var out []string
-	err := walk(path, seen, &out, 0)
-	return out, err
+	f.hosts(map[string]bool{}, &out)
+	return out, nil
 }
 
-// includeDepth bounds an Include chain, as ssh does, so a file that includes
-// itself ends.
-const includeDepth = 16
-
-func walk(path string, seen map[string]bool, out *[]string, depth int) error {
-	if depth > includeDepth {
-		return nil
-	}
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, rest, _ := strings.Cut(strings.ReplaceAll(line, "=", " "), " ")
-		fields := strings.Fields(rest)
-		switch strings.ToLower(key) {
+func (f File) hosts(seen map[string]bool, out *[]string) {
+	for _, l := range f.lines {
+		switch l.key {
 		case "host":
-			for _, h := range fields {
+			for _, h := range l.fields {
 				if strings.ContainsAny(h, "*?!") || seen[h] {
 					continue
 				}
@@ -72,27 +54,90 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 				*out = append(*out, h)
 			}
 		case "include":
-			for _, pattern := range fields {
+			for _, inc := range l.included {
+				inc.hosts(seen, out)
+			}
+		}
+	}
+}
+
+// includeDepth bounds an Include chain, as ssh does, so a file that includes
+// itself ends.
+const includeDepth = 16
+
+// File is an ssh configuration as far as Hosts and HostName read it, Include
+// lines followed, read once so that a caller can ask it about every link
+// host.
+type File struct{ lines []line }
+
+// line is one Host, Match, HostName or Include line; an Include carries the
+// files it names.
+type line struct {
+	key      string
+	fields   []string
+	included []File
+}
+
+// Read reads the file at path and every file it includes. A file that does
+// not exist is an empty File. An Include that cannot be read is left out, as
+// ssh leaves it out, and the rest is read: the File holds every line that
+// could be read, and the error is the first Include that could not.
+func Read(path string) (File, error) {
+	return read(path, 0)
+}
+
+func read(path string, depth int) (File, error) {
+	if depth > includeDepth {
+		return File{}, nil
+	}
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return File{}, nil
+	}
+	if err != nil {
+		return File{}, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var out File
+	var unread error
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		// ssh separates a keyword from its value by any whitespace, or by one
+		// "=".
+		fields := strings.Fields(strings.ReplaceAll(sc.Text(), "=", " "))
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		l := line{key: strings.ToLower(fields[0]), fields: fields[1:]}
+		switch l.key {
+		case "host", "match", "hostname":
+		case "include":
+			for _, pattern := range l.fields {
 				pattern = expandHome(pattern)
 				if !filepath.IsAbs(pattern) {
 					pattern = filepath.Join(filepath.Dir(path), pattern)
 				}
 				matches, err := filepath.Glob(pattern)
 				if err != nil {
-					return fmt.Errorf("%s: include %q: %w", path, pattern, err)
+					unread = cmp.Or(unread, fmt.Errorf("%s: include %q: %w", path, pattern, err))
+					continue
 				}
 				for _, included := range matches {
-					if err := walk(included, seen, out, depth+1); err != nil {
-						return err
-					}
+					inc, err := read(included, depth+1)
+					unread = cmp.Or(unread, err)
+					l.included = append(l.included, inc)
 				}
 			}
+		default:
+			continue
 		}
+		out.lines = append(out.lines, l)
 	}
 	if err := sc.Err(); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
+		return out, fmt.Errorf("%s: %w", path, err)
 	}
-	return nil
+	return out, unread
 }
 
 // HostName is the HostName the file gives host, as ssh reads it: the first
@@ -101,69 +146,37 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 // none, which ssh connects to by its own name. A Match block is read as one
 // that does not match, since its conditions are ssh's to evaluate, except
 // Match all, which matches every host.
-func HostName(path, host string) (string, error) {
-	name, _, err := hostName(path, host, true, 0)
-	return name, err
+func (f File) HostName(host string) string {
+	name, _ := f.hostName(host, true)
+	return name
 }
 
 // hostName walks one file for HostName. matching is whether the lines before
 // the file's first block apply: they belong to the block the Include stands
 // in, or, at the top, to every host.
-func hostName(path, host string, matching bool, depth int) (string, bool, error) {
-	if depth > includeDepth {
-		return "", false, nil
-	}
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	defer func() { _ = f.Close() }()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, rest, _ := strings.Cut(strings.ReplaceAll(line, "=", " "), " ")
-		fields := strings.Fields(rest)
-		switch strings.ToLower(key) {
+func (f File) hostName(host string, matching bool) (string, bool) {
+	for _, l := range f.lines {
+		switch l.key {
 		case "host":
-			matching = hostMatches(fields, host)
+			matching = hostMatches(l.fields, host)
 		case "match":
-			matching = len(fields) == 1 && strings.EqualFold(fields[0], "all")
+			matching = len(l.fields) == 1 && strings.EqualFold(l.fields[0], "all")
 		case "hostname":
-			if matching && len(fields) > 0 {
-				return fields[0], true, nil
+			if matching && len(l.fields) > 0 {
+				return l.fields[0], true
 			}
 		case "include":
 			if !matching {
 				continue
 			}
-			for _, pattern := range fields {
-				pattern = expandHome(pattern)
-				if !filepath.IsAbs(pattern) {
-					pattern = filepath.Join(filepath.Dir(path), pattern)
-				}
-				matches, err := filepath.Glob(pattern)
-				if err != nil {
-					return "", false, fmt.Errorf("%s: include %q: %w", path, pattern, err)
-				}
-				for _, included := range matches {
-					if name, ok, err := hostName(included, host, true, depth+1); err != nil || ok {
-						return name, ok, err
-					}
+			for _, inc := range l.included {
+				if name, ok := inc.hostName(host, true); ok {
+					return name, ok
 				}
 			}
 		}
 	}
-	if err := sc.Err(); err != nil {
-		return "", false, fmt.Errorf("%s: %w", path, err)
-	}
-	return "", false, nil
+	return "", false
 }
 
 // hostMatches reports a Host line's patterns matching host: one of them

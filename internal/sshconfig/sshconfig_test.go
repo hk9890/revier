@@ -142,6 +142,10 @@ Match host dt
 Host dt
     HostName dt.local
 `)
+	file, err := sshconfig.Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for host, want := range map[string]string{
 		"buildbox":   "10.0.0.7",
 		"far.box":    "wild",
@@ -152,11 +156,7 @@ Host dt
 		"buildbox2":  "",
 		"other.box2": "",
 	} {
-		got, err := sshconfig.HostName(path, host)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != want {
+		if got := file.HostName(host); got != want {
 			t.Errorf("HostName(%q) = %q, want %q", host, got, want)
 		}
 	}
@@ -168,11 +168,47 @@ func TestHostNameReadsAMatchAllBlock(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "hosts", "Host lab\n    HostName lab.example.com\n")
 	path := write(t, dir, "config", "Host buildbox\n    User me\nMatch all\n    Include hosts\n")
-	got, err := sshconfig.HostName(path, "lab")
+	file, err := sshconfig.Read(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "lab.example.com" {
+	if got := file.HostName("lab"); got != "lab.example.com" {
 		t.Errorf("HostName(lab) = %q, want lab.example.com", got)
+	}
+}
+
+// ssh separates a keyword from its value by any whitespace, a tab included.
+func TestATabSeparatesAKeywordFromItsValue(t *testing.T) {
+	path := write(t, t.TempDir(), "config", "Host\tbuildbox\n\tHostName\t10.0.0.7\n")
+	file, err := sshconfig.Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := file.HostName("buildbox"); got != "10.0.0.7" {
+		t.Errorf("HostName(buildbox) = %q, want 10.0.0.7", got)
+	}
+	hosts, err := sshconfig.Hosts(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"buildbox"}; !slices.Equal(hosts, want) {
+		t.Errorf("hosts = %v, want %v", hosts, want)
+	}
+}
+
+// An Include that cannot be read costs only itself, as ssh leaves it out:
+// here a directory the glob matched, in a block that does not match.
+func TestAnIncludeThatCannotBeReadCostsOnlyItself(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "work.d", "old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := write(t, dir, "config", "Host work-*\n    Include work.d/*\nHost dt\n    HostName dt.local\n")
+	file, err := sshconfig.Read(path)
+	if err == nil {
+		t.Error("Read = no error, want the Include that could not be read")
+	}
+	if got := file.HostName("dt"); got != "dt.local" {
+		t.Errorf("HostName(dt) = %q, want dt.local", got)
 	}
 }

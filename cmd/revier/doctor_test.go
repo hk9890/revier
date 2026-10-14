@@ -93,9 +93,9 @@ func TestDoctorEndsCleanWhenEverythingLoads(t *testing.T) {
 }
 
 // A link to this machine is left out of every load, and doctor says how many
-// it left: a missing project is otherwise hard to explain. It is no problem,
-// since the link is right on the other machine.
-func TestDoctorSaysHowManyLinksToThisMachineItSkipped(t *testing.T) {
+// it left and which files: a missing project is otherwise hard to explain. It
+// is no problem, since the link is right on the other machine.
+func TestDoctorNamesTheLinksToThisMachineItSkipped(t *testing.T) {
 	machine, err := os.Hostname()
 	if err != nil {
 		t.Skip("no hostname:", err)
@@ -107,7 +107,8 @@ func TestDoctorSaysHowManyLinksToThisMachineItSkipped(t *testing.T) {
 	if err := cmdDoctor(&out, nil); err != nil {
 		t.Fatalf("cmdDoctor: %v", err)
 	}
-	for _, want := range []string{"1 project, 0 files with problems", "skipped 1 link to this machine"} {
+	self := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects", "self.toml")
+	for _, want := range []string{"1 project, 0 files with problems", "skipped 1 link to this machine:\n  " + self + "\n"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report should contain %q:\n%s", want, out.String())
 		}

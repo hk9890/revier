@@ -12,23 +12,46 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// OnThisMachine reports a link host that is the machine revier runs on, by
-// its own name or by the HostName the ssh configuration gives it
-// (decisions.md D131). A user in the destination is ssh's login, not the
-// machine, so it is left out of the name.
-func OnThisMachine(host string) bool {
-	machine, err := os.Hostname()
-	if err != nil {
-		return false
+// Machine knows the link hosts that are the machine revier runs on, by their
+// own name or by the HostName the ssh configuration gives them (decisions.md
+// D131). It reads the hostname and the ssh configuration once, for every
+// host a caller then asks about.
+type Machine struct {
+	name string
+	ssh  sshconfig.File
+}
+
+// ThisMachine is the Machine revier runs on. A hostname it cannot read is no
+// machine, so no host is this one; an ssh configuration it cannot read gives
+// no host a HostName, so a host is this machine by its own name only. An
+// Include it cannot read costs only the HostNames that Include gives.
+func ThisMachine() Machine {
+	var m Machine
+	m.name, _ = os.Hostname()
+	if path, err := sshconfig.Path(); err == nil {
+		m.ssh, _ = sshconfig.Read(path)
 	}
+	return m
+}
+
+// Is reports a link host that is this machine. A user in the destination is
+// ssh's login, not the machine, so it is left out of the name.
+func (m Machine) Is(host string) bool {
 	host = host[strings.LastIndex(host, "@")+1:]
 	names := []string{host}
-	if path, err := sshconfig.Path(); err == nil {
-		if name, err := sshconfig.HostName(path, host); err == nil && name != "" {
-			names = append(names, name)
-		}
+	if name := m.ssh.HostName(host); name != "" {
+		names = append(names, name)
 	}
-	return core.ThisMachine(machine, names...)
+	return core.ThisMachine(m.name, names...)
+}
+
+// RefuseLink refuses a link to host where host is this machine, since revier
+// leaves such a link out (decisions.md D131), and is nil for any other host.
+func (m Machine) RefuseLink(host string) error {
+	if !m.Is(host) {
+		return nil
+	}
+	return fmt.Errorf("%s is this machine; its projects are listed here without a link", host)
 }
 
 // linkTOML is a new link: where the project is, and what the host says about
