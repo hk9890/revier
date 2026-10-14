@@ -14,12 +14,14 @@ import (
 
 // OnThisMachine reports a link host that is the machine revier runs on, by
 // its own name or by the HostName the ssh configuration gives it
-// (decisions.md D131).
+// (decisions.md D131). A user in the destination is ssh's login, not the
+// machine, so it is left out of the name.
 func OnThisMachine(host string) bool {
 	machine, err := os.Hostname()
 	if err != nil {
 		return false
 	}
+	host = host[strings.LastIndex(host, "@")+1:]
 	names := []string{host}
 	if path, err := sshconfig.Path(); err == nil {
 		if name, err := sshconfig.HostName(path, host); err == nil && name != "" {

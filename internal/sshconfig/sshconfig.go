@@ -99,7 +99,8 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 // value in a Host block one of whose patterns matches host and none of whose
 // negated ones does, Include lines followed. "" is a host the file gives
 // none, which ssh connects to by its own name. A Match block is read as one
-// that does not match, since its conditions are ssh's to evaluate.
+// that does not match, since its conditions are ssh's to evaluate, except
+// Match all, which matches every host.
 func HostName(path, host string) (string, error) {
 	name, _, err := hostName(path, host, true, 0)
 	return name, err
@@ -133,7 +134,7 @@ func hostName(path, host string, matching bool, depth int) (string, bool, error)
 		case "host":
 			matching = hostMatches(fields, host)
 		case "match":
-			matching = false
+			matching = len(fields) == 1 && strings.EqualFold(fields[0], "all")
 		case "hostname":
 			if matching && len(fields) > 0 {
 				return fields[0], true, nil

@@ -114,7 +114,7 @@ type Model struct {
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
 	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
-	now       func() time.Time // the clock the double-click window and a host's gap are measured on; a test sets it
+	now       func() time.Time // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
 	theme     theme.Theme
 	frame     int  // the spinner frame a working agent shows
 	spinning  bool // whether a spin tick is out, so a survey starts no second one
@@ -160,7 +160,7 @@ type Model struct {
 	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised
+	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	idle      bool                             // the survey chain ended while hidden; the raise starts it again
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
@@ -223,15 +223,15 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		link:  ptr(newLinkScreen(th)), sessions: ptr(newSessionsScreen(th)),
+		link:  new(newLinkScreen(th)), sessions: new(newSessionsScreen(th)),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		agents: ptr(newAgentScreen(th)),
+		agents: new(newAgentScreen(th)),
 		create: newCreateScreen(th),
 		body:   newBody(),
-		config: ptr(newConfigScreen(th, cfg)),
-		proj:   ptr(newProjectScreen(th)),
+		config: new(newConfigScreen(th, cfg)),
+		proj:   new(newProjectScreen(th)),
 		// Init surveys.
 		surveying: true,
 	}
@@ -256,9 +256,6 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	return m
 }
 
-// ptr is a pointer to v.
-func ptr[T any](v T) *T { return &v }
-
 // StartLookup finds the project to open on when the working directory is in
 // none: the one of the focused window, else the one remembered. It lists
 // every host, so it runs after the first frame, not before it.
@@ -272,9 +269,10 @@ func (m Model) WithStart(lookup StartLookup) Model {
 	return m
 }
 
-// WithPopup makes the surface the popup: Esc on the list hides its window
-// instead of exiting, nothing surveys while it is hidden, and the raise
-// surveys once and resumes (decisions.md D86).
+// WithPopup makes the surface the popup: Esc on the list and a go hide its
+// window instead of exiting, nothing surveys while it is hidden unless a
+// launch is coming up, and the raise surveys once and resumes (decisions.md
+// D86, D129).
 func (m Model) WithPopup() Model {
 	m.popup = true
 	return m
@@ -286,8 +284,12 @@ type startMsg struct {
 	ok   bool
 }
 
-// hiddenMsg follows the hide of the popup's window.
-type hiddenMsg struct{ err error }
+// hiddenMsg follows the hide of the popup's window. went is a hide after a
+// go, not after Esc.
+type hiddenMsg struct {
+	err  error
+	went bool
+}
 
 // reloadedMsg is the project files read again: on the raise of the popup,
 // what `revier new`, a link or an edit changed while it was hidden, and after
@@ -415,13 +417,13 @@ func (m Model) lookupStart() tea.Cmd {
 	}
 }
 
-// hide takes the popup's window off the screen.
-func (m Model) hide() tea.Cmd {
+// hide takes the popup's window off the screen, after Esc or after a go.
+func (m Model) hide(went bool) tea.Cmd {
 	c := m.core
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return hiddenMsg{err: c.HidePopup(ctx)}
+		return hiddenMsg{err: c.HidePopup(ctx), went: went}
 	}
 }
 
@@ -429,7 +431,7 @@ func (m Model) hide() tea.Cmd {
 // surface quits.
 func (m Model) leave() tea.Cmd {
 	if m.popup {
-		return m.hide()
+		return m.hide(false)
 	}
 	return tea.Quit
 }
@@ -553,9 +555,11 @@ func (m *Model) interval() time.Duration {
 	return m.refresh
 }
 
-// claiming reports a launch whose window the next surveys may claim.
+// claiming reports a launch whose window the next surveys may claim. A launch
+// past its window is not: one for a project this surface does not hold is
+// never settled, and would keep the refresh for good.
 func (m *Model) claiming() bool {
-	return m.pending != nil
+	return m.pending.Pending(m.now())
 }
 
 // nextTick starts the tick of the next refresh, and drops any that is out.
@@ -564,8 +568,8 @@ func (m *Model) nextTick() tea.Cmd {
 	return tick(m.interval(), m.chain)
 }
 
-// surveyNow surveys at once, for a focus regained: the rows aged while
-// nobody looked. A survey that is out answers soon enough, and its answer
+// surveyNow surveys at once, for a focus regained or a raise: the rows aged
+// while nobody looked. A survey that is out answers soon enough, and its answer
 // starts the next tick.
 func (m *Model) surveyNow() tea.Cmd {
 	if m.surveying {
@@ -805,6 +809,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case hiddenMsg:
+		if msg.err != nil && msg.went {
+			// The go landed; the popup stays where it is, with its query
+			// and cursor, as it did before a go hid it.
+			slog.Warn("popup hide after go", "err", msg.err)
+			return m, nil
+		}
 		if msg.err != nil {
 			// The popup cannot leave the screen, so it leaves the way it
 			// did before it could hide.
@@ -829,6 +839,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// that raises it is the one that opened it (decisions.md D110).
 			m.hidden, m.agents.shown = false, false
 			m.rounds = nil
+			m.mirror.restart()
+			// A tick still out was set while nobody looked, up to the slow
+			// refresh away: it is dropped, and the reload surveys instead.
+			if !m.surveying {
+				m.chain++
+				m.idle = true
+			}
 			return m, tea.Batch(reloadFiles, m.mouseMode())
 		}
 		if !refocused {
@@ -858,8 +875,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.idle {
 			m.idle = false
-			m.surveying = true
-			return m, m.Survey()
+			return m, m.surveyNow()
 		}
 		return m, nil
 	case assistedMsg:
@@ -881,7 +897,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// with the popup: it leaves the screen, and with it the refresh
 		// (decisions.md D129). A failure stays on the screen to be read.
 		if msg.went && msg.err == nil && m.popup {
-			return m, m.hide()
+			return m, m.hide(true)
 		}
 		// An action had the terminal, and it comes back with mouse reporting
 		// off, as it does from the assistant. After a press that handed
@@ -971,7 +987,7 @@ func (m *Model) need(v revier.ProjectView) int {
 	switch {
 	case v.Attention():
 		return 0
-	case heldHere(m.attached, v):
+	case m.heldHere(v):
 		return 1
 	default:
 		return 2
@@ -1167,7 +1183,7 @@ func (m Model) agentsOnPage(dir int) int {
 // with no attachments, because the surface reads those from state, where a
 // claim writes one between surveys so a claimed window shows at once rather
 // than a refresh later.
-func (m Model) heldHere(v revier.ProjectView) bool {
+func (m *Model) heldHere(v revier.ProjectView) bool {
 	return heldHere(m.attached, v)
 }
 

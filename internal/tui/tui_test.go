@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -1821,5 +1822,15 @@ func TestAMouseReportCutByAReadTypesNothing(t *testing.T) {
 	m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<35;31;40M"), Paste: true})
 	if got := query(m); !strings.Contains(got, "<35;31;40M") {
 		t.Errorf("query = %q, want the pasted text in it", got)
+	}
+}
+
+// Model is copied on every message, and past 64 KB each copy is a heap
+// allocation rather than a copy on the stack: one message allocated 28 MB
+// before the large screens were held by pointer. A field that grows it past
+// the limit is held by pointer too.
+func TestModelIsSmallEnoughToCopyOnTheStack(t *testing.T) {
+	if size := unsafe.Sizeof(tui.Model{}); size >= 64<<10 {
+		t.Errorf("Model is %d bytes, want under 64 KB: hold the large field by pointer", size)
 	}
 }

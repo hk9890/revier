@@ -56,20 +56,16 @@ func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectVie
 // ThisMachine reports a link's host that names the machine revier runs on.
 // machine is this machine's hostname; names are what the link calls the
 // host, its own name and the HostName ssh connects to for it. A name is the
-// machine by its first label, so dt and dt.local are one machine, and
-// localhost is every machine. A link to this machine asks itself over ssh
-// for what it lists already, so revier knows no such link (decisions.md
-// D131).
+// machine by its first label, so dt and dt.local are one machine. A loopback
+// name is not: ssh reaches a VM or a tunnel through one, by its port. A link
+// to this machine asks itself over ssh for what it lists already, so revier
+// knows no such link (decisions.md D131).
 func ThisMachine(machine string, names ...string) bool {
 	short := func(name string) string {
 		label, _, _ := strings.Cut(strings.ToLower(strings.TrimSuffix(name, ".")), ".")
 		return label
 	}
 	for _, name := range names {
-		switch strings.ToLower(name) {
-		case "localhost", "127.0.0.1", "::1":
-			return true
-		}
 		if machine != "" && short(name) == short(machine) {
 			return true
 		}

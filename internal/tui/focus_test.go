@@ -119,6 +119,56 @@ func TestALaunchComingUpKeepsTheRefresh(t *testing.T) {
 	}
 }
 
+// A launch past its window keeps nothing: one for a project this surface
+// does not hold is never settled, and would keep the refresh for good.
+func TestALaunchPastItsWindowKeepsNoRefresh(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	m = survey(m)
+	st, _ := state.Load(root)
+	st.Launch = &state.Launch{Project: "not-here", At: time.Now().Add(-time.Hour)}
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	m = survey(m)
+	if got := m.Interval(); got != 10*time.Second {
+		t.Errorf("interval without the focus with a launch an hour old = %v, want 10s", got)
+	}
+}
+
+// The popup can hide while a tick set without the focus is out, ten seconds
+// long. The raise drops it and surveys once the files are read again, as it
+// does when the chain had ended.
+func TestTheRaiseDropsTheSlowTickThatWasOut(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m = survey(m)
+	m, _ = update(m, tea.BlurMsg{})
+	m, _ = update(m, m.Survey()())
+	slow := m.Ticked()
+	m, hide := press(m, "esc")
+	m = run(m, hide)
+
+	m, cmd := update(m, tea.FocusMsg{})
+	m, cmd = deliver(m, cmd)
+	surveyed := false
+	each(cmd, func(msg tea.Msg) {
+		if fmt.Sprintf("%T", msg) == "tui.surveyMsg" {
+			surveyed = true
+		}
+	})
+	if !surveyed {
+		t.Error("the raise surveyed nothing; the rows waited for the slow tick")
+	}
+	if _, dropped := update(m, slow); dropped != nil {
+		t.Error("the slow tick that was out surveyed again after the raise")
+	}
+}
+
 // The working spinner redraws the surface eight times a second; without the
 // focus it stands, and a working agent shows the theme's own glyph, until
 // the focus is back.
@@ -214,6 +264,36 @@ func TestAGoFromThePopupHidesIt(t *testing.T) {
 		t.Errorf("hidden = %v after a failed go, want the popup on the screen", wm.Hidden)
 	}
 	_ = m
+}
+
+// A go that landed while the popup could not hide leaves the popup where it
+// is, with its query and cursor: only Esc, which had nothing else to do,
+// quits instead.
+func TestAGoFromAPopupThatCannotHideStays(t *testing.T) {
+	_, _, c, projects := world(t, 2) // no popup window: the hide fails
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m = survey(m)
+	m, _ = press(m, "alt+t")
+	m, _ = press(m, "down")
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatal("enter on a target returned no command")
+	}
+	m, hide := deliver(m, cmd)
+	if hide == nil {
+		t.Fatal("the go asked for no hide")
+	}
+	quit := false
+	each(hide, func(msg tea.Msg) {
+		if _, after := update(m, msg); after != nil {
+			if _, ok := after().(tea.QuitMsg); ok {
+				quit = true
+			}
+		}
+	})
+	if quit {
+		t.Error("a go from a popup that could not hide quit the popup")
+	}
 }
 
 // Outside the popup a go hides nothing.

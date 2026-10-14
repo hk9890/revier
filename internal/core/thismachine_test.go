@@ -7,7 +7,8 @@ import (
 )
 
 // A link's host is this machine by its own name or the HostName ssh connects
-// to, compared by the first label, so dt and dt.local are one machine.
+// to, compared by the first label, so dt and dt.local are one machine. A
+// loopback name is a VM or a tunnel reached by its port, not this machine.
 func TestThisMachineIsTheHostnameByItsFirstLabel(t *testing.T) {
 	for _, tc := range []struct {
 		names []string
@@ -17,8 +18,8 @@ func TestThisMachineIsTheHostnameByItsFirstLabel(t *testing.T) {
 		{[]string{"DT.local"}, true},
 		{[]string{"dt.example.com."}, true},
 		{[]string{"alias", "dt.local"}, true},
-		{[]string{"localhost"}, true},
-		{[]string{"alias", "127.0.0.1"}, true},
+		{[]string{"localhost"}, false},
+		{[]string{"vagrant", "127.0.0.1"}, false},
 		{[]string{"buildbox"}, false},
 		{[]string{"dt2"}, false},
 		{[]string{"buildbox", "10.0.0.7"}, false},

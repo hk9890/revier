@@ -161,3 +161,18 @@ Host dt
 		}
 	}
 }
+
+// Match all ends a Host block and matches every host again, which is how a
+// file includes others for every host after its blocks.
+func TestHostNameReadsAMatchAllBlock(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "hosts", "Host lab\n    HostName lab.example.com\n")
+	path := write(t, dir, "config", "Host buildbox\n    User me\nMatch all\n    Include hosts\n")
+	got, err := sshconfig.HostName(path, "lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "lab.example.com" {
+		t.Errorf("HostName(lab) = %q, want lab.example.com", got)
+	}
+}
