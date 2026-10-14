@@ -95,6 +95,92 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 	return nil
 }
 
+// HostName is the HostName the file gives host, as ssh reads it: the first
+// value in a Host block one of whose patterns matches host and none of whose
+// negated ones does, Include lines followed. "" is a host the file gives
+// none, which ssh connects to by its own name. A Match block is read as one
+// that does not match, since its conditions are ssh's to evaluate.
+func HostName(path, host string) (string, error) {
+	name, _, err := hostName(path, host, true, 0)
+	return name, err
+}
+
+// hostName walks one file for HostName. matching is whether the lines before
+// the file's first block apply: they belong to the block the Include stands
+// in, or, at the top, to every host.
+func hostName(path, host string, matching bool, depth int) (string, bool, error) {
+	if depth > includeDepth {
+		return "", false, nil
+	}
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = f.Close() }()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, rest, _ := strings.Cut(strings.ReplaceAll(line, "=", " "), " ")
+		fields := strings.Fields(rest)
+		switch strings.ToLower(key) {
+		case "host":
+			matching = hostMatches(fields, host)
+		case "match":
+			matching = false
+		case "hostname":
+			if matching && len(fields) > 0 {
+				return fields[0], true, nil
+			}
+		case "include":
+			if !matching {
+				continue
+			}
+			for _, pattern := range fields {
+				pattern = expandHome(pattern)
+				if !filepath.IsAbs(pattern) {
+					pattern = filepath.Join(filepath.Dir(path), pattern)
+				}
+				matches, err := filepath.Glob(pattern)
+				if err != nil {
+					return "", false, fmt.Errorf("%s: include %q: %w", path, pattern, err)
+				}
+				for _, included := range matches {
+					if name, ok, err := hostName(included, host, true, depth+1); err != nil || ok {
+						return name, ok, err
+					}
+				}
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return "", false, fmt.Errorf("%s: %w", path, err)
+	}
+	return "", false, nil
+}
+
+// hostMatches reports a Host line's patterns matching host: one of them
+// does, and no negated one does.
+func hostMatches(patterns []string, host string) bool {
+	matched := false
+	for _, p := range patterns {
+		negated := strings.HasPrefix(p, "!")
+		if ok, _ := filepath.Match(strings.TrimPrefix(p, "!"), host); ok {
+			if negated {
+				return false
+			}
+			matched = true
+		}
+	}
+	return matched
+}
+
 // expandHome resolves a leading "~" in an Include path against the home
 // directory, which is how ssh reads it and the form a tool that drops a file
 // into ~/.ssh/config writes. A home that cannot be resolved leaves the path

@@ -192,7 +192,7 @@ path = "/home/user/dev/far"
 git_url = "git@github.com:example/far.git"
 
 [remote]
-host = "buildbox"   # the ssh destination
+host = "buildbox"   # the ssh destination; a link to the machine revier runs on is left out (D131)
 project = "far"     # its name there; defaults to this file's name
 
 # Optional: further targets, windows here that reach the project there. The

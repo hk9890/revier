@@ -6,6 +6,7 @@
 package app
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -54,8 +55,12 @@ func CreateProject(cfgRoot string, projects []core.Project, name revier.ProjectN
 
 // LinkProject writes a link under name to the project a host reports as on,
 // or under the project's own name when name is empty. A name whose file is
-// there is refused, so no project is overwritten.
+// there is refused, so no project is overwritten, and so is a host that is
+// this machine, since revier leaves such a link out (decisions.md D131).
 func LinkProject(cfgRoot string, name revier.ProjectName, host string, on revier.Project) (core.Project, error) {
+	if config.OnThisMachine(host) {
+		return core.Project{}, fmt.Errorf("%s is this machine; its projects are listed here without a link", host)
+	}
 	if name == "" {
 		name = on.Name
 	}

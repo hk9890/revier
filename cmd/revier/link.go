@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"slices"
 	"text/tabwriter"
 
 	usecase "github.com/hk9890/revier/internal/app"
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/sshconfig"
 	"github.com/hk9890/revier/pkg/revier"
@@ -32,6 +34,8 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		if err != nil {
 			return err
 		}
+		// This machine is no host to link to (decisions.md D131).
+		hosts = slices.DeleteFunc(hosts, config.OnThisMachine)
 		if len(hosts) == 0 {
 			_, _ = fmt.Fprintf(a.out, "no hosts in %s\n", path)
 			return nil

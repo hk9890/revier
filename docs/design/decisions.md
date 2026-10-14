@@ -814,3 +814,12 @@ surface that links to it. A round now starts five seconds after the last one
 to that host started, at the soonest; a host that gave no answer waits twice
 as long after each round in a row it failed, up to a minute. This machine's
 rows keep the refresh (D114), and a press asks every host at the next survey.
+
+### D131 — revier knows no link to the machine it runs on
+
+The project files are shared between machines, so a link written on one
+names the other one itself, and there it asked itself over ssh every second
+for what its own survey lists. A link whose host is this machine, by name or
+by the HostName ssh gives it, is left out at load, and `revier doctor` says
+how many. The link dialog does not offer this machine. Rejected: answering
+the link from the local survey, which shows each agent there twice.

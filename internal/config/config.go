@@ -54,6 +54,10 @@ type Config struct {
 	// action stays unbound, the target reaches no project, and the file is
 	// otherwise read whole. `revier doctor` is where these are read.
 	Problems []error `toml:"-"`
+
+	// SelfLinks is the files of the links whose host is this machine, which
+	// Load leaves out (decisions.md D131). `revier doctor` says how many.
+	SelfLinks []string `toml:"-"`
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -137,7 +141,32 @@ func Load(root string) (*Config, []core.Project, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	projects, cfg.SelfLinks = elsewhere(projects)
 	return cfg, projects, nil
+}
+
+// elsewhere is projects without the links to this machine, and the files of
+// the ones it left out. The project files are shared between machines, so a
+// link that is right on one machine names the other one itself.
+func elsewhere(projects []core.Project) ([]core.Project, []string) {
+	here := map[string]bool{}
+	var self []string
+	out := projects[:0:0]
+	for _, p := range projects {
+		if p.Remote != nil {
+			at, asked := here[p.Remote.Host]
+			if !asked {
+				at = OnThisMachine(p.Remote.Host)
+				here[p.Remote.Host] = at
+			}
+			if at {
+				self = append(self, p.File)
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out, self
 }
 
 // Shared is the shared targets every project gets: Targets without the ones

@@ -323,7 +323,9 @@ path and that repository. Neither names anything on this machine: the link has
 no directory here, and the checkout stays the host's to clone.
 
 revier must be installed on the host, a Linux machine, with the project's own
-file under its `~/.config/revier/projects/`; it needs no tmux there. The list
+file under its `~/.config/revier/projects/`; it needs no tmux there. On the
+host itself the link is left out, so one set of project files serves both
+machines; `revier doctor` says how many it skipped. The list
 shows the link as `far@buildbox` with what each agent there is doing, read
 from the revier there. Enter opens the workspace. Its tabs are tabs of your
 terminal: `revier agent new`, `revier shell new`, `revier agent prompt`,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -234,6 +235,7 @@ func (s *linkScreen) open() error {
 	if err != nil {
 		return err
 	}
+	hosts = slices.DeleteFunc(hosts, config.OnThisMachine)
 	if len(hosts) == 0 {
 		return fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
 	}
