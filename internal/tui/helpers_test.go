@@ -9,9 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -76,45 +78,53 @@ func survey(m tui.Model) tui.Model {
 	return next.(tui.Model)
 }
 
+// press is one key as a terminal's input reader delivers it. A name of several
+// characters is typed: one press for each of them.
 func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
-	var msg tea.KeyMsg
-	switch key {
-	case "enter":
-		msg = tea.KeyMsg{Type: tea.KeyEnter}
-	case "tab":
-		msg = tea.KeyMsg{Type: tea.KeyTab}
-	case "shift+tab":
-		msg = tea.KeyMsg{Type: tea.KeyShiftTab}
-	case "esc":
-		msg = tea.KeyMsg{Type: tea.KeyEsc}
-	case "down":
-		msg = tea.KeyMsg{Type: tea.KeyDown}
-	case "up":
-		msg = tea.KeyMsg{Type: tea.KeyUp}
-	case "left":
-		msg = tea.KeyMsg{Type: tea.KeyLeft}
-	case "right":
-		msg = tea.KeyMsg{Type: tea.KeyRight}
-	case "backspace":
-		msg = tea.KeyMsg{Type: tea.KeyBackspace}
-	case "home":
-		msg = tea.KeyMsg{Type: tea.KeyHome}
-	case "end":
-		msg = tea.KeyMsg{Type: tea.KeyEnd}
-	case "pgup":
-		msg = tea.KeyMsg{Type: tea.KeyPgUp}
-	case "pgdown":
-		msg = tea.KeyMsg{Type: tea.KeyPgDown}
-	case "delete":
-		msg = tea.KeyMsg{Type: tea.KeyDelete}
-	case "alt+delete":
-		msg = tea.KeyMsg{Type: tea.KeyDelete, Alt: true}
-	default:
-		letter, alt := strings.CutPrefix(key, "alt+")
-		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter), Alt: alt}
+	named := map[string]tea.KeyPressMsg{
+		"enter":      {Code: tea.KeyEnter},
+		"tab":        {Code: tea.KeyTab},
+		"shift+tab":  {Code: tea.KeyTab, Mod: tea.ModShift},
+		"esc":        {Code: tea.KeyEscape},
+		"down":       {Code: tea.KeyDown},
+		"up":         {Code: tea.KeyUp},
+		"left":       {Code: tea.KeyLeft},
+		"right":      {Code: tea.KeyRight},
+		"backspace":  {Code: tea.KeyBackspace},
+		"home":       {Code: tea.KeyHome},
+		"end":        {Code: tea.KeyEnd},
+		"pgup":       {Code: tea.KeyPgUp},
+		"pgdown":     {Code: tea.KeyPgDown},
+		"delete":     {Code: tea.KeyDelete},
+		"alt+delete": {Code: tea.KeyDelete, Mod: tea.ModAlt},
 	}
-	next, cmd := m.Update(msg)
-	return next.(tui.Model), cmd
+	if msg, ok := named[key]; ok {
+		return send(m, msg)
+	}
+	if letter, alt := strings.CutPrefix(key, "alt+"); alt {
+		r := []rune(letter)[0]
+		msg := tea.KeyPressMsg{Code: unicode.ToLower(r), Mod: tea.ModAlt}
+		if unicode.IsUpper(r) {
+			msg.Mod |= tea.ModShift
+		}
+		return send(m, msg)
+	}
+	var cmds []tea.Cmd
+	for _, r := range key {
+		var cmd tea.Cmd
+		m, cmd = send(m, typed(r))
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// typed is the press of a key that types r, as a terminal's input reader
+// delivers it: a capital is its letter with shift.
+func typed(r rune) tea.KeyPressMsg {
+	if unicode.IsUpper(r) {
+		return tea.KeyPressMsg{Code: unicode.ToLower(r), ShiftedCode: r, Mod: tea.ModShift, Text: string(r)}
+	}
+	return tea.KeyPressMsg{Code: r, Text: string(r)}
 }
 
 // lines is the surface's content, with the margin taken off: its blank rows
@@ -125,7 +135,7 @@ func press(m tui.Model, key string) (tui.Model, tea.Cmd) {
 // gutter space of its own, so a test that cared where a line starts would
 // have to count either way, and margins reads the margin off the render.
 func lines(m tui.Model) []string {
-	out := strings.Split(m.View(), "\n")
+	out := strings.Split(drawn(m), "\n")
 	for i := range out {
 		out[i] = strings.TrimRight(out[i], " ")
 	}
@@ -136,6 +146,27 @@ func lines(m tui.Model) []string {
 		out = out[:len(out)-1]
 	}
 	return out
+}
+
+// drawn is what the surface draws. lipgloss renders every style in colour, and
+// a terminal that shows none drops it, so a test reads the text alone unless
+// it asks for the colours with inColour.
+func drawn(m tui.Model) string {
+	content := m.View().Content
+	if coloured {
+		return content
+	}
+	return ansi.Strip(content)
+}
+
+// coloured is whether drawn keeps the colours.
+var coloured bool
+
+// inColour makes drawn keep the surface's colours for the rest of the test. No
+// test that calls it runs in parallel with another.
+func inColour(t *testing.T) {
+	coloured = true
+	t.Cleanup(func() { coloured = false })
 }
 
 // The chrome lines, in the order View writes them.
@@ -187,11 +218,11 @@ func paneCursor(m tui.Model) string {
 
 // paneCell is the terminal cell where the text starts on the pane line that
 // carries it. The column is the rendered width of what stands before the
-// text, not its byte offset: a glyph is three bytes for one cell, and a
-// colour profile puts escape sequences in the line.
+// text, not its byte offset: a glyph is three bytes for one cell, and a test
+// in colour has escape sequences in the line.
 func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 	t.Helper()
-	for y, raw := range strings.Split(m.View(), "\n") {
+	for y, raw := range strings.Split(drawn(m), "\n") {
 		// The list, the pane's border, the pane.
 		if parts := strings.Split(raw, "│"); len(parts) > 1 {
 			if at := strings.Index(parts[1], text); at >= 0 {
@@ -199,7 +230,7 @@ func paneCell(t *testing.T, m tui.Model, text string) (x, y int) {
 			}
 		}
 	}
-	t.Fatalf("no pane line carries %q:\n%s", text, m.View())
+	t.Fatalf("no pane line carries %q:\n%s", text, drawn(m))
 	return 0, 0
 }
 
@@ -212,7 +243,7 @@ func selectedRow(t *testing.T, m tui.Model) string {
 			return strings.TrimSpace(line)
 		}
 	}
-	t.Fatalf("no row is selected:\n%s", m.View())
+	t.Fatalf("no row is selected:\n%s", drawn(m))
 	return ""
 }
 
@@ -238,7 +269,7 @@ func pane(m tui.Model) string {
 }
 
 // send is one key as bubbletea's input reader delivers it.
-func send(m tui.Model, msg tea.KeyMsg) (tui.Model, tea.Cmd) {
+func send(m tui.Model, msg tea.KeyPressMsg) (tui.Model, tea.Cmd) {
 	next, cmd := m.Update(msg)
 	return next.(tui.Model), cmd
 }
@@ -269,21 +300,21 @@ func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
 
 // wheel is one notch of the mouse wheel at a column.
 func wheel(m tui.Model, x int, b tea.MouseButton) tui.Model {
-	next, _ := m.Update(tea.MouseMsg{X: x, Y: 5, Button: b, Action: tea.MouseActionPress})
+	next, _ := m.Update(tea.MouseWheelMsg{X: x, Y: 5, Button: b})
 	return next.(tui.Model)
 }
 
 // paneBorder is the terminal column of the border between the list and the
 // pane, read off the rendered surface: the rendered width of what stands
-// before it, so a colour profile's escape sequences do not count.
+// before it, so the escape sequences of a test in colour do not count.
 func paneBorder(t *testing.T, m tui.Model) int {
 	t.Helper()
-	for _, raw := range strings.Split(m.View(), "\n") {
+	for _, raw := range strings.Split(drawn(m), "\n") {
 		if strings.Count(raw, "│") == 1 {
 			return lipgloss.Width(raw[:strings.Index(raw, "│")])
 		}
 	}
-	t.Fatalf("no line with a pane:\n%s", m.View())
+	t.Fatalf("no line with a pane:\n%s", drawn(m))
 	return 0
 }
 
@@ -324,13 +355,18 @@ func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 	return m, tea.Batch(outs...)
 }
 
-// recorder keeps what a bubbletea program hands to Update, and quits on the
-// mouse report that ends the input.
+// recorder keeps what a bubbletea program's input reader hands to Update, and
+// quits on the mouse report that ends the input. What the program says of its
+// output and its environment is no input, and is dropped.
 type recorder struct{ got *[]tea.Msg }
 
 func (r recorder) Init() tea.Cmd { return nil }
 
 func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.WindowSizeMsg, tea.ColorProfileMsg, tea.EnvMsg:
+		return r, nil
+	}
 	*r.got = append(*r.got, msg)
 	if _, ok := msg.(tea.MouseMsg); ok {
 		return r, tea.Quit
@@ -338,7 +374,7 @@ func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return r, nil
 }
 
-func (r recorder) View() string { return "" }
+func (r recorder) View() tea.View { return tea.NewView("") }
 
 // update feeds one message and returns the model and its command.
 func update(m tui.Model, msg tea.Msg) (tui.Model, tea.Cmd) {
@@ -361,8 +397,8 @@ func runAll(cmd tea.Cmd) {
 // clickCell is one press and release of the left button on a terminal cell,
 // with the command either returned.
 func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
-	next, pressed := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	next, released := next.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	next, pressed := m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	next, released := next.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
 	return next.(tui.Model), tea.Batch(pressed, released)
 }
 
@@ -452,7 +488,7 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 
 // switched is the model after the key that switches between the two lists.
 func switched(m tui.Model) tui.Model {
-	m, _ = send(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}, Alt: true})
+	m, _ = send(m, tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModAlt})
 	return m
 }
 
@@ -472,7 +508,7 @@ func listedRows(m tui.Model) []string {
 
 // clearField deletes what a form field holds.
 func clearField(m tui.Model) tui.Model {
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 	return next.(tui.Model)
 }
 
@@ -696,7 +732,7 @@ func clickAt(m tui.Model, x, y int) tui.Model {
 // margins reads the frame's margin off the rendered surface: the rows above
 // its top border and the columns left of it.
 func margins(m tui.Model) (rows, cols int) {
-	for i, line := range strings.Split(m.View(), "\n") {
+	for i, line := range strings.Split(drawn(m), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}

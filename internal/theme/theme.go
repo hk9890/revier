@@ -12,12 +12,14 @@
 package theme
 
 import (
+	"image/color"
 	"sort"
 	"strconv"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	catppuccin "github.com/catppuccin/go"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // Theme is a resolved palette and glyph set. Every field is ready to render
@@ -189,7 +191,7 @@ func Lookup(name, glyphs string) (Theme, error) {
 	if !ok {
 		return Theme{}, &UnknownError{Kind: "glyph set", Name: glyphs, Valid: GlyphSets()}
 	}
-	t := fromFlavor(name, f, g)
+	t := fromFlavor(name, f, g, colorprofile.TrueColor)
 	t.Spinner = spinners[glyphs]
 	return t, nil
 }
@@ -197,7 +199,7 @@ func Lookup(name, glyphs string) (Theme, error) {
 // fromFlavor maps a Catppuccin flavour onto the roles. The mapping follows the
 // shell picker's, so revier looks like the tool it replaces: green for
 // running, blue for the metadata columns, mauve for anything remote
-// (os_list_json.py:54).
+// (os_list_json.py:54). Each colour is the one a terminal with profile p shows.
 //
 // Three departures from it. A path is a step dimmer than a stopped name, so the
 // names are what the eye lands on. A missing path is maroon, not red: on a
@@ -205,8 +207,8 @@ func Lookup(name, glyphs string) (Theme, error) {
 // out the red that means an agent wants you. And the counts on the rule are
 // quiet, where the header they came from was red throughout, so the one red
 // count among them is the one that needs reading.
-func fromFlavor(name string, f catppuccin.Flavor, g Glyphs) Theme {
-	c := func(col catppuccin.Color) lipgloss.Color { return lipgloss.Color(col.Hex) }
+func fromFlavor(name string, f catppuccin.Flavor, g Glyphs, p colorprofile.Profile) Theme {
+	c := func(col catppuccin.Color) color.Color { return inProfile(col.Hex, p) }
 	fg := func(col catppuccin.Color) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(c(col))
 	}

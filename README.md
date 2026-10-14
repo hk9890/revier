@@ -186,6 +186,7 @@ projects.
 | alt+e, or a click on the project's name atop the pane | The project screen: its name, path and git URL, and every target it has, the ones from `config.toml` included. A change is written to the project's own file at once, and a new name renames the file. |
 | del | Close the row: a project, a target, an attached window or an agent's tab. Asks first when the close ends an agent or a whole project. |
 | alt+del, alt+d | Delete what the configuration holds of the row, after asking, and close it first when it is open. A project loses its file; a link loses only the link, and nothing changes on the host; a target is removed from the project file, and one from `config.toml` is not deleted. |
+| a target's key | Run-or-raise that target of the selected project. In a terminal that reports key disambiguation, such as kitty, a ctrl+shift key arrives as itself. Elsewhere it arrives as ctrl and its letter, and runs the target only where that key means nothing else here. |
 | an action key | Run the configured action against the selected project. |
 | alt+n | **new**: add a project on this machine. |
 | alt+r | **remote**: link a project on another machine, from the hosts `~/.ssh/config` names and the projects the revier on the chosen host has. |

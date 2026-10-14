@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
@@ -25,7 +25,7 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60}
-	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	s := newCreateScreen(th)
 	s.open()
 	s.path.SetValue(dir)
@@ -48,7 +48,7 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 	}
 
 	s.open()
-	if res, _ := s.key(sf, tea.KeyMsg{Type: tea.KeyEsc}); !res.closed {
+	if res, _ := s.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); !res.closed {
 		t.Errorf("result = %+v, want Esc on the field to close the screen", res)
 	}
 }
@@ -65,7 +65,7 @@ func TestAFolderThatAppearsAfterTheCloneQuestionKeepsTheURLInSight(t *testing.T)
 
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60}
-	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	s := newCreateScreen(th)
 	s.open()
 	s.path.SetValue(url)

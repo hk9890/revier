@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -61,8 +61,8 @@ func newKeyMap(actions []config.Action) keyMap {
 		// del closes what is open, and alt+del deletes what the configuration
 		// holds. del is the query's forward delete as well, and closes only
 		// with nothing right of the query's cursor, where a forward delete has
-		// nothing to delete. ctrl+del cannot be a key: bubbletea does not read
-		// its sequence.
+		// nothing to delete. ctrl+del is not the key: not every terminal
+		// sends it apart from del (decisions.md D93), and legacyKey drops it.
 		Close:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "close")),
 		Delete: key.NewBinding(key.WithKeys("alt+delete", "alt+d"), key.WithHelp("alt+del", "delete")),
 		// Tab walks the list and the agents only; the targets are one chord

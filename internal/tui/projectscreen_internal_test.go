@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -24,7 +24,7 @@ func TestTheProjectScreenWritesAFieldWithNoRootModel(t *testing.T) {
 
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), projects: []core.Project{p}, list: 80}
-	enter, down := tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyDown}
+	enter, down := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter}), pressedKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	ps := newProjectScreen(th)
 	if err := ps.open(p, nil); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestTheProjectScreenWritesAFieldWithNoRootModel(t *testing.T) {
 	if res, _ := ps.key(sf, locked, enter); !errors.Is(res.err, locked) || res.written != nil || !ps.edit.Focused() {
 		t.Fatalf("result = %+v, want the rename refused and the field still typed in", res)
 	}
-	ps.key(sf, locked, tea.KeyMsg{Type: tea.KeyEsc})
+	ps.key(sf, locked, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape}))
 
 	ps.key(sf, nil, down)
 	ps.key(sf, nil, enter)
@@ -52,7 +52,7 @@ func TestTheProjectScreenWritesAFieldWithNoRootModel(t *testing.T) {
 		t.Errorf("screen path = %q, typing = %v, want the file as written and the field left", ps.text.Path, ps.edit.Focused())
 	}
 
-	if res, _ := ps.key(sf, nil, tea.KeyMsg{Type: tea.KeyEsc}); !res.closed {
+	if res, _ := ps.key(sf, nil, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); !res.closed {
 		t.Errorf("result = %+v, want Esc on the rows to close the screen", res)
 	}
 }

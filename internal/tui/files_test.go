@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -255,7 +255,7 @@ func TestTheWheelHoldsStillWhileADeleteIsAsked(t *testing.T) {
 	before := selectedRow(t, m)
 
 	m, _ = press(m, "alt+d")
-	m = wheel(m, 5, tea.MouseButtonWheelDown)
+	m = wheel(m, 5, tea.MouseWheelDown)
 	if row := selectedRow(t, m); row != before {
 		t.Errorf("selected %q while the delete was asked, want %q", row, before)
 	}

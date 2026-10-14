@@ -4,9 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
-
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
@@ -55,12 +52,10 @@ func TestThePaneStartsLevelWithTheProjectQuery(t *testing.T) {
 // colour in lipgloss, and without one it was the terminal's text colour,
 // white beside the grey rules it meets.
 func TestThePaneBorderIsTheRulesColour(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, m := agentWorld(t)
-	view := strings.Split(m.View(), "\n")
+	view := strings.Split(drawn(m), "\n")
 	colour := func(line, glyph string) string {
 		before, _, ok := strings.Cut(line, glyph)
 		if !ok {
@@ -101,7 +96,7 @@ func TestTabWalksTheListAndTheAgentsAndAltTReachesTheTargets(t *testing.T) {
 		m, _ = press(m, step.key)
 		row := paneCursor(m)
 		if step.want == "" && row != "" || !strings.Contains(row, step.want) {
-			t.Fatalf("after %s the pane cursor is %q, want %q:\n%s", step.key, row, step.want, m.View())
+			t.Fatalf("after %s the pane cursor is %q, want %q:\n%s", step.key, row, step.want, drawn(m))
 		}
 	}
 }
@@ -131,7 +126,7 @@ func TestTheCursorLeavesAnAgentsSectionThatIsGone(t *testing.T) {
 	rt.Retitle("2", "zsh")
 	m = survey(m)
 	if row := paneCursor(m); row != "" {
-		t.Errorf("pane cursor = %q, want the list once the agents are gone:\n%s", row, m.View())
+		t.Errorf("pane cursor = %q, want the list once the agents are gone:\n%s", row, drawn(m))
 	}
 }
 
@@ -150,7 +145,7 @@ func TestTypingInAgentsFiltersThemAndEnterGoesToTheAgent(t *testing.T) {
 	}
 	m, cmd := press(m, "enter")
 	if cmd == nil {
-		t.Fatalf("enter on an agent ran nothing:\n%s", m.View())
+		t.Fatalf("enter on an agent ran nothing:\n%s", drawn(m))
 	}
 	cmd()
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "2" {

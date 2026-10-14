@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"

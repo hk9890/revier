@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
@@ -20,11 +20,11 @@ func TestTheConfigScreenWritesAndHandsBackWithNoRootModel(t *testing.T) {
 
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 80}
-	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	cs := newConfigScreen(th, &config.Config{})
 	cs.open()
 
-	res, _ := cs.key(sf, tea.KeyMsg{Type: tea.KeyRight})
+	res, _ := cs.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyRight}))
 	if res.err != nil || res.theme == nil || cs.ui.Theme == "" {
 		t.Fatalf("result = %+v, ui = %+v, want a theme to repaint in", res, cs.ui)
 	}
@@ -49,7 +49,7 @@ func TestTheConfigScreenWritesAndHandsBackWithNoRootModel(t *testing.T) {
 		t.Errorf("actions = %+v, want the one saved", got)
 	}
 
-	if res, _ := cs.key(sf, tea.KeyMsg{Type: tea.KeyEsc}); !res.closed {
+	if res, _ := cs.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); !res.closed {
 		t.Errorf("result = %+v, want Esc on the rows to close the screen", res)
 	}
 }

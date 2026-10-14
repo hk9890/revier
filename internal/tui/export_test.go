@@ -3,9 +3,8 @@ package tui
 import (
 	"time"
 
-	bcursor "github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/core"
 )
@@ -84,7 +83,9 @@ func (m Model) Raised() Model {
 // the command a focus returns would otherwise wait it out.
 func (m Model) StaticCursors() Model {
 	for _, in := range []*textinput.Model{&m.input, &m.ainput, &m.agents.query, &m.create.path, &m.link.name, &m.link.query, &m.sessions.name, &m.config.chord, &m.proj.edit} {
-		in.Cursor.SetMode(bcursor.CursorStatic)
+		st := in.Styles()
+		st.Cursor.Blink = false
+		in.SetStyles(st)
 	}
 	return m
 }

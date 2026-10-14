@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -175,7 +175,7 @@ func (m Model) shutRows() int {
 
 // shutdownKey is every press in the wizard. A shutdown that runs takes no
 // press but quit: its answer is what the wizard shows next.
-func (m Model) shutdownKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 	m.err = nil
 	s := &m.shut
 	switch {
@@ -436,7 +436,7 @@ func (m Model) shutdownTitle() string {
 
 // shutdownScreen is the wizard's rows, in the list's place.
 func (m Model) shutdownScreen() string {
-	th, s, w := m.theme, m.shut, m.listWidth()
+	th, s, w := *m.theme, m.shut, m.listWidth()
 	say := func(st lipgloss.Style, text string) string {
 		return st.PaddingLeft(2).Width(w).Render(clipTo(text, w-2))
 	}

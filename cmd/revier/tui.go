@@ -8,7 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 
 	"github.com/hk9890/revier/internal/core"
@@ -35,12 +36,8 @@ func cmdTUI(a *app) error {
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
 		})
-	// All motion reports the pointer with no button held, which the hover
-	// needs, as well as the wheel and clicks. It takes plain drag-to-select
-	// from the terminal; shift-drag still selects in kitty and most others.
-	// Focus reports are how the surface learns that nobody is at it, and how
-	// the hidden popup learns it was raised.
-	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion(), tea.WithReportFocus()}
+	// The surface's view asks for the terminal modes it runs in: the
+	// alternate screen, and pointer and focus reports (tui.Model.View).
 	if popup {
 		m = m.WithPopup()
 	} else {
@@ -49,7 +46,17 @@ func cmdTUI(a *app) error {
 			return p.Name, ok
 		})
 	}
-	return runSurface(m, opts...)
+	return runSurface(m, colourOf(os.Getenv)...)
+}
+
+// colourOf is the colour the environment allows the surface. Any NO_COLOR
+// that is not empty turns colour off, as no-color.org says; bold and reverse
+// video stay (decisions.md D133).
+func colourOf(getenv func(string) string) []tea.ProgramOption {
+	if getenv("NO_COLOR") == "" {
+		return nil
+	}
+	return []tea.ProgramOption{tea.WithColorProfile(colorprofile.Ascii)}
 }
 
 // signalEnd is the surface ended by a signal: its terminal closed, or

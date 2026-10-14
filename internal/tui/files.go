@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
@@ -214,7 +214,7 @@ func (m Model) targetOpen(project revier.ProjectName, tv revier.TargetView) (boo
 // confirmDelete takes the key that answers the question. Only "y" deletes;
 // every other key keeps the project and is not acted on, so a stray Enter
 // cannot fall through and open what the user just declined to delete.
-func (m Model) confirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) confirmDelete(msg keyPress) (tea.Model, tea.Cmd) {
 	name, target := m.confirm, m.ctarget
 	m.confirm, m.ctarget = "", ""
 	if msg.String() != "y" {

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -95,7 +95,7 @@ func (m Model) openCreate() (tea.Model, tea.Cmd) {
 // createKey is every press on the new-project screen, and what it left for
 // the surface: the screen closed, or a project that is a row the moment it
 // lands, and is cloned when its folder is to come from a repository.
-func (m Model) createKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) createKey(msg keyPress) (tea.Model, tea.Cmd) {
 	res, cmd := m.create.key(m.surface(), msg)
 	m.err = res.err
 	if res.closed {
@@ -134,7 +134,7 @@ func (s *createScreen) open() tea.Cmd {
 
 // key is every press on the screen. Esc goes back a step, and from the field
 // closes the screen.
-func (s *createScreen) key(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
+func (s *createScreen) key(sf surface, msg keyPress) (createResult, tea.Cmd) {
 	res := createResult{err: sf.err}
 	if key.Matches(msg, sf.keys.Quit) {
 		return res, tea.Quit
@@ -168,14 +168,14 @@ func (s *createScreen) key(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
 		return res, nil
 	}
 	res.err = nil
-	in, cmd := s.path.Update(msg)
+	in, cmd := s.path.Update(msg.input())
 	s.path = in
 	s.syncRows()
 	return res, cmd
 }
 
 // rootKey is the step that chooses the folder a name or a clone goes in.
-func (s *createScreen) rootKey(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
+func (s *createScreen) rootKey(sf surface, msg keyPress) (createResult, tea.Cmd) {
 	res := createResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Back):
@@ -195,7 +195,7 @@ func (s *createScreen) rootKey(sf surface, msg tea.KeyMsg) (createResult, tea.Cm
 
 // mkdirKey is the question whether to create the folder. Esc goes back to
 // where the folder was given.
-func (s *createScreen) mkdirKey(sf surface, msg tea.KeyMsg) (createResult, tea.Cmd) {
+func (s *createScreen) mkdirKey(sf surface, msg keyPress) (createResult, tea.Cmd) {
 	switch {
 	case key.Matches(msg, sf.keys.Back):
 		if isFullPath(s.typed()) {

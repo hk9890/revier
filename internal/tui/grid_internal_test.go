@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/config"

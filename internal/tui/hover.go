@@ -59,7 +59,7 @@ func (m Model) paneLine(y int) (int, bool) {
 	}
 	mr, _ := m.margins()
 	top := mr + queryRow
-	if y < top || y >= top+m.detail.Height {
+	if y < top || y >= top+m.detail.Height() {
 		return 0, false
 	}
 	return y - top, true
@@ -74,7 +74,7 @@ func (m Model) paneAt(x, y int) hovered {
 	if m.dialog != dialogNone || m.agents.shown || !ok || !selected {
 		return hovered{}
 	}
-	line += m.detail.YOffset
+	line += m.detail.YOffset()
 	// The pane's content starts past its border and padding.
 	_, mc := m.margins()
 	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {

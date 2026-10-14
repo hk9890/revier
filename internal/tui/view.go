@@ -5,7 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
@@ -69,20 +70,34 @@ func (m *Model) layout() {
 	if m.paneWidth() > 0 {
 		query = m.listWidth()
 	}
-	m.input.Width = query - lipgloss.Width(promptMark) - 2
-	m.link.query.Width = m.input.Width
-	m.agents.query.Width = m.input.Width
+	m.input.SetWidth(query - lipgloss.Width(promptMark) - 2)
+	m.link.query.SetWidth(m.input.Width())
+	m.agents.query.SetWidth(m.input.Width())
 	// The lists are sized by syncBody, which gives them room for every row
 	// they hold; this viewport is the part of that the screen shows.
-	m.body.Width, m.body.Height = m.listWidth(), h
+	m.body.SetWidth(m.listWidth())
+	m.body.SetHeight(h)
 	// One column less than the content: the footer is rendered with a
 	// leading space. help truncates on its own width and marks the cut with an
 	// ellipsis; sized to the terminal instead, it never cut, and View's own
 	// clip took the end of a word with no mark.
-	m.help.Width = w - 1
+	m.help.SetWidth(w - 1)
 }
 
-func (m Model) View() string {
+// View is the surface and the terminal modes it runs in: the alternate
+// screen, the pointer reports of mouseMode, and focus reports, which are how
+// the surface learns that nobody is at it, and how the hidden popup learns it
+// was raised.
+func (m Model) View() tea.View {
+	v := tea.NewView(m.draw())
+	v.AltScreen = true
+	v.MouseMode = m.mouseMode()
+	v.ReportFocus = true
+	return v
+}
+
+// draw is the surface as text.
+func (m Model) draw() string {
 	if m.sel.active {
 		return m.sel.view()
 	}
@@ -190,9 +205,9 @@ func (m Model) thinRule(width int) string {
 func (m Model) subtitle() string {
 	switch m.dialog {
 	case dialogLink:
-		return m.link.subtitle(m.theme)
+		return m.link.subtitle(*m.theme)
 	case dialogNew:
-		return " " + m.create.path.View()
+		return " " + inputView(m.create.path)
 	case dialogConfig:
 		where := "config.toml"
 		if root, err := config.Root(); err == nil {
@@ -287,7 +302,7 @@ func pad0(head string) string {
 // of how many there are, the way the picker says it, or what the step of a
 // dialog is listing.
 func (m Model) ruleCount() string {
-	th := m.theme
+	th := *m.theme
 	switch {
 	case m.dialog == dialogLink:
 		return m.link.count(th)
@@ -317,7 +332,7 @@ func (m Model) ruleTotals() (int, []agentPiece) {
 	// so they stand at the rule's right end, where its rows' ages are. The
 	// rule stops a column short of the pane's border.
 	if m.agents.shown {
-		return m.listWidth() - maxAgentWidth - 1, agentPieces(m.theme, m.agents.totals(), maxAgentWidth)
+		return m.listWidth() - maxAgentWidth - 1, agentPieces(*m.theme, m.agents.totals(), maxAgentWidth)
 	}
 	counts := map[revier.Status]int{}
 	for _, item := range m.plist.VisibleItems() {
@@ -329,8 +344,8 @@ func (m Model) ruleTotals() (int, []agentPiece) {
 			counts[a.State.Status]++
 		}
 	}
-	start, room := projectDelegate{theme: m.theme}.agentGeometry(m.plist)
-	return start, agentPieces(m.theme, counts, room)
+	start, room := projectDelegate{theme: *m.theme}.agentGeometry(m.plist)
+	return start, agentPieces(*m.theme, counts, room)
 }
 
 // ready reports whether the survey's numbers can be shown. bubbletea paints
@@ -351,7 +366,7 @@ func (m Model) ready() bool {
 // It wraps rather than clips: the directory is the part worth reading, and a
 // scratch REVIER_CONFIG_HOME is longer than the list is wide.
 func (m Model) empty() string {
-	th := m.theme
+	th := *m.theme
 	say := func(s lipgloss.Style, text string) string {
 		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
 	}
@@ -388,10 +403,10 @@ func (m Model) footer() string {
 		return m.config.dropPrompt(m.surface())
 	}
 	if m.dialog == dialogProject && m.proj.dropping {
-		return m.proj.dropPrompt(m.theme)
+		return m.proj.dropPrompt(*m.theme)
 	}
 	if m.link.asking != "" {
-		return m.link.askingLine(m.theme)
+		return m.link.askingLine(*m.theme)
 	}
 	err := m.err
 	if err == nil {
@@ -403,7 +418,7 @@ func (m Model) footer() string {
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
 	if m.sessions.restoring != "" || m.sessions.saving {
-		return m.sessions.progressLine(m.theme)
+		return m.sessions.progressLine(*m.theme)
 	}
 	if m.shut.running && m.shut.saves() {
 		return m.theme.Meta.Render(" saving the session when it changed, and closing…")

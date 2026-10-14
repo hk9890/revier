@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/core"

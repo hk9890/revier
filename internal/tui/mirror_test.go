@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/tui"
@@ -67,7 +67,7 @@ func TestAWheelWithNothingAboveTheScreenLeavesTheMirrorFollowing(t *testing.T) {
 	m, rt, _ := listedWorld(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusRunning, on: "one", screen: "only line"})
 	border := paneBorder(t, m)
-	next, cmd := m.Update(tea.MouseMsg{X: border + 4, Y: 12, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseWheelMsg{X: border + 4, Y: 12, Button: tea.MouseWheelUp})
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
@@ -106,7 +106,7 @@ func TestTheWheelScrollsTheMirrorIntoTheScrollback(t *testing.T) {
 	}
 	rt.Screens["1"] = strings.Join(screen, "\n")
 	border := paneBorder(t, m)
-	next, cmd := m.Update(tea.MouseMsg{X: border + 4, Y: 12, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseWheelMsg{X: border + 4, Y: 12, Button: tea.MouseWheelUp})
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}

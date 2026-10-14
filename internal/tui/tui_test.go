@@ -12,9 +12,8 @@ import (
 	"time"
 	"unsafe"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -54,7 +53,7 @@ func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	_, _, c, projects := world(t, 90)
 	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 
-	view := m.View()
+	view := drawn(m)
 	for _, wrong := range []string{"0 projects", "0/0", "No items", "No project"} {
 		if strings.Contains(view, wrong) {
 			t.Errorf("the first frame says %q:\n%s", wrong, view)
@@ -77,7 +76,7 @@ func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	}
 	m = survey(m)
 	if strings.Contains(ruleLine(m), "surveying") || !strings.Contains(ruleLine(m), "90/90") {
-		t.Errorf("after the survey the counts should be real:\n%s", m.View())
+		t.Errorf("after the survey the counts should be real:\n%s", drawn(m))
 	}
 	if body := listColumn(m); !strings.Contains(body, glyphs.Running) {
 		t.Errorf("after the survey the open project should carry its mark:\n%s", body)
@@ -226,7 +225,7 @@ func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
 	m := resize(tui.New(c, nil, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 200, 20)
 
 	// Nothing to survey, so the first frame is already the answer.
-	view := m.View()
+	view := drawn(m)
 	if !strings.Contains(view, "No projects configured") || !strings.Contains(view, filepath.Join(root, "projects")) {
 		t.Errorf("want the empty state to name %s/projects:\n%s", root, view)
 	}
@@ -242,7 +241,7 @@ func TestAFilterMatchingNothingSaysSo(t *testing.T) {
 	for _, r := range "zzz" {
 		m, _ = press(m, string(r))
 	}
-	view := m.View()
+	view := drawn(m)
 	if !strings.Contains(view, `No project matches "zzz"`) {
 		t.Errorf("want the filter named as the reason:\n%s", view)
 	}
@@ -285,7 +284,7 @@ func TestEnterOnAProjectOpensItsHome(t *testing.T) {
 		t.Errorf("window Opened = %v, want nothing but home", wm.Opened)
 	}
 	if !strings.Contains(ruleLine(m), "/2 ") {
-		t.Errorf("enter must not leave the list:\n%s", m.View())
+		t.Errorf("enter must not leave the list:\n%s", drawn(m))
 	}
 }
 
@@ -302,7 +301,7 @@ func TestEnterOnAProjectWithoutHomeShowsItsTargets(t *testing.T) {
 		t.Error("enter on a project without home should run nothing")
 	}
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
-		t.Errorf("pane cursor = %q, want it on the editor, the only target:\n%s", row, m.View())
+		t.Errorf("pane cursor = %q, want it on the editor, the only target:\n%s", row, drawn(m))
 	}
 }
 
@@ -314,7 +313,7 @@ func TestAltTMovesTheCursorOntoTheTargetsAndEscReturns(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, _ = press(m, "alt+t")
-	view := m.View()
+	view := drawn(m)
 	// The key in the spelling the footer uses, not the configuration's.
 	for _, want := range []string{"3/3", "project-00", "ctrl+shift+o"} {
 		if !strings.Contains(view, want) {
@@ -410,17 +409,17 @@ func TestOnANarrowTerminalThePaneStandsInForTheList(t *testing.T) {
 	m, _ = press(m, "tab")
 	body := strings.Join(rows(m), "\n")
 	if strings.Contains(body, "project-00") {
-		t.Errorf("the list is still on screen:\n%s", m.View())
+		t.Errorf("the list is still on screen:\n%s", drawn(m))
 	}
 	if !strings.Contains(body, "Targets") || !strings.Contains(body, "ctrl+shift+o") {
-		t.Errorf("the pane is not on screen:\n%s", m.View())
+		t.Errorf("the pane is not on screen:\n%s", drawn(m))
 	}
 	if !strings.Contains(ruleLine(m), " 3/3 ") {
 		t.Errorf("rule = %q, want the list still under it", ruleLine(m))
 	}
 	m, _ = press(m, "esc")
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "project-00") {
-		t.Errorf("esc did not bring the list back:\n%s", m.View())
+		t.Errorf("esc did not bring the list back:\n%s", drawn(m))
 	}
 }
 
@@ -430,7 +429,7 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	m, _ = press(m, "alt+t") // the cursor is on home
-	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO})
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+o ran nothing")
 	}
@@ -487,7 +486,7 @@ func TestEnterOnATargetRunsGo(t *testing.T) {
 	m = next.(tui.Model)
 	next, _ = m.Update(m.Survey()())
 	m = next.(tui.Model)
-	if view := m.View(); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
+	if view := drawn(m); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
 		t.Errorf("after Go the editor should show running:\n%s", view)
 	}
 	_ = rt
@@ -501,14 +500,14 @@ func TestTypingFiltersProjects(t *testing.T) {
 	m, _ = press(m, "1")
 	body := strings.Join(rows(m), "\n")
 	if !strings.Contains(body, "project-11") || strings.Contains(body, "project-10") {
-		t.Errorf("filter '11' should leave only project-11:\n%s", m.View())
+		t.Errorf("filter '11' should leave only project-11:\n%s", drawn(m))
 	}
 	m, _ = press(m, "backspace")
-	if body := m.View(); !strings.Contains(body, "project-10") {
+	if body := drawn(m); !strings.Contains(body, "project-10") {
 		t.Errorf("filter '1' should include project-10:\n%s", body)
 	}
 	m, _ = press(m, "esc")
-	if body := m.View(); !strings.Contains(body, "project-00") {
+	if body := drawn(m); !strings.Contains(body, "project-00") {
 		t.Errorf("esc should clear the filter:\n%s", body)
 	}
 }
@@ -520,7 +519,7 @@ func TestAttachedInstancesAreListedAndFocused(t *testing.T) {
 	ref := wm.Add("Pull requests", "chrome")
 	m := refreshed(t, c, projects, stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {ref}}), nil)
 	m, _ = press(m, "alt+t")
-	if view := m.View(); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
+	if view := drawn(m); !strings.Contains(view, "Pull requests") || !strings.Contains(view, "attached") {
 		t.Fatalf("attached instance not listed:\n%s", view)
 	}
 	m, _ = press(m, "down")
@@ -542,7 +541,7 @@ func TestSurveyErrorIsShownNotFatal(t *testing.T) {
 	rt.InstancesErr = fmt.Errorf("kitty went away")
 	next, _ := m.Update(m.Survey()())
 	m = next.(tui.Model)
-	if view := m.View(); !strings.Contains(view, "kitty went away") || !strings.Contains(view, "project-00") {
+	if view := drawn(m); !strings.Contains(view, "kitty went away") || !strings.Contains(view, "project-00") {
 		t.Errorf("want the error in the footer and the rows kept:\n%s", view)
 	}
 }
@@ -573,7 +572,7 @@ func TestPollingClaimsTheWindowThatAppearsAfterALaunch(t *testing.T) {
 	m, _ = press(m, "0")
 	m, _ = press(m, "0") // project-00; project-01 sorts first, its agent wants the human
 	m, _ = press(m, "alt+t")
-	if view := m.View(); !strings.Contains(view, "Pull requests") {
+	if view := drawn(m); !strings.Contains(view, "Pull requests") {
 		t.Errorf("the claimed window should be listed under the project:\n%s", view)
 	}
 }
@@ -668,7 +667,7 @@ func TestPollingBindsALaunchedTargetByClass(t *testing.T) {
 	}
 	m = survey(m)
 	m, _ = press(m, "tab")
-	if view := m.View(); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
+	if view := drawn(m); !strings.Contains(view, "editor") || !strings.Contains(view, "running") {
 		t.Errorf("the bound editor should show running:\n%s", view)
 	}
 }
@@ -822,7 +821,7 @@ func TestTheFirstSurveyUsesTheBindingsInState(t *testing.T) {
 			return
 		}
 	}
-	t.Fatalf("no row for project-00:\n%s", m.View())
+	t.Fatalf("no row for project-00:\n%s", drawn(m))
 }
 
 // A background refresh replaces every row. The cursor must stay on the
@@ -855,7 +854,7 @@ func TestRefreshKeepsTheFilterAndTheSelectedProject(t *testing.T) {
 	if after := selectedRow(t, m); after != before {
 		t.Errorf("selection moved across a refresh: %q -> %q", before, after)
 	}
-	if body := m.View(); strings.Contains(body, "project-11") {
+	if body := drawn(m); strings.Contains(body, "project-11") {
 		t.Errorf("filter did not survive the refresh:\n%s", body)
 	}
 }
@@ -869,7 +868,7 @@ func TestFilterMatchesNonAdjacentCharacters(t *testing.T) {
 	for _, r := range "pj11" {
 		m, _ = press(m, string(r))
 	}
-	body := m.View()
+	body := drawn(m)
 	if !strings.Contains(body, "project-11") {
 		t.Errorf("fuzzy filter 'pj11' should match project-11:\n%s", body)
 	}
@@ -929,7 +928,7 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 			t.Errorf("80 columns should not split, line %d = %q", i, line)
 		}
 	}
-	for i, line := range strings.Split(m.View(), "\n") {
+	for i, line := range strings.Split(drawn(m), "\n") {
 		if w := lipgloss.Width(line); w > 80 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
@@ -938,13 +937,14 @@ func TestNoDetailPaneAtEightyColumns(t *testing.T) {
 
 // A target key acts on the row under the cursor, without the target level.
 // The keys are the ones the desktop bindings use, so the surface and the
-// keyboard agree about what ctrl+shift+o means. A terminal sends ctrl+shift+o
-// as the byte of ctrl+o, which is the message the surface gets.
+// keyboard agree about what ctrl+shift+o means. A legacy terminal sends
+// ctrl+shift+o as the byte of ctrl+o, and the surface folds the press to it
+// in any terminal that does not report key disambiguation.
 func TestTargetKeyRunsAgainstTheHighlightedProject(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
-	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor, a window target
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModShift}) // editor, a window target
 	if cmd == nil {
 		t.Fatal("ctrl+shift+o produced no command")
 	}
@@ -979,9 +979,7 @@ func TestFooterNamesTheHighlightedProjectsTargetKeys(t *testing.T) {
 // and a key that changes colour by where it stands reads as two kinds of
 // thing.
 func TestEveryKeyHintIsTheHelpColour(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 40)
@@ -1002,14 +1000,14 @@ func TestEveryKeyHintIsTheHelpColour(t *testing.T) {
 	colour("the help screen", screen(m), "alt+e")
 }
 
-// ctrl+shift+u cannot reach the surface as itself, and ctrl+u, which it
-// arrives as, is the query's. The query keeps it: nothing opens.
+// ctrl+shift+u is folded to ctrl+u, as a legacy terminal sends it, where the
+// terminal does not report key disambiguation, and ctrl+u is the query's. The query keeps it: nothing opens.
 func TestADesktopKeyTheQueryOwnsEditsTheQuery(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 	m, _ = press(m, "p")
 
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, cmd := send(m, tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl | tea.ModShift})
 	if cmd != nil {
 		cmd()
 	}
@@ -1021,8 +1019,8 @@ func TestADesktopKeyTheQueryOwnsEditsTheQuery(t *testing.T) {
 	}
 }
 
-// bubbletea names ctrl+alt+<key> "alt+ctrl+<key>", alt first. A target key and
-// an action on a ctrl+alt chord fire on the message the terminal produces.
+// A target key and an action on a ctrl+alt chord fire on the message the
+// terminal produces.
 func TestCtrlAltKeysFire(t *testing.T) {
 	raw := []revier.Project{{Name: "solo", Path: "/p/solo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -1036,12 +1034,12 @@ func TestCtrlAltKeysFire(t *testing.T) {
 	actions := []config.Action{{Key: "ctrl-alt-y", Name: "sync", Run: []string{"true"}}}
 	m := refreshed(t, c, projects, stateWith(t, nil), actions)
 
-	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO, Alt: true}); cmd == nil {
+	if _, cmd := send(m, tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModAlt}); cmd == nil {
 		t.Error("ctrl+alt+o ran no target")
 	} else if cmd(); len(wm.Opened) != 1 {
 		t.Errorf("window host opened %d times, want the editor once", len(wm.Opened))
 	}
-	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY, Alt: true}); cmd == nil {
+	if _, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl | tea.ModAlt}); cmd == nil {
 		t.Error("ctrl+alt+y ran no action")
 	}
 }
@@ -1051,7 +1049,7 @@ func TestCtrlAltKeysFire(t *testing.T) {
 func TestAnActionThatRunsNothingSaysSo(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	m := refreshed(t, c, projects, stateWith(t, nil), []config.Action{{Key: "ctrl-y", Name: "sync"}})
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	m, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
 	}
@@ -1087,7 +1085,7 @@ func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
 	if len(wm.Opened) != 0 || len(rt.Opened) != 0 {
 		t.Fatalf("a bare letter opened something: window %d, runtime %d", len(wm.Opened), len(rt.Opened))
 	}
-	if body := m.View(); !strings.Contains(body, "❯ o") {
+	if body := drawn(m); !strings.Contains(body, "❯ o") {
 		t.Errorf("'o' should have gone to the query line:\n%s", body)
 	}
 }
@@ -1112,7 +1110,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY}) // ctrl+shift+y; "plain" is the first row
+	m, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl | tea.ModShift}) // "plain" is the first row
 	if cmd != nil {
 		t.Fatal("a target the project does not declare should run nothing")
 	}
@@ -1250,10 +1248,9 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 }
 
 // A raise under the pointer puts a mouse report behind the terminal's focus
-// report in the same read, and bubbletea then hands the focus report over as
-// something other than a tea.FocusMsg. It is the raise all the same: the
-// files are read and the surveys resume. The messages are the ones bubbletea
-// itself makes of those bytes, so its next version cannot change them unseen.
+// report in the same read. It is the raise all the same: the files are read
+// and the surveys resume. The messages are the ones bubbletea itself makes of
+// those bytes, so its next version cannot change them unseen.
 func TestAFocusReportWithAMouseReportBehindItIsTheRaise(t *testing.T) {
 	var read []tea.Msg
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1342,7 +1339,7 @@ func paneColumns(t *testing.T, m tui.Model) int {
 	t.Helper()
 	border := paneBorder(t, m)
 	widest := 0
-	for _, raw := range strings.Split(m.View(), "\n") {
+	for _, raw := range strings.Split(drawn(m), "\n") {
 		if n := lipgloss.Width(strings.TrimRight(raw, " ")); n > widest {
 			widest = n
 		}
@@ -1387,7 +1384,7 @@ func TestDetailPaneWrapsALongPathAndActivity(t *testing.T) {
 			t.Errorf("continuation %q starts at the label column", text)
 		}
 	}
-	for i, line := range strings.Split(m.View(), "\n") {
+	for i, line := range strings.Split(drawn(m), "\n") {
 		if w := lipgloss.Width(line); w > 150 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
@@ -1402,9 +1399,9 @@ func TestANarrowListCutsRatherThanWrapping(t *testing.T) {
 
 	r := rows(m)
 	if !strings.Contains(r[0], "long") || !strings.Contains(r[1], "/p/deeply") || !strings.Contains(r[2], "short") {
-		t.Errorf("want the long row on two lines and the next project on the third:\n%s", m.View())
+		t.Errorf("want the long row on two lines and the next project on the third:\n%s", drawn(m))
 	}
-	for i, line := range strings.Split(m.View(), "\n") {
+	for i, line := range strings.Split(drawn(m), "\n") {
 		if w := lipgloss.Width(line); w > 76 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
@@ -1519,12 +1516,12 @@ func countedWorld(t *testing.T, path string, statuses []revier.Status) tui.Model
 func TestAMultiLineErrorKeepsTheFooterOneLine(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 100, 20)
-	height := len(strings.Split(m.View(), "\n"))
+	height := len(strings.Split(drawn(m), "\n"))
 
 	rt.InstancesErr = fmt.Errorf("kitty went away\nand took its socket with it")
 	m = survey(m)
-	if got := len(strings.Split(m.View(), "\n")); got != height {
-		t.Errorf("the surface is %d lines with the error, %d without:\n%s", got, height, m.View())
+	if got := len(strings.Split(drawn(m), "\n")); got != height {
+		t.Errorf("the surface is %d lines with the error, %d without:\n%s", got, height, drawn(m))
 	}
 	if f := footer(m); !strings.Contains(f, "kitty went away") {
 		t.Errorf("footer = %q, want the error's first line", f)
@@ -1539,11 +1536,11 @@ func TestTheWheelMovesTheSelection(t *testing.T) {
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, 20)
 		first := selectedRow(t, m)
 
-		m = wheel(m, 5, tea.MouseButtonWheelDown)
+		m = wheel(m, 5, tea.MouseWheelDown)
 		if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
 			t.Errorf("%d columns: selected %q after a notch down, want project-00", width, row)
 		}
-		m = wheel(m, 5, tea.MouseButtonWheelUp)
+		m = wheel(m, 5, tea.MouseWheelUp)
 		if row := selectedRow(t, m); row != first {
 			t.Errorf("%d columns: selected %q after a notch back up, want %q", width, row, first)
 		}
@@ -1574,13 +1571,13 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 	border := paneBorder(t, m)
 
 	// One column left of the border is still the list.
-	m = wheel(m, border-1, tea.MouseButtonWheelDown)
-	m = wheel(m, border-1, tea.MouseButtonWheelUp)
+	m = wheel(m, border-1, tea.MouseWheelDown)
+	m = wheel(m, border-1, tea.MouseWheelUp)
 	if top := strings.Split(pane(m), "\n")[0]; top != "Project  first edit alt+e" {
 		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
 	}
 
-	m = wheel(m, border, tea.MouseButtonWheelDown)
+	m = wheel(m, border, tea.MouseWheelDown)
 	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
 		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
 	}
@@ -1608,7 +1605,7 @@ func topRow(t *testing.T, m tui.Model) string {
 			return n
 		}
 	}
-	t.Fatalf("no project row on screen:\n%s", m.View())
+	t.Fatalf("no project row on screen:\n%s", drawn(m))
 	return ""
 }
 
@@ -1719,13 +1716,13 @@ func TestTheStartingProjectOpensWithTheRowsAboveItInView(t *testing.T) {
 
 	rows := visibleProjects(m)
 	if len(rows) == 0 {
-		t.Fatalf("no project rows on the screen:\n%s", m.View())
+		t.Fatalf("no project rows on the screen:\n%s", drawn(m))
 	}
 	// project-59 holds the agent that needs the user, so it sorts first and
 	// every other project keeps its file order under it: ten rows above
 	// project-40 is project-30.
 	if rows[0] != "project-30" {
-		t.Errorf("first row = %q, want project-30, ten rows above the start:\n%s", rows[0], m.View())
+		t.Errorf("first row = %q, want project-30, ten rows above the start:\n%s", rows[0], drawn(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "project-40") {
 		t.Errorf("selected %q, want project-40", row)
@@ -1742,7 +1739,7 @@ func TestTheLookedUpStartOpensWithTheRowsAboveItInView(t *testing.T) {
 
 	m = run(m, m.LookupStart())
 	if rows := visibleProjects(m); len(rows) == 0 || rows[0] != "project-30" {
-		t.Errorf("first row = %v, want project-30, ten rows above the start:\n%s", rows, m.View())
+		t.Errorf("first row = %v, want project-30, ten rows above the start:\n%s", rows, drawn(m))
 	}
 }
 
@@ -1755,10 +1752,10 @@ func TestASmallScreenPutsTheStartingProjectOnTheLastRow(t *testing.T) {
 
 	rows := visibleProjects(m)
 	if len(rows) < 2 {
-		t.Fatalf("want more than the starting project on the screen, got %v:\n%s", rows, m.View())
+		t.Fatalf("want more than the starting project on the screen, got %v:\n%s", rows, drawn(m))
 	}
 	if last := rows[len(rows)-1]; last != "project-40" {
-		t.Errorf("last row = %q, want the start project-40 on it:\n%s", last, m.View())
+		t.Errorf("last row = %q, want the start project-40 on it:\n%s", last, drawn(m))
 	}
 }
 
@@ -1776,7 +1773,7 @@ func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testin
 	}
 	before := visibleProjects(m)
 	if len(before) == 0 || before[0] != "project-30" {
-		t.Fatalf("first row = %v, want project-30 before the query:\n%s", before, m.View())
+		t.Fatalf("first row = %v, want project-30 before the query:\n%s", before, drawn(m))
 	}
 
 	for _, r := range "zzzz" {
@@ -1793,35 +1790,85 @@ func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testin
 	// rows above it instead, with project-33 on the first.
 	got := visibleProjects(m)
 	if len(got) == 0 || got[len(got)-1] != "project-43" {
-		t.Errorf("rows = %v, want project-43 on the last of them:\n%s", got, m.View())
+		t.Errorf("rows = %v, want project-43 on the last of them:\n%s", got, drawn(m))
 	}
 	if len(got) > 0 && got[0] == "project-33" {
-		t.Errorf("the list was placed around the cursor, not followed to it:\n%s", m.View())
+		t.Errorf("the list was placed around the cursor, not followed to it:\n%s", drawn(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "project-43") {
 		t.Errorf("selected %q, want project-43, the row the cursor was on", row)
 	}
 }
 
-// A burst of pointer motion fills a read of the input, and the report the
-// read cut arrives as alt+[ and then its rest as typed text. Neither is a
-// key: the filter stays empty. The same text pasted is the user's.
+// reads is an input that hands over one chunk a read, as a terminal's input
+// arrives in reads of its own.
+type reads []string
+
+func (r *reads) Read(p []byte) (int, error) {
+	if len(*r) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, (*r)[0])
+	if (*r)[0] = (*r)[0][n:]; (*r)[0] == "" {
+		*r = (*r)[1:]
+	}
+	return n, nil
+}
+
+// A burst of pointer motion fills a read of the input, and a report the read
+// cuts ends one read and starts the next. It is a report all the same, and no
+// key: the filter stays empty. The messages are the ones bubbletea itself
+// makes of those reads, so its next version cannot change them unseen. The
+// same text pasted is the user's.
 func TestAMouseReportCutByAReadTypesNothing(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 	empty := query(m)
 
 	for _, tail := range []string{"<35;31;40M", "<35;107;28M", "<0;12;7m"} {
-		m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("["), Alt: true})
-		m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tail)})
+		var read []tea.Msg
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		program := tea.NewProgram(recorder{&read}, tea.WithContext(ctx), tea.WithoutSignalHandler(),
+			tea.WithInput(&reads{"\x1b[", tail}), tea.WithOutput(io.Discard))
+		_, err := program.Run()
+		cancel()
+		if err != nil {
+			t.Fatalf("bubbletea read no mouse report out of %q cut after its first two bytes: %v", tail, err)
+		}
+		for _, msg := range read {
+			m, _ = update(m, msg)
+		}
 	}
 	if got := query(m); got != empty {
-		t.Errorf("query = %q, want it empty as before:\n%s", got, m.View())
+		t.Errorf("query = %q, want it empty as before (%q):\n%s", got, empty, drawn(m))
 	}
 
-	m, _ = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<35;31;40M"), Paste: true})
+	m, _ = update(m, tea.PasteMsg{Content: "<35;31;40M"})
 	if got := query(m); !strings.Contains(got, "<35;31;40M") {
 		t.Errorf("query = %q, want the pasted text in it", got)
+	}
+}
+
+// The Linux console sends F1 to F5 as ESC [ [ and a letter from A to E. They
+// are no key of the surface, so they type nothing, and a letter typed after
+// them is typed. The messages are the ones bubbletea itself makes of the input.
+func TestAConsoleFunctionKeyTypesNothing(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	var read []tea.Msg
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	program := tea.NewProgram(recorder{&read}, tea.WithContext(ctx), tea.WithoutSignalHandler(),
+		tea.WithInput(&reads{"\x1b[[A", "\x1b[[E", "B", "\x1b[<35;1;1M"}), tea.WithOutput(io.Discard))
+	if _, err := program.Run(); err != nil {
+		t.Fatal(err)
+	}
+	for _, msg := range read {
+		m, _ = update(m, msg)
+	}
+	if got := query(m); !strings.Contains(got, "❯ B ") {
+		t.Errorf("query = %q, want only the B typed after the function keys", got)
 	}
 }
 

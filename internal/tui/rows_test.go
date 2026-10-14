@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -142,7 +142,7 @@ func TestADoubleClickClearsTheQuery(t *testing.T) {
 	m, _ = press(m, "0")
 	m = clickAt(m, 5, 5) // project-00, the only match
 	*now = now.Add(399 * time.Millisecond)
-	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseClickMsg{X: 5, Y: 5, Button: tea.MouseLeft})
 	m = next.(tui.Model)
 	if cmd == nil {
 		t.Fatal("a double click on a row returned no command")
@@ -159,7 +159,7 @@ func TestADoubleClickClearsTheQuery(t *testing.T) {
 func TestATargetKeyClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), nil), "00")
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlO}) // ctrl+shift+o: editor
+	m, cmd := send(m, tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl | tea.ModShift}) // editor
 	if cmd == nil {
 		t.Fatal("ctrl+shift+o ran nothing")
 	}
@@ -175,7 +175,7 @@ func TestADoubleClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	m, _ = clickCell(m, x, y)
 	m, cmd := clickCell(m, x, y)
 	if cmd == nil {
-		t.Fatalf("the double click ran nothing:\n%s", m.View())
+		t.Fatalf("the double click ran nothing:\n%s", drawn(m))
 	}
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
@@ -188,7 +188,7 @@ func TestAnActionClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
 	m := typeInto(refreshed(t, c, projects, stateWith(t, nil), actions), "00")
-	m, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	m, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
 	}
@@ -308,7 +308,7 @@ func TestANarrowRowKeepsTheCountAndNoActivity(t *testing.T) {
 	if !strings.Contains(first, theme.Default().Glyphs.Working+" 1") || strings.Contains(first, "Reading") {
 		t.Errorf("row = %q, want the count kept and no activity", first)
 	}
-	for i, line := range strings.Split(m.View(), "\n") {
+	for i, line := range strings.Split(drawn(m), "\n") {
 		if w := lipgloss.Width(line); w > 60 {
 			t.Errorf("line %d is %d columns wide: %q", i, w, line)
 		}
@@ -366,7 +366,7 @@ func TestThePaneWaitsUntilTheListHasItsRoom(t *testing.T) {
 			}
 		}
 		if split != tc.pane {
-			t.Errorf("at %d columns pane = %v, want %v:\n%s", tc.width, split, tc.pane, m.View())
+			t.Errorf("at %d columns pane = %v, want %v:\n%s", tc.width, split, tc.pane, drawn(m))
 		}
 	}
 }
@@ -380,7 +380,7 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 	g := theme.Default().Glyphs
 
 	widest := 0
-	for _, line := range strings.Split(m.View(), "\n") {
+	for _, line := range strings.Split(drawn(m), "\n") {
 		w := lipgloss.Width(strings.TrimRight(line, " "))
 		if w > 380 {
 			t.Errorf("line is %d columns wide: %q", w, line)
@@ -390,7 +390,7 @@ func TestAWideTerminalFillsTheWidthWithAGrid(t *testing.T) {
 		}
 	}
 	if widest < 370 {
-		t.Errorf("the surface is %d wide, want the whole terminal but the margin:\n%s", widest, m.View())
+		t.Errorf("the surface is %d wide, want the whole terminal but the margin:\n%s", widest, drawn(m))
 	}
 	r := rows(m)
 	first, second := r[0], r[2]
@@ -504,7 +504,7 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 	*now = now.Add(100 * time.Millisecond)
 	m = clickAt(m, 5, 7) // project-00: a second choice, not a double click
 	*now = now.Add(399 * time.Millisecond)
-	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseClickMsg{X: 5, Y: 7, Button: tea.MouseLeft})
 	m = next.(tui.Model)
 	if cmd == nil {
 		t.Fatal("a double click on a row returned no command")
@@ -514,7 +514,7 @@ func TestADoubleClickOpensTheRow(t *testing.T) {
 		t.Fatalf("runtime Opened = %v, want project-00's home", rt.Opened)
 	}
 	if !strings.Contains(ruleLine(m), " 3/3 ") {
-		t.Errorf("a double click must not leave the list:\n%s", m.View())
+		t.Errorf("a double click must not leave the list:\n%s", drawn(m))
 	}
 }
 
@@ -529,7 +529,7 @@ func TestASecondClickAfterTheWindowOpensNothing(t *testing.T) {
 
 	m = clickAt(m, 5, 7) // project-00, which is stopped: opening it would show
 	*now = now.Add(400 * time.Millisecond)
-	next, cmd := m.Update(tea.MouseMsg{X: 5, Y: 7, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseClickMsg{X: 5, Y: 7, Button: tea.MouseLeft})
 	m = next.(tui.Model)
 	if cmd != nil {
 		cmd()

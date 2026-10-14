@@ -4,8 +4,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -80,29 +80,37 @@ type press struct {
 // window, so the press is forgotten and nothing is copied. done is false for
 // an event that is not the drag's, which the caller handles as usual.
 func (m Model) held(msg tea.MouseMsg) (Model, bool) {
-	switch {
-	case msg.Action == tea.MouseActionMotion && msg.Button == tea.MouseButtonLeft:
-		return m.drag(msg), true
-	case msg.Action == tea.MouseActionMotion && msg.Button == tea.MouseButtonNone:
-		m.press, m.sel = nil, selection{}
-	case msg.Action == tea.MouseActionRelease && msg.Button != tea.MouseButtonLeft && msg.Button != tea.MouseButtonNone:
-		return m, true
-	case msg.Action == tea.MouseActionPress && m.sel.active:
-		return m, true
+	mouse := msg.Mouse()
+	switch msg.(type) {
+	case tea.MouseMotionMsg:
+		switch mouse.Button {
+		case tea.MouseLeft:
+			return m.drag(mouse), true
+		case tea.MouseNone:
+			m.press, m.sel = nil, selection{}
+		}
+	case tea.MouseReleaseMsg:
+		if mouse.Button != tea.MouseLeft && mouse.Button != tea.MouseNone {
+			return m, true
+		}
+	case tea.MouseClickMsg, tea.MouseWheelMsg:
+		if m.sel.active {
+			return m, true
+		}
 	}
 	return m, false
 }
 
 // drag follows the left button. A selection begins once the pointer is
 // dragFrom cells from the press.
-func (m Model) drag(msg tea.MouseMsg) Model {
-	at := pointerCell{x: msg.X, y: msg.Y}
+func (m Model) drag(mouse tea.Mouse) Model {
+	at := pointerCell{x: mouse.X, y: mouse.Y}
 	if !m.sel.active {
 		from := m.press.at
 		if max(abs(at.x-from.x), abs(at.y-from.y)) < dragFrom {
 			return m
 		}
-		m.sel = selection{active: true, from: from, screen: m.View()}
+		m.sel = selection{active: true, from: from, screen: m.draw()}
 	}
 	m.sel.to = at
 	return m
@@ -137,7 +145,7 @@ func (m Model) release() (tea.Model, tea.Cmd) {
 // selectingKey is a key pressed during a drag. Back drops the selection and
 // copies nothing, and quit still quits. Every other key is dropped, because it
 // would change a screen the selection stands over.
-func (m Model) selectingKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) selectingKey(msg keyPress) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Back):
 		m.sel, m.press = selection{}, nil

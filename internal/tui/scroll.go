@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/viewport"
 )
 
 // The list component pages: its cursor walks to the bottom of a page and the
@@ -45,13 +45,13 @@ func (m *Model) syncBody() {
 		m.body.SetYOffset(0)
 		return
 	case dialogConfig:
-		m.body.Width = m.listWidth()
+		m.body.SetWidth(m.listWidth())
 		text, at := m.config.screen(m.surface())
 		m.body.SetContent(text)
 		m.follow(at, 1)
 		return
 	case dialogProject:
-		m.body.Width = m.listWidth()
+		m.body.SetWidth(m.listWidth())
 		text, at := m.proj.screen(m.surface())
 		m.body.SetContent(text)
 		m.follow(at, 1)
@@ -62,8 +62,8 @@ func (m *Model) syncBody() {
 	if m.dialog == dialogHelp {
 		// It has no pane beside it, so it is wider than the list it
 		// stands over.
-		m.body.Width = m.listWidth()
-		offset := m.body.YOffset
+		m.body.SetWidth(m.listWidth())
+		offset := m.body.YOffset()
 		m.body.SetContent(m.helpScreen())
 		m.body.SetYOffset(offset)
 		return
@@ -128,10 +128,10 @@ func (m Model) itemHeight() int {
 func (m *Model) follow(top, height int) {
 	bottom := top + height
 	switch {
-	case top < m.body.YOffset:
+	case top < m.body.YOffset():
 		m.body.SetYOffset(top)
-	case bottom > m.body.YOffset+m.body.Height:
-		m.body.SetYOffset(bottom - m.body.Height)
+	case bottom > m.body.YOffset()+m.body.Height():
+		m.body.SetYOffset(bottom - m.body.Height())
 	}
 }
 
@@ -146,10 +146,10 @@ const startContext = 10
 // then the row is the last one in view, because a row the user was taken to
 // and cannot see is worse than no context at all.
 func (m *Model) place(top, height int) {
-	m.body.SetYOffset(max(top-startContext*height, top+height-m.body.Height, 0))
+	m.body.SetYOffset(max(top-startContext*height, top+height-m.body.Height(), 0))
 }
 
-func newBody() viewport.Model { return viewport.New(0, 0) }
+func newBody() viewport.Model { return viewport.New() }
 
 // listWidth is the room the list has once the detail pane has taken its
 // share: none, while the pane stands in the list's place.

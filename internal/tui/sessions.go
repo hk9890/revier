@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -161,12 +161,12 @@ type sessionsResult struct {
 func (m Model) openSessions() (tea.Model, tea.Cmd) {
 	m.toList()
 	m.dialog = dialogSessions
-	m.err = m.sessions.open(m.stateRoot, m.theme)
+	m.err = m.sessions.open(m.stateRoot, *m.theme)
 	return m, nil
 }
 
 // sessionsKey is every press on the screen, and what it left for the surface.
-func (m Model) sessionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) sessionsKey(msg keyPress) (tea.Model, tea.Cmd) {
 	res, cmd := m.sessions.key(m.surface(), msg)
 	m.err = res.err
 	if res.closed {
@@ -184,7 +184,7 @@ func (m Model) nameSession() (tea.Model, tea.Cmd) {
 
 // saved takes a save's answer.
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
-	if err := m.sessions.saved(m.stateRoot, m.theme, msg); err != nil {
+	if err := m.sessions.saved(m.stateRoot, *m.theme, msg); err != nil {
 		m.err = err
 	}
 	return m, nil
@@ -233,7 +233,7 @@ func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
 // key is every press on the screen: up and down walk the sessions, Enter
 // restores the one under the cursor, the save key names a new one, and Esc
 // leaves.
-func (sc *sessionsScreen) key(sf surface, msg tea.KeyMsg) (sessionsResult, tea.Cmd) {
+func (sc *sessionsScreen) key(sf surface, msg keyPress) (sessionsResult, tea.Cmd) {
 	if sc.naming {
 		return sc.nameKey(sf, msg)
 	}
@@ -273,7 +273,7 @@ func (sc *sessionsScreen) openName() (tea.Cmd, error) {
 
 // nameKey is every press while the name is typed. Enter saves, Esc goes back
 // to the sessions, and everything else is the field's.
-func (sc *sessionsScreen) nameKey(sf surface, msg tea.KeyMsg) (sessionsResult, tea.Cmd) {
+func (sc *sessionsScreen) nameKey(sf surface, msg keyPress) (sessionsResult, tea.Cmd) {
 	res := sessionsResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -290,7 +290,7 @@ func (sc *sessionsScreen) nameKey(sf surface, msg tea.KeyMsg) (sessionsResult, t
 		return res, nil
 	}
 	res.err = nil
-	in, cmd := sc.name.Update(msg)
+	in, cmd := sc.name.Update(msg.input())
 	sc.name = in
 	return res, cmd
 }
@@ -395,7 +395,7 @@ func (sc *sessionsScreen) help(k keyMap) []key.Binding {
 // field.
 func (sc *sessionsScreen) subtitle(sf surface) string {
 	if sc.naming {
-		return " " + sc.name.View()
+		return " " + inputView(sc.name)
 	}
 	return " " + sf.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(sf.stateRoot))+", newest first")
 }

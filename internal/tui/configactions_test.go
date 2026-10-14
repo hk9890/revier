@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/tui"
@@ -53,7 +53,7 @@ func TestTheConfigScreenAddsAnAction(t *testing.T) {
 		t.Errorf("config screen does not list the new action:\n%s", screen(m))
 	}
 	m, _ = press(m, "esc")
-	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY}); cmd == nil {
+	if _, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl}); cmd == nil {
 		t.Error("ctrl+y ran nothing after the action was added")
 	}
 }
@@ -75,7 +75,7 @@ func TestTheConfigScreenChangesAnAction(t *testing.T) {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}
 	m, _ = press(m, "esc")
-	if _, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlG}); cmd != nil {
+	if _, cmd := send(m, tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}); cmd != nil {
 		t.Error("ctrl+g still runs the action after its key changed")
 	}
 }

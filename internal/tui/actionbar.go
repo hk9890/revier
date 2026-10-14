@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // The action bar is the top line: what the surface can do that is not about
@@ -157,7 +157,7 @@ func (m Model) barCells() []barCell {
 // blanks the line rather than removing it: the rows below must not jump by
 // one while an answer is waited for.
 func (m Model) bar() string {
-	th := m.theme
+	th := *m.theme
 	var b strings.Builder
 	b.WriteString(m.barLead())
 	for i, c := range m.barCells() {
@@ -196,7 +196,7 @@ func (m Model) barAt(x, y int) int {
 }
 
 // barKey runs the button a press names, if a button declares it.
-func (m Model) barKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func (m Model) barKey(msg keyPress) (tea.Model, tea.Cmd, bool) {
 	for _, a := range barActions {
 		if msg.String() == a.key {
 			next, cmd := a.run(m)

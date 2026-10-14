@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
@@ -26,7 +26,7 @@ func TestTheLinkScreenWalksItsStepsWithNoRootModel(t *testing.T) {
 
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60, pane: 40, page: 5}
-	enter, esc := tea.KeyMsg{Type: tea.KeyEnter}, tea.KeyMsg{Type: tea.KeyEsc}
+	enter, esc := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter}), pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})
 	s := newLinkScreen(th)
 	if err := s.open(); err != nil {
 		t.Fatal(err)

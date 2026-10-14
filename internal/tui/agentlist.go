@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -39,7 +39,7 @@ import (
 const switchChord core.Chord = "alt+space"
 
 // switches reports the press that switches between the lists.
-func switches(msg tea.KeyMsg) bool {
+func switches(msg keyPress) bool {
 	c, ok := pressed(msg)
 	return ok && c == switchChord
 }
@@ -353,7 +353,7 @@ func (m Model) switchKey() string {
 // surface. The rows are agents, so Enter goes to one and del closes one; the
 // keys that act on a project - its screen, its targets, the actions - have no
 // row to act on here.
-func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) agentsKey(msg keyPress) (tea.Model, tea.Cmd) {
 	m.err = nil
 	res, cmd := m.agents.key(m.surface(), msg)
 	switch {
@@ -377,7 +377,7 @@ func (m Model) agentsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // key is every press the list itself takes: the movement keys, Enter, del
 // and Esc.
-func (al *agentList) key(sf surface, msg tea.KeyMsg) (agentsResult, tea.Cmd) {
+func (al *agentList) key(sf surface, msg keyPress) (agentsResult, tea.Cmd) {
 	al.top = false
 	if by, ok := sf.keys.move(msg, func(int) int { return sf.page }); ok {
 		moveRow(&al.list, by)
@@ -404,11 +404,11 @@ func (al *agentList) key(sf surface, msg tea.KeyMsg) (agentsResult, tea.Cmd) {
 }
 
 // edit feeds a key to the query, and filters again if it changed.
-func (al *agentList) edit(msg tea.KeyMsg) tea.Cmd {
+func (al *agentList) edit(msg keyPress) tea.Cmd {
 	if !promptKey(msg) {
 		return nil
 	}
-	next, cmd := al.query.Update(msg)
+	next, cmd := al.query.Update(msg.input())
 	al.query = next
 	if next.Value() != al.filter {
 		al.setFilter(next.Value())

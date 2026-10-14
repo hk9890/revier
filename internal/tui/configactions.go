@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -68,7 +68,7 @@ func (cs *configScreen) openActionForm(sf surface, i int) tea.Cmd {
 
 // actionFormKey is a press while the form is up. Enter writes the action,
 // Esc leaves it as it was.
-func (cs *configScreen) actionFormKey(sf surface, msg tea.KeyMsg) (configResult, tea.Cmd) {
+func (cs *configScreen) actionFormKey(sf surface, msg keyPress) (configResult, tea.Cmd) {
 	res := configResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -79,14 +79,14 @@ func (cs *configScreen) actionFormKey(sf surface, msg tea.KeyMsg) (configResult,
 		return res, nil
 	case key.Matches(msg, sf.keys.Next, sf.keys.Down):
 		return res, cs.moveField(+1)
-	case msg.Type == tea.KeyShiftTab, key.Matches(msg, sf.keys.Up):
+	case msg.shiftTab(), key.Matches(msg, sf.keys.Up):
 		return res, cs.moveField(-1)
 	case key.Matches(msg, sf.keys.Enter):
 		return cs.saveAction(sf), nil
 	case altRune(msg):
 		return res, nil
 	}
-	in, cmd := cs.aform.fields[cs.aform.field].Update(msg)
+	in, cmd := cs.aform.fields[cs.aform.field].Update(msg.input())
 	cs.aform.fields[cs.aform.field] = in
 	return res, cmd
 }
@@ -168,7 +168,7 @@ func checkAction(sf surface, act config.Action, index int) error {
 
 // dropAction takes the key that answers the delete question. Only y deletes;
 // any other key keeps the action and is not acted on.
-func (cs *configScreen) dropAction(sf surface, msg tea.KeyMsg) configResult {
+func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
 	cs.dropping = false
 	i, ok := cs.actionRow(sf)
@@ -214,7 +214,7 @@ func (f actionForm) lines(th theme.Theme, w int) ([]string, int) {
 	notes := [actionFields]string{"", "{{.Path}} is the project's directory", "ctrl or alt and a key"}
 	out := make([]string, actionFields)
 	for j, in := range f.fields {
-		line := cursor(th, j == f.field) + th.Meta.Render(pad(labels[j], configLabelWidth)) + in.View()
+		line := cursor(th, j == f.field) + th.Meta.Render(pad(labels[j], configLabelWidth)) + inputView(in)
 		if notes[j] != "" {
 			line += th.Path.Render("  " + notes[j])
 		}

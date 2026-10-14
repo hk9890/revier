@@ -50,7 +50,8 @@ func TestTheSpinnerStopsWhenNothingWorks(t *testing.T) {
 func TestASpinUnderADialogRedrawsNothing(t *testing.T) {
 	m := spinModel(revier.StatusRunning)
 	m.dialog = dialogHelp
-	m.body.Width, m.body.Height = 40, 5
+	m.body.SetWidth(40)
+	m.body.SetHeight(5)
 	m.body.SetContent("left as it was")
 	next, _ := m.Update(spinMsg{})
 	if got := next.(Model).body.View(); !strings.Contains(got, "left as it was") {

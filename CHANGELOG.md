@@ -6,6 +6,19 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **A ctrl+shift target key works inside revier in kitty.** In a terminal that
+  reports key disambiguation, such as kitty, pressing ctrl+shift+o in the
+  surface runs the target bound to it, as the desktop key does outside, and
+  ctrl+o keeps its own meaning. Before, the press arrived as ctrl+o, so a
+  target key whose ctrl key the surface used did nothing there. In other
+  terminals, keys work as before. The help screen and the footer name the
+  ctrl+shift keys that now work.
+- **With `NO_COLOR` set, the selected row is bold and a text field shows its
+  cursor.** Colour stays off, for any value of `NO_COLOR` that is not empty.
+  Before, the surface drew no emphasis at all, and the cursor was invisible.
+
 ## v0.15.0
 
 - **Action required: `panels` are on a tab target only.** A project file or a

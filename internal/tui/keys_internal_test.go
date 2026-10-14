@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -42,12 +42,12 @@ func TestConfigSurfaceKeysAreTheSurfaceKeys(t *testing.T) {
 }
 
 // keyRecorder is a program that keeps the first key it is sent and quits.
-type keyRecorder struct{ got *[]tea.KeyMsg }
+type keyRecorder struct{ got *[]tea.KeyPressMsg }
 
-func (r keyRecorder) Init() tea.Cmd { return nil }
-func (r keyRecorder) View() string  { return "" }
+func (r keyRecorder) Init() tea.Cmd  { return nil }
+func (r keyRecorder) View() tea.View { return tea.NewView("") }
 func (r keyRecorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok {
+	if k, ok := msg.(tea.KeyPressMsg); ok {
 		*r.got = append(*r.got, k)
 		return r, tea.Quit
 	}
@@ -57,14 +57,15 @@ func (r keyRecorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // The desktop takes the key that opens the popup before the popup's terminal
 // sees it, so `revier popup` types core.SwitchKey into a popup that is focused
 // already. Those bytes, read by bubbletea's own input reader as a terminal's
-// are, are the press the surface switches its list on.
+// are and folded as the surface folds every press, are the press the surface
+// switches its list on.
 func TestTheKeyTypedIntoTheFocusedPopupIsTheSwitch(t *testing.T) {
-	var got []tea.KeyMsg
+	var got []tea.KeyPressMsg
 	p := tea.NewProgram(keyRecorder{&got}, tea.WithInput(strings.NewReader(core.SwitchKey)), tea.WithOutput(io.Discard))
 	if _, err := p.Run(); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(got) != 1 || !switches(got[0]) {
+	if len(got) != 1 || !switches(fold(got[0])) {
 		t.Errorf("read %q, want the one press that switches the list", got)
 	}
 }

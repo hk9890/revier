@@ -138,7 +138,7 @@ func TestAClosedProjectTakesThePaneCursorBackToTheList(t *testing.T) {
 	m, _ = press(m, "down")
 	m, _ = press(m, "alt+t")
 	if paneCursor(m) == "" {
-		t.Fatalf("alt+t put the cursor on no target:\n%s", m.View())
+		t.Fatalf("alt+t put the cursor on no target:\n%s", drawn(m))
 	}
 
 	rt.Remove(refs["project-00"])

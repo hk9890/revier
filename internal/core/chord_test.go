@@ -128,30 +128,35 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// A terminal without the kitty keyboard protocol has one byte for ctrl+o and
-// ctrl+shift+o, and tab's byte for ctrl+i. What it reports is the chord a
-// surface in it can match on.
+// A terminal without key disambiguation has one byte for ctrl+o and
+// ctrl+shift+o, and tab's byte for ctrl+i; one with it reports each chord as
+// pressed. What it reports is the chord a surface in it can match on.
 func TestTheChordATerminalReports(t *testing.T) {
 	for _, tc := range []struct {
-		in   core.Chord
-		want core.Chord
+		in     core.Chord
+		legacy core.Chord // a terminal without key disambiguation
 	}{
 		{"ctrl+shift+o", "ctrl+o"},
 		{"ctrl+alt+shift+o", "ctrl+alt+o"},
 		{"ctrl+shift+i", "tab"},
+		{"ctrl+i", "tab"},
 		{"ctrl+m", "enter"},
 		{"ctrl+alt+o", "ctrl+alt+o"},
 		{"alt+shift+o", "alt+shift+o"},
 		{"ctrl+shift+up", "ctrl+shift+up"},
 		{"ctrl+o", "ctrl+o"},
 	} {
-		got, ok := tc.in.Terminal()
-		if !ok || got != tc.want {
-			t.Errorf("Chord(%q).Terminal() = %q, %v; want %q", tc.in, got, ok, tc.want)
+		if got, ok := tc.in.Terminal(false); !ok || got != tc.legacy {
+			t.Errorf("Chord(%q).Terminal(false) = %q, %v; want %q", tc.in, got, ok, tc.legacy)
+		}
+		if got, ok := tc.in.Terminal(true); !ok || got != tc.in {
+			t.Errorf("Chord(%q).Terminal(true) = %q, %v; want it as pressed", tc.in, got, ok)
 		}
 	}
-	if got, ok := core.Chord("super+o").Terminal(); ok {
-		t.Errorf("Chord(super+o).Terminal() = %q; want no terminal to report it", got)
+	for _, disambiguates := range []bool{false, true} {
+		if got, ok := core.Chord("super+o").Terminal(disambiguates); ok {
+			t.Errorf("Chord(super+o).Terminal(%v) = %q; want the TUI to bind no super chord", disambiguates, got)
+		}
 	}
 }
 
