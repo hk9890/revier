@@ -25,8 +25,11 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	// Refused before the host is asked: the ask would be ssh to itself.
-	if len(pos) > 0 && config.OnThisMachine(pos[0]) {
-		return fmt.Errorf("%s is this machine; its projects are listed here without a link", pos[0])
+	here := config.ThisMachine()
+	if len(pos) > 0 {
+		if err := here.RefuseLink(pos[0]); err != nil {
+			return err
+		}
 	}
 	switch len(pos) {
 	case 0:
@@ -39,7 +42,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 			return err
 		}
 		// This machine is no host to link to (decisions.md D131).
-		hosts = slices.DeleteFunc(hosts, config.OnThisMachine)
+		hosts = slices.DeleteFunc(hosts, here.Is)
 		if len(hosts) == 0 {
 			_, _ = fmt.Fprintf(a.out, "no hosts in %s\n", path)
 			return nil

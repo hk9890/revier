@@ -142,6 +142,10 @@ Match host dt
 Host dt
     HostName dt.local
 `)
+	file, err := sshconfig.Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for host, want := range map[string]string{
 		"buildbox":   "10.0.0.7",
 		"far.box":    "wild",
@@ -152,11 +156,7 @@ Host dt
 		"buildbox2":  "",
 		"other.box2": "",
 	} {
-		got, err := sshconfig.HostName(path, host)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != want {
+		if got := file.HostName(host); got != want {
 			t.Errorf("HostName(%q) = %q, want %q", host, got, want)
 		}
 	}
@@ -168,11 +168,11 @@ func TestHostNameReadsAMatchAllBlock(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "hosts", "Host lab\n    HostName lab.example.com\n")
 	path := write(t, dir, "config", "Host buildbox\n    User me\nMatch all\n    Include hosts\n")
-	got, err := sshconfig.HostName(path, "lab")
+	file, err := sshconfig.Read(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "lab.example.com" {
+	if got := file.HostName("lab"); got != "lab.example.com" {
 		t.Errorf("HostName(lab) = %q, want lab.example.com", got)
 	}
 }
