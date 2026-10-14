@@ -24,6 +24,10 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Refused before the host is asked: the ask would be ssh to itself.
+	if len(pos) > 0 && config.OnThisMachine(pos[0]) {
+		return fmt.Errorf("%s is this machine; its projects are listed here without a link", pos[0])
+	}
 	switch len(pos) {
 	case 0:
 		path, err := sshconfig.Path()

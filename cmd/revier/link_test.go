@@ -45,6 +45,25 @@ func TestLinkListsTheHostsProjectsAndWhatIsLinked(t *testing.T) {
 	}
 }
 
+// This machine is refused before it is asked: the ask would be ssh to
+// itself, and the link would be left out of every load (decisions.md D131).
+func TestLinkRefusesThisMachineBeforeAskingIt(t *testing.T) {
+	machine, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname:", err)
+	}
+	a, remote := hostWith(t, "far")
+	for _, args := range [][]string{{machine}, {machine, "far"}} {
+		err := cmdLink(context.Background(), a, args)
+		if err == nil || !strings.Contains(err.Error(), "is this machine") {
+			t.Errorf("link %v: err = %v, want this machine refused", args, err)
+		}
+	}
+	if len(remote.Asked) != 0 {
+		t.Errorf("asked %v, want no ask of this machine", remote.Asked)
+	}
+}
+
 // `revier link <host> <project>` writes the link and loads it: the host is
 // asked first, and a project it does not have is refused before any file.
 func TestLinkWritesALinkToAProjectTheHostHas(t *testing.T) {
