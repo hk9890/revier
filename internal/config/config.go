@@ -10,10 +10,11 @@
 // What a failure costs is the smallest thing that is wrong (decisions.md
 // D85). validateTargets refuses one target, validateProject refuses one
 // project, and loading refuses nothing: every file becomes a project, marked
-// with what could not be read. Nothing here returns an error for a mistake in
-// a project file, because there is no caller that mistake should stop -
-// revier is how a user reaches the project they have to fix. The write paths
-// are the exception, and ask Problems before they replace a file.
+// with what could not be read, except a link to this machine, which Load
+// leaves out and lists in SelfLinks (D131). Nothing here returns an error for
+// a mistake in a project file, because there is no caller that mistake should
+// stop - revier is how a user reaches the project they have to fix. The write
+// paths are the exception, and ask Problems before they replace a file.
 package config
 
 import (
@@ -123,9 +124,10 @@ func Root() (string, error) {
 	return filepath.Join(home, ".config", "revier"), nil
 }
 
-// Load reads the global config and every project under <root>/projects.
-// A missing root or a missing config.toml is not an error: revier starts with
-// no projects rather than refusing to run.
+// Load reads the global config and every project under <root>/projects,
+// without the links to this machine, whose files it lists in SelfLinks
+// (decisions.md D131). A missing root or a missing config.toml is not an
+// error: revier starts with no projects rather than refusing to run.
 func Load(root string) (*Config, []core.Project, error) {
 	cfgPath := File(root)
 	data, err := os.ReadFile(cfgPath)

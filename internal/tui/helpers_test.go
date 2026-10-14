@@ -324,6 +324,28 @@ func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 	return m, tea.Batch(outs...)
 }
 
+// recorder keeps what a bubbletea program hands to Update, and quits on the
+// mouse report that ends the input.
+type recorder struct{ got *[]tea.Msg }
+
+func (r recorder) Init() tea.Cmd { return nil }
+
+func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	*r.got = append(*r.got, msg)
+	if _, ok := msg.(tea.MouseMsg); ok {
+		return r, tea.Quit
+	}
+	return r, nil
+}
+
+func (r recorder) View() string { return "" }
+
+// update feeds one message and returns the model and its command.
+func update(m tui.Model, msg tea.Msg) (tui.Model, tea.Cmd) {
+	next, cmd := m.Update(msg)
+	return next.(tui.Model), cmd
+}
+
 // run is deliver without the commands the model answers with.
 func run(m tui.Model, cmd tea.Cmd) tui.Model {
 	m, _ = deliver(m, cmd)

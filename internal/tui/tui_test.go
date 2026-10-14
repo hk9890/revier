@@ -1248,22 +1248,6 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 }
 
-// recorder keeps what a bubbletea program hands to Update, and quits on the
-// mouse report that ends the input.
-type recorder struct{ got *[]tea.Msg }
-
-func (r recorder) Init() tea.Cmd { return nil }
-
-func (r recorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	*r.got = append(*r.got, msg)
-	if _, ok := msg.(tea.MouseMsg); ok {
-		return r, tea.Quit
-	}
-	return r, nil
-}
-
-func (r recorder) View() string { return "" }
-
 // A raise under the pointer puts a mouse report behind the terminal's focus
 // report in the same read, and bubbletea then hands the focus report over as
 // something other than a tea.FocusMsg. It is the raise all the same: the

@@ -441,7 +441,8 @@ TUI, and a first survey that is a round trip to every linked host - a second
 from the key to the agent states. The popup now minimizes on Esc through the
 window host, and `revier popup` raises it under D76's run-or-raise in tens of
 milliseconds, with the cursor and the query where they were. Hidden, it
-surveys nothing, since nobody reads the answer.
+surveys nothing, since nobody reads the answer, unless a launch of its own is
+still coming up (D129).
 
 ### D87 — claim-on-appear polls; there is no window-event port
 

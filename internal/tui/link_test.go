@@ -337,8 +337,6 @@ func TestAHostThatDoesNotAnswerIsSaidInTheFooter(t *testing.T) {
 	}
 }
 
-// With no hosts configured there is nothing to choose from, and the footer
-// says where a host would come from.
 // This machine is no host to link to: a link to it is left out of every
 // load, so the dialog does not offer it.
 func TestAltRLeavesThisMachineOut(t *testing.T) {
@@ -358,6 +356,8 @@ func TestAltRLeavesThisMachineOut(t *testing.T) {
 	}
 }
 
+// With no hosts configured there is nothing to choose from, and the footer
+// says where a host would come from.
 func TestAltRWithNoHostsSaysSo(t *testing.T) {
 	m, _, _ := linkWorld(t, nil)
 	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))

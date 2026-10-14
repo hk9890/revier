@@ -20,12 +20,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// update feeds one message and returns the model and its command.
-func update(m tui.Model, msg tea.Msg) (tui.Model, tea.Cmd) {
-	next, cmd := m.Update(msg)
-	return next.(tui.Model), cmd
-}
-
 // Without the focus nobody reads the surface closely, so it refreshes every
 // ten seconds instead of every second, and with the focus back at the
 // refresh again.
