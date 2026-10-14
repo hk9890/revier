@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -107,7 +107,7 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 
 // configKey is every press on the config screen, and what it left for the
 // surface: a change is applied the moment it is written.
-func (m Model) configKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) configKey(msg keyPress) (tea.Model, tea.Cmd) {
 	res, cmd := m.config.key(m.surface(), msg)
 	m.err = res.err
 	switch {
@@ -137,10 +137,12 @@ func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// applyTheme repaints every part of the surface that was built with a theme.
-// The lists keep their items and cursors; only their styles change.
+// applyTheme repaints every part of the surface that was built with a theme,
+// in the colours the terminal shows. The lists keep their items and cursors;
+// only their styles change.
 func (m *Model) applyTheme(th theme.Theme) {
-	m.theme = th
+	th = th.In(m.profile)
+	m.theme = &th
 	m.link.restyle(th)
 	m.help = newHelp(th)
 	m.detail.Style = newDetail(th).Style
@@ -161,7 +163,7 @@ func (cs *configScreen) open() {
 
 // key is every press on the config screen. Left and right change the row's
 // value; Enter does the same, or opens the trigger key for typing.
-func (cs *configScreen) key(sf surface, msg tea.KeyMsg) (configResult, tea.Cmd) {
+func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 	switch {
 	case cs.chord.Focused():
 		return cs.chordKey(sf, msg)
@@ -201,9 +203,9 @@ func (cs *configScreen) key(sf surface, msg tea.KeyMsg) (configResult, tea.Cmd) 
 		cs.chord.SetValue(cs.ui.TriggerKey)
 		cs.chord.CursorEnd()
 		return res, cs.chord.Focus()
-	case msg.Type == tea.KeyLeft:
+	case msg.bare(tea.KeyLeft):
 		return cs.change(-1)
-	case msg.Type == tea.KeyRight, key.Matches(msg, sf.keys.Enter):
+	case msg.bare(tea.KeyRight), key.Matches(msg, sf.keys.Enter):
 		return cs.change(+1)
 	}
 	return res, nil
@@ -211,7 +213,7 @@ func (cs *configScreen) key(sf surface, msg tea.KeyMsg) (configResult, tea.Cmd) 
 
 // chordKey is a press while the trigger key is typed. Enter writes it, Esc
 // leaves it as it was.
-func (cs *configScreen) chordKey(sf surface, msg tea.KeyMsg) (configResult, tea.Cmd) {
+func (cs *configScreen) chordKey(sf surface, msg keyPress) (configResult, tea.Cmd) {
 	res := configResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -234,7 +236,7 @@ func (cs *configScreen) chordKey(sf surface, msg tea.KeyMsg) (configResult, tea.
 	case altRune(msg):
 		return res, nil
 	}
-	in, cmd := cs.chord.Update(msg)
+	in, cmd := cs.chord.Update(msg.input())
 	cs.chord = in
 	return res, cmd
 }
@@ -411,7 +413,7 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 	row(int(rowGlyphs), "glyphs", "‹ "+orDefault(cs.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")
 	trigger := orDefault(cs.ui.TriggerKey, config.DefaultTriggerKey)
 	if cs.chord.Focused() {
-		trigger = cs.chord.View()
+		trigger = inputView(cs.chord)
 	}
 	row(int(rowTrigger), "trigger key", trigger, "the desktop key that opens revier")
 

@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
@@ -36,23 +35,20 @@ func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 // The pointer resting on a button lights it as the selected row is lit, and
 // moving off it puts the button back.
 func TestThePointerLightsTheButtonUnderIt(t *testing.T) {
-	// The surface renders without colour where no terminal is attached, and
-	// the highlight is a colour. No test runs in parallel with this one.
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	// The highlight is a colour.
+	inColour(t)
 
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	x, y := barCell(t, m)
 
-	plain := m.View()
+	plain := drawn(m)
 	m = motion(m, x, y)
-	if m.View() == plain {
+	if drawn(m) == plain {
 		t.Error("the surface is unchanged with the pointer on a button")
 	}
 	m = motion(m, x, y+3) // down onto the rows
-	if back := m.View(); back != plain {
+	if back := drawn(m); back != plain {
 		t.Errorf("the surface with the pointer off the bar is not the surface before it:\n%q\n%q", back, plain)
 	}
 }
@@ -556,16 +552,16 @@ func TestTheHelpScreenScrolls(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 16)
 
 	m, _ = press(m, "alt+h")
-	top := m.View()
+	top := drawn(m)
 	m, _ = press(m, "down")
-	if m.View() == top {
+	if drawn(m) == top {
 		t.Error("the help screen is unchanged after down on a short terminal")
 	}
 }
 
 // motion is the pointer moving over a terminal cell, pressing nothing.
 func motion(m tui.Model, x, y int) tui.Model {
-	next, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+	next, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y})
 	return next.(tui.Model)
 }
 
@@ -573,17 +569,15 @@ func motion(m tui.Model, x, y int) tui.Model {
 // light is not the selection's: two rows can be marked at once, and which of
 // them Enter means must stay readable.
 func TestThePointerLightsARowAndATarget(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	_, mc := margins(m)
 
-	plain := m.View()
+	plain := drawn(m)
 	m = motion(m, mc+6, rowTop(m)+2) // the second row, not the selected one
-	if m.View() == plain {
+	if drawn(m) == plain {
 		t.Error("the list is unchanged with the pointer on a row")
 	}
 	if lit := selectedRow(t, m); !strings.Contains(lit, "project-02") {
@@ -591,8 +585,8 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 	}
 
 	x, y := paneCell(t, m, "editor")
-	before := m.View()
-	if m = motion(m, x, y); m.View() == before {
+	before := drawn(m)
+	if m = motion(m, x, y); drawn(m) == before {
 		t.Error("the pane is unchanged with the pointer on a target")
 	}
 }
@@ -600,18 +594,16 @@ func TestThePointerLightsARowAndATarget(t *testing.T) {
 // The first line below the last row is not a row: the pointer lights nothing
 // there, and a click chooses nothing.
 func TestThePointerBelowTheLastRowLightsNothing(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 3)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30) // room under the rows
 	_, mc := margins(m)
 	below := rowTop(m) + 3*2 // three rows of two lines each
 
-	plain := m.View()
-	if m = motion(m, mc+6, below); m.View() != plain {
-		t.Errorf("the list changed with the pointer below its last row:\n%s", m.View())
+	plain := drawn(m)
+	if m = motion(m, mc+6, below); drawn(m) != plain {
+		t.Errorf("the list changed with the pointer below its last row:\n%s", drawn(m))
 	}
 	was := selectedRow(t, m)
 	if m = clickAt(m, mc+6, below); selectedRow(t, m) != was {
@@ -623,9 +615,7 @@ func TestThePointerBelowTheLastRowLightsNothing(t *testing.T) {
 // the keyboard scrolls the list, the surface is the one a fresh move of the
 // pointer to the same cell draws.
 func TestThePointerLightStaysOnWhatIsUnderIt(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 12)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 14)
@@ -636,8 +626,8 @@ func TestThePointerLightStaysOnWhatIsUnderIt(t *testing.T) {
 	for range 11 {
 		got, _ = press(got, "down")
 	}
-	if want := motion(got, x, y); got.View() != want.View() {
-		t.Errorf("after a scroll the light is not on the row under the pointer:\n%s\nwant:\n%s", got.View(), want.View())
+	if want := motion(got, x, y); drawn(got) != drawn(want) {
+		t.Errorf("after a scroll the light is not on the row under the pointer:\n%s\nwant:\n%s", drawn(got), drawn(want))
 	}
 }
 
@@ -648,8 +638,8 @@ func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
 	_, mc := margins(m)
 
 	m = motion(m, mc+6, rowTop(m)+2)
-	before := m.View()
-	if m = motion(m, mc+9, rowTop(m)+2); m.View() != before {
+	before := drawn(m)
+	if m = motion(m, mc+9, rowTop(m)+2); drawn(m) != before {
 		t.Error("the surface changed with the pointer still on the same row")
 	}
 }
@@ -677,9 +667,7 @@ func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
 // The version stands at the right end of the bar, dim: it says which revier
 // this is, and nothing else on the screen is about the installation.
 func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 160, 20)
@@ -703,9 +691,7 @@ func TestTheBarCarriesTheVersionAtItsRightEdge(t *testing.T) {
 // A terminal with no room for both drops the version. The buttons are what
 // the line is for, and they do not move for it.
 func TestANarrowBarDropsTheVersion(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	inColour(t)
 
 	_, _, c, projects := world(t, 2)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)

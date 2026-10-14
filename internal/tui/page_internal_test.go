@@ -7,7 +7,7 @@ import "testing"
 // below it.
 func TestAPageOfAgentsCountsTheRowsInItsDirection(t *testing.T) {
 	m := bare(Model{focus: focusAgents})
-	m.detail.Height = 6
+	m.detail.SetHeight(6)
 	for i := range 20 {
 		m.alines = append(m.alines, lineSpan{start: 2 * i, end: 2*i + 2})
 	}

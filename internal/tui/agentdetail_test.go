@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -247,7 +247,7 @@ func TestTheWheelOverTheProjectPaneScrollsTheMirror(t *testing.T) {
 	m, rt, _ := shownWorld(t, 140, 30, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen[60:], "\n")})
 	rt.Screens["1"] = strings.Join(screen, "\n")
 	border := paneBorder(t, m)
-	next, cmd := m.Update(tea.MouseMsg{X: border + 4, Y: 12, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	next, cmd := m.Update(tea.MouseWheelMsg{X: border + 4, Y: 12, Button: tea.MouseWheelUp})
 	if cmd == nil {
 		t.Fatal("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
@@ -299,13 +299,13 @@ func TestTheWheelOverTheFactsBesideTheMirrorScrollsThePane(t *testing.T) {
 	m, _, _ := shownWorld(t, 300, 12, agents...)
 	border := paneBorder(t, m)
 
-	next, _ := m.Update(tea.MouseMsg{X: border + 4, Y: 8, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	next, _ := m.Update(tea.MouseWheelMsg{X: border + 4, Y: 8, Button: tea.MouseWheelDown})
 	m = next.(tui.Model)
 	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
 		t.Errorf("the wheel over the facts did not scroll the pane:\n%s", body)
 	}
 
-	_, cmd := m.Update(tea.MouseMsg{X: border + 120, Y: 8, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	_, cmd := m.Update(tea.MouseWheelMsg{X: border + 120, Y: 8, Button: tea.MouseWheelUp})
 	if cmd == nil {
 		t.Error("the wheel over the mirror asked for nothing, want a read of the scrollback")
 	}
@@ -411,7 +411,7 @@ func TestNothingIsReadForAPaneWithNoRowForTheMirror(t *testing.T) {
 // bring the facts back.
 func TestAPaneThatFitsAgainStandsAtItsTop(t *testing.T) {
 	m, _, _ := shownWorld(t, 140, 22, crowd(16)...)
-	m = wheel(m, paneBorder(t, m)+4, tea.MouseButtonWheelDown)
+	m = wheel(m, paneBorder(t, m)+4, tea.MouseWheelDown)
 	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
 		t.Fatalf("the wheel did not scroll a pane with no row for the mirror:\n%s", body)
 	}
@@ -431,7 +431,7 @@ func TestAClickOnTheMirrorBesideARowRunsNothing(t *testing.T) {
 	}
 	m, _, _ := shownWorld(t, 300, 40, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
 	_, y := paneCell(t, m, "agent-0 task")
-	raw := strings.Split(m.View(), "\n")[y]
+	raw := strings.Split(drawn(m), "\n")[y]
 	parts := strings.Split(raw, "│")
 	at := strings.Index(parts[1], "line ")
 	if at < 0 {

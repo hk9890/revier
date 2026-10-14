@@ -4,34 +4,23 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
-	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // pressed is a keypress as a canonical chord, the form every configured key
-// is compared in. bubbletea names a press its own way - alt first, as
-// `alt+ctrl+o`, and alt+shift+o as `alt+O` - so its name is parsed rather
-// than compared as text. A paste, or several runes at once, is typed text and
-// no chord.
-func pressed(msg tea.KeyMsg) (core.Chord, bool) {
-	name := msg.String()
-	switch msg.Type {
-	case tea.KeyRunes:
-		if msg.Paste || len(msg.Runes) != 1 {
-			return "", false
-		}
-		if r := msg.Runes[0]; msg.Alt && unicode.IsUpper(r) {
-			name = "alt+shift+" + string(unicode.ToLower(r))
-		}
-	case tea.KeySpace:
-		name = strings.TrimSuffix(name, " ") + "space"
+// is compared in. bubbletea names a press its own way - a shifted letter as
+// the capital it types, the space bar as `space` - so its name is parsed
+// rather than compared as text. A paste, or a key that types several runes at
+// once, is typed text and no chord.
+func pressed(msg keyPress) (core.Chord, bool) {
+	if msg.pasted || msg.Code == tea.KeyExtended {
+		return "", false
 	}
-	c, err := core.ParseChord(name)
+	c, err := core.ParseChord(msg.String())
 	return c, err == nil
 }
 
@@ -41,19 +30,21 @@ func pressed(msg tea.KeyMsg) (core.Chord, bool) {
 // every project and not only the highlighted one. That is what lets a press on
 // a project with no editor say so instead of doing nothing.
 //
-// A target key is a desktop key first, and the terminal does not deliver
-// every chord the desktop does (core.Chord.Terminal). ctrl+shift+o reaches the
-// surface as ctrl+o, so it is bound under ctrl+o - pressing the desktop key
-// inside the surface then does what it does outside - unless ctrl+o already
-// means something here: one of the surface's own keys, an action, a query
-// editing key, or a target that declares ctrl+o itself. Then it binds nothing
-// here and stays a desktop key only.
+// A target key is a desktop key first, and a terminal without key
+// disambiguation does not deliver every chord the desktop does
+// (core.Chord.Terminal). There ctrl+shift+o reaches the surface as ctrl+o, so
+// it is bound under ctrl+o - pressing the desktop key inside the surface then
+// does what it does outside - unless ctrl+o already means something here: one
+// of the surface's own keys, an action, a query editing key, or a target that
+// declares ctrl+o itself. Then it binds nothing here and stays a desktop key
+// only. Where the terminal disambiguates, unfolds is true and every chord is
+// bound as pressed (decisions.md D132).
 //
 // The second return is every chord a target declares as the chord itself,
 // which is what tells a folded binding to yield. It comes back with the
 // vocabulary so that no caller can derive one and forget the other; the footer
 // reads it for each row it draws and must not rescan every project to do so.
-func targetKeys(projects []core.Project, keys keyMap) (map[core.Chord]revier.TargetName, map[core.Chord]bool) {
+func targetKeys(projects []core.Project, keys keyMap, unfolds bool) (map[core.Chord]revier.TargetName, map[core.Chord]bool) {
 	type folded struct {
 		sent core.Chord
 		name revier.TargetName
@@ -74,7 +65,7 @@ func targetKeys(projects []core.Project, keys keyMap) (map[core.Chord]revier.Tar
 				continue
 			}
 			declared[c] = true
-			sent, ok := c.Terminal()
+			sent, ok := c.Terminal(unfolds)
 			switch {
 			case !ok || keys.claims(sent):
 			case sent == c:
@@ -120,32 +111,59 @@ func chordName(key string) (core.Chord, bool) {
 // targetKey runs the target a chord means against the highlighted project.
 // The second return says whether the key was one; a key no project binds is
 // not handled here.
-func (m Model) targetKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+func (m Model) targetKey(msg keyPress) (Model, tea.Cmd, bool) {
 	c, ok := pressed(msg)
 	if !ok {
 		return m, nil, false
 	}
-	name, ok := m.tkeys[c]
-	if !ok {
+	if _, ok := m.tkeys[c]; !ok {
 		return m, nil, false
 	}
+	next, cmd := m.goChord(c)
+	return next, cmd, true
+}
+
+// unfolded is the chord pressed, where the terminal reports key
+// disambiguation, the press is not the key legacyKey folded it to, and a
+// target key binds it: such a press is that target's (decisions.md D132).
+// Otherwise it is none, and the folded press is all the surface reads.
+func (m Model) unfolded(press, folded tea.KeyPressMsg) core.Chord {
+	if !m.unfolds {
+		return ""
+	}
+	press.Mod &^= tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock
+	c, ok := pressed(pressedKey(press))
+	if !ok {
+		return ""
+	}
+	if f, ok := pressed(pressedKey(folded)); ok && f == c {
+		return ""
+	}
+	if _, bound := m.tkeys[c]; !bound {
+		return ""
+	}
+	return c
+}
+
+// goChord runs the target the vocabulary binds c to against the highlighted
+// project.
+func (m Model) goChord(c core.Chord) (Model, tea.Cmd) {
 	v, ok := m.selected()
 	if !ok {
-		return m, nil, true
+		return m, nil
 	}
 	p, ok := m.project(v.Project.Name)
 	if !ok {
-		return m, nil, true
+		return m, nil
 	}
-	name = m.ownTarget(p, c, name)
+	name := m.ownTarget(p, c, m.tkeys[c])
 	for _, t := range p.Targets {
 		if t.Name == name {
-			next, cmd := opened(m, m.goTarget(p, name))
-			return next, cmd, true
+			return opened(m, m.goTarget(p, name))
 		}
 	}
 	m.err = fmt.Errorf("%s has no %s target", p.Name, name)
-	return m, nil, true
+	return m, nil
 }
 
 // ownTarget is the target of p that the chord means where p binds the chord
@@ -154,7 +172,7 @@ func (m Model) targetKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 // that folds to c binds under c only where no target declares c outright, as
 // targetKeys binds it.
 func (m Model) ownTarget(p core.Project, c core.Chord, fallback revier.TargetName) revier.TargetName {
-	outright, folded := chordTarget(p, c)
+	outright, folded := chordTarget(p, c, m.unfolds)
 	switch {
 	case outright != "":
 		return outright
@@ -166,7 +184,7 @@ func (m Model) ownTarget(p core.Project, c core.Chord, fallback revier.TargetNam
 
 // chordTarget is the first target of p that declares c outright, and the first
 // whose chord folds to c.
-func chordTarget(p core.Project, c core.Chord) (outright, folded revier.TargetName) {
+func chordTarget(p core.Project, c core.Chord, unfolds bool) (outright, folded revier.TargetName) {
 	for i, t := range p.Targets {
 		if p.TargetErr(i) != nil {
 			continue
@@ -178,7 +196,7 @@ func chordTarget(p core.Project, c core.Chord) (outright, folded revier.TargetNa
 		if tc == c {
 			return t.Name, folded
 		}
-		if sent, ok := tc.Terminal(); ok && sent == c && folded == "" {
+		if sent, ok := tc.Terminal(unfolds); ok && sent == c && folded == "" {
 			folded = t.Name
 		}
 	}
@@ -190,7 +208,7 @@ func chordTarget(p core.Project, c core.Chord) (outright, folded revier.TargetNa
 // declares, so a project added or dropped can change what a press does in
 // another one.
 func (m *Model) setKeys() {
-	m.tkeys, m.tdeclared = targetKeys(m.projects, m.keys)
+	m.tkeys, m.tdeclared = targetKeys(m.projects, m.keys, m.unfolds)
 }
 
 // declares reports a target of any project that declares c outright.
@@ -207,7 +225,7 @@ func (m Model) targetKeysOf(v revier.ProjectView) []targetKeyHelp {
 		if !ok {
 			continue
 		}
-		sent, ok := c.Terminal()
+		sent, ok := c.Terminal(m.unfolds)
 		if !ok {
 			continue
 		}

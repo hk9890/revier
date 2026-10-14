@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
@@ -67,7 +67,7 @@ const paneChrome = 2
 const paneRise = 2
 
 func newDetail(th theme.Theme) viewport.Model {
-	v := viewport.New(0, 0)
+	v := viewport.New()
 	// A border takes its own colour and not the style's foreground: without
 	// one it is drawn in the terminal's text colour, brighter than the rules
 	// it meets.
@@ -99,7 +99,8 @@ func (m *Model) syncDetail() {
 	if m.paneWidth() > 0 {
 		h += paneRise
 	}
-	m.detail.Width, m.detail.Height = cols, h
+	m.detail.SetWidth(cols)
+	m.detail.SetHeight(h)
 	switch m.dialog {
 	case dialogNew, dialogConfig, dialogProject:
 		m.detail.SetContent("")
@@ -117,7 +118,7 @@ func (m *Model) syncDetail() {
 	// The agent list's pane scrolls its mirror itself, under a head that
 	// stays (mirror.go).
 	if m.agents.shown {
-		m.detail.SetContent(m.agents.pane(m.surface(), &m.mirror, m.now(), m.detail.Height))
+		m.detail.SetContent(m.agents.pane(m.surface(), &m.mirror, m.now(), m.detail.Height()))
 		m.detail.GotoTop()
 		return
 	}
@@ -137,7 +138,7 @@ func (m *Model) syncDetail() {
 	// A viewport keeps its offset over a content that got shorter, and the
 	// wheel over a mirror scrolls the mirror: a pane that fits again would
 	// stand scrolled with nothing to bring its top back.
-	m.detail.SetYOffset(m.detail.YOffset)
+	m.detail.SetYOffset(m.detail.YOffset())
 	if fresh {
 		m.detail.GotoTop()
 	}
@@ -155,10 +156,10 @@ func (m *Model) syncDetail() {
 // that does it, as the list does for its cursor.
 func (m *Model) followPane(line int) {
 	switch {
-	case line < m.detail.YOffset:
+	case line < m.detail.YOffset():
 		m.detail.SetYOffset(line)
-	case line >= m.detail.YOffset+m.detail.Height:
-		m.detail.SetYOffset(line - m.detail.Height + 1)
+	case line >= m.detail.YOffset()+m.detail.Height():
+		m.detail.SetYOffset(line - m.detail.Height() + 1)
 	}
 }
 
@@ -181,7 +182,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 		if !mirrored {
 			return facts
 		}
-		return facts + m.agentScreen(key, w, m.detail.Height-strings.Count(facts, "\n"))
+		return facts + m.agentScreen(key, w, m.detail.Height()-strings.Count(facts, "\n"))
 	}
 	facts := m.facts(v, maxFactsWidth)
 	if !mirrored {
@@ -192,7 +193,7 @@ func (m *Model) detailContent(v revier.ProjectView) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		lipgloss.NewStyle().Width(maxFactsWidth).Render(facts),
 		strings.Repeat(" ", gridGap),
-		strings.TrimPrefix(m.agentScreen(key, w-gridGap-maxFactsWidth, m.detail.Height+1), "\n"))
+		strings.TrimPrefix(m.agentScreen(key, w-gridGap-maxFactsWidth, m.detail.Height()+1), "\n"))
 }
 
 // besideFacts reports the wide layout of the project pane: the mirror beside
@@ -206,11 +207,11 @@ func (m Model) besideFacts() bool {
 // state are on its row above and are not repeated. rows counts the heading,
 // and a pane with no row for the mirror under it shows neither.
 func (m *Model) agentScreen(key listedKey, w, rows int) string {
-	body := m.mirror.view(m.theme, key, w, rows-2) // the heading and the blank line before it
+	body := m.mirror.view(*m.theme, key, w, rows-2) // the heading and the blank line before it
 	if rows-2 < 1 {
 		return ""
 	}
-	return heading(m.theme, "Screen", w) + body
+	return heading(*m.theme, "Screen", w) + body
 }
 
 // facts is the pane's first part: what this project is, then what is up,
@@ -219,7 +220,7 @@ func (m *Model) agentScreen(key listedKey, w, rows int) string {
 // A path and an activity line wrap: they are the fields worth reading whole,
 // and a cut takes exactly the end that says which checkout or which step.
 func (m *Model) facts(v revier.ProjectView, w int) string {
-	th := m.theme
+	th := *m.theme
 	var b strings.Builder
 
 	line := func(label, value string, style lipgloss.Style) {
@@ -306,8 +307,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// their query. Where each lands is recorded, so the cursor can be kept on
 	// screen and a click can find its row.
 	lineNow := func() int { return strings.Count(b.String(), "\n") }
-	m.ainput.Width = w - lipgloss.Width(promptMark) - 1
-	b.WriteString(heading(m.theme, "Targets", w))
+	m.ainput.SetWidth(w - lipgloss.Width(promptMark) - 1)
+	b.WriteString(heading(*m.theme, "Targets", w))
 	m.tlines = m.tlines[:0]
 	for i, row := range m.targetRows() {
 		m.tlines = append(m.tlines, lineNow())
@@ -318,7 +319,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// Every agent, and what it is doing: the row only counts them by state.
 	m.afield, m.alines = -1, m.alines[:0]
 	if len(v.Agents) > 0 {
-		b.WriteString(heading(m.theme, "Agents", w))
+		b.WriteString(heading(*m.theme, "Agents", w))
 		m.afield = lineNow()
 		b.WriteString(m.fieldView(m.ainput, focusAgents) + "\n")
 		for i, row := range m.agentRows() {
@@ -350,7 +351,7 @@ func heading(th theme.Theme, title string, w int) string {
 // width, so the two cursors read as one; the row under the pointer carries the
 // hover background, because a click reaches it.
 func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
-	th := m.theme
+	th := *m.theme
 	style := func(s lipgloss.Style) lipgloss.Style {
 		switch {
 		case sel:

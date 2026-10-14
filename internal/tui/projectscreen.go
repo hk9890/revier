@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -89,7 +89,7 @@ func (m Model) openProject() (tea.Model, tea.Cmd) {
 
 // projectKey is every press on the project screen, and what it left for the
 // surface: the project as its file now loads.
-func (m Model) projectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) projectKey(msg keyPress) (tea.Model, tea.Cmd) {
 	was := m.proj.name
 	// Only Enter on a typed field can rename.
 	var locked error
@@ -175,7 +175,7 @@ func (ps *projectScreen) value(f projectField) string {
 
 // key is every press on the project screen. locked is why the project cannot
 // be renamed now, nil when it can.
-func (ps *projectScreen) key(sf surface, locked error, msg tea.KeyMsg) (projectResult, tea.Cmd) {
+func (ps *projectScreen) key(sf surface, locked error, msg keyPress) (projectResult, tea.Cmd) {
 	switch {
 	case ps.edit.Focused():
 		return ps.editKey(sf, locked, msg)
@@ -213,7 +213,7 @@ func (ps *projectScreen) key(sf surface, locked error, msg tea.KeyMsg) (projectR
 	case key.Matches(msg, sf.keys.Enter):
 		// As wide as the row leaves it, so a long path scrolls under the
 		// cursor instead of running off the right edge, typed blind.
-		ps.edit.Width = max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8)
+		ps.edit.SetWidth(max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8))
 		ps.edit.SetValue(ps.value(ps.fields()[ps.row]))
 		ps.edit.CursorEnd()
 		return res, ps.edit.Focus()
@@ -223,7 +223,7 @@ func (ps *projectScreen) key(sf surface, locked error, msg tea.KeyMsg) (projectR
 
 // editKey is a press while a field is typed. Enter writes it, Esc leaves it
 // as it was.
-func (ps *projectScreen) editKey(sf surface, locked error, msg tea.KeyMsg) (projectResult, tea.Cmd) {
+func (ps *projectScreen) editKey(sf surface, locked error, msg keyPress) (projectResult, tea.Cmd) {
 	res := projectResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -241,7 +241,7 @@ func (ps *projectScreen) editKey(sf surface, locked error, msg tea.KeyMsg) (proj
 	case altRune(msg):
 		return res, nil
 	}
-	in, cmd := ps.edit.Update(msg)
+	in, cmd := ps.edit.Update(msg.input())
 	ps.edit = in
 	return res, cmd
 }
@@ -341,7 +341,7 @@ func (ps *projectScreen) saveTarget(sf surface, edit config.TargetEdit) projectR
 // dropTarget takes the key that answers the delete question. Only y deletes
 // the file's entry: a target of the project's own goes, and an override
 // leaves config.toml's target as it is there.
-func (ps *projectScreen) dropTarget(sf surface, msg tea.KeyMsg) projectResult {
+func (ps *projectScreen) dropTarget(sf surface, msg keyPress) projectResult {
 	ps.dropping = false
 	i, ok := ps.targetRow()
 	if msg.String() != "y" || !ok {
@@ -433,7 +433,7 @@ func (ps *projectScreen) screen(sf surface) (string, int) {
 	for r, f := range ps.fields() {
 		value := ps.value(f)
 		if ps.edit.Focused() && ps.row == r {
-			value = ps.edit.View()
+			value = inputView(ps.edit)
 		}
 		row(r, labels[f], value, notes[f])
 	}
@@ -501,7 +501,7 @@ func settingLine(th theme.Theme, sel bool, label, value, note string, w int) str
 // The line is a row like the ones under it, "Project" in the label column,
 // and the key hint says what it does, as every bar button's does.
 func (m Model) nameButton(name revier.ProjectName, w int) string {
-	th := m.theme
+	th := *m.theme
 	label, keys := th.Header, th.Help
 	if m.over.kind == hoverName {
 		label, keys = th.OnHover(label), th.OnHover(keys)

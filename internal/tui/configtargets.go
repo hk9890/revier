@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
@@ -212,7 +212,7 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 // dropTarget takes the key that answers the delete question for a shared
 // target. Only y deletes, and a delete a project would not load without is
 // refused and named.
-func (cs *configScreen) dropTarget(sf surface, msg tea.KeyMsg) configResult {
+func (cs *configScreen) dropTarget(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
 	cs.dropping = false
 	i, ok := cs.targetRow(sf)
@@ -301,7 +301,7 @@ type formResult struct {
 
 // key is a press while the target form is up. Esc closes it; Enter hands the
 // target to the screen, which writes it and closes the form.
-func (f *targetForm) key(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
+func (f *targetForm) key(sf surface, msg keyPress) (formResult, tea.Cmd) {
 	if f.panel.open {
 		return f.panelKey(sf, msg)
 	}
@@ -316,7 +316,7 @@ func (f *targetForm) key(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
 		return formResult{}, nil
 	case key.Matches(msg, sf.keys.Next, sf.keys.Down):
 		return res, f.move(+1)
-	case msg.Type == tea.KeyShiftTab, key.Matches(msg, sf.keys.Up):
+	case msg.shiftTab(), key.Matches(msg, sf.keys.Up):
 		return res, f.move(-1)
 	case row.kind == rowPanel && key.Matches(msg, sf.keys.Delete):
 		f.panels = slices.Delete(slices.Clone(f.panels), row.field, row.field+1)
@@ -331,12 +331,12 @@ func (f *targetForm) key(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
 			return res, nil
 		}
 		res.save = &config.TargetEdit{Target: t, PanelFrom: from}
-	case row.kind == rowHome && (msg.Type == tea.KeyLeft || msg.Type == tea.KeyRight || msg.Type == tea.KeySpace):
+	case row.kind == rowHome && (msg.bare(tea.KeyLeft) || msg.bare(tea.KeyRight) || msg.space()):
 		f.home = !f.home
 	case row.kind == rowField && row.field == tfName && f.shared != nil:
 		// A shared target is found by its name; renamed, it would be another.
 	case row.kind == rowField && !altRune(msg):
-		in, cmd := f.fields[row.field].Update(msg)
+		in, cmd := f.fields[row.field].Update(msg.input())
 		f.fields[row.field] = in
 		return res, cmd
 	}
@@ -443,7 +443,7 @@ func (f *targetForm) openPanel(th theme.Theme, i int) {
 
 // panelKey is a press while a panel is edited. Enter keeps the panel in the
 // target form, which is written when the target is saved.
-func (f *targetForm) panelKey(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) {
+func (f *targetForm) panelKey(sf surface, msg keyPress) (formResult, tea.Cmd) {
 	res := formResult{err: sf.err}
 	p := &f.panel
 	switch {
@@ -452,9 +452,9 @@ func (f *targetForm) panelKey(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) 
 	case key.Matches(msg, sf.keys.Back):
 		f.panel = panelForm{}
 		return formResult{}, nil
-	case key.Matches(msg, sf.keys.Next, sf.keys.Down), msg.Type == tea.KeyShiftTab, key.Matches(msg, sf.keys.Up):
+	case key.Matches(msg, sf.keys.Next, sf.keys.Down), msg.shiftTab(), key.Matches(msg, sf.keys.Up):
 		step := 1
-		if msg.Type == tea.KeyShiftTab || key.Matches(msg, sf.keys.Up) {
+		if msg.shiftTab() || key.Matches(msg, sf.keys.Up) {
 			step = -1
 		}
 		p.title.Blur()
@@ -482,18 +482,18 @@ func (f *targetForm) panelKey(sf surface, msg tea.KeyMsg) (formResult, tea.Cmd) 
 		f.panels = panels
 		f.panel = panelForm{}
 		return formResult{}, nil
-	case p.field == pfKind && (msg.Type == tea.KeyLeft || msg.Type == tea.KeySpace):
+	case p.field == pfKind && (msg.bare(tea.KeyLeft) || msg.space()):
 		p.kind = revier.PanelKind(cycle(panelKinds, string(p.kind), -1))
-	case p.field == pfKind && msg.Type == tea.KeyRight:
+	case p.field == pfKind && msg.bare(tea.KeyRight):
 		p.kind = revier.PanelKind(cycle(panelKinds, string(p.kind), +1))
 	case altRune(msg):
 	case p.field == pfTitle:
 		var cmd tea.Cmd
-		p.title, cmd = p.title.Update(msg)
+		p.title, cmd = p.title.Update(msg.input())
 		return res, cmd
 	case p.field == pfCommand:
 		var cmd tea.Cmd
-		p.command, cmd = p.command.Update(msg)
+		p.command, cmd = p.command.Update(msg.input())
 		return res, cmd
 	}
 	return res, nil
@@ -558,7 +558,7 @@ func (f targetForm) lines(th theme.Theme, w int) ([]string, int) {
 		var value string
 		switch row.kind {
 		case rowField:
-			value = f.fields[row.field].View()
+			value = inputView(f.fields[row.field])
 		case rowHome:
 			value = style(th.ProjectName).Render("‹ no ›")
 			if f.home {
@@ -628,7 +628,7 @@ func (f targetForm) note(row formRow) string {
 
 // lines is the panel form, and the line the cursor is on.
 func (p panelForm) lines(th theme.Theme, w int) ([]string, int) {
-	values := []string{th.ProjectName.Render("‹ " + string(p.kind) + " ›"), p.title.View(), p.command.View()}
+	values := []string{th.ProjectName.Render("‹ " + string(p.kind) + " ›"), inputView(p.title), inputView(p.command)}
 	labels := []string{"kind", "title", "command"}
 	out := make([]string, panelFields)
 	for j := range out {

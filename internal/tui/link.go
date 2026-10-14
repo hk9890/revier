@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -189,7 +189,7 @@ func (m Model) openLink() (tea.Model, tea.Cmd) {
 
 // linkKey is every press while the dialog is up, and what it left for the
 // surface: the dialog closed, or a link that is then a row.
-func (m Model) linkKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) linkKey(msg keyPress) (tea.Model, tea.Cmd) {
 	res, cmd := m.link.key(m.surface(), msg)
 	m.err = res.err
 	switch {
@@ -257,7 +257,7 @@ func (s *linkScreen) open() error {
 // none of the surface's own keys act under it. On a host's projects what is
 // typed filters them, and Esc clears the query before it goes back, as on the
 // surface (decisions.md D44).
-func (s *linkScreen) key(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
+func (s *linkScreen) key(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 	if s.step == linkNaming {
 		return s.nameKey(sf, msg)
 	}
@@ -283,7 +283,7 @@ func (s *linkScreen) key(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
 		cmd, res.err = s.pick()
 		return res, cmd
 	case s.step == linkRemote && promptKey(msg):
-		next, cmd := s.query.Update(msg)
+		next, cmd := s.query.Update(msg.input())
 		s.query = next
 		if next.Value() != s.filter {
 			s.setFilter(next.Value())
@@ -426,7 +426,7 @@ func linkName(host string, project revier.ProjectName) string {
 // back to the host's projects, and everything else is the field's. The
 // offered name is replaced by the first character typed, as a selected
 // field's is; any other edit keeps it.
-func (s *linkScreen) nameKey(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
+func (s *linkScreen) nameKey(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 	res := linkResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -443,11 +443,11 @@ func (s *linkScreen) nameKey(sf surface, msg tea.KeyMsg) (linkResult, tea.Cmd) {
 		return res, nil
 	}
 	res.err = nil
-	if s.proposed && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
+	if s.proposed && (msg.runes() || msg.space()) {
 		s.name.SetValue("")
 	}
 	s.proposed = false
-	in, cmd := s.name.Update(msg)
+	in, cmd := s.name.Update(msg.input())
 	s.name = in
 	return res, cmd
 }
@@ -524,15 +524,18 @@ func (s *linkScreen) title() string {
 func (s *linkScreen) subtitle(th theme.Theme) string {
 	switch s.step {
 	case linkRemote:
-		return " " + s.query.View()
+		return " " + inputView(s.query)
 	case linkNaming:
 		// The offered name is drawn as a selection until it is edited,
 		// because the first character typed replaces it.
 		in := s.name
 		if s.proposed {
-			in.TextStyle = th.OnSelection(th.ProjectName)
+			st := in.Styles()
+			st.Focused.Text = th.OnSelection(th.ProjectName)
+			st.Blurred.Text = st.Focused.Text
+			in.SetStyles(st)
 		}
-		return " " + in.View()
+		return " " + inputView(in)
 	}
 	return ""
 }

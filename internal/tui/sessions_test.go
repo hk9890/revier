@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -89,7 +89,7 @@ func TestTheSessionsScreenWithNoneSaysHowToSave(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 	m, _ = press(m, "alt+s")
-	if view := m.View(); !strings.Contains(view, "No saved sessions") {
+	if view := drawn(m); !strings.Contains(view, "No saved sessions") {
 		t.Errorf("screen = %q, want it to say there are none", view)
 	}
 }

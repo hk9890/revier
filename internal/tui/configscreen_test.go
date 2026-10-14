@@ -51,11 +51,11 @@ func TestLeavingTheConfigScreenRestoresTheListWidth(t *testing.T) {
 	configRoot(t, "")
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30)
-	before := m.View()
+	before := drawn(m)
 
 	m, _ = press(m, "alt+c")
 	m, _ = press(m, "esc")
-	if got := m.View(); got != before {
+	if got := drawn(m); got != before {
 		t.Errorf("surface after the config screen =\n%s\nwant\n%s", got, before)
 	}
 }

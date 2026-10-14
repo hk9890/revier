@@ -30,17 +30,17 @@ import (
 	"log/slog"
 	"maps"
 	"os/exec"
-	"reflect"
 	"slices"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
+	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -114,10 +114,11 @@ type Model struct {
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
 	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
-	now       func() time.Time // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
-	theme     theme.Theme
-	frame     int  // the spinner frame a working agent shows
-	spinning  bool // whether a spin tick is out, so a survey starts no second one
+	now       func() time.Time     // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
+	theme     *theme.Theme         // the palette and glyphs, held by pointer as the large screens are
+	profile   colorprofile.Profile // the colours the terminal shows, which the theme is drawn in
+	frame     int                  // the spinner frame a working agent shows
+	spinning  bool                 // whether a spin tick is out, so a survey starts no second one
 
 	views    []revier.ProjectView // attention first, then config order
 	surveyed bool                 // whether a survey has answered: the counts are real
@@ -156,6 +157,8 @@ type Model struct {
 	detail    viewport.Model
 	shown     revier.ProjectName               // the project the pane holds, so a new one starts at its top
 	tkeys     map[core.Chord]revier.TargetName // press to target name, over every project
+	unfolds   bool                             // the terminal reports key disambiguation, so a target key binds its chord as pressed
+	consoleF  bool                             // the Linux console's start of F1 to F5 came, so the next press is the key's letter
 	start     revier.ProjectName               // the project to open on, from the working directory
 	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
@@ -203,7 +206,7 @@ type Model struct {
 	// past 64 KB each copy is a heap allocation rather than a copy on the
 	// stack.
 	link     *linkScreen     // the link dialog (link.go)
-	create   createScreen    // the new-project screen (newproject.go)
+	create   *createScreen   // the new-project screen (newproject.go)
 	sessions *sessionsScreen // the sessions screen, and its save or restore (sessions.go)
 	config   *configScreen   // the config screen (configscreen.go)
 	proj     *projectScreen  // the project screen (projectscreen.go)
@@ -221,14 +224,14 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	keys := newKeyMap(actions)
 	m := Model{
 		core: c, stateRoot: stateRoot, actions: actions,
-		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
+		refresh: refresh, now: time.Now, theme: &th, width: 80, height: 24,
 		plist: newProjectList(th),
 		link:  new(newLinkScreen(th)), sessions: new(newSessionsScreen(th)),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
 		agents: new(newAgentScreen(th)),
-		create: newCreateScreen(th),
+		create: new(newCreateScreen(th)),
 		body:   newBody(),
 		config: new(newConfigScreen(th, cfg)),
 		proj:   new(newProjectScreen(th)),
@@ -580,27 +583,40 @@ func (m *Model) surveyNow() tea.Cmd {
 	return m.Survey()
 }
 
-// mouseMode asks the terminal for the pointer reports the surface needs.
-// With the focus, every motion, for the hover. Without it, a moving pointer
-// would rebuild the surface for each cell it crosses, so only presses, the
-// wheel and drags are reported until the focus is back.
-func (m *Model) mouseMode() tea.Cmd {
+// mouseMode is the pointer reports the surface asks the terminal for. With
+// the focus, every motion with no button held, for the hover, as well as the
+// wheel and clicks; it takes plain drag-to-select from the terminal, and
+// shift-drag still selects in kitty and most others. Without the focus, a
+// moving pointer would rebuild the surface for each cell it crosses, so only
+// presses, the wheel and drags are reported until the focus is back.
+func (m Model) mouseMode() tea.MouseMode {
 	if m.blurred {
-		return tea.Sequence(tea.DisableMouse, tea.EnableMouseCellMotion)
+		return tea.MouseModeCellMotion
 	}
-	return tea.EnableMouseAllMotion
+	return tea.MouseModeAllMotion
 }
 
 // Update handles the message and then rebuilds the detail pane, so the pane
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if report, ok := focusBeforeInput(msg); ok {
-		msg = report
-	}
-	// Half of a mouse report changes nothing, so nothing is rebuilt for it.
-	if key, ok := msg.(tea.KeyMsg); ok && splitReport(key) {
+	if csi, ok := msg.(uv.UnknownCsiEvent); ok {
+		m.consoleF = csi == consoleF
 		return m, nil
+	}
+	// A press is folded before anything reads it, a component included, and
+	// one a legacy terminal sends as no key changes nothing. The chord as it
+	// was pressed goes with it for a target key that binds it so.
+	if press, ok := msg.(tea.KeyPressMsg); ok {
+		if m.consoleF {
+			m.consoleF = false
+			press = consoleKey(press)
+		}
+		folded, ok := legacyKey(press)
+		if !ok {
+			return m, nil
+		}
+		msg = keyPress{KeyPressMsg: folded, exact: m.unfolded(press, folded)}
 	}
 	next, cmd := m.update(msg)
 	mm, ok := next.(Model)
@@ -612,7 +628,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// The pointer moving within one row, or over nothing, changes nothing on
 	// the screen, and a terminal reports every cell it crosses.
-	if mouse, ok := msg.(tea.MouseMsg); ok && mouse.Action == tea.MouseActionMotion && mm.over == m.over {
+	if _, ok := msg.(tea.MouseMotionMsg); ok && mm.over == m.over {
 		return mm, cmd
 	}
 	// The screen is frozen under a selection: nothing drawn now is shown, and
@@ -660,27 +676,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return mm, cmd
-}
-
-// focusBeforeInput is the terminal's focus report as bubbletea hands it over
-// when other input is behind it in the same read: an unknown sequence of an
-// unexported type, told here by its bytes. It returns the message the report
-// stands for. bubbletea makes a tea.FocusMsg or a tea.BlurMsg only of a
-// report that ends a read, and a raise under the pointer puts a mouse report
-// behind it, so without this the popup stayed hidden in its own count while
-// on the screen, and nothing surveyed.
-func focusBeforeInput(msg tea.Msg) (tea.Msg, bool) {
-	v := reflect.ValueOf(msg)
-	if v.Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Uint8 {
-		return nil, false
-	}
-	switch string(v.Bytes()) {
-	case ansi.Focus:
-		return tea.FocusMsg{}, true
-	case ansi.Blur:
-		return tea.BlurMsg{}, true
-	}
-	return nil, false
 }
 
 // loggedAlready reports a message whose error the operation behind it has
@@ -828,7 +823,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// spinner and the hover stop, until the focus is back (decisions.md
 		// D129).
 		m.blurred = true
-		return m, m.mouseMode()
+		return m, nil
 	case tea.FocusMsg:
 		refocused := m.blurred
 		m.blurred = false
@@ -846,7 +841,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.chain++
 				m.idle = true
 			}
-			return m, tea.Batch(reloadFiles, m.mouseMode())
+			return m, reloadFiles
 		}
 		if !refocused {
 			return m, nil
@@ -856,7 +851,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// reads rows that aged while nobody looked.
 		m.mirror.restart()
 		m.rounds = nil
-		return m, tea.Batch(m.surveyNow(), m.mouseMode())
+		return m, m.surveyNow()
 	case reloadedMsg:
 		switch {
 		case msg.err == nil:
@@ -880,10 +875,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case assistedMsg:
 		m.err = msg.err
-		// bubbletea turns mouse reporting off for a hand-over and leaves it
-		// off when the terminal is back, so the surface asks for it again,
-		// in the mode cmd/revier starts it in.
-		return m, tea.Batch(reloadAssisted, m.mouseMode())
+		return m, reloadAssisted
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends. An activation wrote
@@ -899,10 +891,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.went && msg.err == nil && m.popup {
 			return m, m.hide(true)
 		}
-		// An action had the terminal, and it comes back with mouse reporting
-		// off, as it does from the assistant. After a press that handed
-		// nothing over the mode is on already, and asking changes nothing.
-		return m, m.mouseMode()
+		return m, nil
 	case askedMsg:
 		return m.asked(msg)
 	case savedMsg:
@@ -920,18 +909,23 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
-		// The clone had the terminal, as the assistant has.
 		if msg.err != nil {
 			m.err = msg.err
-			return m, m.mouseMode()
+			return m, nil
 		}
-		return m, tea.Batch(m.goTarget(msg.project, msg.home), m.mouseMode())
-	case tea.KeyMsg:
-		m.copied = 0
-		if m.sel.active {
-			return m.selectingKey(msg)
-		}
-		return m.key(msg)
+		return m, m.goTarget(msg.project, msg.home)
+	case keyPress:
+		return m.keyIn(msg)
+	case tea.ColorProfileMsg:
+		m.profile = msg.Profile
+		m.applyTheme(*m.theme)
+		return m, nil
+	case tea.KeyboardEnhancementsMsg:
+		m.unfolds = msg.SupportsKeyDisambiguation()
+		m.setKeys()
+		return m, nil
+	case tea.PasteMsg:
+		return m.keyIn(pastedText(msg.Content))
 	case tea.MouseMsg:
 		return m.mouse(msg)
 	}
@@ -942,6 +936,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.ainput, cmds[1] = m.ainput.Update(msg)
 	m.agents.query, cmds[2] = m.agents.query.Update(msg)
 	return m, tea.Batch(cmds[:]...)
+}
+
+// keyIn is a press or a paste, which a drag in progress holds back.
+func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
+	m.copied = 0
+	if m.sel.active {
+		return m.selectingKey(msg)
+	}
+	return m.key(msg)
 }
 
 // keep holds the parts of state the surface reads between refreshes. The
@@ -998,7 +1001,7 @@ func (m *Model) need(v revier.ProjectView) int {
 // what is left over reaches the list - which is why every printable rune is a
 // filter character and never a list command: the surface filters as you type,
 // so no letter can be a shortcut.
-func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
@@ -1022,6 +1025,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.agentsKey(msg)
 	}
 	m.err = nil
+	// A target key the terminal delivers as pressed comes before every
+	// meaning of the key it folds to (decisions.md D132).
+	if msg.exact != "" {
+		return m.goChord(msg.exact)
+	}
 	if by, ok := m.keys.move(msg, m.page); ok {
 		m.moveCursor(by)
 		return m, nil
@@ -1104,7 +1112,7 @@ const allRows = 1 << 30
 // move is how many rows a movement key moves a cursor. page is how many rows
 // of the section are on the screen from the cursor's, down for 1 and up for
 // -1, and is asked only for a page key.
-func (k keyMap) move(msg tea.KeyMsg, page func(dir int) int) (int, bool) {
+func (k keyMap) move(msg keyPress, page func(dir int) int) (int, bool) {
 	switch {
 	case key.Matches(msg, k.Up):
 		return -1, true
@@ -1150,7 +1158,7 @@ func clampRow(i, n int) int {
 func (m Model) page(dir int) int {
 	switch m.focus {
 	case focusTargets:
-		return max(m.detail.Height, 1) // a target is one line
+		return max(m.detail.Height(), 1) // a target is one line
 	case focusAgents:
 		return m.agentsOnPage(dir)
 	}
@@ -1159,14 +1167,14 @@ func (m Model) page(dir int) int {
 
 // listPage is how many rows of the list in view the body shows at once.
 func (m Model) listPage() int {
-	return max(m.body.Height/m.itemHeight(), 1)
+	return max(m.body.Height()/m.itemHeight(), 1)
 }
 
 // agentsOnPage is how many agent rows past the cursor fit on the pane, below
 // it for 1 and above it for -1. An agent's row is as tall as its activity
 // needs, so rows are not lines.
 func (m Model) agentsOnPage(dir int) int {
-	n, room := 0, m.detail.Height
+	n, room := 0, m.detail.Height()
 	for i := m.acursor + dir; i >= 0 && i < len(m.alines); i += dir {
 		room -= m.alines[i].end - m.alines[i].start
 		if room < 0 {
@@ -1328,7 +1336,7 @@ func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 // action runs the configured action bound to the key, if any, against the
 // selected project. The terminal is handed to the command while it runs, and
 // the command is resolved by the same rules `revier run` uses.
-func (m Model) action(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (m Model) action(msg keyPress) (tea.Cmd, bool) {
 	c, ok := pressed(msg)
 	if !ok {
 		return nil, false
@@ -1429,7 +1437,7 @@ func (m *Model) startSpin() tea.Cmd {
 // the rows and the pane. Without the focus the spinner stands, and a working
 // agent shows the theme's own glyph.
 func (m Model) spun() theme.Theme {
-	th := m.theme
+	th := *m.theme
 	if len(th.Spinner) > 0 && !m.blurred {
 		th.Glyphs.Working = th.Spinner[m.frame%len(th.Spinner)]
 	}

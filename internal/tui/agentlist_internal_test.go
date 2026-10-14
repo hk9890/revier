@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -36,8 +36,8 @@ func TestTheAgentListFiltersAndHandsBackWithNoRootModel(t *testing.T) {
 		t.Errorf("totals = %v, want one agent in each state", got)
 	}
 
-	esc := tea.KeyMsg{Type: tea.KeyEsc}
-	letter := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}
+	esc := pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})
+	letter := pressedKey(tea.KeyPressMsg{Code: 'g', Text: "g"})
 	al.query.Focus()
 	if res, _ := al.key(sf, letter); !res.rest {
 		t.Fatalf("result = %+v, want a letter handed back: the bar is asked before the query", res)
@@ -49,7 +49,7 @@ func TestTheAgentListFiltersAndHandsBackWithNoRootModel(t *testing.T) {
 	if res, _ := al.key(sf, esc); res.leave || al.filter != "" {
 		t.Fatalf("result = %+v, filter = %q, want Esc to clear the query first", res, al.filter)
 	}
-	if res, _ := al.key(sf, tea.KeyMsg{Type: tea.KeyDelete}); res.close == nil || res.close.project.Name != "alpha" {
+	if res, _ := al.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyDelete})); res.close == nil || res.close.project.Name != "alpha" {
 		t.Errorf("result = %+v, want del to hand back the agent under the cursor", res)
 	}
 	if res, _ := al.key(sf, esc); !res.leave {

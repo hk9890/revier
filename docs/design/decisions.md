@@ -144,11 +144,6 @@ state.
 
 A popup that ignores the wheel reads as dead. Shift-drag still selects text.
 
-### D35 — a key the terminal cannot deliver works on the desktop only
-
-Without the kitty keyboard protocol, Ctrl+Shift+U arrives as Ctrl+U. A target
-key yields to any meaning that press already has in the TUI.
-
 ### D36 — a click selects a row, and a second click opens it
 
 Selecting a project costs nothing; opening one opens a window.
@@ -497,8 +492,8 @@ what the configuration holds of that row. A delete used to be refused while
 anything ran. It now closes first, through the same plan as a shutdown,
 because a refusal only sends the user to close by hand. A target of
 `config.toml` is every project's, so no project's row deletes it. Unlinking
-touches no file on the host. ctrl+del is not the key because bubbletea v1
-does not read its sequence.
+touches no file on the host. ctrl+del is not the key because not every
+terminal sends it apart from del.
 
 ### D94 — a tab closes as every panel in it, and its busy check covers them all
 
@@ -824,3 +819,20 @@ for what its own survey lists. A link whose host is this machine, by name or
 by the HostName ssh gives it, is left out at load, and `revier doctor` says
 how many. The link dialog does not offer this machine. Rejected: answering
 the link from the local survey, which shows each agent there twice.
+
+### D132 — a target key reaches the TUI as pressed where the terminal tells it apart
+
+Replaces "a key the terminal cannot deliver works on the desktop only".
+Where the terminal reports key disambiguation, as kitty does, Ctrl+Shift+U
+arrives as itself, and a target bound to it runs before the press is read as
+Ctrl+U; Ctrl+U keeps its own meaning. Elsewhere Ctrl+Shift+U arrives as
+Ctrl+U, and the target key yields to any meaning that press already has in
+the TUI. Every other press is read as a terminal without disambiguation
+sends it, so the surface's own keys work alike in every terminal.
+
+### D133 — NO_COLOR turns colour off, and leaves bold and reverse video
+
+Any NO_COLOR that is not empty draws the surface without colour, as
+no-color.org says. Bold and reverse video stay: the selected row and the text
+field's cursor are still told apart, and the selection box is drawn as before.
+Rejected: dropping every style, which hides the cursor and the selection box.

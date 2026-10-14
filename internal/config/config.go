@@ -292,7 +292,9 @@ func validateActions(actions []Action) []error {
 			out[i] = errors.Join(append(errs, fmt.Errorf("action %q: %w", act.Name, err))...)
 			continue
 		}
-		sent, ok := chord.Terminal()
+		// An action is matched on the press the TUI folds, which is the
+		// same in every terminal.
+		sent, ok := chord.Terminal(false)
 		switch {
 		case chord.Typed():
 			errs = append(errs, fmt.Errorf("action %q: key %q is typed text, which the TUI filters on; give it ctrl or alt", act.Name, act.Key))

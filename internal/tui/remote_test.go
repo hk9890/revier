@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -95,7 +95,7 @@ func TestAnActionOnARemoteProjectRunsOnTheHost(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), []config.Action{{Key: "ctrl-y", Name: "sync"}})
 
-	_, cmd := send(m, tea.KeyMsg{Type: tea.KeyCtrlY})
+	_, cmd := send(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+y ran no action")
 	}

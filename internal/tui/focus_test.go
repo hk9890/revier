@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -36,6 +36,26 @@ func TestWithoutTheFocusTheSurfaceRefreshesSlowly(t *testing.T) {
 	m, _ = update(m, tea.FocusMsg{})
 	if got := m.Interval(); got != time.Second {
 		t.Errorf("interval with the focus back = %v, want the refresh", got)
+	}
+}
+
+// Without the focus the pointer is reported only while a button is held: a
+// pointer that only moves would rebuild the surface for every cell it
+// crosses, with nobody at it. The hover needs every motion back with the
+// focus.
+func TestWithoutTheFocusOnlyAHeldPointerIsReported(t *testing.T) {
+	_, _, c, projects := world(t, 3)
+	m := refreshed(t, c, projects, stateWith(t, nil), nil)
+	if got := m.View().MouseMode; got != tea.MouseModeAllMotion {
+		t.Fatalf("mouse mode with the focus = %v, want every motion", got)
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	if got := m.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Errorf("mouse mode without the focus = %v, want motion with a button held only", got)
+	}
+	m, _ = update(m, tea.FocusMsg{})
+	if got := m.View().MouseMode; got != tea.MouseModeAllMotion {
+		t.Errorf("mouse mode with the focus back = %v, want every motion", got)
 	}
 }
 
@@ -76,8 +96,8 @@ func TestTheFocusRegainedWithASurveyOutStartsNoOther(t *testing.T) {
 		t.Fatal("the tick surveyed nothing")
 	}
 	m, cmd := update(m, tea.FocusMsg{})
-	if cmd == nil {
-		t.Fatal("the focus regained asked for nothing, want at least the pointer reports back")
+	if got := m.View().MouseMode; got != tea.MouseModeAllMotion {
+		t.Errorf("mouse mode after the focus regained = %v, want the pointer reports back", got)
 	}
 	each(cmd, func(msg tea.Msg) {
 		if fmt.Sprintf("%T", msg) == "tui.surveyMsg" {
@@ -183,7 +203,7 @@ func TestTheSpinnerStopsWithoutTheFocus(t *testing.T) {
 	if _, cmd := update(m, tui.Spin()); cmd != nil {
 		t.Error("the spinner went on without the focus")
 	}
-	if view := m.View(); !strings.Contains(view, theme.Default().Glyphs.Working) {
+	if view := drawn(m); !strings.Contains(view, theme.Default().Glyphs.Working) {
 		t.Errorf("a working agent without the focus does not show the working glyph:\n%s", view)
 	}
 	m, _ = update(m, tea.FocusMsg{})
@@ -206,10 +226,9 @@ func TestTheFocusRegainedReadsTheMirrorAtOnce(t *testing.T) {
 	}
 }
 
-// A blur report with other input behind it in the same read reaches the
-// surface as something other than a tea.BlurMsg, as a focus report does. It
-// is the blur all the same. The messages are the ones bubbletea itself makes
-// of those bytes, so its next version cannot change them unseen.
+// A blur report with other input behind it in the same read is the blur all
+// the same, as a focus report is. The messages are the ones bubbletea itself
+// makes of those bytes, so its next version cannot change them unseen.
 func TestABlurReportWithAMouseReportBehindItIsTheBlur(t *testing.T) {
 	var read []tea.Msg
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
 )
@@ -43,7 +43,7 @@ func (m Model) openHelp() (tea.Model, tea.Cmd) {
 
 // helpScreenKey is every press on the help screen. The screen only reads, so
 // a press scrolls it or leaves it. The key that opened it closes it too.
-func (m Model) helpScreenKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) helpScreenKey(msg keyPress) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -213,7 +213,7 @@ func sortEntries(es []helpEntry) {
 // key column is shared by every section, so the descriptions line up down the
 // whole screen and it reads as one table.
 func (m Model) helpScreen() string {
-	th := m.theme
+	th := *m.theme
 	w := m.listWidth()
 	sections := m.helpSections()
 	keyWidth := 0

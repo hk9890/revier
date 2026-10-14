@@ -37,7 +37,7 @@ type surface struct {
 
 func (m Model) surface() surface {
 	return surface{
-		theme: m.theme, spun: m.spun(), keys: m.keys, core: m.core, stateRoot: m.stateRoot,
+		theme: *m.theme, spun: m.spun(), keys: m.keys, core: m.core, stateRoot: m.stateRoot,
 		views: m.views, surveyed: m.surveyed, attached: m.attached, projects: m.projects, targets: m.targets, usable: m.usable,
 		actions: m.actions, shared: m.shared, tkeys: m.tkeys, err: m.err,
 		list: m.listWidth(), pane: m.paneCols() - paneChrome, page: m.listPage(),

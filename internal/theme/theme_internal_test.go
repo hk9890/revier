@@ -1,12 +1,60 @@
 package theme
 
 import (
+	"image/color"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
+
+// The indices are the ones termenv chose, which revier drew with before it
+// rendered through lipgloss v2: in 16 colours a mocha hover row on bright
+// black, where v2's own choice is black, and dim text in bright blue.
+func TestA256Or16ColourTerminalGetsTheIndexRevierAlwaysDrew(t *testing.T) {
+	type pair struct{ c256, c16 int }
+	roles := []struct {
+		name string
+		of   func(Theme) color.Color
+	}{
+		{"Path", func(th Theme) color.Color { return th.Path.GetForeground() }},
+		{"NameDim", func(th Theme) color.Color { return th.NameDim.GetForeground() }},
+		{"Hover", func(th Theme) color.Color { return th.Hover.GetBackground() }},
+		{"Cursor", func(th Theme) color.Color { return th.Cursor.GetBackground() }},
+		{"ProjectName", func(th Theme) color.Color { return th.ProjectName.GetForeground() }},
+		{"Accent", func(th Theme) color.Color { return th.Accent.GetForeground() }},
+		{"Attention", func(th Theme) color.Color { return th.Attention.GetForeground() }},
+		{"PathMissing", func(th Theme) color.Color { return th.PathMissing.GetForeground() }},
+		{"Idle", func(th Theme) color.Color { return th.Idle.GetForeground() }},
+		{"Meta", func(th Theme) color.Color { return th.Meta.GetForeground() }},
+	}
+	for flavour, want := range map[string][]pair{
+		"catppuccin-mocha":     {{60, 12}, {103, 12}, {59, 8}, {59, 8}, {189, 13}, {183, 13}, {211, 13}, {217, 9}, {117, 14}, {111, 12}},
+		"catppuccin-macchiato": {{66, 6}, {103, 12}, {59, 8}, {59, 8}, {189, 13}, {183, 13}, {210, 9}, {232, 0}, {116, 14}, {111, 12}},
+		"catppuccin-frappe":    {{102, 8}, {103, 12}, {59, 8}, {59, 8}, {189, 13}, {182, 13}, {174, 9}, {232, 0}, {116, 14}, {111, 12}},
+		"catppuccin-latte":     {{145, 7}, {103, 12}, {188, 7}, {146, 12}, {59, 8}, {99, 12}, {232, 0}, {167, 9}, {38, 6}, {27, 12}},
+	} {
+		th, err := Lookup(flavour, DefaultGlyphs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in256, in16 := th.In(colorprofile.ANSI256), th.In(colorprofile.ANSI)
+		for i, role := range roles {
+			if got := role.of(in256); got != ansi.IndexedColor(want[i].c256) {
+				t.Errorf("%s %s in 256 colours = %v, want index %d", flavour, role.name, got, want[i].c256)
+			}
+			if got := role.of(in16); got != ansi.BasicColor(want[i].c16) {
+				t.Errorf("%s %s in 16 colours = %v, want index %d", flavour, role.name, got, want[i].c16)
+			}
+		}
+		if got := th.In(colorprofile.TrueColor).Hover.GetBackground(); got != th.Hover.GetBackground() {
+			t.Errorf("%s hover in true colour = %v, want the hex colour %v", flavour, got, th.Hover.GetBackground())
+		}
+	}
+}
 
 func TestDefaultsResolve(t *testing.T) {
 	th := Default()

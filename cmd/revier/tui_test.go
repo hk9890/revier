@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/core"
 )
@@ -73,7 +76,7 @@ type program struct{ first tea.Cmd }
 
 func (p program) Init() tea.Cmd                       { return p.first }
 func (p program) Update(tea.Msg) (tea.Model, tea.Cmd) { return p, nil }
-func (p program) View() string                        { return "" }
+func (p program) View() tea.View                      { return tea.NewView("") }
 
 // surfaceOf runs a surface that runs first, with no terminal.
 func surfaceOf(first tea.Cmd) error {
@@ -110,6 +113,38 @@ func TestASignalEndsTheSurfaceAndIsNamed(t *testing.T) {
 			return nil
 		})
 		wantSignal(t, err, sig)
+	}
+}
+
+// styled is a surface that draws one bold, coloured word, then quits.
+type styled struct{}
+
+func (styled) Init() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg { return tea.QuitMsg{} })
+}
+func (styled) Update(tea.Msg) (tea.Model, tea.Cmd) { return styled{}, nil }
+func (styled) View() tea.View {
+	return tea.NewView(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff0000")).Render("word"))
+}
+
+// NO_COLOR with any value that is not empty draws no colour, and keeps bold.
+func TestNoColorWithAnyValueDrawsNoColour(t *testing.T) {
+	for _, v := range []string{"1", "yes"} {
+		var out bytes.Buffer
+		opts := append(colourOf(func(string) string { return v }), tea.WithInput(nil), tea.WithOutput(&out), tea.WithWindowSize(20, 2))
+		if err := runSurface(styled{}, opts...); err != nil {
+			t.Fatalf("NO_COLOR=%s: runSurface = %v", v, err)
+		}
+		got := out.String()
+		if !strings.Contains(got, "word") || !strings.Contains(got, "\x1b[1m") {
+			t.Errorf("NO_COLOR=%s: output %q, want the word in bold", v, got)
+		}
+		if strings.Contains(got, "38;") {
+			t.Errorf("NO_COLOR=%s: output %q has a colour", v, got)
+		}
+	}
+	if opts := colourOf(func(string) string { return "" }); opts != nil {
+		t.Errorf("colourOf(no NO_COLOR) = %v, want no option", opts)
 	}
 }
 

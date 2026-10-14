@@ -1,10 +1,9 @@
 package tui
 
 import (
-	"regexp"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // doubleClick is how close two clicks on one row are to count as a double
@@ -38,8 +37,9 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m, nil
 	}
-	m.cell = &pointerCell{x: msg.X, y: msg.Y}
-	m.over = m.hoverAt(msg.X, msg.Y)
+	mouse := msg.Mouse()
+	m.cell = &pointerCell{x: mouse.X, y: mouse.Y}
+	m.over = m.hoverAt(mouse.X, mouse.Y)
 	if m.press != nil {
 		next, done := m.held(msg)
 		if done {
@@ -47,25 +47,25 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m = next
 	}
-	switch {
-	case msg.Action == tea.MouseActionRelease:
+	switch msg.(type) {
+	case tea.MouseReleaseMsg:
 		return m.release()
-	case msg.Action != tea.MouseActionPress:
+	case tea.MouseMotionMsg:
 		return m, nil
 	}
-	// A press is the user's: the agent list's cursor is theirs from here
-	// (switchList).
+	// A press or a turn of the wheel is the user's: the agent list's cursor
+	// is theirs from here (switchList).
 	m.copied, m.agents.top = 0, false
-	if msg.Button == tea.MouseButtonLeft {
+	if mouse.Button == tea.MouseLeft {
 		m.press = &press{at: *m.cell, over: m.over}
 	}
 	// The help screen has no rows, and more lines than a short terminal
 	// holds: the wheel scrolls it, and a click does nothing.
 	if m.dialog == dialogHelp {
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
+		switch mouse.Button {
+		case tea.MouseWheelUp:
 			m.body.ScrollUp(1)
-		case tea.MouseButtonWheelDown:
+		case tea.MouseWheelDown:
 			m.body.ScrollDown(1)
 		}
 		return m, nil
@@ -73,19 +73,19 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if !m.hasRows() {
 		return m, nil
 	}
-	if msg.Button == tea.MouseButtonLeft && m.over.kind != hoverRow && m.over.kind != hoverNone {
+	if mouse.Button == tea.MouseLeft && m.over.kind != hoverRow && m.over.kind != hoverNone {
 		return m, nil
 	}
-	if m.overPane(msg.X) {
+	if m.overPane(mouse.X) {
 		// The wheel over a pane that mirrors an agent scrolls the mirror
 		// through the panel's scrollback, and what stands over it stays. A
 		// pane too short for the mirror scrolls as a whole, and so does one
 		// with the mirror beside the facts while the pointer is on the facts.
-		if _, a, ok := m.mirroring(); ok && m.overMirror(msg.X) {
-			switch msg.Button {
-			case tea.MouseButtonWheelUp:
+		if _, a, ok := m.mirroring(); ok && m.overMirror(mouse.X) {
+			switch mouse.Button {
+			case tea.MouseWheelUp:
 				return m, m.mirror.scroll(m.core, a, mirrorNotch)
-			case tea.MouseButtonWheelDown:
+			case tea.MouseWheelDown:
 				return m, m.mirror.scroll(m.core, a, -mirrorNotch)
 			}
 			return m, nil
@@ -93,13 +93,13 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.detail, _ = m.detail.Update(msg)
 		return m, nil
 	}
-	switch msg.Button {
-	case tea.MouseButtonWheelUp:
+	switch mouse.Button {
+	case tea.MouseWheelUp:
 		m.bodyList().CursorUp()
-	case tea.MouseButtonWheelDown:
+	case tea.MouseWheelDown:
 		m.bodyList().CursorDown()
-	case tea.MouseButtonLeft:
-		index, ok := m.rowAt(msg.X, msg.Y)
+	case tea.MouseLeft:
+		index, ok := m.rowAt(mouse.X, mouse.Y)
 		if !ok {
 			return m, nil
 		}
@@ -114,7 +114,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.last = click{}
 			// A second click on a screen's row is its Enter.
 			if m.dialog != dialogNone {
-				return m.key(tea.KeyMsg{Type: tea.KeyEnter})
+				return m.key(pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 			}
 			return m.enter()
 		}
@@ -202,7 +202,7 @@ func (m Model) rowAt(x, y int) (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	index := (line + m.body.YOffset) / m.itemHeight()
+	index := (line + m.body.YOffset()) / m.itemHeight()
 	if index >= len(m.bodyList().VisibleItems()) {
 		return 0, false
 	}
@@ -219,25 +219,6 @@ func (m Model) bodyLine(y int) (int, bool) {
 		return 0, false
 	}
 	return y - top, true
-}
-
-// reportTail is a mouse report with its first two bytes gone, as the input
-// reader types it.
-var reportTail = regexp.MustCompile(`^<\d+;\d+;\d+[Mm]$`)
-
-// splitReport reports a key that is half of a mouse report and no key at
-// all. The input reader takes 256 bytes at a time and does not wait for the
-// rest of a report that a full read cut, so a burst of pointer motion
-// arrives as alt+[ and then the rest of the report as typed text, which a
-// field took for a query. Pasted text of that form is the user's.
-func splitReport(msg tea.KeyMsg) bool {
-	if msg.Type != tea.KeyRunes || msg.Paste {
-		return false
-	}
-	if msg.Alt {
-		return string(msg.Runes) == "["
-	}
-	return reportTail.MatchString(string(msg.Runes))
 }
 
 // overMirror reports whether a column of the pane is the mirror's: every one

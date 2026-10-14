@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/theme"
@@ -36,11 +36,11 @@ func TestTheSessionsScreenListsAndNamesWithNoRootModel(t *testing.T) {
 		t.Errorf("pane = %q, want the session, and its plan pending before a survey", pane)
 	}
 
-	save := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s"), Alt: true}
+	save := pressedKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModAlt})
 	if res, _ := sc.key(sf, save); res.err != nil || !sc.naming {
 		t.Fatalf("naming = %v, err = %v, want the name step", sc.naming, res.err)
 	}
-	if res, _ := sc.key(sf, tea.KeyMsg{Type: tea.KeyEsc}); res.closed || sc.naming {
+	if res, _ := sc.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); res.closed || sc.naming {
 		t.Fatalf("naming = %v, closed = %v, want Esc back on the sessions", sc.naming, res.closed)
 	}
 
@@ -48,7 +48,7 @@ func TestTheSessionsScreenListsAndNamesWithNoRootModel(t *testing.T) {
 	if res, _ := sc.key(sf, save); res.err == nil || sc.naming {
 		t.Errorf("err = %v, want a second save refused while one runs", res.err)
 	}
-	if res, _ := sc.key(sf, tea.KeyMsg{Type: tea.KeyEsc}); !res.closed {
+	if res, _ := sc.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); !res.closed {
 		t.Errorf("result = %+v, want Esc on the sessions to close the screen", res)
 	}
 }
