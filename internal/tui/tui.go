@@ -521,6 +521,16 @@ func (m *Model) due(host string, now time.Time) bool {
 	return now.Sub(at) >= min(gap, remoteGapMost)
 }
 
+// startRound records at as the start of host's round, the time its gap counts
+// from, in a new map, as the model's maps are copied on write.
+func (m *Model) startRound(host string, at time.Time) {
+	m.rounds = maps.Clone(m.rounds)
+	if m.rounds == nil {
+		m.rounds = map[string]time.Time{}
+	}
+	m.rounds[host] = at
+}
+
 // askAgain lets the next survey ask each linked host that answered its last
 // round, whatever its gap. A host that gave no answer keeps its gap, so a
 // press or a refocus does not wait on it again (decisions.md D130).
@@ -761,11 +771,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !slices.Contains(m.polling, host) && m.due(host, now) {
 				// A new slice: the rounds that run hold the old one.
 				m.polling = append(slices.Clone(m.polling), host)
-				m.rounds = maps.Clone(m.rounds)
-				if m.rounds == nil {
-					m.rounds = map[string]time.Time{}
-				}
-				m.rounds[host] = now
+				m.startRound(host, now)
 				cmds = append(cmds, m.AskRemotes(host))
 			}
 		}
@@ -779,6 +785,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.failed = map[string]int{}
 				}
 				m.failed[host]++
+				// A press or a refocus while the round ran forgot when it
+				// started. A host that gave no answer still waits its gap
+				// (decisions.md D130), counted here from the failure.
+				if _, ok := m.rounds[host]; !ok {
+					m.startRound(host, m.now())
+				}
 			} else {
 				delete(m.failed, host)
 			}

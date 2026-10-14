@@ -6,6 +6,7 @@ package sshconfig
 
 import (
 	"bufio"
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,40 +33,20 @@ func Path() (string, error) {
 // relative one is against the file's own directory. A file that does not
 // exist names nothing.
 func Hosts(path string) ([]string, error) {
-	seen := map[string]bool{}
+	f, err := Read(path)
+	if err != nil {
+		return nil, err
+	}
 	var out []string
-	err := walk(path, seen, &out, 0)
-	return out, err
+	f.hosts(map[string]bool{}, &out)
+	return out, nil
 }
 
-// includeDepth bounds an Include chain, as ssh does, so a file that includes
-// itself ends.
-const includeDepth = 16
-
-func walk(path string, seen map[string]bool, out *[]string, depth int) error {
-	if depth > includeDepth {
-		return nil
-	}
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, rest, _ := strings.Cut(strings.ReplaceAll(line, "=", " "), " ")
-		fields := strings.Fields(rest)
-		switch strings.ToLower(key) {
+func (f File) hosts(seen map[string]bool, out *[]string) {
+	for _, l := range f.lines {
+		switch l.key {
 		case "host":
-			for _, h := range fields {
+			for _, h := range l.fields {
 				if strings.ContainsAny(h, "*?!") || seen[h] {
 					continue
 				}
@@ -73,31 +54,20 @@ func walk(path string, seen map[string]bool, out *[]string, depth int) error {
 				*out = append(*out, h)
 			}
 		case "include":
-			for _, pattern := range fields {
-				pattern = expandHome(pattern)
-				if !filepath.IsAbs(pattern) {
-					pattern = filepath.Join(filepath.Dir(path), pattern)
-				}
-				matches, err := filepath.Glob(pattern)
-				if err != nil {
-					return fmt.Errorf("%s: include %q: %w", path, pattern, err)
-				}
-				for _, included := range matches {
-					if err := walk(included, seen, out, depth+1); err != nil {
-						return err
-					}
-				}
+			for _, inc := range l.included {
+				inc.hosts(seen, out)
 			}
 		}
 	}
-	if err := sc.Err(); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	return nil
 }
 
-// File is an ssh configuration as far as HostName reads it, Include lines
-// followed, read once so that a caller can ask it about every link host.
+// includeDepth bounds an Include chain, as ssh does, so a file that includes
+// itself ends.
+const includeDepth = 16
+
+// File is an ssh configuration as far as Hosts and HostName read it, Include
+// lines followed, read once so that a caller can ask it about every link
+// host.
 type File struct{ lines []line }
 
 // line is one Host, Match, HostName or Include line; an Include carries the
@@ -109,7 +79,9 @@ type line struct {
 }
 
 // Read reads the file at path and every file it includes. A file that does
-// not exist is an empty File.
+// not exist is an empty File. An Include that cannot be read is left out, as
+// ssh leaves it out, and the rest is read: the File holds every line that
+// could be read, and the error is the first Include that could not.
 func Read(path string) (File, error) {
 	return read(path, 0)
 }
@@ -128,14 +100,16 @@ func read(path string, depth int) (File, error) {
 	defer func() { _ = f.Close() }()
 
 	var out File
+	var unread error
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		text := strings.TrimSpace(sc.Text())
-		if text == "" || strings.HasPrefix(text, "#") {
+		// ssh separates a keyword from its value by any whitespace, or by one
+		// "=".
+		fields := strings.Fields(strings.ReplaceAll(sc.Text(), "=", " "))
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
 			continue
 		}
-		key, rest, _ := strings.Cut(strings.ReplaceAll(text, "=", " "), " ")
-		l := line{key: strings.ToLower(key), fields: strings.Fields(rest)}
+		l := line{key: strings.ToLower(fields[0]), fields: fields[1:]}
 		switch l.key {
 		case "host", "match", "hostname":
 		case "include":
@@ -146,13 +120,12 @@ func read(path string, depth int) (File, error) {
 				}
 				matches, err := filepath.Glob(pattern)
 				if err != nil {
-					return File{}, fmt.Errorf("%s: include %q: %w", path, pattern, err)
+					unread = cmp.Or(unread, fmt.Errorf("%s: include %q: %w", path, pattern, err))
+					continue
 				}
 				for _, included := range matches {
 					inc, err := read(included, depth+1)
-					if err != nil {
-						return File{}, err
-					}
+					unread = cmp.Or(unread, err)
 					l.included = append(l.included, inc)
 				}
 			}
@@ -162,9 +135,9 @@ func read(path string, depth int) (File, error) {
 		out.lines = append(out.lines, l)
 	}
 	if err := sc.Err(); err != nil {
-		return File{}, fmt.Errorf("%s: %w", path, err)
+		return out, fmt.Errorf("%s: %w", path, err)
 	}
-	return out, nil
+	return out, unread
 }
 
 // HostName is the HostName the file gives host, as ssh reads it: the first

@@ -26,6 +26,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/BurntSushi/toml"
@@ -151,13 +152,14 @@ func Load(root string) (*Config, []core.Project, error) {
 // the ones it left out. The project files are shared between machines, so a
 // link that is right on one machine names the other one itself. Leaving one
 // out is not a refusal: nothing in the file is wrong, and on the other
-// machine the same file is a working link.
+// machine the same file is a working link. The machine is read at the first
+// link, so a load with no link, on every command, reads no ssh configuration.
 func elsewhere(projects []core.Project) ([]core.Project, []string) {
-	here := ThisMachine()
+	here := sync.OnceValue(ThisMachine)
 	var self []string
 	out := projects[:0:0]
 	for _, p := range projects {
-		if p.Remote != nil && here.Is(p.Remote.Host) {
+		if p.Remote != nil && here().Is(p.Remote.Host) {
 			self = append(self, p.File)
 			continue
 		}

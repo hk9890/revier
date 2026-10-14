@@ -258,12 +258,13 @@ surveys nothing and asks no linked host, since nobody reads the answer, unless
 a launch of its own is still coming up (D87); the
 terminal's focus report on the raise reads the project files again, since a
 press used to load them, then runs one survey and resumes the refresh. A press
-that goes to a target or an agent hides the popup too. Any surface without the
-focus refreshes every ten seconds, the mirror with it, the spinner stands, and
-the pointer is reported only when pressed; the focus regained surveys this
-machine and every linked host that answered its last round at once (D129,
-D130). The surface knows it is
-the popup, and which project to open on, from the environment its terminal is
+that goes to a target or an agent hides the popup too once it lands, unless the
+popup was hidden and raised again since the press: the raise is the user's
+next errand. Any surface without the focus refreshes every ten seconds, the
+mirror with it, the spinner stands, and the pointer is reported only when
+pressed; the focus regained surveys this machine and every linked host that
+answered its last round at once (D129, D130). The surface knows it is the
+popup, and which project to open on, from the environment its terminal is
 started with, read and dropped at start so nothing it launches inherits it.
 The project is resolved at the keypress, while the focused window is still the
 user's. In any other terminal, and where the host cannot hide, Esc exits.

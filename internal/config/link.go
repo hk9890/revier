@@ -23,7 +23,8 @@ type Machine struct {
 
 // ThisMachine is the Machine revier runs on. A hostname it cannot read is no
 // machine, so no host is this one; an ssh configuration it cannot read gives
-// no host a HostName, so a host is this machine by its own name only.
+// no host a HostName, so a host is this machine by its own name only. An
+// Include it cannot read costs only the HostNames that Include gives.
 func ThisMachine() Machine {
 	var m Machine
 	m.name, _ = os.Hostname()

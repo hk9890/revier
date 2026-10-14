@@ -259,6 +259,26 @@ func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
 	}
 }
 
+// A press while a round is out lets the next survey ask its host again. A
+// round that then gives no answer still starts the host's gap: the next
+// survey does not wait on it again (decisions.md D130).
+func TestARoundThatFailsAfterAPressStillWaitsItsGap(t *testing.T) {
+	m, _, remote := besideALink(t)
+	remote.Err = errors.New("buildbox: no answer")
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	m, round := surveyedHere(m)
+	m, _ = m.Acted(nil)
+	m, _ = deliver(m, round)
+
+	now = now.Add(time.Second)
+	m, next := surveyedHere(m)
+	deliver(m, next)
+	if len(remote.Asked) != 1 {
+		t.Errorf("the host was asked %d times, want no second round a second after it gave no answer", len(remote.Asked))
+	}
+}
+
 // Each linked host is asked by itself: one that has not answered holds
 // neither the rows of a link on another host nor that host's next round.
 func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
