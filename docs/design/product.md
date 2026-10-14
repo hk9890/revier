@@ -158,7 +158,8 @@ rather than a coincidence of the filter.
 The rows refresh from this machine alone, and what a linked host says is laid
 over them when it answers: a project closed here is off its row within a
 refresh however long a host takes, and a link's pane says `surveying` until
-its host has answered once (D114). A cursor nobody moved stays on the top row
+its host has answered once (D114). A host is asked at most once in five
+seconds, and less often while it does not answer (D130). A cursor nobody moved stays on the top row
 until the last host has answered, since an answer can put a link first.
 The pane starts level with the project query.
 
@@ -248,9 +249,14 @@ before the terminal sees it. That window is the popup, or a terminal whose
 current panel runs revier with no command, paired with its window as an
 attachment is (D95); there no popup opens. A runtime that cannot type into the
 panel leaves the press what it was: the popup, raised or opened. Hidden, it
-surveys nothing and asks no linked host, since nobody reads the answer; the
+surveys nothing and asks no linked host, since nobody reads the answer, unless
+a launch of its own is still coming up (D87); the
 terminal's focus report on the raise reads the project files again, since a
-press used to load them, then runs one survey and resumes the refresh. The surface knows it is
+press used to load them, then runs one survey and resumes the refresh. A press
+that goes to a target or an agent hides the popup too. Any surface without the
+focus refreshes every ten seconds, the mirror with it, the spinner stands, and
+the pointer is reported only when pressed; the focus regained surveys this
+machine and every linked host at once (D129). The surface knows it is
 the popup, and which project to open on, from the environment its terminal is
 started with, read and dropped at start so nothing it launches inherits it.
 The project is resolved at the keypress, while the focused window is still the

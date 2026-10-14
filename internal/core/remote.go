@@ -117,6 +117,17 @@ func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
 	return RemoteAnswers{by: by}
 }
 
+// Failed reports answers in which the host gave no answer at all: every
+// link it was asked about holds a failure.
+func (a RemoteAnswers) Failed() bool {
+	for _, answer := range a.by {
+		if answer.err == nil {
+			return false
+		}
+	}
+	return len(a.by) > 0
+}
+
 // Renamed returns the answers with the one for the link called from under to:
 // the file moved, and what its host said of the project stands.
 func (a RemoteAnswers) Renamed(from, to revier.ProjectName) RemoteAnswers {

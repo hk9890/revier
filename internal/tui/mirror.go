@@ -52,6 +52,7 @@ type mirror struct {
 	seq      int       // the number of the last read asked for
 	took     int       // the number of the last read taken
 	ticking  bool      // whether a tick is out, so a switch starts no second one
+	gen      int       // the number of the tick that is out; an older one is dropped
 
 	// The lines text was last set as, and the width they were set at: the
 	// pane is drawn again on every message, and a scrollback is long. A read
@@ -70,10 +71,28 @@ type mirroredMsg struct {
 	err  error
 }
 
-type mirrorTickMsg struct{}
+// mirrorTickMsg starts the next read. gen is the number of the tick.
+type mirrorTickMsg struct{ gen int }
 
-func mirrorTick() tea.Cmd {
-	return tea.Tick(mirrorInterval, func(time.Time) tea.Msg { return mirrorTickMsg{} })
+func mirrorTick(d time.Duration, gen int) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return mirrorTickMsg{gen: gen} })
+}
+
+// mirrorEvery is how often the mirror reads the panel: once a second with
+// the focus, as often as the surface refreshes without it.
+func (m Model) mirrorEvery() time.Duration {
+	if m.blurred {
+		return blurredRefresh
+	}
+	return mirrorInterval
+}
+
+// restart drops the tick that is out, so the next ask reads at once and
+// starts a tick at the interval of now: the focus is back on a mirror that
+// read slowly.
+func (mi *mirror) restart() {
+	mi.gen++
+	mi.ticking = false
 }
 
 // mirrored is the agent the pane mirrors, and the row that names it: the one
@@ -111,16 +130,17 @@ func (m Model) mirroring() (listedKey, revier.AgentView, bool) {
 // view with a screen read before it left, and on every tick after. It starts
 // the tick when the mirror comes into view, and the tick ends itself when it
 // leaves.
-func (mi *mirror) ask(c *core.Core, key listedKey, a revier.AgentView, msg tea.Msg) tea.Cmd {
+func (mi *mirror) ask(c *core.Core, key listedKey, a revier.AgentView, msg tea.Msg, every time.Duration) tea.Cmd {
 	var cmds []tea.Cmd
 	back := !mi.ticking
 	if back {
 		mi.ticking = true
-		cmds = append(cmds, mirrorTick())
+		cmds = append(cmds, mirrorTick(every, mi.gen))
 	}
-	_, tick := msg.(mirrorTickMsg)
+	t, tick := msg.(mirrorTickMsg)
+	tick = tick && t.gen == mi.gen
 	if key != mi.key {
-		*mi = mirror{key: key, ticking: true, seq: mi.seq, room: mi.room, width: mi.width}
+		*mi = mirror{key: key, ticking: true, gen: mi.gen, seq: mi.seq, room: mi.room, width: mi.width}
 	} else if !tick && !back {
 		return tea.Batch(cmds...)
 	}

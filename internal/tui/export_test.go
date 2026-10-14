@@ -17,8 +17,16 @@ func (m Model) LookupStart() tea.Cmd { return m.lookupStart() }
 // Spin is one tick of the working spinner.
 func Spin() tea.Msg { return spinMsg{} }
 
-// WithClock replaces the clock the double-click window is measured on, so a
-// test decides how far apart two clicks were.
+// Interval is how long the surface waits now for its next refresh.
+func (m Model) Interval() time.Duration { return m.interval() }
+
+// Ticked is the refresh tick that is out, as it arrives: a test delivers it
+// without waiting it out.
+func (m Model) Ticked() tea.Msg { return tickMsg{chain: m.chain} }
+
+// WithClock replaces the clock the double-click window and the gap between
+// two rounds to a linked host are measured on, so a test decides how far
+// apart two clicks or two surveys were.
 func (m Model) WithClock(now func() time.Time) Model {
 	m.now = now
 	return m
@@ -41,7 +49,7 @@ func (m Model) Said() Model {
 // has answered, as the command its tick sends would answer it: at once, on
 // this goroutine.
 func (m Model) Mirrored() Model {
-	next, _ := m.Update(mirrorTickMsg{})
+	next, _ := m.Update(mirrorTickMsg{gen: m.mirror.gen})
 	m = next.(Model)
 	_, a, ok := m.mirroring()
 	if !ok {
@@ -53,7 +61,7 @@ func (m Model) Mirrored() Model {
 
 // MirrorTicked is the model after one tick of the mirror's timer.
 func (m Model) MirrorTicked() Model {
-	next, _ := m.Update(mirrorTickMsg{})
+	next, _ := m.Update(mirrorTickMsg{gen: m.mirror.gen})
 	return next.(Model)
 }
 
