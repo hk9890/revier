@@ -164,6 +164,7 @@ type Model struct {
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
+	raises    int                              // the times the popup was raised; a go hides it only when it was not raised since the press
 	idle      bool                             // the survey chain ended while hidden; the raise starts it again
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
@@ -171,7 +172,7 @@ type Model struct {
 	local     core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers   core.RemoteAnswers               // what the linked hosts said last
 	polling   []string                         // the linked hosts that are being asked
-	rounds    map[string]time.Time             // when each linked host was last asked; nil asks every one at the next survey
+	rounds    map[string]time.Time             // when each linked host was last asked; one not in it is asked at the next survey
 	failed    map[string]int                   // the rounds in a row each linked host gave no answer to
 	onTop     bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input     textinput.Model                  // the filter query, with its own cursor
@@ -395,9 +396,11 @@ func spin() tea.Cmd {
 // result. An activation wrote what it learned through the ledger, and the
 // surface takes state in on the update loop. went is a press that brought a
 // target or an agent to the front, not an action that had the terminal.
+// raises is Model.raises at the press.
 type actedMsg struct {
-	err  error
-	went bool
+	err    error
+	went   bool
+	raises int
 }
 
 // Init surveys immediately; the timer starts once the first survey answers.
@@ -499,7 +502,9 @@ func (m Model) AskRemotes(hosts ...string) tea.Cmd {
 // remoteGap is the least time between the starts of two rounds to one linked
 // host. Each round is a whole survey on that machine, and a surface with the
 // focus refreshes every second; the rows of this machine keep that refresh
-// (decisions.md D114, D130).
+// (decisions.md D114, D130). The timing is the surface's and not the core's:
+// the surface is the one caller that asks the hosts again and again, and
+// core.AskRemotes asks each host once per call.
 const remoteGap = 5 * time.Second
 
 // remoteGapMost bounds the gap of a host that gave no answer: each round in a
@@ -514,6 +519,14 @@ func (m *Model) due(host string, now time.Time) bool {
 	}
 	gap := remoteGap << min(m.failed[host], 4)
 	return now.Sub(at) >= min(gap, remoteGapMost)
+}
+
+// askAgain lets the next survey ask each linked host that answered its last
+// round, whatever its gap. A host that gave no answer keeps its gap, so a
+// press or a refocus does not wait on it again (decisions.md D130).
+func (m *Model) askAgain() {
+	m.rounds = maps.Clone(m.rounds)
+	maps.DeleteFunc(m.rounds, func(host string, _ time.Time) bool { return m.failed[host] == 0 })
 }
 
 // linkedHosts is every host a project lives on, each once, in the projects'
@@ -835,7 +848,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The surface opens on the projects, a raise included: the press
 			// that raises it is the one that opened it (decisions.md D110).
 			m.hidden, m.agents.shown = false, false
-			m.rounds = nil
+			m.raises++
+			m.askAgain()
 			m.mirror.restart()
 			// A tick still out was set while nobody looked, up to the slow
 			// refresh away: it is dropped, and the reload surveys instead.
@@ -852,7 +866,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// again at once, the linked hosts and the mirror with it, so nobody
 		// reads rows that aged while nobody looked.
 		m.mirror.restart()
-		m.rounds = nil
+		m.askAgain()
 		return m, m.surveyNow()
 	case reloadedMsg:
 		switch {
@@ -886,11 +900,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.takeState()
 		// What a press changed on a linked host is asked for at the next
 		// survey, not at the end of the host's gap.
-		m.rounds = nil
+		m.askAgain()
 		// A press that brought a target or an agent to the front is done
 		// with the popup: it leaves the screen, and with it the refresh
-		// (decisions.md D129). A failure stays on the screen to be read.
-		if msg.went && msg.err == nil && m.popup {
+		// (decisions.md D129). A failure stays on the screen to be read, and
+		// a popup raised again since the press is the user's next errand.
+		if msg.went && msg.err == nil && m.popup && !m.hidden && msg.raises == m.raises {
 			return m, m.hide(true)
 		}
 		return m, nil
@@ -1300,14 +1315,14 @@ func (m Model) goRow(i int) tea.Cmd {
 	}
 	row := rows[i]
 	if ref := row.attached; !ref.IsZero() {
-		c := m.core
+		c, raises := m.core, m.raises
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)
 			logging.Op("focus attached", start, err, "ref", ref)
-			return actedMsg{err: err, went: true}
+			return actedMsg{err: err, went: true, raises: raises}
 		}
 	}
 	v, _ := m.selected()
@@ -1326,12 +1341,12 @@ func (m Model) goRow(i int) tea.Cmd {
 // surface stays live. Enter on a row of the pane and a target key on the
 // list are the same operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
-	c := m.core
+	c, raises := m.core, m.raises
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
 		_, _, err := c.ActivateWaiting(ctx, p, name, nil)
-		return actedMsg{err: err, went: true}
+		return actedMsg{err: err, went: true, raises: raises}
 	}
 }
 

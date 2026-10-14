@@ -285,6 +285,33 @@ func TestAGoFromThePopupHidesIt(t *testing.T) {
 	_ = m
 }
 
+// A go that lands after the user hid the popup and raised it again leaves it
+// on the screen: the user raised it for the next errand.
+func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("revier", core.PopupClass)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m = survey(m)
+	m, _ = press(m, "alt+t")
+	m, _ = press(m, "down") // editor
+	m, slow := press(m, "enter")
+	if slow == nil {
+		t.Fatal("enter on a target returned no command")
+	}
+	m, _ = press(m, "esc") // out of the pane
+	m, hide := press(m, "esc")
+	m = run(m, hide)
+	if len(wm.Hidden) != 1 {
+		t.Fatalf("hidden = %v after esc, want the popup", wm.Hidden)
+	}
+	m, _ = update(m, tea.FocusMsg{})
+
+	// Fed by hand: the answer is the assertion, a hide or nothing.
+	if _, cmd := update(m, slow()); cmd != nil {
+		t.Error("a go that landed past the raise answered with a command, want none: the popup stays")
+	}
+}
+
 // A go that landed while the popup could not hide leaves the popup where it
 // is, with its query and cursor: only Esc, which had nothing else to do,
 // quits instead.

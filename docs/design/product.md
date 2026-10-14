@@ -261,7 +261,8 @@ press used to load them, then runs one survey and resumes the refresh. A press
 that goes to a target or an agent hides the popup too. Any surface without the
 focus refreshes every ten seconds, the mirror with it, the spinner stands, and
 the pointer is reported only when pressed; the focus regained surveys this
-machine and every linked host at once (D129). The surface knows it is
+machine and every linked host that answered its last round at once (D129,
+D130). The surface knows it is
 the popup, and which project to open on, from the environment its terminal is
 started with, read and dropped at start so nothing it launches inherits it.
 The project is resolved at the keypress, while the focused window is still the

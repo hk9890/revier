@@ -239,6 +239,26 @@ func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 	}
 }
 
+// A host that gave no answer keeps its gap at the focus regained: asking it
+// at once would wait on it again (decisions.md D130).
+func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
+	m, _, remote := besideALink(t)
+	remote.Err = errors.New("buildbox: no answer")
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	m, _ = surveyedHere(m)
+	m = run(m, m.AskRemotes("buildbox"))
+
+	now = now.Add(5 * time.Second)
+	m, _ = update(m, tea.BlurMsg{})
+	m, cmd := update(m, tea.FocusMsg{})
+	m, cmd = deliver(m, cmd)
+	deliver(m, cmd)
+	if len(remote.Asked) != 1 {
+		t.Errorf("the host was asked %d times, want no second round within its doubled gap", len(remote.Asked))
+	}
+}
+
 // Each linked host is asked by itself: one that has not answered holds
 // neither the rows of a link on another host nor that host's next round.
 func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
