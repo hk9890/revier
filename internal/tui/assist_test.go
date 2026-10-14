@@ -144,11 +144,8 @@ func (h handOver) Init() tea.Cmd {
 }
 
 func (h handOver) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
-	case handOverNow:
+	if _, now := msg.(handOverNow); now {
 		return h, tea.Exec(h.run, func(error) tea.Msg { return tea.QuitMsg{} })
-	case tea.QuitMsg:
-		return h, tea.Quit
 	}
 	return h, nil
 }

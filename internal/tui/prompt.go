@@ -42,10 +42,11 @@ func styleField(in *textinput.Model, th theme.Theme) {
 }
 
 // inputView is a text field as the surface draws it. An empty field shows its
-// placeholder: whole in a field with no width, and in one with a width cut to
-// it with an ellipsis and padded to it. textinput draws a field with no width
-// with the placeholder's first character only, and pads one with a width past
-// it, so it is handed a placeholder that needs neither.
+// placeholder: whole in a field with no width, and in one with a width cut
+// with an ellipsis to the room its text and cursor take, and padded to it.
+// textinput draws a field with no width with the placeholder's first
+// character only, and cuts one with a width with no mark, so it is handed a
+// placeholder that needs neither.
 func inputView(in textinput.Model) string {
 	if in.Value() != "" || in.Placeholder == "" {
 		return in.View()
@@ -54,11 +55,9 @@ func inputView(in textinput.Model) string {
 	rest := in.Placeholder[len(first):]
 	pad := 0
 	if w := in.Width(); w > 0 {
-		room := w - lipgloss.Width(in.Prompt) - lipgloss.Width(first)
+		room := w + 1 - lipgloss.Width(first)
 		rest = ansi.Truncate(rest, room, "…")
 		pad = max(0, room-lipgloss.Width(rest))
-	} else if ansi.StringWidth(rest) <= 1 {
-		rest = ""
 	}
 	in.Placeholder = first + rest
 	in.SetWidth(max(lipgloss.Width(in.Placeholder)-1, 0))

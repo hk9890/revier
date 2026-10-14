@@ -89,7 +89,8 @@ func consoleKey(k tea.KeyPressMsg) tea.KeyPressMsg {
 // comes first, where the terminal reports key disambiguation (Model.unfolded).
 //
 // The second return is false for a press whose legacy sequence the surface
-// reads as no key at all, such as ctrl+delete: that press does nothing.
+// reads as no key at all, such as ctrl+delete: that press does nothing, unless
+// a target key binds it as pressed.
 func legacyKey(k tea.KeyPressMsg) (tea.KeyPressMsg, bool) {
 	mod := k.Mod &^ (tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock)
 	k.Mod = mod

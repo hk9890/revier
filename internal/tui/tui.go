@@ -604,19 +604,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consoleF = csi == consoleF
 		return m, nil
 	}
-	// A press is folded before anything reads it, a component included, and
-	// one a legacy terminal sends as no key changes nothing. The chord as it
-	// was pressed goes with it for a target key that binds it so.
+	// A press is folded before anything reads it, a component included. The
+	// chord as it was pressed goes with it for a target key that binds it so,
+	// also where a legacy terminal sends the press as no key; any other such
+	// press changes nothing.
 	if press, ok := msg.(tea.KeyPressMsg); ok {
 		if m.consoleF {
 			m.consoleF = false
 			press = consoleKey(press)
 		}
 		folded, ok := legacyKey(press)
-		if !ok {
+		exact := m.unfolded(press, folded)
+		if !ok && exact == "" {
 			return m, nil
 		}
-		msg = keyPress{KeyPressMsg: folded, exact: m.unfolded(press, folded)}
+		msg = keyPress{KeyPressMsg: folded, exact: exact}
 	}
 	next, cmd := m.update(msg)
 	mm, ok := next.(Model)

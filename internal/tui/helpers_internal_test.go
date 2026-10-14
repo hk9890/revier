@@ -6,7 +6,7 @@ import tea "charm.land/bubbletea/v2"
 // them builds it, with the screens New would give it: Model holds them by
 // pointer.
 func bare(m Model) Model {
-	m.link, m.sessions, m.config, m.proj, m.agents = &linkScreen{}, &sessionsScreen{}, &configScreen{}, &projectScreen{}, &agentList{}
+	m.link, m.sessions, m.config, m.proj, m.agents, m.create = &linkScreen{}, &sessionsScreen{}, &configScreen{}, &projectScreen{}, &agentList{}, &createScreen{}
 	return m
 }
 

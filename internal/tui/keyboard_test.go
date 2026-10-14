@@ -39,6 +39,9 @@ var kittyChords = []struct {
 	{"alt+shift+o", tea.KeyPressMsg{Code: 'o', Mod: tea.ModAlt | tea.ModShift}, true},
 	{"ctrl+shift+up", tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModCtrl | tea.ModShift}, true},
 	{"ctrl+o", tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}, true},
+	// A legacy terminal sends no key the surface reads for these.
+	{"ctrl+f5", tea.KeyPressMsg{Code: tea.KeyF5, Mod: tea.ModCtrl}, false},
+	{"ctrl+shift+1", tea.KeyPressMsg{Code: '1', Mod: tea.ModCtrl | tea.ModShift}, false},
 }
 
 // webOn is one project whose web target, a window, carries key.
