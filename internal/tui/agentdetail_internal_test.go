@@ -29,7 +29,7 @@ func TestTheNewestAnswerForTheProjectShownIsTaken(t *testing.T) {
 	one := agentKey{host: "rt", id: "1", panel: "1"}
 	two := agentKey{host: "rt", id: "1", panel: "2"}
 	said := func(text string) revier.AgentDetail { return revier.AgentDetail{Message: text, At: time.Unix(1, 0)} }
-	m := Model{aasked: "demo"}
+	m := bare(Model{aasked: "demo"})
 
 	m.took(detailsMsg{project: "demo", seq: 2, said: map[agentKey]revier.AgentDetail{one: said("newer"), two: said("two speaks")}})
 	m.took(detailsMsg{project: "demo", seq: 1, said: map[agentKey]revier.AgentDetail{one: said("older")}})

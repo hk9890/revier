@@ -6,7 +6,7 @@ import "testing"
 // moves: page up from the last agent counts the rows above it, not the none
 // below it.
 func TestAPageOfAgentsCountsTheRowsInItsDirection(t *testing.T) {
-	m := Model{focus: focusAgents}
+	m := bare(Model{focus: focusAgents})
 	m.detail.Height = 6
 	for i := range 20 {
 		m.alines = append(m.alines, lineSpan{start: 2 * i, end: 2*i + 2})

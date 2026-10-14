@@ -579,7 +579,7 @@ func (s *linkScreen) restyle(th theme.Theme) {
 // light draws a host's projects with the row under the pointer lit, -1 for
 // none.
 func (s *linkScreen) light(th theme.Theme, row int) {
-	s.remote.SetDelegate(projectDelegate{theme: th, hover: row})
+	s.remote.SetDelegate(projectDelegate{theme: th, hover: row}.measured(s.remote))
 }
 
 // nameScreen is what stands in the list's place while the link is named:

@@ -32,7 +32,6 @@ import (
 	"os/exec"
 	"reflect"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -199,13 +198,16 @@ type Model struct {
 	targets []revier.Target // the shared targets, typed, as config.toml holds them
 
 	// The screens. Each is a struct of its own (screen.go): the root routes a
-	// press to the one that is up and applies the result it hands back.
-	link     linkScreen     // the link dialog (link.go)
-	create   createScreen   // the new-project screen (newproject.go)
-	sessions sessionsScreen // the sessions screen, and its save or restore (sessions.go)
-	config   configScreen   // the config screen (configscreen.go)
-	proj     projectScreen  // the project screen (projectscreen.go)
-	agents   agentList      // the agent list, the surface's second list (agentlist.go)
+	// press to the one that is up and applies the result it hands back. The
+	// large ones are held by pointer: Model is copied on every message, and
+	// past 64 KB each copy is a heap allocation rather than a copy on the
+	// stack.
+	link     *linkScreen     // the link dialog (link.go)
+	create   createScreen    // the new-project screen (newproject.go)
+	sessions *sessionsScreen // the sessions screen, and its save or restore (sessions.go)
+	config   *configScreen   // the config screen (configscreen.go)
+	proj     *projectScreen  // the project screen (projectscreen.go)
+	agents   *agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -221,15 +223,15 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		link:  newLinkScreen(th), sessions: newSessionsScreen(th),
+		link:  ptr(newLinkScreen(th)), sessions: ptr(newSessionsScreen(th)),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		agents: newAgentScreen(th),
+		agents: ptr(newAgentScreen(th)),
 		create: newCreateScreen(th),
 		body:   newBody(),
-		config: newConfigScreen(th, cfg),
-		proj:   newProjectScreen(th),
+		config: ptr(newConfigScreen(th, cfg)),
+		proj:   ptr(newProjectScreen(th)),
 		// Init surveys.
 		surveying: true,
 	}
@@ -253,6 +255,9 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.reload()
 	return m
 }
+
+// ptr is a pointer to v.
+func ptr[T any](v T) *T { return &v }
 
 // StartLookup finds the project to open on when the working directory is in
 // none: the one of the focused window, else the one remembered. It lists
@@ -611,8 +616,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if mm.sel.active {
 		return mm, cmd
 	}
-	if _, ok := msg.(spinMsg); ok {
+	switch msg.(type) {
+	case spinMsg:
 		mm.redrawSpin()
+		return mm, cmd
+	case tickMsg:
+		// A tick only starts the survey; its answer is what changes the rows.
+		return mm, cmd
+	case mirrorTickMsg:
+		// A tick only starts the read; the screen it reads is drawn when it
+		// answers.
+		key, a, ok := mm.mirroring()
+		if !ok {
+			return mm, cmd
+		}
+		return mm, tea.Batch(cmd, mm.mirror.ask(mm.core, key, a, msg, mm.mirrorEvery()))
+	case mirroredMsg:
+		// A screen read is the pane's alone.
+		mm.syncDetail()
 		return mm, cmd
 	}
 	mm.syncDetail()
@@ -927,22 +948,30 @@ func (m *Model) takeState() {
 // or an agent's state changes. Running above stopped is the picker's order
 // (os_list_json.py sorts on it too): with ninety projects the handful that are
 // open are what a search is almost always for.
-func (m Model) sorted(views []revier.ProjectView) []revier.ProjectView {
-	out := make([]revier.ProjectView, len(views))
-	copy(out, views)
-	sort.SliceStable(out, func(i, j int) bool {
-		return m.need(out[i]) < m.need(out[j])
-	})
+func (m *Model) sorted(views []revier.ProjectView) []revier.ProjectView {
+	type row struct {
+		view revier.ProjectView
+		need int
+	}
+	rows := make([]row, len(views))
+	for i, v := range views {
+		rows[i] = row{v, m.need(v)}
+	}
+	slices.SortStableFunc(rows, func(a, b row) int { return a.need - b.need })
+	out := make([]revier.ProjectView, len(rows))
+	for i, r := range rows {
+		out[i] = r.view
+	}
 	return out
 }
 
 // need is the group sorted puts a project in, the one that needs the user
 // most first. A query keeps its rows in these groups too (ranked).
-func (m Model) need(v revier.ProjectView) int {
+func (m *Model) need(v revier.ProjectView) int {
 	switch {
 	case v.Attention():
 		return 0
-	case m.heldHere(v):
+	case heldHere(m.attached, v):
 		return 1
 	default:
 		return 2
