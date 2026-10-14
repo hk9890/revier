@@ -161,16 +161,19 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	// be able to lock the config screen against every other edit. The two
 	// loads read the same files, so before is taken first: a file changed
 	// between them must read as the change this write did not make, not as a
-	// breakage it did.
+	// breakage it did. The projects are the ones Load gives, without the
+	// links to this machine (decisions.md D131).
 	dir := filepath.Join(root, "projects")
 	before, err := LoadProjects(dir, cfg.Shared())
 	if err != nil {
 		return TargetsWritten{}, err
 	}
+	before, _ = elsewhere(before)
 	projects, err := LoadProjects(dir, next.Shared())
 	if err != nil {
 		return TargetsWritten{}, err
 	}
+	projects, _ = elsewhere(projects)
 	if err := brokenBy(before, projects); err != nil {
 		return TargetsWritten{}, fmt.Errorf("not written, it would break %w", err)
 	}

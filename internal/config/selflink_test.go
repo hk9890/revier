@@ -51,3 +51,32 @@ func TestALinkToThisMachineIsNotLoaded(t *testing.T) {
 		t.Errorf("SelfLinks = %v, want %v", cfg.SelfLinks, want)
 	}
 }
+
+// A shared target written from the config screen hands the surface the
+// projects again, and those leave out the link to this machine as Load does.
+func TestAWrittenTargetGivesNoLinkToThisMachine(t *testing.T) {
+	machine, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname:", err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	root := t.TempDir()
+	dir := filepath.Join(root, "projects")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "far.toml", link)
+	write(t, dir, "self.toml", strings.Replace(link, "buildbox", machine, 1))
+
+	written, err := config.AddTarget(root, nil, revier.Target{Name: "web", Window: &revier.Realization{Launch: []string{"xdg-open", "https://example.com"}, Match: revier.Match{Class: "^web$"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []revier.ProjectName
+	for _, p := range written.Projects {
+		got = append(got, p.Name)
+	}
+	if !slices.Equal(got, []revier.ProjectName{"far"}) {
+		t.Errorf("projects after the write = %v, want the link to buildbox alone", got)
+	}
+}
