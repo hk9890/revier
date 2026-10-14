@@ -256,6 +256,29 @@ func TestSurveyReportsAProjectItsHostDidNotList(t *testing.T) {
 	}
 }
 
+// Failed is a host that gave no answer at all, which the surface backs off
+// from (decisions.md D130). A host that answered and did not list the
+// project is reachable, so the next round asks it at the usual gap.
+func TestFailedIsAHostThatGaveNoAnswer(t *testing.T) {
+	down := hosttest.NewRemote("buildbox")
+	down.Err = errors.New("buildbox: connection refused")
+	up := hosttest.NewRemote("buildbox", answer("other", revier.StatusIdle))
+	for _, tc := range []struct {
+		name   string
+		remote revier.Remote
+		want   bool
+	}{
+		{"unreached", down, true},
+		{"did not list the project", up, false},
+	} {
+		c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": tc.remote}}
+		answers := c.AskRemotes(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
+		if got := answers.Failed(); got != tc.want {
+			t.Errorf("%s: Failed() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 // A host with no remote yet gets one from the factory, once, and keeps it:
 // a link written while the surface runs, or a host the dialog asks about,
 // needs no restart.
