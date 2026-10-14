@@ -863,8 +863,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// The focus is back on a surface that refreshed slowly: it surveys
-		// again at once, the linked hosts and the mirror with it, so nobody
-		// reads rows that aged while nobody looked.
+		// again at once, the linked hosts that answered their last round and
+		// the mirror with it, so nobody reads rows that aged while nobody
+		// looked.
 		m.mirror.restart()
 		m.askAgain()
 		return m, m.surveyNow()

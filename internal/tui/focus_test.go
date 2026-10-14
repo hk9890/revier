@@ -306,8 +306,7 @@ func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	}
 	m, _ = update(m, tea.FocusMsg{})
 
-	// Fed by hand: the answer is the assertion, a hide or nothing.
-	if _, cmd := update(m, slow()); cmd != nil {
+	if _, cmd := deliver(m, slow); cmd != nil {
 		t.Error("a go that landed past the raise answered with a command, want none: the popup stays")
 	}
 }

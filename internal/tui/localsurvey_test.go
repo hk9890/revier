@@ -221,8 +221,8 @@ func TestALinkedHostIsAskedOnceAGap(t *testing.T) {
 	}
 }
 
-// The focus regained asks every linked host at once, whatever its gap: the
-// rows aged while nobody looked.
+// The focus regained asks every linked host that answered its last round at
+// once, whatever its gap: the rows aged while nobody looked.
 func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 	m, _, remote := besideALink(t)
 	now := time.Now()

@@ -150,7 +150,7 @@ func Load(root string) (*Config, []core.Project, error) {
 // elsewhere is projects without the links to this machine, and the files of
 // the ones it left out. The project files are shared between machines, so a
 // link that is right on one machine names the other one itself. Leaving one
-// out is not a refusal (D85): nothing in the file is wrong, and on the other
+// out is not a refusal: nothing in the file is wrong, and on the other
 // machine the same file is a working link.
 func elsewhere(projects []core.Project) ([]core.Project, []string) {
 	here := ThisMachine()
