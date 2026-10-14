@@ -1,6 +1,8 @@
 package tui_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -124,10 +126,21 @@ func TestAControlKeyInATextFieldIsItsLegacyKey(t *testing.T) {
 	fields := map[string]string{"the query": "project-01", "the path": "/nowhere/x"}
 	// focused is a new surface with the field focused and text in it. Each
 	// press gets its own: the screens are held by pointer, and an enter on
-	// the path writes a project file.
+	// the path writes a project file. The roots are emptied, not made anew:
+	// the path screen prints the file it would write, and two roots of
+	// different names would draw two screens.
+	roots := t.TempDir()
 	focused := func(field string, unfolds bool) tui.Model {
-		t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
-		t.Setenv("REVIER_STATE_HOME", t.TempDir())
+		for _, env := range []string{"REVIER_CONFIG_HOME", "REVIER_STATE_HOME"} {
+			root := filepath.Join(roots, env)
+			if err := os.RemoveAll(root); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(root, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(env, root)
+		}
 		_, _, c, projects := world(t, 2)
 		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 30)
 		if unfolds {
