@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,10 +156,12 @@ func TestARenamedLinkKeepsWhatItsHostSaid(t *testing.T) {
 }
 
 // The linked hosts are asked one round at a time: a survey that answers
-// while a round runs starts no second one, and the first survey after it
-// starts the next.
+// while a round runs starts no second one, and the first survey after it and
+// after the host's gap starts the next.
 func TestTheLinkedHostsAreAskedOneRoundAtATime(t *testing.T) {
 	m, _, remote := besideALink(t)
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
 
 	m, first := surveyedHere(m)
 	m, second := surveyedHere(m)
@@ -168,10 +171,71 @@ func TestTheLinkedHostsAreAskedOneRoundAtATime(t *testing.T) {
 		t.Fatalf("the host was asked %d times over two surveys, want one round", len(remote.Asked))
 	}
 
+	now = now.Add(5 * time.Second)
 	m, third := surveyedHere(m)
 	deliver(m, third)
 	if len(remote.Asked) != 2 {
 		t.Errorf("the host was asked %d times, want a second round once the first answered", len(remote.Asked))
+	}
+}
+
+// A round to a linked host is a whole survey on that machine, so a host is
+// asked at most once in five seconds while the rows here refresh every
+// second, and one that gave no answer waits twice as long after each round
+// in a row it failed.
+func TestALinkedHostIsAskedOnceAGap(t *testing.T) {
+	m, _, remote := besideALink(t)
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	round := func() {
+		t.Helper()
+		var cmd tea.Cmd
+		m, cmd = surveyedHere(m)
+		m, _ = deliver(m, cmd)
+	}
+
+	round()
+	now = now.Add(4 * time.Second)
+	round()
+	if len(remote.Asked) != 1 {
+		t.Fatalf("the host was asked %d times within its gap, want once", len(remote.Asked))
+	}
+	now = now.Add(time.Second)
+	round()
+	if len(remote.Asked) != 2 {
+		t.Fatalf("the host was asked %d times after its gap, want twice", len(remote.Asked))
+	}
+
+	remote.Err = errors.New("buildbox: no answer")
+	now = now.Add(5 * time.Second)
+	round() // the third round fails
+	now = now.Add(5 * time.Second)
+	round()
+	if len(remote.Asked) != 3 {
+		t.Fatalf("the host was asked %d times five seconds after a failed round, want no fourth", len(remote.Asked))
+	}
+	now = now.Add(5 * time.Second)
+	round()
+	if len(remote.Asked) != 4 {
+		t.Errorf("the host was asked %d times ten seconds after a failed round, want a fourth", len(remote.Asked))
+	}
+}
+
+// The focus regained asks every linked host at once, whatever its gap: the
+// rows aged while nobody looked.
+func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
+	m, _, remote := besideALink(t)
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	m, _ = surveyedHere(m)
+	m = run(m, m.AskRemotes("buildbox"))
+
+	m, _ = update(m, tea.BlurMsg{})
+	m, cmd := update(m, tea.FocusMsg{})
+	m, cmd = deliver(m, cmd)
+	deliver(m, cmd)
+	if len(remote.Asked) != 2 {
+		t.Errorf("the host was asked %d times, want a second round at the focus regained", len(remote.Asked))
 	}
 }
 
@@ -193,6 +257,8 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 	slow := hosttest.NewRemote("slowbox", hostSays("beta", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": fast, "slowbox": slow}}
 	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
 
 	// The survey starts a round of each host; only buildbox answers.
 	m, rounds := surveyedHere(resize(m, 140, 30))
@@ -204,6 +270,7 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 		t.Errorf("pane of beta = %q, want surveying: slowbox has not answered", body)
 	}
 
+	now = now.Add(5 * time.Second)
 	m, next := surveyedHere(m)
 	deliver(m, next)
 	if len(fast.Asked) != 2 || len(slow.Asked) != 0 {

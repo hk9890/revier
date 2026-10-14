@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,26 @@ func (c *Core) remote(host string) (revier.Remote, error) {
 // what the link dialog offers to link (decisions.md D45).
 func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectView, error) {
 	return c.survey(ctx, host, nil)
+}
+
+// ThisMachine reports a link's host that names the machine revier runs on.
+// machine is this machine's hostname; names are what the link calls the
+// host, its own name and the HostName ssh connects to for it. A name is the
+// machine by its first label, so dt and dt.local are one machine. A loopback
+// name is not: ssh reaches a VM or a tunnel through one, by its port. A link
+// to this machine asks itself over ssh for what it lists already, so revier
+// knows no such link (decisions.md D131).
+func ThisMachine(machine string, names ...string) bool {
+	short := func(name string) string {
+		label, _, _ := strings.Cut(strings.ToLower(strings.TrimSuffix(name, ".")), ".")
+		return label
+	}
+	for _, name := range names {
+		if machine != "" && short(name) == short(machine) {
+			return true
+		}
+	}
+	return false
 }
 
 // LinkedAs is the name of the link here to project on host: the first by
@@ -115,6 +136,17 @@ func (a RemoteAnswers) With(hosts []string, got RemoteAnswers) RemoteAnswers {
 	}
 	maps.Copy(by, got.by)
 	return RemoteAnswers{by: by}
+}
+
+// Failed reports answers in which the host gave no answer at all: every
+// link it was asked about holds a failure.
+func (a RemoteAnswers) Failed() bool {
+	for _, answer := range a.by {
+		if answer.err == nil {
+			return false
+		}
+	}
+	return len(a.by) > 0
 }
 
 // Renamed returns the answers with the one for the link called from under to:

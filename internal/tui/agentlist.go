@@ -462,7 +462,7 @@ func goAgent(c *core.Core, p core.Project, agent revier.AgentView) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
 		_, err := c.ActivateAgentWaiting(ctx, p, agent)
-		return actedMsg{err: err}
+		return actedMsg{err: err, went: true}
 	}
 }
 

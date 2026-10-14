@@ -441,7 +441,8 @@ TUI, and a first survey that is a round trip to every linked host - a second
 from the key to the agent states. The popup now minimizes on Esc through the
 window host, and `revier popup` raises it under D76's run-or-raise in tens of
 milliseconds, with the cursor and the query where they were. Hidden, it
-surveys nothing, since nobody reads the answer.
+surveys nothing, since nobody reads the answer, unless a launch of its own is
+still coming up (D129).
 
 ### D87 — claim-on-appear polls; there is no window-event port
 
@@ -795,3 +796,31 @@ is the panels of its listed tabs, in order; a target that lists none has no
 agent panel. A link has one list of tabs, the derived one: its home lists
 `agent`, and a list a target of the link declares is dropped. The agents are
 saved under the workspace, in the file shape of 0.14.0, so an old file restores.
+
+### D129 — a surface without the focus refreshes every ten seconds
+
+A popup left on the screen behind the window it opened surveyed every second
+and asked each linked host as often, with nobody reading it. The terminal's
+focus reports set the pace now: without the focus the surface and its mirror
+refresh every ten seconds and the spinner stands, and the focus regained
+surveys this machine and every linked host at once. A launch still coming up
+keeps the second, since the survey claims its window (D87). A go hides the
+popup. Rejected: a full stop, which leaves rows of any age on a second screen.
+
+### D130 — a linked host is asked at most once in five seconds
+
+A round is a whole survey on the host, and a surface with the focus started
+the next as soon as the last one answered: a third of a core there for each
+surface that links to it. A round now starts five seconds after the last one
+to that host started, at the soonest; a host that gave no answer waits twice
+as long after each round in a row it failed, up to a minute. This machine's
+rows keep the refresh (D114), and a press asks every host at the next survey.
+
+### D131 — revier knows no link to the machine it runs on
+
+The project files are shared between machines, so a link written on one
+names the other one itself, and there it asked itself over ssh every second
+for what its own survey lists. A link whose host is this machine, by name or
+by the HostName ssh gives it, is left out at load, and `revier doctor` says
+how many. The link dialog does not offer this machine. Rejected: answering
+the link from the local survey, which shows each agent there twice.

@@ -2,12 +2,34 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/sshconfig"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// OnThisMachine reports a link host that is the machine revier runs on, by
+// its own name or by the HostName the ssh configuration gives it
+// (decisions.md D131). A user in the destination is ssh's login, not the
+// machine, so it is left out of the name.
+func OnThisMachine(host string) bool {
+	machine, err := os.Hostname()
+	if err != nil {
+		return false
+	}
+	host = host[strings.LastIndex(host, "@")+1:]
+	names := []string{host}
+	if path, err := sshconfig.Path(); err == nil {
+		if name, err := sshconfig.HostName(path, host); err == nil && name != "" {
+			names = append(names, name)
+		}
+	}
+	return core.ThisMachine(machine, names...)
+}
 
 // linkTOML is a new link: where the project is, and what the host says about
 // it that a target here renders (decisions.md D41, D83). The path and the

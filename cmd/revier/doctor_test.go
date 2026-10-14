@@ -92,6 +92,28 @@ func TestDoctorEndsCleanWhenEverythingLoads(t *testing.T) {
 	}
 }
 
+// A link to this machine is left out of every load, and doctor says how many
+// it left: a missing project is otherwise hard to explain. It is no problem,
+// since the link is right on the other machine.
+func TestDoctorSaysHowManyLinksToThisMachineItSkipped(t *testing.T) {
+	machine, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname:", err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	doctorRoot(t, map[string]string{"sound.toml": sound, "self.toml": "[remote]\nhost = \"" + machine + "\"\n"})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v", err)
+	}
+	for _, want := range []string{"1 project, 0 files with problems", "skipped 1 link to this machine"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report should contain %q:\n%s", want, out.String())
+		}
+	}
+}
+
 // A mistake in config.toml is reported under that file, as a project's is
 // under its own, and costs only what it names: the projects still load.
 func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {

@@ -404,10 +404,14 @@ func (m Model) uncovered(views []revier.ProjectView) []revier.ProjectView {
 // known drops the views of projects the surface no longer holds. A survey
 // started before a delete answers after it, and would otherwise put the
 // deleted row back for a refresh.
-func (m Model) known(views []revier.ProjectView) []revier.ProjectView {
+func (m *Model) known(views []revier.ProjectView) []revier.ProjectView {
+	names := make(map[revier.ProjectName]bool, len(m.projects))
+	for _, p := range m.projects {
+		names[p.Name] = true
+	}
 	out := make([]revier.ProjectView, 0, len(views))
 	for _, v := range views {
-		if _, ok := m.project(v.Project.Name); ok {
+		if names[v.Project.Name] {
 			out = append(out, v)
 		}
 	}

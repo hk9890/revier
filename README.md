@@ -181,7 +181,7 @@ projects.
 | Tab | Move the cursor between the projects and the agents; from the targets, back to the projects. |
 | alt+t | Move the cursor to the targets. |
 | typing | Filter the section the cursor is in. |
-| Enter | Act on the row: a project opens its home, a target runs-or-raises, an agent's tab comes to the front, on its host for a project on another machine. |
+| Enter | Act on the row: a project opens its home, a target runs-or-raises, an agent's tab comes to the front, on its host for a project on another machine. The popup then hides. |
 | Esc | Clear the section's filter, then bring the cursor back to the projects. |
 | alt+e, or a click on the project's name atop the pane | The project screen: its name, path and git URL, and every target it has, the ones from `config.toml` included. A change is written to the project's own file at once, and a new name renames the file. |
 | del | Close the row: a project, a target, an attached window or an agent's tab. Asks first when the close ends an agent or a whole project. |
@@ -323,7 +323,9 @@ path and that repository. Neither names anything on this machine: the link has
 no directory here, and the checkout stays the host's to clone.
 
 revier must be installed on the host, a Linux machine, with the project's own
-file under its `~/.config/revier/projects/`; it needs no tmux there. The list
+file under its `~/.config/revier/projects/`; it needs no tmux there. On the
+host itself the link is left out, so one set of project files serves both
+machines; `revier doctor` says how many it skipped. The list
 shows the link as `far@buildbox` with what each agent there is doing, read
 from the revier there. Enter opens the workspace. Its tabs are tabs of your
 terminal: `revier agent new`, `revier shell new`, `revier agent prompt`,
@@ -361,6 +363,8 @@ The popup needs kitty, and GNOME with the
 and its `wctl`; `revier popup` names whichever is missing. A new popup is
 centred at full screen height and 1800 px wide, or fills the screen when the
 screen is narrower than that. A popup already open is raised where you left it.
+Without the focus, the popup or a revier in a terminal of your own refreshes
+every ten seconds, and at once when the focus is back.
 
 To claim the keys, run `revier keys install --dry-run` to see what would
 change, then `revier keys install`.

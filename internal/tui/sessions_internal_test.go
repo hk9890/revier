@@ -20,7 +20,7 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 	}
 	written := make(chan struct{}, 1)
 	restoring := ledger.File{Root: root, Written: written}
-	m := Model{stateRoot: root, core: &core.Core{Ledger: ledger.File{Root: root}}}
+	m := bare(Model{stateRoot: root, core: &core.Core{Ledger: ledger.File{Root: root}}})
 
 	restoring.Update(func(st *state.State) bool {
 		st.Launched("work", "home", time.Now())

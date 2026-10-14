@@ -122,3 +122,57 @@ func TestAnIncludeLoopEnds(t *testing.T) {
 		t.Errorf("hosts = %v, want %v", hosts, want)
 	}
 }
+
+// HostName is the name ssh connects to for a host: the first value of a
+// block that matches it, a pattern or an Include included, and none for a
+// host the file gives no name.
+func TestHostNameIsTheFirstValueOfAMatchingBlock(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "work", "Host lab*\n    HostName lab.example.com\n")
+	path := write(t, dir, "config", `
+Include work
+Host buildbox
+    HostName 10.0.0.7
+Host buildbox
+    HostName ignored.example.com
+Host !private *.box
+    HostName wild
+Match host dt
+    HostName from-match
+Host dt
+    HostName dt.local
+`)
+	for host, want := range map[string]string{
+		"buildbox":   "10.0.0.7",
+		"far.box":    "wild",
+		"private":    "",
+		"dt":         "dt.local",
+		"lab7":       "lab.example.com",
+		"elsewhere":  "",
+		"buildbox2":  "",
+		"other.box2": "",
+	} {
+		got, err := sshconfig.HostName(path, host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("HostName(%q) = %q, want %q", host, got, want)
+		}
+	}
+}
+
+// Match all ends a Host block and matches every host again, which is how a
+// file includes others for every host after its blocks.
+func TestHostNameReadsAMatchAllBlock(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "hosts", "Host lab\n    HostName lab.example.com\n")
+	path := write(t, dir, "config", "Host buildbox\n    User me\nMatch all\n    Include hosts\n")
+	got, err := sshconfig.HostName(path, "lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "lab.example.com" {
+		t.Errorf("HostName(lab) = %q, want lab.example.com", got)
+	}
+}

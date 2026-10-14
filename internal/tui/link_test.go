@@ -337,6 +337,25 @@ func TestAHostThatDoesNotAnswerIsSaidInTheFooter(t *testing.T) {
 	}
 }
 
+// This machine is no host to link to: a link to it is left out of every
+// load, so the dialog does not offer it.
+func TestAltRLeavesThisMachineOut(t *testing.T) {
+	machine, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname:", err)
+	}
+	m, _, _ := linkWorld(t, nil)
+	sshConfig := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(sshConfig, []byte("Host "+machine+"\nHost buildbox\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
+	m = step(m, "alt+r")
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, machine) || !strings.Contains(body, "buildbox") {
+		t.Errorf("rows = %q, want buildbox alone", body)
+	}
+}
+
 // With no hosts configured there is nothing to choose from, and the footer
 // says where a host would come from.
 func TestAltRWithNoHostsSaysSo(t *testing.T) {

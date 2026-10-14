@@ -74,7 +74,7 @@ func (m *Model) syncBody() {
 	if m.over.kind == hoverRow {
 		row = m.over.index
 	}
-	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row})
+	m.plist.SetDelegate(projectDelegate{theme: m.spun(), hover: row}.measured(m.plist))
 	m.link.light(m.spun(), row)
 	m.agents.list.SetDelegate(agentDelegate{theme: m.spun(), hover: row})
 	l, itemHeight := m.bodyList(), m.itemHeight()

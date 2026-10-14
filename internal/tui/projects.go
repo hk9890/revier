@@ -75,10 +75,20 @@ func newProjectList(th theme.Theme) list.Model {
 //
 // hover is the row the pointer is on, or -1. It is set on the delegate
 // rather than read from the model because the list component renders through
-// the delegate and hands it nothing but the row.
+// the delegate and hands it nothing but the row. column is the width of the
+// project column, measured over every row once for the draw (measured); zero
+// measures it on each ask.
 type projectDelegate struct {
-	theme theme.Theme
-	hover int
+	theme  theme.Theme
+	hover  int
+	column int
+}
+
+// measured is the delegate with the project column of the list measured
+// once: every row asks for it, and measuring it reads every row.
+func (d projectDelegate) measured(m list.Model) projectDelegate {
+	d.column = d.projectColumn(m)
+	return d
 }
 
 // Height is two: the name line and the path under it. The path is what tells
@@ -215,7 +225,11 @@ const (
 // no room for the column at all.
 func (d projectDelegate) agentGeometry(m list.Model) (start, room int) {
 	indent := rowIndent(d.theme)
-	room = min(maxAgentWidth, m.Width()-indent-gridGap-d.projectColumn(m))
+	column := d.column
+	if column == 0 {
+		column = d.projectColumn(m)
+	}
+	room = min(maxAgentWidth, m.Width()-indent-gridGap-column)
 	if room < 1 {
 		return 0, 0
 	}

@@ -108,7 +108,7 @@ func TestAChordMeansTheHighlightedProjectsOwnTarget(t *testing.T) {
 	c := core.PrepareProject(revier.Project{Name: "c", Path: "/c", Targets: []revier.Target{
 		{Name: "diff", Key: "ctrl-shift-o", Window: window("meld")},
 	}})
-	m := Model{projects: []core.Project{a, b, c}, keys: newKeyMap(nil)}
+	m := bare(Model{projects: []core.Project{a, b, c}, keys: newKeyMap(nil)})
 	m.setKeys()
 
 	for _, tc := range []struct {

@@ -38,11 +38,11 @@ func cmdTUI(a *app) error {
 	// All motion reports the pointer with no button held, which the hover
 	// needs, as well as the wheel and clicks. It takes plain drag-to-select
 	// from the terminal; shift-drag still selects in kitty and most others.
-	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
+	// Focus reports are how the surface learns that nobody is at it, and how
+	// the hidden popup learns it was raised.
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion(), tea.WithReportFocus()}
 	if popup {
-		// Focus reports are how the hidden popup learns it was raised.
 		m = m.WithPopup()
-		opts = append(opts, tea.WithReportFocus())
 	} else {
 		m = m.WithStart(func(ctx context.Context) (revier.ProjectName, bool) {
 			p, ok := a.resolveAway(ctx)

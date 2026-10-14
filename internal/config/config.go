@@ -10,10 +10,11 @@
 // What a failure costs is the smallest thing that is wrong (decisions.md
 // D85). validateTargets refuses one target, validateProject refuses one
 // project, and loading refuses nothing: every file becomes a project, marked
-// with what could not be read. Nothing here returns an error for a mistake in
-// a project file, because there is no caller that mistake should stop -
-// revier is how a user reaches the project they have to fix. The write paths
-// are the exception, and ask Problems before they replace a file.
+// with what could not be read, except a link to this machine, which Load
+// leaves out and lists in SelfLinks (D131). Nothing here returns an error for
+// a mistake in a project file, because there is no caller that mistake should
+// stop - revier is how a user reaches the project they have to fix. The write
+// paths are the exception, and ask Problems before they replace a file.
 package config
 
 import (
@@ -54,6 +55,10 @@ type Config struct {
 	// action stays unbound, the target reaches no project, and the file is
 	// otherwise read whole. `revier doctor` is where these are read.
 	Problems []error `toml:"-"`
+
+	// SelfLinks is the files of the links whose host is this machine, which
+	// Load leaves out (decisions.md D131). `revier doctor` says how many.
+	SelfLinks []string `toml:"-"`
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -119,9 +124,10 @@ func Root() (string, error) {
 	return filepath.Join(home, ".config", "revier"), nil
 }
 
-// Load reads the global config and every project under <root>/projects.
-// A missing root or a missing config.toml is not an error: revier starts with
-// no projects rather than refusing to run.
+// Load reads the global config and every project under <root>/projects,
+// without the links to this machine, whose files it lists in SelfLinks
+// (decisions.md D131). A missing root or a missing config.toml is not an
+// error: revier starts with no projects rather than refusing to run.
 func Load(root string) (*Config, []core.Project, error) {
 	cfgPath := File(root)
 	data, err := os.ReadFile(cfgPath)
@@ -137,7 +143,32 @@ func Load(root string) (*Config, []core.Project, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	projects, cfg.SelfLinks = elsewhere(projects)
 	return cfg, projects, nil
+}
+
+// elsewhere is projects without the links to this machine, and the files of
+// the ones it left out. The project files are shared between machines, so a
+// link that is right on one machine names the other one itself.
+func elsewhere(projects []core.Project) ([]core.Project, []string) {
+	here := map[string]bool{}
+	var self []string
+	out := projects[:0:0]
+	for _, p := range projects {
+		if p.Remote != nil {
+			at, asked := here[p.Remote.Host]
+			if !asked {
+				at = OnThisMachine(p.Remote.Host)
+				here[p.Remote.Host] = at
+			}
+			if at {
+				self = append(self, p.File)
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out, self
 }
 
 // Shared is the shared targets every project gets: Targets without the ones

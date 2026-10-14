@@ -72,6 +72,11 @@ func cmdDoctor(out io.Writer, args []string) error {
 	_ = w.Flush()
 
 	_, _ = fmt.Fprintf(out, "\n%s, %s with problems\n", core.Count(len(projects), "project"), core.Count(bad, "file"))
+	// Not a problem: the files are shared between machines, and the link is
+	// right on the other one (decisions.md D131).
+	if n := len(cfg.SelfLinks); n > 0 {
+		_, _ = fmt.Fprintf(out, "skipped %s to this machine\n", core.Count(n, "link"))
+	}
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.

@@ -9,8 +9,9 @@
 // pane mirrors it (D110, D111).
 //
 // Every project, target and agent it draws comes from core.SurveyLocal,
-// refreshed on a timer that never overlaps itself, with what core.AskRemotes
-// last brought from the linked hosts laid over it (D114), and every action
+// refreshed on a timer that never overlaps itself and that slows down while
+// the terminal has no focus (D129), with what core.AskRemotes last brought
+// from the linked hosts laid over it (D114, D130), and every action
 // goes through the same core paths the CLI commands use. The two reads
 // outside that path are core.Details, when an agent spoke last and what it
 // said, which the surface asks for on its own and no survey carries (D106),
@@ -27,10 +28,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"os/exec"
 	"reflect"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -113,7 +114,7 @@ type Model struct {
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
 	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
-	now       func() time.Time // the clock the double-click window is measured on; a test sets it
+	now       func() time.Time // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
 	theme     theme.Theme
 	frame     int  // the spinner frame a working agent shows
 	spinning  bool // whether a spin tick is out, so a survey starts no second one
@@ -159,11 +160,16 @@ type Model struct {
 	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised
+	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	idle      bool                             // the survey chain ended while hidden; the raise starts it again
+	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
+	surveying bool                             // a survey is out, so a focus regained starts no second one
+	chain     int                              // the number of the refresh tick that is out; an older one is dropped
 	local     core.Report                      // the last survey of this machine, with no host's answer laid over
 	answers   core.RemoteAnswers               // what the linked hosts said last
 	polling   []string                         // the linked hosts that are being asked
+	rounds    map[string]time.Time             // when each linked host was last asked; nil asks every one at the next survey
+	failed    map[string]int                   // the rounds in a row each linked host gave no answer to
 	onTop     bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	input     textinput.Model                  // the filter query, with its own cursor
 	over      hovered                          // what the pointer is on
@@ -192,13 +198,16 @@ type Model struct {
 	targets []revier.Target // the shared targets, typed, as config.toml holds them
 
 	// The screens. Each is a struct of its own (screen.go): the root routes a
-	// press to the one that is up and applies the result it hands back.
-	link     linkScreen     // the link dialog (link.go)
-	create   createScreen   // the new-project screen (newproject.go)
-	sessions sessionsScreen // the sessions screen, and its save or restore (sessions.go)
-	config   configScreen   // the config screen (configscreen.go)
-	proj     projectScreen  // the project screen (projectscreen.go)
-	agents   agentList      // the agent list, the surface's second list (agentlist.go)
+	// press to the one that is up and applies the result it hands back. The
+	// large ones are held by pointer: Model is copied on every message, and
+	// past 64 KB each copy is a heap allocation rather than a copy on the
+	// stack.
+	link     *linkScreen     // the link dialog (link.go)
+	create   createScreen    // the new-project screen (newproject.go)
+	sessions *sessionsScreen // the sessions screen, and its save or restore (sessions.go)
+	config   *configScreen   // the config screen (configscreen.go)
+	proj     *projectScreen  // the project screen (projectscreen.go)
+	agents   *agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
 // New builds the surface over prepared projects. stateRoot is where revier's
@@ -214,15 +223,17 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		core: c, stateRoot: stateRoot, actions: actions,
 		refresh: refresh, now: time.Now, theme: th, width: 80, height: 24,
 		plist: newProjectList(th),
-		link:  newLinkScreen(th), sessions: newSessionsScreen(th),
+		link:  new(newLinkScreen(th)), sessions: new(newSessionsScreen(th)),
 		keys: keys, help: newHelp(th), detail: newDetail(th),
 		start: start, input: newPrompt(th, projectPlaceholder),
 		ainput: newPrompt(th, agentPlaceholder), afield: -1,
-		agents: newAgentScreen(th),
+		agents: new(newAgentScreen(th)),
 		create: newCreateScreen(th),
 		body:   newBody(),
-		config: newConfigScreen(th, cfg),
-		proj:   newProjectScreen(th),
+		config: new(newConfigScreen(th, cfg)),
+		proj:   new(newProjectScreen(th)),
+		// Init surveys.
+		surveying: true,
 	}
 	// The files go in through the one function that reads them, so what is
 	// derived from them is derived once and the first frame holds the same
@@ -258,9 +269,10 @@ func (m Model) WithStart(lookup StartLookup) Model {
 	return m
 }
 
-// WithPopup makes the surface the popup: Esc on the list hides its window
-// instead of exiting, nothing surveys while it is hidden, and the raise
-// surveys once and resumes (decisions.md D86).
+// WithPopup makes the surface the popup: Esc on the list and a go hide its
+// window instead of exiting, nothing surveys while it is hidden unless a
+// launch is coming up, and the raise surveys once and resumes (decisions.md
+// D86, D129).
 func (m Model) WithPopup() Model {
 	m.popup = true
 	return m
@@ -272,8 +284,12 @@ type startMsg struct {
 	ok   bool
 }
 
-// hiddenMsg follows the hide of the popup's window.
-type hiddenMsg struct{ err error }
+// hiddenMsg follows the hide of the popup's window. went is a hide after a
+// go, not after Esc.
+type hiddenMsg struct {
+	err  error
+	went bool
+}
 
 // reloadedMsg is the project files read again: on the raise of the popup,
 // what `revier new`, a link or an edit changed while it was hidden, and after
@@ -352,7 +368,15 @@ type remotesMsg struct {
 	answers core.RemoteAnswers
 }
 
-type tickMsg struct{}
+// tickMsg starts the next refresh. chain is the number of the tick: a focus
+// regained surveys at once and drops the tick that was out, so one chain
+// runs.
+type tickMsg struct{ chain int }
+
+// blurredRefresh is how often a surface whose window has no focus refreshes:
+// nobody reads it closely, and each refresh costs every linked host a survey
+// of its own (decisions.md D129).
+const blurredRefresh = 10 * time.Second
 
 // spinMsg advances the working spinner. It runs on its own timer, because
 // the survey's is seconds long and a spinner that fast does not read as one.
@@ -366,8 +390,12 @@ func spin() tea.Cmd {
 
 // actedMsg follows a press, a focus, or an action; the next survey shows the
 // result. An activation wrote what it learned through the ledger, and the
-// surface takes state in on the update loop.
-type actedMsg struct{ err error }
+// surface takes state in on the update loop. went is a press that brought a
+// target or an agent to the front, not an action that had the terminal.
+type actedMsg struct {
+	err  error
+	went bool
+}
 
 // Init surveys immediately; the timer starts once the first survey answers.
 func (m Model) Init() tea.Cmd {
@@ -389,13 +417,13 @@ func (m Model) lookupStart() tea.Cmd {
 	}
 }
 
-// hide takes the popup's window off the screen.
-func (m Model) hide() tea.Cmd {
+// hide takes the popup's window off the screen, after Esc or after a go.
+func (m Model) hide(went bool) tea.Cmd {
 	c := m.core
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return hiddenMsg{err: c.HidePopup(ctx)}
+		return hiddenMsg{err: c.HidePopup(ctx), went: went}
 	}
 }
 
@@ -403,7 +431,7 @@ func (m Model) hide() tea.Cmd {
 // surface quits.
 func (m Model) leave() tea.Cmd {
 	if m.popup {
-		return m.hide()
+		return m.hide(false)
 	}
 	return tea.Quit
 }
@@ -442,9 +470,9 @@ func (m Model) Survey() tea.Cmd {
 
 // AskRemotes asks the hosts named about their projects, or every linked host
 // when none is named. The surface asks each host by itself, one round at a
-// time: the survey that answers while a host has no round running starts its
-// next, so a host is asked as often as it answers, never faster than the
-// refresh, and a host that is slow holds no other host's rows up.
+// time: the survey that answers while a host has no round running and its gap
+// has passed starts its next (due), so a host is asked at most once a gap,
+// and a host that is slow holds no other host's rows up.
 func (m Model) AskRemotes(hosts ...string) tea.Cmd {
 	if len(hosts) == 0 {
 		hosts = m.linkedHosts()
@@ -463,6 +491,26 @@ func (m Model) AskRemotes(hosts ...string) tea.Cmd {
 		events.Sessions(c.Lay(local, answers).Views)
 		return remotesMsg{hosts: hosts, answers: answers}
 	}
+}
+
+// remoteGap is the least time between the starts of two rounds to one linked
+// host. Each round is a whole survey on that machine, and a surface with the
+// focus refreshes every second; the rows of this machine keep that refresh
+// (decisions.md D114, D130).
+const remoteGap = 5 * time.Second
+
+// remoteGapMost bounds the gap of a host that gave no answer: each round in a
+// row it fails to answer doubles the gap, up to this.
+const remoteGapMost = time.Minute
+
+// due reports a linked host whose next round may start now.
+func (m *Model) due(host string, now time.Time) bool {
+	at, ok := m.rounds[host]
+	if !ok {
+		return true
+	}
+	gap := remoteGap << min(m.failed[host], 4)
+	return now.Sub(at) >= min(gap, remoteGapMost)
 }
 
 // linkedHosts is every host a project lives on, each once, in the projects'
@@ -492,16 +540,63 @@ func (m *Model) show() {
 	m.reload()
 }
 
-func tick(d time.Duration) tea.Cmd {
-	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{} })
+func tick(d time.Duration, chain int) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{chain: chain} })
+}
+
+// interval is how long the surface waits for its next refresh: the refresh
+// with the focus, longer without it. A launch still coming up keeps the
+// refresh, because the survey is what claims its window (decisions.md D87,
+// D129).
+func (m *Model) interval() time.Duration {
+	if m.blurred && !m.claiming() {
+		return blurredRefresh
+	}
+	return m.refresh
+}
+
+// claiming reports a launch whose window the next surveys may claim. A launch
+// past its window is not: one for a project this surface does not hold is
+// never settled, and would keep the refresh for good.
+func (m *Model) claiming() bool {
+	return m.pending.Pending(m.now())
+}
+
+// nextTick starts the tick of the next refresh, and drops any that is out.
+func (m *Model) nextTick() tea.Cmd {
+	m.chain++
+	return tick(m.interval(), m.chain)
+}
+
+// surveyNow surveys at once, for a focus regained or a raise: the rows aged
+// while nobody looked. A survey that is out answers soon enough, and its answer
+// starts the next tick.
+func (m *Model) surveyNow() tea.Cmd {
+	if m.surveying {
+		return nil
+	}
+	m.chain++
+	m.surveying = true
+	return m.Survey()
+}
+
+// mouseMode asks the terminal for the pointer reports the surface needs.
+// With the focus, every motion, for the hover. Without it, a moving pointer
+// would rebuild the surface for each cell it crosses, so only presses, the
+// wheel and drags are reported until the focus is back.
+func (m *Model) mouseMode() tea.Cmd {
+	if m.blurred {
+		return tea.Sequence(tea.DisableMouse, tea.EnableMouseCellMotion)
+	}
+	return tea.EnableMouseAllMotion
 }
 
 // Update handles the message and then rebuilds the detail pane, so the pane
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if focusBeforeInput(msg) {
-		msg = tea.FocusMsg{}
+	if report, ok := focusBeforeInput(msg); ok {
+		msg = report
 	}
 	// Half of a mouse report changes nothing, so nothing is rebuilt for it.
 	if key, ok := msg.(tea.KeyMsg); ok && splitReport(key) {
@@ -525,8 +620,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if mm.sel.active {
 		return mm, cmd
 	}
-	if _, ok := msg.(spinMsg); ok {
+	switch msg.(type) {
+	case spinMsg:
 		mm.redrawSpin()
+		return mm, cmd
+	case tickMsg:
+		// A tick only starts the survey; its answer is what changes the rows.
+		return mm, cmd
+	case mirrorTickMsg:
+		// A tick only starts the read; the screen it reads is drawn when it
+		// answers.
+		key, a, ok := mm.mirroring()
+		if !ok {
+			return mm, cmd
+		}
+		return mm, tea.Batch(cmd, mm.mirror.ask(mm.core, key, a, msg, mm.mirrorEvery()))
+	case mirroredMsg:
+		// A screen read is the pane's alone.
+		mm.syncDetail()
 		return mm, cmd
 	}
 	mm.syncDetail()
@@ -536,7 +647,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// drawn pane says whether it has a row for the mirror.
 	var read tea.Cmd
 	if key, a, ok := mm.mirroring(); ok {
-		read = mm.mirror.ask(mm.core, key, a, msg)
+		read = mm.mirror.ask(mm.core, key, a, msg, mm.mirrorEvery())
 	}
 	cmd = tea.Batch(cmd, mm.askDetails(msg), read)
 	// A key, a survey or a screen change can move what is under a pointer
@@ -551,15 +662,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return mm, cmd
 }
 
-// focusBeforeInput reports the terminal's focus report as bubbletea hands it
-// over when other input is behind it in the same read: an unknown sequence of
-// an unexported type, told here by its bytes. bubbletea makes a tea.FocusMsg
-// only of a report that ends a read, and a raise under the pointer puts a
-// mouse report behind it, so without this the popup stayed hidden in its own
-// count while on the screen, and nothing surveyed.
-func focusBeforeInput(msg tea.Msg) bool {
+// focusBeforeInput is the terminal's focus report as bubbletea hands it over
+// when other input is behind it in the same read: an unknown sequence of an
+// unexported type, told here by its bytes. It returns the message the report
+// stands for. bubbletea makes a tea.FocusMsg or a tea.BlurMsg only of a
+// report that ends a read, and a raise under the pointer puts a mouse report
+// behind it, so without this the popup stayed hidden in its own count while
+// on the screen, and nothing surveyed.
+func focusBeforeInput(msg tea.Msg) (tea.Msg, bool) {
 	v := reflect.ValueOf(msg)
-	return v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 && string(v.Bytes()) == ansi.Focus
+	if v.Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Uint8 {
+		return nil, false
+	}
+	switch string(v.Bytes()) {
+	case ansi.Focus:
+		return tea.FocusMsg{}, true
+	case ansi.Blur:
+		return tea.BlurMsg{}, true
+	}
+	return nil, false
 }
 
 // loggedAlready reports a message whose error the operation behind it has
@@ -587,15 +708,19 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mirror.take(msg)
 		return m, nil
 	case mirrorTickMsg:
-		// The tick ends with the mirror off the screen, and the mirror's ask
-		// starts it again when the mirror comes back; the read it is for is
-		// the ask's too.
+		// A tick that a focus regained replaced is dropped. The tick ends with
+		// the mirror off the screen, and the mirror's ask starts it again when
+		// the mirror comes back; the read it is for is the ask's too.
+		if msg.gen != m.mirror.gen {
+			return m, nil
+		}
 		if _, _, ok := m.mirroring(); !ok {
 			m.mirror.ticking = false
 			return m, nil
 		}
-		return m, mirrorTick()
+		return m, mirrorTick(m.mirrorEvery(), m.mirror.gen)
 	case surveyMsg:
+		m.surveying = false
 		m.surveyErr = msg.err
 		if msg.err == nil {
 			// A host that could not list degraded the survey rather than
@@ -610,51 +735,70 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Hidden, nobody reads the answer, and the chain ends here, and with
 		// it the rounds of the linked hosts that a survey starts: a round
-		// trip to each of them a second is for nothing.
+		// trip to each of them a second is for nothing. A launch still coming
+		// up keeps the chain until its window is claimed or the launch
+		// expires, since the survey is what claims it (decisions.md D87).
 		if m.hidden {
-			m.idle = true
-			return m, nil
+			if !m.claiming() {
+				m.idle = true
+				return m, nil
+			}
+			return m, m.nextTick()
 		}
 		var cmds []tea.Cmd
+		now := m.now()
 		for _, host := range m.linkedHosts() {
-			if !slices.Contains(m.polling, host) {
+			if !slices.Contains(m.polling, host) && m.due(host, now) {
 				// A new slice: the rounds that run hold the old one.
 				m.polling = append(slices.Clone(m.polling), host)
+				m.rounds = maps.Clone(m.rounds)
+				if m.rounds == nil {
+					m.rounds = map[string]time.Time{}
+				}
+				m.rounds[host] = now
 				cmds = append(cmds, m.AskRemotes(host))
 			}
 		}
-		if !m.spinning && m.anyWorking() {
-			m.spinning = true
-			cmds = append(cmds, spin())
-		}
-		return m, tea.Batch(append(cmds, tick(m.refresh))...)
+		return m, tea.Batch(append(cmds, m.startSpin(), m.nextTick())...)
 	case remotesMsg:
 		m.polling = slices.DeleteFunc(slices.Clone(m.polling), func(host string) bool { return slices.Contains(msg.hosts, host) })
+		m.failed = maps.Clone(m.failed)
+		for _, host := range msg.hosts {
+			if msg.answers.Failed() {
+				if m.failed == nil {
+					m.failed = map[string]int{}
+				}
+				m.failed[host]++
+			} else {
+				delete(m.failed, host)
+			}
+		}
 		m.answers = m.answers.With(msg.hosts, msg.answers)
 		if !m.surveyed {
 			return m, nil
 		}
 		m.show()
-		if !m.spinning && !m.hidden && m.anyWorking() {
-			m.spinning = true
-			return m, spin()
-		}
-		return m, nil
+		return m, m.startSpin()
 	case spinMsg:
 		// The spinner stops when nothing works, so an idle surface does not
-		// redraw, and while hidden, where nobody sees it; the next survey
-		// that finds a working agent starts it again.
-		if m.hidden || !m.anyWorking() {
+		// redraw, and while hidden or without the focus, where nobody watches
+		// it; the next survey that finds a working agent where somebody
+		// watches starts it again.
+		if m.hidden || m.blurred || !m.anyWorking() {
 			m.spinning = false
 			return m, nil
 		}
 		m.frame++
 		return m, spin()
 	case tickMsg:
-		if m.hidden {
+		if msg.chain != m.chain {
+			return m, nil
+		}
+		if m.hidden && !m.claiming() {
 			m.idle = true
 			return m, nil
 		}
+		m.surveying = true
 		return m, m.Survey()
 	case startMsg:
 		// The user's own cursor wins: a keystroke, a query or a dialog in
@@ -665,6 +809,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case hiddenMsg:
+		if msg.err != nil && msg.went {
+			// The go landed; the popup stays where it is, with its query
+			// and cursor, as it did before a go hid it.
+			slog.Warn("popup hide after go", "err", msg.err)
+			return m, nil
+		}
 		if msg.err != nil {
 			// The popup cannot leave the screen, so it leaves the way it
 			// did before it could hide.
@@ -673,16 +823,40 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.hidden = true
 		return m, nil
+	case tea.BlurMsg:
+		// The window lost the focus: the surface refreshes slowly, and the
+		// spinner and the hover stop, until the focus is back (decisions.md
+		// D129).
+		m.blurred = true
+		return m, m.mouseMode()
 	case tea.FocusMsg:
+		refocused := m.blurred
+		m.blurred = false
 		// The raise: the files again, then one survey, then the chain as
 		// before. A chain still running while hidden goes on by itself.
-		if !m.hidden {
+		if m.hidden {
+			// The surface opens on the projects, a raise included: the press
+			// that raises it is the one that opened it (decisions.md D110).
+			m.hidden, m.agents.shown = false, false
+			m.rounds = nil
+			m.mirror.restart()
+			// A tick still out was set while nobody looked, up to the slow
+			// refresh away: it is dropped, and the reload surveys instead.
+			if !m.surveying {
+				m.chain++
+				m.idle = true
+			}
+			return m, tea.Batch(reloadFiles, m.mouseMode())
+		}
+		if !refocused {
 			return m, nil
 		}
-		// The surface opens on the projects, a raise included: the press that
-		// raises it is the one that opened it (decisions.md D110).
-		m.hidden, m.agents.shown = false, false
-		return m, reloadFiles
+		// The focus is back on a surface that refreshed slowly: it surveys
+		// again at once, the linked hosts and the mirror with it, so nobody
+		// reads rows that aged while nobody looked.
+		m.mirror.restart()
+		m.rounds = nil
+		return m, tea.Batch(m.surveyNow(), m.mouseMode())
 	case reloadedMsg:
 		switch {
 		case msg.err == nil:
@@ -701,7 +875,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.idle {
 			m.idle = false
-			return m, m.Survey()
+			return m, m.surveyNow()
 		}
 		return m, nil
 	case assistedMsg:
@@ -709,17 +883,26 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// bubbletea turns mouse reporting off for a hand-over and leaves it
 		// off when the terminal is back, so the surface asks for it again,
 		// in the mode cmd/revier starts it in.
-		return m, tea.Batch(reloadAssisted, tea.EnableMouseAllMotion)
+		return m, tea.Batch(reloadAssisted, m.mouseMode())
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
 		// add a second survey-tick chain that never ends. An activation wrote
 		// where it landed through the ledger, so the surface takes state in.
 		m.err = msg.err
 		m.takeState()
+		// What a press changed on a linked host is asked for at the next
+		// survey, not at the end of the host's gap.
+		m.rounds = nil
+		// A press that brought a target or an agent to the front is done
+		// with the popup: it leaves the screen, and with it the refresh
+		// (decisions.md D129). A failure stays on the screen to be read.
+		if msg.went && msg.err == nil && m.popup {
+			return m, m.hide(true)
+		}
 		// An action had the terminal, and it comes back with mouse reporting
 		// off, as it does from the assistant. After a press that handed
 		// nothing over the mode is on already, and asking changes nothing.
-		return m, tea.EnableMouseAllMotion
+		return m, m.mouseMode()
 	case askedMsg:
 		return m.asked(msg)
 	case savedMsg:
@@ -740,9 +923,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The clone had the terminal, as the assistant has.
 		if msg.err != nil {
 			m.err = msg.err
-			return m, tea.EnableMouseAllMotion
+			return m, m.mouseMode()
 		}
-		return m, tea.Batch(m.goTarget(msg.project, msg.home), tea.EnableMouseAllMotion)
+		return m, tea.Batch(m.goTarget(msg.project, msg.home), m.mouseMode())
 	case tea.KeyMsg:
 		m.copied = 0
 		if m.sel.active {
@@ -781,18 +964,26 @@ func (m *Model) takeState() {
 // or an agent's state changes. Running above stopped is the picker's order
 // (os_list_json.py sorts on it too): with ninety projects the handful that are
 // open are what a search is almost always for.
-func (m Model) sorted(views []revier.ProjectView) []revier.ProjectView {
-	out := make([]revier.ProjectView, len(views))
-	copy(out, views)
-	sort.SliceStable(out, func(i, j int) bool {
-		return m.need(out[i]) < m.need(out[j])
-	})
+func (m *Model) sorted(views []revier.ProjectView) []revier.ProjectView {
+	type row struct {
+		view revier.ProjectView
+		need int
+	}
+	rows := make([]row, len(views))
+	for i, v := range views {
+		rows[i] = row{v, m.need(v)}
+	}
+	slices.SortStableFunc(rows, func(a, b row) int { return a.need - b.need })
+	out := make([]revier.ProjectView, len(rows))
+	for i, r := range rows {
+		out[i] = r.view
+	}
 	return out
 }
 
 // need is the group sorted puts a project in, the one that needs the user
 // most first. A query keeps its rows in these groups too (ranked).
-func (m Model) need(v revier.ProjectView) int {
+func (m *Model) need(v revier.ProjectView) int {
 	switch {
 	case v.Attention():
 		return 0
@@ -992,7 +1183,7 @@ func (m Model) agentsOnPage(dir int) int {
 // with no attachments, because the surface reads those from state, where a
 // claim writes one between surveys so a claimed window shows at once rather
 // than a refresh later.
-func (m Model) heldHere(v revier.ProjectView) bool {
+func (m *Model) heldHere(v revier.ProjectView) bool {
 	return heldHere(m.attached, v)
 }
 
@@ -1106,7 +1297,7 @@ func (m Model) goRow(i int) tea.Cmd {
 			start := time.Now()
 			err := c.Focus(ctx, ref)
 			logging.Op("focus attached", start, err, "ref", ref)
-			return actedMsg{err: err}
+			return actedMsg{err: err, went: true}
 		}
 	}
 	v, _ := m.selected()
@@ -1130,7 +1321,7 @@ func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
 		_, _, err := c.ActivateWaiting(ctx, p, name, nil)
-		return actedMsg{err: err}
+		return actedMsg{err: err, went: true}
 	}
 }
 
@@ -1225,11 +1416,21 @@ func (m *Model) redrawSpin() {
 	}
 }
 
+// startSpin starts the spinner when an agent works where somebody watches.
+func (m *Model) startSpin() tea.Cmd {
+	if m.spinning || m.hidden || m.blurred || !m.anyWorking() {
+		return nil
+	}
+	m.spinning = true
+	return spin()
+}
+
 // spun is the theme with the working glyph at the current spinner frame, for
-// the rows and the pane.
+// the rows and the pane. Without the focus the spinner stands, and a working
+// agent shows the theme's own glyph.
 func (m Model) spun() theme.Theme {
 	th := m.theme
-	if len(th.Spinner) > 0 {
+	if len(th.Spinner) > 0 && !m.blurred {
 		th.Glyphs.Working = th.Spinner[m.frame%len(th.Spinner)]
 	}
 	return th
