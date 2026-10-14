@@ -213,7 +213,8 @@ the view holds its lines as more are written under them. A link's agent is
 mirrored as any other, since the panel is here. A panel no runtime here can
 read leaves a note in the mirror's place. Nothing a screen carries but its
 colour reaches the terminal, and the first line of a message that a row shows
-is drawn as text (D108).
+is drawn as text (D108). With NO_COLOR set no colour reaches the terminal, and
+bold and reverse video stay (D133).
 
 The list and the pane's agents each have a query over their rows, kept while
 their project is, until a press opens something; then both end, and each
@@ -231,6 +232,10 @@ of them (D81). del closes the row under the cursor - a project, a target, an
 attached window or an agent's tab - and alt+del deletes what the configuration
 holds of it: a project's file, which for a link is the link alone, or a target
 the project file declares. What is open closes first (D93).
+A target's key runs that target of the selected project. Where the terminal
+tells a ctrl+shift key apart, as kitty does, the target runs and ctrl with the
+letter keeps its own meaning; elsewhere the press arrives as ctrl with the
+letter and yields to any meaning that has here (D132).
 
 The popup is the surface in a kitty window of class `revier-popup`, which
 `revier popup` run-or-raises and places under D24 (D76). It is centred at the
