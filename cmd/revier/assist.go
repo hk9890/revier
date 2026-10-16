@@ -65,7 +65,8 @@ const assistReturn = `- The user reviews your changes in revier when you exit: s
 const assistUsage = "usage: revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]"
 
 // cmdAssist hands this terminal to a coding agent briefed to configure and
-// diagnose revier, and returns when the agent exits.
+// diagnose revier, and returns when the agent exits. With --exec it becomes
+// the agent instead, as the built-in project's panel runs it.
 //
 // No app, for the reason doctor has none and one more: this is the command
 // that repairs a configuration, so it must start on one that does not load.

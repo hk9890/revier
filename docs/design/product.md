@@ -275,9 +275,11 @@ popup was hidden and raised again since the press: the raise is the user's
 next errand. Any surface without the focus refreshes every ten seconds, the
 mirror with it, the spinner stands, and the pointer is reported only when
 pressed; the focus regained surveys this machine and every linked host that
-answered its last round at once (D129, D130). The surface knows it is the
-popup, and which project to open on, from the environment its terminal is
-started with, read and dropped at start so nothing it launches inherits it.
+answered its last round at once (D129, D130), and reads the project files
+again, which the config assistant beside it writes (D135). The surface knows
+it is the popup, and which project to open on, from the environment its
+terminal is started with, read and dropped at start so nothing it launches
+inherits it.
 The project is resolved at the keypress, while the focused window is still the
 user's. In any other terminal, and where the host cannot hide, Esc exits.
 

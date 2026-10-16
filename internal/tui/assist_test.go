@@ -22,8 +22,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// alt+a hands the terminal over: the press answers with the command that
-// runs the assistant, and opens no screen of the surface's own.
+// With no built-in among the projects, alt+a hands the terminal over: the
+// press answers with the command that runs the assistant, and opens no
+// screen of the surface's own.
 func TestAltAHandsTheTerminalToTheAssistant(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 160, 20)
