@@ -287,8 +287,7 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 // revier's yet.
 func classify(want KeyRow, holders []revier.Binding) KeyRow {
 	// Every switched-on shortcut on the chord fires, not just the first one
-	// the desktop happens to list - which is why README's step 3 asks a user
-	// to switch the old bindings off. Reporting one holder and dropping the
+	// the desktop happens to list. Reporting one holder and dropping the
 	// rest would say "active" for a chord that also runs somebody else's
 	// command, and that is the one thing this command exists to catch.
 	var live []revier.Binding

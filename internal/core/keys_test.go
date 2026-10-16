@@ -339,10 +339,9 @@ func TestAFailedReadIsReported(t *testing.T) {
 	}
 }
 
-// GNOME fires every switched-on shortcut on a chord, which is why README's
-// step 3 asks a user to switch the old ones off. Reporting the first holder
-// and dropping the rest calls the chord active while somebody else's command
-// runs on the same press - the one state this command exists to catch.
+// GNOME fires every switched-on shortcut on a chord. Reporting the first
+// holder and dropping the rest calls the chord active while somebody else's
+// command runs on the same press - the one state this command exists to catch.
 func TestASecondSwitchedOnHolderIsNotHidden(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
 		hosttest.Custom("<Shift><Control>u", `sh -lc "revier go home --picker"`, "revier: workspace"),

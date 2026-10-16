@@ -74,10 +74,10 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 
 // attach ends the command with this terminal on the instance: the process
 // becomes the runtime's attach, so the pane that ran `revier open --attach`
-// is the workspace from here on. It is what the ssh pane of a remote
-// project runs on the host (decisions.md D40). Only a runtime that can
-// attach a terminal offers it; a runtime whose instances are windows of
-// their own has been raised already, and there is nothing to become.
+// is the workspace from here on, for a user who starts revier inside a
+// terminal. Only a runtime that can attach a terminal offers it; a runtime
+// whose instances are windows of their own has been raised already, and
+// there is nothing to become.
 func (a *app) attach(ref revier.TargetRef) error {
 	att, ok := a.core.Runtime.(revier.Attacher)
 	if !ok {
