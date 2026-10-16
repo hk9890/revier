@@ -758,6 +758,77 @@ func TestAPanelReportsTheForegroundArgv(t *testing.T) {
 	}
 }
 
+// An agent panel whose program is not on PATH is refused before tmux starts
+// anything, by the panel and the program, and again on the next Open. Started,
+// the pane closes at once and the step after fails on a tmux id the user never
+// saw.
+func TestOpenRefusesAPanelWhoseCommandIsNotOnPath(t *testing.T) {
+	h, c := server(t), ctx(t)
+	r := revier.Realization{
+		Name: "home", Match: revier.Match{Title: "^home$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Title: "claude", Command: []string{"revier-test-no-such-agent"}},
+			{Kind: revier.PanelShell},
+		},
+	}
+	want := `the agent panel's command "revier-test-no-such-agent" is not on PATH`
+	for range 2 {
+		if _, err := h.Open(c, r); err == nil || err.Error() != want {
+			t.Errorf("Open = %v, want %q", err, want)
+		}
+	}
+}
+
+// A panel whose command exits as soon as it starts is named as having exited,
+// and again on the next Open. It ends before tmux prints the new session, or
+// after: then the step that follows fails on a session tmux has closed, and
+// with it the server when no other session kept it. The runner waits after
+// starting the session, so the command has ended before that step.
+func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
+	for _, tc := range []struct {
+		script string
+		keeper bool
+	}{
+		{"exit 0", false},
+		{"sleep 0.1", false},
+		{"sleep 0.1", true},
+	} {
+		t.Run(fmt.Sprintf("%s, other session %v", tc.script, tc.keeper), func(t *testing.T) {
+			h, c := server(t), ctx(t)
+			if tc.keeper {
+				if err := exec.Command("tmux", "-L", h.Socket, "new-session", "-d", "-s", "keeper", "sleep", "30").Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			h.SetRunner(func(ctx context.Context, args ...string) (string, error) {
+				var out, stderr strings.Builder
+				cmd := exec.CommandContext(ctx, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...)
+				cmd.Stdout, cmd.Stderr = &out, &stderr
+				if err := cmd.Run(); err != nil {
+					return "", fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, stderr.String())
+				}
+				if args[0] == "new-session" {
+					time.Sleep(300 * time.Millisecond)
+				}
+				return out.String(), nil
+			})
+			r := revier.Realization{
+				Name: "home", Match: revier.Match{Title: "^home$"},
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Title: "claude", Command: []string{"sh", "-c", tc.script}},
+					{Kind: revier.PanelShell},
+				},
+			}
+			want := fmt.Sprintf("the agent panel's command %q exited as soon as it started", "sh -c "+tc.script)
+			for range 2 {
+				if _, err := h.Open(c, r); err == nil || err.Error() != want {
+					t.Errorf("Open = %v, want %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 // The whole product against a real substrate: run-or-raise opens the target the
 // first time, raises it the second, and toggles home on the third.
 func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
