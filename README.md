@@ -137,7 +137,8 @@ revier version                what is installed
 
 In the TUI, projects whose agent is waiting for you sort first. Each project
 row counts its agents by state: needs you, working, idle, unknown. The pane
-beside the list shows the project's targets and agents, and the terminal of
+beside the list shows the project's targets, each tab under the target it
+opens inside, and its agents, and the terminal of
 one agent as it is now, in its own colours; the wheel scrolls back through
 it. That is the agent you moved the cursor to; until you do, the agent that
 needs you, else one at rest before one working. The agent of a project on

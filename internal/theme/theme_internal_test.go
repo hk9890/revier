@@ -128,8 +128,8 @@ func TestEveryRoleIsSetInEveryFlavour(t *testing.T) {
 var backgroundOnly = map[string]bool{"Hover": true}
 
 // optional are the glyphs a set may leave out: the folder column, which a set
-// draws for both states or not at all.
-var optional = map[string]bool{"Folder": true, "NoFolder": true, "Remote": true}
+// draws for both states or not at all, and the pane's kind column, likewise.
+var optional = map[string]bool{"Folder": true, "NoFolder": true, "Remote": true, "Window": true, "Container": true}
 
 // The comment on Glyphs promises one cell each. A two-cell glyph in a row
 // built from padded columns moves every column after it.
@@ -177,6 +177,9 @@ func TestNoGlyphSetIsIncomplete(t *testing.T) {
 		}
 		if (g.Folder == "") != (g.NoFolder == "") || (g.Folder == "") != (g.Remote == "") {
 			t.Errorf("%s glyph set draws one folder state and not the others", setName)
+		}
+		if (g.Window == "") != (g.Container == "") {
+			t.Errorf("%s glyph set draws one target kind and not the other", setName)
 		}
 	}
 }
