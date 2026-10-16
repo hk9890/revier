@@ -156,7 +156,7 @@ Write modifiers and a key joined by `-` or `+`: `ctrl-o`, `ctrl+shift+d`,
 
 `revier keys install` binds the key to the target's name in the project you
 are in, so give a target the same key in every project. Two targets of a
-project cannot share a key. A target named `picker` cannot have a key.
+project cannot share a key. A target named `popup` cannot have a key.
 
 ### Tabs
 

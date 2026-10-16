@@ -860,3 +860,13 @@ shows the screen above it. A screen with no frame the probe knows - a dialog in
 the box's place, a layout that changed - is shown whole, and so is every
 screen `revier agent read --screen` prints (D116). Rejected: a cut by pattern
 in the surface, which would know every harness's layout.
+
+### D137 — the trigger key's entry is named for the popup it opens
+
+The key opens the popup, and D8 retired "picker" as a surface name, so a
+shortcut named `revier: picker` sent a user looking for a thing that is not
+there. The entry is `revier: popup`, and the reserved name a keyed target
+cannot take moves from `picker` to `popup` with it. An install renames an
+entry revier named when its name is out of date, since one it names stays
+revier's whatever it is called (D77); a shortcut the user bound keeps the
+user's name.
