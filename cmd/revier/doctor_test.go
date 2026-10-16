@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,8 +205,8 @@ func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
 	})
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
+		t.Fatalf("err = %v, want two files with problems", err)
 	}
 	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
 	ofFar, ofNear, ok := strings.Cut(out.String(), filepath.Join(root, "near.toml"))
@@ -230,7 +231,7 @@ func TestDoctorReportsAnUnknownHostName(t *testing.T) {
 	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	for _, want := range []string{
@@ -250,7 +251,7 @@ func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {
 	doctorRoot(t, map[string]string{"typed.toml": "path = 5\n", "syntax.toml": "path = \n"})
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
@@ -272,7 +273,7 @@ func TestDoctorColumnsARefusalWithNoColonByItsName(t *testing.T) {
 	configRoot(t, "[[action]]\nkey = \"ctrl-y\"\nname = \"c\"\n", map[string]string{"sound.toml": sound})
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	if want := "  action \"c\" runs nothing\n"; !strings.Contains(out.String(), want) {
