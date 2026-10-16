@@ -134,3 +134,62 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 		}
 	}
 }
+
+// A refused [[status]] table is reported under the file that writes it, and
+// so is a pane status a project changes that still runs nothing: doctor is
+// where both are read (decisions.md D85).
+func TestDoctorReportsStatusProblemsUnderTheirFile(t *testing.T) {
+	doctorRoot(t, map[string]string{
+		"sound.toml": sound,
+		"tables.toml": sound + `
+[[status]]
+at = "rule-left"
+run = ["true"]
+
+[[status]]
+at = "project-line"
+every = "10s"
+`,
+	})
+	root := os.Getenv("REVIER_CONFIG_HOME")
+	twoTables := "[[status]]\nat = \"rule-right\"\nrun = [\"date\"]\n\n[[status]]\nat = \"rule-right\"\nrun = [\"uptime\"]\n"
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(twoTables), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	got := out.String()
+
+	// config.toml is reported first, so the report splits at the project's
+	// heading into what each file holds.
+	ofConfig, ofProject, ok := strings.Cut(got, filepath.Join(root, "projects", "tables.toml"))
+	if !ok {
+		t.Fatalf("report should name tables.toml:\n%s", got)
+	}
+	for _, want := range []string{
+		"config.toml",
+		`status "rule-right"`,
+		"two tables stand at this place",
+		"fix: delete one of the two tables",
+	} {
+		if !strings.Contains(ofConfig, want) {
+			t.Errorf("config.toml's report should contain %q:\n%s", want, got)
+		}
+	}
+	for _, want := range []string{
+		`status "rule-left"`,
+		"only config.toml declares it",
+		`status "project-line"`,
+		"runs nothing",
+	} {
+		if !strings.Contains(ofProject, want) {
+			t.Errorf("tables.toml's report should contain %q:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "2 projects, 2 files with problems") {
+		t.Errorf("report should count config.toml and tables.toml alone:\n%s", got)
+	}
+}

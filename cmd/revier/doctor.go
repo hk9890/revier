@@ -48,8 +48,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 		}
 	}
 	for _, p := range projects {
-		probs := config.Problems(p)
-		if len(probs) == 0 {
+		if len(config.Problems(p)) == 0 {
 			continue
 		}
 		bad++
@@ -67,6 +66,10 @@ func cmdDoctor(out io.Writer, args []string) error {
 				what := fmt.Sprintf("target %q", p.Targets[i].Name)
 				problemLine(w, what, what, err.Error())
 			}
+		}
+		for _, err := range p.StatusRefused {
+			what, _, _ := strings.Cut(err.Error(), ":")
+			problemLine(w, what, what, err.Error())
 		}
 	}
 	_ = w.Flush()
@@ -147,6 +150,8 @@ func advise(msg string) string {
 		return "leave `home = true` on one target only"
 	case strings.Contains(msg, "has an empty match"):
 		return "give the realization a `match` that names the instance it finds"
+	case strings.Contains(msg, "two tables stand at this place"):
+		return "delete one of the two tables"
 	case strings.Contains(msg, "declared twice"):
 		return "rename one of the two, or delete the duplicate table"
 	case strings.Contains(msg, "share key"):

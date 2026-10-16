@@ -185,6 +185,18 @@ beside the facts, level with the name, once that leaves it 100 columns. The
 wheel over the mirror scrolls it and the facts stay; over a pane with no
 mirror, or over the facts beside one, it scrolls the pane.
 
+A status stands in the thin rule under the top line, at its left end over the
+list or its right end, at the right end of the pane's first line where the
+name leaves room, or as a section of the pane over the targets, under its
+title (D134). It shows what its command printed last, each segment in the
+colour of its level. The pane's statuses are the selected project's. Each
+place runs one command at a time, so a cursor run down the list costs one
+project's runs: a project the cursor reaches runs at once, or when the run
+still out at that place answers. Each runs on its own timer and never holds
+up a frame. How a status
+fits its line, and what a failed run leaves, are in
+[extending.md](extending.md#level-1--configuration).
+
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button
 does the same and names where it goes (D110). A terminal too narrow for every

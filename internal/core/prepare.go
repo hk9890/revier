@@ -28,6 +28,13 @@ type Project struct {
 	// D85).
 	Invalid error
 
+	// Status is the [[status]] tables the project file writes itself, as
+	// written: StatusOf merges them with config.toml's. StatusRefused is
+	// why each table the file writes and a rule refused is left out, and,
+	// once config.Load merged them, why each that still runs nothing is.
+	Status        []Status
+	StatusRefused []error
+
 	compiled []compiledTarget // parallel to Project.Targets
 }
 

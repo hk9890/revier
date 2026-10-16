@@ -303,6 +303,11 @@ one for the current directory, and `revier open <name>` does the same for a
 name revier does not know yet. A project whose directory is
 missing is cloned from its `git_url` when it is opened.
 
+A `[[status]]` in `config.toml` runs a command and shows what it prints in the
+rule under the top line, or in the pane for the selected project: an
+account's usage limits, a CI result. A project file adds its own to the pane,
+or changes a shared one. The format is in the same document.
+
 A project can live on another machine. `revier link <host> <project>`, or
 alt+r in the TUI, writes a link file for it in the same directory. The file
 names the host and, when it differs from the file's own name, the project's

@@ -247,9 +247,55 @@ Templates are Go `text/template` over `Project`, rendered by the core before a
 host sees them. `run` and `launch` are argv lists, not shell strings: there is
 no quoting to get wrong and no shell to inject into.
 
+A status is a command whose output the surface draws at one place (D134): an
+account's usage limits, a CI result, a ticket count.
+
+```toml
+# config.toml
+[[status]]
+at    = "rule-right"            # rule-left, rule-right, project-line or project
+run   = ["usage-limits"]        # found on PATH; a leading "~/" is expanded
+every = "2m"                    # a Go duration; 60s when left out, 5s at least
+
+[[status]]
+at    = "project"
+title = "CI"                    # only at "project"; "Info" when left out
+run   = ["ci-status", "--short"]
+```
+
+`rule-left` and `rule-right` stand at the ends of the thin rule under the
+top line, and run once for the whole screen. `project-line` stands at the
+right end of the pane's first line, and `project` is a section of the pane
+under its title. These two run for the selected project alone, with
+`REVIER_PROJECT` and `REVIER_PROJECT_PATH` set, and `REVIER_PROJECT_HOST` for
+a link. `run` is an argv list with no template, required in `config.toml`:
+the project reaches the command through those variables.
+
+A project file declares `project-line` and `project` only. Its table at the
+same place as a shared one changes the fields it sets, as a target's does,
+and leaves out `run` to keep the shared command; a table at a new place is the
+project's own. A project cannot switch a shared status off. A link runs its
+own tables alone, since a shared command is written against a checkout here,
+and the host's project file is not read.
+
+The command prints a JSON list of segments, one segment, or plain text, where
+each line that is not empty is a segment:
+
+```json
+[{"text":"5h 82%","level":"critical"},{"text":"7d 41%","level":"normal"}]
+```
+
+`level` is `normal`, `warning` or `critical`, drawn in the theme's colours;
+colour the command prints itself is dropped. A line place joins the segments
+and leaves out whole ones from the right that do not fit; the section draws
+one to a line. A run is ended after five seconds, and a run that fails or is
+ended keeps the last answer, dimmed; the log names why. Nothing runs while the
+popup is hidden. A table that breaks a rule is refused alone, and
+`revier doctor` names it (D85).
+
 Anything specific to one person — an editor, a ticket viewer, a browser, a
-company tool — is a target or an action. It never becomes code in this
-repository.
+company tool — is a target, an action or a status. It never becomes code in
+this repository.
 
 ## Level 2 — an external agent probe
 
@@ -288,8 +334,9 @@ The probe runs in revier's working directory, which
 reads panels running `aider` and no others, so an unrelated agent pane never
 costs a process, and a compiled-in probe for the same harness wins.
 
-Only `AgentProbe` has a subprocess form. A `Host` is stateful and sits in the
-latency path of every keystroke, so it is Go or nothing.
+Of the ports, only `AgentProbe` has a subprocess form; a status is a command
+too, but no port. A `Host` is stateful and sits in the latency path of every
+keystroke, so it is Go or nothing.
 
 ## Level 3 — a Go host
 

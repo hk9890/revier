@@ -839,3 +839,14 @@ Any NO_COLOR that is not empty draws the surface without colour, as
 no-color.org says. Bold and reverse video stay: the selected row and the text
 field's cursor are still told apart, and the selection box is drawn as before.
 Rejected: dropping every style, which hides the cursor and the selection box.
+
+### D134 — a status is a command, drawn at one of four places
+
+What a status shows is a command's output, so revier holds no fact of the
+tool it reports on. A segment carries a level, not a colour, so the theme and
+NO_COLOR stay in charge. The places are the ends of the thin rule, the end of
+the pane's first line and a pane section; the pane's two run for the selected
+project alone, so the cost does not grow with the projects. A link runs its
+own tables alone: a shared command is written against a checkout here.
+Rejected: the top line, the footer and the project rows, which have no room
+at normal widths.

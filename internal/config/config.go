@@ -9,9 +9,10 @@
 //
 // What a failure costs is the smallest thing that is wrong (decisions.md
 // D85). validateTargets refuses one target, validateProject refuses one
-// project, and loading refuses nothing: every file becomes a project, marked
-// with what could not be read, except a link to this machine, which Load
-// leaves out and lists in SelfLinks (D131). Nothing here returns an error for
+// project, validateStatuses refuses one [[status]] table, and loading refuses
+// nothing: every file becomes a project, marked with what could not be read,
+// except a link to this machine, which Load leaves out and lists in SelfLinks
+// (D131). Nothing here returns an error for
 // a mistake in a project file, because there is no caller that mistake should
 // stop - revier is how a user reaches the project they have to fix. The write
 // paths are the exception, and ask Problems before they replace a file.
@@ -37,13 +38,14 @@ import (
 )
 
 // Config is the global configuration: which adapters to prefer, the actions
-// the TUI exposes, the external agent probes, and the targets every project
-// shares.
+// the TUI exposes, the external agent probes, the statuses it draws, and the
+// targets every project shares.
 type Config struct {
-	Hosts   Hosts    `toml:"hosts"`
-	UI      UI       `toml:"ui"`
-	Actions []Action `toml:"action"`
-	Probes  []Probe  `toml:"probe"`
+	Hosts   Hosts         `toml:"hosts"`
+	UI      UI            `toml:"ui"`
+	Actions []Action      `toml:"action"`
+	Probes  []Probe       `toml:"probe"`
+	Status  []StatusTable `toml:"status"`
 	// Targets are the shared targets, as TOML decoded them, so a project
 	// can override any one field of one (shared.go). Every [[target]] the
 	// file writes is here, so the config screen edits the file as it is;
@@ -60,6 +62,8 @@ type Config struct {
 	// SelfLinks is the files of the links whose host is this machine, which
 	// Load leaves out (decisions.md D131). `revier doctor` says how many.
 	SelfLinks []string `toml:"-"`
+
+	statuses []core.Status // Status without the tables a rule refused
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -145,6 +149,13 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, err
 	}
 	projects, cfg.SelfLinks = elsewhere(projects)
+	// A table that changes a shared status refuses only once merged with
+	// config.toml's, so the merge's refusals are laid on the project here,
+	// where every reader of Problems sees them.
+	for i := range projects {
+		_, unrun := projects[i].StatusOf(cfg.statuses)
+		projects[i].StatusRefused = append(projects[i].StatusRefused, unrun...)
+	}
 	return cfg, projects, nil
 }
 
@@ -242,6 +253,9 @@ func parse(data []byte) (*Config, error) {
 			cfg.Problems = append(cfg.Problems, err)
 		}
 	}
+	statuses, errs := validateStatuses(cfg.Status, false)
+	cfg.statuses = statuses
+	cfg.Problems = append(cfg.Problems, errs...)
 	return cfg, nil
 }
 
@@ -387,6 +401,7 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 	}
 	prepared := core.PrepareProject(p)
 	prepared.File = path
+	prepared.Status, prepared.StatusRefused = projectStatuses(data)
 	if err := validateProject(p); err != nil {
 		prepared.Invalid = fmt.Errorf("%s: %w", path, err)
 	}
@@ -406,8 +421,9 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 }
 
 // Problems is every reason a loaded project is not whole: the project-wide
-// refusal first, then one per refused target. It is empty for a project that
-// loaded entire, which is what `revier new` asks before it keeps a file.
+// refusal first, then one per refused target, then one per refused
+// [[status]] table. It is empty for a project that loaded entire, which is
+// what `revier new` asks before it keeps a file.
 func Problems(p core.Project) []error {
 	var out []error
 	if p.Invalid != nil {
@@ -418,14 +434,16 @@ func Problems(p core.Project) []error {
 			out = append(out, err)
 		}
 	}
-	return out
+	return append(out, p.StatusRefused...)
 }
 
 // newProblems is what after is not whole for that before was: the reasons a
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
 // edit of the file, and the file could only be repaired by hand
-// (decisions.md D85). A problem is the project's, or one target's by name.
+// (decisions.md D85). A problem is the project's, one target's by name, or
+// one status place's: the opening of its refusal, since a TOML error in the
+// tables names a line, and an edit above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}
 	if before.Invalid != nil {
@@ -442,6 +460,18 @@ func newProblems(before, after core.Project) []error {
 	}
 	for i, t := range after.Targets {
 		if err := after.TargetErr(i); err != nil && !had["target "+string(t.Name)] {
+			out = append(out, err)
+		}
+	}
+	place := func(err error) string {
+		what, _, _ := strings.Cut(err.Error(), ":")
+		return what
+	}
+	for _, err := range before.StatusRefused {
+		had[place(err)] = true
+	}
+	for _, err := range after.StatusRefused {
+		if !had[place(err)] {
 			out = append(out, err)
 		}
 	}

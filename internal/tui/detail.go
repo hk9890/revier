@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -230,7 +231,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 
 	// The name stands level with the list's query, and the rule under it
 	// level with the list's rule, so the two columns read as one head.
-	b.WriteString(m.nameButton(v.Project.Name, w))
+	b.WriteString(m.nameLine(v.Project.Name, w))
 	b.WriteString("\n")
 	b.WriteString(th.Border.Render(strings.Repeat("─", w)))
 	b.WriteString("\n")
@@ -306,6 +307,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// The rows the pane's cursor stands on: the targets, and the agents under
 	// their query. Where each lands is recorded, so the cursor can be kept on
 	// screen and a click can find its row.
+	b.WriteString(m.statusSection(v.Project.Name, w))
+
 	lineNow := func() int { return strings.Count(b.String(), "\n") }
 	m.ainput.SetWidth(w - lipgloss.Width(promptMark) - 1)
 	b.WriteString(heading(*m.theme, "Targets", w))
@@ -521,3 +524,39 @@ const (
 	detailNameWidth  = 10
 	detailStateWidth = 15
 )
+
+// nameLine is the pane's first line: the name button, and the project's
+// project-line status at the right edge where the button leaves room for it
+// (decisions.md D134).
+func (m Model) nameLine(name revier.ProjectName, w int) string {
+	button := m.nameButton(name, w)
+	room := w - lipgloss.Width(button) - gridGap
+	status := m.statusAt(core.StatusProjectLine, name).fit(*m.theme, room)
+	if status == "" {
+		return button
+	}
+	return button + strings.Repeat(" ", w-lipgloss.Width(button)-lipgloss.Width(status)) + status
+}
+
+// statusSection is the project's project status: a section of the pane under
+// the status's title (decisions.md D134), one segment to a line. Nothing
+// shown yet is no section at all. An answer is shown only while its place
+// has the status that gave it, so that status's title is the place's own.
+func (m Model) statusSection(name revier.ProjectName, w int) string {
+	result := m.statusAt(core.StatusProject, name)
+	if len(result.segments) == 0 {
+		return ""
+	}
+	title := result.from.Title
+	if title == "" {
+		title = statusTitle
+	}
+	th := *m.theme
+	var b strings.Builder
+	b.WriteString(heading(th, title, w))
+	for _, s := range result.segments {
+		b.WriteString(result.style(th, s.Level).Render(ellipsis(s.Text, w)))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
