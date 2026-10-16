@@ -134,16 +134,27 @@ func main() {
 		return
 	}
 	status, say := outcome(err)
-	var ended signalEnd
-	if errors.As(err, &ended) {
-		logging.Op("command", start, nil, "args", args, "exit", status, "signal", ended.sig.String())
-		os.Exit(status)
-	}
-	logging.Op("command", start, err, "args", args, "exit", status)
+	logCommand(start, args, err, status)
 	if say {
 		fmt.Fprintln(os.Stderr, "revier:", err)
 	}
 	os.Exit(status)
+}
+
+// logCommand records a command that ended with err and status. A run that
+// ended as it should is no failure, whatever its status: a surface a signal
+// closed, and a doctor that found problems, which is its report.
+func logCommand(start time.Time, args []string, err error, status int) {
+	attrs := []any{"args", args, "exit", status}
+	var ended signalEnd
+	var found problemsFound
+	switch {
+	case errors.As(err, &ended):
+		err, attrs = nil, append(attrs, "signal", ended.sig.String())
+	case errors.As(err, &found):
+		err, attrs = nil, append(attrs, "problems", found.files)
+	}
+	logging.Op("command", start, err, attrs...)
 }
 
 // openLog starts the day's log for this process. A log that cannot be opened
@@ -208,7 +219,7 @@ func outcome(err error) (status int, say bool) {
 	case errors.As(err, &ended):
 		return 128 + int(ended.sig), false
 	// `revier doctor` is its own report; a line here would add nothing to it.
-	case errors.Is(err, errSilent):
+	case errors.As(err, new(problemsFound)):
 		return 1, false
 	}
 	return 1, true

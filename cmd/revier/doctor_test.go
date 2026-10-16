@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,8 +48,8 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 
 	var out strings.Builder
 	err := cmdDoctor(&out, nil)
-	if !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err != (problemsFound{files: 3}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 3 files", err)
 	}
 	got := out.String()
 
@@ -125,8 +124,8 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 	}
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 1}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 1 file", err)
 	}
 	for _, want := range []string{"config.toml", `action "sync"`, "typed text", "1 project, 1 file with problems"} {
 		if !strings.Contains(out.String(), want) {
@@ -158,8 +157,8 @@ every = "10s"
 	}
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 2 files", err)
 	}
 	got := out.String()
 

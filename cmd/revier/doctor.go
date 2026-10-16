@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -86,7 +85,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.
-		return errSilent
+		return problemsFound{files: bad}
 	}
 	return nil
 }
@@ -174,6 +173,11 @@ func advise(msg string) string {
 	return ""
 }
 
-// errSilent ends a command with a non-zero status and no further message,
-// because the command has printed its own report.
-var errSilent = errors.New("")
+// problemsFound is a doctor run that found files with problems. It ends the
+// command with status 1 and no further message, because the report is the
+// message, and it is logged as the outcome it is and not as a failure.
+type problemsFound struct{ files int }
+
+func (e problemsFound) Error() string {
+	return core.Count(e.files, "file") + " with problems"
+}
