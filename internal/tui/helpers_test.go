@@ -28,21 +28,15 @@ import (
 // test that forgets its own t.Setenv writes there and not into the user's
 // configuration.
 func TestMain(m *testing.M) {
-	os.Exit(runInScratchRoots(m))
-}
-
-func runInScratchRoots(m *testing.M) int {
-	scratch, err := os.MkdirTemp("", "revier-test-")
+	roots, err := os.MkdirTemp("", "revier-test-")
 	if err != nil {
 		panic(err)
 	}
-	defer func() { _ = os.RemoveAll(scratch) }()
+	defer func() { _ = os.RemoveAll(roots) }()
 	for _, env := range []string{"REVIER_CONFIG_HOME", "REVIER_STATE_HOME"} {
-		if err := os.Setenv(env, filepath.Join(scratch, env)); err != nil {
-			panic(err)
-		}
+		_ = os.Setenv(env, filepath.Join(roots, env))
 	}
-	return m.Run()
+	m.Run()
 }
 
 // world is a runtime, a window host, and n projects; the last project's
