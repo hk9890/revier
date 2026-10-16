@@ -104,11 +104,12 @@ func ValidateTargetName(name revier.TargetName) error {
 }
 
 // ValidateKeyTarget refuses a name a target with a key cannot have on top of
-// that: the popup's row, which the trigger key already holds.
+// that: the popup's row, which the trigger key already holds, and the name of
+// the entry the desktop keeps it in.
 func ValidateKeyTarget(name revier.TargetName) error {
-	if name == PopupTarget {
+	if name == PopupTarget || name == triggerEntry {
 		return fmt.Errorf("target %q has a key, and %q names the key that opens revier ([ui] trigger_key); rename the target",
-			name, PopupTarget)
+			name, name)
 	}
 	return nil
 }

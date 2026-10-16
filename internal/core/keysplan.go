@@ -117,9 +117,19 @@ func (p KeyPlan) Installed() int {
 // bindingID is the name revier gives a shortcut it owns. It is stable across
 // runs and unlike anything a desktop allocates for itself - GNOME numbers its
 // own entries - so the two never claim the same storage.
-func bindingID(target string) string { return bindingIDPrefix + target }
+func bindingID(target string) string {
+	if target == PopupTarget {
+		return bindingIDPrefix + triggerEntry
+	}
+	return bindingIDPrefix + target
+}
 
 const bindingIDPrefix = "revier-"
+
+// triggerEntry is the id the trigger key's entry was written under when its
+// row was named picker. It stays, so a changed trigger key moves that entry
+// instead of leaving it on the old chord (decisions.md D137).
+const triggerEntry = "picker"
 
 // bindingLabel is what the desktop's settings window shows.
 func bindingLabel(target string) string { return "revier: " + target }

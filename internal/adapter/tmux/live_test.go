@@ -721,13 +721,15 @@ func TestAPanelReportsTheForegroundArgv(t *testing.T) {
 		Name: "home", Match: revier.Match{Title: "^home$"},
 		Panels: []revier.PanelSpec{
 			{Kind: revier.PanelAgent, Command: []string{python, aider}},
-			{Kind: revier.PanelTool, Command: []string{"bash", "-c", "exec -a nvim sh -c 'sleep 30' claude"}},
+			{Kind: revier.PanelTool, Command: []string{"bash", "-c", "exec -a nvim sh -c 'sleep 30 & wait' claude"}},
 		},
 	}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
-	// The second pane runs nvim once bash has exec'd it.
+	// The second pane runs nvim once bash has exec'd it. The sleep is in the
+	// background so that no sh execs it in nvim's place: bash, as sh, execs
+	// the last command of a -c it is given.
 	var panels []revier.Panel
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		instances, err := h.Instances(c)

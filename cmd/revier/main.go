@@ -258,9 +258,11 @@ func run(out io.Writer, args []string) error {
 
 	// Before any command runs: a usage request must not probe the desktop,
 	// open a window, or contact a host.
-	if text := commandHelp(cmd); text != "" && asksHelp(cmd, args) {
-		_, _ = fmt.Fprint(out, text)
-		return nil
+	if asksHelp(cmd, args) {
+		if text := commandHelp(cmd); text != "" {
+			_, _ = fmt.Fprint(out, text)
+			return nil
+		}
 	}
 
 	switch cmd {
@@ -367,7 +369,9 @@ func commandHelp(cmd string) string {
 	in := false
 	for _, line := range strings.Split(usage, "\n") {
 		if strings.HasPrefix(line, "  revier ") {
-			in = strings.Fields(line)[1] == cmd
+			// The command is the word after revier. The TUI's line has none,
+			// and the first word of its description is no command.
+			in = line == "  revier "+cmd || strings.HasPrefix(line, "  revier "+cmd+" ")
 		} else if !strings.HasPrefix(line, "   ") {
 			in = false
 		}
@@ -384,8 +388,9 @@ func commandHelp(cmd string) string {
 // asksHelp reports whether args ask cmd for its usage. A help flag counts
 // anywhere before `--`, which is what the flag parser reads it as. A first
 // argument of help counts only where nothing names a project, a target or an
-// action: in a family, and in link, whose first argument is a host. A family
-// given nothing answers with its usage too.
+// action: in a family, and in link, whose first argument is a host. Given
+// nothing, session and keys answer with their usage too, before the app their
+// dispatch builds; agent and shell answer it themselves.
 func asksHelp(cmd string, args []string) bool {
 	_, family := familyUsage[cmd]
 	if len(args) == 0 {

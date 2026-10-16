@@ -175,10 +175,30 @@ func (c *Core) served(snap snapshot, p Project, i int) (revier.Instance, bool) {
 func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error) {
 	host, real, _, err := c.resolve(t)
 	if err != nil {
-		return nil, revier.Realization{}, fmt.Errorf("%w: target %q %s", err, t.Name, noHostReason(t))
+		return nil, revier.Realization{}, noHost{err: err, target: t.Name, reason: noHostReason(t)}
 	}
 	return host, real, nil
 }
+
+// noHost is ErrNoHost for one target: which target, of which project, and the
+// kind of host it lacks. The message is built when it is read: a survey
+// resolves every target on every refresh, and drops this error for each one
+// no host here can realize.
+type noHost struct {
+	err     error
+	target  revier.TargetName
+	project revier.ProjectName
+	reason  string
+}
+
+func (e noHost) Error() string {
+	if e.project == "" {
+		return fmt.Sprintf("%v: target %q %s", e.err, e.target, e.reason)
+	}
+	return fmt.Sprintf("%v: target %q of project %q %s", e.err, e.target, e.project, e.reason)
+}
+
+func (e noHost) Unwrap() error { return e.err }
 
 // noHostReason says which kind of host a target that resolved to none needs.
 func noHostReason(t revier.Target) string {
@@ -243,7 +263,7 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	}
 	host, real, kind, err := c.resolve(p.Targets[i])
 	if err != nil {
-		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("%w: target %q of project %q %s", err, p.Targets[i].Name, p.Name, noHostReason(p.Targets[i]))
+		return nil, revier.Realization{}, revier.CompiledMatch{}, noHost{err: err, target: p.Targets[i].Name, project: p.Name, reason: noHostReason(p.Targets[i])}
 	}
 	m := p.compiled[i].runtime
 	if kind == revier.HostWindow {

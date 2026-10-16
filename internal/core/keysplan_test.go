@@ -726,6 +726,36 @@ func TestATriggerKeyUnderTheOldNameIsRevierOwnAndRenamed(t *testing.T) {
 	}
 }
 
+// A trigger key moved to another chord rewrites the entry an older revier
+// wrote, so the old chord stops opening the popup.
+func TestAMovedTriggerKeyRewritesTheOldEntry(t *testing.T) {
+	w := hosttest.NewWriter("gnome", legacyPopupKey())
+	c := &core.Core{KeyBinder: w}
+
+	plan, err := c.PlanInstallKeys(context.Background(), nil, "ctrl+alt+p")
+	if err != nil {
+		t.Fatalf("PlanInstallKeys: %v", err)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	if held := w.Held("<Alt>space"); len(held) != 0 {
+		t.Errorf("alt+space is still held by %+v", held)
+	}
+	held := w.Held("<Control><Alt>p")
+	if len(held) != 1 || held[0].ID != "revier-picker" {
+		t.Errorf("ctrl+alt+p is held by %+v, want the old entry moved there", held)
+	}
+}
+
+// A target with a key cannot take the name of the trigger key's row, nor of
+// the entry the desktop keeps it in.
+func TestATargetWithAKeyCannotTakeTheTriggerKeyNames(t *testing.T) {
+	for _, name := range []revier.TargetName{core.PopupTarget, "picker"} {
+		if core.ValidateKeyTarget(name) == nil {
+			t.Errorf("a keyed target named %q was accepted", name)
+		}
+	}
+}
+
 // Uninstall removes a trigger key an older revier wrote under the old name.
 func TestUninstallRemovesATriggerKeyUnderTheOldName(t *testing.T) {
 	w := hosttest.NewWriter("gnome", legacyPopupKey())

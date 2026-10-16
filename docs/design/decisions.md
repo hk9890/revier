@@ -863,10 +863,10 @@ in the surface, which would know every harness's layout.
 
 ### D137 — the trigger key's entry is named for the popup it opens
 
-The key opens the popup, and D8 retired "picker" as a surface name, so a
+The key opens the popup, and the picker is no surface of its own (D8), so a
 shortcut named `revier: picker` sent a user looking for a thing that is not
-there. The entry is `revier: popup`, and the reserved name a keyed target
-cannot take moves from `picker` to `popup` with it. An install renames an
-entry revier named when its name is out of date, since one it names stays
-revier's whatever it is called (D77); a shortcut the user bound keeps the
-user's name.
+there. Its row and its name are `popup`; its entry keeps the id
+`revier-picker`, so a changed trigger key moves that entry and leaves no copy
+on the old chord. A keyed target can take neither name. An install renames an
+entry revier named, since one it names stays revier's whatever it is called
+(D77); a shortcut the user bound keeps the user's name.

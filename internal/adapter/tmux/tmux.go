@@ -111,8 +111,10 @@ func (h *Host) Probe(ctx context.Context) error {
 // Instances lists every session on the server, with the panes of all its
 // windows.
 //
-// Two calls, both bulk: one for session names and one for panes. The cost is
-// constant, not per project, which is the property the hot path actually needs.
+// Two tmux calls, both bulk: one for session names and one for panes. Their
+// number is constant, not per project, which is the property the hot path
+// actually needs. Each pane's foreground process is then read from /proc:
+// two file reads per pane, and no process.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	sessions, named, err := h.sessions(ctx)
 	if err != nil || len(sessions) == 0 {
@@ -445,11 +447,12 @@ func exitedAtOnce(p revier.PanelSpec) error {
 	return fmt.Errorf("%s command %q exited as soon as it started", whose(p), strings.Join(p.Command, " "))
 }
 
-// whose names what a command belongs to: a panel by its kind, and a
-// realization's launch, which has no kind, as the launch.
+// whose names what a command belongs to: a panel by its kind. A realization's
+// launch has no kind, and neither has a panel whose kind was left out, so
+// either is named by its command alone.
 func whose(p revier.PanelSpec) string {
 	if p.Kind == "" {
-		return "the launch"
+		return "the"
 	}
 	return "the " + string(p.Kind) + " panel's"
 }

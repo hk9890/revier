@@ -281,10 +281,13 @@ func Foreground(pid int) (int, []string, bool) {
 		return 0, nil, false
 	}
 	cmdline, err := os.ReadFile("/proc/" + strconv.Itoa(fg) + "/cmdline")
-	if err != nil || len(cmdline) == 0 {
+	// A process that cleared its argv reads as NULs alone, and names no
+	// program.
+	args := strings.TrimRight(string(cmdline), "\x00")
+	if err != nil || args == "" {
 		return 0, nil, false
 	}
-	return fg, strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00"), true
+	return fg, strings.Split(args, "\x00"), true
 }
 
 // RunsUnder reports a panel the calling process runs under: the panel's

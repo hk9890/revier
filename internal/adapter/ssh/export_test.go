@@ -8,9 +8,6 @@ func (r *Remote) SetRunner(run func(ctx context.Context, args ...string) (stdout
 	r.run = run
 }
 
-// Quote exposes quote.
-func Quote(s string) string { return quote(s) }
-
 // Login exposes login.
 func Login(line string) string { return login(line) }
 

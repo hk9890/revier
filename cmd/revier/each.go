@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/runlog"
@@ -376,24 +377,14 @@ func cmdEachLog(w io.Writer, args []string) error {
 func runCommand(r runlog.Run) string {
 	words := make([]string, len(r.Argv))
 	for i, w := range r.Argv {
-		words[i] = shellWord(w)
+		words[i] = ssh.Quote(w)
 	}
 	s := strings.Join(words, " ")
 	if r.Filter != "" {
-		s = "--filter " + shellWord(r.Filter) + " -- " + s
+		s = "--filter " + ssh.Quote(r.Filter) + " -- " + s
 	}
 	if r.Finished.IsZero() {
 		s += "  (unfinished)"
 	}
 	return s
-}
-
-// shellWord is s as one word of a POSIX shell: bare when no character in it
-// is special to the shell, otherwise in single quotes, with each single quote
-// in s closed, escaped and reopened.
-func shellWord(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~") {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

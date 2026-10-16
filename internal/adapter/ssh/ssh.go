@@ -110,7 +110,7 @@ func quiet(line string) string {
 func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, error) {
 	words := make([]string, len(args))
 	for i, a := range args {
-		words[i] = quote(a)
+		words[i] = Quote(a)
 	}
 	full := append(flags(), "--", r.host, quiet(strings.Join(words, " ")))
 	var out, errb bytes.Buffer
@@ -131,9 +131,9 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 // close.
 const waitDelay = time.Second
 
-// quote wraps s for a POSIX shell: single quotes, with each single quote in s
+// Quote wraps s for a POSIX shell: single quotes, with each single quote in s
 // closed, escaped and reopened.
-func quote(s string) string {
+func Quote(s string) string {
 	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~") {
 		return s
 	}
@@ -165,12 +165,12 @@ func (r *Remote) PanelCommand(project revier.ProjectName, kind revier.PanelKind)
 // PanelCommand is Remote.PanelCommand for a host, the form the tests pin.
 func PanelCommand(host string, project revier.ProjectName, kind string) []string {
 	const tag = "\x00"
-	there := "revier " + kind + " exec -p " + quote(string(project)) + " --tag " + tag
+	there := "revier " + kind + " exec -p " + Quote(string(project)) + " --tag " + tag
 	words := []string{"exec", "ssh", "-t"}
 	for _, f := range connection() {
-		words = append(words, quote(f))
+		words = append(words, Quote(f))
 	}
-	script := strings.Join(words, " ") + " -- " + quote(host) + ` "` + doubleQuoted(login(there)) + `"`
+	script := strings.Join(words, " ") + " -- " + Quote(host) + ` "` + doubleQuoted(login(there)) + `"`
 	return []string{"sh", "-c", strings.ReplaceAll(script, tag, `$(uname -n).$$ $*`), "sh"}
 }
 
@@ -183,7 +183,7 @@ func doubleQuoted(s string) string {
 // terminal: -t asks for a tty there, so an action that prompts or draws
 // works as it would in a shell on the host.
 func (r *Remote) RunCommand(project revier.ProjectName, action string) []string {
-	remote := strings.Join([]string{"revier", "run", quote(action), "-p", quote(string(project))}, " ")
+	remote := strings.Join([]string{"revier", "run", Quote(action), "-p", Quote(string(project))}, " ")
 	return append(append([]string{"ssh", "-t"}, flags()...), "--", r.host, login(remote))
 }
 
