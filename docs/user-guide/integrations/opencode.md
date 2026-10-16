@@ -49,9 +49,9 @@ name = "agent"
 |---|---|
 | The agent is counted, and listed as `unknown` | State: working, needs you, idle |
 | `revier agent read --screen`: the text of its panel | `revier agent read` without `--screen`: revier reads no opencode conversation |
-| `revier agent prompt` and `revier agent send-keys` | `revier agent wait`: the state never leaves `unknown`, so the wait ends only at its timeout |
+| `revier agent send-keys` | `revier agent prompt`: it refuses an agent whose state is `unknown`, because the Enter could answer a dialog. Drive it with `send-keys` |
 | `revier agent new`, `revier agent focus`, the agent list | Resume: a restored opencode agent starts a new conversation |
-| `revier session save` and `restore` open the agent again | |
+| `revier session save` and `restore` open the agent again | `revier agent wait`: the state never leaves `unknown`, so the wait ends only at its timeout |
 
 Because its state is `unknown`, an opencode agent never sorts first as one
 that needs you. `revier shutdown` refuses only while an agent is working or

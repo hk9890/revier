@@ -589,8 +589,10 @@ two ends of the rule under the top line, the right end of the pane's first
 line, or a section of the pane. Use it for an account's usage limits, a CI
 result, a ticket count.
 
-`config.toml` declares all four places. A project file and a link file declare
-the two places in the pane, and change a shared table at the same place.
+`config.toml` declares all four places. A project file declares the two places
+in the pane, and changes a shared table at the same place. A link file declares
+the two places in the pane too, but takes no table from `config.toml`: each of
+its tables gives its own `run`.
 
 The fields, the output format, the timing and a worked example are in
 [extending/status.md](extending/status.md).
@@ -686,8 +688,10 @@ prints one warning line and writes each problem to the log:
 
 ```
 revier: warning: 1 configuration file with problems; run `revier doctor`
-``` The TUI lists a refused project with its
-reason. See [troubleshooting.md](troubleshooting.md).
+```
+
+The TUI lists a refused project with its reason. See
+[troubleshooting.md](troubleshooting.md).
 
 ## Quick reference
 

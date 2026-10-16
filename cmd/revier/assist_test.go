@@ -108,6 +108,9 @@ func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
 			t.Errorf("reference does not hold %q", want)
 		}
 	}
+	if !strings.HasPrefix(out.String(), "# Configuration\n") {
+		t.Errorf("reference does not open on the configuration page:\n%.200s", out.String())
+	}
 }
 
 // With no agent installed the command ends with a status of its own, and

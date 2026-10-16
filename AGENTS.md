@@ -78,6 +78,6 @@ dispatched by hand, and the dispatched ref must be the tagged commit.
 
 **MUST read [docs/DOCUMENTING.md](docs/DOCUMENTING.md) AND invoke the
 `instruction-writing:writing-project-docs` skill before creating or editing ANY
-Markdown file** — the root steering files, anything under `docs/`, or anything
-under `docs/design/`. The two trees have different owners and different
-registers, and some gaps in the set are deliberate.
+Markdown file** — the root steering files, anything under `docs/`,
+`docs/design/` or `docs/user-guide/`. The three trees have different owners and
+different registers, and some gaps in the set are deliberate.

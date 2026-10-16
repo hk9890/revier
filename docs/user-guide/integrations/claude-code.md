@@ -107,7 +107,8 @@ revier agent read demo --screen --lines 40
 ```
 
 Without `--screen`, revier prints the last thing the agent said, read from the
-end of its conversation file under `~/.claude/projects/`. That file's format
+end of its conversation file under `projects/` in Claude Code's directory
+(`$CLAUDE_CONFIG_DIR`, else `~/.claude`). That file's format
 is Claude Code's own and changes between releases, so revier shows it as it
 can and never acts on it. `--screen` prints the text of the panel and works
 for every agent. [Agents](../agents.md) has every `revier agent` command.

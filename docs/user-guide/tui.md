@@ -99,7 +99,8 @@ The pane shows the project under the cursor:
 - **Status**: `running`, `stopped`, `surveying`, `invalid`, `unreachable` or
   `not available`.
 - **Host**, for a project on another machine.
-- **Path** and **Git URL**. A path that does not exist is red.
+- **Path** and **Git URL**. A path that does not exist is maroon, a step away
+  from the red that marks an agent that needs you.
 - For a file that did not load, or a host that does not answer, the reason in
   full.
 - For a project whose directory is missing: `Directory is not on this

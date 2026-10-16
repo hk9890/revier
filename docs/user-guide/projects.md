@@ -165,7 +165,7 @@ opening the project clones it first:
 
 ```bash
 revier open shop
-# revier: ~/dev/shop is not on this machine; cloning git@github.com:example/shop.git
+# revier: /home/you/dev/shop is not on this machine; cloning git@github.com:example/shop.git
 ```
 
 `revier open`, Enter on the project in the TUI, and the agent panel of a link

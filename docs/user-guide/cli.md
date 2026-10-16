@@ -179,8 +179,9 @@ revier agent prompt <agent> [--] <text>
 ```
 
 Type one line into the agent and submit it. It returns once an idle agent has
-started on it. It refuses a panel that is not an agent's, and an agent that
-waits for an answer, where the Enter would pick an option in its dialog.
+started on it. It refuses a panel that is not an agent's, an agent that waits
+for an answer, where the Enter would pick an option in its dialog, and an agent
+whose state is `unknown`, which may show such a dialog.
 
 ### revier agent read
 
@@ -477,10 +478,10 @@ revier list --json demo
     },
     "running": true,
     "path_exists": true,
-    "home": { "host": "kitty", "id": "12", "title": "demo" },
+    "home": { "host": "kitty", "id": "12", "title": "session:demo" },
     "targets": [
       { "name": "home", "key": "ctrl-shift-u", "host": "kitty",
-        "ref": { "host": "kitty", "id": "12", "title": "demo" }, "available": true }
+        "ref": { "host": "kitty", "id": "12", "title": "session:demo" }, "available": true }
     ],
     "agents": [
       { "panel": "3", "ref": { "host": "kitty", "id": "12" },

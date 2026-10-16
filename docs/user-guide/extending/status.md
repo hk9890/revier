@@ -114,10 +114,10 @@ theme`; you cannot set them per status.
 ## How a segment fits its line
 
 - **On a line** (`rule-left`, `rule-right`, `project-line`), the segments are
-  joined with ` · ` between them. Where the line has no room for the next
-  whole segment, that segment and every one after it are left out. revier
-  never cuts a segment in half, because half a value reads as another value.
-  Put the segment that matters most first.
+  joined by a `·` with two spaces on each side. Where the line has no room
+  for the next whole segment, that segment and every one after it are left
+  out. revier never cuts a segment in half, because half a value reads as
+  another value. Put the segment that matters most first.
 - **On the rule**, a status stands two columns in from the edge. A status
   with no room at all is left off, and the rule runs through.
 - **In the `project` section**, each segment has a line of its own. A

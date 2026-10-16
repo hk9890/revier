@@ -49,7 +49,7 @@ tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin
 see [Building](#building).
 
 To verify an archive against the release's signed checksums, see
-[Getting started](docs/user-guide/getting-started.md).
+[Verify a download](docs/user-guide/getting-started.md#verify-a-download).
 
 ## First use
 

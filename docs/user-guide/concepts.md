@@ -192,7 +192,7 @@ break with one:
 |---|---|
 | a field name revier does not know, such as a typo | nothing: the field is ignored |
 | a rule about one target | that target. It reports `invalid` with its reason, and its key says why when pressed and launches nothing. |
-| a rule about the project: no home, no path, an unusable name | that project. It is listed with its reason, and its sound targets still resolve. |
+| a rule about the project: no home, no path, an unusable name | that project. It is listed with its reason, and nothing in it opens. |
 | a project file that is not TOML | that project. It is listed by its file name, with the parse error. |
 | `config.toml` itself does not load | everything: nothing is left to read the rest with |
 
