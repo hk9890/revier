@@ -48,13 +48,15 @@ usage:
   revier status                 which project this directory resolves to
   revier doctor                 every project file that did not load whole, and
                                 what to do about each problem
-  revier assist [-p name] [--print-brief | --reference]
+  revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]
                                 hand this terminal to Claude Code, briefed to
                                 configure revier and to find what is wrong with
                                 it, on the conversation it held last; -p tells
                                 it which project you mean; --print-brief prints
                                 the brief and --reference the configuration
-                                format, and neither starts anything
+                                format, and neither starts anything; --exec
+                                becomes the agent, as the built-in project
+                                revier-config-assistant runs it
   revier keys status [--json]   the desktop chords revier wants, and who holds them
   revier agent wait <agent> --until <status> [--timeout s]
                                 block until an agent reaches a status

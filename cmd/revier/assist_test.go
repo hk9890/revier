@@ -128,3 +128,20 @@ func TestAssistWithNoAgentInstalledSaysSo(t *testing.T) {
 		t.Errorf("outcome = %d, %v; want %d and the message printed", status, say, exitNoAssistant)
 	}
 }
+
+// --exec is the built-in project's panel, and --resume is what a session
+// restore adds to that panel: neither goes with another mode.
+func TestAssistRefusesExecWithAnotherMode(t *testing.T) {
+	configRoot(t, "", nil)
+	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+
+	for _, args := range [][]string{
+		{"assist", "--exec", "--print-brief"},
+		{"assist", "--exec", "--reference"},
+		{"assist", "--resume", "abc-123"},
+	} {
+		if err := run(&strings.Builder{}, args); err == nil || !strings.Contains(err.Error(), "usage") {
+			t.Errorf("%q: err = %v, want the usage", args, err)
+		}
+	}
+}

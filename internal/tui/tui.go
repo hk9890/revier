@@ -110,6 +110,7 @@ func (d dialog) hasPane() bool {
 type Model struct {
 	core      *core.Core
 	projects  []core.Project
+	assistant core.Project // the built-in project alt+a raises, kept over a reload; zero when the surface was given none
 	stateRoot string
 	actions   []config.Action
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
@@ -167,7 +168,7 @@ type Model struct {
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	raises    int                              // the times the popup was raised; a go hides it only when it was not raised since the press
-	idle      bool                             // the survey chain ended while hidden; the raise starts it again
+	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
 	chain     int                              // the number of the refresh tick that is out; an older one is dropped
@@ -266,6 +267,16 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	return m
 }
 
+// WithAssistant gives the surface the built-in assistant alt+a raises. The
+// files do not hold it, so every read of them takes it back into the list,
+// and a read with a file of its name in its place leaves it out.
+func (m Model) WithAssistant(p core.Project) Model {
+	m.assistant = p
+	m.setFiles(m.shared, m.projects)
+	m.reloadViews()
+	return m
+}
+
 // StartLookup finds the project to open on when the working directory is in
 // none: the one of the focused window, else the one remembered. It lists
 // every host, so it runs after the first frame, not before it.
@@ -344,6 +355,11 @@ func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
 	m.usable = config.Usable(shared)
 	m.targets = config.ListTargets(shared)
 	m.projects = projects
+	// The files do not hold the assistant, so it is added to every read of
+	// them.
+	if m.assistant.Name != "" {
+		m.projects = config.WithBuiltin(projects, m.assistant)
+	}
 	m.setKeys()
 }
 
@@ -891,10 +907,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The focus is back on a surface that refreshed slowly: it surveys
 		// again at once, the linked hosts that answered their last round and
 		// the mirror with it, so nobody reads rows that aged while nobody
-		// looked.
+		// looked. The files are read again first, as on the raise: the
+		// assistant beside the surface writes them while it is away, so the
+		// survey runs on what they say now, and a config.toml it left that
+		// does not load is said here, as after the hand-over.
 		m.mirror.restart()
 		m.askAgain()
-		return m, m.surveyNow()
+		if !m.surveying {
+			m.chain++
+			m.idle = true
+		}
+		return m, reloadAssisted
 	case reloadedMsg:
 		// The statuses run on whatever was read last: a failed read keeps
 		// the old ones running, as it keeps the old list.

@@ -406,14 +406,30 @@ func (m Model) empty() string {
 	case m.agents.shown:
 		return say(th.NameDim, "No agent runs in an open project.")
 	case len(m.projects) == 0:
-		where := "projects/<name>.toml under the configuration directory"
-		if root, err := config.Root(); err == nil {
-			where = config.ContractHome(filepath.Join(root, "projects")) + "/<name>.toml"
-		}
-		return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
+		return m.noProjects()
 	default:
 		return say(th.NameDim, fmt.Sprintf("No project matches %q.", m.filter))
 	}
+}
+
+// noProjects says where to add a project. It stands in place of the rows
+// when there are none, and under the built-in's when that is the only one:
+// the assistant is no project of the user's.
+func (m Model) noProjects() string {
+	th := *m.theme
+	say := func(s lipgloss.Style, text string) string {
+		return s.PaddingLeft(2).Width(m.listWidth()).Render(text)
+	}
+	where := "projects/<name>.toml under the configuration directory"
+	if root, err := config.Root(); err == nil {
+		where = config.ContractHome(filepath.Join(root, "projects")) + "/<name>.toml"
+	}
+	return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
+}
+
+// onlyAssistant reports the built-in the one project there is.
+func (m Model) onlyAssistant() bool {
+	return len(m.projects) == 1 && m.isAssistant(m.projects[0].Name)
 }
 
 // footer is the key legend, or the last failure. An error replaces the legend

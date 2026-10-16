@@ -107,5 +107,11 @@ errors first. `/clear` in Claude Code starts a new conversation.
   [Configuration](configuration.md), [Status commands](extending/status.md) and
   [Agent probes](extending/probes.md).
 
-`revier assist` needs `claude` on your `PATH`. In the TUI, alt+a starts it on
-the selected project.
+`revier assist` needs `claude` on your `PATH`.
+
+In the TUI, alt+a raises `revier-config-assistant`, a project revier builds
+in: the same agent, in a workspace of its own beside the TUI. Its row has a
+cog where other rows have a folder. It shows in the agent list, and a saved
+session restores it. It is not told which project the cursor is on: name it.
+The TUI reads the files again when it gets the focus back. With no runtime
+host, alt+a hands the terminal over, as `revier assist` does.

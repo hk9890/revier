@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"text/tabwriter"
 	"time"
 
@@ -62,12 +63,23 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		return enc.Encode(views)
 	}
 
-	if len(views) == 0 {
+	if err := a.table(views); err != nil {
+		return err
+	}
+	// The built-in assistant is in no file and is no project of the user's,
+	// so a list of it alone still says where to add one, under its row.
+	if !slices.ContainsFunc(a.projects, func(p core.Project) bool { return p.File != "" }) {
 		root, _ := configRootForMessage()
 		_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
+	}
+	return nil
+}
+
+// table is the list as a person at this machine reads it.
+func (a *app) table(views []revier.ProjectView) error {
+	if len(views) == 0 {
 		return nil
 	}
-
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
 	// The table is read by a person at this machine, and the JSON above by

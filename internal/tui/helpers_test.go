@@ -56,6 +56,15 @@ func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Co
 	return rt, wm, c, projects
 }
 
+// inFiles names a file for each project, as a project loaded from one has,
+// for a test that reaches what is refused on a project in no file. No file
+// is written: the test stops before one is read.
+func inFiles(projects []core.Project) {
+	for i := range projects {
+		projects[i].File = "/cfg/projects/" + string(projects[i].Name) + ".toml"
+	}
+}
+
 // stateWith writes a state file holding the given attachments and returns
 // its root.
 func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef) string {

@@ -114,11 +114,12 @@ func (m Model) createKey(msg keyPress) (tea.Model, tea.Cmd) {
 
 // addProject puts a project just written in as the selected row, at once, as the
 // next survey will show it, rather than a refresh later. The screen that
-// wrote it closes.
+// wrote it closes. A file of the built-in's name takes its place.
 func (m *Model) addProject(p core.Project, view revier.ProjectView) {
-	m.projects = append(m.projects, p)
+	m.projects = append(without(m.projects, p.Name), p)
 	m.setKeys()
-	m.views = m.sorted(append(m.views, view))
+	m.local.Views = withoutView(m.local.Views, p.Name)
+	m.views = m.sorted(append(withoutView(m.views, p.Name), view))
 	m.dialog = dialogNone
 	m.reload()
 	m.selectName(p.Name)
@@ -362,7 +363,7 @@ func sameRepo(url string) string {
 }
 
 func nameFree(projects []core.Project, name revier.ProjectName) error {
-	if p, ok := projectNamed(projects, name); ok {
+	if p, ok := projectNamed(projects, name); ok && !config.IsBuiltin(p) {
 		return fmt.Errorf("project %q already exists: %s", name, config.ContractHome(p.File))
 	}
 	return nil

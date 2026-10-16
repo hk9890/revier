@@ -129,7 +129,7 @@ var backgroundOnly = map[string]bool{"Hover": true}
 
 // optional are the glyphs a set may leave out: the folder column, which a set
 // draws for both states or not at all, and the pane's kind column, likewise.
-var optional = map[string]bool{"Folder": true, "NoFolder": true, "Remote": true, "Window": true, "Container": true}
+var optional = map[string]bool{"Folder": true, "NoFolder": true, "Remote": true, "Builtin": true, "Window": true, "Container": true}
 
 // The comment on Glyphs promises one cell each. A two-cell glyph in a row
 // built from padded columns moves every column after it.
@@ -175,7 +175,7 @@ func TestNoGlyphSetIsIncomplete(t *testing.T) {
 				t.Errorf("%s glyph set has no %s", setName, name)
 			}
 		}
-		if (g.Folder == "") != (g.NoFolder == "") || (g.Folder == "") != (g.Remote == "") {
+		if (g.Folder == "") != (g.NoFolder == "") || (g.Folder == "") != (g.Remote == "") || (g.Folder == "") != (g.Builtin == "") {
 			t.Errorf("%s glyph set draws one folder state and not the others", setName)
 		}
 		if (g.Window == "") != (g.Container == "") {

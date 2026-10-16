@@ -33,6 +33,7 @@ func cmdTUI(a *app) error {
 	// The surface owns the terminal, so a state write that fails is in the
 	// log and not on stderr.
 	m := tui.New(a.core.WithLedger(ledger.File{Root: a.stateRoot}), a.projects, a.stateRoot, a.cfg, time.Second, th, start).
+		WithAssistant(a.assistant).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
 		})

@@ -646,9 +646,10 @@ one harness's format (D106). The panel is what every harness draws and what a
 link's ssh carries, so the pane reads it from the runtime (`PanelReader`) once
 a second, and its scrollback only while the user is scrolled into it. The
 screen is laid out for the agent's window, wider than the pane, so a long line
-continues on the next. Only SGR sequences pass, and every line is closed: a
-screen holds whatever a tool printed (D108). Rejected: cutting a long line,
-which loses the end of every sentence.
+continues on the next, broken at a word so no word reads split. Only SGR
+sequences pass, and every line is closed: a screen holds whatever a tool
+printed (D108). Rejected: cutting a long line, which loses the end of every
+sentence.
 
 ### D112 — what revier did in a project is an event, kept apart from the log
 
@@ -750,17 +751,6 @@ free of files, so the sequences are not there. The event of a use is recorded
 by the operation that did the thing, through the ledger (D120); a surface
 records only the conversations its survey saw.
 
-### D123 — revier starts one agent of its own, to write its configuration
-
-A user no longer fills in setup screens: they tell the coding agent they have
-what they want. `revier assist`, and alt+a, hand the terminal to Claude Code in
-a directory under the state root, briefed with the files, with `revier doctor`
-as its check and with the project under the cursor. It is a hand-over, as an
-action's is; the command needs no configuration to load, so it also repairs
-one. Only this agent is revier's: a project's agent is still only observed.
-Rejected: a terminal drawn in the surface, an emulator to maintain; a project
-of its own, which a configuration that does not load takes with it.
-
 ### D125 — the project pane mirrors one agent's panel, as the agent list's pane does
 
 One agent drawn two ways, its message set from the transcript beside the
@@ -850,3 +840,23 @@ project alone, so the cost does not grow with the projects. A link runs its
 own tables alone: a shared command is written against a checkout here.
 Rejected: the top line, the footer and the project rows, which have no room
 at normal widths.
+
+### D135 — revier's config assistant is a project it builds in
+
+Replaces D123. revier starts one agent of its own, Claude Code briefed to write
+its configuration, in `revier-config-assistant`: a project no file declares, in
+a directory under the state root. It gets run-or-raise, the survey, the probe
+and session restore with no code of its own; alt+a raises it beside the
+surface, and a file of that name replaces it. With no runtime, or with a
+config.toml that does not load, `revier assist` still hands the terminal over.
+Rejected: a project in a file, which a configuration that does not load loses.
+
+### D136 — the mirror leaves out the frame a harness draws under the conversation
+
+Claude Code ends its screen in an input box, a status line and a mode line:
+a third of a short pane, saying nothing the row does not. Where that frame
+starts is the harness's layout, so a probe finds it (`Framed`) and the mirror
+shows the screen above it. A screen with no frame the probe knows - a dialog in
+the box's place, a layout that changed - is shown whole, and so is every
+screen `revier agent read --screen` prints (D116). Rejected: a cut by pattern
+in the surface, which would know every harness's layout.

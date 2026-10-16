@@ -37,8 +37,8 @@ revier agent read demo --screen   # the text of its panel
 
 ## More
 
-- `revier assist` starts Claude Code in `assist/` in the state directory,
-  briefed to change your configuration; see
+- `revier assist`, and alt+a in the TUI, start Claude Code in `assist/` in
+  the state directory, briefed to change your configuration; see
   [Agents](../agents.md#let-an-agent-configure-revier) and
   [Environment variables](../cli.md#environment-variables).
 - To show your usage limits in the TUI, see

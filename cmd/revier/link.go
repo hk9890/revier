@@ -56,7 +56,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		if err != nil {
 			return err
 		}
-		return printRemote(a, pos[0], views)
+		return printRemote(a, pos[0], config.Linkable(views))
 	case 2:
 		p, err := a.link(ctx, pos[0], revier.ProjectName(pos[1]), revier.ProjectName(*name))
 		if err != nil {
@@ -92,13 +92,14 @@ func (a *app) link(ctx context.Context, host string, project, name revier.Projec
 	if name == "" {
 		name = project
 	}
-	if p, ok := a.project(name); ok {
+	if p, ok := a.project(name); ok && !config.IsBuiltin(p) {
 		return core.Project{}, fmt.Errorf("project %q already exists: %s", name, p.File)
 	}
 	views, err := a.core.ProjectsOn(ctx, host)
 	if err != nil {
 		return core.Project{}, err
 	}
+	views = config.Linkable(views)
 	var on revier.Project
 	found := false
 	for _, v := range views {

@@ -89,7 +89,8 @@ selection.
 Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. Agents that need you are on top, then working
 agents, then idle ones. Each row shows how long ago the agent spoke. Type to
-filter by project or by what the agent does. Enter goes to the agent's tab.
+filter by project or by what the agent does. The pane shows the agent's
+terminal, without Claude Code's input box. Enter goes to the agent's tab.
 del closes it. alt+space goes back to the projects; Esc with no query quits.
 
 ## The popup
@@ -109,8 +110,7 @@ kitty, and GNOME with the Window Control extension. See
 - When Enter or a target key brings a window to the front, the popup hides.
 - Esc with no query hides it. ctrl+c quits it.
 - Each raise reads the configuration files again. A revier in your own
-  terminal reads them only at start, and after an assist session (alt+a),
-  because assist edits them. Restart it after you edit a file by hand.
+  terminal reads them again each time it gets the focus back.
 
 ## Screens
 
@@ -124,7 +124,7 @@ Each screen takes the place of the list. Esc goes back one step.
 | alt+s | sessions | Restore a saved session with Enter, or save the open projects with alt+s. See [projects.md](projects.md#save-and-restore-sessions). |
 | alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. |
 | alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |
-| alt+a | assist | Hand the terminal to Claude Code, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
+| alt+a | assist | Raise `revier-config-assistant`: Claude Code beside the TUI, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
 | alt+h | help | Every key the TUI knows, including your target keys and actions |
 
 In a form, Tab and ↑ ↓ move between fields, Enter saves, Esc cancels. The

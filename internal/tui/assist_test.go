@@ -15,11 +15,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-// alt+a hands the terminal over: the press answers with the command that
-// runs the assistant, and opens no screen of the surface's own.
+// With no built-in among the projects, alt+a hands the terminal over: the
+// press answers with the command that runs the assistant, and opens no
+// screen of the surface's own.
 func TestAltAHandsTheTerminalToTheAssistant(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 160, 20)
@@ -34,6 +39,136 @@ func TestAltAHandsTheTerminalToTheAssistant(t *testing.T) {
 	}
 	if drawn(m) != before {
 		t.Error("alt+a changed the surface before the hand-over")
+	}
+}
+
+// With the built-in among the projects, alt+a raises it beside the surface,
+// as a target key raises a tab, and hands nothing over.
+func TestAltARaisesTheBuiltinAssistant(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
+
+	m, cmd := press(m, "alt+a")
+	if cmd == nil {
+		t.Fatal("alt+a returned no command")
+	}
+	cmd()
+	if len(rt.Opened) != 1 || rt.Opened[0].Name != string(config.Assistant) {
+		t.Fatalf("runtime Opened = %v, want the assistant's workspace", rt.Opened)
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, string(config.Assistant)) {
+		t.Errorf("the surface does not list the assistant:\n%s", body)
+	}
+}
+
+// The assistant's row says it is revier's own, where another row says where
+// its checkout is; a file that takes the name gets a folder like any other.
+func TestTheBuiltinAssistantRowHasItsOwnGlyph(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	cog := theme.Default().Glyphs.Builtin
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 120, 20)
+
+	for _, row := range rows(m) {
+		if strings.Contains(row, cog) != strings.Contains(row, string(config.Assistant)) {
+			t.Errorf("row %q: want the built-in glyph %q on the assistant's row alone", row, cog)
+		}
+	}
+
+	// The pane offers no edit: there is no file to open.
+	m, _ = press(m, "end")
+	if top, _, _ := strings.Cut(pane(m), "\n"); strings.Contains(top, "alt+e") || !strings.Contains(top, "built in") {
+		t.Errorf("pane top = %q, want the built-in named as such and no edit key", top)
+	}
+
+	mine := core.PrepareProject(revier.Project{Name: config.Assistant, Path: "/mine"})
+	mine.File = "/cfg/projects/" + string(config.Assistant) + ".toml"
+	m = resize(refreshed(t, c, append(projects, mine), stateWith(t, nil), nil).WithAssistant(builtin), 120, 20)
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, cog) {
+		t.Errorf("a file of the built-in's name drew the built-in glyph:\n%s", body)
+	}
+}
+
+// A file of the built-in's name read after the start takes its row. alt+a
+// then opens no workspace the list does not show: it hands the terminal over.
+func TestAltAHandsOverWhenAFileTookTheBuiltinsName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	rt, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, "projects", string(config.Assistant)+".toml")
+	if err := os.WriteFile(file, []byte("path = \"/p/mine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, cmd := m.Assisted(nil)
+	m, _ = deliver(m, cmd)
+
+	if _, cmd = press(m, "alt+a"); cmd == nil {
+		t.Fatal("alt+a returned no command")
+	}
+	cmd()
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime Opened = %v, want nothing: the built-in is not listed", rt.Opened)
+	}
+}
+
+// A file of the built-in's name at the start takes its place for as long as
+// it is there, not for the whole session: a read without it brings the
+// built-in back.
+func TestTheBuiltinComesBackWhenTheFileOfItsNameGoes(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	rt, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	mine := core.PrepareProject(revier.Project{Name: config.Assistant, Path: "/mine"})
+	mine.File = "/cfg/projects/" + string(config.Assistant) + ".toml"
+	m := resize(refreshed(t, c, append(projects, mine), stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
+
+	// The read finds no file of the name in the scratch configuration.
+	m, cmd := m.Assisted(nil)
+	m, _ = deliver(m, cmd)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, theme.Default().Glyphs.Builtin) {
+		t.Fatalf("the built-in did not come back:\n%s", body)
+	}
+	_, cmd = press(m, "alt+a")
+	cmd()
+	if len(rt.Opened) != 1 || rt.Opened[0].Name != string(config.Assistant) {
+		t.Errorf("runtime Opened = %v, want the built-in's workspace", rt.Opened)
+	}
+}
+
+// The built-in is no project of the user's: alone, it still has the hint
+// where to add one under its row.
+func TestTheBuiltinAloneSaysWhereToAddAProject(t *testing.T) {
+	_, _, c, _ := world(t, 1)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	m := resize(refreshed(t, c, nil, stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
+
+	if body := listColumn(m); !strings.Contains(body, string(config.Assistant)) || !strings.Contains(body, "No projects configured") {
+		t.Errorf("list = %q, want the built-in's row and where to add a project", body)
+	}
+	_, _, c, projects := world(t, 1)
+	m = resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
+	if body := listColumn(m); strings.Contains(body, "No projects configured") {
+		t.Errorf("list = %q, want no hint beside a project of the user's", body)
+	}
+}
+
+// The files do not hold the assistant, so a read of them keeps it.
+func TestTheBuiltinAssistantOutlivesAReload(t *testing.T) {
+	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
+	_, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 120, 20)
+
+	m, cmd := m.Assisted(nil)
+	m, _ = deliver(m, cmd)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, string(config.Assistant)) {
+		t.Errorf("the reload dropped the assistant:\n%s", body)
 	}
 }
 

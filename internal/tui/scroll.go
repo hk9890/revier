@@ -86,7 +86,11 @@ func (m *Model) syncBody() {
 		return
 	}
 	l.SetSize(m.listWidth(), n*itemHeight)
-	m.body.SetContent(l.View())
+	if l == &m.plist && m.onlyAssistant() {
+		m.body.SetContent(l.View() + "\n\n" + m.noProjects())
+	} else {
+		m.body.SetContent(l.View())
+	}
 	// The placement is the project list's. A dialog's rows standing over it
 	// are neither placed nor allowed to spend it.
 	if m.placing && l == &m.plist {

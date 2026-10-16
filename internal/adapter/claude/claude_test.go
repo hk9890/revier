@@ -461,6 +461,11 @@ func TestResumeCommand(t *testing.T) {
 			revier.PanelSpec{Command: []string{"node", "-r", "tsx", "/opt/bin/claude", "-c"}},
 			[]string{"node", "-r", "tsx", "/opt/bin/claude", "--resume", "abc-123"},
 		},
+		{
+			"revier's own assistant, which takes the flag to pass on",
+			revier.PanelSpec{Command: []string{"/bin/revier", "assist", "--exec"}},
+			[]string{"/bin/revier", "assist", "--exec", "--resume", "abc-123"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -521,8 +526,21 @@ func TestAssistArgv(t *testing.T) {
 	}
 }
 
+// The assistant beside the surface is framed by its window, not by a status
+// line, and a conversation a restore names wins over the newest one.
+func TestAssistArgvBeside(t *testing.T) {
+	got := claude.Assist{Brief: "the brief", Beside: true, Resume: true, Session: "abc-123"}.Argv()
+	if !slices.Contains(got, "abc-123") || slices.Contains(got, "--continue") {
+		t.Errorf("Argv = %q, want --resume abc-123 and no --continue", got)
+	}
+	if slices.Contains(got, "--settings") {
+		t.Errorf("Argv = %q, want no settings: the user's own status line stays beside the surface", got)
+	}
+}
+
 // A conversation is one Claude Code filed for the directory, under the name
-// it gives that directory.
+// it gives that directory, with a turn of the user's in it: Claude Code
+// refuses to continue a session that was opened and left.
 func TestHasConversation(t *testing.T) {
 	// Claude Code's directory is a path and not a pattern, whatever
 	// characters it holds.
@@ -537,10 +555,63 @@ func TestHasConversation(t *testing.T) {
 	if err := os.MkdirAll(filed, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), nil, 0o644); err != nil {
+	left := `{"type":"file-history-snapshot","messageId":"m1"}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), []byte(left), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("a session opened and left is a conversation; Claude Code refuses to continue it")
+	}
+	caveat := left + `{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), []byte(caveat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("a line Claude Code marks meta is a turn of the user's")
+	}
+	held := left + `{"type":"user","message":{"role":"user","content":"add a project"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "def.jsonl"), []byte(held), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	soon := time.Now().Add(30 * time.Second)
+	if err := os.Chtimes(filepath.Join(filed, "def.jsonl"), soon, soon); err != nil {
 		t.Fatal(err)
 	}
 	if !claude.HasConversation(dir) {
 		t.Error("the conversation filed for the directory was not found")
+	}
+	// --continue opens the newest: one opened and left after the
+	// conversation is what it would refuse.
+	later := time.Now().Add(time.Minute)
+	if err := os.Chtimes(filepath.Join(filed, "abc.jsonl"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("an older conversation counts while the newest transcript holds no turn of the user's")
+	}
+}
+
+// Claude Code's frame is its input box and what it draws under the box. A
+// dialog in the box's place, or a past prompt in the conversation, is not.
+func TestFrame(t *testing.T) {
+	rule := strings.Repeat("─", 20)
+	said := []string{"● Done.", "", "✻ Worked for 3s", "", "              1234 tokens"}
+	cases := []struct {
+		name  string
+		lines []string
+		want  int
+	}{
+		{"the input box and its status lines", append(slices.Clone(said),
+			rule+" ultracode ─", "❯ ", rule, "  host  main", "  ⏵⏵ bypass permissions on"), len(said)},
+		{"a prompt typed over two lines", append(slices.Clone(said),
+			rule, "❯ first line", "  second line", rule, "  ⏵⏵ accept edits on"), len(said)},
+		{"a dialog asks the user", append(slices.Clone(said),
+			rule, " Bash command", "", " Do you want to proceed?", "❯ 1. Yes", "  2. No", "", " Esc to cancel"), len(said) + 8},
+		{"a past prompt and no box", append(slices.Clone(said), "❯ fix the test", "", "● On it."), len(said) + 3},
+	}
+	for _, tc := range cases {
+		if got := (&claude.Probe{}).Frame(tc.lines); got != tc.want {
+			t.Errorf("%s: Frame = %d, want %d", tc.name, got, tc.want)
+		}
 	}
 }

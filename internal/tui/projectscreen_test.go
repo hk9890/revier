@@ -9,7 +9,62 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
 )
+
+// A rename onto the built-in's name takes its place: one row of that name,
+// the file's. A rename away from it, or a delete of the file, gives the
+// place back to the built-in.
+func TestAFileTakesTheBuiltinsPlaceAndGivesItBack(t *testing.T) {
+	m, file, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
+	m = resize(m.WithAssistant(config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})), 140, 60)
+	cog := theme.Default().Glyphs.Builtin
+	named := func(m tui.Model) (n int, builtin bool) {
+		for _, row := range rows(m) {
+			if strings.Contains(row, string(config.Assistant)) {
+				n++
+				builtin = builtin || strings.Contains(row, cog)
+			}
+		}
+		return n, builtin
+	}
+	if n, builtin := named(m); n != 1 || !builtin {
+		t.Fatalf("%d rows of the name, built-in %v; want the built-in's alone:\n%s", n, builtin, strings.Join(rows(m), "\n"))
+	}
+	rename := func(m tui.Model, to string) tui.Model {
+		m, _ = press(m, "alt+e")
+		m, _ = press(m, "enter")
+		m = typeInto(clearField(m), to)
+		m, _ = press(m, "enter")
+		m, _ = press(m, "esc")
+		return m
+	}
+
+	m = rename(m, string(config.Assistant))
+	if n, builtin := named(m); n != 1 || builtin {
+		t.Fatalf("after the rename onto the name: %d rows of it, built-in %v; want the file's alone:\n%s", n, builtin, strings.Join(rows(m), "\n"))
+	}
+	m = rename(m, "demo")
+	if n, builtin := named(m); n != 1 || !builtin {
+		t.Fatalf("after the rename away: %d rows of the name, built-in %v; want the built-in back", n, builtin)
+	}
+
+	m = rename(m, string(config.Assistant))
+	m, _ = press(m, "alt+d")
+	m, _ = press(m, "y")
+	if _, err := os.Stat(filepath.Join(filepath.Dir(file), string(config.Assistant)+".toml")); !os.IsNotExist(err) {
+		t.Fatalf("the file of the name: %v, want it deleted", err)
+	}
+	if n, builtin := named(m); n != 1 || !builtin {
+		t.Errorf("after the delete: %d rows of the name, built-in %v; want the built-in back", n, builtin)
+	}
+	// The built-in itself is in no file to delete.
+	m, _ = press(m, "alt+d")
+	if f := footer(m); !strings.Contains(f, "built in and in no file") {
+		t.Errorf("footer = %q, want the delete of the built-in refused", f)
+	}
+}
 
 // alt+e opens the screen on the highlighted project: its values, and every
 // target it has with where each comes from. alt+e and Esc both leave it.

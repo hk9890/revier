@@ -219,8 +219,10 @@ Beside the agent list the pane names the agent as it names a project - the
 agent's activity as the title, then its state, project, path, git URL, harness
 and when it spoke - and under that mirrors the agent's panel (D111): the end of
 what its terminal shows, read once a second, in the terminal's own colours. A
-line wider than the pane continues on the next. The wheel scrolls back into the
-panel's scrollback, which is read only while the view is scrolled into it, and
+line wider than the pane continues on the next at a word, under its first word
+past any list mark, and a rule wider than the pane is shortened to fit (D111).
+The frame the harness draws under the conversation is left out (D136). The
+wheel scrolls back into the panel's scrollback, which is read only while the view is scrolled into it, and
 the view holds its lines as more are written under them. A link's agent is
 mirrored as any other, since the panel is here. A panel no runtime here can
 read leaves a note in the mirror's place. Nothing a screen carries but its
@@ -274,10 +276,12 @@ that goes to a target or an agent hides the popup too once it lands, unless the
 popup was hidden and raised again since the press: the raise is the user's
 next errand. Any surface without the focus refreshes every ten seconds, the
 mirror with it, the spinner stands, and the pointer is reported only when
-pressed; the focus regained surveys this machine and every linked host that
-answered its last round at once (D129, D130). The surface knows it is the
-popup, and which project to open on, from the environment its terminal is
-started with, read and dropped at start so nothing it launches inherits it.
+pressed; the focus regained reads the project files again, which the config
+assistant beside it writes (D135), and then surveys this machine and every
+linked host that answered its last round at once (D129, D130). The surface knows
+it is the popup, and which project to open on, from the environment its
+terminal is started with, read and dropped at start so nothing it launches
+inherits it.
 The project is resolved at the keypress, while the focused window is still the
 user's. In any other terminal, and where the host cannot hide, Esc exits.
 
@@ -354,7 +358,7 @@ The recheck adds and drops no step, which is what D78 holds fixed.
 - Projects on another machine, surveyed by the revier installed there (D40)
 
 Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
-(D32), `revier events` (D112) and `revier assist` (D123) extend it.
+(D32), `revier events` (D112) and the config assistant (D135) extend it.
 
 **Out, deliberately**
 
@@ -370,10 +374,12 @@ revier is not a terminal multiplexer and does not replace one. It sits above
 whatever runtime you already use and gives it a project-shaped view.
 
 revier does not run your agent, wrap it, or proxy its output. It observes a
-panel and reports what it sees. The one agent it starts is its own:
-`revier assist`, and alt+a on the surface, hand the terminal to Claude Code,
-briefed to write revier's configuration and to find what is wrong with it, and
-the surface reads the files again when that agent exits (D123).
+panel and reports what it sees. The one agent it starts is its own: Claude
+Code, briefed to write revier's configuration and to find what is wrong with
+it, in `revier-config-assistant`, a project revier builds in and no file
+declares. alt+a raises it beside the surface, and it is surveyed, probed and
+restored as any project is. Where no surface can start, `revier assist` hands
+the terminal to the same agent instead (D135).
 
 ## What degrades, and how far
 

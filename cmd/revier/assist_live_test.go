@@ -21,9 +21,10 @@ func TestAssistStartsTheAgentBriefedInItsOwnDirectory(t *testing.T) {
 	t.Setenv("ASSIST_RECORD", record)
 	// The stand-in files a conversation for the directory it ran in, as
 	// Claude Code does once the user has said something.
-	onPath(t, "claude", `{ pwd; printf '%s\n' "$@"; } > "$ASSIST_RECORD"
+	onPath(t, "claude", `[ "$1" = agents ] && { echo "[]"; exit 0; }
+{ pwd; printf '%s\n' "$@"; } > "$ASSIST_RECORD"
 filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
-mkdir -p "$filed" && : > "$filed/abc.jsonl"`)
+mkdir -p "$filed" && echo '{"type":"user"}' > "$filed/abc.jsonl"`)
 
 	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,31 @@ func TestAssistMakesTheConfigurationRootOfANewInstallation(t *testing.T) {
 	}
 }
 
+// A conversation a live session works on is not continued by a second
+// start: two agents on one conversation would write one transcript.
+func TestAssistContinuesNoConversationALiveSessionHolds(t *testing.T) {
+	configRoot(t, "", nil)
+	st := t.TempDir()
+	t.Setenv("REVIER_STATE_HOME", st)
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	t.Setenv("ASSIST_DIR", filepath.Join(st, "assist"))
+	record := filepath.Join(t.TempDir(), "record")
+	t.Setenv("ASSIST_RECORD", record)
+	onPath(t, "claude", `[ "$1" = agents ] && { printf '[{"pid": 4242, "cwd": "%s"}]' "$ASSIST_DIR"; exit 0; }
+printf '%s\n' "$@" > "$ASSIST_RECORD"
+filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
+mkdir -p "$filed" && echo '{"type":"user"}' > "$filed/abc.jsonl"`)
+
+	for range 2 {
+		if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, _ := os.ReadFile(record); strings.Contains(string(got), "--continue") {
+		t.Errorf("the second start continued the conversation a live session holds:\n%s", got)
+	}
+}
+
 // A file can be filed for the directory and hold nothing Claude Code will
 // continue. It then ends at once, and the user must not be left with a key
 // that fails until they delete a file: the agent starts once more, new.
@@ -78,9 +104,10 @@ func TestAssistStartsNewWhenTheAgentRefusesToContinue(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 	record := filepath.Join(t.TempDir(), "record")
 	t.Setenv("ASSIST_RECORD", record)
-	onPath(t, "claude", `filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
+	onPath(t, "claude", `[ "$1" = agents ] && { echo "[]"; exit 0; }
+filed="$CLAUDE_CONFIG_DIR/projects/$(pwd | tr -c 'a-zA-Z0-9\n' '-')"
 case " $* " in *" --continue "*) echo refused >> "$ASSIST_RECORD"; exit 1;; esac
-if [ ! -e "$filed/abc.jsonl" ]; then mkdir -p "$filed" && : > "$filed/abc.jsonl"; exit 0; fi
+if [ ! -e "$filed/abc.jsonl" ]; then mkdir -p "$filed" && echo '{"type":"user"}' > "$filed/abc.jsonl"; exit 0; fi
 echo started >> "$ASSIST_RECORD"`)
 
 	// The first start files the conversation, as the stand-in in the test
