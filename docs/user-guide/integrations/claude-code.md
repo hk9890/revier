@@ -46,9 +46,6 @@ revier agent read demo --screen   # the text of its panel
 
 ## What does not work
 
-- An agent you typed into a shell pane under tmux shows as `unknown` and
-  restores with no conversation. Start agents from the project file or with
-  `revier agent new`.
 - `revier agent read` without `--screen` on a linked project: the
   conversation is on the other machine.
 - `revier assist` with an agent other than Claude Code.

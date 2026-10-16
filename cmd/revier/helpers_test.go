@@ -3,8 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
@@ -162,3 +168,70 @@ home = true
   launch = ["true"]
   match = { title = "^home$" }
 `
+
+// dispatchers are the functions that switch on a command word, by the family
+// whose subcommands they accept; run accepts the top-level commands.
+var dispatchers = map[string]string{
+	"run":        "",
+	"cmdAgent":   "agent",
+	"cmdShell":   "shell",
+	"cmdSession": "session",
+	"cmdKeys":    "keys",
+	"cmdEach":    "each",
+}
+
+// dispatched is every command the dispatchers accept, as the words a user
+// types: "list", "agent wait". It reads the case labels from the source, so a
+// command added to a switch is in it without anyone listing it here.
+func dispatched(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cmds []string
+	fset := token.NewFileSet()
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			family, ok := dispatchers[fn.Name.Name]
+			if !ok {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				clause, ok := n.(*ast.CaseClause)
+				if !ok {
+					return true
+				}
+				for _, e := range clause.List {
+					lit, ok := e.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						continue
+					}
+					word, _ := strconv.Unquote(lit.Value)
+					if slices.Contains([]string{"", "help", "--help", "-h", "--version"}, word) {
+						continue
+					}
+					cmds = append(cmds, strings.TrimSpace(family+" "+word))
+				}
+				return true
+			})
+		}
+	}
+	slices.Sort(cmds)
+	cmds = slices.Compact(cmds)
+	if len(cmds) < 20 {
+		t.Fatalf("found only %d commands, %v: the dispatchers moved", len(cmds), cmds)
+	}
+	return cmds
+}
