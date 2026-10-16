@@ -63,7 +63,10 @@ func treeRows(views []revier.TargetView, declared []revier.Target) []targetRow {
 			continue
 		}
 		rows = append(rows, targetRow{target: tv, kind: kindContainer})
-		opensWith, active := opening(runtime[tv.Name])
+		var opensWith []revier.TargetName
+		if r := runtime[tv.Name]; r != nil {
+			opensWith = r.Tabs
+		}
 		rank := func(tab revier.TargetView) int {
 			if i := slices.Index(opensWith, tab.Name); i >= 0 {
 				return i
@@ -72,20 +75,8 @@ func treeRows(views []revier.TargetView, declared []revier.Target) []targetRow {
 		}
 		slices.SortStableFunc(held, func(a, b revier.TargetView) int { return rank(a) - rank(b) })
 		for i, tab := range held {
-			rows = append(rows, targetRow{target: tab, kind: kindTab, last: i == len(held)-1, active: tab.Name == active})
+			rows = append(rows, targetRow{target: tab, kind: kindTab, last: i == len(held)-1})
 		}
 	}
 	return rows
-}
-
-// opening is the tabs a new instance of r opens with, and the one of them
-// that has the focus.
-func opening(r *revier.Realization) ([]revier.TargetName, revier.TargetName) {
-	if r == nil || len(r.Tabs) == 0 {
-		return nil, ""
-	}
-	if r.Active != "" {
-		return r.Tabs, r.Active
-	}
-	return r.Tabs, r.Tabs[0]
 }

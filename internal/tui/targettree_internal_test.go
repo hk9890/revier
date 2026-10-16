@@ -15,12 +15,12 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// workspace is a home that opens with two tabs and the agent in focus, a tab
-// inside it that it does not open with, and two windows, declared in an order
-// that puts the tabs apart from their home.
+// workspace is a home that opens with two tabs, a tab inside it that it does
+// not open with, and two windows, declared in an order that puts the tabs
+// apart from their home.
 func workspace() []revier.Target {
 	return []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{Tabs: []revier.TargetName{"tickets", "agent"}, Active: "agent"}},
+		{Name: "home", Home: true, Runtime: &revier.Realization{Tabs: []revier.TargetName{"tickets", "agent"}}},
 		{Name: "logs", Runtime: &revier.Realization{Inside: "home"}},
 		{Name: "agent", Runtime: &revier.Realization{Inside: "home"}},
 		{Name: "editor", Window: &revier.Realization{}},
@@ -39,41 +39,34 @@ func views(declared []revier.Target) []revier.TargetView {
 
 // A tab hangs under the target it is inside: first the tabs it opens with,
 // in that order, then the rest in the order of the survey. The last ends the
-// branch, and the one it opens in focus is marked.
+// branch.
 func TestTabsHangUnderTheirContainer(t *testing.T) {
 	rows := treeRows(views(workspace()), workspace())
 	type shape struct {
-		name   revier.TargetName
-		kind   targetKind
-		last   bool
-		active bool
+		name revier.TargetName
+		kind targetKind
+		last bool
 	}
 	var got []shape
 	for _, r := range rows {
-		got = append(got, shape{r.target.Name, r.kind, r.last, r.active})
+		got = append(got, shape{r.target.Name, r.kind, r.last})
 	}
 	want := []shape{
-		{"home", kindContainer, false, false},
-		{"tickets", kindTab, false, false},
-		{"agent", kindTab, false, true},
-		{"logs", kindTab, true, false},
-		{"editor", kindWindow, false, false},
-		{"web", kindWindow, false, false},
+		{"home", kindContainer, false},
+		{"tickets", kindTab, false},
+		{"agent", kindTab, false},
+		{"logs", kindTab, true},
+		{"editor", kindWindow, false},
+		{"web", kindWindow, false},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("rows = %+v, want %+v", got, want)
 	}
 }
 
-// With no tab listed, the container's first tab has the focus; a target the
-// configuration does not declare is a window.
-func TestTheFirstTabHasTheFocusWhenNoneIsNamed(t *testing.T) {
-	declared := workspace()
-	declared[0].Runtime.Active = ""
-	rows := treeRows(append(views(declared), revier.TargetView{Name: "stray"}), declared)
-	if !rows[1].active || rows[1].target.Name != "tickets" {
-		t.Errorf("rows[1] = %+v, want tickets in focus", rows[1])
-	}
+// A target the configuration does not declare is a window.
+func TestAnUndeclaredTargetIsAWindow(t *testing.T) {
+	rows := treeRows(append(views(workspace()), revier.TargetView{Name: "stray"}), workspace())
 	if last := rows[len(rows)-1]; last.target.Name != "stray" || last.kind != kindWindow {
 		t.Errorf("last row = %+v, want stray as a window", last)
 	}
@@ -145,9 +138,6 @@ func TestARowDrawsItsKind(t *testing.T) {
 			if !strings.HasPrefix(plain, "  "+want[i]) {
 				t.Errorf("%s: row %q, want it to start with %q", set, plain, "  "+want[i])
 			}
-		}
-		if agent := ansi.Strip(m.detailRow(rows[2], 60, false, false)); !strings.Contains(agent, "opens first") {
-			t.Errorf("%s: agent row %q, want it marked as the tab that opens first", set, agent)
 		}
 	}
 }

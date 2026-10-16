@@ -393,14 +393,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 		mark, state, stateStyle, name = th.Glyphs.Running, "running", th.Running, th.ProjectName
 	}
 	head := gridHead(lead, style(name).Render(string(t.Name)), style(stateStyle).Render(mark+" "+state), space)
-	rest := style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w)))
-	if row.active {
-		if t.Key != "" {
-			rest += space.Render("  ")
-		}
-		rest += style(th.Meta).Render("opens first")
-	}
-	return fill(clipTo(head+rest, w), w, style)
+	return fill(clipTo(head+style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
 }
 
 // kindMark is the end of a target row's lead, in front of its name: the window

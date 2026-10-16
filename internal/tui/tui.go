@@ -1130,13 +1130,12 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
 // attached instance, which has a ref and no name. A tab is last when it ends
-// its container's branch, and active when the container opens with it in focus.
+// its container's branch.
 type targetRow struct {
 	target   revier.TargetView
 	attached revier.TargetRef
 	kind     targetKind
 	last     bool
-	active   bool
 }
 
 // allRows is a move past either end of any section, which the cursor stops
