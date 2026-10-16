@@ -61,9 +61,11 @@ that did not focus after `Open` passed L2 and failed L4.
   in its `helpers_test.go` that runs `os.Exit(testenv.Run(m))`. A test that
   forgets its own `t.Setenv` then writes into a scratch directory whose
   configuration names no host, and the package fails, naming the file.
-  - Give a new file or directory that revier finds under the user's home
-    its own `REVIER_*` override, set that override in `testenv.Run`, and add
-    the function that resolves it to the rule above.
+  - Give a new file or directory of revier's own under the user's home its
+    own `REVIER_*` override. Set that override in `testenv.Run`, name it in
+    the failure message there, and add the function that resolves it to the
+    rule above. A file of another tool, such as Claude Code's `~/.claude`,
+    keeps that tool's own variable.
 - In `internal/tui`, feed a command that a key press or an `Update` returned
   back to the model with a helper from `internal/tui/helpers_test.go`, not with
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers
