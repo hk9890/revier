@@ -88,6 +88,29 @@ func (p *Probe) Name() string { return "claude" }
 // this machine (revier.Titled).
 func (p *Probe) Activity(title string) string { return Activity(title) }
 
+// Frame is where Claude Code's input box starts: the rule directly above the
+// last line that starts with the prompt mark, when a rule closes the box
+// below it. Under the box are the status line and the mode line, so the cut
+// takes them too. A dialog stands in the box's place and has no rule above
+// its marked choice, so a screen that asks the user is left whole
+// (revier.Framed).
+func (p *Probe) Frame(lines []string) int {
+	for i := len(lines) - 1; i > 0; i-- {
+		if !strings.HasPrefix(lines[i], "❯") {
+			continue
+		}
+		if !rule(lines[i-1]) || !slices.ContainsFunc(lines[i+1:], rule) {
+			return len(lines)
+		}
+		return i - 1
+	}
+	return len(lines)
+}
+
+// rule reports a line Claude Code draws as a rule, with or without a label
+// on it.
+func rule(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "──") }
+
 // Match recognises a Claude pane by its foreground command.
 func (p *Probe) Match(panel revier.Panel) bool {
 	return panel.Runs("claude") || panel.Runs("claude-code")

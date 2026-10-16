@@ -438,6 +438,20 @@ type Titled interface {
 }
 ```
 
+## Framed
+
+An optional capability of an `AgentProbe`, detected by type assertion. A
+harness draws its own frame at the end of its screen - an input box, status
+lines - and only its probe knows where that frame starts. The mirror shows the
+screen above it (D136). The probe is handed the screen's lines as plain text
+and answers `len(lines)` when it finds no frame, so the screen is shown whole.
+
+```go
+type Framed interface {
+    Frame(lines []string) int
+}
+```
+
 ## Resumable
 
 An optional capability of an `AgentProbe`, detected by type assertion. A probe

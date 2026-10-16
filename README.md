@@ -174,8 +174,8 @@ top. A row is the agent's state, what it is on and how long ago it spoke, over
 its project and its worktree. Beside it the pane shows the agent's terminal as
 it is now, once a second, in its colours; the wheel scrolls back through it.
 Enter goes to the agent and del closes its tab. A line of the agent's terminal
-that is wider than the pane continues on the next. revier always opens on the
-projects.
+that is wider than the pane continues on the next at a word. Claude Code's
+input box and status lines are left out. revier always opens on the projects.
 
 | Key | Does |
 |---|---|
