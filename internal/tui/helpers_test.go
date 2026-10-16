@@ -19,24 +19,15 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// TestMain points the config and state roots at scratch directories, so a
-// test that forgets its own t.Setenv writes there and not into the user's
-// configuration.
+// TestMain keeps every test off the user's own revier files (testenv.Run).
 func TestMain(m *testing.M) {
-	roots, err := os.MkdirTemp("", "revier-test-")
-	if err != nil {
-		panic(err)
-	}
-	defer func() { _ = os.RemoveAll(roots) }()
-	for _, env := range []string{"REVIER_CONFIG_HOME", "REVIER_STATE_HOME"} {
-		_ = os.Setenv(env, filepath.Join(roots, env))
-	}
-	m.Run()
+	os.Exit(testenv.Run(m))
 }
 
 // world is a runtime, a window host, and n projects; the last project's
