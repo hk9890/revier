@@ -851,12 +851,11 @@ surface, and a file of that name replaces it. With no runtime, or with a
 config.toml that does not load, `revier assist` still hands the terminal over.
 Rejected: a project in a file, which a configuration that does not load loses.
 
-### D136 — the mirror leaves out the frame a harness draws under the conversation
+### D137 — the mirror shows the agent's whole screen
 
-Claude Code ends its screen in an input box, a status line and a mode line:
-a third of a short pane, saying nothing the row does not. Where that frame
-starts is the harness's layout, so a probe finds it (`Framed`) and the mirror
-shows the screen above it. A screen with no frame the probe knows - a dialog in
-the box's place, a layout that changed - is shown whole, and so is every
-screen `revier agent read --screen` prints (D116). Rejected: a cut by pattern
-in the surface, which would know every harness's layout.
+Replaces D136. The cut read where Claude Code's frame starts from the text it
+draws, and Claude Code draws new things under its input box and in its place:
+an agent selector under the box left the screen whole, and a full-screen view
+has no box to find. A cut that holds only for the layouts it was tested on is
+wrong on the next one. Rejected: a cut by the harness's layout, in the probe or
+in the surface.
