@@ -590,3 +590,28 @@ func TestHasConversation(t *testing.T) {
 		t.Error("an older conversation counts while the newest transcript holds no turn of the user's")
 	}
 }
+
+// Claude Code's frame is its input box and what it draws under the box. A
+// dialog in the box's place, or a past prompt in the conversation, is not.
+func TestFrame(t *testing.T) {
+	rule := strings.Repeat("─", 20)
+	said := []string{"● Done.", "", "✻ Worked for 3s", "", "              1234 tokens"}
+	cases := []struct {
+		name  string
+		lines []string
+		want  int
+	}{
+		{"the input box and its status lines", append(slices.Clone(said),
+			rule+" ultracode ─", "❯ ", rule, "  host  main", "  ⏵⏵ bypass permissions on"), len(said)},
+		{"a prompt typed over two lines", append(slices.Clone(said),
+			rule, "❯ first line", "  second line", rule, "  ⏵⏵ accept edits on"), len(said)},
+		{"a dialog asks the user", append(slices.Clone(said),
+			rule, " Bash command", "", " Do you want to proceed?", "❯ 1. Yes", "  2. No", "", " Esc to cancel"), len(said) + 8},
+		{"a past prompt and no box", append(slices.Clone(said), "❯ fix the test", "", "● On it."), len(said) + 3},
+	}
+	for _, tc := range cases {
+		if got := (&claude.Probe{}).Frame(tc.lines); got != tc.want {
+			t.Errorf("%s: Frame = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}

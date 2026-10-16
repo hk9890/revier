@@ -646,9 +646,10 @@ one harness's format (D106). The panel is what every harness draws and what a
 link's ssh carries, so the pane reads it from the runtime (`PanelReader`) once
 a second, and its scrollback only while the user is scrolled into it. The
 screen is laid out for the agent's window, wider than the pane, so a long line
-continues on the next. Only SGR sequences pass, and every line is closed: a
-screen holds whatever a tool printed (D108). Rejected: cutting a long line,
-which loses the end of every sentence.
+continues on the next, broken at a word so no word reads split. Only SGR
+sequences pass, and every line is closed: a screen holds whatever a tool
+printed (D108). Rejected: cutting a long line, which loses the end of every
+sentence.
 
 ### D112 — what revier did in a project is an event, kept apart from the log
 
@@ -849,3 +850,13 @@ and session restore with no code of its own; alt+a raises it beside the
 surface, and a file of that name replaces it. With no runtime, or with a
 config.toml that does not load, `revier assist` still hands the terminal over.
 Rejected: a project in a file, which a configuration that does not load loses.
+
+### D136 — the mirror leaves out the frame a harness draws under the conversation
+
+Claude Code ends its screen in an input box, a status line and a mode line:
+a third of a short pane, saying nothing the row does not. Where that frame
+starts is the harness's layout, so a probe finds it (`Framed`) and the mirror
+shows the screen above it. A screen with no frame the probe knows - a dialog in
+the box's place, a layout that changed - is shown whole, and so is every
+screen `revier agent read --screen` prints (D116). Rejected: a cut by pattern
+in the surface, which would know every harness's layout.

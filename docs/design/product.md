@@ -219,8 +219,10 @@ Beside the agent list the pane names the agent as it names a project - the
 agent's activity as the title, then its state, project, path, git URL, harness
 and when it spoke - and under that mirrors the agent's panel (D111): the end of
 what its terminal shows, read once a second, in the terminal's own colours. A
-line wider than the pane continues on the next. The wheel scrolls back into the
-panel's scrollback, which is read only while the view is scrolled into it, and
+line wider than the pane continues on the next at a word, under its first word
+past any list mark, and a rule wider than the pane is shortened to fit (D111).
+The frame the harness draws under the conversation is left out (D136). The
+wheel scrolls back into the panel's scrollback, which is read only while the view is scrolled into it, and
 the view holds its lines as more are written under them. A link's agent is
 mirrored as any other, since the panel is here. A panel no runtime here can
 read leaves a note in the mirror's place. Nothing a screen carries but its
