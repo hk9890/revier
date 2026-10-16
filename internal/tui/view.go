@@ -193,11 +193,35 @@ func (m Model) thinRule(width int) string {
 	if width < 2 {
 		return ""
 	}
-	line := []rune(strings.Repeat("\u2500", width-1))
-	if at := m.listWidth() - 1; m.paneWidth() > 0 && at >= 0 && at < len(line) {
-		line[at] = '\u252c'
+	n := width - 1
+	left, right := m.statusAt(core.StatusRuleLeft, ""), m.statusAt(core.StatusRuleRight, "")
+	if at := m.listWidth() - 1; m.paneWidth() > 0 && at >= 0 && at < n {
+		return " " + m.ruleRun(at, left, statusResult{}) + m.theme.Border.Render("\u252c") + m.ruleRun(n-at-1, statusResult{}, right)
 	}
-	return " " + m.theme.Border.Render(string(line))
+	return " " + m.ruleRun(n, left, right)
+}
+
+// ruleRun is n columns of the thin rule, with a status standing in it at
+// either end, two columns in from the edge (decisions.md D134). Beside the
+// pane the left one stands over the list and the right one over the pane.
+// A status with no room is left off and the rule runs through.
+func (m Model) ruleRun(n int, left, right statusResult) string {
+	const edge = 2
+	th := *m.theme
+	rule := func(k int) string { return th.Border.Render(strings.Repeat("\u2500", max(k, 0))) }
+	room := n - 2*edge
+	l := left.fit(th, room-2)
+	if l != "" {
+		l = " " + l + " "
+	}
+	r := right.fit(th, room-lipgloss.Width(l)-2)
+	if r != "" {
+		r = " " + r + " "
+	}
+	if l == "" && r == "" {
+		return rule(n)
+	}
+	return rule(edge) + l + rule(n-2*edge-lipgloss.Width(l)-lipgloss.Width(r)) + r + rule(edge)
 }
 
 // subtitle is the line over the rule: the query, where typing filters, or

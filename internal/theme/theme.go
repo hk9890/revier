@@ -48,6 +48,7 @@ type Theme struct {
 	Running     lipgloss.Style // an agent or target that is up
 	Idle        lipgloss.Style // an agent at rest
 	Attention   lipgloss.Style // an agent waiting for the user, and errors
+	Warning     lipgloss.Style // a status its command says is near a limit
 	Border      lipgloss.Style // pane separators
 	Help        lipgloss.Style // every key hint: the legend, a button's key, a target key
 	Frame       lipgloss.Style // the block the whole surface is rendered in
@@ -247,6 +248,7 @@ func fromFlavor(name string, f catppuccin.Flavor, g Glyphs, p colorprofile.Profi
 		Running:     fg(f.Green()),
 		Idle:        fg(f.Sky()),
 		Attention:   fg(f.Red()).Bold(true),
+		Warning:     fg(f.Yellow()),
 		Border:      fg(f.Surface1()),
 		Help:        fg(f.Overlay0()),
 		Frame:       fg(f.Text()),

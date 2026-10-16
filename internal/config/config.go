@@ -40,10 +40,11 @@ import (
 // the TUI exposes, the external agent probes, and the targets every project
 // shares.
 type Config struct {
-	Hosts   Hosts    `toml:"hosts"`
-	UI      UI       `toml:"ui"`
-	Actions []Action `toml:"action"`
-	Probes  []Probe  `toml:"probe"`
+	Hosts   Hosts         `toml:"hosts"`
+	UI      UI            `toml:"ui"`
+	Actions []Action      `toml:"action"`
+	Probes  []Probe       `toml:"probe"`
+	Status  []StatusTable `toml:"status"`
 	// Targets are the shared targets, as TOML decoded them, so a project
 	// can override any one field of one (shared.go). Every [[target]] the
 	// file writes is here, so the config screen edits the file as it is;
@@ -60,6 +61,8 @@ type Config struct {
 	// SelfLinks is the files of the links whose host is this machine, which
 	// Load leaves out (decisions.md D131). `revier doctor` says how many.
 	SelfLinks []string `toml:"-"`
+
+	statuses []core.Status // Status without the tables a rule refused
 }
 
 // UI is how the TUI looks. Both names are resolved at load, so a typo is a
@@ -242,6 +245,9 @@ func parse(data []byte) (*Config, error) {
 			cfg.Problems = append(cfg.Problems, err)
 		}
 	}
+	statuses, errs := validateStatuses(cfg.Status, false)
+	cfg.statuses = statuses
+	cfg.Problems = append(cfg.Problems, errs...)
 	return cfg, nil
 }
 
@@ -387,6 +393,7 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 	}
 	prepared := core.PrepareProject(p)
 	prepared.File = path
+	prepared.Status, prepared.StatusRefused = projectStatuses(data)
 	if err := validateProject(p); err != nil {
 		prepared.Invalid = fmt.Errorf("%s: %w", path, err)
 	}
@@ -418,7 +425,7 @@ func Problems(p core.Project) []error {
 			out = append(out, err)
 		}
 	}
-	return out
+	return append(out, p.StatusRefused...)
 }
 
 // newProblems is what after is not whole for that before was: the reasons a
@@ -442,6 +449,14 @@ func newProblems(before, after core.Project) []error {
 	}
 	for i, t := range after.Targets {
 		if err := after.TargetErr(i); err != nil && !had["target "+string(t.Name)] {
+			out = append(out, err)
+		}
+	}
+	for _, err := range before.StatusRefused {
+		had[err.Error()] = true
+	}
+	for _, err := range after.StatusRefused {
+		if !had[err.Error()] {
 			out = append(out, err)
 		}
 	}

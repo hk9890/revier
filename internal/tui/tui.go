@@ -114,6 +114,7 @@ type Model struct {
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
 	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
+	status    statuses
 	now       func() time.Time     // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
 	theme     *theme.Theme         // the palette and glyphs, held by pointer as the large screens are
 	profile   colorprofile.Profile // the colours the terminal shows, which the theme is drawn in
@@ -235,6 +236,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		create: new(newCreateScreen(th)),
 		body:   newBody(),
 		config: new(newConfigScreen(th, cfg)),
+		status: newStatuses(cfg.Statuses()),
 		proj:   new(newProjectScreen(th)),
 		// Init surveys.
 		surveying: true,
@@ -243,6 +245,9 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	// derived from them is derived once and the first frame holds the same
 	// thing a reload leaves behind.
 	m.setFiles(cfg.Targets, projects)
+	// Init starts the statuses' beat on a copy of the model, so the beat is
+	// marked out here, where the mark is kept.
+	m.status.beating = m.anyStatus()
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
 	m.takeState()
@@ -301,6 +306,7 @@ type hiddenMsg struct {
 type reloadedMsg struct {
 	shared   []map[string]any
 	actions  []config.Action
+	statuses []core.Status
 	projects []core.Project
 	err      error
 	assisted bool // read after the assistant, whose user is back to read the result
@@ -319,7 +325,7 @@ func readFiles() reloadedMsg {
 		if err != nil {
 			return err
 		}
-		msg.shared, msg.actions, msg.projects = cfg.Targets, cfg.Actions, projects
+		msg.shared, msg.actions, msg.statuses, msg.projects = cfg.Targets, cfg.Actions, cfg.Statuses(), projects
 		return nil
 	})
 	return msg
@@ -405,7 +411,7 @@ type actedMsg struct {
 
 // Init surveys immediately; the timer starts once the first survey answers.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart())
+	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart(), m.firstBeat())
 }
 
 // lookupStart asks the lookup where to open, when the working directory did
@@ -648,6 +654,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return next, cmd
 	}
+	if follow := mm.followSelection(); follow != nil {
+		cmd = tea.Batch(cmd, follow)
+	}
 	if mm.err != nil && mm.err != m.err && !loggedAlready(msg) {
 		slog.Error("tui", "err", mm.err)
 	}
@@ -882,11 +891,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.askAgain()
 		return m, m.surveyNow()
 	case reloadedMsg:
+		// The statuses run on whatever was read last: a failed read keeps
+		// the old ones running, as it keeps the old list.
+		statuses := m.status.config
 		switch {
 		case msg.err == nil:
 			m.setFiles(msg.shared, msg.projects)
 			m.setActions(msg.actions)
 			m.reloadViews()
+			statuses = msg.statuses
 		case msg.assisted:
 			// The old list stands here too, with the reason under it: the
 			// user is back to read what the assistant wrote, and a
@@ -897,9 +910,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// empty the popup.
 			slog.Warn("reload on raise", "err", msg.err)
 		}
+		status := m.retakeStatuses(statuses)
 		if m.idle {
 			m.idle = false
-			return m, m.surveyNow()
+			return m, tea.Batch(m.surveyNow(), status)
+		}
+		return m, status
+	case statusBeatMsg:
+		return m, m.beat()
+	case statusMsg:
+		m.takeStatus(msg)
+		if msg.key.at.OfProject() {
+			m.syncDetail()
 		}
 		return m, nil
 	case assistedMsg:
