@@ -371,14 +371,29 @@ func cmdEachLog(w io.Writer, args []string) error {
 }
 
 // runCommand is how a run is named in a listing: what it ran, the filter that
-// chose where, and whether it got to the end.
+// chose where, and whether it got to the end. Each word is quoted as a shell
+// reads it back, so the line can be pasted to run the same command again.
 func runCommand(r runlog.Run) string {
-	s := strings.Join(r.Argv, " ")
+	words := make([]string, len(r.Argv))
+	for i, w := range r.Argv {
+		words[i] = shellWord(w)
+	}
+	s := strings.Join(words, " ")
 	if r.Filter != "" {
-		s = fmt.Sprintf("--filter '%s' -- %s", r.Filter, s)
+		s = "--filter " + shellWord(r.Filter) + " -- " + s
 	}
 	if r.Finished.IsZero() {
 		s += "  (unfinished)"
 	}
 	return s
+}
+
+// shellWord is s as one word of a POSIX shell: bare when no character in it
+// is special to the shell, otherwise in single quotes, with each single quote
+// in s closed, escaped and reopened.
+func shellWord(s string) string {
+	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

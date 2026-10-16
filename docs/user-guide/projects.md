@@ -96,7 +96,8 @@ revier each -- git pull --ff-only
 
 Projects run one at a time, with no input. Each project prints one line:
 `ok`, `failed`, or why it was skipped. The output of each project goes to a
-log, not to the terminal: `revier each log` shows it. `revier each --help`
+log, not to the terminal: `revier each log` shows it, with each run's
+command quoted so that you can paste it into a shell. `revier each --help`
 has the filters.
 
 ## Save and restore sessions
