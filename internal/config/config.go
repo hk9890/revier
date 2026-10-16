@@ -9,9 +9,10 @@
 //
 // What a failure costs is the smallest thing that is wrong (decisions.md
 // D85). validateTargets refuses one target, validateProject refuses one
-// project, and loading refuses nothing: every file becomes a project, marked
-// with what could not be read, except a link to this machine, which Load
-// leaves out and lists in SelfLinks (D131). Nothing here returns an error for
+// project, validateStatuses refuses one [[status]] table, and loading refuses
+// nothing: every file becomes a project, marked with what could not be read,
+// except a link to this machine, which Load leaves out and lists in SelfLinks
+// (D131). Nothing here returns an error for
 // a mistake in a project file, because there is no caller that mistake should
 // stop - revier is how a user reaches the project they have to fix. The write
 // paths are the exception, and ask Problems before they replace a file.
@@ -37,8 +38,8 @@ import (
 )
 
 // Config is the global configuration: which adapters to prefer, the actions
-// the TUI exposes, the external agent probes, and the targets every project
-// shares.
+// the TUI exposes, the external agent probes, the statuses it draws, and the
+// targets every project shares.
 type Config struct {
 	Hosts   Hosts         `toml:"hosts"`
 	UI      UI            `toml:"ui"`

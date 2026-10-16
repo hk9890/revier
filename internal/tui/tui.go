@@ -12,10 +12,11 @@
 // refreshed on a timer that never overlaps itself and that slows down while
 // the terminal has no focus (D129), with what core.AskRemotes last brought
 // from the linked hosts laid over it (D114, D130), and every action
-// goes through the same core paths the CLI commands use. The two reads
+// goes through the same core paths the CLI commands use. The three reads
 // outside that path are core.Details, when an agent spoke last and what it
 // said, which the surface asks for on its own and no survey carries (D106),
-// and core.Screen, the mirror's.
+// core.Screen, the mirror's, and the [[status]] commands, which it runs on a
+// timer of their own (D134).
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly

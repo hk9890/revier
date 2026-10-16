@@ -67,3 +67,7 @@ refuses the set. Add a rule to `config.validateTargets` unless it is about the
 project as a whole, in which case `config.validateProject`. Both keep the
 project loaded and listed, so every reason stays readable in the surface and in
 `revier doctor`.
+
+Add a rule about one `[[status]]` table to `config.validateStatuses`. It refuses
+that table alone, and only `revier doctor` reports it: the surface leaves the
+table out and says nothing, because a status is not how a project is reached.
