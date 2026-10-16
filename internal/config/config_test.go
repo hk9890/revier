@@ -176,6 +176,15 @@ func TestValidateRejects(t *testing.T) {
 			`target "tickets" is inside "home" and has both launch and panels`,
 		},
 		{
+			// A typo would otherwise cost the panel its agent role silently.
+			"panel with an unknown kind",
+			tabProject(func(tab *revier.Target) {
+				tab.Runtime.Launch = nil
+				tab.Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelShell}, {Kind: "agnet", Command: []string{"sh"}}}
+			}),
+			`target "tickets": panel 2 has kind "agnet"; use agent, shell or tool`,
+		},
+		{
 			"tab with a window realization",
 			tabProject(func(tab *revier.Target) { tab.Window = &base }),
 			"a tab has only the runtime",

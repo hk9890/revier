@@ -212,7 +212,7 @@ file).
 
 | Key | Type | Meaning |
 |---|---|---|
-| `kind` | `"agent"`, `"shell"` or `"tool"` | A coding agent, a shell, or another program. revier does not refuse another value; it counts as `tool`. |
+| `kind` | `"agent"`, `"shell"` or `"tool"` | A coding agent, a shell, or another program. Default: `"tool"`. revier refuses the target for another value. |
 | `title` | string | The panel's title. |
 | `command` | list of strings | What the panel runs. Default: your shell. |
 
