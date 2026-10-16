@@ -192,3 +192,20 @@ every = "10s"
 		t.Errorf("report should count config.toml and tables.toml alone:\n%s", got)
 	}
 }
+
+// A refusal names what it is about with a colon after the name or without
+// one. Either way the column is the name, and the message prints once.
+func TestDoctorColumnsARefusalWithNoColonByItsName(t *testing.T) {
+	configRoot(t, "[[action]]\nkey = \"ctrl-y\"\nname = \"c\"\n", map[string]string{"sound.toml": sound})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	if want := "  action \"c\" runs nothing\n"; !strings.Contains(out.String(), want) {
+		t.Errorf("report should contain %q:\n%s", want, out.String())
+	}
+	if n := strings.Count(out.String(), "runs nothing"); n != 1 {
+		t.Errorf("the refusal is printed %d times, want once:\n%s", n, out.String())
+	}
+}

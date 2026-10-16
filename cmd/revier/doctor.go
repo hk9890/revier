@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -40,9 +41,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 		bad++
 		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
 		for _, err := range cfg.Problems {
-			// An action's or a shared target's refusal opens with what it
-			// is about, which is the column.
-			what, _, _ := strings.Cut(err.Error(), ":")
+			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}
 	}
@@ -67,7 +66,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 			}
 		}
 		for _, err := range p.StatusRefused {
-			what, _, _ := strings.Cut(err.Error(), ":")
+			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}
 	}
@@ -88,6 +87,20 @@ func cmdDoctor(out io.Writer, args []string) error {
 		return problemsFound{files: bad}
 	}
 	return nil
+}
+
+// subject is what a refusal of config.toml or of a status table is about,
+// which is the column: the opening up to the name it quotes, as in `action
+// "c"`, or else up to the first colon. Some refusals put a colon after the
+// name and some do not, `action "c": key ...` and `action "c" runs nothing`,
+// so a cut at the colon alone took the whole of the second as the column.
+func subject(msg string) string {
+	kind, rest, _ := strings.Cut(msg, " ")
+	if name, err := strconv.QuotedPrefix(rest); err == nil {
+		return kind + " " + name
+	}
+	what, _, _ := strings.Cut(msg, ":")
+	return what
 }
 
 // problemLine prints one problem and its advice under a column naming what
