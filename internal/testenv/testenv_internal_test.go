@@ -11,11 +11,8 @@ import (
 func scratch(t *testing.T) (dir, config string) {
 	t.Helper()
 	dir = t.TempDir()
-	config = filepath.Join(dir, "config")
-	if err := os.Mkdir(config, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(config, "config.toml"), []byte(noHosts), 0o644); err != nil {
+	config, err := prepare(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return dir, config
@@ -53,6 +50,17 @@ func TestAChangedScratchConfigIsListed(t *testing.T) {
 	dir, config := scratch(t)
 	file := filepath.Join(config, "config.toml")
 	if err := os.WriteFile(file, []byte("[hosts]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := writtenSince(dir, config); !slices.Equal(got, []string{file}) {
+		t.Errorf("writtenSince = %v, want [%s]", got, file)
+	}
+}
+
+func TestARemovedScratchConfigIsListed(t *testing.T) {
+	dir, config := scratch(t)
+	file := filepath.Join(config, "config.toml")
+	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
 	if got := writtenSince(dir, config); !slices.Equal(got, []string{file}) {

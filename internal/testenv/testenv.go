@@ -14,7 +14,8 @@ import (
 )
 
 // noHosts is the scratch configuration: it names no host, so a test that
-// runs a command without its own configuration reaches no desktop.
+// runs a command without its own configuration reaches no runtime and no
+// window. The key binder and key writer do not read it.
 const noHosts = "[hosts]\nruntime = [\"none\"]\nwindow = [\"none\"]\n"
 
 // Run runs the tests with REVIER_CONFIG_HOME, REVIER_STATE_HOME and
@@ -28,11 +29,8 @@ func Run(m *testing.M) int {
 		panic(err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	config := filepath.Join(dir, "config")
-	if err := os.Mkdir(config, 0o755); err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile(filepath.Join(config, "config.toml"), []byte(noHosts), 0o644); err != nil {
+	config, err := prepare(dir)
+	if err != nil {
 		panic(err)
 	}
 	_ = os.Setenv("REVIER_CONFIG_HOME", config)
@@ -47,19 +45,28 @@ func Run(m *testing.M) int {
 	return code
 }
 
-// writtenSince lists every path under dir that Run did not make itself, with
-// config/config.toml listed only where its content changed.
+// prepare makes the scratch configuration under dir and returns its root.
+func prepare(dir string) (config string, err error) {
+	config = filepath.Join(dir, "config")
+	if err := os.Mkdir(config, 0o755); err != nil {
+		return "", err
+	}
+	return config, os.WriteFile(filepath.Join(config, "config.toml"), []byte(noHosts), 0o644)
+}
+
+// writtenSince lists every path under dir that prepare did not make, and
+// config/config.toml where its content changed or it is gone.
 func writtenSince(dir, config string) []string {
+	file := filepath.Join(config, "config.toml")
 	var written []string
+	if b, err := os.ReadFile(file); err != nil || string(b) != noHosts {
+		written = append(written, file)
+	}
 	_ = filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			written = append(written, fmt.Sprintf("%s: %v", path, err))
-		case path == dir, path == config:
-		case path == filepath.Join(config, "config.toml"):
-			if b, err := os.ReadFile(path); err != nil || string(b) != noHosts {
-				written = append(written, path)
-			}
+		case path == dir, path == config, path == file:
 		default:
 			written = append(written, path)
 		}
