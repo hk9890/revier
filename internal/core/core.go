@@ -174,7 +174,23 @@ func (c *Core) served(snap snapshot, p Project, i int) (revier.Instance, bool) {
 // ErrNoHost when the target declares no realization for any configured host.
 func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error) {
 	host, real, _, err := c.resolve(t)
-	return host, real, err
+	if err != nil {
+		return nil, revier.Realization{}, fmt.Errorf("%w: target %q %s", err, t.Name, noHostReason(t))
+	}
+	return host, real, nil
+}
+
+// noHostReason says which kind of host a target that resolved to none needs.
+func noHostReason(t revier.Target) string {
+	switch {
+	case t.Window != nil && t.Runtime != nil:
+		return "has a window and a runtime realization, and neither a window host nor a runtime is configured or available"
+	case t.Window != nil:
+		return "has only a window realization, and no window host is configured or available"
+	case t.Runtime != nil:
+		return "has only a runtime realization, and no runtime is configured or available"
+	}
+	return "declares no realization"
 }
 
 // resolve is Resolve plus which side of the host split answered, so the caller
@@ -227,7 +243,7 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	}
 	host, real, kind, err := c.resolve(p.Targets[i])
 	if err != nil {
-		return nil, revier.Realization{}, revier.CompiledMatch{}, err
+		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("%w: target %q of project %q %s", err, p.Targets[i].Name, p.Name, noHostReason(p.Targets[i]))
 	}
 	m := p.compiled[i].runtime
 	if kind == revier.HostWindow {
