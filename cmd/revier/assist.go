@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -52,10 +53,16 @@ How to work:
 - "%[1]s open", "go", "popup", "run", "each", "attach", "shutdown", "session restore", "agent new", "agent prompt", "agent send-keys", "shell new", "keys install" and "keys uninstall" act on the user's desktop, on their projects or on their agents. Run one only when the user asks for it.
 - Keep the comments and the order of a file you edit. Change the smallest thing that does what was asked.
 - When the cause is a fault in revier and not in the configuration, do not work around it. Write the user an issue report: what they did, what happened, the doctor output, and the log lines.
-- The user reviews your changes in revier when you exit. End with the list of files you changed and what each change does, and say that /exit returns to revier, where the changes are on the screen.
+- End with the list of files you changed and what each change does.
 `
 
-const assistUsage = "usage: revier assist [-p name] [--print-brief | --reference]"
+// assistReturn is how the brief ends for the agent the surface handed its
+// terminal to. The one beside the surface returns to nothing, and its user
+// reads the changes in the surface whenever they look at it.
+const assistReturn = `- The user reviews your changes in revier when you exit: say that /exit returns to revier, where the changes are on the screen.
+`
+
+const assistUsage = "usage: revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]"
 
 // cmdAssist hands this terminal to a coding agent briefed to configure and
 // diagnose revier, and returns when the agent exits.
@@ -72,7 +79,16 @@ func cmdAssist(out io.Writer, args []string) error {
 	project := projectFlag(fs)
 	printBrief := fs.Bool("print-brief", false, "print what the agent is told, and start none")
 	reference := fs.Bool("reference", false, "print the format of the configuration")
-	if rest, err := parseArgs(fs, args); err != nil || len(rest) != 0 || *printBrief && *reference {
+	beside := fs.Bool("exec", false, "become the agent, beside the surface: the built-in project's panel runs this")
+	session := fs.String("resume", "", "with --exec, the conversation to resume, as a session restore names it")
+	rest, err := parseArgs(fs, args)
+	modes := 0
+	for _, on := range []bool{*printBrief, *reference, *beside} {
+		if on {
+			modes++
+		}
+	}
+	if err != nil || len(rest) != 0 || modes > 1 || *session != "" && !*beside {
 		return fmt.Errorf("%s", assistUsage)
 	}
 	if *reference {
@@ -103,7 +119,11 @@ func cmdAssist(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), filepath.Join(cfgRoot, "projects"), logging.Dir(stateRoot)) + now
+	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), filepath.Join(cfgRoot, "projects"), logging.Dir(stateRoot))
+	if !*beside {
+		brief += assistReturn
+	}
+	brief += now
 	if *printBrief {
 		_, err := fmt.Fprint(out, brief)
 		return err
@@ -115,8 +135,11 @@ func cmdAssist(out io.Writer, args []string) error {
 		Subject: *project,
 		Dirs:    []string{cfgRoot},
 		Resume:  claude.HasConversation(dir),
+		Session: *session,
+		Beside:  *beside,
 	}
-	if _, err := exec.LookPath(agent.Argv()[0]); err != nil {
+	path, err := exec.LookPath(agent.Argv()[0])
+	if err != nil {
 		return errNoAssistant
 	}
 	// The configuration root is made with the agent's own directory: a new
@@ -126,6 +149,9 @@ func cmdAssist(out io.Writer, args []string) error {
 			return err
 		}
 	}
+	if *beside {
+		return becomeAgent(path, agent.Argv(), dir)
+	}
 	start := time.Now()
 	err = runAgent(agent.Argv(), dir)
 	if err != nil && agent.Resume && time.Since(start) < resumeGrace {
@@ -133,6 +159,16 @@ func cmdAssist(out io.Writer, args []string) error {
 		err = runAgent(agent.Argv(), dir)
 	}
 	return err
+}
+
+// becomeAgent replaces this process with the agent, in dir. The panel's
+// probe reads the program the panel runs, and a revier waiting on its child
+// would be that program, with the agent hidden under it.
+func becomeAgent(path string, argv []string, dir string) error {
+	if err := os.Chdir(dir); err != nil {
+		return err
+	}
+	return syscall.Exec(path, argv, os.Environ())
 }
 
 // runAgent gives the terminal to the agent, in dir, until it exits.

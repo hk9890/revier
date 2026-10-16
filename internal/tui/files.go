@@ -124,6 +124,10 @@ func (m Model) askDelete() (tea.Model, tea.Cmd) {
 		m.err = errors.New("an agent is in no file; del closes it")
 		return m, nil
 	}
+	if m.isAssistant(v.Project.Name) {
+		m.err = fmt.Errorf("%s is built in and in no file; del closes it", v.Project.Name)
+		return m, nil
+	}
 	// Before the first survey the view is the files' alone, and says nothing
 	// about what is open.
 	if m.surveyed && m.openHere(v) {

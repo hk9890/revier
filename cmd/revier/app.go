@@ -46,6 +46,11 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
+	builtin, err := assistProject(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	projects = config.WithBuiltin(projects, builtin)
 	rt, win, err := selectHosts(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -58,6 +63,25 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 		cfg: cfg, cfgRoot: cfgRoot, projects: projects,
 		stateRoot: stateRoot, out: out, core: c,
 	}, nil
+}
+
+// assistProject is the built-in assistant, with the directory it starts in
+// made: core.Open refuses a project whose directory is not there.
+func assistProject(stateRoot string) (core.Project, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return core.Project{}, err
+	}
+	// The panel starts in the directory, so a relative root would name
+	// another place there.
+	dir, err := filepath.Abs(filepath.Join(stateRoot, "assist"))
+	if err != nil {
+		return core.Project{}, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return core.Project{}, err
+	}
+	return config.Builtin(dir, self), nil
 }
 
 // warnState says that a change did not reach the state file. State is a

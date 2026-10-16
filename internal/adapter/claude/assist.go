@@ -22,14 +22,38 @@ type Assist struct {
 	// in. Claude Code refuses the flag where there is none: HasConversation
 	// says whether there is.
 	Resume bool
+	// Session is the conversation to resume, as a session restore names it.
+	// It wins over Resume.
+	Session string
+	// Beside is an assistant that runs beside the surface, in a workspace of
+	// its own, and not in the terminal the surface handed it. Its window and
+	// its row say whose it is, so it gets no status line, and the user's own
+	// stays.
+	Beside bool
 }
 
 // Argv is the command line.
-//
-// The status line is the frame around the hand-over: the surface is off the
-// screen, and nothing else there says whose session this is or how it ends.
-// The keys it names are Claude Code's own.
 func (a Assist) Argv() []string {
+	argv := []string{"claude", "--append-system-prompt", a.Brief}
+	if !a.Beside {
+		argv = append(argv, "--settings", a.handOverSettings())
+	}
+	switch {
+	case a.Session != "":
+		argv = append(argv, "--resume", a.Session)
+	case a.Resume:
+		argv = append(argv, "--continue")
+	}
+	for _, dir := range a.Dirs {
+		argv = append(argv, "--add-dir", dir)
+	}
+	return argv
+}
+
+// handOverSettings is the status line that frames the hand-over: the surface
+// is off the screen, and nothing else there says whose session this is or
+// how it ends. The keys it names are Claude Code's own.
+func (a Assist) handOverSettings() string {
 	status := "revier assist  ·  "
 	if a.Subject != "" {
 		status += a.Subject + "  ·  "
@@ -44,14 +68,7 @@ func (a Assist) Argv() []string {
 	if err != nil {
 		panic(err) // a map of strings always marshals
 	}
-	argv := []string{"claude", "--append-system-prompt", a.Brief, "--settings", string(settings)}
-	if a.Resume {
-		argv = append(argv, "--continue")
-	}
-	for _, dir := range a.Dirs {
-		argv = append(argv, "--add-dir", dir)
-	}
-	return argv
+	return string(settings)
 }
 
 // shellQuote is s as one word of a POSIX shell.

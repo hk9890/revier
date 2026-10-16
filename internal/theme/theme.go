@@ -93,6 +93,9 @@ type Glyphs struct {
 	// Remote takes the folder column for a project on another machine. A
 	// set that draws the folder draws this too.
 	Remote string
+	// Builtin takes the folder column for the project revier builds in and
+	// no file declares. A set that draws the folder draws this too.
+	Builtin string
 
 	// Window and Container are a kind column in front of a target's name in
 	// the pane: a target that is a window of its own, and one whose instance
@@ -140,6 +143,7 @@ var glyphSets = map[string]Glyphs{
 		Folder:     "\uf07b", // nf-fa-folder
 		NoFolder:   "\uf114", // nf-fa-folder_o
 		Remote:     "\uf233", // nf-fa-server
+		Builtin:    "\uf013", // nf-fa-cog
 		Window:     "\uf2d0", // nf-fa-window_maximize
 		Container:  "\uf2d2", // nf-fa-window_restore
 		Branch:     "\u251c", // a box-drawing tee, as in the unicode set

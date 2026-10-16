@@ -461,6 +461,11 @@ func TestResumeCommand(t *testing.T) {
 			revier.PanelSpec{Command: []string{"node", "-r", "tsx", "/opt/bin/claude", "-c"}},
 			[]string{"node", "-r", "tsx", "/opt/bin/claude", "--resume", "abc-123"},
 		},
+		{
+			"revier's own assistant, which takes the flag to pass on",
+			revier.PanelSpec{Command: []string{"/bin/revier", "assist", "--exec"}},
+			[]string{"/bin/revier", "assist", "--exec", "--resume", "abc-123"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -518,6 +523,18 @@ func TestAssistArgv(t *testing.T) {
 	// whatever it holds.
 	if s := settings.StatusLine.Command; !strings.Contains(s, `hans'\''s`) {
 		t.Errorf("status line command = %q, want the subject quoted for the shell", s)
+	}
+}
+
+// The assistant beside the surface is framed by its window, not by a status
+// line, and a conversation a restore names wins over the newest one.
+func TestAssistArgvBeside(t *testing.T) {
+	got := claude.Assist{Brief: "the brief", Beside: true, Resume: true, Session: "abc-123"}.Argv()
+	if !slices.Contains(got, "abc-123") || slices.Contains(got, "--continue") {
+		t.Errorf("Argv = %q, want --resume abc-123 and no --continue", got)
+	}
+	if slices.Contains(got, "--settings") {
+		t.Errorf("Argv = %q, want no settings: the user's own status line stays beside the surface", got)
 	}
 }
 

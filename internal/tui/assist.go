@@ -25,11 +25,22 @@ func reloadAssisted() tea.Msg {
 	return msg
 }
 
-// openAssist hands the terminal to `revier assist`, as an action is handed
-// it. The surface runs the command rather than starting the agent itself, so
-// the key and the shell reach one thing, and that thing still starts when the
-// surface does not.
+// openAssist raises the built-in assistant beside the surface, as a target
+// key raises a project's tab. With no runtime to open it in, or no built-in
+// given, the surface hands the terminal over instead.
 func (m Model) openAssist() (tea.Model, tea.Cmd) {
+	if m.assistant.Name == "" || m.core.Runtime == nil {
+		return m.handOverAssist()
+	}
+	m.err = nil
+	return m, m.goTarget(m.assistant, "agent")
+}
+
+// handOverAssist hands the terminal to `revier assist`, as an action is
+// handed it. The surface runs the command rather than starting the agent
+// itself, so the key and the shell reach one thing, and that thing still
+// starts when the surface does not.
+func (m Model) handOverAssist() (tea.Model, tea.Cmd) {
 	self, err := os.Executable()
 	if err != nil {
 		m.err = err
@@ -45,6 +56,13 @@ func (m Model) openAssist() (tea.Model, tea.Cmd) {
 	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return assistedMsg{err: assistErr(err, said.String())}
 	})
+}
+
+// isAssistant reports the project named the built-in assistant, and not a
+// file's project that took its name.
+func (m Model) isAssistant(name revier.ProjectName) bool {
+	p, ok := m.project(name)
+	return ok && p.File == "" && m.assistant.Name != "" && p.Name == m.assistant.Name
 }
 
 // assistArgs is `revier assist` as the surface runs it. The project under the

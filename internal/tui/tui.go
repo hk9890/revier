@@ -110,6 +110,7 @@ func (d dialog) hasPane() bool {
 type Model struct {
 	core      *core.Core
 	projects  []core.Project
+	assistant core.Project // the built-in project alt+a raises, kept over a reload; zero when the surface was given none
 	stateRoot string
 	actions   []config.Action
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
@@ -242,6 +243,9 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		// Init surveys.
 		surveying: true,
 	}
+	if i := slices.IndexFunc(projects, func(p core.Project) bool { return p.Name == config.Assistant && p.File == "" }); i >= 0 {
+		m.assistant = projects[i]
+	}
 	// The files go in through the one function that reads them, so what is
 	// derived from them is derived once and the first frame holds the same
 	// thing a reload leaves behind.
@@ -344,6 +348,11 @@ func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
 	m.usable = config.Usable(shared)
 	m.targets = config.ListTargets(shared)
 	m.projects = projects
+	// The files do not hold the assistant, so it is added to every read of
+	// them.
+	if m.assistant.Name != "" {
+		m.projects = config.WithBuiltin(projects, m.assistant)
+	}
 	m.setKeys()
 }
 
@@ -891,10 +900,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The focus is back on a surface that refreshed slowly: it surveys
 		// again at once, the linked hosts that answered their last round and
 		// the mirror with it, so nobody reads rows that aged while nobody
-		// looked.
+		// looked. The files are read again with it: the assistant beside the
+		// surface writes them while it is away.
 		m.mirror.restart()
 		m.askAgain()
-		return m, m.surveyNow()
+		return m, tea.Batch(m.surveyNow(), reloadFiles)
 	case reloadedMsg:
 		// The statuses run on whatever was read last: a failed read keeps
 		// the old ones running, as it keeps the old list.
