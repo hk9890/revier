@@ -901,10 +901,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// again at once, the linked hosts that answered their last round and
 		// the mirror with it, so nobody reads rows that aged while nobody
 		// looked. The files are read again with it: the assistant beside the
-		// surface writes them while it is away.
+		// surface writes them while it is away, and a config.toml it left
+		// that does not load is said here, as after the hand-over.
 		m.mirror.restart()
 		m.askAgain()
-		return m, tea.Batch(m.surveyNow(), reloadFiles)
+		return m, tea.Batch(m.surveyNow(), reloadAssisted)
 	case reloadedMsg:
 		// The statuses run on whatever was read last: a failed read keeps
 		// the old ones running, as it keeps the old list.

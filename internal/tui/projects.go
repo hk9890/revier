@@ -431,8 +431,9 @@ func (m *Model) reload() {
 
 	items := make([]list.Item, 0, len(m.views))
 	groups := make([]int, 0, len(m.views))
+	builtin := m.isAssistant(m.assistant.Name)
 	for _, v := range m.views {
-		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v), builtin: m.isAssistant(v.Project.Name)})
+		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v), builtin: builtin && v.Project.Name == m.assistant.Name})
 		groups = append(groups, m.need(v))
 	}
 	m.plist.Filter = ranked(func(i int) int { return groups[i] })

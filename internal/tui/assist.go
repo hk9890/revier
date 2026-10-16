@@ -27,9 +27,10 @@ func reloadAssisted() tea.Msg {
 
 // openAssist raises the built-in assistant beside the surface, as a target
 // key raises a project's tab. With no runtime to open it in, or no built-in
-// given, the surface hands the terminal over instead.
+// listed - none given, or a file of its name in its place - the surface hands
+// the terminal over instead.
 func (m Model) openAssist() (tea.Model, tea.Cmd) {
-	if m.assistant.Name == "" || m.core.Runtime == nil {
+	if !m.isAssistant(m.assistant.Name) || m.core.Runtime == nil {
 		return m.handOverAssist()
 	}
 	m.err = nil

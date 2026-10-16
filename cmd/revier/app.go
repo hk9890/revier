@@ -46,11 +46,14 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	builtin, err := assistProject(stateRoot)
-	if err != nil {
-		return nil, err
+	// The assistant lives under the state root, which is a convenience: a
+	// root it cannot be made in costs the built-in, not the command. alt+a
+	// then hands the terminal over, and `revier assist` says why.
+	if builtin, err := assistProject(stateRoot); err != nil {
+		slog.Warn("built-in assistant left out", "err", err)
+	} else {
+		projects = config.WithBuiltin(projects, builtin)
 	}
-	projects = config.WithBuiltin(projects, builtin)
 	rt, win, err := selectHosts(ctx, cfg)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,6 +170,9 @@ func becomeAgent(path string, argv []string, dir string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
+	// The exec replaces the process, so the command's own line is never
+	// written: this one stands for it.
+	slog.Info("assist", "exec", path, "dir", dir)
 	return syscall.Exec(path, argv, os.Environ())
 }
 

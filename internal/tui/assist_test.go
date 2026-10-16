@@ -90,6 +90,33 @@ func TestTheBuiltinAssistantRowHasItsOwnGlyph(t *testing.T) {
 	}
 }
 
+// A file of the built-in's name read after the start takes its row. alt+a
+// then opens no workspace the list does not show: it hands the terminal over.
+func TestAltAHandsOverWhenAFileTookTheBuiltinsName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	rt, _, c, projects := world(t, 2)
+	builtin := config.Builtin(t.TempDir(), "/bin/revier")
+	m := resize(refreshed(t, c, config.WithBuiltin(projects, builtin), stateWith(t, nil), nil), 160, 20)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, "projects", string(config.Assistant)+".toml")
+	if err := os.WriteFile(file, []byte("path = \"/p/mine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, cmd := m.Assisted(nil)
+	m, _ = deliver(m, cmd)
+
+	if _, cmd = press(m, "alt+a"); cmd == nil {
+		t.Fatal("alt+a returned no command")
+	}
+	cmd()
+	if len(rt.Opened) != 0 {
+		t.Errorf("runtime Opened = %v, want nothing: the built-in is not listed", rt.Opened)
+	}
+}
+
 // The files do not hold the assistant, so a read of them keeps it.
 func TestTheBuiltinAssistantOutlivesAReload(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
