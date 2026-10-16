@@ -223,6 +223,27 @@ func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
 	}
 }
 
+// An unknown name in [hosts] stops every command that lists or opens, so
+// doctor reports it, in any position: after a host that works and after
+// none too, where host selection never reaches it.
+func TestDoctorReportsAnUnknownHostName(t *testing.T) {
+	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	for _, want := range []string{
+		`hosts.runtime unknown host "ghostty"; known: kitty, tmux, none`,
+		`hosts.window  unknown host "sway"; known: gnome, none`,
+		"1 project, 1 file with problems",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report should contain %q:\n%s", want, out.String())
+		}
+	}
+}
+
 // A value of the wrong type is valid TOML, so its advice is about the type,
 // and only a syntax error is told the file is not valid TOML.
 func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {

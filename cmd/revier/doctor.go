@@ -37,10 +37,10 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// `target "worktree"`, and a target name has no length limit.
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	bad := 0
-	if len(cfg.Problems) > 0 {
+	if problems := append(hostProblems(cfg), cfg.Problems...); len(problems) > 0 {
 		bad++
 		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
-		for _, err := range cfg.Problems {
+		for _, err := range problems {
 			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}
