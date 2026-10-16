@@ -145,11 +145,11 @@ func TestScreenLinesKeepColourAndNothingElse(t *testing.T) {
 		red + "abcd\x1b[m",
 		red + "ef\x1b[39m\x1b[m",
 		"link",
-		" cle",
-		"ared",
+		"clea",
+		"red",
 		"\x1b[1;38;5;208mbold\x1b[0m\x1b[m",
-		" pla",
-		"in",
+		"plai",
+		"n",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("lines = %q\nwant    %q", got, want)
@@ -164,5 +164,69 @@ func TestScreenLinesMeasureACharacterWithWhatJoinsIt(t *testing.T) {
 	want := []string{"⚠️a", "b"}
 	if !slices.Equal(got, want) {
 		t.Errorf("lines = %q, want %q", got, want)
+	}
+}
+
+// A row too long breaks at a space, never inside a word that fits a line, and
+// continues under its first word: past its indent and past the mark of a
+// list item.
+func TestScreenLinesBreakAtAWordUnderTheFirstWord(t *testing.T) {
+	got := tui.ScreenLines("  - a wrong value type refuses\n"+
+		"● Item one is done\n"+
+		"12. the twelfth step\n"+
+		"plain text runs on", 16)
+	want := []string{
+		"  - a wrong",
+		"    value type",
+		"    refuses",
+		"● Item one is",
+		"  done",
+		"12. the twelfth",
+		"    step",
+		"plain text runs",
+		"on",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q\nwant    %q", got, want)
+	}
+}
+
+// A word wider than the line is cut, and the spaces a row ends in start no
+// line of their own.
+func TestScreenLinesCutOnlyAWordWiderThanTheLine(t *testing.T) {
+	got := tui.ScreenLines("abcdefghij end      ", 4)
+	want := []string{"abcd", "efgh", "ij", "end"}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q, want %q", got, want)
+	}
+	// An indent that would leave no room for a wide character is dropped.
+	got = tui.ScreenLines(" 中中", 2)
+	want = []string{"中", "中"}
+	if !slices.Equal(got, want) {
+		t.Errorf("narrow lines = %q, want %q", got, want)
+	}
+}
+
+// A word a harness centred past the line's end shows on a line of its own,
+// with no line of its indent above it.
+func TestScreenLinesDropAnIndentWiderThanTheLine(t *testing.T) {
+	got := tui.ScreenLines(strings.Repeat(" ", 20)+"1234 tokens", 16)
+	want := []string{"1234 tokens"}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q, want %q", got, want)
+	}
+}
+
+// A rule wider than the line is shortened to fit, with the label it carries,
+// and is never continued on a second line.
+func TestScreenLinesShortenARule(t *testing.T) {
+	got := tui.ScreenLines(strings.Repeat("─", 30)+"\n"+
+		strings.Repeat("─", 20)+" ultracode ─", 16)
+	want := []string{
+		strings.Repeat("─", 16),
+		strings.Repeat("─", 4) + " ultracode ─",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q\nwant    %q", got, want)
 	}
 }
