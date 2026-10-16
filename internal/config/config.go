@@ -148,6 +148,13 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, err
 	}
 	projects, cfg.SelfLinks = elsewhere(projects)
+	// A table that changes a shared status refuses only once merged with
+	// config.toml's, so the merge's refusals are laid on the project here,
+	// where every reader of Problems sees them.
+	for i := range projects {
+		_, unrun := projects[i].StatusOf(cfg.statuses)
+		projects[i].StatusRefused = append(projects[i].StatusRefused, unrun...)
+	}
 	return cfg, projects, nil
 }
 
@@ -413,8 +420,9 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 }
 
 // Problems is every reason a loaded project is not whole: the project-wide
-// refusal first, then one per refused target. It is empty for a project that
-// loaded entire, which is what `revier new` asks before it keeps a file.
+// refusal first, then one per refused target, then one per refused
+// [[status]] table. It is empty for a project that loaded entire, which is
+// what `revier new` asks before it keeps a file.
 func Problems(p core.Project) []error {
 	var out []error
 	if p.Invalid != nil {
@@ -432,7 +440,9 @@ func Problems(p core.Project) []error {
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
 // edit of the file, and the file could only be repaired by hand
-// (decisions.md D85). A problem is the project's, or one target's by name.
+// (decisions.md D85). A problem is the project's, one target's by name, or
+// one status place's: the opening of its refusal, since a TOML error in the
+// tables names a line, and an edit above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}
 	if before.Invalid != nil {
@@ -452,11 +462,15 @@ func newProblems(before, after core.Project) []error {
 			out = append(out, err)
 		}
 	}
+	place := func(err error) string {
+		what, _, _ := strings.Cut(err.Error(), ":")
+		return what
+	}
 	for _, err := range before.StatusRefused {
-		had[err.Error()] = true
+		had[place(err)] = true
 	}
 	for _, err := range after.StatusRefused {
-		if !had[err.Error()] {
+		if !had[place(err)] {
 			out = append(out, err)
 		}
 	}

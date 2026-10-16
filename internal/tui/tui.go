@@ -677,6 +677,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// A tick only starts the survey; its answer is what changes the rows.
 		return mm, cmd
+	case statusBeatMsg:
+		// A beat only starts the commands; their answers are what change the
+		// screen.
+		return mm, cmd
 	case mirrorTickMsg:
 		// A tick only starts the read; the screen it reads is drawn when it
 		// answers.
@@ -920,8 +924,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.beat()
 	case statusMsg:
 		m.takeStatus(msg)
-		if msg.key.at.OfProject() {
-			m.syncDetail()
+		// A place runs once at a time, so a cursor that moved on while it ran
+		// has its project run now, not a beat later.
+		if msg.key.at.OfProject() && msg.key.project != m.status.selected {
+			return m, m.runDue()
 		}
 		return m, nil
 	case assistedMsg:

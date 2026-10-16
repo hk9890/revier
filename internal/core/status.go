@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -41,11 +42,13 @@ type Status struct {
 // the project's own at the same place, then the project's own at a place no
 // shared one fills. A link takes its own alone: a shared command is written
 // against a checkout here, and a link's checkout is on its host
-// (decisions.md D134). The errors are the merged statuses that still run
-// nothing; each is left out.
+// (decisions.md D134). A project with no path, such as one whose file did
+// not load, takes none either: the command would read whatever directory
+// revier runs in as its checkout. The errors are the merged statuses that
+// still run nothing; each is left out.
 func (p Project) StatusOf(shared []Status) ([]Status, []error) {
 	var merged []Status
-	if p.Remote == nil {
+	if p.Remote == nil && p.Path != "" {
 		for _, s := range shared {
 			if s.At.OfProject() {
 				merged = append(merged, s)
@@ -53,7 +56,7 @@ func (p Project) StatusOf(shared []Status) ([]Status, []error) {
 		}
 	}
 	for _, own := range p.Status {
-		i := statusAt(merged, own.At)
+		i := slices.IndexFunc(merged, func(s Status) bool { return s.At == own.At })
 		if i < 0 {
 			merged = append(merged, own)
 			continue
@@ -88,13 +91,4 @@ func (s Status) with(over Status) Status {
 		s.Every = over.Every
 	}
 	return s
-}
-
-func statusAt(statuses []Status, at StatusPlace) int {
-	for i, s := range statuses {
-		if s.At == at {
-			return i
-		}
-	}
-	return -1
 }

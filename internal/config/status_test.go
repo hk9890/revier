@@ -136,16 +136,29 @@ run = ["again"]
 	if !reflect.DeepEqual(p.Status, want) {
 		t.Errorf("Status = %+v, want %+v", p.Status, want)
 	}
-	if len(p.StatusRefused) != 2 ||
+	// config.toml has no project-line status, so the table that changes one
+	// runs nothing once merged, and Load says so beside the rules' refusals.
+	if len(p.StatusRefused) != 3 ||
 		!strings.Contains(p.StatusRefused[0].Error(), `"rule-left"`) ||
-		!strings.Contains(p.StatusRefused[1].Error(), "two tables") {
-		t.Errorf("StatusRefused = %v, want the rule-left table and the second project table", p.StatusRefused)
+		!strings.Contains(p.StatusRefused[1].Error(), "two tables") ||
+		!strings.Contains(p.StatusRefused[2].Error(), `"project-line": runs nothing`) {
+		t.Errorf("StatusRefused = %v, want the rule-left table, the second project table and the project-line table that runs nothing", p.StatusRefused)
 	}
 	if p.Invalid != nil {
 		t.Errorf("Invalid = %v, want nil: a refused status refuses the table alone", p.Invalid)
 	}
 	if got := config.Problems(p); !reflect.DeepEqual(got, p.StatusRefused) {
 		t.Errorf("Problems = %v, want the status refusals %v", got, p.StatusRefused)
+	}
+}
+
+// A status table TOML cannot decode is refused with the line it stands on.
+// An edit above it moves that line and breaks nothing new, so it is written
+// (decisions.md D85).
+func TestProjectEditAboveABrokenStatusIsWritten(t *testing.T) {
+	file, shared := projectRoot(t, overriding+"\n[[status]]\nat = \"project\"\nrun = [\"x\"]\nevery = 10\n")
+	if _, err := config.SetProjectValue(file, "git_url", "git@github.com:me/demo.git", shared); err != nil {
+		t.Errorf("SetProjectValue over a broken status table: %v", err)
 	}
 }
 

@@ -539,20 +539,17 @@ func (m Model) nameLine(name revier.ProjectName, w int) string {
 }
 
 // statusSection is the project's project status: a section of the pane under
-// the status's title, one segment to a line (decisions.md D134). Nothing
-// shown yet is no section at all.
+// the status's title (decisions.md D134), one segment to a line. Nothing
+// shown yet is no section at all. An answer is shown only while its place
+// has the status that gave it, so that status's title is the place's own.
 func (m Model) statusSection(name revier.ProjectName, w int) string {
 	result := m.statusAt(core.StatusProject, name)
 	if len(result.segments) == 0 {
 		return ""
 	}
-	title := statusTitle
-	if p, ok := m.selectedProject(); ok && p.Name == name {
-		for _, s := range m.paneStatuses(p) {
-			if s.At == core.StatusProject && s.Title != "" {
-				title = s.Title
-			}
-		}
+	title := result.from.Title
+	if title == "" {
+		title = statusTitle
 	}
 	th := *m.theme
 	var b strings.Builder

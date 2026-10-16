@@ -93,6 +93,15 @@ func TestStatusOfOfALinkWithNoTableOfItsOwnIsEmpty(t *testing.T) {
 	}
 }
 
+// A project with no path, such as one whose file did not load, has no
+// checkout for a shared command to read.
+func TestStatusOfOfAProjectWithNoPathTakesNoSharedStatus(t *testing.T) {
+	p := core.PrepareProject(revier.Project{Name: "broken"})
+	if got, errs := p.StatusOf(sharedStatuses); len(got) != 0 || len(errs) != 0 {
+		t.Errorf("StatusOf = %+v, %v; want nothing", got, errs)
+	}
+}
+
 func TestStatusOfLeavesOutAStatusThatRunsNothing(t *testing.T) {
 	shared := []core.Status{sharedStatuses[2]}
 	p := statusProject(nil,

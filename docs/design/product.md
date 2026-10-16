@@ -189,9 +189,11 @@ A status stands in the thin rule under the top line, at its left end over the
 list or its right end, at the right end of the pane's first line where the
 name leaves room, or as a section of the pane over the targets, under its
 title (D134). It shows what its command printed last, each segment in the
-colour of its level. The pane's statuses are the selected project's, and run
-as soon as the cursor reaches a project they have not run for within their
-wait. Each runs on its own timer and never holds up a frame. How a status
+colour of its level. The pane's statuses are the selected project's. Each
+place runs one command at a time, so a cursor run down the list costs one
+project's runs: a project the cursor reaches runs at once, or when the run
+still out at that place answers. Each runs on its own timer and never holds
+up a frame. How a status
 fits its line, and what a failed run leaves, are in
 [extending.md](extending.md#level-1--configuration).
 

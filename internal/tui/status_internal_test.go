@@ -131,8 +131,8 @@ func TestStatusFitDropsWholeSegmentsFromTheRight(t *testing.T) {
 	}
 }
 
-// Each segment takes its level's colour, and a stale answer is quiet
-// throughout.
+// Each segment takes its level's colour, and a stale answer is fainter than
+// quiet throughout, so one with no level shows its command failed too.
 func TestStatusFitColoursByLevel(t *testing.T) {
 	th := theme.Default()
 	if th.Warning.Render("x") == th.Help.Render("x") || th.Attention.Render("x") == th.Help.Render("x") {
@@ -147,8 +147,8 @@ func TestStatusFitColoursByLevel(t *testing.T) {
 	}
 	stale := statusResult{segments: segs, stale: true}.fit(th, 100)
 	for _, s := range segs {
-		if !strings.Contains(stale, th.Help.Render(s.Text)) {
-			t.Errorf("stale fit = %q, want %q drawn quiet", stale, s.Text)
+		if !strings.Contains(stale, th.Help.Faint(true).Render(s.Text)) {
+			t.Errorf("stale fit = %q, want %q drawn faint", stale, s.Text)
 		}
 	}
 }
@@ -193,7 +193,7 @@ func TestStatusChangedByAReloadDropsItsAnswer(t *testing.T) {
 	}
 	m.runDue()
 	for _, key := range []statusKey{ruleLeft, alphaInfo} {
-		if !m.status.running[key] {
+		if !m.status.running[key.at] {
 			t.Errorf("%+v not run again after its status changed", key)
 		}
 	}
@@ -310,14 +310,14 @@ func TestStatusRunsNothingWhileHidden(t *testing.T) {
 	}
 }
 
-// A key whose command is still running, or ran less than its wait ago, is
+// A place whose command is still running, or ran less than its wait ago, is
 // not started again; one whose wait is up and whose run answered is.
-func TestStatusStartsOneRunOfAKeyAtATime(t *testing.T) {
+func TestStatusStartsOneRunOfAPlaceAtATime(t *testing.T) {
 	m := statusSurface(t, []core.Status{{At: core.StatusRuleLeft, Run: []string{"l"}}}, 90, 30)
 	at := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return at }
 	m = forgetRuns(m)
-	if m.runDue() == nil || !m.status.running[ruleLeft] {
+	if m.runDue() == nil || !m.status.running[core.StatusRuleLeft] {
 		t.Fatal("the first runDue started nothing")
 	}
 	at = at.Add(2 * statusEvery)
@@ -339,14 +339,50 @@ func TestStatusStartsOneRunOfAKeyAtATime(t *testing.T) {
 func TestStatusRunsThePaneForTheSelectedProject(t *testing.T) {
 	m := statusSurface(t, everyPlace, 90, 30)
 	for _, key := range []statusKey{alphaLine, alphaInfo} {
-		if !m.status.running[key] {
+		if _, ok := m.status.started[key]; !ok || !m.status.running[key.at] {
 			t.Errorf("%+v not started for the selected project", key)
 		}
 	}
-	for key := range m.status.running {
+	for key := range m.status.started {
 		if key.project == "beta" {
 			t.Errorf("%+v started for a project not selected", key)
 		}
+	}
+}
+
+// A pane place runs once at a time: a cursor moved on while it runs starts
+// nothing for the project it reached, and the answer runs the place for
+// that project, so a run down the list costs one project's runs.
+func TestStatusCursorMovedWhileAPlaceRunsWaitsForItsAnswer(t *testing.T) {
+	m := statusSurface(t, everyPlace, 90, 30)
+	betaInfo := statusKey{at: core.StatusProject, project: "beta"}
+	m.selectName("beta")
+	if cmd := m.followSelection(); cmd != nil {
+		t.Error("the cursor on beta started a run while alpha's are out")
+	}
+	if _, ok := m.status.started[betaInfo]; ok {
+		t.Errorf("%+v started while alpha's run of the place is out", betaInfo)
+	}
+	m = answer(m, alphaInfo, nil, segment{Text: "alpha's"})
+	if _, ok := m.status.started[betaInfo]; !ok || !m.status.running[core.StatusProject] {
+		t.Errorf("%+v not started once alpha's run answered", betaInfo)
+	}
+	if _, ok := m.status.started[statusKey{at: core.StatusProjectLine, project: "beta"}]; ok {
+		t.Error("beta's project-line started while alpha's still runs")
+	}
+}
+
+// A reload that leaves no status ends the beat, and one that brings a status
+// back starts it again.
+func TestStatusBeatEndsWithTheLastStatus(t *testing.T) {
+	m := statusSurface(t, everyPlace, 90, 30)
+	m.status.beating = true
+	m.status.config = nil
+	if cmd := m.beat(); cmd != nil || m.status.beating {
+		t.Error("a beat with no status left set another")
+	}
+	if cmd := m.retakeStatuses(everyPlace); cmd == nil || !m.status.beating {
+		t.Error("a reload that brought a status back started no beat")
 	}
 }
 

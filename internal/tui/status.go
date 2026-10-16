@@ -72,9 +72,9 @@ type statuses struct {
 	results  map[statusKey]statusResult
 	started  map[statusKey]core.Status // the status each key last started a run of
 	at       map[statusKey]time.Time   // and when
-	running  map[statusKey]bool
-	selected revier.ProjectName // the project the pane's places last ran for
-	beating  bool               // a beat is out
+	running  map[core.StatusPlace]bool // per place, so a cursor run down the list costs one project's runs
+	selected revier.ProjectName        // the project the pane's places last ran for
+	beating  bool                      // a beat is out
 }
 
 func newStatuses(config []core.Status) statuses {
@@ -83,7 +83,7 @@ func newStatuses(config []core.Status) statuses {
 		results: map[statusKey]statusResult{},
 		started: map[statusKey]core.Status{},
 		at:      map[statusKey]time.Time{},
-		running: map[statusKey]bool{},
+		running: map[core.StatusPlace]bool{},
 	}
 }
 
@@ -146,12 +146,13 @@ func statusTick() tea.Cmd {
 	return tea.Tick(statusBeat, func(time.Time) tea.Msg { return statusBeatMsg{} })
 }
 
-// beat runs what is due and sets the next beat. A beat of a hidden popup ends
-// the chain, and the raise starts it again. A surface without the focus keeps
-// beating, since it may stand on a second screen, and every status is slow
-// already.
+// beat runs what is due and sets the next beat. A beat of a hidden popup, or
+// of a surface a reload left with no status, ends the chain; the raise or the
+// reload that brings one back starts it again. A surface without the focus
+// keeps beating, since it may stand on a second screen, and every status is
+// slow already.
 func (m *Model) beat() tea.Cmd {
-	if m.hidden {
+	if m.hidden || !m.anyStatus() {
 		m.status.beating = false
 		return nil
 	}
@@ -183,13 +184,13 @@ func (m *Model) runDue() tea.Cmd {
 		if every == 0 {
 			every = statusEvery
 		}
-		if m.status.running[key] {
+		if m.status.running[key.at] {
 			return
 		}
 		if last, ok := m.status.started[key]; ok && sameStatus(last, s) && now.Sub(m.status.at[key]) < every {
 			return
 		}
-		m.status.running[key] = true
+		m.status.running[key.at] = true
 		m.status.started[key], m.status.at[key] = s, now
 		cmds = append(cmds, runStatus(key, s, env))
 	}
@@ -198,25 +199,12 @@ func (m *Model) runDue() tea.Cmd {
 			due(statusKey{at: s.At}, s, nil)
 		}
 	}
-	if p, ok := m.selectedProject(); ok {
+	if p, ok := m.highlighted(); ok {
 		for _, s := range m.paneStatuses(p) {
 			due(statusKey{at: s.At, project: p.Name}, s, projectEnv(p))
 		}
 	}
 	return tea.Batch(cmds...)
-}
-
-func (m Model) selectedProject() (core.Project, bool) {
-	name, ok := m.selectedName()
-	if !ok {
-		return core.Project{}, false
-	}
-	for _, p := range m.projects {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return core.Project{}, false
 }
 
 // paneStatuses is the pane's statuses of one project. What runs nothing is
@@ -228,7 +216,7 @@ func (m Model) paneStatuses(p core.Project) []core.Status {
 
 // projectEnv tells a pane's command which project it runs for. A link's
 // path is the one on its host, and the host is named, so the command can
-// reach it there (decisions.md D134).
+// reach it there.
 func projectEnv(p core.Project) []string {
 	env := []string{"REVIER_PROJECT=" + string(p.Name), "REVIER_PROJECT_PATH=" + p.Path}
 	if p.Remote != nil {
@@ -254,9 +242,10 @@ func runStatus(key statusKey, s core.Status, env []string) tea.Cmd {
 		c.WaitDelay = 50 * time.Millisecond
 		err := c.Run()
 		switch {
+		case err == nil:
 		case ctx.Err() != nil:
 			err = fmt.Errorf("timed out after %s", statusTimeout)
-		case err != nil:
+		default:
 			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
 		}
 		logging.Poll(strings.TrimSpace("status "+string(key.at)+" "+string(key.project)), "status", start, err,
@@ -268,7 +257,7 @@ func runStatus(key statusKey, s core.Status, env []string) tea.Cmd {
 // takeStatus keeps an answer. A failed run keeps the last good one of the
 // same status, dimmed.
 func (m *Model) takeStatus(msg statusMsg) {
-	m.status.running[msg.key] = false
+	m.status.running[msg.key.at] = false
 	if msg.err != nil {
 		if r, ok := m.status.results[msg.key]; ok && sameStatus(r.from, msg.ran) {
 			r.stale = true
@@ -325,11 +314,11 @@ func (m Model) statusAt(at core.StatusPlace, project revier.ProjectName) statusR
 func (m Model) statusOfPlace(at core.StatusPlace, project revier.ProjectName) (core.Status, bool) {
 	list := m.status.config
 	if at.OfProject() {
-		i := slices.IndexFunc(m.projects, func(p core.Project) bool { return p.Name == project })
-		if i < 0 {
+		p, ok := m.project(project)
+		if !ok {
 			return core.Status{}, false
 		}
-		list = m.paneStatuses(m.projects[i])
+		list = m.paneStatuses(p)
 	}
 	i := slices.IndexFunc(list, func(s core.Status) bool { return s.At == at })
 	if i < 0 {
@@ -360,11 +349,12 @@ func (r statusResult) fit(th theme.Theme, room int) string {
 	return b.String()
 }
 
-// style is the colour of a level: quiet unless the command says otherwise,
-// and quiet again once the answer is stale.
+// style is the colour of a level: quiet unless the command says otherwise.
+// A stale answer is fainter than quiet, so a segment that had no level
+// still shows that its command failed.
 func (r statusResult) style(th theme.Theme, level string) lipgloss.Style {
 	if r.stale {
-		return th.Help
+		return th.Help.Faint(true)
 	}
 	switch level {
 	case "warning":

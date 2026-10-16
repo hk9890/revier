@@ -202,7 +202,7 @@ func (m Model) thinRule(width int) string {
 }
 
 // ruleRun is n columns of the thin rule, with a status standing in it at
-// either end, two columns in from the edge (decisions.md D134). Beside the
+// either end (decisions.md D134), two columns in from the edge. Beside the
 // pane the left one stands over the list and the right one over the pane.
 // A status with no room is left off and the rule runs through.
 func (m Model) ruleRun(n int, left, right statusResult) string {

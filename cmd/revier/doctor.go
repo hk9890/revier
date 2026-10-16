@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -49,9 +48,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 		}
 	}
 	for _, p := range projects {
-		_, unrun := p.StatusOf(cfg.Statuses())
-		statusProbs := append(slices.Clone(p.StatusRefused), unrun...)
-		if len(config.Problems(p))+len(unrun) == 0 {
+		if len(config.Problems(p)) == 0 {
 			continue
 		}
 		bad++
@@ -70,7 +67,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 				problemLine(w, what, what, err.Error())
 			}
 		}
-		for _, err := range statusProbs {
+		for _, err := range p.StatusRefused {
 			what, _, _ := strings.Cut(err.Error(), ":")
 			problemLine(w, what, what, err.Error())
 		}
