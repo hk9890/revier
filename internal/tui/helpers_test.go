@@ -24,6 +24,27 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
+// TestMain points the config and state roots at scratch directories, so a
+// test that forgets its own t.Setenv writes there and not into the user's
+// configuration.
+func TestMain(m *testing.M) {
+	os.Exit(runInScratchRoots(m))
+}
+
+func runInScratchRoots(m *testing.M) int {
+	scratch, err := os.MkdirTemp("", "revier-test-")
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = os.RemoveAll(scratch) }()
+	for _, env := range []string{"REVIER_CONFIG_HOME", "REVIER_STATE_HOME"} {
+		if err := os.Setenv(env, filepath.Join(scratch, env)); err != nil {
+			panic(err)
+		}
+	}
+	return m.Run()
+}
+
 // world is a runtime, a window host, and n projects; the last project's
 // workspace is running with an agent that wants the human.
 func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project) {
