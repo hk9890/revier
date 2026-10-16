@@ -65,7 +65,7 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
    ```
 
    Then check the checksums signature with the `cosign` and `sha256sum` lines
-   in [README.md](../README.md#install).
+   in [the user guide](user-guide/getting-started.md#verify-a-download).
 
 **The dispatched ref must be the tagged commit.** `workflow_dispatch` reads
 the workflow file from the ref it runs on, and GoReleaser requires the

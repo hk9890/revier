@@ -3,12 +3,13 @@
 The standard is the `instruction-writing:writing-project-docs` skill. Below is
 this repository's delta, which wins where the two disagree.
 
-## Two trees, two owners
+## Three trees, three owners
 
 | Tree | Owns | Register |
 |---|---|---|
 | `docs/*.md` | How to operate on this repository now | Command register: imperative, one instruction per line |
 | `docs/design/` | What the system is intended to be, and why | Prose. A design doc argues; rationale is its content, not padding. |
+| `docs/user-guide/` | How to use revier as it is built: every command, file, field and key a user meets | Task prose, second person: "to do X, do Y". |
 
 `docs/design/README.md` states which design document owns what. Design docs are
 not a record of what is built — the code is that record — so a design doc
@@ -27,6 +28,20 @@ describing something absent from `internal/` is intent, not documentation drift.
   in the new one, and repoint every `Dnn` citation in the tree. Git history
   keeps the old text.
 - Never reuse a number.
+
+## `docs/user-guide/`
+
+- Write for someone who installed revier and never opens this repository.
+- Link only to pages inside `docs/user-guide/`. A user who reads the guide
+  away from the repository finds every link working.
+- Name a file path or a configuration key only where the user opens or sets
+  it. A source path, a Go symbol, a `mise` task, a test layer, CI and release
+  detail stay in `docs/`.
+- Cite no decision. Where the user needs the reason, give it in one sentence;
+  the argument stays in `docs/design/`.
+- `configuration.md` and `extending/` are the configuration reference. The
+  binary embeds them, and `revier assist --reference` prints them, so a fact
+  about the format lives there and nowhere else.
 
 ## Conventions
 
@@ -47,6 +62,8 @@ and return nothing:
 
 ## README scope
 
-`README.md` describes what revier is, how to install a release, how to use
-it, and the two commands that build it from source. The layer model, the
-manual driver, and cutting a release are `docs/`, not README.
+`README.md` describes what revier is, how to install a release, a short first
+use, and the two commands that build it from source, and links to
+`docs/user-guide/` for the rest. How to use revier beyond that first use is
+the guide's. The layer model, the manual driver, and cutting a release are
+`docs/`, not README.
