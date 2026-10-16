@@ -79,11 +79,12 @@ func cmdEach(w io.Writer, args []string) error {
 	var dry bool
 	fs.BoolVar(&dry, "dry-run", false, "print the selection and run nothing")
 	fs.BoolVar(&dry, "n", false, "print the selection and run nothing (shorthand)")
-	if err := fs.Parse(args[:sep]); err != nil {
+	pos, err := parseArgs(fs, args[:sep])
+	if err != nil {
 		return err
 	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("each: unexpected %q before --", fs.Arg(0))
+	if len(pos) > 0 {
+		return fmt.Errorf("each: unexpected %q before --", pos[0])
 	}
 
 	cfgRoot, err := config.Root()

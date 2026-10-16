@@ -1,9 +1,10 @@
 # Command line
 
 `revier` with no command opens the TUI. Every other command does one thing and
-exits. `revier help` lists the commands. `revier agent help`, `shell help`,
+exits. `revier help` lists the commands and their flags. `revier <command>
+--help` gives the usage of one command. `revier agent help`, `shell help`,
 `session help`, `keys help`, `each help` and `events help` give each family
-in full, with its flags.
+in full.
 
 - `-p <name>` names the project. Without it, revier uses the project of the
   current directory, else of the focused window, else the one it acted on last.

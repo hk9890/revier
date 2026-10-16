@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"slices"
+	"strings"
 	"time"
 
 	"github.com/hk9890/revier/internal/build"
@@ -98,6 +98,7 @@ usage:
 
 flags:
   -p, --project <name>          act on this project instead of the resolved one
+  -h, --help                    the usage of the command, or of its family
 `
 
 // exitNoProject is returned when no project could be resolved. It is a
@@ -237,6 +238,13 @@ func run(out io.Writer, args []string) error {
 		cmd, args = args[0], args[1:]
 	}
 
+	// Before any command runs: a usage request must not probe the desktop,
+	// open a window, or contact a host.
+	if text := commandHelp(cmd); text != "" && asksHelp(cmd, args) {
+		_, _ = fmt.Fprint(out, text)
+		return nil
+	}
+
 	switch cmd {
 	case "version", "--version":
 		_, _ = fmt.Fprintf(out, "revier %s (%s, %s)\n", build.Version, build.Commit, build.Date)
@@ -272,13 +280,6 @@ func run(out io.Writer, args []string) error {
 		// Its own app, as agent new has: the hosts are probed and listed
 		// inside the command's own bound.
 		return cmdShell(out, args)
-	case "session":
-		// Before the app, as the other families answer it: a usage request
-		// must not probe the desktop first.
-		if len(args) == 0 || slices.Contains([]string{"help", "--help", "-h"}, args[0]) {
-			_, _ = fmt.Fprint(out, sessionUsage)
-			return nil
-		}
 	}
 
 	// A keypress command gets long enough for a detached launch's wait
@@ -301,7 +302,7 @@ func run(out io.Writer, args []string) error {
 	case "go":
 		return cmdGo(ctx, a, args)
 	case "popup":
-		// Refused before the launch: `revier popup --help` must not open a window.
+		// Refused before the launch: an argument must not open a window.
 		if len(args) != 0 {
 			return fmt.Errorf("usage: revier popup")
 		}
@@ -326,6 +327,66 @@ func run(out io.Writer, args []string) error {
 	}
 }
 
+// familyUsage is the usage of each command that has its own, in full: the
+// families, and the commands whose output wants a page of its own.
+var familyUsage = map[string]string{
+	"agent":   agentUsage,
+	"shell":   shellUsage,
+	"session": sessionUsage,
+	"keys":    keysUsage,
+	"each":    eachUsage,
+	"events":  eventsUsage,
+}
+
+// commandHelp is what `revier <cmd> --help` prints: the family's own usage,
+// else the lines of usage that describe cmd. It is empty for a command that
+// does not exist.
+func commandHelp(cmd string) string {
+	if text, ok := familyUsage[cmd]; ok {
+		return text
+	}
+	var b strings.Builder
+	in := false
+	for _, line := range strings.Split(usage, "\n") {
+		if strings.HasPrefix(line, "  revier ") {
+			in = strings.Fields(line)[1] == cmd
+		} else if !strings.HasPrefix(line, "   ") {
+			in = false
+		}
+		if in {
+			b.WriteString(line + "\n")
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "usage:\n" + b.String()
+}
+
+// asksHelp reports whether args ask cmd for its usage. A help flag counts
+// anywhere before `--`, which is what the flag parser reads it as. A first
+// argument of help counts only where nothing names a project, a target or an
+// action: in a family, and in link, whose first argument is a host. A family
+// given nothing answers with its usage too.
+func asksHelp(cmd string, args []string) bool {
+	_, family := familyUsage[cmd]
+	if len(args) == 0 {
+		return cmd == "session" || cmd == "keys"
+	}
+	if args[0] == "help" && (family || cmd == "link") {
+		return true
+	}
+	for _, a := range args {
+		switch a {
+		case "--":
+			return false
+		case "-h", "-help", "--h", "--help":
+			return true
+		}
+	}
+	return false
+}
+
 // commandWait bounds a command that has no bound of its own.
 var commandWait = core.BindWait + 30*time.Second
 
@@ -344,16 +405,25 @@ func projectFlag(fs *flag.FlagSet) *string {
 // other` would leave -p unparsed and act on the resolved project instead of
 // the requested one - the wrong project, silently. Every command here takes a
 // positional before its flags, so parsing has to continue past them.
+//
+// The flag set prints nothing: main prints a parse error once, and run answers
+// a help request before any command parses its flags. Everything after `--` is
+// positional, so a prompt or a key may start with a dash.
 func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	fs.SetOutput(io.Discard)
 	var positional []string
 	for {
 		if err := fs.Parse(args); err != nil {
 			return nil, err
 		}
-		if fs.NArg() == 0 {
+		rest := fs.Args()
+		if len(rest) == 0 {
 			return positional, nil
 		}
-		positional = append(positional, fs.Arg(0))
-		args = fs.Args()[1:]
+		if read := len(args) - len(rest); read > 0 && args[read-1] == "--" {
+			return append(positional, rest...), nil
+		}
+		positional = append(positional, rest[0])
+		args = rest[1:]
 	}
 }

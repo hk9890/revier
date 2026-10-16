@@ -3,10 +3,151 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+// dispatchers are the functions that switch on a command word, by the family
+// whose subcommands they accept; run accepts the top-level commands.
+var dispatchers = map[string]string{
+	"run":        "",
+	"cmdAgent":   "agent",
+	"cmdShell":   "shell",
+	"cmdSession": "session",
+	"cmdKeys":    "keys",
+	"cmdEach":    "each",
+}
+
+// dispatched is every command the dispatchers accept, as the words a user
+// types: "list", "agent wait". It reads the case labels from the source, so a
+// command added to a switch is in it without anyone listing it here.
+func dispatched(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cmds []string
+	fset := token.NewFileSet()
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			family, ok := dispatchers[fn.Name.Name]
+			if !ok {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				clause, ok := n.(*ast.CaseClause)
+				if !ok {
+					return true
+				}
+				for _, e := range clause.List {
+					lit, ok := e.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						continue
+					}
+					word, _ := strconv.Unquote(lit.Value)
+					if slices.Contains([]string{"", "help", "--help", "-h", "--version"}, word) {
+						continue
+					}
+					cmds = append(cmds, strings.TrimSpace(family+" "+word))
+				}
+				return true
+			})
+		}
+	}
+	slices.Sort(cmds)
+	cmds = slices.Compact(cmds)
+	if len(cmds) < 20 {
+		t.Fatalf("found only %d commands, %v: the dispatchers moved", len(cmds), cmds)
+	}
+	return cmds
+}
+
+// Every command answers --help and -h with its usage on stdout and ends with
+// status 0. Nothing reaches the flag parser, whose own answer is an error.
+func TestEveryCommandAnswersHelpWithItsUsage(t *testing.T) {
+	for _, cmd := range dispatched(t) {
+		for _, flag := range []string{"--help", "-h"} {
+			args := append(strings.Fields(cmd), flag)
+			var out bytes.Buffer
+			if err := run(&out, args); err != nil {
+				t.Errorf("revier %s: err = %v, want the usage", strings.Join(args, " "), err)
+				continue
+			}
+			word, _, _ := strings.Cut(cmd, " ")
+			if !strings.Contains(out.String(), "usage:") || !strings.Contains(out.String(), "revier "+word) {
+				t.Errorf("revier %s printed no usage:\n%s", strings.Join(args, " "), out.String())
+			}
+		}
+	}
+}
+
+// `revier link help` is a request for the usage, not a host called help.
+func TestLinkHelpPrintsTheUsage(t *testing.T) {
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	var out bytes.Buffer
+	if err := run(&out, []string{"link", "help"}); err != nil {
+		t.Fatalf("err = %v, want the usage", err)
+	}
+	if !strings.Contains(out.String(), "revier link [host [project]]") {
+		t.Errorf("printed %q, want the link usage", out.String())
+	}
+}
+
+// A help flag after `--` is text for the command, not a request for help.
+func TestAHelpFlagAfterTheSeparatorIsAnArgument(t *testing.T) {
+	if asksHelp("agent", []string{"prompt", "demo", "--", "-h"}) {
+		t.Error("asksHelp read the prompt text -h as a help request")
+	}
+	fs := flag.NewFlagSet("agent send-keys", flag.ContinueOnError)
+	pos, err := parseArgs(fs, []string{"demo", "--", "a", "-h"})
+	if err != nil || !slices.Equal(pos, []string{"demo", "a", "-h"}) {
+		t.Errorf("parseArgs = %q, %v; want every word after -- as positional", pos, err)
+	}
+}
+
+// The flag parser prints nothing of its own: main prints the error once.
+func TestAnUnknownFlagIsNotPrintedByTheParser(t *testing.T) {
+	stderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	err = run(io.Discard, []string{"each", "--bogus", "--", "true"})
+	os.Stderr = stderr
+	_ = w.Close()
+	printed, _ := io.ReadAll(r)
+
+	if err == nil || !strings.Contains(err.Error(), "-bogus") {
+		t.Errorf("err = %v, want the unknown flag", err)
+	}
+	if len(printed) > 0 {
+		t.Errorf("the parser printed %q, want nothing before main prints the error", printed)
+	}
+}
 
 // A doctor that found problems exits 1 and says nothing more, and its
 // command line in the log is its outcome: at Info, with how many files.
