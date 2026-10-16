@@ -44,7 +44,9 @@ nothing; see [`[hosts]`](../configuration.md#hosts).
 
    revier skips a key that something else holds, such as Alt+Space on stock
    GNOME; see [Getting started](../getting-started.md#install-the-desktop-keys).
-   `revier keys status` shows who holds each key.
+   `revier keys status` shows who holds each key. The trigger key is
+   `revier: popup` in GNOME Settings; an install renames one that an older
+   revier wrote as `revier: picker`.
 
 ## Windows that open late
 

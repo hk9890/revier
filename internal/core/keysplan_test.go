@@ -684,7 +684,98 @@ func TestAnotherShortcutBesideRevierOwnIsTheOnlyThingInTheWay(t *testing.T) {
 
 	c.ApplyKeys(context.Background(), plan, true)
 	held := w.Held("<Alt>space")
-	if len(held) != 1 || held[0].Label != "revier: picker" {
+	if len(held) != 1 || held[0].Label != "revier: popup" {
 		t.Errorf("alt+space is held by %+v, want revier's own shortcut alone", held)
+	}
+}
+
+// legacyPopupKey is the trigger key as a revier that named its row "picker"
+// wrote it: in its own entry, under the name revier: picker.
+func legacyPopupKey() revier.Binding {
+	b := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier-picker")
+	b.Label = "revier: picker"
+	return b
+}
+
+// A trigger key an older revier wrote under the name revier: picker is still
+// revier's: status reports it active and not as an orphan, and install renames
+// it in place rather than writing a second entry beside it.
+func TestATriggerKeyUnderTheOldNameIsRevierOwnAndRenamed(t *testing.T) {
+	w := hosttest.NewWriter("gnome", legacyPopupKey())
+	c := &core.Core{KeyBinder: w}
+
+	report, err := c.Keys(context.Background(), nil, "alt+space")
+	if err != nil {
+		t.Fatalf("Keys: %v", err)
+	}
+	if row := report.Rows[0]; row.Target != core.PopupTarget || row.Status != core.KeyActive {
+		t.Errorf("row = %+v, want the popup's row active", row)
+	}
+	if len(report.Orphaned) != 0 {
+		t.Errorf("orphaned = %+v, want none", report.Orphaned)
+	}
+
+	_, plan := planInstall(t, w)
+	if got := step(t, plan, "alt+space").Action; got != core.KeyRename {
+		t.Fatalf("action = %q, want rename", got)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	held := w.Held("<Alt>space")
+	if len(held) != 1 || held[0].ID != "revier-picker" || held[0].Label != "revier: popup" {
+		t.Errorf("alt+space is held by %+v, want the old entry renamed revier: popup", held)
+	}
+}
+
+// A trigger key moved to another chord rewrites the entry an older revier
+// wrote, so the old chord stops opening the popup.
+func TestAMovedTriggerKeyRewritesTheOldEntry(t *testing.T) {
+	w := hosttest.NewWriter("gnome", legacyPopupKey())
+	c := &core.Core{KeyBinder: w}
+
+	plan, err := c.PlanInstallKeys(context.Background(), nil, "ctrl+alt+p")
+	if err != nil {
+		t.Fatalf("PlanInstallKeys: %v", err)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	if held := w.Held("<Alt>space"); len(held) != 0 {
+		t.Errorf("alt+space is still held by %+v", held)
+	}
+	held := w.Held("<Control><Alt>p")
+	if len(held) != 1 || held[0].ID != "revier-picker" {
+		t.Errorf("ctrl+alt+p is held by %+v, want the old entry moved there", held)
+	}
+}
+
+// A target with a key cannot take the name of the trigger key's row, nor of
+// the entry the desktop keeps it in.
+func TestATargetWithAKeyCannotTakeTheTriggerKeyNames(t *testing.T) {
+	for _, name := range []revier.TargetName{core.PopupTarget, "picker"} {
+		if core.ValidateKeyTarget(name) == nil {
+			t.Errorf("a keyed target named %q was accepted", name)
+		}
+	}
+}
+
+// Uninstall removes a trigger key an older revier wrote under the old name.
+func TestUninstallRemovesATriggerKeyUnderTheOldName(t *testing.T) {
+	w := hosttest.NewWriter("gnome", legacyPopupKey())
+	c := &core.Core{KeyBinder: w}
+	plan, err := c.PlanUninstallKeys(context.Background(), nil, "alt+space")
+	if err != nil {
+		t.Fatalf("PlanUninstallKeys: %v", err)
+	}
+	c.ApplyKeys(context.Background(), plan, false)
+	if len(w.Bindings) != 0 {
+		t.Errorf("bindings after uninstall = %+v, want none", w.Bindings)
+	}
+}
+
+// A shortcut a user bound by hand to revier's command, in an entry of their
+// own, keeps the name the user gave it.
+func TestAHandBoundTriggerKeyKeepsItsName(t *testing.T) {
+	w := hosttest.NewWriter("gnome", hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "my-popup"))
+	_, plan := planInstall(t, w)
+	if got := step(t, plan, "alt+space").Action; got != core.KeyOK {
+		t.Errorf("action = %q, want ok", got)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/runlog"
@@ -87,5 +88,23 @@ func TestTheSummaryNamesWhatNeedsTheUser(t *testing.T) {
 	// A filtered project is what the user asked for, not something to fix.
 	if strings.Contains(out.String(), "plain") {
 		t.Errorf("summary names a filtered project:\n%s", out.String())
+	}
+}
+
+// The COMMAND column is what a shell reads back as the same argv and filter,
+// so a word with a space is one word and a quote in the filter survives.
+func TestARunIsNamedAsAShellReadsItBack(t *testing.T) {
+	done := time.Date(2026, 10, 16, 21, 57, 44, 0, time.UTC)
+	for _, c := range []struct {
+		run  runlog.Run
+		want string
+	}{
+		{runlog.Run{Argv: []string{"sh", "-c", "echo a b; true"}, Finished: done}, `sh -c 'echo a b; true'`},
+		{runlog.Run{Argv: []string{"git", "status"}, Filter: `grep -q "it's" TODO`, Finished: done}, `--filter 'grep -q "it'\''s" TODO' -- git status`},
+		{runlog.Run{Argv: []string{"echo", ""}, Finished: done}, `echo ''`},
+	} {
+		if got := runCommand(c.run); got != c.want {
+			t.Errorf("runCommand(%q, filter %q) = %s, want %s", c.run.Argv, c.run.Filter, got, c.want)
+		}
 	}
 }

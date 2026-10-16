@@ -1,9 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -37,13 +37,11 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// `target "worktree"`, and a target name has no length limit.
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	bad := 0
-	if len(cfg.Problems) > 0 {
+	if problems := append(hostProblems(cfg), cfg.Problems...); len(problems) > 0 {
 		bad++
 		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
-		for _, err := range cfg.Problems {
-			// An action's or a shared target's refusal opens with what it
-			// is about, which is the column.
-			what, _, _ := strings.Cut(err.Error(), ":")
+		for _, err := range problems {
+			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}
 	}
@@ -68,7 +66,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 			}
 		}
 		for _, err := range p.StatusRefused {
-			what, _, _ := strings.Cut(err.Error(), ":")
+			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}
 	}
@@ -86,9 +84,23 @@ func cmdDoctor(out io.Writer, args []string) error {
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.
-		return errSilent
+		return problemsFound{files: bad}
 	}
 	return nil
+}
+
+// subject is what a refusal of config.toml or of a status table is about,
+// which is the column: the opening up to the name it quotes, as in `action
+// "c"`, or else up to the first colon. Some refusals put a colon after the
+// name and some do not, `action "c": key ...` and `action "c" runs nothing`,
+// so a cut at the colon alone took the whole of the second as the column.
+func subject(msg string) string {
+	kind, rest, _ := strings.Cut(msg, " ")
+	if name, err := strconv.QuotedPrefix(rest); err == nil {
+		return kind + " " + name
+	}
+	what, _, _ := strings.Cut(msg, ":")
+	return what
 }
 
 // problemLine prints one problem and its advice under a column naming what
@@ -160,6 +172,8 @@ func advise(msg string) string {
 		return "give the runtime realization the `name` its match finds"
 	case strings.Contains(msg, "project has no path"):
 		return "add `path = \"...\"`, or `[remote]` if the project lives on another machine"
+	case strings.Contains(msg, "declares no realization under [target.remote"):
+		return "give the target a `[target.remote.window]` or `[target.remote.runtime]` table"
 	case strings.Contains(msg, "declares no realization"):
 		return "give the target a `[target.window]` or `[target.runtime]` table"
 	case strings.Contains(msg, "error parsing regexp"):
@@ -168,12 +182,21 @@ func advise(msg string) string {
 		return "fix the template; the message names what does not parse or evaluate"
 	case strings.Contains(msg, "name is not read"):
 		return "delete the `name = ...` line; the file name is the project's name"
+	case strings.Contains(msg, "incompatible types"):
+		// The decoder's line prefix is on this message too, and the file
+		// is valid TOML: only the value is of the wrong type.
+		return "give the key a value of the type the message names, for example a string in quotes"
 	case strings.Contains(msg, "toml: line"):
 		return "the file is not valid TOML; the message names the line"
 	}
 	return ""
 }
 
-// errSilent ends a command with a non-zero status and no further message,
-// because the command has printed its own report.
-var errSilent = errors.New("")
+// problemsFound is a doctor run that found files with problems. It ends the
+// command with status 1 and no further message, because the report is the
+// message, and it is logged as the outcome it is and not as a failure.
+type problemsFound struct{ files int }
+
+func (e problemsFound) Error() string {
+	return core.Count(e.files, "file") + " with problems"
+}

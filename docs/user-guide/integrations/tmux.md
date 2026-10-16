@@ -54,8 +54,5 @@ bind-key S run-shell -b 'revier shell new --panel "#{pane_id}" --dir "#{pane_cur
 - `place` does nothing: a session is no desktop window.
 - The tmux server does not outlive a reboot. Use `revier session save` and
   `revier session restore`; see [Projects](../projects.md).
-- An agent you type into a shell pane shows as `unknown`, because the pane's
-  own process is the shell. Start agents from the project file or with
-  `revier agent new`.
 - The popup is a kitty window. With tmux and no kitty, the trigger key does
   nothing; run `revier` in a terminal.

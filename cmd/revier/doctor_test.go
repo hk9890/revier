@@ -49,8 +49,8 @@ func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 
 	var out strings.Builder
 	err := cmdDoctor(&out, nil)
-	if !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err != (problemsFound{files: 3}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 3 files", err)
 	}
 	got := out.String()
 
@@ -125,8 +125,8 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 	}
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 1}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 1 file", err)
 	}
 	for _, want := range []string{"config.toml", `action "sync"`, "typed text", "1 project, 1 file with problems"} {
 		if !strings.Contains(out.String(), want) {
@@ -158,8 +158,8 @@ every = "10s"
 	}
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
-		t.Fatalf("err = %v, want the silent non-zero end", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 2 files", err)
 	}
 	got := out.String()
 
@@ -191,5 +191,95 @@ every = "10s"
 	}
 	if !strings.Contains(got, "2 projects, 2 files with problems") {
 		t.Errorf("report should count config.toml and tables.toml alone:\n%s", got)
+	}
+}
+
+// A link declares its realization under [target.remote], so a link target
+// with none is never told to add the local table a line above told it to
+// move, and a local target keeps the local advice.
+func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	doctorRoot(t, map[string]string{
+		"far.toml":  "path = \"/x\"\n[remote]\nhost = \"buildbox\"\n\n[[target]]\nname = \"ed\"\n  [target.window]\n  launch = [\"code\"]\n  match = { class = \"^code$\" }\n",
+		"near.toml": sound + "\n[[target]]\nname = \"ed\"\n",
+	})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
+		t.Fatalf("err = %v, want two files with problems", err)
+	}
+	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+	ofFar, ofNear, ok := strings.Cut(out.String(), filepath.Join(root, "near.toml"))
+	if !ok {
+		t.Fatalf("report should name near.toml:\n%s", out.String())
+	}
+	if !strings.Contains(ofFar, "fix: give the target a `[target.remote.window]` or `[target.remote.runtime]` table") {
+		t.Errorf("far.toml should be advised on the remote tables:\n%s", out.String())
+	}
+	if strings.Contains(ofFar, "`[target.window]`") {
+		t.Errorf("far.toml should never be advised a local table:\n%s", out.String())
+	}
+	if !strings.Contains(ofNear, "fix: give the target a `[target.window]` or `[target.runtime]` table") {
+		t.Errorf("near.toml should keep the local advice:\n%s", out.String())
+	}
+}
+
+// An unknown name in [hosts] stops every command that lists or opens, so
+// doctor reports it, in any position: after a host that works and after
+// none too, where host selection never reaches it.
+func TestDoctorReportsAnUnknownHostName(t *testing.T) {
+	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	for _, want := range []string{
+		`hosts.runtime unknown host "ghostty"; known: kitty, tmux, none`,
+		`hosts.window  unknown host "sway"; known: gnome, none`,
+		"1 project, 1 file with problems",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report should contain %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A value of the wrong type is valid TOML, so its advice is about the type,
+// and only a syntax error is told the file is not valid TOML.
+func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {
+	doctorRoot(t, map[string]string{"typed.toml": "path = 5\n", "syntax.toml": "path = \n"})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+	ofSyntax, ofTyped, ok := strings.Cut(out.String(), filepath.Join(root, "typed.toml"))
+	if !ok {
+		t.Fatalf("report should name typed.toml:\n%s", out.String())
+	}
+	if !strings.Contains(ofTyped, "fix: give the key a value of the type the message names") || strings.Contains(ofTyped, "not valid TOML") {
+		t.Errorf("typed.toml should be advised on the type alone:\n%s", out.String())
+	}
+	if !strings.Contains(ofSyntax, "fix: the file is not valid TOML") {
+		t.Errorf("syntax.toml should keep the TOML advice:\n%s", out.String())
+	}
+}
+
+// A refusal names what it is about with a colon after the name or without
+// one. Either way the column is the name, and the message prints once.
+func TestDoctorColumnsARefusalWithNoColonByItsName(t *testing.T) {
+	configRoot(t, "[[action]]\nkey = \"ctrl-y\"\nname = \"c\"\n", map[string]string{"sound.toml": sound})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	if want := "  action \"c\" runs nothing\n"; !strings.Contains(out.String(), want) {
+		t.Errorf("report should contain %q:\n%s", want, out.String())
+	}
+	if n := strings.Count(out.String(), "runs nothing"); n != 1 {
+		t.Errorf("the refusal is printed %d times, want once:\n%s", n, out.String())
 	}
 }

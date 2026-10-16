@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -207,11 +208,39 @@ func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
 	}
 }
 
-// An argument is refused before anything is launched, so `revier popup --help`
-// does not open a window.
+// An argument is refused before anything is launched, so a stray word does
+// not open a window.
 func TestPopupRefusesArguments(t *testing.T) {
 	scratch(t)
-	if err := run(io.Discard, []string{"popup", "--help"}); err == nil || !strings.Contains(err.Error(), "usage: revier popup") {
+	if err := run(io.Discard, []string{"popup", "extra"}); err == nil || !strings.Contains(err.Error(), "usage: revier popup") {
 		t.Errorf("err = %v, want the usage", err)
+	}
+}
+
+// A help request is answered before any host is probed: `revier popup
+// --help` opens no window, and no command asks tmux anything. The status run
+// at the end proves the stub would have seen a probe.
+func TestAHelpRequestProbesNoHost(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
+	marker := filepath.Join(root, "probed")
+	onPath(t, "tmux", "touch "+marker+"; exit 1")
+
+	for _, cmd := range dispatched(t) {
+		args := append(strings.Fields(cmd), "--help")
+		if err := run(io.Discard, args); err != nil {
+			t.Errorf("revier %s: %v", strings.Join(args, " "), err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a help request ran tmux")
+	}
+	_ = run(io.Discard, []string{"status"})
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("revier status ran no tmux, so this test proves nothing")
 	}
 }

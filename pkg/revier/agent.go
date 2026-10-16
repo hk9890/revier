@@ -289,11 +289,12 @@ type ToolCall struct {
 // flag's spelling never reaches the core.
 type Resumable interface {
 	// Sessions names the conversation each panel holds, in the panels'
-	// order, with a zero Conversation for a panel that holds none. It is
-	// asked once for every panel of a save rather than once per panel,
-	// because the answer may cost a process - `claude agents --json` - and a
-	// save of twenty agents must cost that once, the rule Host.Instances
-	// follows.
+	// order, with a zero Conversation for a panel the harness does not
+	// list, and the Dir alone for an agent it lists with no conversation
+	// yet, so that one restores empty where it worked. It is asked once for
+	// every panel of a save rather than once per panel, because the answer
+	// may cost a process - `claude agents --json` - and a save of twenty
+	// agents must cost that once, the rule Host.Instances follows.
 	Sessions(ctx context.Context, panels []Panel) ([]Conversation, error)
 
 	// ResumeCommand returns the argv that starts the harness on that

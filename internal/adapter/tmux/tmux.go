@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -110,8 +111,10 @@ func (h *Host) Probe(ctx context.Context) error {
 // Instances lists every session on the server, with the panes of all its
 // windows.
 //
-// Two calls, both bulk: one for session names and one for panes. The cost is
-// constant, not per project, which is the property the hot path actually needs.
+// Two tmux calls, both bulk: one for session names and one for panes. Their
+// number is constant, not per project, which is the property the hot path
+// actually needs. Each pane's foreground process is then read from /proc:
+// two file reads per pane, and no process.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	sessions, named, err := h.sessions(ctx)
 	if err != nil || len(sessions) == 0 {
@@ -165,18 +168,31 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if !ok || owner[paneID] != sessionID {
 			continue
 		}
-		pid, _ := strconv.Atoi(panePID)
+		pid, command := foreground(panePID, paneCmd)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(paneID),
 			Kind:    kindOf(paneCmd),
 			Title:   paneTitle,
 			Vars:    parseVars(paneVars),
 			PID:     pid,
-			Command: []string{paneCmd},
+			Command: command,
 			Tab:     windowID,
 		})
 	}
 	return sessions, nil
+}
+
+// foreground is the pid and argv of a pane's foreground process, as a probe
+// reads them. tmux names only the program, and `python3 .../aider` or `node
+// .../bin/claude` is then python3 or node to every probe, so the argv is read
+// from /proc. Where /proc cannot be read, the pane's first process and the
+// program tmux names stand in.
+func foreground(panePID, paneCmd string) (int, []string) {
+	pid, _ := strconv.Atoi(panePID)
+	if fg, argv, ok := proc.Foreground(pid); ok {
+		return fg, argv
+	}
+	return pid, []string{paneCmd}
 }
 
 // owns reports whether session a, rather than b, owns a pane both list: the
@@ -279,10 +295,17 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
 	}
 	panels := r.PanelSpecs()
+	if err := startable(panels); err != nil {
+		return revier.TargetRef{}, err
+	}
 
 	out, err := h.newSession(ctx, r.Name, panels[0])
 	if err != nil {
 		return revier.TargetRef{}, err
+	}
+	if strings.TrimSpace(out) == "" {
+		// tmux prints nothing when the session ended before it could.
+		return revier.TargetRef{}, exitedAtOnce(panels[0])
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
 	if len(f) != 4 {
@@ -319,7 +342,7 @@ func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSp
 // name leaves the realization's name on a new session and fills its window.
 func (h *Host) name(ctx context.Context, session, window, pane string, r revier.Realization, panels []revier.PanelSpec) error {
 	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
-		return err
+		return exited(err, panels[0])
 	}
 	panes, err := h.fill(ctx, window, pane, panels)
 	if err != nil {
@@ -351,27 +374,87 @@ func start(p revier.PanelSpec) []string {
 // window beside it. It returns the window's panes, the first one first.
 func (h *Host) fill(ctx context.Context, window, first string, panels []revier.PanelSpec) ([]string, error) {
 	if err := h.title(ctx, first, panels[0].Title); err != nil {
-		return nil, err
+		return nil, exited(err, panels[0])
 	}
 	panes := []string{first}
-	for _, p := range panels[1:] {
+	for i, p := range panels[1:] {
 		args := append([]string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}, start(p)...)
 		out, err := h.run(ctx, args...)
 		if err != nil {
-			return nil, err
+			// The window goes with its last pane, so the panels before
+			// this one have all exited.
+			return nil, exited(err, panels[i])
 		}
 		pane := strings.TrimSpace(out)
 		if err := h.title(ctx, pane, p.Title); err != nil {
-			return nil, err
+			return nil, exited(err, p)
 		}
 		panes = append(panes, pane)
 	}
 	if len(panels) > 1 {
 		if _, err := h.run(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
-			return nil, err
+			return nil, exited(err, panels[len(panels)-1])
 		}
 	}
 	return panes, nil
+}
+
+// startable refuses panels whose program is not on PATH before tmux starts
+// any of them. tmux starts it anyway, the pane closes at once, and the step
+// after fails on an id that no longer exists - which names neither the panel
+// nor its command. A program named by a path is left to tmux: it is read
+// against the panel's directory, not this one.
+func startable(panels []revier.PanelSpec) error {
+	for _, p := range panels {
+		if len(p.Command) == 0 || strings.Contains(p.Command[0], "/") {
+			continue
+		}
+		if _, err := exec.LookPath(p.Command[0]); err != nil {
+			return fmt.Errorf("%s command %q is not on PATH", whose(p), p.Command[0])
+		}
+	}
+	return nil
+}
+
+// exited names the panel whose command ended as soon as it started, when a
+// step of an Open or an OpenTab failed because tmux closed what that panel's
+// pane held: the pane, its window, its session, or the server with its last
+// session. Any other failure is tmux's own and is returned as it is.
+func exited(err error, p revier.PanelSpec) error {
+	if noServer(err) || closed(err) {
+		return exitedAtOnce(p)
+	}
+	return err
+}
+
+// closed reports a tmux error about a target that is gone, in each of the
+// words tmux has for it.
+func closed(err error) bool {
+	s := err.Error()
+	for _, gone := range []string{"can't find pane", "can't find window", "can't find session", "no such session", "no current target", "server exited unexpectedly"} {
+		if strings.Contains(s, gone) {
+			return true
+		}
+	}
+	return false
+}
+
+// exitedAtOnce says the panel's command ended as soon as it started.
+func exitedAtOnce(p revier.PanelSpec) error {
+	if len(p.Command) == 0 {
+		return fmt.Errorf("%s shell exited as soon as it started", whose(p))
+	}
+	return fmt.Errorf("%s command %q exited as soon as it started", whose(p), strings.Join(p.Command, " "))
+}
+
+// whose names what a command belongs to: a panel by its kind. A realization's
+// launch has no kind, and neither has a panel whose kind was left out, so
+// either is named by its command alone.
+func whose(p revier.PanelSpec) string {
+	if p.Kind == "" {
+		return "the"
+	}
+	return "the " + string(p.Kind) + " panel's"
 }
 
 // OpenTab opens a window after the last one of the session: r.Launch alone,
@@ -388,10 +471,16 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 	panels := r.PanelSpecs()
+	if err := startable(panels); err != nil {
+		return "", err
+	}
 	args := []string{"new-window", "-d", "-a", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-t", sessionOf(ref.ID) + ":{end}"}
 	out, err := h.run(ctx, append(args, start(panels[0])...)...)
 	if err != nil {
 		return "", err
+	}
+	if strings.TrimSpace(out) == "" {
+		return "", exitedAtOnce(panels[0])
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 2)
 	window := f[0]
@@ -418,9 +507,9 @@ func (h *Host) tab(ctx context.Context, window, pane string, panels []revier.Pan
 	// A tab's mark is its whole identity (decisions.md D64): a tab that
 	// carries none is found by nothing, and the next press opens another. It
 	// fails the tab, which OpenTab then kills.
-	for _, pane := range panes {
+	for i, pane := range panes {
 		if err := h.setVars(ctx, pane, vars); err != nil {
-			return err
+			return exited(err, panels[i])
 		}
 	}
 	return nil

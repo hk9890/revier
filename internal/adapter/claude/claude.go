@@ -245,7 +245,8 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 //
 // The directory is the session's cwd as the listing gives it, which is where
 // Claude works and not where its pane was opened: an agent that entered a
-// worktree is listed in the worktree.
+// worktree is listed in the worktree. A session listed with no sessionId
+// still gives its directory, so the agent restores empty where it worked.
 //
 // It always runs the command rather than reuse the listing Inspect keeps: a
 // save records what holds now, and runs once.
@@ -256,7 +257,7 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 	}
 	out := make([]revier.Conversation, len(panels))
 	for i, panel := range panels {
-		if s, ok := listed[panel.PID]; ok && panel.PID != 0 && s.SessionID != "" {
+		if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 			out[i] = revier.Conversation{ID: revier.SessionID(s.SessionID), Dir: s.Cwd}
 		}
 	}

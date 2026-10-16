@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/runlog"
@@ -79,11 +80,12 @@ func cmdEach(w io.Writer, args []string) error {
 	var dry bool
 	fs.BoolVar(&dry, "dry-run", false, "print the selection and run nothing")
 	fs.BoolVar(&dry, "n", false, "print the selection and run nothing (shorthand)")
-	if err := fs.Parse(args[:sep]); err != nil {
+	pos, err := parseArgs(fs, args[:sep])
+	if err != nil {
 		return err
 	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("each: unexpected %q before --", fs.Arg(0))
+	if len(pos) > 0 {
+		return fmt.Errorf("each: unexpected %q before --", pos[0])
 	}
 
 	cfgRoot, err := config.Root()
@@ -370,11 +372,16 @@ func cmdEachLog(w io.Writer, args []string) error {
 }
 
 // runCommand is how a run is named in a listing: what it ran, the filter that
-// chose where, and whether it got to the end.
+// chose where, and whether it got to the end. Each word is quoted as a shell
+// reads it back, so the line can be pasted to run the same command again.
 func runCommand(r runlog.Run) string {
-	s := strings.Join(r.Argv, " ")
+	words := make([]string, len(r.Argv))
+	for i, w := range r.Argv {
+		words[i] = ssh.Quote(w)
+	}
+	s := strings.Join(words, " ")
 	if r.Filter != "" {
-		s = fmt.Sprintf("--filter '%s' -- %s", r.Filter, s)
+		s = "--filter " + ssh.Quote(r.Filter) + " -- " + s
 	}
 	if r.Finished.IsZero() {
 		s += "  (unfinished)"

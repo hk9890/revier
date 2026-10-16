@@ -1,9 +1,10 @@
 # Command line
 
 `revier` with no command opens the TUI. Every other command does one thing and
-exits. `revier help` lists the commands. `revier agent help`, `shell help`,
+exits. `revier help` lists the commands and their flags. `revier <command>
+--help` gives the usage of one command. `revier agent help`, `shell help`,
 `session help`, `keys help`, `each help` and `events help` give each family
-in full, with its flags.
+in full.
 
 - `-p <name>` names the project. Without it, revier uses the project of the
   current directory, else of the focused window, else the one it acted on last.
@@ -18,16 +19,16 @@ in full, with its flags.
 |---|---|
 | `revier` | The TUI. See [The TUI](tui.md). |
 | `revier popup` | The TUI in a kitty window of its own. |
-| `revier list [--json] [<name>..]` | Print every project, its state, agent and targets. |
+| `revier list [--json [--conversations]] [<name>..]` | Print every project, its state, agent and targets. `--conversations` adds the conversation each agent holds to the JSON. |
 | `revier new [<name>]` | Write a project file for the current directory. |
 | `revier open [<name>] [--attach]` | Run-or-raise the project's workspace. `--attach` (tmux only) ends with this terminal on it. |
 | `revier go <target> [--picker]` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |
 | `revier link [<host> [<project>]]` | List hosts, list a host's projects, or link one. See [Projects on another machine](links.md). |
 | `revier run <action>` | Run an `[[action]]` in the project. |
-| `revier each [--filter '<sh>'] -- <cmd>` | Run a command in every project's directory. `revier each log` lists past runs; `revier each log <run> <project>` prints what the command printed there. |
+| `revier each [--filter '<sh>'] [-n] -- <cmd>` | Run a command in every project's directory. `revier each log` lists past runs; `revier each log <run> <project>` prints what the command printed there. |
 | `revier agent new` / `revier shell new` | Add an agent tab or a shell tab to an open workspace. |
-| `revier agent prompt <agent> <text>` | Type one line into the agent and submit it. |
+| `revier agent prompt <agent> <text>` | Type one line into the agent and submit it. Refuses an agent in `attention` or `unknown`; opencode's is always `unknown`. |
 | `revier agent wait <agent> --until <status>` | Wait for `idle`, `running`, `attention` or `stopped`. |
 | `revier agent read <agent> [--screen]` | Print the agent's last reply, or its screen. |
 | `revier agent send-keys <agent> <key>..` | Type keys, such as `esc` or `enter`. |

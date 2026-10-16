@@ -17,11 +17,14 @@ import (
 // every pane on the server.
 func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	const projects = 90
+	// Above the largest pid Linux allows, so the foreground read in /proc
+	// finds no process of the machine the test runs on.
+	const noPID = 4194305
 	var sessions, panes strings.Builder
 	for i := range projects {
 		fmt.Fprintf(&sessions, "4242|$%d|1|project-%d\n", i, i)
-		fmt.Fprintf(&panes, "$%d|@%d|%%%d|100|zsh||shell\n", i, i, 2*i)
-		fmt.Fprintf(&panes, "$%d|@%d|%%%d|101|claude||agent\n", i, i, 2*i+1)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d|zsh||shell\n", i, i, 2*i, noPID)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d|claude||agent\n", i, i, 2*i+1, noPID)
 	}
 	var calls []string
 	h := &tmux.Host{}

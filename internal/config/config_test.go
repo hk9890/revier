@@ -176,6 +176,15 @@ func TestValidateRejects(t *testing.T) {
 			`target "tickets" is inside "home" and has both launch and panels`,
 		},
 		{
+			// A typo would otherwise cost the panel its agent role silently.
+			"panel with an unknown kind",
+			tabProject(func(tab *revier.Target) {
+				tab.Runtime.Launch = nil
+				tab.Runtime.Panels = []revier.PanelSpec{{Kind: revier.PanelShell}, {Kind: "agnet", Command: []string{"sh"}}}
+			}),
+			`target "tickets": panel 2 has kind "agnet"; use agent, shell or tool`,
+		},
+		{
 			"tab with a window realization",
 			tabProject(func(tab *revier.Target) { tab.Window = &base }),
 			"a tab has only the runtime",
@@ -774,12 +783,12 @@ func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 }
 
 // A keyed target's name is the row, the shortcut's entry, and a word in the
-// command the key runs. "picker" is the row of the key that opens revier, so
+// command the key runs. "popup" is the row of the key that opens revier, so
 // the two collided and every install was refused; a name that is not one plain
 // word would run as shell syntax, and revier would not know the shortcut as
 // its own.
 func TestValidateRejectsANameAKeyedTargetCannotHave(t *testing.T) {
-	for _, name := range []revier.TargetName{"picker", "my editor", `x"; rm -rf ~; "`, "-x"} {
+	for _, name := range []revier.TargetName{"popup", "my editor", `x"; rm -rf ~; "`, "-x"} {
 		p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
 				Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
@@ -800,9 +809,9 @@ func TestValidateRejectsANameAKeyedTargetCannotHave(t *testing.T) {
 }
 
 // Without a key the name reaches no desktop, so it is not restricted.
-func TestATargetWithNoKeyMayBeCalledPicker(t *testing.T) {
+func TestATargetWithNoKeyMayBeCalledPopup(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
-		{Name: "picker", Home: true, Runtime: &revier.Realization{
+		{Name: "popup", Home: true, Runtime: &revier.Realization{
 			Name: "x", Launch: []string{"x"}, Match: revier.Match{Title: "^x$"},
 		}},
 	}}

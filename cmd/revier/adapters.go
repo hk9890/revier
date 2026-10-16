@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/adapter/execprobe"
@@ -76,6 +79,25 @@ func selectHosts(ctx context.Context, cfg *config.Config) (revier.Runtime, revie
 		return nil, nil, err
 	}
 	return rt, win, nil
+}
+
+// hostProblems is every name in [hosts] that no compiled-in adapter carries,
+// in any position of its list. selectHost stops at the first name that
+// works, so a name after it is never checked there, and an unknown name it
+// does reach stops every command but doctor; doctor reads these instead.
+func hostProblems(cfg *config.Config) []error {
+	var errs []error
+	check := func(kind string, want, known []string) {
+		known = append(known, hostNone)
+		for _, name := range want {
+			if !slices.Contains(known, name) {
+				errs = append(errs, fmt.Errorf("hosts.%s: unknown host %q; known: %s", kind, name, strings.Join(known, ", ")))
+			}
+		}
+	}
+	check("runtime", cfg.Hosts.Runtime, slices.Sorted(maps.Keys(runtimeAdapters())))
+	check("window", cfg.Hosts.Window, slices.Sorted(maps.Keys(windowAdapters())))
+	return errs
 }
 
 // selectHost picks one host of a kind, "runtime" or "window". Finding none

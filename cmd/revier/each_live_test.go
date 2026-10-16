@@ -166,7 +166,7 @@ func TestEachLogReadsAPastRunBack(t *testing.T) {
 	if err := cmdEach(&list, []string{"log"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(list.String(), id) || !strings.Contains(list.String(), "echo hello from alpha") {
+	if !strings.Contains(list.String(), id) || !strings.Contains(list.String(), "echo 'hello from alpha'") {
 		t.Errorf("each log does not list the run:\n%s", list.String())
 	}
 

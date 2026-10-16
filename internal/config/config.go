@@ -601,7 +601,13 @@ func validateTargets(p revier.Project) []error {
 			}
 		}
 
-		if t.Window == nil && t.Runtime == nil {
+		switch {
+		case t.Window != nil || t.Runtime != nil:
+		case p.Remote != nil:
+			// A link's part is under [target.remote]; a local part was
+			// dropped and refused by validateParts, and is not the fix.
+			errs = append(errs, fmt.Errorf("target %q declares no realization under [target.remote.window] or [target.remote.runtime]", t.Name))
+		default:
 			errs = append(errs, fmt.Errorf("target %q declares no realization", t.Name))
 		}
 		tab := t.Runtime != nil && t.Runtime.Inside != ""
@@ -721,6 +727,16 @@ func validateTab(p revier.Project, t revier.Target) []error {
 	}
 	if len(r.Launch) > 0 && len(r.Panels) > 0 {
 		errs = append(errs, fmt.Errorf("target %q is inside %q and has both launch and panels; panels are what is launched, so drop launch", t.Name, r.Inside))
+	}
+	for i, panel := range r.Panels {
+		// A kind left out is a tool. Any other unknown kind is a typo that
+		// would cost an agent panel its role: no resume, no remote command,
+		// no copy by `revier agent new`.
+		switch panel.Kind {
+		case "", revier.PanelAgent, revier.PanelShell, revier.PanelTool:
+		default:
+			errs = append(errs, fmt.Errorf("target %q: panel %d has kind %q; use agent, shell or tool", t.Name, i+1, panel.Kind))
+		}
 	}
 	if r.Inside == t.Name {
 		return append(errs, fmt.Errorf("target %q is inside itself", t.Name))

@@ -67,6 +67,22 @@ func TestResolveWithoutWindowHost(t *testing.T) {
 	}
 }
 
+// A press on a window-only target with no window host says which target of
+// which project it was, and what it lacks: the project can come from the
+// last-used fallback, so the user may not know which one was meant.
+func TestPressOnAWindowOnlyTargetWithoutAWindowHostNamesTargetProjectAndHost(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+
+	_, err := press(context.Background(), c, prepared(t, project()), "editor")
+	if !errors.Is(err, core.ErrNoHost) {
+		t.Fatalf("err = %v, want ErrNoHost", err)
+	}
+	want := `no host can realize this target: target "editor" of project "revier" has only a window realization, and no window host is configured or available`
+	if err.Error() != want {
+		t.Errorf("err = %q\nwant  %q", err, want)
+	}
+}
+
 func TestGoRaisesAnExistingInstance(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.Add("Visual Studio Code", "code")

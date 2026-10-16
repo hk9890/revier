@@ -30,6 +30,9 @@ const (
 	KeyUpdate KeyAction = "update"
 	// KeyEnable: revier's own shortcut is there and switched off.
 	KeyEnable KeyAction = "enable"
+	// KeyRename: revier's own shortcut is right, under a name an older revier
+	// gave it.
+	KeyRename KeyAction = "rename"
 	// KeyTakeOver: somebody else's shortcut holds the chord. Needs force.
 	KeyTakeOver KeyAction = "take over"
 	// KeyClear: a desktop default holds the chord. Needs force, and changes a
@@ -114,9 +117,19 @@ func (p KeyPlan) Installed() int {
 // bindingID is the name revier gives a shortcut it owns. It is stable across
 // runs and unlike anything a desktop allocates for itself - GNOME numbers its
 // own entries - so the two never claim the same storage.
-func bindingID(target string) string { return bindingIDPrefix + target }
+func bindingID(target string) string {
+	if target == PopupTarget {
+		return bindingIDPrefix + triggerEntry
+	}
+	return bindingIDPrefix + target
+}
 
 const bindingIDPrefix = "revier-"
+
+// triggerEntry is the id the trigger key's entry was written under when its
+// row was named picker. It stays, so a changed trigger key moves that entry
+// instead of leaving it on the old chord (decisions.md D138).
+const triggerEntry = "picker"
 
 // bindingLabel is what the desktop's settings window shows.
 func bindingLabel(target string) string { return "revier: " + target }
@@ -330,19 +343,27 @@ func installStep(row KeyRow, holders []revier.Binding) KeyStep {
 	if own, ok := ownHolder(holders); ok {
 		step.Write.ID = own.ID
 		step.Write.Where = own.Where
-		step.Own = ownAction(own, row.Command)
+		step.Own = ownAction(own, step.Write)
+	}
+	if step.Action == KeyOK && step.Own == KeyRename {
+		step.Action = KeyRename
 	}
 	return step
 }
 
 // ownAction is what an install does to revier's own shortcut: rewrite a
-// command that is out of date, switch on one that is off, or leave it.
-func ownAction(own revier.Binding, want string) KeyAction {
+// command that is out of date, switch on one that is off, rename one an older
+// revier wrote under another name, or leave it. Only an entry revier named is
+// renamed: a shortcut a user bound by hand to revier's command keeps the name
+// the user gave it.
+func ownAction(own, want revier.Binding) KeyAction {
 	switch {
-	case own.Command != want:
+	case own.Command != want.Command:
 		return KeyUpdate
 	case !own.Enabled:
 		return KeyEnable
+	case own.Label != want.Label && strings.HasPrefix(own.ID, bindingIDPrefix):
+		return KeyRename
 	default:
 		return KeyOK
 	}

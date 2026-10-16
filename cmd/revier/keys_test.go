@@ -12,7 +12,7 @@ func report() core.KeyReport {
 	return core.KeyReport{
 		Desktop: "gnome",
 		Rows: []core.KeyRow{
-			{Chord: "alt+space", Target: core.PickerTarget, Status: core.KeyActive, HeldBy: "revier: picker", Command: `sh -lc "revier popup"`},
+			{Chord: "alt+space", Target: core.PopupTarget, Status: core.KeyActive, HeldBy: "revier: popup", Command: `sh -lc "revier popup"`},
 			{Chord: "ctrl+shift+o", Target: "editor", Status: core.KeyTaken, HeldBy: "to-editor-window"},
 			{Chord: "ctrl+shift+u", Target: "home", Status: core.KeyFree},
 		},
@@ -29,7 +29,7 @@ func TestEveryRowReachesTheTable(t *testing.T) {
 	out := printed(report())
 	for _, want := range []string{
 		"KEY", "TARGET", "STATUS", "HELD BY",
-		"alt+space", "picker", "active", "revier: picker",
+		"alt+space", "popup", "active", "revier: popup",
 		"ctrl+shift+o", "editor", "taken", "to-editor-window",
 		"ctrl+shift+u", "home", "free",
 	} {

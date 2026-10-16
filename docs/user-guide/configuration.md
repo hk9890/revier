@@ -156,7 +156,7 @@ Write modifiers and a key joined by `-` or `+`: `ctrl-o`, `ctrl+shift+d`,
 
 `revier keys install` binds the key to the target's name in the project you
 are in, so give a target the same key in every project. Two targets of a
-project cannot share a key. A target named `picker` cannot have a key.
+project cannot share a key. A target named `popup` or `picker` cannot have a key.
 
 ### Tabs
 
@@ -212,7 +212,7 @@ file).
 
 | Key | Type | Meaning |
 |---|---|---|
-| `kind` | `"agent"`, `"shell"` or `"tool"` | A coding agent, a shell, or another program. revier does not refuse another value; it counts as `tool`. |
+| `kind` | `"agent"`, `"shell"` or `"tool"` | A coding agent, a shell, or another program. Default: `"tool"`. revier refuses the target for another value. |
 | `title` | string | The panel's title. |
 | `command` | list of strings | What the panel runs. Default: your shell. |
 
@@ -354,8 +354,9 @@ A key you leave out uses its default, and revier skips a default host that
 does not work, without a message. A list you write is strict: revier tries the
 names in order and stops at the first that works, or at `none`, which turns
 that kind off. When it reaches an unknown name first, or no name works, every
-command that opens, raises or lists stops with an error. `revier doctor` does
-not check `[hosts]`.
+command that opens, raises or lists stops with an error. `revier doctor`
+reports every unknown name, wherever it is in the list; it does not check
+whether a host works.
 
 ## Statuses and probes
 

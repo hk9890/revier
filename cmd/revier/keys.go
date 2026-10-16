@@ -20,12 +20,14 @@ const keysUsage = `revier keys - the desktop keys revier wants, and who holds ea
 
 usage:
   revier keys status [--json]              who holds each key now
-  revier keys install [--force] [-n]       claim the keys
-  revier keys uninstall [-n]               release the keys revier holds
+  revier keys install [--force] [-n] [--json]
+                                           claim the keys
+  revier keys uninstall [-n] [--json]      release the keys revier holds
 
   --force  take a key something else holds. Without it, install adds only
            what is free and reports the rest.
   -n, --dry-run  print what would happen and change nothing
+  --json   print the report, or the plan and what became of it, as JSON
 `
 
 // keyBinderWait bounds the desktop probe, and keysWait the whole read. Both

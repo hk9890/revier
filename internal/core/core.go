@@ -174,7 +174,43 @@ func (c *Core) served(snap snapshot, p Project, i int) (revier.Instance, bool) {
 // ErrNoHost when the target declares no realization for any configured host.
 func (c *Core) Resolve(t revier.Target) (revier.Host, revier.Realization, error) {
 	host, real, _, err := c.resolve(t)
-	return host, real, err
+	if err != nil {
+		return nil, revier.Realization{}, noHost{err: err, target: t.Name, reason: noHostReason(t)}
+	}
+	return host, real, nil
+}
+
+// noHost is ErrNoHost for one target: which target, of which project, and the
+// kind of host it lacks. The message is built when it is read: a survey
+// resolves every target on every refresh, and drops this error for each one
+// no host here can realize.
+type noHost struct {
+	err     error
+	target  revier.TargetName
+	project revier.ProjectName
+	reason  string
+}
+
+func (e noHost) Error() string {
+	if e.project == "" {
+		return fmt.Sprintf("%v: target %q %s", e.err, e.target, e.reason)
+	}
+	return fmt.Sprintf("%v: target %q of project %q %s", e.err, e.target, e.project, e.reason)
+}
+
+func (e noHost) Unwrap() error { return e.err }
+
+// noHostReason says which kind of host a target that resolved to none needs.
+func noHostReason(t revier.Target) string {
+	switch {
+	case t.Window != nil && t.Runtime != nil:
+		return "has a window and a runtime realization, and neither a window host nor a runtime is configured or available"
+	case t.Window != nil:
+		return "has only a window realization, and no window host is configured or available"
+	case t.Runtime != nil:
+		return "has only a runtime realization, and no runtime is configured or available"
+	}
+	return "declares no realization"
 }
 
 // resolve is Resolve plus which side of the host split answered, so the caller
@@ -227,7 +263,7 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	}
 	host, real, kind, err := c.resolve(p.Targets[i])
 	if err != nil {
-		return nil, revier.Realization{}, revier.CompiledMatch{}, err
+		return nil, revier.Realization{}, revier.CompiledMatch{}, noHost{err: err, target: p.Targets[i].Name, project: p.Name, reason: noHostReason(p.Targets[i])}
 	}
 	m := p.compiled[i].runtime
 	if kind == revier.HostWindow {

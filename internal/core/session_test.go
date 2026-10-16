@@ -428,6 +428,19 @@ func TestRestoreStartsAnAgentEmptyWhenItsDirectoryIsGone(t *testing.T) {
 	}
 }
 
+// An agent whose harness gave a directory and no conversation starts empty in
+// that directory, not where the workspace starts.
+func TestRestoreStartsAnAgentWithNoConversationInItsDirectory(t *testing.T) {
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+	sub := t.TempDir()
+
+	rt := restored(t, c, agentProject(), []core.Resume{{Harness: "claude", Dir: sub}})
+	agent := rt.Opened[0].Panels[1]
+	if !slices.Equal(agent.Command, []string{"claude", "--model", "opus"}) || agent.Dir != sub {
+		t.Errorf("agent = %+v, want it empty in %s", agent, sub)
+	}
+}
+
 // A restore and `revier agent new` build an agent tab through the same code:
 // the tab a restore opens for an agent is the tab agent new opens for the same
 // conversation and directory.

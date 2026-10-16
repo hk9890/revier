@@ -11,6 +11,7 @@ package tmux_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -698,6 +699,135 @@ func TestInstancesReportPanels(t *testing.T) {
 	}
 	if instances[0].Panels[0].ID == "" {
 		t.Error("panel has no id")
+	}
+}
+
+// A panel reports the argv and pid of the pane's foreground process, as kitty
+// does. tmux names only the program, so an agent an interpreter runs - `python3
+// .../aider` - was python3 to every probe and never claimed; a program given a
+// file to edit is still not taken for the file.
+func TestAPanelReportsTheForegroundArgv(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	dir := t.TempDir()
+	aider := filepath.Join(dir, "aider")
+	if err := os.WriteFile(aider, []byte("import time\ntime.sleep(30)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "home", Match: revier.Match{Title: "^home$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{python, aider}},
+			{Kind: revier.PanelTool, Command: []string{"bash", "-c", "exec -a nvim sh -c 'sleep 30 & wait' claude"}},
+		},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// The second pane runs nvim once bash has exec'd it. The sleep is in the
+	// background so that no sh execs it in nvim's place: bash, as sh, execs
+	// the last command of a -c it is given.
+	var panels []revier.Panel
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		instances, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		if len(instances) == 1 && len(instances[0].Panels) == 2 {
+			panels = instances[0].Panels
+			if panels[1].Command[0] == "nvim" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("panels = %+v, want the second running nvim", panels)
+		}
+	}
+	if got := panels[0].Command; got[0] != python || got[1] != aider {
+		t.Errorf("command = %q, want the interpreter and its script", got)
+	}
+	if !panels[0].Runs("aider") {
+		t.Errorf("%q does not run aider", panels[0].Command)
+	}
+	if args, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", panels[0].PID)); err != nil || !strings.Contains(string(args), aider) {
+		t.Errorf("pid %d is not the foreground process: %q, %v", panels[0].PID, args, err)
+	}
+	if panels[1].Runs("claude") {
+		t.Errorf("%q is taken for claude", panels[1].Command)
+	}
+}
+
+// An agent panel whose program is not on PATH is refused before tmux starts
+// anything, by the panel and the program, and again on the next Open. Started,
+// the pane closes at once and the step after fails on a tmux id the user never
+// saw.
+func TestOpenRefusesAPanelWhoseCommandIsNotOnPath(t *testing.T) {
+	h, c := server(t), ctx(t)
+	r := revier.Realization{
+		Name: "home", Match: revier.Match{Title: "^home$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Title: "claude", Command: []string{"revier-test-no-such-agent"}},
+			{Kind: revier.PanelShell},
+		},
+	}
+	want := `the agent panel's command "revier-test-no-such-agent" is not on PATH`
+	for range 2 {
+		if _, err := h.Open(c, r); err == nil || err.Error() != want {
+			t.Errorf("Open = %v, want %q", err, want)
+		}
+	}
+}
+
+// A panel whose command exits as soon as it starts is named as having exited,
+// and again on the next Open. It ends before tmux prints the new session, or
+// after: then the step that follows fails on a session tmux has closed, and
+// with it the server when no other session kept it. The runner waits after
+// starting the session, so the command has ended before that step.
+func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
+	for _, tc := range []struct {
+		script string
+		keeper bool
+	}{
+		{"exit 0", false},
+		{"sleep 0.1", false},
+		{"sleep 0.1", true},
+	} {
+		t.Run(fmt.Sprintf("%s, other session %v", tc.script, tc.keeper), func(t *testing.T) {
+			h, c := server(t), ctx(t)
+			if tc.keeper {
+				if err := exec.Command("tmux", "-L", h.Socket, "new-session", "-d", "-s", "keeper", "sleep", "30").Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			h.SetRunner(func(ctx context.Context, args ...string) (string, error) {
+				var out, stderr strings.Builder
+				cmd := exec.CommandContext(ctx, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...)
+				cmd.Stdout, cmd.Stderr = &out, &stderr
+				if err := cmd.Run(); err != nil {
+					return "", fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, stderr.String())
+				}
+				if args[0] == "new-session" {
+					time.Sleep(300 * time.Millisecond)
+				}
+				return out.String(), nil
+			})
+			r := revier.Realization{
+				Name: "home", Match: revier.Match{Title: "^home$"},
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Title: "claude", Command: []string{"sh", "-c", tc.script}},
+					{Kind: revier.PanelShell},
+				},
+			}
+			want := fmt.Sprintf("the agent panel's command %q exited as soon as it started", "sh -c "+tc.script)
+			for range 2 {
+				if _, err := h.Open(c, r); err == nil || err.Error() != want {
+					t.Errorf("Open = %v, want %q", err, want)
+				}
+			}
+		})
 	}
 }
 

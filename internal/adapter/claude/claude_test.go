@@ -350,7 +350,9 @@ const agentsJSON = `[
   {"pid": 583601, "cwd": "/a", "kind": "interactive", "startedAt": 1789118141564,
    "sessionId": "39120ccd-8abd-434a-92c7-83ecac81fc32", "name": "a", "status": "idle"},
   {"pid": 610851, "cwd": "/a", "kind": "interactive", "startedAt": 1789118532755,
-   "sessionId": "b8f365f0-07ae-4464-867f-f8ac02c2f467", "name": "b", "status": "waiting"}
+   "sessionId": "b8f365f0-07ae-4464-867f-f8ac02c2f467", "name": "b", "status": "waiting"},
+  {"pid": 720044, "cwd": "/a/sub", "kind": "interactive", "startedAt": 1789118600000,
+   "name": "c", "status": "idle"}
 ]`
 
 func agents(out string, err error) func(context.Context) ([]byte, error) {
@@ -360,7 +362,8 @@ func agents(out string, err error) func(context.Context) ([]byte, error) {
 // A pane is matched to its conversation by the pid of its process and nothing
 // else, so two agents in one directory are told apart. The conversations come
 // back in the panels' order, each with the directory Claude lists it in, and
-// zero where nothing matched.
+// zero where nothing matched. A session listed with no id still gives its
+// directory, so its agent restores empty where it worked.
 func TestSessions(t *testing.T) {
 	p := &claude.Probe{}
 	p.SetAgents(agents(agentsJSON, nil))
@@ -369,6 +372,7 @@ func TestSessions(t *testing.T) {
 		{ID: "2", PID: 999999}, // a pid Claude does not list: claude typed into a shell
 		{ID: "3", PID: 583601}, // same directory as the first, a different conversation
 		{ID: "4"},              // a runtime that could not see the process
+		{ID: "5", PID: 720044}, // listed with a cwd and no sessionId
 	}
 	got, err := p.Sessions(context.Background(), panels)
 	if err != nil {
@@ -379,6 +383,7 @@ func TestSessions(t *testing.T) {
 		{},
 		{ID: "39120ccd-8abd-434a-92c7-83ecac81fc32", Dir: "/a"},
 		{},
+		{Dir: "/a/sub"},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Sessions = %+v, want %+v", got, want)

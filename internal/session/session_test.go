@@ -91,6 +91,9 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 	if got.Conversations() != 1 {
 		t.Errorf("Conversations = %d, want the one with an id", got.Conversations())
 	}
+	if got.Agents() != 2 {
+		t.Errorf("Agents = %d, want both, the one with no id included", got.Agents())
+	}
 	if got.Targets() != 2 {
 		t.Errorf("Targets = %d, want 2", got.Targets())
 	}

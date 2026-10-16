@@ -859,3 +859,13 @@ an agent selector under the box left the screen whole, and a full-screen view
 has no box to find. A cut that holds only for the layouts it was tested on is
 wrong on the next one. Rejected: a cut by the harness's layout, in the probe or
 in the surface.
+
+### D138 — the trigger key's entry is named for the popup it opens
+
+The key opens the popup, and the picker is no surface of its own (D8), so a
+shortcut named `revier: picker` sent a user looking for a thing that is not
+there. Its row and its name are `popup`; its entry keeps the id
+`revier-picker`, so a changed trigger key moves that entry and leaves no copy
+on the old chord. A keyed target can take neither name. An install renames an
+entry revier named, since one it names stays revier's whatever it is called
+(D77); a shortcut the user bound keeps the user's name.
