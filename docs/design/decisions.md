@@ -564,7 +564,7 @@ the panel itself, and the host's word crossed a machine.
 
 `AgentState` carried a `Since` for how long the status had held. Nothing ever
 rendered it: no row, no pane and no `--json` consumer in this tree reads one,
-and the probe contract `extending.md` states never asked a script for it. The
+and the probe contract the user guide states never asked a script for it. The
 one probe that filled it stopped when its listing turned out to say only what
 an agent does now. A field on a port that no surface reads is a field every
 out-of-tree probe author fills for nothing, so it is gone; a product that

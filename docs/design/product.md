@@ -195,7 +195,7 @@ project's runs: a project the cursor reaches runs at once, or when the run
 still out at that place answers. Each runs on its own timer and never holds
 up a frame. How a status
 fits its line, and what a failed run leaves, are in
-[extending.md](extending.md#level-1--configuration).
+[the user guide](../user-guide/extending/status.md).
 
 The key that opens the surface, pressed on it, puts the agent list in the
 project list's place, and pressed again the projects; the bar's first button

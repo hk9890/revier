@@ -1,0 +1,82 @@
+# Agent probes
+
+A probe tells revier the state of a coding agent that revier does not know.
+revier knows Claude Code and opencode. For another agent, write a small
+program: it reads one panel as JSON on stdin and prints one state as JSON.
+A probe sees only panels in kitty or tmux. For a link, declare and install the
+probe on the host; there the panel has no `title`, so use `pid` or `command`.
+
+## Declare a probe
+
+Only in `config.toml`; in a project file revier ignores it. Restart the TUI
+after you add one, and run `revier doctor`: a `[[probe]]` without `name` or
+`exec` stops every command except `revier doctor` and `revier assist`.
+
+```toml
+[[probe]]
+name = "aider"
+exec = "~/bin/aider-probe"
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `name` | required | The agent's name, and the program the probe claims. |
+| `exec` | required | The program revier runs, with no arguments. A bare name is looked up on `PATH`; `~/` is your home; another relative path is read against your home. |
+
+A probe named `aider` reads the panels whose program is `aider` (with any
+directory), or `node`, `bun`, `deno` or `python…` with `aider` as the first
+argument that is not a flag. In tmux, revier sees only the program name, so an
+agent started through an interpreter is not claimed there. The built-in
+probes go first, then yours in file order.
+
+## Input and output
+
+```json
+{"id":"3","kind":"tool","title":"aider: refactoring the store","vars":{"revier_target":"agent"},"pid":41221,"command":["aider"],"tab":"2"}
+```
+
+`id` is the panel (kitty window id, tmux pane id) and `tab` its tab. `kind` is
+`shell` when the command is a shell, else `tool`. `title` is the panel's
+title; many agents write their state there. `vars`, `pid`, `command` and `tab`
+are optional. `pid` and `command` are the foreground process in kitty; in
+tmux, `pid` is the pane's first process and `command` its program name only.
+
+Print one JSON object and exit 0 within 500 ms:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `status` | yes | `running` (working), `idle` (waits for a prompt), `attention` (waits for you), `unknown`. |
+| `harness` | no | The agent's name. Default: the probe's `name`. |
+| `activity` | no | One line about the work, shown on the agent's row. |
+| `dir` | no | The agent's directory when it is not the project's, for example a worktree. |
+| `session` | no | The conversation id. `revier events` records the agent by it. |
+
+A non-zero exit, bad JSON, an unknown `status` or a run over 500 ms makes the
+panel `unknown`; the log has the reason and the probe's stderr. revier runs
+the probe for each panel on each refresh, so keep it fast. With a probe,
+`revier agent read` needs `--screen`, and a restore starts the agent fresh.
+
+## Example
+
+```sh
+#!/bin/sh
+# ~/bin/aider-probe
+title=$(jq -r '.title // ""')
+
+case "$title" in
+  *'?')      status=attention ;;
+  *working*) status=running ;;
+  *)         status=idle ;;
+esac
+
+jq -cn --arg status "$status" --arg activity "$title" \
+  '{harness: "aider", status: $status, activity: $activity}'
+```
+
+Test it by hand:
+
+```
+$ chmod +x ~/bin/aider-probe
+$ echo '{"id":"3","kind":"tool","title":"apply this edit?"}' | ~/bin/aider-probe
+{"harness":"aider","status":"attention","activity":"apply this edit?"}
+```

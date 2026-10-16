@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/hk9890/revier/docs/design"
+	userguide "github.com/hk9890/revier/docs/user-guide"
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -249,15 +249,7 @@ func assistContext(cfgRoot, project string) (string, error) {
 }
 
 // assistReference is the configuration format as this build reads it: the
-// part of extending.md that needs no code. The rest is about writing a probe
-// or a host, which the agent that edits two TOML files has no use for.
+// reference pages of the user guide, in the order the guide reads them.
 func assistReference() string {
-	text := design.Extending
-	if i := strings.Index(text, "## Level 1"); i >= 0 {
-		text = text[i:]
-	}
-	if i := strings.Index(text, "\n## Level 2"); i >= 0 {
-		text = text[:i+1]
-	}
-	return text
+	return userguide.Configuration + "\n" + userguide.Status + "\n" + userguide.Probes
 }

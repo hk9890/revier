@@ -1,0 +1,131 @@
+# The TUI
+
+`revier` with no command opens the TUI: revier's full-screen view in a
+terminal. It shows every project, what its agents do, and its targets. To open
+it from a desktop key, use [the popup](#the-popup).
+
+```
+revier
+```
+
+When the output is not a terminal, for example `revier | grep`, revier prints
+the `revier list` table and exits.
+
+## The screen
+
+- **The top line** has a button for each thing that is not about one project:
+  agents, new, remote, sessions, shutdown, config, assist and help. Each
+  button shows its key. In a narrow terminal the last buttons fold into `≡`;
+  their keys still work.
+- **The query line** filters the rows under it.
+- **The project list** is on the left. **The pane** on the right shows the
+  project under the cursor.
+- **The footer** shows the keys for where the cursor is. An error replaces
+  them until the next key press.
+
+A [status](extending/status.md#places) can show on the rule under the top
+line, and in the pane.
+
+### The project list
+
+Each project shows its name, its path, a mark when it is open, and its agents
+counted by [state](concepts.md#agents). Projects with an agent that needs you
+are on top. Open projects come next, then all others. A project on another
+machine shows its link name, for example `far@buildbox`; see
+[links.md](links.md).
+
+### The pane
+
+The pane shows the project's status, path and git URL, then two sections:
+
+- **Targets**: each target, its key and its state, then each window you
+  attached with `revier attach`.
+- **Agents**: each agent, its harness, its state and what it does. Under the
+  list is the terminal of the selected agent, as it is now.
+
+When a file does not load or a host does not answer, the pane gives the
+reason. When the project directory is missing and the project has a
+`git_url`, Enter clones it.
+
+| Target state | Means |
+|---|---|
+| running | an instance is open |
+| stopped | no instance is open |
+| surveying | revier is still looking |
+| no host here | no host on this machine can open it; see [troubleshooting.md](troubleshooting.md#a-target-says-no-host-here) |
+| invalid | its configuration is wrong; `revier doctor` says why |
+| unknown | the host did not answer; a press is refused until it does |
+
+## Move and act
+
+Type to filter the project list or the Agents, where the cursor is. The
+Targets have no filter. The match is fuzzy. The TUI has no single-letter
+keys, so every letter goes to the query.
+
+| Key | Does |
+|---|---|
+| ↑ ↓, ctrl+p ctrl+n, pgup pgdown, home end | Move |
+| Tab, shift+tab | Move between the project list and the Agents |
+| alt+t | Move to the Targets |
+| Enter | A project: open its home target. A target: run or raise it. An agent: bring its tab to the front. |
+| a target's key | Run or raise that target of the selected project |
+| an action's key | Run that action in the selected project |
+| del | Close the row: the project, the target or the agent. It asks first when this closes a whole project, a target that holds an agent, or an agent that works or waits for you. |
+| alt+del, alt+d | Delete the project file, or the target's entry in it. When nothing of it is open, it asks `y`; when something is open, it offers to close it and then delete. An agent is in no file. |
+| alt+space | Switch between the project list and the [agent list](#the-agent-list) |
+| Esc | Clear the query, go back to the project list, then quit (or hide the popup) |
+| ctrl+c | Quit |
+
+Closing a whole project saves the session first. You cannot rename a project
+while something in it runs: close it first.
+
+**Mouse.** A click selects, a double click acts as Enter. The wheel scrolls
+the pane or an agent's terminal. A drag copies the text of a box to the
+clipboard (OSC 52, works over ssh). Use shift+drag for the terminal's own
+selection.
+
+## The agent list
+
+Press alt+space to see every agent of every open project. In the popup, press
+the trigger key instead. Agents that need you are on top, then working
+agents, then idle ones. Each row shows how long ago the agent spoke. Type to
+filter by project or by what the agent does. The pane shows the agent's
+terminal, without Claude Code's input box. Enter goes to the agent's tab.
+del closes it. alt+space goes back to the projects; Esc with no query quits.
+
+## The popup
+
+```
+revier popup
+```
+
+`revier popup` opens the TUI in its own kitty window, or raises the one that
+is open. The trigger key runs it, Alt+Space by default; see
+[getting-started.md](getting-started.md#install-the-desktop-keys). It needs
+kitty, and GNOME with the Window Control extension. See
+[integrations/kitty.md](integrations/kitty.md) and
+[integrations/gnome.md](integrations/gnome.md).
+
+- The popup opens on the project of the window that had the focus.
+- When Enter or a target key brings a window to the front, the popup hides.
+- Esc with no query hides it. ctrl+c quits it.
+- Each raise reads the configuration files again. A revier in your own
+  terminal reads them again each time it gets the focus back.
+
+## Screens
+
+Each screen takes the place of the list. Esc goes back one step.
+
+| Key | Screen | Does |
+|---|---|---|
+| alt+n | new | Add a project. Type a path, a name, or a git URL to clone. |
+| alt+r | remote | Link a project on another machine: pick a host, a project, a name. See [links.md](links.md). |
+| alt+e | project | Edit the project's name, path, git URL and targets. Each change is written at once. |
+| alt+s | sessions | Restore a saved session with Enter, or save the open projects with alt+s. See [projects.md](projects.md#save-and-restore-sessions). |
+| alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. |
+| alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |
+| alt+a | assist | Raise `revier-config-assistant`: Claude Code beside the TUI, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
+| alt+h | help | Every key the TUI knows, including your target keys and actions |
+
+In a form, Tab and ↑ ↓ move between fields, Enter saves, Esc cancels. The
+fields are those of [configuration.md](configuration.md#targets).

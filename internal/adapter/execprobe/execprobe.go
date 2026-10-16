@@ -1,6 +1,6 @@
 // Package execprobe implements an AgentProbe as a subprocess, so a harness
 // revier does not know can be supported without writing Go. The contract is
-// docs/design/extending.md, "Level 2": one Panel as JSON on stdin, one
+// docs/user-guide/extending/probes.md: one Panel as JSON on stdin, one
 // AgentState as JSON on stdout, per panel per refresh.
 //
 // Only AgentProbe has this form. A Host is stateful and sits in the latency

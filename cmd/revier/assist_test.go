@@ -97,19 +97,19 @@ func TestTheBriefNamesTheProjectAndItsProblems(t *testing.T) {
 }
 
 // The format comes from the binary, so it is the one this version reads: the
-// configuration part of the document, without the parts about writing code.
+// reference pages of the user guide, statuses and probes included.
 func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
 	var out strings.Builder
 	if err := run(&out, []string{"assist", "--reference"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[[target]]", "[target.runtime]", "config.toml"} {
+	for _, want := range []string{"[[target]]", "[target.runtime]", "config.toml", "[[status]]", "[[probe]]"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("reference does not hold %q", want)
 		}
 	}
-	if strings.Contains(out.String(), "## Level 2") || strings.HasPrefix(out.String(), "# Extending") {
-		t.Errorf("reference holds more than the configuration level:\n%.200s", out.String())
+	if !strings.HasPrefix(out.String(), "# Configuration\n") {
+		t.Errorf("reference does not open on the configuration page:\n%.200s", out.String())
 	}
 }
 

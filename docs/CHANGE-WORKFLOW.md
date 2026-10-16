@@ -38,7 +38,8 @@ Use the `commit-commands:commit` skill for the standard flow.
   [DOCUMENTING.md](DOCUMENTING.md) says.
 - A new host ships the host tests [TESTING.md](TESTING.md) requires.
 - A change to behaviour updates every place that describes it: `README.md`,
-  package doc comments, test comments.
+  the page of `docs/user-guide/` that covers it, package doc comments, test
+  comments.
 
 ## Push and PR
 
