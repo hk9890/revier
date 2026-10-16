@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -76,7 +78,7 @@ const assistUsage = "usage: revier assist [-p name] [--print-brief | --reference
 // agent starts in a directory of its own under the state root, so the
 // conversation held there is the one the next start continues, and nothing
 // the agent keeps beside it lands among the user's configuration.
-func cmdAssist(out io.Writer, args []string) error {
+func cmdAssist(out io.Writer, args []string) (err error) {
 	fs := flag.NewFlagSet("assist", flag.ContinueOnError)
 	project := projectFlag(fs)
 	printBrief := fs.Bool("print-brief", false, "print what the agent is told, and start none")
@@ -89,6 +91,10 @@ func cmdAssist(out io.Writer, args []string) error {
 		if on {
 			modes++
 		}
+	}
+	// A panel's own arguments can fail too, and its window closes on them.
+	if *beside || slices.Contains(args, "--exec") {
+		defer func() { holdOpen(err) }()
 	}
 	if err != nil || len(rest) != 0 || modes > 1 || *session != "" && !*beside {
 		return fmt.Errorf("%s", assistUsage)
@@ -136,9 +142,14 @@ func cmdAssist(out io.Writer, args []string) error {
 		Brief:   brief,
 		Subject: *project,
 		Dirs:    []string{cfgRoot},
-		Resume:  claude.HasConversation(dir),
 		Session: *session,
 		Beside:  *beside,
+	}
+	// A second agent there - one more in the built-in, or this command in a
+	// shell beside it - starts a conversation of its own: two that continue
+	// the newest would write one transcript.
+	if *session == "" && claude.HasConversation(dir) {
+		agent.Resume = !claude.InUse(context.Background(), dir)
 	}
 	path, err := exec.LookPath(agent.Argv()[0])
 	if err != nil {
@@ -174,6 +185,17 @@ func becomeAgent(path string, argv []string, dir string) error {
 	// written: this one stands for it.
 	slog.Info("assist", "exec", path, "dir", dir)
 	return syscall.Exec(path, argv, os.Environ())
+}
+
+// holdOpen keeps a failure of --exec on the screen. The panel closes when the
+// command ends, and with it the one place its reason was written; nothing
+// else ran it to read why. A panel with no terminal has nobody to wait for.
+func holdOpen(err error) {
+	if err == nil || !term.IsTerminal(int(os.Stdin.Fd())) {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "revier assist: %v\n\nPress Enter to close.\n", err)
+	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
 // runAgent gives the terminal to the agent, in dir, until it exits.

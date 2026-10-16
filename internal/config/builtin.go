@@ -18,15 +18,15 @@ const Assistant revier.ProjectName = "revier-config-assistant"
 const assistSession = string(Assistant)
 
 // Builtin is the assistant as a project: a workspace in dir, whose one tab
-// runs `self assist --exec`. That command builds the brief when the agent
-// starts, so the brief is never rendered as a template, and it replaces
-// itself with the agent, so the probe finds the agent in the panel.
+// runs command, `revier assist --exec`. That command builds the brief when
+// the agent starts, so the brief is never rendered as a template, and it
+// replaces itself with the agent, so the probe finds the agent in the panel.
 //
 // It takes no shared target: config.toml cannot refuse it, and a file that
 // does not load cannot take it with it. It goes through the rules a project
 // file goes through, so the surface reads a fault in it as it reads one in a
 // file.
-func Builtin(dir, self string) core.Project {
+func Builtin(dir string, command []string) core.Project {
 	p := revier.Project{Name: Assistant, Path: dir, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name:  assistSession,
@@ -34,7 +34,7 @@ func Builtin(dir, self string) core.Project {
 			Tabs:  []revier.TargetName{agentTab},
 		}},
 		{Name: agentTab, Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{self, "assist", "--exec"}},
+			{Kind: revier.PanelAgent, Command: command},
 		}}},
 	}}
 	prepared := core.PrepareProject(p)
@@ -47,6 +47,21 @@ func Builtin(dir, self string) core.Project {
 		}
 	}
 	return prepared
+}
+
+// IsBuiltin reports p the assistant revier built, and not a file's project
+// that took its name. It takes no name from a file: a file of its name
+// replaces it.
+func IsBuiltin(p core.Project) bool {
+	return p.Name == Assistant && p.File == ""
+}
+
+// Linkable is what a host lists that a link may name: all but its built-in
+// assistant, which writes that host's configuration and not this one's. The
+// host's list says no more than a name, so a project file there of the same
+// name is left out with it.
+func Linkable(views []revier.ProjectView) []revier.ProjectView {
+	return slices.DeleteFunc(slices.Clone(views), func(v revier.ProjectView) bool { return v.Project.Name == Assistant })
 }
 
 // WithBuiltin is projects with the assistant after them. A project file of

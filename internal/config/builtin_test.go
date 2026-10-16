@@ -13,7 +13,7 @@ import (
 // fault in how it is built is a refusal the surface shows, and this test
 // fails on it first.
 func TestTheBuiltinAssistantLoadsWhole(t *testing.T) {
-	p := config.Builtin("/state/assist", "/bin/revier")
+	p := config.Builtin("/state/assist", []string{"/bin/revier", "assist", "--exec"})
 	if probs := config.Problems(p); len(probs) != 0 {
 		t.Fatalf("the built-in does not load whole: %v", probs)
 	}
@@ -32,10 +32,20 @@ func TestTheBuiltinAssistantLoadsWhole(t *testing.T) {
 	}
 }
 
+// A host's built-in writes that host's configuration, so a link may not
+// name it; everything else the host lists stays.
+func TestAHostsBuiltinIsNotLinkable(t *testing.T) {
+	views := []revier.ProjectView{{Project: revier.Project{Name: "alpha"}}, {Project: revier.Project{Name: config.Assistant}}}
+	got := config.Linkable(views)
+	if len(got) != 1 || got[0].Project.Name != "alpha" || len(views) != 2 {
+		t.Errorf("Linkable = %v from %v, want alpha alone and the list it was given untouched", got, views)
+	}
+}
+
 // A project file of the built-in's name says what that project is on this
 // machine.
 func TestAProjectFileOfTheBuiltinsNameWinsOverIt(t *testing.T) {
-	builtin := config.Builtin("/state/assist", "/bin/revier")
+	builtin := config.Builtin("/state/assist", []string{"/bin/revier", "assist", "--exec"})
 	mine := core.PrepareProject(revier.Project{Name: config.Assistant, Path: "/mine"})
 	mine.File = "/cfg/projects/" + string(config.Assistant) + ".toml"
 
@@ -44,5 +54,12 @@ func TestAProjectFileOfTheBuiltinsNameWinsOverIt(t *testing.T) {
 	}
 	if got := config.WithBuiltin(nil, builtin); len(got) != 1 || got[0].Path != "/state/assist" {
 		t.Errorf("WithBuiltin on no projects = %v, want the built-in", got)
+	}
+	// So the name is free for a file: the built-in does not refuse it.
+	if err := config.CanCreate([]core.Project{builtin}, config.Assistant, "/mine"); err != nil {
+		t.Errorf("CanCreate under the built-in's name: %v, want it free for a file", err)
+	}
+	if err := config.CanCreate([]core.Project{mine}, config.Assistant, "/other"); err == nil {
+		t.Error("CanCreate under the name of a file's project: no error, want it taken")
 	}
 }

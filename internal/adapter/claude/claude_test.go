@@ -539,7 +539,8 @@ func TestAssistArgvBeside(t *testing.T) {
 }
 
 // A conversation is one Claude Code filed for the directory, under the name
-// it gives that directory.
+// it gives that directory, with a turn of the user's in it: Claude Code
+// refuses to continue a session that was opened and left.
 func TestHasConversation(t *testing.T) {
 	// Claude Code's directory is a path and not a pattern, whatever
 	// characters it holds.
@@ -554,10 +555,38 @@ func TestHasConversation(t *testing.T) {
 	if err := os.MkdirAll(filed, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), nil, 0o644); err != nil {
+	left := `{"type":"file-history-snapshot","messageId":"m1"}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), []byte(left), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("a session opened and left is a conversation; Claude Code refuses to continue it")
+	}
+	caveat := left + `{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "abc.jsonl"), []byte(caveat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("a line Claude Code marks meta is a turn of the user's")
+	}
+	held := left + `{"type":"user","message":{"role":"user","content":"add a project"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(filed, "def.jsonl"), []byte(held), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	soon := time.Now().Add(30 * time.Second)
+	if err := os.Chtimes(filepath.Join(filed, "def.jsonl"), soon, soon); err != nil {
 		t.Fatal(err)
 	}
 	if !claude.HasConversation(dir) {
 		t.Error("the conversation filed for the directory was not found")
+	}
+	// --continue opens the newest: one opened and left after the
+	// conversation is what it would refuse.
+	later := time.Now().Add(time.Minute)
+	if err := os.Chtimes(filepath.Join(filed, "abc.jsonl"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	if claude.HasConversation(dir) {
+		t.Error("an older conversation counts while the newest transcript holds no turn of the user's")
 	}
 }

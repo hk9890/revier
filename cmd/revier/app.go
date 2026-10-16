@@ -24,6 +24,7 @@ type app struct {
 	cfg       *config.Config
 	cfgRoot   string
 	projects  []core.Project
+	assistant core.Project // the built-in, listed or not: a file of its name may take its place
 	stateRoot string
 	core      *core.Core
 	// out is where a command's own output goes: stdout, or a buffer under
@@ -46,14 +47,7 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The assistant lives under the state root, which is a convenience: a
-	// root it cannot be made in costs the built-in, not the command. alt+a
-	// then hands the terminal over, and `revier assist` says why.
-	if builtin, err := assistProject(stateRoot); err != nil {
-		slog.Warn("built-in assistant left out", "err", err)
-	} else {
-		projects = config.WithBuiltin(projects, builtin)
-	}
+	assistant := withAssistant(&projects, cfgRoot, stateRoot)
 	rt, win, err := selectHosts(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -63,28 +57,58 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	c := newCore(cfg, rt, win, nil)
 	c.Ledger = ledger.File{Root: stateRoot, Failed: warnState}
 	return &app{
-		cfg: cfg, cfgRoot: cfgRoot, projects: projects,
+		cfg: cfg, cfgRoot: cfgRoot, projects: projects, assistant: assistant,
 		stateRoot: stateRoot, out: out, core: c,
 	}, nil
 }
 
+// withAssistant adds the built-in assistant to projects, unless a file of
+// its name is there, and returns it either way: the surface takes it back
+// into the list when that file goes. The assistant lives under the state
+// root, which is a convenience: a root it cannot be made in costs the
+// built-in, not the command, and the zero project comes back. alt+a then
+// hands the terminal over, and `revier assist` says why.
+func withAssistant(projects *[]core.Project, cfgRoot, stateRoot string) core.Project {
+	builtin, err := assistProject(cfgRoot, stateRoot)
+	if err != nil {
+		slog.Warn("built-in assistant left out", "err", err)
+		return core.Project{}
+	}
+	*projects = config.WithBuiltin(*projects, builtin)
+	return builtin
+}
+
 // assistProject is the built-in assistant, with the directory it starts in
 // made: core.Open refuses a project whose directory is not there.
-func assistProject(stateRoot string) (core.Project, error) {
+//
+// Its panel runs with both roots this command resolved. A runtime starts a
+// panel in its own environment, not in the surface's, so a root the surface
+// was given would otherwise be lost to the agent.
+func assistProject(cfgRoot, stateRoot string) (core.Project, error) {
 	self, err := os.Executable()
 	if err != nil {
 		return core.Project{}, err
 	}
+	// env reads a word with "=" in it as one more variable to set.
+	if strings.Contains(self, "=") {
+		return core.Project{}, fmt.Errorf("the revier binary's path %s has a \"=\" in it, which env cannot run", self)
+	}
 	// The panel starts in the directory, so a relative root would name
 	// another place there.
-	dir, err := filepath.Abs(filepath.Join(stateRoot, "assist"))
-	if err != nil {
+	if cfgRoot, err = filepath.Abs(cfgRoot); err != nil {
 		return core.Project{}, err
 	}
+	if stateRoot, err = filepath.Abs(stateRoot); err != nil {
+		return core.Project{}, err
+	}
+	dir := filepath.Join(stateRoot, "assist")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return core.Project{}, err
 	}
-	return config.Builtin(dir, self), nil
+	return config.Builtin(dir, []string{
+		"env", "REVIER_CONFIG_HOME=" + cfgRoot, "REVIER_STATE_HOME=" + stateRoot,
+		self, "assist", "--exec",
+	}), nil
 }
 
 // warnState says that a change did not reach the state file. State is a

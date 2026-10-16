@@ -77,6 +77,11 @@ func TestTheFocusRegainedSurveysAtOnce(t *testing.T) {
 	if _, dropped := update(m, slow); dropped != nil {
 		t.Error("the slow tick that was out surveyed again after the focus came back")
 	}
+	// The files first, as the assistant beside the surface writes them; the
+	// survey after them.
+	if m, cmd = deliver(m, cmd); cmd == nil {
+		t.Fatal("the files read again at the focus regained started no survey")
+	}
 	if m, cmd = deliver(m, cmd); cmd == nil {
 		t.Fatal("the survey of the focus regained scheduled no refresh")
 	}

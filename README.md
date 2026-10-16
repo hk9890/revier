@@ -87,13 +87,15 @@ revier doctor                 every project file that did not load whole, with
 revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]
                               hand this terminal to Claude Code, briefed to
                               configure revier and to find what is wrong with
-                              it, on the conversation it held last; -p tells
+                              it, on the conversation it held last, or a new
+                              one while another session works there; -p tells
                               it which project you mean; --print-brief prints
                               the brief and --reference the configuration
                               format, and neither starts anything; --exec
                               becomes the agent, as the built-in project
-                              revier-config-assistant runs it; exit 6 when no
-                              claude is on PATH
+                              revier-config-assistant runs it, and on a
+                              failure waits for Enter; exit 6 when no claude
+                              is on PATH
 revier keys status [--json]   the desktop keys revier wants, and who holds each
 revier keys install [--force] claim the desktop keys
 revier keys uninstall         release the keys revier holds
@@ -197,7 +199,7 @@ projects.
 | alt+s | **sessions**: save and restore the set of open projects. |
 | alt+q | **shutdown**: close every project, or one, after a confirm. |
 | alt+c | **config**: set the theme, the glyphs, the trigger key and the runtime host, and add, change and delete shared targets and actions. Each change is written to `config.toml` and applied at once, comments kept. |
-| alt+a | **assist**: raise `revier-config-assistant`, a project revier builds in: Claude Code in a workspace of its own, briefed to change the configuration and to find what is wrong with it. Its row has a cog where other rows have a folder. It runs beside the surface like any project's agent: the agent list shows it, a saved session restores its conversation, and it continues the one you held with it last; `/clear` there starts a new one. It is told what does not load, but not which project the cursor is on: name it. The surface reads the files again when it gets the focus back. A project file of the same name replaces it. With no runtime, alt+a hands the terminal over instead, and the surface reads the files again when the agent exits. `revier assist` does that from a shell, and starts on a configuration that does not load. |
+| alt+a | **assist**: raise `revier-config-assistant`, a project revier builds in: Claude Code in a workspace of its own, briefed to change the configuration and to find what is wrong with it. Its row has a cog where other rows have a folder. It runs beside the surface like any project's agent: the agent list shows it, a saved session restores its conversation, and it continues the one you held with it last; `/clear` there starts a new one, and so does a second agent there while the first one runs. It is told what does not load, but not which project the cursor is on: name it. The surface reads the files again when it gets the focus back. A project file of the same name replaces it, and the built-in comes back when that file goes. Another machine's built-in is not offered as a link: it configures that machine. With no runtime, alt+a hands the terminal over instead, and the surface reads the files again when the agent exits. `revier assist` does that from a shell, and starts on a configuration that does not load. |
 | alt+h | **help**: every key, the surface's own, the target keys, the configured actions and the desktop keys. |
 
 **new** takes one of three things:

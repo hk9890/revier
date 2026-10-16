@@ -47,18 +47,33 @@ func (m *Model) replaceProject(name revier.ProjectName, p core.Project) {
 	// New lists, not writes into the old ones: a survey still running reads
 	// the old list on another goroutine.
 	projects := slices.Clone(m.projects)
+	views, local := m.views, m.local.Views
+	// A rename onto the built-in's name takes its place.
+	if name != p.Name && slices.ContainsFunc(projects, func(q core.Project) bool { return q.Name == p.Name && config.IsBuiltin(q) }) {
+		projects = without(projects, p.Name)
+		views, local = withoutView(views, p.Name), withoutView(local, p.Name)
+	}
 	for i := range projects {
 		if projects[i].Name == name {
 			projects[i] = p
 		}
 	}
+	// A rename away from it gives the place back.
+	if m.assistant.Name != "" {
+		projects = config.WithBuiltin(projects, m.assistant)
+	}
 	// The last survey of this machine takes the change as the rows do: the
 	// next answer of the linked hosts is laid over it, and would otherwise
 	// put the project back as it was before its file was written.
-	m.projects, m.views, m.local.Views = projects, rewritten(m.views, name, p), rewritten(m.local.Views, name, p)
+	m.projects, m.views, m.local.Views = projects, rewritten(views, name, p), rewritten(local, name, p)
 	m.setKeys()
-	m.reload()
+	m.reloadViews()
 	m.selectName(p.Name)
+}
+
+// withoutView is views without the one of the project called name.
+func withoutView(views []revier.ProjectView, name revier.ProjectName) []revier.ProjectView {
+	return slices.DeleteFunc(slices.Clone(views), func(v revier.ProjectView) bool { return v.Project.Name == name })
 }
 
 // rewritten is the views with the one of the project called name as its file
@@ -124,8 +139,13 @@ func (m Model) askDelete() (tea.Model, tea.Cmd) {
 		m.err = errors.New("an agent is in no file; del closes it")
 		return m, nil
 	}
-	if m.isAssistant(v.Project.Name) {
-		m.err = fmt.Errorf("%s is built in and in no file; del closes it", v.Project.Name)
+	// A project in no file has nothing to delete, and a close first would
+	// end in nothing.
+	if p, ok := m.project(v.Project.Name); ok && p.File == "" {
+		m.err = fmt.Errorf("%s is in no file; del closes it", v.Project.Name)
+		if m.isAssistant(p.Name) {
+			m.err = fmt.Errorf("%s is built in and in no file; del closes it", p.Name)
+		}
 		return m, nil
 	}
 	// Before the first survey the view is the files' alone, and says nothing
@@ -256,10 +276,14 @@ func (m *Model) removeProject(name revier.ProjectName) error {
 		return err
 	}
 	slog.Info("project deleted", "project", name, "path", p.File)
+	// A file of the built-in's name gives its place back.
 	m.projects = without(m.projects, name)
-	m.views = m.known(m.views)
+	if m.assistant.Name != "" {
+		m.projects = config.WithBuiltin(m.projects, m.assistant)
+	}
+	m.views, m.local.Views = withoutView(m.views, name), withoutView(m.local.Views, name)
 	m.setKeys()
-	m.reload()
+	m.reloadViews()
 	return nil
 }
 
