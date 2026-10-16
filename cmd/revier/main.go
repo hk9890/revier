@@ -30,13 +30,17 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json] [name..] the same, printed once, or for the named projects
+  revier list [--json [--conversations]] [name..]
+                                what the TUI shows, printed once, or for the
+                                named projects; --conversations names the
+                                conversation each agent holds
   revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
                                 missing directory is cloned from git_url; --attach
                                 ends with this terminal on it (tmux)
   revier new [name]             write a project file for this directory
-  revier link [host [project]]  the ssh hosts other than this machine; a host's
+  revier link [host [project]] [--name name]
+                                the ssh hosts other than this machine; a host's
                                 projects; or a link to one, written here under
                                 --name or the project's own
   revier go <target> [-p name] [--picker]
@@ -45,7 +49,7 @@ usage:
   revier popup                  the TUI in a kitty window of its own, or the one open
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project
-  revier status                 which project this directory resolves to
+  revier status [-p name]       which project this directory resolves to
   revier doctor                 every project file that did not load whole, and
                                 what to do about each problem
   revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]
@@ -58,6 +62,11 @@ usage:
                                 becomes the agent, as the built-in project
                                 revier-config-assistant runs it
   revier keys status [--json]   the desktop chords revier wants, and who holds them
+  revier keys install [--force] [-n] [--json]
+                                claim the chords; --force takes one something
+                                else holds; -n prints the plan and changes nothing
+  revier keys uninstall [-n] [--json]
+                                release the chords revier holds
   revier agent wait <agent> --until <status> [--timeout s]
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
@@ -67,6 +76,8 @@ usage:
                                 panel shows
   revier agent send-keys <agent> <key>..
                                 type keys into an agent, whatever it is doing
+  revier agent focus <agent> [--ref instance]
+                                go to an agent's tab and raise its window
   revier agent new [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open
                                 workspace; for a link, the tab's agent runs
@@ -75,6 +86,9 @@ usage:
   revier shell new [-p name | --panel id] [--dir path]
                                 add a shell tab to an open workspace; for a
                                 link, the tab's shell runs on the host
+  revier agent exec -p name [--tag tag] [--resume id] [--dir path]
+  revier shell exec -p name [--tag tag] [--dir path]
+                                what a link's panels run on its host
   revier session save [--name label]
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]
@@ -87,8 +101,12 @@ usage:
                                 closes only the agents, --targets only what holds
                                 no agent; refuses while an agent is busy unless
                                 --force
-  revier each -- <cmd>          run one command in every project's directory
-  revier each log [run]         past runs of it, or one run's results
+  revier each [--filter '<sh>'] [-n] -- <cmd>
+                                run one command in every project's directory;
+                                --filter only where a shell test exits 0
+  revier each log [run [project]]
+                                past runs of it, one run's results, or what
+                                the command printed in one project
   revier events [--days n] [--local]
                                 what revier did in each project in the last n
                                 days (7), one JSON line per event, with what

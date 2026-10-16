@@ -85,6 +85,21 @@ func dispatched(t *testing.T) []string {
 	return cmds
 }
 
+// `revier help` names every command the dispatch accepts, and a family's own
+// usage names each of its subcommands. A command added without its line fails
+// here, so the list cannot fall behind again.
+func TestUsageNamesEveryCommandTheDispatchAccepts(t *testing.T) {
+	for _, cmd := range dispatched(t) {
+		if !strings.Contains(usage, "  revier "+cmd) {
+			t.Errorf("revier help does not name %q", cmd)
+		}
+		family, _, isSub := strings.Cut(cmd, " ")
+		if isSub && !strings.Contains(familyUsage[family], "revier "+cmd) {
+			t.Errorf("revier %s help does not name %q", family, cmd)
+		}
+	}
+}
+
 // Every command answers --help and -h with its usage on stdout and ends with
 // status 0. Nothing reaches the flag parser, whose own answer is an error.
 func TestEveryCommandAnswersHelpWithItsUsage(t *testing.T) {
