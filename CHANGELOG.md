@@ -6,6 +6,93 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.18.0
+
+- **Action required: a target with a key cannot be named `popup`.** The
+  trigger key, the chord that opens `revier popup` (alt+space by default), is
+  now named `revier: popup`, not `revier: picker`. A target that has a `key`
+  and is named `popup` or `picker` is refused at load, and `revier doctor`
+  names it. Rename the target. Then run `revier keys install` once. It renames
+  the old `revier: picker` entry in GNOME Settings and prints `renamed` for
+  that row. `--dry-run` shows the rename too. A shortcut that you bound to
+  revier by hand keeps your name. `revier keys status`, `install` and
+  `uninstall` name the row `popup`, also in `--json` (`"target": "popup"`,
+  before `"picker"`). Change a script that reads the old name.
+- **Action required: a panel `kind` must be `agent`, `shell` or `tool`.**
+  Before, revier accepted any value without a message. A typo such as
+  `kind = "agnet"` made the panel a `tool`, so a restore did not resume its
+  conversation, a link did not fill its command, and `revier agent new` did
+  not copy it. Now revier refuses only that target, and `revier doctor`
+  shows `target "<name>": panel <n> has kind "<value>"; use agent, shell or
+  tool`. Correct the value. A panel with no `kind` is still a `tool`.
+- **Action required: an unknown name in `[hosts]` makes `revier doctor`
+  fail.** An unknown name in `hosts.runtime` or `hosts.window` is reported
+  under the `config.toml` heading, with the known names, and doctor exits 1.
+  This also applies to a name after a host that works, or after `none`, which
+  no command reported before. Correct the name or remove it from the list.
+  Doctor does not check if a host works.
+- **A user guide is on
+  [GitHub](https://github.com/hk9890/revier/tree/main/docs/user-guide).** It
+  has pages for getting started, concepts, the TUI, projects, agents, links,
+  configuration, CLI commands, troubleshooting, statuses and agent probes. It
+  also has one page each for kitty, tmux, Ghostty, GNOME, Claude Code and
+  opencode. `revier assist --reference` now prints the configuration, status
+  and probe pages of the guide, so the assistant also gets the status and
+  probe formats.
+- **revier sees an agent in a tmux pane that an interpreter runs.** Before,
+  revier showed no agent state for an agent that started as, for example,
+  `node .../bin/claude`, and an agent typed into a shell pane showed as
+  `unknown`. Now, in tmux as in kitty, the agent shows its state in the TUI,
+  the agent list and probes, and a session save records it. An external probe
+  gets the whole command line and the foreground pid of a tmux panel.
+- **`revier <command> --help` prints that command's usage and exits 0.**
+  `-h` and `-help` do the same. Before, most commands printed a different
+  usage text and exited 1, and some were refused or contacted the hosts.
+  Help opens no window and contacts no host. `revier link help` and
+  `revier <family> help` print the usage. `revier help` now names every
+  command and flag. `revier agent help` says that `agent prompt` also
+  refuses an agent whose state is unknown, as an opencode agent always is.
+  For such an agent, use `agent send-keys`. An unknown flag is reported
+  once. Each word after `--` is text, also a word that starts with a dash.
+- **The agent mirror shows the whole screen.** v0.17.0 cut Claude Code's
+  screen above its input box. When Claude Code drew something under the box
+  or in its place, such as the background-agent selector or the workflow
+  view, the cut was in the wrong place. Now the mirror shows the agent's
+  whole screen, the input box included.
+- **`revier each log` prints a command that you can paste into a shell.**
+  Each word of the command and the filter is quoted as a shell reads it.
+  Before, `sh -c 'echo a b; true'` showed as `sh -c echo a b; true`, and a
+  filter that held a single quote showed incorrect quotes.
+- **`revier session list` and the sessions screen count every saved
+  agent.** Before, they counted only agents with a conversation, so a
+  session could show `0 agents` and then restore three. Session files do
+  not change.
+- **A restore starts a Claude Code agent in the directory where it
+  worked.** Before, a restore started a Claude Code agent that had no
+  conversation yet in the project directory. An agent with a conversation
+  resumes it as before.
+- **The tmux host names the command that does not start.** Before,
+  `revier open` failed with a raw tmux error such as `no such session: $0`.
+  Now a `launch` or panel command whose program is not on PATH is refused
+  before tmux starts, with `the <kind> panel's command "<prog>" is not on
+  PATH`, or `the command "<prog>" is not on PATH` for a launch or a panel
+  with no kind. A command that exits at once gives `... command "<cmd>"
+  exited as soon as it started`. A program given as a path is not checked in
+  advance. Install the command, put it on PATH, or correct the command.
+- **A target that no host can open is named in the error.** `revier go`
+  printed only `no host can realize this target`. Now the message names the
+  target, its project and the kind of host that is missing, for example
+  `target "editor" of project "myproj" has only a window realization, and
+  no window host is configured or available`.
+- **`revier doctor` gives better advice.** In a link project, doctor tells a
+  target with no realization to add a `[target.remote.window]` or
+  `[target.remote.runtime]` table. Before, it told you to add a
+  `[target.window]` table, which a link project refuses. A value of the wrong
+  type is advised on its type, not on TOML syntax. A refusal such as
+  `action "c" runs nothing` prints once, under its name, not two times. A
+  doctor run that finds problems is no longer written to the log as an
+  error.
+
 ## v0.17.0
 
 - **alt+a raises the config assistant beside the surface.** Before, alt+a
