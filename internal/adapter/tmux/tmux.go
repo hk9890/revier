@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -165,18 +166,31 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if !ok || owner[paneID] != sessionID {
 			continue
 		}
-		pid, _ := strconv.Atoi(panePID)
+		pid, command := foreground(panePID, paneCmd)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(paneID),
 			Kind:    kindOf(paneCmd),
 			Title:   paneTitle,
 			Vars:    parseVars(paneVars),
 			PID:     pid,
-			Command: []string{paneCmd},
+			Command: command,
 			Tab:     windowID,
 		})
 	}
 	return sessions, nil
+}
+
+// foreground is the pid and argv of a pane's foreground process, as a probe
+// reads them. tmux names only the program, and `python3 .../aider` or `node
+// .../bin/claude` is then python3 or node to every probe, so the argv is read
+// from /proc. Where /proc cannot be read, the pane's first process and the
+// program tmux names stand in.
+func foreground(panePID, paneCmd string) (int, []string) {
+	pid, _ := strconv.Atoi(panePID)
+	if fg, argv, ok := proc.Foreground(pid); ok {
+		return fg, argv
+	}
+	return pid, []string{paneCmd}
 }
 
 // owns reports whether session a, rather than b, owns a pane both list: the

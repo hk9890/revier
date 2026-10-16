@@ -11,6 +11,7 @@ package tmux_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -698,6 +699,62 @@ func TestInstancesReportPanels(t *testing.T) {
 	}
 	if instances[0].Panels[0].ID == "" {
 		t.Error("panel has no id")
+	}
+}
+
+// A panel reports the argv and pid of the pane's foreground process, as kitty
+// does. tmux names only the program, so an agent an interpreter runs - `python3
+// .../aider` - was python3 to every probe and never claimed; a program given a
+// file to edit is still not taken for the file.
+func TestAPanelReportsTheForegroundArgv(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	dir := t.TempDir()
+	aider := filepath.Join(dir, "aider")
+	if err := os.WriteFile(aider, []byte("import time\ntime.sleep(30)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "home", Match: revier.Match{Title: "^home$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{python, aider}},
+			{Kind: revier.PanelTool, Command: []string{"bash", "-c", "exec -a nvim sh -c 'sleep 30' claude"}},
+		},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// The second pane runs nvim once bash has exec'd it.
+	var panels []revier.Panel
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		instances, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		if len(instances) == 1 && len(instances[0].Panels) == 2 {
+			panels = instances[0].Panels
+			if panels[1].Command[0] == "nvim" {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("panels = %+v, want the second running nvim", panels)
+		}
+	}
+	if got := panels[0].Command; got[0] != python || got[1] != aider {
+		t.Errorf("command = %q, want the interpreter and its script", got)
+	}
+	if !panels[0].Runs("aider") {
+		t.Errorf("%q does not run aider", panels[0].Command)
+	}
+	if args, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", panels[0].PID)); err != nil || !strings.Contains(string(args), aider) {
+		t.Errorf("pid %d is not the foreground process: %q, %v", panels[0].PID, args, err)
+	}
+	if panels[1].Runs("claude") {
+		t.Errorf("%q is taken for claude", panels[1].Command)
 	}
 }
 

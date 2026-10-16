@@ -25,9 +25,8 @@ exec = "~/bin/aider-probe"
 
 A probe named `aider` reads the panels whose program is `aider` (with any
 directory), or `node`, `bun`, `deno` or `python…` with `aider` as the first
-argument that is not a flag. In tmux, revier sees only the program name, so an
-agent started through an interpreter is not claimed there. The built-in
-probes go first, then yours in file order.
+argument that is not a flag. The built-in probes go first, then yours in file
+order.
 
 ## Input and output
 
@@ -38,8 +37,7 @@ probes go first, then yours in file order.
 `id` is the panel (kitty window id, tmux pane id) and `tab` its tab. `kind` is
 `shell` when the command is a shell, else `tool`. `title` is the panel's
 title; many agents write their state there. `vars`, `pid`, `command` and `tab`
-are optional. `pid` and `command` are the foreground process in kitty; in
-tmux, `pid` is the pane's first process and `command` its program name only.
+are optional. `pid` and `command` are the panel's foreground process.
 
 Print one JSON object and exit 0 within 500 ms:
 
