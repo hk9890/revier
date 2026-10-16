@@ -146,6 +146,7 @@ var verbs = map[core.KeyAction]string{
 	core.KeyCreate: "created",
 	core.KeyUpdate: "command rewritten",
 	core.KeyEnable: "switched on",
+	core.KeyRename: "renamed",
 	core.KeyRemove: "removed",
 }
 

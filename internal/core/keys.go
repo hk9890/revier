@@ -15,11 +15,11 @@ import (
 // from. It is a normal outcome on a headless box, not a failure.
 var ErrNoKeyBinder = errors.New("no desktop keybinding support on this machine")
 
-// PickerTarget is the row for the chord that opens revier itself. It is not a
-// target - nothing is run-or-raised, the surface comes up - so it has a name
-// of its own rather than borrowing a target's, and ValidateKeyTarget keeps a
-// target with a key from taking it.
-const PickerTarget = "picker"
+// PopupTarget is the row for the trigger key, the chord that opens revier's
+// popup. It is not a target - nothing is run-or-raised, the surface comes up -
+// so it has a name of its own rather than borrowing a target's, and
+// ValidateKeyTarget keeps a target with a key from taking it.
+const PopupTarget = "popup"
 
 // KeyStatus is what a chord revier wants is doing right now.
 type KeyStatus string
@@ -54,7 +54,7 @@ type KeyRow struct {
 	// what is installed there now.
 	Command string `json:"command"`
 	// Projects are the projects that ask for this chord, in configuration
-	// order. Empty for the picker, which no project declares.
+	// order. Empty for the popup's row, which no project declares.
 	Projects []revier.ProjectName `json:"projects,omitempty"`
 	// Conflict is set when the projects do not agree: the same target is
 	// bound to more than one chord, so more than one row carries the target.
@@ -76,7 +76,7 @@ type KeyReport struct {
 // The commands revier binds to a desktop key. A login shell, so the desktop
 // finds revier on the same PATH a terminal has.
 const (
-	pickerCommand   = `sh -lc "revier popup"`
+	popupCommand    = `sh -lc "revier popup"`
 	goCommandPrefix = `sh -lc "revier go `
 	goCommandSuffix = ` --picker"`
 )
@@ -104,11 +104,11 @@ func ValidateTargetName(name revier.TargetName) error {
 }
 
 // ValidateKeyTarget refuses a name a target with a key cannot have on top of
-// that: the picker's row, which the key opening revier already holds.
+// that: the popup's row, which the trigger key already holds.
 func ValidateKeyTarget(name revier.TargetName) error {
-	if name == PickerTarget {
+	if name == PopupTarget {
 		return fmt.Errorf("target %q has a key, and %q names the key that opens revier ([ui] trigger_key); rename the target",
-			name, PickerTarget)
+			name, PopupTarget)
 	}
 	return nil
 }
@@ -129,11 +129,11 @@ func owned(b revier.Binding) bool {
 }
 
 // ownedCommand reports whether a command is exactly one revier writes: the
-// picker's, or one target's. A user's own shortcut that merely runs revier -
+// popup's, or one target's. A user's own shortcut that merely runs revier -
 // `revier go editor && notify-send done` in an entry of their own - is theirs,
 // and is treated as anybody else's.
 func ownedCommand(cmd string) bool {
-	if cmd == pickerCommand {
+	if cmd == popupCommand {
 		return true
 	}
 	name, ok := strings.CutPrefix(cmd, goCommandPrefix)
@@ -190,11 +190,11 @@ func index(bindings []revier.Binding) map[Chord][]revier.Binding {
 	return out
 }
 
-// wantedChords is every chord revier would bind: the picker, plus the union of
+// wantedChords is every chord revier would bind: the popup's, plus the union of
 // the key each target declares. A chord one project declares is wanted, so a
 // target that exists in a single project still gets a row.
 func wantedChords(projects []Project, trigger Chord) []KeyRow {
-	rows := []KeyRow{{Chord: trigger, Target: PickerTarget, Command: pickerCommand}}
+	rows := []KeyRow{{Chord: trigger, Target: PopupTarget, Command: popupCommand}}
 
 	// Keyed by target and chord, so a target bound to two different chords
 	// produces two rows rather than one that hides the disagreement.
@@ -206,12 +206,12 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 	chordsPerTarget := map[string]map[Chord]bool{}
 	targetsPerChord := map[Chord]map[string]bool{}
 
-	// The picker holds a chord like any target does. Left out of these maps, a
+	// The popup holds a chord like any target does. Left out of these maps, a
 	// target that declares the trigger key produces two rows on one chord -
-	// the picker active and the target stale - with neither marked, which is
+	// the popup active and the target stale - with neither marked, which is
 	// the disagreement this marking exists to name.
-	chordsPerTarget[PickerTarget] = map[Chord]bool{trigger: true}
-	targetsPerChord[trigger] = map[string]bool{PickerTarget: true}
+	chordsPerTarget[PopupTarget] = map[Chord]bool{trigger: true}
+	targetsPerChord[trigger] = map[string]bool{PopupTarget: true}
 
 	for _, p := range projects {
 		for i, t := range p.Targets {
@@ -261,12 +261,12 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 		}
 	}
 
-	// The picker first, then targets by name, then by chord: the picker is
+	// The popup first, then targets by name, then by chord: the popup is
 	// the key a user checks first, and the rest has to be stable across runs.
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
-		if (a.Target == PickerTarget) != (b.Target == PickerTarget) {
-			return a.Target == PickerTarget
+		if (a.Target == PopupTarget) != (b.Target == PopupTarget) {
+			return a.Target == PopupTarget
 		}
 		if a.Target != b.Target {
 			return a.Target < b.Target

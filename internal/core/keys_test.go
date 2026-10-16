@@ -48,9 +48,9 @@ func TestEveryWantedChordIsReportedTaken(t *testing.T) {
 	if len(report.Rows) != 3 {
 		t.Fatalf("got %d rows, want 3: %+v", len(report.Rows), report.Rows)
 	}
-	// The picker first: it is the key a user checks first.
-	if report.Rows[0].Target != core.PickerTarget {
-		t.Errorf("first row is %q, want the picker", report.Rows[0].Target)
+	// The popup first: it is the key a user checks first.
+	if report.Rows[0].Target != core.PopupTarget {
+		t.Errorf("first row is %q, want the popup", report.Rows[0].Target)
 	}
 	for _, r := range report.Rows {
 		if r.Status != core.KeyTaken {
@@ -69,7 +69,7 @@ func TestEveryWantedChordIsReportedTaken(t *testing.T) {
 // what `keys install` will write is visible before it writes it.
 func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup"),
 		hosttest.Custom("<Shift><Control>o", `sh -lc "revier go edit --picker"`, "revier: editor"),
 	), keyProject(t, "revier"))
 
@@ -90,7 +90,7 @@ func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 // An entry in the desktop's store but switched off fires on no press and
 // appears nowhere in the settings UI. It is reported for exactly that reason.
 func TestSwitchedOffEntryIsInertAndNotFree(t *testing.T) {
-	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker")
+	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup")
 	off.Enabled = false
 	report := keysOf(t, hosttest.NewKeys("gnome", off), keyProject(t, "revier"))
 
@@ -102,7 +102,7 @@ func TestSwitchedOffEntryIsInertAndNotFree(t *testing.T) {
 // A shortcut that fires beats one that does not, whoever owns it: what fires
 // is what the user experiences on a press.
 func TestASwitchedOnShortcutWinsOverASwitchedOffOne(t *testing.T) {
-	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker")
+	off := hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup")
 	off.Enabled = false
 	report := keysOf(t, hosttest.NewKeys("gnome",
 		off,
@@ -138,7 +138,7 @@ func TestADesktopDefaultIsNeitherFreeNorTaken(t *testing.T) {
 // would say the key is done while the default still runs.
 func TestADesktopDefaultBesideRevierOwnShortcutIsNotActive(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup"),
 		hosttest.Builtin("<Alt>space", "org.gnome.desktop.wm.keybindings", "activate-window-menu"),
 	), keyProject(t, "revier"))
 
@@ -146,7 +146,7 @@ func TestADesktopDefaultBesideRevierOwnShortcutIsNotActive(t *testing.T) {
 	if got.Status != core.KeyBuiltin {
 		t.Errorf("alt+space = %q, want builtin: the desktop default still fires", got.Status)
 	}
-	for _, want := range []string{"revier: picker", "activate-window-menu"} {
+	for _, want := range []string{"revier: popup", "activate-window-menu"} {
 		if !strings.Contains(got.HeldBy, want) {
 			t.Errorf("held by %q, want it to name %q", got.HeldBy, want)
 		}
@@ -359,8 +359,8 @@ func TestASecondSwitchedOnHolderIsNotHidden(t *testing.T) {
 	}
 }
 
-// The picker holds a chord like a target does. A target that declares the
-// trigger key puts two rows on one chord - the picker active, the target
+// The popup holds a chord like a target does. A target that declares the
+// trigger key puts two rows on one chord - the popup active, the target
 // stale - and repairing the stale one breaks the key that opens revier.
 func TestATargetOnTheTriggerChordIsMarked(t *testing.T) {
 	clash := prepared(t, revier.Project{
@@ -373,7 +373,7 @@ func TestATargetOnTheTriggerChordIsMarked(t *testing.T) {
 		},
 	})
 	report := keysOf(t, hosttest.NewKeys("gnome",
-		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: picker"),
+		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup"),
 	), keyProject(t, "revier"), clash)
 
 	var onTheChord []core.KeyRow

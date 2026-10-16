@@ -114,14 +114,14 @@ $ revier keys install --dry-run
 
   dry run: nothing is changed
 
-  - Alt+Space     revier: picker  skipped: org.gnome.desktop.wm.keybindings activate-window-menu holds it
+  - Alt+Space     revier: popup   skipped: org.gnome.desktop.wm.keybindings activate-window-menu holds it
   > Ctrl+Shift+O  revier: editor  would be created
 
   keybindings: 1 of 2 would be installed
   1 key is held by something else. --force takes it.
 ```
 
-`revier: picker` is the **trigger key**. It opens the popup: the TUI in a
+`revier: popup` is the **trigger key**. It opens the popup: the TUI in a
 kitty window of its own. On a stock GNOME, the window menu holds Alt+Space.
 Do one of these:
 
