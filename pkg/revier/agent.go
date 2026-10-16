@@ -219,18 +219,6 @@ type Titled interface {
 	Activity(title string) string
 }
 
-// Framed is an optional capability of an AgentProbe, detected by type
-// assertion. Frame is the index of the first line of the harness's own frame
-// at the end of a screen - its input box, its status lines - in the screen's
-// lines as plain text, or len(lines) when the screen ends in none. The mirror
-// shows the screen above it; `revier agent read --screen` shows it whole
-// (decisions.md D136). A probe without it, or a frame the probe does not
-// find, leaves the screen whole, so a harness that changes its layout costs
-// only the cut.
-type Framed interface {
-	Frame(lines []string) int
-}
-
 // Detailed is an optional capability of an AgentProbe, detected by type
 // assertion. Detail is the last thing the agent in a panel said, for the
 // surface, which orders its agents by when each spoke, and for `revier agent

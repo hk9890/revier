@@ -28,10 +28,10 @@ import (
 // It is the terminal's own drawing, laid out for the agent's window, and that
 // window is wider than the pane: a line that does not fit continues on the
 // next at a word, under its own first word, and a rule is shortened to fit
-// instead. The frame the harness draws under the conversation is left out
-// (D136). The colours are kept, and nothing else the terminal was told: only
-// an SGR sequence is passed on, and every line is closed, so what an agent's
-// screen holds cannot repaint the surface that shows it.
+// instead. The screen is shown whole (D137). The colours are kept, and
+// nothing else the terminal was told: only an SGR sequence is passed on, and
+// every line is closed, so what an agent's screen holds cannot repaint the
+// surface that shows it.
 
 // mirrorInterval is how often the mirror reads the panel. It has its own
 // timer: a survey lists every host here, and the mirror must not wait for
@@ -157,7 +157,7 @@ func (mi *mirror) readScreen(c *core.Core, a revier.AgentView) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), detailWait)
 		defer cancel()
-		text, err := c.Mirror(ctx, a, deep)
+		text, err := c.Screen(ctx, a, deep)
 		return mirroredMsg{key: key, seq: seq, deep: deep, text: text, err: err}
 	}
 }
