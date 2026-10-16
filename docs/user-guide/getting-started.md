@@ -1,50 +1,37 @@
 # Getting started
 
-From nothing installed to an agent that waits for you, in one path. Each step
-shows the command and what you see. [Concepts](concepts.md) explains the words
-this page uses.
+This page takes you from install to an agent that waits for you. Three words
+first. A **target** is a thing you reach with a key: the project's
+terminal workspace, an editor, a web page. The **home** target is the
+workspace: the terminal window you return to. The **TUI** is revier's
+full-screen view in a terminal. [Concepts](concepts.md) explains the rest.
 
 ## What you need
 
-- Linux. revier ships for `x64` and `arm64`.
-- A terminal revier can drive: kitty or tmux. revier calls this the runtime
-  host. It uses the first one it finds: kitty, then tmux.
-- For windows, the popup and the desktop keys: GNOME with the
-  [Window Control extension](https://github.com/carlo9890/gnome-window-control)
-  and its `wctl`. The popup also needs kitty. Without GNOME, everything that
-  lives in a terminal still works.
-- For agent state: Claude Code 2.1.212 or newer. opencode is recognised, but
-  its state shows as unknown.
+- Linux, `x64` or `arm64`.
+- kitty or tmux. revier opens your workspaces in it.
+- Claude Code 2.1.212 or newer, as `claude` on your `PATH`. The project that
+  `revier new` writes runs it in its agent tab.
+- For window targets, desktop keys and the popup: GNOME with the Window
+  Control extension and its `wctl`. See [GNOME](integrations/gnome.md) to
+  install it. The popup also needs kitty.
 
 ## Install
 
-With [mise](https://mise.jdx.dev), which reads the releases page and puts
-`revier` on your PATH:
+With [mise](https://mise.jdx.dev):
 
 ```bash
 mise use -g github:hk9890/revier
 ```
 
-Or download an archive from the
-[releases page](https://github.com/hk9890/revier/releases). Archives are named
-`revier_<version>_linux_<arch>.tar.gz`, with `x64` or `arm64` as the
-architecture. The archive holds the `revier` binary alone. Put it on your PATH:
-
-```bash
-tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin
-```
-
-Check what is installed:
-
-```bash
-revier version
-```
+Or extract `revier_<version>_linux_<arch>.tar.gz` from the
+[releases page](https://github.com/hk9890/revier/releases) onto your PATH,
+for example with `tar -xzf <file> -C ~/.local/bin`.
 
 ### Verify a download
 
-Each release ships a checksums file, signed by its release workflow at the
-release's tag. To verify an archive, download the checksums file and its
-`.sig` and `.pem` beside the archive, then run:
+Before you extract an archive, download the release's checksums file with its
+`.sig` and `.pem` beside it, then run:
 
 ```bash
 cosign verify-blob \
@@ -56,206 +43,116 @@ cosign verify-blob \
 sha256sum -c revier_<version>_checksums.txt --ignore-missing
 ```
 
-The first command proves the checksums file came from the release workflow.
-The second proves the archive matches it. Do this before you extract the
-archive.
+The first command proves the release workflow signed the checksums. The second
+proves the archive matches them.
 
-## First launch
+## Set up your terminal
 
-Run revier with no arguments:
+- **kitty**: add these two lines to `~/.config/kitty/kitty.conf`, then
+  restart kitty. Without them, revier starts a kitty of its own. See
+  [kitty](integrations/kitty.md).
 
-```bash
-revier
-```
+  ```
+  allow_remote_control socket-only
+  listen_on unix:${XDG_RUNTIME_DIR}/kitty
+  ```
 
-This is the TUI. With no project yet, the list says where a project goes:
+- **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
+  to use tmux; see [tmux](integrations/tmux.md).
 
-```
-  No projects configured. Add one as
-  ~/.config/revier/projects/<name>.toml
-```
+## Give your editor a key
 
-Press `ctrl+c` to quit. You can add a project from the TUI with `alt+n`, but
-the next step does it from the shell.
-
-## Make your first project
-
-Go to the directory of a project and run `revier new`:
-
-```bash
-cd ~/dev/demo
-revier new
-```
-
-```
-created /home/you/.config/revier/projects/demo.toml
-```
-
-The project takes the directory's name. To give it another, run
-`revier new <name>`. revier refuses your home directory, and a directory that
-is already a project.
-
-The file it writes declares three targets:
-
-- `home`: the workspace. A terminal window called `session:demo`.
-- `agent`: a tab inside the workspace, with Claude Code (`claude`) beside a
-  shell.
-- `editor`: an IntelliJ IDEA window. Change its `launch` and `match` to your
-  own editor. [Projects](projects.md) shows how.
-
-If the directory is a git checkout, the file also records its origin as
-`git_url`. When the directory is missing later, `revier open` clones it from
-there. If `mise` is installed, `revier new` also runs `mise trust` on the
-directory, so the first shell there starts without a prompt.
-
-## Open it
-
-From inside the project directory:
-
-```bash
-revier open
-```
-
-```
-demo: session:demo (kitty/<id>)
-```
-
-revier opens the workspace: a new kitty window with the `agent` tab, Claude
-Code on one side and a shell on the other. Run `revier open` again and revier
-raises the same window. It does not open a second one. This is run-or-raise.
-
-From anywhere else, name the project: `revier open demo`. A name revier does
-not know yet becomes a new project for the current directory, as `revier new`
-would make it.
-
-On tmux, the workspace is a tmux session. `revier open --attach` ends with your
-terminal attached to it.
-
-## Claim the desktop keys
-
-revier is one process per keypress. A desktop key runs a revier command and
-exits. Before the keys can do that, revier writes them into GNOME's keyboard
-shortcuts.
-
-First, give a target a key. Open `~/.config/revier/projects/demo.toml` and add
-a `key` line to the `editor` target:
+Skip this step without GNOME. A target in `~/.config/revier/config.toml` is
+shared: every project gets it, and its key works in every project. Write your
+editor there before you make a project:
 
 ```toml
 [[target]]
 name = "editor"
 key  = "ctrl-shift-o"
+  [target.window]
+  launch = ["code", "{{.Path}}"]                       # {{.Path}}: the project's directory
+  match  = { class = "^[Cc]ode$", title = "{{.Name}}" } # how revier finds the open window
 ```
 
-Then see what an install would change. This changes nothing:
+This is VS Code. For another editor, change `launch` and `match`
+([Targets](configuration.md#targets)); `wctl list --json` shows each window's
+class. This guide writes the key `ctrl-shift-o` as Ctrl+Shift+O.
+
+## Make your first project
+
+Go to a project directory and run `revier new`:
 
 ```bash
-revier keys install --dry-run
+cd ~/dev/demo
+revier new      # created /home/you/.config/revier/projects/demo.toml
 ```
 
+The project takes the name of the directory. The file declares `home`, a
+terminal window called `session:demo`, and `agent`, a tab in it with Claude
+Code beside a shell. Your shared `editor` is the third target. With no target
+in `config.toml`, the file gets an IntelliJ IDEA `editor`; change it to yours.
+
+Run `revier status` to check which hosts revier found: the `runtime` line
+names kitty or tmux, the `window` line gnome, and `-` means none.
+
+## Open it
+
+Run `revier open`. revier opens the workspace with the `agent` tab. Run it
+again, and revier raises the same window instead of a second one. This is
+run-or-raise. From another directory, run `revier open demo`. On tmux,
+`revier open --attach` puts your terminal on the workspace.
+
+## Install the desktop keys
+
+revier writes its keys into GNOME's keyboard shortcuts. See what an install
+changes first:
+
 ```
+$ revier keys install --dry-run
 === revier keys install ===
 
   dry run: nothing is changed
 
-  - Alt+Space     revier          skipped: org.gnome.desktop.wm.keybindings activate-window-menu holds it
+  - Alt+Space     revier: picker  skipped: org.gnome.desktop.wm.keybindings activate-window-menu holds it
   > Ctrl+Shift+O  revier: editor  would be created
 
   keybindings: 1 of 2 would be installed
   1 key is held by something else. --force takes it.
 ```
 
-`Alt+Space` opens the popup: the TUI in a kitty window of its own. It is the
-trigger key, `[ui] trigger_key` in `config.toml`. Every other line is a
-target's `key`, bound to `revier go <target> --picker`. The name in the second
-column is what GNOME's keyboard settings show for the shortcut.
+`revier: picker` is the **trigger key**. It opens the popup: the TUI in a
+kitty window of its own. On a stock GNOME, the window menu holds Alt+Space.
+Do one of these:
 
-Without `--force`, install adds only the keys nothing else holds, and names
-the rest as `skipped`. On a stock GNOME, `Alt+Space` opens the window menu, as
-above. To take it, add `--force`:
+- Run `revier keys install --force`. revier takes Alt+Space, and the plan
+  prints how to give it back.
+- Set `trigger_key` in [`[ui]`](configuration.md#ui) to a free key, then run
+  `revier keys install`.
 
-```bash
-revier keys install --dry-run --force
-revier keys install --force
-```
+`revier keys uninstall` removes only what revier wrote.
 
-`--force` takes a key from whatever holds it. Another shortcut is switched off
-and keeps its command, so the tool that wrote it can put it back. A GNOME
-default loses that one key and keeps any other it holds, and the plan prints
-the `gsettings reset` line that gives it back. To keep the window menu, run
-`revier keys install` without `--force` instead, or set another
-`trigger_key`.
+## Go to a target and back
 
-`revier keys status` shows who holds each key, and changes nothing.
-`revier keys uninstall` removes what revier wrote and nothing else. It restores
-no other tool's shortcuts: that tool does.
+Focus the workspace and press Ctrl+Shift+O. revier opens the project's editor,
+or raises it. Press Ctrl+Shift+O again in the editor, and you are back in the
+workspace. This is toggle-back. From a shell, run `revier go editor`.
 
-## Jump to a target and back
+## See an agent that needs you
 
-Put the focus on the workspace and press `ctrl+shift+o`. revier finds the
-project from the focused window and runs-or-raises its `editor`: the editor
-opens the first time, and comes to the front every time after.
+In the `claude` panel of the agent tab, type `create the file hello.txt`.
+Claude Code asks for permission to write it. Do not answer. Press the trigger
+key, or run `revier` in a terminal.
 
-Press `ctrl+shift+o` again while the editor has the focus. You are back in the
-workspace. This is toggle-back: a second press of a target's key returns you to
-the project's home.
+The project with an agent that needs you is at the top, and the pane shows
+the agent's terminal. Press Alt+Space in the TUI for the list of all agents. Select the agent and press Enter. revier raises
+its tab and window.
 
-The same key works in every project that declares an `editor`, and it opens
-that project's editor. When the focused window belongs to no project, revier
-uses the project it acted on last. When there is none, `--picker` opens the
-popup, so you can choose one.
+From a shell, `revier list` prints one line per project with its most urgent
+agent state: `attention` means it needs you.
 
-From a shell, the same jump is:
+## Next
 
-```bash
-revier go editor
-revier go editor -p demo
-```
-
-## See an agent wait for you
-
-Give the agent in the workspace a task that needs your permission, for example
-a command it must ask to run. Then press `Alt+Space`, or run `revier` in any
-terminal.
-
-The project with an agent that waits for you sorts to the top. Its row counts
-its agents by state: needs you, working, idle, unknown. The pane beside the
-list shows the project's targets and its agents, and the terminal of the agent
-that needs you, as it is now.
-
-Press `alt+space` again on the TUI to see the agent list: every agent of every
-open project, the ones that need you first. Move the cursor to the agent and
-press `Enter`. revier brings its tab to the front and raises its window. The
-popup hides.
-
-The same answer, printed once:
-
-```bash
-revier list
-```
-
-```
-PROJECT  STATE    AGENT      TARGETS
-demo     running  attention  *home *agent  editor
-```
-
-`attention` is the state the TUI calls "needs you". A `*` marks a target that
-is open.
-
-## Where next
-
-- **[Concepts](concepts.md)**: projects, targets, run-or-raise, agent states,
-  and what degrades. Read it once.
-- **[The TUI](tui.md)**: the list, the pane, the popup, and every key.
-- **[Projects](projects.md)**: project files, shared targets, actions,
-  sessions and shutdown.
-- **[Agents](agents.md)**: drive an agent from a script with `revier agent`,
-  and `revier assist`.
-- **[Links](links.md)**: projects on another machine.
-- **[Configuration](configuration.md)**: every file, table and field revier
-  reads.
-- **[Command line](cli.md)**: every command, flag and exit code.
-- **[Troubleshooting](troubleshooting.md)**: `revier doctor` first, then the
-  symptoms.
-- **Integrations**: [kitty](integrations/kitty.md), [tmux](integrations/tmux.md),
-  [Ghostty](integrations/ghostty.md), [GNOME](integrations/gnome.md),
-  [Claude Code](integrations/claude-code.md), [opencode](integrations/opencode.md).
+Read [Concepts](concepts.md) once. Then see [The TUI](tui.md),
+[Projects](projects.md) and, when something does not work,
+[Troubleshooting](troubleshooting.md).

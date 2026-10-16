@@ -32,16 +32,21 @@ describing something absent from `internal/` is intent, not documentation drift.
 ## `docs/user-guide/`
 
 - Write for someone who installed revier and never opens this repository.
-- Link only to pages inside `docs/user-guide/`. A user who reads the guide
-  away from the repository finds every link working.
+  Keep it short: a page says how to do a thing, with one example. Leave out
+  what `revier doctor`, `--help` or an error message tells the user when it
+  happens.
+- Link to no file of this repository outside `docs/user-guide/`. A link to
+  another site, such as a tool to install, is fine.
 - Name a file path or a configuration key only where the user opens or sets
   it. A source path, a Go symbol, a `mise` task, a test layer, CI and release
-  detail stay in `docs/`.
+  detail stay in `docs/`. The one exception is the identity the user passes
+  to verify a download.
 - Cite no decision. Where the user needs the reason, give it in one sentence;
   the argument stays in `docs/design/`.
 - `configuration.md` and `extending/` are the configuration reference. The
-  binary embeds them, and `revier assist --reference` prints them, so a fact
-  about the format lives there and nowhere else.
+  binary embeds them, and `revier assist --reference` prints them, so a rule
+  or field of the format is written there and nowhere else. Another page
+  shows at most an example and links to the reference section.
 
 ## Conventions
 
