@@ -601,7 +601,13 @@ func validateTargets(p revier.Project) []error {
 			}
 		}
 
-		if t.Window == nil && t.Runtime == nil {
+		switch {
+		case t.Window != nil || t.Runtime != nil:
+		case p.Remote != nil:
+			// A link's part is under [target.remote]; a local part was
+			// dropped and refused by validateParts, and is not the fix.
+			errs = append(errs, fmt.Errorf("target %q declares no realization under [target.remote.window] or [target.remote.runtime]", t.Name))
+		default:
 			errs = append(errs, fmt.Errorf("target %q declares no realization", t.Name))
 		}
 		tab := t.Runtime != nil && t.Runtime.Inside != ""

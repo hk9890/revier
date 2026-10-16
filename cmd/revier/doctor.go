@@ -172,6 +172,8 @@ func advise(msg string) string {
 		return "give the runtime realization the `name` its match finds"
 	case strings.Contains(msg, "project has no path"):
 		return "add `path = \"...\"`, or `[remote]` if the project lives on another machine"
+	case strings.Contains(msg, "declares no realization under [target.remote"):
+		return "give the target a `[target.remote.window]` or `[target.remote.runtime]` table"
 	case strings.Contains(msg, "declares no realization"):
 		return "give the target a `[target.window]` or `[target.runtime]` table"
 	case strings.Contains(msg, "error parsing regexp"):

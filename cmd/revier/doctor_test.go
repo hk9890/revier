@@ -193,6 +193,36 @@ every = "10s"
 	}
 }
 
+// A link declares its realization under [target.remote], so a link target
+// with none is never told to add the local table a line above told it to
+// move, and a local target keeps the local advice.
+func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	doctorRoot(t, map[string]string{
+		"far.toml":  "path = \"/x\"\n[remote]\nhost = \"buildbox\"\n\n[[target]]\nname = \"ed\"\n  [target.window]\n  launch = [\"code\"]\n  match = { class = \"^code$\" }\n",
+		"near.toml": sound + "\n[[target]]\nname = \"ed\"\n",
+	})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+	ofFar, ofNear, ok := strings.Cut(out.String(), filepath.Join(root, "near.toml"))
+	if !ok {
+		t.Fatalf("report should name near.toml:\n%s", out.String())
+	}
+	if !strings.Contains(ofFar, "fix: give the target a `[target.remote.window]` or `[target.remote.runtime]` table") {
+		t.Errorf("far.toml should be advised on the remote tables:\n%s", out.String())
+	}
+	if strings.Contains(ofFar, "`[target.window]`") {
+		t.Errorf("far.toml should never be advised a local table:\n%s", out.String())
+	}
+	if !strings.Contains(ofNear, "fix: give the target a `[target.window]` or `[target.runtime]` table") {
+		t.Errorf("near.toml should keep the local advice:\n%s", out.String())
+	}
+}
+
 // A value of the wrong type is valid TOML, so its advice is about the type,
 // and only a syntax error is told the file is not valid TOML.
 func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {
