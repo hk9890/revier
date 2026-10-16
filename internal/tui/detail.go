@@ -365,7 +365,7 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	if sel {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
-	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))
+	lead := bar + style(th.Path).Render(" ") + kindMark(th, row, style)
 	space := style(lipgloss.NewStyle())
 	if ref := row.attached; !ref.IsZero() {
 		head := gridHead(lead, style(th.NameDim).Render("attached"), style(th.Running).Render(th.Glyphs.Running+" running"), space)
@@ -393,7 +393,35 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 		mark, state, stateStyle, name = th.Glyphs.Running, "running", th.Running, th.ProjectName
 	}
 	head := gridHead(lead, style(name).Render(string(t.Name)), style(stateStyle).Render(mark+" "+state), space)
-	return fill(clipTo(head+style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w))), w), w, style)
+	rest := style(th.Help).Render(ellipsis(keyLabel(t.Key), gridRest(w)))
+	if row.active {
+		if t.Key != "" {
+			rest += space.Render("  ")
+		}
+		rest += style(th.Meta).Render("opens first")
+	}
+	return fill(clipTo(head+rest, w), w, style)
+}
+
+// kindMark is the end of a target row's lead, in front of its name: the window
+// or container glyph, or for a tab the branch that hangs it under its
+// container, then a space. A set without the kind glyphs leaves the column
+// blank in front of a window or container, so their names stay in line with
+// the tabs'.
+func kindMark(th theme.Theme, row targetRow, style func(lipgloss.Style) lipgloss.Style) string {
+	glyph, glyphStyle := th.Glyphs.Window, th.Meta
+	switch {
+	case row.kind == kindContainer:
+		glyph = th.Glyphs.Container
+	case row.kind == kindTab && row.last:
+		glyph, glyphStyle = th.Glyphs.LastBranch, th.Border
+	case row.kind == kindTab:
+		glyph, glyphStyle = th.Glyphs.Branch, th.Border
+	}
+	if glyph == "" {
+		glyph = " "
+	}
+	return style(glyphStyle).Render(glyph) + style(lipgloss.NewStyle()).Render(" ")
 }
 
 // detailAgent is one row of the Agents section, on the Targets section's grid:
@@ -490,12 +518,13 @@ func gridRest(w int) int {
 }
 
 // The pane's columns. Narrower than the list's, because the pane is. The lead
-// is the cursor bar and a space. The state column fits the widest state, a
+// is the cursor bar, a space, and a target's kind mark and a space, which an
+// agent's row leaves blank. The state column fits the widest state, a
 // glyph and "no host here", and a gap, so the key or activity after it has the
 // room.
 const (
 	detailLabelWidth = 9
-	detailLeadWidth  = 2
+	detailLeadWidth  = 4
 	detailNameWidth  = 10
 	detailStateWidth = 15
 )

@@ -1129,10 +1129,14 @@ func (m Model) project(name revier.ProjectName) (core.Project, bool) {
 }
 
 // targetRow is one row of the pane's Targets section: a declared target, or an
-// attached instance, which has a ref and no name.
+// attached instance, which has a ref and no name. A tab is last when it ends
+// its container's branch, and active when the container opens with it in focus.
 type targetRow struct {
 	target   revier.TargetView
 	attached revier.TargetRef
+	kind     targetKind
+	last     bool
+	active   bool
 }
 
 // allRows is a move past either end of any section, which the cursor stops
@@ -1229,17 +1233,15 @@ func heldHere(attached map[revier.ProjectName][]revier.TargetRef, v revier.Proje
 	return v.Held() || len(attached[v.Project.Name]) > 0
 }
 
-// targetRows is the pane's Targets section: every target, then every
-// attached instance.
+// targetRows is the pane's Targets section: every target, each tab under the
+// target it is inside, then every attached instance.
 func (m Model) targetRows() []targetRow {
 	v, ok := m.selected()
 	if !ok {
 		return nil
 	}
-	var all []targetRow
-	for _, t := range v.Targets {
-		all = append(all, targetRow{target: t})
-	}
+	p, _ := m.project(v.Project.Name)
+	all := treeRows(v.Targets, p.Targets)
 	for _, ref := range m.attached[v.Project.Name] {
 		all = append(all, targetRow{attached: ref})
 	}

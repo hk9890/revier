@@ -92,6 +92,16 @@ type Glyphs struct {
 	// Remote takes the folder column for a project on another machine. A
 	// set that draws the folder draws this too.
 	Remote string
+
+	// Window and Container are a kind column in front of a target's name in
+	// the pane: a target that is a window of its own, and one whose instance
+	// holds tabs. A set draws both or neither. Branch and LastBranch take the
+	// column for a tab, under its container, so the tree says what is inside
+	// what; every set draws them.
+	Window     string
+	Container  string
+	Branch     string
+	LastBranch string
 }
 
 // The three glyph sets. Nerd is the default: it says things with icons - a
@@ -113,26 +123,32 @@ var glyphSets = map[string]Glyphs{
 		Running: "\u25cf", Stopped: "\u25cb", Cursor: "\u258c",
 		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
 		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715",
+		Window: "\u25a1", Container: "\u25a3", Branch: "\u251c", LastBranch: "\u2514",
 	},
 	"nerd": {
-		Running:  "\uf111", // nf-fa-circle
-		Stopped:  "\uf10c", // nf-fa-circle_o
-		Cursor:   "\u258c", // a half block, as in the unicode set
-		NeedsYou: "\uf0f3", // nf-fa-bell
-		Working:  "\u280b", // braille, the first spinner frame
-		Idle:     "\uf04c", // nf-fa-pause
-		Unknown:  "\uf128", // nf-fa-question
-		Start:    "\uf04b", // nf-fa-play
-		Keep:     "\uf00c", // nf-fa-check
-		Skip:     "\uf05e", // nf-fa-ban
-		Folder:   "\uf07b", // nf-fa-folder
-		NoFolder: "\uf114", // nf-fa-folder_o
-		Remote:   "\uf233", // nf-fa-server
+		Running:    "\uf111", // nf-fa-circle
+		Stopped:    "\uf10c", // nf-fa-circle_o
+		Cursor:     "\u258c", // a half block, as in the unicode set
+		NeedsYou:   "\uf0f3", // nf-fa-bell
+		Working:    "\u280b", // braille, the first spinner frame
+		Idle:       "\uf04c", // nf-fa-pause
+		Unknown:    "\uf128", // nf-fa-question
+		Start:      "\uf04b", // nf-fa-play
+		Keep:       "\uf00c", // nf-fa-check
+		Skip:       "\uf05e", // nf-fa-ban
+		Folder:     "\uf07b", // nf-fa-folder
+		NoFolder:   "\uf114", // nf-fa-folder_o
+		Remote:     "\uf233", // nf-fa-server
+		Window:     "\uf2d0", // nf-fa-window_maximize
+		Container:  "\uf2d2", // nf-fa-window_restore
+		Branch:     "\u251c", // a box-drawing tee, as in the unicode set
+		LastBranch: "\u2514", // a box-drawing corner
 	},
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
 		Start: "+", Keep: "=", Skip: "x",
+		Branch: "|", LastBranch: "`",
 	},
 }
 
