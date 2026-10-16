@@ -27,9 +27,14 @@ What the format is built to keep true:
   mark revier gives it (D64). `panels` stand only on a tab (D128), and a tab
   needs a runtime with tabs (D70). `tabs` opens an instance with its tabs, and
   a listed tab that fails stops the ones after it (D126).
+- A restore resumes the agents of a listed tab; a tab that runs a `launch`
+  comes back without a resume (D68).
 - A target carries a realization for each kind of project, because a local
   project and a link are reached with different tools (D82). A project file
   writes the part of its own kind.
+- A link's `path` and `git_url` are the host's; a target here renders them,
+  and neither names anything on this machine (D83).
+- A link to the machine revier runs on is left out (D131).
 - A status is a command whose output the surface draws at one place (D134).
   A link runs its own statuses alone: a shared command is written against a
   checkout on this machine.

@@ -63,11 +63,9 @@ on your PATH. Refer to [agents.md](agents.md).
 
 ## Every command fails with config.toml in the message
 
-A few mistakes in `config.toml` stop every command, `revier doctor` included:
-
-- the file is not valid TOML;
-- a `[[probe]]` has no `name` or no `exec`;
-- `[ui] trigger_key` is not a key revier can read.
+A few mistakes in `config.toml` stop every command, `revier doctor` included.
+[What is refused, and how you find out](configuration.md#what-is-refused-and-how-you-find-out)
+lists them.
 
 The message names the file and the mistake. Fix the file, or run
 `revier assist`, which still starts. Every other mistake costs only the table
