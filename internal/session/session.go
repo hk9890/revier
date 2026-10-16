@@ -213,6 +213,17 @@ func List(stateRoot string) ([]Session, error) {
 	return out, nil
 }
 
+// Agents counts every agent recorded, with a conversation or without one.
+func (s Session) Agents() int {
+	n := 0
+	for _, p := range s.Projects {
+		for _, t := range p.Targets {
+			n += len(t.Agents)
+		}
+	}
+	return n
+}
+
 // Conversations counts the agents recorded with a conversation to resume.
 func (s Session) Conversations() int {
 	n := 0

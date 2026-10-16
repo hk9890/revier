@@ -36,13 +36,17 @@ func homeOf(name string) session.Project {
 }
 
 // The sessions button is on the bar with its key, and the screen it opens
-// lists the saved sessions newest first, each with its name and counts.
+// lists the saved sessions newest first, each with its name and counts. An
+// agent with no conversation is still one of the agents counted.
 func TestAltSListsTheSavedSessionsNewestFirst(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
 	older := saved(t, root, "before-reboot", 10, homeOf("project-00"), homeOf("project-01"))
 	// Saved in the same second as the older one, so its id carries a suffix.
-	newer := saved(t, root, "", 10, homeOf("project-00"))
+	// Its agents name no conversation, and the pane counts them all the same.
+	agents := homeOf("project-00")
+	agents.Targets[0].Agents = []session.Agent{{Harness: "claude"}, {Harness: "claude"}}
+	newer := saved(t, root, "", 10, agents)
 	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
 
 	if bar := barLine(m); !strings.Contains(bar, "sessions") || !strings.Contains(bar, "alt+s") {
@@ -74,7 +78,7 @@ func TestAltSListsTheSavedSessionsNewestFirst(t *testing.T) {
 	if a, b := column(body[0], "—"), column(body[1], "before-reboot"); a != b {
 		t.Errorf("rows = %q, want the names aligned, at %d and %d", body[:2], a, b)
 	}
-	if holds := pane(m); !strings.Contains(holds, "1 project · 1 target · 0 agents") {
+	if holds := pane(m); !strings.Contains(holds, "1 project · 1 target · 2 agents") {
 		t.Errorf("pane = %q, want the counts of the session under the cursor", holds)
 	}
 

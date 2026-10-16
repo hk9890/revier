@@ -94,7 +94,7 @@ func (d sessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 func sessionCounts(s session.Session) string {
 	return core.Count(len(s.Projects), "project") + " · " + core.Count(s.Targets(), "target") +
-		" · " + core.Count(s.Conversations(), "agent")
+		" · " + core.Count(s.Agents(), "agent")
 }
 
 // sessionOutcome is what the last save or restore on the screen came to, for
