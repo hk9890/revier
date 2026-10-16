@@ -6,6 +6,43 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.17.0
+
+- **alt+a raises the config assistant beside the surface.** Before, alt+a
+  handed the surface's terminal to Claude Code until it exited. Now it raises
+  `revier-config-assistant`, a project that revier builds in: Claude Code in a
+  workspace of its own, briefed to change the configuration and to find what
+  is wrong with it. Its row has a cog where other rows have a folder. Like any
+  other project, it shows in the agent list, a saved session restores its
+  conversation, and a second alt+a raises the same window. It continues the
+  conversation you held with it last, also the one from the old hand-over. A
+  second agent there, while the first one runs, starts a new one. It is not
+  told which project the cursor is on, so name the project. The surface reads the files again when it gets
+  the focus back. A project file with the same name replaces the built-in
+  project, and the built-in project comes back when that file goes. Another
+  machine's built-in project is not offered as a link. With no runtime, alt+a
+  hands the terminal over as before. When the assistant cannot start, its
+  window stays open and shows why until you press Enter.
+- **A `[[status]]` shows a command's output on the surface.** A `[[status]]`
+  table in `config.toml` runs a command and shows what it prints at one of
+  these places: an end of the rule under the top line, the end of the pane's
+  first line, or a section of the pane for the selected project. Examples are
+  an account's usage limits or a CI result. A project file adds its own status
+  to the pane, or changes a shared one. The command can mark its output as a
+  warning or as critical. When a run fails, the last answer stays, dimmed.
+  `revier doctor` names a table that it refuses. `revier assist --reference`
+  prints the format.
+- **The pane shows each tab under the target it opens inside.** Before, the
+  targets were listed in the configuration order, so a tab looked like a window
+  of its own. Now a tab is drawn on a branch line under its container, and a
+  glyph marks each window and each container.
+- **The agent mirror is easier to read.** A line that is wider than the pane
+  now continues on the next line at a word, not in the middle of a word, and
+  keeps the indent of its list item. A rule is shortened to fit the pane.
+  Claude Code's input box and status lines are left out, so the pane shows more
+  of the conversation. `revier agent read --screen` still prints the whole
+  screen.
+
 ## v0.16.0
 
 - **The surface no longer keeps a CPU core busy.** A TUI or popup left on
