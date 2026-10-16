@@ -146,7 +146,7 @@ func barHelpEntries() []helpEntry {
 		"sessions": "save and restore the set of open projects",
 		"shutdown": "save the session when it changed, and close every project or one",
 		"config":   "change the configuration",
-		"assist":   "hand the terminal to a coding agent briefed to configure revier",
+		"assist":   "raise revier-config-assistant, the coding agent briefed to configure revier",
 		"help":     "show this screen",
 	}
 	out := make([]helpEntry, 0, len(barActions))

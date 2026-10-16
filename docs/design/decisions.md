@@ -751,17 +751,6 @@ free of files, so the sequences are not there. The event of a use is recorded
 by the operation that did the thing, through the ledger (D120); a surface
 records only the conversations its survey saw.
 
-### D123 — revier starts one agent of its own, to write its configuration
-
-A user no longer fills in setup screens: they tell the coding agent they have
-what they want. `revier assist`, and alt+a, hand the terminal to Claude Code in
-a directory under the state root, briefed with the files, with `revier doctor`
-as its check and with the project under the cursor. It is a hand-over, as an
-action's is; the command needs no configuration to load, so it also repairs
-one. Only this agent is revier's: a project's agent is still only observed.
-Rejected: a terminal drawn in the surface, an emulator to maintain; a project
-of its own, which a configuration that does not load takes with it.
-
 ### D125 — the project pane mirrors one agent's panel, as the agent list's pane does
 
 One agent drawn two ways, its message set from the transcript beside the
@@ -851,6 +840,16 @@ project alone, so the cost does not grow with the projects. A link runs its
 own tables alone: a shared command is written against a checkout here.
 Rejected: the top line, the footer and the project rows, which have no room
 at normal widths.
+
+### D135 — revier's config assistant is a project it builds in
+
+Replaces D123. revier starts one agent of its own, Claude Code briefed to write
+its configuration, in `revier-config-assistant`: a project no file declares, in
+a directory under the state root. It gets run-or-raise, the survey, the probe
+and session restore with no code of its own; alt+a raises it beside the
+surface, and a file of that name replaces it. With no runtime, or with a
+config.toml that does not load, `revier assist` still hands the terminal over.
+Rejected: a project in a file, which a configuration that does not load loses.
 
 ### D136 — the mirror leaves out the frame a harness draws under the conversation
 

@@ -38,6 +38,20 @@ func besideALink(t *testing.T) (tui.Model, *hosttest.FakeRuntime, *hosttest.Fake
 	return resize(m, 150, 30), rt, remote
 }
 
+// linkFiled puts the link in the configuration the surface reads again when
+// the focus is back, so the survey after the read still has it to ask about.
+func linkFiled(t *testing.T, name string) {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "projects", name+".toml"), []byte(remoteFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A project closed here is off its row at the next survey of this machine,
 // with no linked host asked: a host that is slow or gone holds no row here
 // up (decisions.md D114).
@@ -224,6 +238,7 @@ func TestALinkedHostIsAskedOnceAGap(t *testing.T) {
 // The focus regained asks every linked host that answered its last round at
 // once, whatever its gap: the rows aged while nobody looked.
 func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
+	linkFiled(t, "alpha")
 	m, _, remote := besideALink(t)
 	now := time.Now()
 	m = m.WithClock(func() time.Time { return now })
@@ -232,7 +247,8 @@ func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 
 	m, _ = update(m, tea.BlurMsg{})
 	m, cmd := update(m, tea.FocusMsg{})
-	m, cmd = deliver(m, cmd)
+	m, cmd = deliver(m, cmd) // the files read again
+	m, cmd = deliver(m, cmd) // this machine surveyed
 	deliver(m, cmd)
 	if len(remote.Asked) != 2 {
 		t.Errorf("the host was asked %d times, want a second round at the focus regained", len(remote.Asked))
@@ -242,6 +258,7 @@ func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 // A host that gave no answer keeps its gap at the focus regained: asking it
 // at once would wait on it again (decisions.md D130).
 func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
+	linkFiled(t, "alpha")
 	m, _, remote := besideALink(t)
 	remote.Err = errors.New("buildbox: no answer")
 	now := time.Now()
@@ -252,7 +269,8 @@ func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
 	now = now.Add(5 * time.Second)
 	m, _ = update(m, tea.BlurMsg{})
 	m, cmd := update(m, tea.FocusMsg{})
-	m, cmd = deliver(m, cmd)
+	m, cmd = deliver(m, cmd) // the files read again
+	m, cmd = deliver(m, cmd) // this machine surveyed
 	deliver(m, cmd)
 	if len(remote.Asked) != 1 {
 		t.Errorf("the host was asked %d times, want no second round within its doubled gap", len(remote.Asked))

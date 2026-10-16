@@ -50,6 +50,7 @@ func (i remoteItem) rowView() revier.ProjectView { return i.view }
 func (i remoteItem) rowPath() string             { return remoteHome(i.view.Project.Path) }
 func (i remoteItem) rowUnsurveyed() bool         { return false }
 func (i remoteItem) rowHeld() bool               { return i.view.Held() }
+func (i remoteItem) rowBuiltin() bool            { return false }
 
 func (i remoteItem) rowNote() string {
 	if i.linked == "" {
@@ -365,7 +366,7 @@ func (s *linkScreen) ask(c *core.Core) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), askWait)
 		defer cancel()
 		views, err := c.ProjectsOn(ctx, it.host)
-		return askedMsg{host: it.host, views: views, err: err}
+		return askedMsg{host: it.host, views: config.Linkable(views), err: err}
 	}
 }
 
@@ -466,7 +467,7 @@ func (s *linkScreen) nameFault(projects []core.Project) error {
 	if err := config.CanAddress(name); err != nil {
 		return err
 	}
-	if p, ok := projectNamed(projects, name); ok {
+	if p, ok := projectNamed(projects, name); ok && !config.IsBuiltin(p) {
 		return fmt.Errorf("a project named %q exists here: %s", name, config.ContractHome(p.File))
 	}
 	return nil

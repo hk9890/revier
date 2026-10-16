@@ -73,7 +73,7 @@ func CanCreate(projects []core.Project, name revier.ProjectName, dir string) err
 		}
 		// A file of another name can declare this project name, and the load
 		// refuses two projects under one name.
-		if p.Name == name {
+		if p.Name == name && !IsBuiltin(p) {
 			return fmt.Errorf("project %q already exists: %s", name, p.File)
 		}
 	}

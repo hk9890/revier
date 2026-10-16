@@ -26,6 +26,8 @@ type projectItem struct {
 	// held is what the surface, not the view alone, says holds the project:
 	// the delegate renders from the item and looks nothing up (Model.held).
 	held bool
+	// builtin is the project revier builds in, which no file declares.
+	builtin bool
 }
 
 // FilterValue is what the fuzzy filter matches. Only the name: a path or an
@@ -38,6 +40,7 @@ func (i projectItem) rowPath() string             { return config.ContractHome(i
 func (i projectItem) rowNote() string             { return "" }
 func (i projectItem) rowUnsurveyed() bool         { return i.unsurveyed }
 func (i projectItem) rowHeld() bool               { return i.held }
+func (i projectItem) rowBuiltin() bool            { return i.builtin }
 
 // tableRow is an item the project table draws: the projects here, and the
 // projects of a host in the link dialog. The two differ in whose home a path
@@ -52,6 +55,9 @@ type tableRow interface {
 	// too; a host's project in the link dialog is held by what the host said
 	// and nothing of this machine's (decisions.md D104).
 	rowHeld() bool
+	// rowBuiltin reports the project revier builds in, which takes the
+	// folder column.
+	rowBuiltin() bool
 }
 
 // newProjectList is the picker. Filtering is on but its own filter bar is
@@ -145,9 +151,11 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := bar + gap + style(markStyle).Render(mark) + gap
 	if th.Glyphs.Folder != "" {
 		// The column says where the checkout is: here, not here, or on a
-		// host.
+		// host; or that there is none, revier's own project.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
 		switch {
+		case it.rowBuiltin():
+			folder, folderStyle = th.Glyphs.Builtin, th.Accent
 		case v.Project.Remote != nil:
 			folder, folderStyle = th.Glyphs.Remote, th.Remote
 		case !v.PathExists:
@@ -423,8 +431,9 @@ func (m *Model) reload() {
 
 	items := make([]list.Item, 0, len(m.views))
 	groups := make([]int, 0, len(m.views))
+	builtin := m.isAssistant(m.assistant.Name)
 	for _, v := range m.views {
-		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v)})
+		items = append(items, projectItem{view: v, unsurveyed: !m.surveyed, held: m.heldHere(v), builtin: builtin && v.Project.Name == m.assistant.Name})
 		groups = append(groups, m.need(v))
 	}
 	m.plist.Filter = ranked(func(i int) int { return groups[i] })

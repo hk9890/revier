@@ -192,6 +192,7 @@ func TestTheFirstSurveyPlacesTheCursor(t *testing.T) {
 // by.
 func TestADeleteBeforeTheFirstSurveyIsRefused(t *testing.T) {
 	_, _, c, projects := world(t, 4)
+	inFiles(projects)
 	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 	for range 3 {
 		m, _ = press(m, "down")

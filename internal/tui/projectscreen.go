@@ -512,8 +512,12 @@ func (m Model) nameButton(name revier.ProjectName, w int) string {
 
 // nameButtonText is the button's two runs, the name and the key hint after
 // it. The width the pointer is matched against is read off the same text,
-// so the two cannot disagree.
+// so the two cannot disagree. The built-in has no file to edit, and says so
+// where the key would stand.
 func (m Model) nameButtonText(name revier.ProjectName) (text, hint string) {
+	if m.isAssistant(name) {
+		return " " + string(name) + " ", "built in, in no file "
+	}
 	edit := m.keys.Edit.Help()
 	return " " + string(name) + " ", edit.Desc + " " + edit.Key + " "
 }

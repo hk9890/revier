@@ -319,6 +319,7 @@ func TestAltDelRefusesTheHomeTargetBeforeClosingIt(t *testing.T) {
 // that host holds may be open, and no close reaches it (decisions.md D89).
 func TestAltDelWaitsForAHostThatCouldNotList(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
+	inFiles(projects)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 	wm.InstancesErr = errors.New("went away")
 	m = survey(m)
