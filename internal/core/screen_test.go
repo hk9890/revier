@@ -46,36 +46,3 @@ func TestScreenOfAnAgentElsewhereIsNoScreen(t *testing.T) {
 		t.Errorf("reads = %+v, want none", rt.ScreenReads)
 	}
 }
-
-// framedProbe finds its harness's frame at the line that reads "frame".
-type framedProbe struct{ hosttest.TitleProbe }
-
-func (framedProbe) Frame(lines []string) int {
-	if i := slices.Index(lines, "frame"); i >= 0 {
-		return i
-	}
-	return len(lines)
-}
-
-// The panes show an agent's screen above the frame its harness draws, as the
-// probe that named the harness finds it, and the screen whole for a harness
-// whose probe cannot look.
-func TestMirrorCutsTheFrameTheHarnessProbeFinds(t *testing.T) {
-	rt := hosttest.NewRuntime("rt")
-	ref := rt.Add("session:demo", "kitty", revier.Panel{ID: "7"})
-	screen := "said\x1b[1m\n\x1b[2mframe\x1b[m\nstatus"
-	rt.Screens = map[revier.PanelID]string{"7": screen}
-	probes := []revier.AgentProbe{
-		framedProbe{hosttest.TitleProbe{Harness: "claude"}},
-		hosttest.TitleProbe{Harness: "opencode"},
-	}
-	c := &core.Core{Runtime: rt, Probes: probes}
-
-	for harness, want := range map[string]string{"claude": "said\x1b[1m", "opencode": screen} {
-		agent := revier.AgentView{Ref: ref, Panel: "7", State: revier.AgentState{Harness: harness}}
-		got, err := c.Mirror(context.Background(), agent, false)
-		if err != nil || got != want {
-			t.Errorf("%s: Mirror = %q, %v; want %q", harness, got, err, want)
-		}
-	}
-}

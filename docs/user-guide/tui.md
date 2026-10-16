@@ -90,7 +90,7 @@ Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. Agents that need you are on top, then working
 agents, then idle ones. Each row shows how long ago the agent spoke. Type to
 filter by project or by what the agent does. The pane shows the agent's
-terminal, without Claude Code's input box. Enter goes to the agent's tab.
+terminal. Enter goes to the agent's tab.
 del closes it. alt+space goes back to the projects; Esc with no query quits.
 
 ## The popup
