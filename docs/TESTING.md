@@ -56,11 +56,11 @@ that did not focus after `Open` passed L2 and failed L4.
   - Use `helpers_live_test.go` or `helpers_integration_test.go`, with the
     build tag, when only tests of that tag use it.
   - Leave one that a single test file uses in that file.
-- Give each package whose code reaches `config.Root` or `state.Root`, by its
-  own call or through another package, a `TestMain` in its `helpers_test.go`
-  that points `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` at scratch
-  directories, as `cmd/revier` and `internal/tui` do. A test that forgets its own `t.Setenv` then writes there,
-  not into the user's configuration.
+- Give each package whose code reaches `config.Root`, `state.Root` or
+  `sshconfig.Path`, by its own call or through another package, a `TestMain`
+  in its `helpers_test.go` that runs `os.Exit(testenv.Run(m))`. A test that
+  forgets its own `t.Setenv` then writes into a scratch directory whose
+  configuration names no host, and the package fails, naming the file.
 - In `internal/tui`, feed a command that a key press or an `Update` returned
   back to the model with a helper from `internal/tui/helpers_test.go`, not with
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers

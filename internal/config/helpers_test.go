@@ -8,8 +8,14 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// TestMain keeps every test off the user's own revier files (testenv.Run).
+func TestMain(m *testing.M) {
+	os.Exit(testenv.Run(m))
+}
 
 const valid = `
 path = "/home/user/dev/github/revier"
