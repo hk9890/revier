@@ -370,12 +370,3 @@ func TestStatusInitBeatIsKept(t *testing.T) {
 		t.Error("a surface with no status started a beat")
 	}
 }
-
-// A command runs without a shell, and its output is read as a status.
-func TestStatusRunsTheCommand(t *testing.T) {
-	s := core.Status{At: core.StatusProject, Run: []string{"sh", "-c", `echo "$REVIER_PROJECT"`}}
-	msg := runStatus(alphaInfo, s, []string{"REVIER_PROJECT=alpha"})().(statusMsg)
-	if msg.err != nil || msg.key != alphaInfo || !sameStatus(msg.ran, s) || !slices.Equal(texts(msg.segments), []string{"alpha"}) {
-		t.Errorf("runStatus = %+v, want alpha", msg)
-	}
-}

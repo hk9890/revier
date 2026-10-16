@@ -137,7 +137,7 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 
 // A refused [[status]] table is reported under the file that writes it, and
 // so is a pane status a project changes that still runs nothing: doctor is
-// where both are read (decisions.md D134).
+// where both are read (decisions.md D85).
 func TestDoctorReportsStatusProblemsUnderTheirFile(t *testing.T) {
 	doctorRoot(t, map[string]string{
 		"sound.toml": sound,
