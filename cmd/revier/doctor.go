@@ -180,6 +180,10 @@ func advise(msg string) string {
 		return "fix the template; the message names what does not parse or evaluate"
 	case strings.Contains(msg, "name is not read"):
 		return "delete the `name = ...` line; the file name is the project's name"
+	case strings.Contains(msg, "incompatible types"):
+		// The decoder's line prefix is on this message too, and the file
+		// is valid TOML: only the value is of the wrong type.
+		return "give the key a value of the type the message names, for example a string in quotes"
 	case strings.Contains(msg, "toml: line"):
 		return "the file is not valid TOML; the message names the line"
 	}

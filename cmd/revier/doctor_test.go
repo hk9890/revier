@@ -193,6 +193,28 @@ every = "10s"
 	}
 }
 
+// A value of the wrong type is valid TOML, so its advice is about the type,
+// and only a syntax error is told the file is not valid TOML.
+func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {
+	doctorRoot(t, map[string]string{"typed.toml": "path = 5\n", "syntax.toml": "path = \n"})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); !errors.Is(err, errSilent) {
+		t.Fatalf("err = %v, want the silent non-zero end", err)
+	}
+	root := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+	ofSyntax, ofTyped, ok := strings.Cut(out.String(), filepath.Join(root, "typed.toml"))
+	if !ok {
+		t.Fatalf("report should name typed.toml:\n%s", out.String())
+	}
+	if !strings.Contains(ofTyped, "fix: give the key a value of the type the message names") || strings.Contains(ofTyped, "not valid TOML") {
+		t.Errorf("typed.toml should be advised on the type alone:\n%s", out.String())
+	}
+	if !strings.Contains(ofSyntax, "fix: the file is not valid TOML") {
+		t.Errorf("syntax.toml should keep the TOML advice:\n%s", out.String())
+	}
+}
+
 // A refusal names what it is about with a colon after the name or without
 // one. Either way the column is the name, and the message prints once.
 func TestDoctorColumnsARefusalWithNoColonByItsName(t *testing.T) {
