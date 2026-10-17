@@ -366,10 +366,10 @@ agent revier does not know: see [extending/probes.md](extending/probes.md).
 
 ## Mistakes
 
-A mistake stops only the table, target or project it is in. One exception:
-when `config.toml` is not valid TOML, or `[ui]` or a `[[probe]]` is wrong, no
-command that reads the projects runs. `revier doctor` prints the error, and
-`revier assist` starts to fix it.
+A mistake stops only the table, target or project it is in. A wrong `[ui]`
+value uses its default, and a wrong `[[probe]]` is not run. One exception:
+when `config.toml` is not valid TOML, no command that reads the projects runs.
+`revier doctor` prints the error, and `revier assist` starts to fix it.
 
 Run `revier doctor` to see every problem, with the fix where it knows one. It
 exits 1 when a file has a problem. See [troubleshooting.md](troubleshooting.md).

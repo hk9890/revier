@@ -10,7 +10,7 @@ probe on the host; there the panel has no `title`, so use `pid` or `command`.
 
 Only in `config.toml`; in a project file revier ignores it. Restart the TUI
 after you add one, and run `revier doctor`: a `[[probe]]` without `name` or
-`exec` stops every command except `revier doctor` and `revier assist`.
+`exec` is not run, and `revier doctor` names it.
 
 ```toml
 [[probe]]
