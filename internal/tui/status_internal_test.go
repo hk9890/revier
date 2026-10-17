@@ -68,7 +68,6 @@ var (
 	ruleLeft   = statusKey{at: core.StatusRuleLeft}
 	ruleRight  = statusKey{at: core.StatusRuleRight}
 	alphaLine  = statusKey{at: core.StatusProjectLine, project: "alpha"}
-	alphaInfo  = statusKey{at: core.StatusProject, project: "alpha"}
 	everyPlace = []core.Status{{At: core.StatusRuleLeft, Run: []string{"l"}}, {At: core.StatusRuleRight, Run: []string{"r"}}, {At: core.StatusProjectLine, Run: []string{"pl"}}, {At: core.StatusProject, Run: []string{"p"}}}
 	errFailed  = errors.New("exit status 1")
 )

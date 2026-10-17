@@ -21,14 +21,14 @@ A findability map: where things live, and how to search for them.
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
 | `internal/hosttest/` | The fake host, probe, key binder and remote that layer L2 runs against. |
-| `internal/testenv/` | The scratch configuration, state and ssh configuration a test binary runs in, in place of the user's own. |
+| `internal/testenv/` | The scratch configuration, state and ssh configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool. |
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `docs/user-guide/` | The user guide. `embed.go` carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
-| `cmd/revier/` | CLI entry point. `adapters.go` constructs every port's adapter; `assist.go`, `each.go` and `serve.go` call adapter helpers directly. |
+| `cmd/revier/` | CLI entry point. `adapters.go` constructs every port's adapter; `assist.go` and `each.go` call adapter helpers directly, and `serve.go` reads `proc`'s variable names. |
 
 ## The ports
 

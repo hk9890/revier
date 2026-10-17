@@ -50,8 +50,8 @@ describing something absent from `internal/` is intent, not documentation drift.
 
 ## Conventions
 
-- Cite a decision as `` `docs/design/decisions.md` Dnn `` from `docs/`, and
-  from a Go comment as [REVIEWING.md](REVIEWING.md#quality-rules) says.
+- Cite a decision as `` `docs/design/decisions.md` Dnn `` from `docs/` outside
+  `docs/design/`, and from a Go comment as [REVIEWING.md](REVIEWING.md#quality-rules) says.
 - Inside `docs/design/`, tag the behaviour a decision produces `(Dnn)`. Write
   a bare `Dnn` where the prose names the decision itself, as in "Replaces
   D71".

@@ -18,18 +18,6 @@ func TestAContinuationLineHasNoLabel(t *testing.T) {
 	}
 }
 
-const sound = `
-path = "/tmp/sound"
-
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "home"
-  launch = ["sh"]
-  match = { title = "^home$" }
-`
-
 // doctorRoot writes a configuration root and points revier at it.
 func doctorRoot(t *testing.T, files map[string]string) {
 	t.Helper()
