@@ -13,6 +13,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -63,7 +64,7 @@ func TestAListOfTheAssistantAloneSaysWhereToAddOne(t *testing.T) {
 func TestAssistExecWithNoAgentFailsAtOnce(t *testing.T) {
 	configRoot(t, "", nil)
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
+	testenv.NoTools(t)
 
 	if err := run(&strings.Builder{}, []string{"assist", "--exec"}); !errors.Is(err, errNoAssistant) {
 		t.Errorf("err = %v, want %v", err, errNoAssistant)

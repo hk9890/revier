@@ -1,7 +1,6 @@
-//go:build integration
-
-// Layer L3: what Instances costs, against a recorder in place of tmux that
-// answers with generated listings.
+// What Instances costs, against a recorder in place of tmux that answers with
+// generated listings. No recorded output and no tool, so the default layer
+// runs it.
 package tmux_test
 
 import (

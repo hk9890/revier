@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/internal/theme"
 )
 
@@ -20,7 +21,7 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	// The folder is new, so no git and no mise run on it; with no tool on the
 	// PATH none can.
-	t.Setenv("PATH", t.TempDir())
+	testenv.NoTools(t)
 	dir := filepath.Join(t.TempDir(), "widget")
 
 	th := theme.Default()
@@ -59,7 +60,7 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 func TestAFolderThatAppearsAfterTheCloneQuestionKeepsTheURLInSight(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	t.Setenv("PATH", t.TempDir())
+	testenv.NoTools(t)
 	parent := t.TempDir()
 	const url = "https://example.com/owner/widget.git"
 

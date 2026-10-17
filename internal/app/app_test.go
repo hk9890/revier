@@ -19,6 +19,7 @@ import (
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -37,19 +38,11 @@ func (l *ledger) Update(apply func(*state.State) bool) *state.State {
 
 func (l *ledger) Record(e revier.Event) { l.events = append(l.events, e) }
 
-// noTools empties PATH, so a project for a directory that is there starts
-// neither git nor mise: this layer starts no process, and mise's trust list
-// is left as it was.
-func noTools(t *testing.T) {
-	t.Helper()
-	t.Setenv("PATH", t.TempDir())
-}
-
 // created is a configuration root with one project in it, for a directory
 // that is there.
 func created(t *testing.T, name revier.ProjectName) (root string, p core.Project) {
 	t.Helper()
-	noTools(t)
+	testenv.NoTools(t)
 	root = t.TempDir()
 	p, err := app.CreateProject(root, nil, name, t.TempDir(), "", io.Discard)
 	if err != nil {
@@ -59,7 +52,7 @@ func created(t *testing.T, name revier.ProjectName) (root string, p core.Project
 }
 
 func TestCreateProjectNamesTheProjectAfterItsDirectory(t *testing.T) {
-	noTools(t)
+	testenv.NoTools(t)
 	root := t.TempDir()
 	dir := filepath.Join(t.TempDir(), "my project")
 	if err := os.Mkdir(dir, 0o755); err != nil {
@@ -80,7 +73,7 @@ func TestCreateProjectNamesTheProjectAfterItsDirectory(t *testing.T) {
 // a directory that is no checkout has none.
 func TestCreateProjectRecordsTheRepositoryOnlyOfAMissingDirectory(t *testing.T) {
 	const url = "git@github.com:hk9890/demo.git"
-	noTools(t)
+	testenv.NoTools(t)
 	root := t.TempDir()
 
 	missing, err := app.CreateProject(root, nil, "", filepath.Join(t.TempDir(), "demo"), url, io.Discard)

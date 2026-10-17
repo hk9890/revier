@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/testenv"
 )
 
 // The brief names the files of the configuration revier reads, so the agent
@@ -118,7 +120,7 @@ func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
 func TestAssistWithNoAgentInstalledSaysSo(t *testing.T) {
 	configRoot(t, "", nil)
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
+	testenv.NoTools(t)
 
 	err := run(&strings.Builder{}, []string{"assist"})
 	if !errors.Is(err, errNoAssistant) {

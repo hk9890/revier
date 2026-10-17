@@ -29,9 +29,9 @@ import (
 
 // Host is a GNOME WindowController.
 type Host struct {
-	// wctl runs wctl with the arguments and returns its standard output.
+	// run runs wctl with the arguments and returns its standard output.
 	// Tests replace it; production leaves it nil and runs the wctl on PATH.
-	wctl func(ctx context.Context, args ...string) ([]byte, error)
+	run func(ctx context.Context, args ...string) ([]byte, error)
 
 	// animatedHide and animatedFocus are each set once wctl has refused to
 	// hide or to activate without the animation, and has then done it with it.
@@ -105,15 +105,15 @@ func (h *Host) Probe(ctx context.Context) error {
 	if d := os.Getenv("XDG_CURRENT_DESKTOP"); d != "" && !strings.Contains(strings.ToUpper(d), "GNOME") {
 		return fmt.Errorf("XDG_CURRENT_DESKTOP is %q, not GNOME", d)
 	}
-	if _, err := h.run(ctx, "list", "--json"); err != nil {
+	if _, err := h.wctl(ctx, "list", "--json"); err != nil {
 		return fmt.Errorf("wctl is present but not answering: %w", err)
 	}
 	return nil
 }
 
-func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
-	if h.wctl != nil {
-		return h.wctl(ctx, args...)
+func (h *Host) wctl(ctx context.Context, args ...string) ([]byte, error) {
+	if h.run != nil {
+		return h.run(ctx, args...)
 	}
 	return execRun(ctx, "wctl", args...)
 }
@@ -123,7 +123,7 @@ func (h *Host) run(ctx context.Context, args ...string) ([]byte, error) {
 // so a refresh costs one invocation in nearly every case and at most two,
 // regardless of how many projects exist.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
-	raw, err := h.run(ctx, "list", "--json")
+	raw, err := h.wctl(ctx, "list", "--json")
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (h *Host) activeWorkspace(ctx context.Context) func() (int, bool) {
 			return at, ok
 		}
 		asked = true
-		raw, err := h.run(ctx, "workspaces", "--json")
+		raw, err := h.wctl(ctx, "workspaces", "--json")
 		if err != nil {
 			return 0, false
 		}
@@ -231,7 +231,7 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot close a zero ref")
 	}
-	_, err := h.run(ctx, "close", ref.ID)
+	_, err := h.wctl(ctx, "close", ref.ID)
 	return err
 }
 
@@ -259,12 +259,12 @@ func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 // of a refusal.
 func (h *Host) withoutAnimation(ctx context.Context, animated *atomic.Bool, command, id string) error {
 	if !animated.Load() {
-		_, err := h.run(ctx, command, id, "--no-animation")
+		_, err := h.wctl(ctx, command, id, "--no-animation")
 		if !refusesNoAnimation(err, command) {
 			return err
 		}
 	}
-	_, err := h.run(ctx, command, id)
+	_, err := h.wctl(ctx, command, id)
 	if err == nil {
 		animated.Store(true)
 	}
@@ -305,14 +305,14 @@ func (h *Host) Place(ctx context.Context, ref revier.TargetRef, geometry []strin
 		return fmt.Errorf("gnome: place needs four tokens, got %d", len(geometry))
 	}
 	args := append([]string{"place", ref.ID}, geometry...)
-	_, err := h.run(ctx, append(args, "--settled")...)
+	_, err := h.wctl(ctx, append(args, "--settled")...)
 	return err
 }
 
 // WorkareaWidth reports the width of the primary monitor's usable area, the
 // rectangle wctl resolves a placement's percentages against.
 func (h *Host) WorkareaWidth(ctx context.Context) (int, error) {
-	raw, err := h.run(ctx, "workarea", "--json")
+	raw, err := h.wctl(ctx, "workarea", "--json")
 	if err != nil {
 		return 0, err
 	}
@@ -334,7 +334,7 @@ func decodeWorkareaWidth(raw []byte) (int, error) {
 
 // Focused reports the focused window.
 func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
-	raw, err := h.run(ctx, "focused", "--json")
+	raw, err := h.wctl(ctx, "focused", "--json")
 	if err != nil {
 		return revier.TargetRef{}, err
 	}

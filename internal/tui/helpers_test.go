@@ -761,3 +761,13 @@ func margins(m tui.Model) (rows, cols int) {
 // probeOf is the world's one agent probe, whose state a test changes between
 // the plan and the confirm.
 func probeOf(c *core.Core) *hosttest.FakeProbe { return c.Probes[0].(*hosttest.FakeProbe) }
+
+// listColumn is the rows' left side, without the pane beside them.
+func listColumn(m tui.Model) string {
+	var out []string
+	for _, row := range rows(m) {
+		left, _, _ := strings.Cut(row, "│")
+		out = append(out, left)
+	}
+	return strings.Join(out, "\n")
+}

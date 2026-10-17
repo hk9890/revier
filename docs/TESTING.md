@@ -42,7 +42,8 @@ that did not focus after `Open` passed L2 and failed L4.
 ## Conventions
 
 - Tests sit next to the code. A live test file ends in `live_test.go` and
-  carries `//go:build live`.
+  carries `//go:build live`. An integration test file ends in
+  `_integration_test.go` and carries `//go:build integration`.
 - Put a test file in the external `_test` package. When it needs an unexported
   name, put it in the package and end its name in `_internal_test.go`, or in
   `_internal_live_test.go` when it is live. Two exceptions: `export_test.go` is

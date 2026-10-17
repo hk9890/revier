@@ -1,7 +1,6 @@
-//go:build integration
-
-// Layer L3: what Instances costs, against a recorder in place of wctl that
-// answers with a generated window list.
+// What Instances costs, against a recorder in place of wctl that answers with
+// a generated window list. No recorded output and no tool, so the default
+// layer runs it.
 package gnome_test
 
 import (

@@ -15,3 +15,11 @@ func fold(k tea.KeyPressMsg) keyPress {
 	folded, _ := legacyKey(k)
 	return pressedKey(folded)
 }
+
+func texts(segs []segment) []string {
+	var out []string
+	for _, s := range segs {
+		out = append(out, s.Text)
+	}
+	return out
+}

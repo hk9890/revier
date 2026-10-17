@@ -73,14 +73,6 @@ var (
 	errFailed  = errors.New("exit status 1")
 )
 
-func texts(segs []segment) []string {
-	var out []string
-	for _, s := range segs {
-		out = append(out, s.Text)
-	}
-	return out
-}
-
 // A command may print a JSON list of segments, one JSON segment, or plain
 // text, of which every line that holds anything is a segment. Its escape
 // sequences and control characters do not reach the frame, and a segment

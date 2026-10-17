@@ -206,16 +206,6 @@ func TestADeleteBeforeTheFirstSurveyIsRefused(t *testing.T) {
 	}
 }
 
-// listColumn is the rows' left side, without the pane beside them.
-func listColumn(m tui.Model) string {
-	var out []string
-	for _, row := range rows(m) {
-		left, _, _ := strings.Cut(row, "│")
-		out = append(out, left)
-	}
-	return strings.Join(out, "\n")
-}
-
 // With no project files the surface says so, and says where they go, rather
 // than showing an empty list.
 func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
