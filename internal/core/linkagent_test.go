@@ -299,7 +299,7 @@ func TestASaveRecordsALinksConversationsFromItsHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps := c.Session(context.Background(), report, "far")
+	s, gaps := c.Session(context.Background(), report)
 	if len(s.Projects) != 1 || len(s.Projects[0].Targets) == 0 {
 		t.Fatalf("session = %+v, want the link's home", s)
 	}
@@ -312,7 +312,7 @@ func TestASaveRecordsALinksConversationsFromItsHost(t *testing.T) {
 	}
 
 	remote.Err = errors.New("buildbox: connection refused")
-	if _, gaps := c.Session(context.Background(), report, "far"); len(gaps.Failed) != 1 {
+	if _, gaps := c.Session(context.Background(), report); len(gaps.Failed) != 1 {
 		t.Errorf("gaps = %+v, want the host's failure said", gaps)
 	}
 }

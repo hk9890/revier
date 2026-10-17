@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
-	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -738,27 +737,4 @@ func listed(snap snapshot, s CloseStep) bool {
 	return slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool {
 		return slices.Contains(s.closes(), p.ID)
 	})
-}
-
-// SaveChanged saves the session a shutdown ends, unless the newest saved
-// session already holds the same, or nothing is open. saved is false when it
-// wrote nothing.
-func (c *Core) SaveChanged(ctx context.Context, stateRoot string, r Report, current revier.ProjectName, at time.Time) (stored session.Session, saved bool, gaps SessionGaps, err error) {
-	s, gaps := c.Session(ctx, r, current)
-	if len(s.Projects) == 0 {
-		return session.Session{}, false, gaps, nil
-	}
-	newest, err := session.Load(stateRoot, "")
-	switch {
-	case err == nil && newest.SameAs(s):
-		return newest, false, gaps, nil
-	case err != nil && !errors.Is(err, session.ErrNoSession):
-		return session.Session{}, false, gaps, err
-	}
-	s.At = at
-	stored, _, err = store(stateRoot, s, gaps, "shutdown")
-	if err != nil {
-		return session.Session{}, false, gaps, err
-	}
-	return stored, true, gaps, nil
 }

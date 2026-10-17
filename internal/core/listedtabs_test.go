@@ -372,7 +372,7 @@ func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), r, "revier")
+	s, _ := c.Session(context.Background(), r)
 	if len(s.Projects) != 1 {
 		t.Fatalf("session = %+v, want one project", s.Projects)
 	}
@@ -572,7 +572,7 @@ func savedListedTabs(t *testing.T, dir string) (session.Session, core.SessionGap
 		inTab(revier.Panel{ID: "5", Kind: revier.PanelShell, Title: "zsh"}, "t3", nil),
 	)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	return c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, listedTabsProject("agent"))}, nil), "revier")
+	return c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, listedTabsProject("agent"))}, nil))
 }
 
 // restoredInto restores s over a project on a fresh runtime, and checks that
@@ -824,7 +824,7 @@ func savedWith(t *testing.T, project revier.Project, panels ...revier.Panel) (se
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:revier", "kitty", panels...)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
-	s, gaps := c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, project)}, nil), "revier")
+	s, gaps := c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, project)}, nil))
 	if len(s.Projects) != 1 {
 		t.Fatalf("session = %+v, want one project", s.Projects)
 	}
