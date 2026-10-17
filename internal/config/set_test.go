@@ -140,6 +140,22 @@ func TestSetRefusesAValueLoadRefuses(t *testing.T) {
 	}
 }
 
+// A write is refused for what it breaks, not for what was broken before it
+// (decisions.md D85): an unknown theme already in the file does not lock the
+// trigger key, and writing a valid theme in its place mends it.
+func TestSetIsNotRefusedForAProblemTheFileHadAlready(t *testing.T) {
+	root := writeConfig(t, "[ui]\ntheme = \"solarized\"\n")
+	if err := config.Set(root, "ui", "trigger_key", "alt-j"); err != nil {
+		t.Fatalf("Set trigger_key: %v", err)
+	}
+	if err := config.Set(root, "ui", "theme", "catppuccin-latte"); err != nil {
+		t.Fatalf("Set theme: %v", err)
+	}
+	if got, want := readConfig(t, root), "[ui]\ntheme = \"catppuccin-latte\"\ntrigger_key = \"alt-j\"\n"; got != want {
+		t.Errorf("config.toml = %q, want %q", got, want)
+	}
+}
+
 // A value the line editor cannot find where it looks - a dotted key - is
 // refused rather than written a second time.
 func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {
