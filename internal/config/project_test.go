@@ -11,20 +11,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-const overriding = `# demo
-path = "~/demo"
-
-[[target]]
-name = "editor"
-key = "ctrl-o"
-
-[[target]]
-name = "pulls"
-  [target.window]
-  launch = ["chrome"]
-  match = { class = "^chrome$" }
-`
-
 func TestReadProjectSaysWhereEachTargetComesFrom(t *testing.T) {
 	file, shared := projectRoot(t, overriding)
 	p, err := config.ReadProject(file, shared)

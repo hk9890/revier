@@ -208,3 +208,19 @@ func projectRoot(t *testing.T, body string) (string, []map[string]any) {
 	}
 	return config.ProjectFile(root, "demo"), cfg.Targets
 }
+
+// overriding is a project file that overrides the shared editor target and
+// adds a target of its own.
+const overriding = `# demo
+path = "~/demo"
+
+[[target]]
+name = "editor"
+key = "ctrl-o"
+
+[[target]]
+name = "pulls"
+  [target.window]
+  launch = ["chrome"]
+  match = { class = "^chrome$" }
+`
