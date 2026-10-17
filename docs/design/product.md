@@ -219,15 +219,18 @@ Beside the agent list the pane names the agent as it names a project - the
 agent's activity as the title, then its state, project, path, git URL, harness
 and when it spoke - and under that mirrors the agent's panel (D111): the end of
 what its terminal shows, read once a second, in the terminal's own colours. A
-line wider than the pane continues on the next at a word, under its first word
-past any list mark, and a rule wider than the pane is shortened to fit (D111).
+line wider than the pane continues on the next at a word, so no word reads
+split, under its first word past any list mark, and a rule wider than the pane
+is shortened to fit (D111).
 The screen is shown whole, the harness's own frame included (D137). The
 wheel scrolls back into the panel's scrollback, which is read only while the view is scrolled into it, and
 the view holds its lines as more are written under them. A link's agent is
 mirrored as any other, since the panel is here. A panel no runtime here can
 read leaves a note in the mirror's place. Nothing a screen carries but its
-colour reaches the terminal, and the first line of a message that a row shows
-is drawn as text (D108). With NO_COLOR set no colour reaches the terminal, and
+colour - its SGR sequences - reaches the terminal, and the first line of a
+message that a row shows is drawn as text (D108). Every line of the mirror
+closes the colour it opens, so what a screen holds cannot repaint the surface
+that shows it (D111). With NO_COLOR set no colour reaches the terminal, and
 bold and reverse video stay (D133).
 
 The list and the pane's agents each have a query over their rows, kept while

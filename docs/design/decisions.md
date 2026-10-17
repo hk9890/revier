@@ -646,10 +646,8 @@ one harness's format (D106). The panel is what every harness draws and what a
 link's ssh carries, so the pane reads it from the runtime (`PanelReader`) once
 a second, and its scrollback only while the user is scrolled into it. The
 screen is laid out for the agent's window, wider than the pane, so a long line
-continues on the next, broken at a word so no word reads split. Only SGR
-sequences pass, and every line is closed: a screen holds whatever a tool
-printed (D108). Rejected: cutting a long line, which loses the end of every
-sentence.
+wraps; only colour passes, since a screen holds whatever a tool printed (D108).
+Rejected: cutting a long line, which loses the end of every sentence.
 
 ### D112 — what revier did in a project is an event, kept apart from the log
 

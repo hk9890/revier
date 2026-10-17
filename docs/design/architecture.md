@@ -134,6 +134,9 @@ stable. Go convention puts an interface in the package that consumes it; this
 project overrides that convention because the interfaces are a product feature,
 and adapter authors need one obvious import path.
 
-Adapters are wired explicitly in `cmd/revier/adapters.go`, not through `init()`
-registration. Explicit wiring is greppable, and it makes the set of compiled-in
-adapters a single readable list.
+The adapter of every port is constructed explicitly in `cmd/revier/adapters.go`,
+not through `init()` registration. Explicit wiring is greppable, and it makes
+the set of compiled-in adapters a single readable list. A command that
+needs one adapter helper calls it directly: `assist.go` starts the Claude
+assistant, `each.go` quotes for ssh, and `serve.go` tags what it starts for
+`proc`.
