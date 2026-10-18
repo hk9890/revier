@@ -6,6 +6,62 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.19.0
+
+- **A wrong `[ui]` value or `[[probe]]` in `config.toml` no longer stops every
+  command.** Before, one such mistake stopped every command that reads the
+  projects: the TUI, the desktop chords and `revier popup`. `revier doctor`
+  showed only that one error. The mistake could be a `[[probe]]` without
+  `name` or `exec`, an unknown `theme` or `glyphs`, or a `trigger_key` that
+  revier cannot read. Now only the wrong value is affected:
+  - An unknown `theme` or `glyphs` uses its default.
+  - A `[[probe]]` without `name` or `exec` does not run.
+  - A `trigger_key` that revier cannot read stops only `revier keys status`,
+    `install` and `uninstall`. They do not bind alt+space in its place, and
+    the TUI help shows no trigger key.
+
+  `revier doctor` names each mistake under the `config.toml` heading and
+  exits 1. Correct the value. revier still stops every command when
+  `config.toml` is not valid TOML, or when a value has the wrong type, such as
+  `theme = 3`.
+- **The config screen (alt+c) shows the problems of `config.toml`.** Before,
+  the TUI showed none of them. The one warning line on stderr disappeared when
+  the TUI started, and only `revier doctor` named the problems. Now each
+  problem shows above the rows of the screen, and a long problem wraps. A
+  problem can be an unknown theme or glyph set, a trigger key that revier
+  cannot read, an action, shared target or `[[status]]` that cannot be used,
+  or a `[[probe]]` without `name` or `exec`. A theme name with a typo now
+  shows as the default theme, and this screen tells you why. If `config.toml`
+  stops being valid TOML while the TUI runs, the screen shows the path and the
+  reason the next time you open it. The screen reads the list again when it
+  opens, after each change you make on it, and when the TUI reads the files
+  again without an error. When you choose a valid theme on the screen, its
+  problem goes away.
+- **An agent whose Claude Code conversation is gone starts empty, and revier
+  tells you.** Claude Code keeps no conversation for an agent that never got a
+  prompt. It also deletes conversations older than `cleanupPeriodDays`, which
+  is 30 days by default. Before, a restore resumed such an agent anyway.
+  Claude Code stopped at once with `No conversation found with session ID`,
+  the window showed a failed command, and the restore counted the agent as
+  resumed. Now the agent starts empty in the directory where it worked. The
+  restore summary adds, for example, `2 agents empty: conversation gone`. The
+  sessions screen shows `empty: its conversation is gone`, also in the plan
+  before you restore. `revier agent new --resume <id>` does the same check,
+  and so does the agent of a linked project when its host runs this version.
+  Both print `revier: warning: <id> was not resumed (conversation gone)` and
+  then tell you that the agent starts empty. For the agent of a linked
+  project, only that warning on the host tells you: the restore summary and
+  the sessions screen still count it as resumed.
+- **A double click in the TUI opens only the row that you clicked two times.**
+  Before, a refresh between the two clicks could move another project or agent
+  into the place that you clicked. For example, a project that needs you moved
+  to the top, or an agent closed and the rows below it moved up. The second
+  click then opened that other row, which you had clicked only once. This was
+  also true for the agent and target rows of the pane and for the rows of a
+  screen. Now a double click counts only when the same project, agent or
+  target is still in the same place. If the row moves, the second click is a
+  new single click.
+
 ## v0.18.0
 
 - **Action required: a target with a key cannot be named `popup`.** The
