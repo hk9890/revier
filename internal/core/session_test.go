@@ -440,6 +440,26 @@ func TestRestoreStartsAnAgentWithNoConversationInItsDirectory(t *testing.T) {
 	}
 }
 
+// A conversation its harness no longer keeps - one never filed, or pruned
+// since the save - is not resumed: the harness would refuse it and end at
+// once. The agent starts empty in its directory, and the restore says why.
+func TestRestoreStartsAnAgentWhoseConversationIsGoneEmptyInItsDirectory(t *testing.T) {
+	probe := resumable()
+	probe.Gone = []revier.SessionID{"never-filed"}
+	c := &core.Core{Probes: []revier.AgentProbe{probe}}
+	sub := t.TempDir()
+
+	rt := restored(t, c, agentProject(), []core.Resume{{Harness: "claude", Session: "never-filed", Dir: sub}})
+	agent := rt.Opened[0].Panels[1]
+	if !slices.Equal(agent.Command, []string{"claude", "--model", "opus"}) || agent.Dir != sub {
+		t.Errorf("agent = %+v, want it empty in %s", agent, sub)
+	}
+	outcomes := c.Resumes(prepared(t, agentProject()), "home", []core.Resume{{Harness: "claude", Session: "never-filed", Dir: sub}})
+	if want := []core.AgentOutcome{core.AgentConversationGone}; !slices.Equal(outcomes, want) {
+		t.Errorf("outcomes = %v, want %v", outcomes, want)
+	}
+}
+
 // A restore and `revier agent new` build an agent tab through the same code:
 // the tab a restore opens for an agent is the tab agent new opens for the same
 // conversation and directory.

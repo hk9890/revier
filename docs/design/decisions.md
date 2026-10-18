@@ -687,3 +687,14 @@ an agent selector under the box left the screen whole, and a full-screen view
 has no box to find. A cut that holds only for the layouts it was tested on is
 wrong on the next one. Rejected: a cut by the harness's layout, in the probe or
 in the surface.
+
+### D139 — a conversation is resumed only while its harness keeps it
+
+Claude Code names a session from its start but files it at the first prompt,
+and prunes old ones; a resume of one it does not keep ends at once in a window
+whose command failed, which the restore counted as resumed. So a save records
+an agent with no filed conversation by its directory alone, and a restore asks
+the probe whether the harness still keeps the conversation before it resumes,
+starting the agent empty in its directory otherwise. Rejected: watching the
+panel after the launch, which sees the failure only after its window opened and
+makes every restore wait.

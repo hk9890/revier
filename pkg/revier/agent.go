@@ -297,6 +297,13 @@ type Resumable interface {
 	// agents must cost that once, the rule Host.Instances follows.
 	Sessions(ctx context.Context, panels []Panel) ([]Conversation, error)
 
+	// Holds reports whether the harness still keeps the conversation, the
+	// agent having worked in dir, so a resume of it opens it. A harness that
+	// files a conversation late, or prunes old ones, refuses a resume of one
+	// it does not keep and ends at once; a restore asks first and starts that
+	// agent empty instead.
+	Holds(id SessionID, dir string) bool
+
 	// ResumeCommand returns the argv that starts the harness on that
 	// conversation, built from the panel as it is configured now. The
 	// configured arguments are kept: a project that runs its agent with a

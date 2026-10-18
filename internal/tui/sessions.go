@@ -642,6 +642,8 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 		return startOp(th, tense("start", "started")), ""
 	case core.AgentDirGone:
 		return startOp(th, tense("start", "started")), "empty: its directory is gone"
+	case core.AgentConversationGone:
+		return startOp(th, tense("start", "started")), "empty: its conversation is gone"
 	case core.AgentUnresumable:
 		return startOp(th, tense("start", "started")), "empty: its harness cannot resume here"
 	case core.AgentInTab:

@@ -275,6 +275,13 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 	return out, nil
 }
 
+// Holds reports whether Claude Code keeps a transcript of the conversation:
+// one never prompted has none, and Claude Code prunes one older than its
+// cleanupPeriodDays.
+func (p *Probe) Holds(id revier.SessionID, dir string) bool {
+	return p.filed(listedSession{SessionID: string(id), Cwd: dir})
+}
+
 // filed reports whether Claude Code has filed a transcript for the session,
 // and true when a project directory could not be read to say.
 func (p *Probe) filed(s listedSession) bool {

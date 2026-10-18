@@ -407,6 +407,20 @@ func TestSessionsLeavesOutASessionWithNoTranscript(t *testing.T) {
 	}
 }
 
+// A restore resumes only a conversation Claude Code still keeps: one filed
+// under the directory the agent worked in, or under any other.
+func TestHolds(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "")
+	writeTranscript(t, root, "-home-user-dev-demo", "under-its-dir", said("here"))
+	writeTranscript(t, root, "-home-user-dev-demo--claude-worktrees-x", "elsewhere", said("there"))
+	cases := map[revier.SessionID]bool{"under-its-dir": true, "elsewhere": true, "never-filed": false}
+	for id, want := range cases {
+		if got := p.Holds(id, "/home/user/dev/demo"); got != want {
+			t.Errorf("Holds(%s) = %v, want %v", id, got, want)
+		}
+	}
+}
+
 // A background session has no pid. It must not become the conversation of a
 // panel that reports none.
 func TestSessionsIgnoresBackgroundSessions(t *testing.T) {

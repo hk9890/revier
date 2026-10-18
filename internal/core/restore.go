@@ -232,6 +232,9 @@ func AgentsNote(verb string, agents []AgentOutcome, tabErr error) string {
 	if n[AgentDirGone] > 0 {
 		note += fmt.Sprintf(", %s empty: directory gone", Count(n[AgentDirGone], "agent"))
 	}
+	if n[AgentConversationGone] > 0 {
+		note += fmt.Sprintf(", %s empty: conversation gone", Count(n[AgentConversationGone], "agent"))
+	}
 	if n[AgentUnresumable] > 0 {
 		note += fmt.Sprintf(", %s empty: no probe here resumes its harness in its panel", Count(n[AgentUnresumable], "agent"))
 	}
