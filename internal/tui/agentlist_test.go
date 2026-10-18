@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -252,6 +254,40 @@ func TestEnterOnAnAgentRowGoesToTheAgent(t *testing.T) {
 	runAll(cmd)
 	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"2"}) {
 		t.Errorf("panel focuses = %v, want the second agent's panel", rt.PanelFocuses)
+	}
+}
+
+// An agent in a workspace two projects match is a row under each, and a click
+// on each row is two choices, not a double click: a second click on one row
+// goes to the agent.
+func TestClicksOnAnAgentsRowsUnderTwoProjectsAreNotADoubleClick(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:shared", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude idle fix the build"})
+	var raw []revier.Project
+	for _, name := range []revier.ProjectName{"alpha", "beta"} {
+		raw = append(raw, revier.Project{Name: name, Path: "/p/" + string(name), Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{
+				Name: "session:shared", Launch: []string{"x"}, Match: revier.Match{Title: "^session:shared$"}}},
+		}})
+	}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	m, now := clocked(switched(resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 120, 20)))
+	if rows := listedRows(m); len(rows) != 2 {
+		t.Fatalf("rows = %q, want the agent under each project", rows)
+	}
+
+	m = clickAt(m, 5, 5)
+	*now = now.Add(100 * time.Millisecond)
+	m, cmd := clickCell(m, 5, 7)
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Fatalf("panel focuses = %v, want none: one click on each row", rt.PanelFocuses)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	_, cmd = clickCell(m, 5, 7)
+	runAll(cmd)
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"1"}) {
+		t.Errorf("panel focuses = %v after a second click on the row, want the agent's panel", rt.PanelFocuses)
 	}
 }
 

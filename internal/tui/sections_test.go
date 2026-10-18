@@ -203,9 +203,10 @@ func TestADoubleClickOnAnAgentGoesToItAndOnItsFieldTypesThere(t *testing.T) {
 	}
 }
 
-// Two clicks on one cell of the Agents section are two choices when a refresh
-// between them moved another agent into that row: it was clicked once.
-func TestASecondClickOnAnAgentRowARefreshMovedGoesNowhere(t *testing.T) {
+// threeAgents is demo, open with three agents, on a clock the test
+// advances, and the ref of its workspace, for a test that closes one of them.
+func threeAgents(t *testing.T) (*hosttest.FakeRuntime, revier.TargetRef, tui.Model, *time.Time) {
+	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:demo", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude idle fix-remote-work"},
@@ -217,6 +218,13 @@ func TestASecondClickOnAnAgentRowARefreshMovedGoesNowhere(t *testing.T) {
 	}}})
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30).Said())
+	return rt, ref, m, now
+}
+
+// Two clicks on one cell of the Agents section are two choices when a refresh
+// between them moved another agent into that row: it was clicked once.
+func TestASecondClickOnAnAgentRowARefreshMovedGoesNowhere(t *testing.T) {
+	rt, ref, m, now := threeAgents(t)
 
 	x, y := paneCell(t, m, "UX and naming")
 	m, cmd := clickCell(m, x, y)
@@ -233,6 +241,30 @@ func TestASecondClickOnAnAgentRowARefreshMovedGoesNowhere(t *testing.T) {
 	runAll(cmd)
 	if len(rt.PanelFocuses) != 0 {
 		t.Errorf("panel focuses = %v, want none: one click on release notes", rt.PanelFocuses)
+	}
+}
+
+// Clicks on two rows of the Agents section are two choices when a refresh
+// between them moved the agent clicked first into the row clicked second.
+func TestAClickOnTheAgentRowARefreshMovedTheLastAgentToGoesNowhere(t *testing.T) {
+	rt, ref, m, now := threeAgents(t)
+
+	x, y := paneCell(t, m, "release notes")
+	ux, uy := paneCell(t, m, "UX and naming")
+	m, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	if err := rt.ClosePanel(t.Context(), ref, "1"); err != nil {
+		t.Fatal(err)
+	}
+	m = survey(m)
+	if rx, ry := paneCell(t, m, "release notes"); rx != ux || ry != uy {
+		t.Fatalf("release notes is at %d,%d after the refresh, UX and naming was at %d,%d: the test needs it moved there", rx, ry, ux, uy)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	_, cmd = clickCell(m, ux, uy)
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Errorf("panel focuses = %v, want none: one click on each of two rows", rt.PanelFocuses)
 	}
 }
 

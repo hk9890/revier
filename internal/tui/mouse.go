@@ -13,20 +13,23 @@ import (
 // click. The desktop's own is between 400 and 500 ms.
 const doubleClick = 400 * time.Millisecond
 
-// click is the last press of the left button: what the row it landed on
-// showed and when, so the next press can tell a double click from a second
-// choice. It holds what the row showed, not where the row stood: a refresh
-// between the two presses can sort another project or agent into that place.
+// click is the last press of the left button: the row it landed on, what that
+// row showed, and when, so the next press can tell a double click from a
+// second choice. A double click needs the same place and the same row in it:
+// a refresh between the two presses can sort another project or agent into
+// that place, or the one clicked into another place.
 type click struct {
-	row any
-	at  time.Time
+	index int
+	row   any
+	at    time.Time
 }
 
-// clicked is what a list row shows: the agent of an agent's row, which keeps
-// its key while its activity changes, and the name every other row filters on.
+// clicked is what a list row shows: the agent and the project of an agent's
+// row, because an agent that two projects hold is a row under each, and the
+// name every other row filters on.
 func clicked(it list.Item) any {
 	if a, ok := it.(agentItem); ok {
-		return keyOf(a.agent)
+		return a.key()
 	}
 	return it.FilterValue()
 }
@@ -123,8 +126,8 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m.bodyList().Select(index)
 		last := m.last
-		m.last = click{row: clicked(m.bodyList().SelectedItem()), at: m.now()}
-		if last.row == m.last.row && m.last.at.Sub(last.at) < doubleClick {
+		m.last = click{index: index, row: clicked(m.bodyList().SelectedItem()), at: m.now()}
+		if last.index == index && last.row == m.last.row && m.last.at.Sub(last.at) < doubleClick {
 			m.last = click{}
 			// A second click on a screen's row is its Enter.
 			if m.dialog != dialogNone {
@@ -183,11 +186,12 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// paneClick is the last click on a pane row, for telling a double click: what
-// the row showed, as click holds it for a list row.
+// paneClick is the last click on a pane row, for telling a double click: the
+// row and what it showed, as click holds them for a list row.
 type paneClick struct {
-	row any
-	at  time.Time
+	over hovered
+	row  any
+	at   time.Time
 }
 
 // paneRow is what the pane row under the pointer shows: the agent, the
@@ -207,8 +211,8 @@ func (m Model) paneRow() any {
 // it is the second of a double click on that row.
 func (m *Model) twice() bool {
 	last := m.pclick
-	m.pclick = paneClick{row: m.paneRow(), at: m.now()}
-	if last.row != m.pclick.row || m.pclick.at.Sub(last.at) >= doubleClick {
+	m.pclick = paneClick{over: m.over, row: m.paneRow(), at: m.now()}
+	if last.over != m.pclick.over || last.row != m.pclick.row || m.pclick.at.Sub(last.at) >= doubleClick {
 		return false
 	}
 	m.pclick = paneClick{}
