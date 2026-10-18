@@ -1,5 +1,10 @@
 # revier
 
+[![CI](https://github.com/hk9890/revier/actions/workflows/ci.yml/badge.svg)](https://github.com/hk9890/revier/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/hk9890/revier)](https://github.com/hk9890/revier/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey)
+
 A project-grouped control surface for running coding agents.
 
 You run several projects at once. Each holds a coding agent, a shell, and the
@@ -16,12 +21,12 @@ territory.
 
 Early, but usable. Linux only.
 
-Working: project files, run-or-raise with toggle-back, the project resolved
-from the focused window, agent state for Claude Code 2.1.212 or newer (opencode is recognised
-but reports no state), external probes, kitty and tmux runtime hosts, the GNOME window host,
-claim-on-appear for windows opened after a launch, the TUI, the popup, every
-command in the [command line reference](docs/user-guide/cli.md), and the GNOME
-keybindings.
+- **Terminals:** kitty and tmux. Ghostty works through tmux.
+- **Desktop:** GNOME, for window targets and desktop keys.
+- **Agents:** Claude Code 2.1.212 or newer reports its state. opencode is
+  recognised but reports no state. An external probe adds any other tool.
+- **Commands:** every command in the
+  [command line reference](docs/user-guide/cli.md).
 
 To follow the design, read [docs/design/](docs/design/README.md) — it states
 the model, its boundaries and the reasons, and logs the decisions behind it.
@@ -81,8 +86,7 @@ mise run build     # ./bin/revier
 
 Installing revier is [Install](#install) above.
 
-Contributor guides live in [docs/](docs/): [CODING.md](docs/CODING.md),
-[TESTING.md](docs/TESTING.md), [RUNNING.md](docs/RUNNING.md).
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
