@@ -29,13 +29,14 @@ Each section is also the text of its release on the
   the TUI started, and only `revier doctor` named the problems. Now each
   problem shows above the rows of the screen, and a long problem wraps. A
   problem can be an unknown theme or glyph set, a trigger key that revier
-  cannot read, an action or shared target that cannot be used, or a
-  `[[probe]]` without `name` or `exec`. A theme name with a typo now shows as
-  the default theme, and this screen tells you why. If `config.toml` stops
-  being valid TOML while the TUI runs, the screen shows the path and the
-  reason. The screen reads the list again when it opens, after each change you
-  make on it, and when the TUI reads the files again. When you choose a valid
-  theme on the screen, its problem goes away.
+  cannot read, an action, shared target or `[[status]]` that cannot be used,
+  or a `[[probe]]` without `name` or `exec`. A theme name with a typo now
+  shows as the default theme, and this screen tells you why. If `config.toml`
+  stops being valid TOML while the TUI runs, the screen shows the path and the
+  reason the next time you open it. The screen reads the list again when it
+  opens, after each change you make on it, and when the TUI reads the files
+  again without an error. When you choose a valid theme on the screen, its
+  problem goes away.
 - **An agent whose Claude Code conversation is gone starts empty, and revier
   tells you.** Claude Code keeps no conversation for an agent that never got a
   prompt. It also deletes conversations older than `cleanupPeriodDays`, which
@@ -48,7 +49,9 @@ Each section is also the text of its release on the
   before you restore. `revier agent new --resume <id>` does the same check,
   and so does the agent of a linked project when its host runs this version.
   Both print `revier: warning: <id> was not resumed (conversation gone)` and
-  then tell you that the agent starts empty.
+  then tell you that the agent starts empty. For the agent of a linked
+  project, only that warning on the host tells you: the restore summary and
+  the sessions screen still count it as resumed.
 - **A double click in the TUI opens only the row that you clicked two times.**
   Before, a refresh between the two clicks could move another project or agent
   into the place that you clicked. For example, a project that needs you moved
