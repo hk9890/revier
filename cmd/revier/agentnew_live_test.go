@@ -24,6 +24,7 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	agent := strings.TrimSuffix(args, ".args")
 	dir := t.TempDir()
 
+	fileConversation(t, "abc-123")
 	if err := run(io.Discard, []string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
 		t.Fatalf("agent new: %v", err)
 	}
@@ -55,6 +56,7 @@ func TestANewAgentAndANewShellAreEvents(t *testing.T) {
 	t.Cleanup(func() { events.Setup("") })
 	dir := t.TempDir()
 
+	fileConversation(t, "abc-123")
 	if err := run(io.Discard, []string{"agent", "new", "-p", "work", "--resume", "abc-123", "--dir", dir}); err != nil {
 		t.Fatalf("agent new: %v", err)
 	}
