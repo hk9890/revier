@@ -3,18 +3,32 @@ package tui
 import (
 	"time"
 
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // doubleClick is how close two clicks on one row are to count as a double
 // click. The desktop's own is between 400 and 500 ms.
 const doubleClick = 400 * time.Millisecond
 
-// click is the last press of the left button: which row it landed on and
-// when, so the next press can tell a double click from a second choice.
+// click is the last press of the left button: what the row it landed on
+// showed and when, so the next press can tell a double click from a second
+// choice. It holds what the row showed, not where the row stood: a refresh
+// between the two presses can sort another project or agent into that place.
 type click struct {
-	index int
-	at    time.Time
+	row any
+	at  time.Time
+}
+
+// clicked is what a list row shows: the agent of an agent's row, which keeps
+// its key while its activity changes, and the name every other row filters on.
+func clicked(it list.Item) any {
+	if a, ok := it.(agentItem); ok {
+		return keyOf(a.agent)
+	}
+	return it.FilterValue()
 }
 
 // mouse is the wheel, the pointer and the left button. The wheel over the
@@ -109,8 +123,8 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m.bodyList().Select(index)
 		last := m.last
-		m.last = click{index: index, at: m.now()}
-		if last.index == index && m.last.at.Sub(last.at) < doubleClick {
+		m.last = click{row: clicked(m.bodyList().SelectedItem()), at: m.now()}
+		if last.row == m.last.row && m.last.at.Sub(last.at) < doubleClick {
 			m.last = click{}
 			// A second click on a screen's row is its Enter.
 			if m.dialog != dialogNone {
@@ -169,18 +183,32 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// paneClick is the last click on a pane row, for telling a double click.
+// paneClick is the last click on a pane row, for telling a double click: what
+// the row showed, as click holds it for a list row.
 type paneClick struct {
-	over hovered
-	at   time.Time
+	row any
+	at  time.Time
+}
+
+// paneRow is what the pane row under the pointer shows: the agent, the
+// instance attached by hand, or the target.
+func (m Model) paneRow() any {
+	if m.over.kind == hoverAgent {
+		return keyOf(m.agentRows()[m.over.index].agent)
+	}
+	row := m.targetRows()[m.over.index]
+	if !row.attached.IsZero() {
+		return revier.TargetRef{Host: row.attached.Host, ID: row.attached.ID}
+	}
+	return row.target.Name
 }
 
 // twice records a click on the pane row under the pointer and reports whether
 // it is the second of a double click on that row.
 func (m *Model) twice() bool {
 	last := m.pclick
-	m.pclick = paneClick{over: m.over, at: m.now()}
-	if last.over != m.over || m.pclick.at.Sub(last.at) >= doubleClick {
+	m.pclick = paneClick{row: m.paneRow(), at: m.now()}
+	if last.row != m.pclick.row || m.pclick.at.Sub(last.at) >= doubleClick {
 		return false
 	}
 	m.pclick = paneClick{}
