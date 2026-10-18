@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -85,7 +86,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		// runs on the budget the shutdown hands it, not on what the two
 		// surveys left of this command's.
 		opts.Before = func(saving context.Context, now core.Report) error {
-			stored, saved, gaps, err := a.core.SaveChanged(saving, a.stateRoot, now, a.core.Ledger.State().Current, time.Now())
+			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, time.Now())
 			switch {
 			case err != nil:
 				return err

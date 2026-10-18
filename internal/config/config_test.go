@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -617,7 +618,8 @@ func TestValidatePanelsStandInForLaunchOnATabAlone(t *testing.T) {
 }
 
 // A [[probe]] entry is loaded with its binary path expanded; a half-declared
-// one is refused at load.
+// one is left out and named in Problems, and the rest loads (decisions.md
+// D85).
 func TestLoadProbes(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\nexec = \"~/bin/aider-probe\"\n")
@@ -641,9 +643,19 @@ func TestLoadProbes(t *testing.T) {
 		t.Errorf("probes = %+v", cfg.Probes)
 	}
 
-	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\n")
-	if _, _, err := config.Load(root); err == nil {
-		t.Error("a probe without exec should be refused at load")
+	root = projectsRoot(t, "[[probe]]\nname = \"aider\"\n\n[[probe]]\nname = \"goose\"\nexec = \"goose-probe\"\n", map[string]string{"demo.toml": valid})
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Probes) != 1 || cfg.Probes[0].Name != "goose" {
+		t.Errorf("probes = %+v, want goose alone", cfg.Probes)
+	}
+	if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), `probe "aider"`) {
+		t.Errorf("problems = %v, want the probe named", cfg.Problems)
+	}
+	if len(projects) != 1 {
+		t.Errorf("loaded %d projects, want the project set untouched", len(projects))
 	}
 }
 
@@ -667,18 +679,31 @@ glyphs = "nerd"
 	}
 }
 
-// A typo in a theme name must stop revier at startup. Falling back to the
-// default would leave the user looking for a colour that never arrives.
-func TestLoadRejectsAnUnknownThemeAndNamesTheValidOnes(t *testing.T) {
-	root := t.TempDir()
-	write(t, root, "config.toml", "[ui]\ntheme = \"dracula\"\n")
+// A typo in a theme or glyph name draws the default and is named in
+// Problems with the valid names, so `revier doctor` says what to write. It
+// costs the look alone, never the project set (decisions.md D85).
+func TestLoadDrawsTheDefaultForAnUnknownThemeAndNamesTheValidOnes(t *testing.T) {
+	root := projectsRoot(t, "[ui]\ntheme = \"dracula\"\nglyphs = \"runes\"\n", map[string]string{"demo.toml": valid})
 
-	_, _, err := config.Load(root)
-	if err == nil {
-		t.Fatal("Load: no error for an unknown theme")
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
-	if !strings.Contains(err.Error(), "catppuccin-mocha") {
-		t.Errorf("error = %q, want it to list the valid names", err)
+	if len(projects) != 1 {
+		t.Errorf("loaded %d projects, want the project set untouched", len(projects))
+	}
+	th, err := cfg.Theme()
+	if err != nil {
+		t.Fatalf("Theme: %v", err)
+	}
+	if th.Name != theme.DefaultTheme || th.Glyphs != theme.Default().Glyphs {
+		t.Errorf("theme = %q with glyphs %+v, want the default", th.Name, th.Glyphs)
+	}
+	got := errors.Join(cfg.Problems...)
+	for _, want := range []string{"ui.theme", "catppuccin-mocha", "ui.glyphs", "runes"} {
+		if got == nil || !strings.Contains(got.Error(), want) {
+			t.Errorf("problems = %v, want them to name %q", got, want)
+		}
 	}
 }
 
@@ -844,19 +869,28 @@ func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
 	}
 }
 
-// A key that does not parse fails at startup, naming the value. Reported at a
-// keypress instead, it would look like a broken keyboard.
-func TestLoadRejectsAnUnreadableTriggerKey(t *testing.T) {
-	root := t.TempDir()
-	write(t, root, "config.toml", "[ui]\ntrigger_key = \"<Nonsense>space\"\n")
+// A key that does not parse is named in Problems at load, with the value, and
+// stays as written: the keys commands refuse it rather than bind the default
+// in place of the key the user chose, and nothing else is refused for it
+// (decisions.md D85). Reported at a keypress instead, it would look like a
+// broken keyboard.
+func TestLoadNamesAnUnreadableTriggerKeyAndKeepsIt(t *testing.T) {
+	root := projectsRoot(t, "[ui]\ntrigger_key = \"<Nonsense>space\"\n", map[string]string{"demo.toml": valid})
 
-	_, _, err := config.Load(root)
-	if err == nil {
-		t.Fatal("Load accepted a key it cannot read")
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
+	if len(projects) != 1 {
+		t.Errorf("loaded %d projects, want the project set untouched", len(projects))
+	}
+	if key, err := cfg.TriggerKey(); err == nil {
+		t.Errorf("TriggerKey = %q, want the error, not a default", key)
+	}
+	got := errors.Join(cfg.Problems...)
 	for _, want := range []string{"trigger_key", "Nonsense"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error = %q, want it to name %q", err, want)
+		if got == nil || !strings.Contains(got.Error(), want) {
+			t.Errorf("problems = %v, want them to name %q", got, want)
 		}
 	}
 }

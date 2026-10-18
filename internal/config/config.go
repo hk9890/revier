@@ -54,9 +54,13 @@ type Config struct {
 
 	// Problems is what config.toml declares that nothing can use, each with
 	// its reason: an action the TUI could never run, a shared target no
-	// project could take. Each costs itself alone (decisions.md D85): the
-	// action stays unbound, the target reaches no project, and the file is
-	// otherwise read whole. `revier doctor` is where these are read.
+	// project could take, a probe half declared, a [ui] value that does not
+	// resolve. Each costs itself alone (decisions.md D85): the action stays
+	// unbound, the target reaches no project, the probe is not run, an
+	// unknown theme or glyph set is the default, a trigger key that does not
+	// parse refuses only the keys commands, and the file is otherwise read
+	// whole. `revier
+	// doctor` is where these are read.
 	Problems []error `toml:"-"`
 
 	// SelfLinks is the files of the links whose host is this machine, which
@@ -66,8 +70,8 @@ type Config struct {
 	statuses []core.Status // Status without the tables a rule refused
 }
 
-// UI is how the TUI looks. Both names are resolved at load, so a typo is a
-// startup error and not an unstyled surface.
+// UI is how the TUI looks. Both names are resolved at load: a typo is one of
+// Problems, and the default is drawn in its place.
 type UI struct {
 	Theme  string `toml:"theme"`
 	Glyphs string `toml:"glyphs"`
@@ -222,25 +226,44 @@ func File(root string) string {
 	return filepath.Join(root, "config.toml")
 }
 
-// parse decodes and validates the text of config.toml. Load and Set both
-// run it, so a value Set writes is one Load accepts at the next start.
+// parse decodes and validates the text of config.toml. Only text that does
+// not decode is an error; every rule it breaks is one of Problems. Load and
+// the writers all run it, and a writer refuses what adds to Problems, so a
+// value written is one Load uses at the next start.
 func parse(data []byte) (*Config, error) {
 	cfg := &Config{}
 	if _, err := toml.Decode(string(data), cfg); err != nil {
 		return nil, err
 	}
+	probes := cfg.Probes[:0:0]
 	for i, pr := range cfg.Probes {
-		if pr.Name == "" || pr.Exec == "" {
-			return nil, fmt.Errorf("probe %d needs both name and exec", i+1)
+		switch {
+		case pr.Name == "":
+			cfg.Problems = append(cfg.Problems, fmt.Errorf("probe %d: needs a name", i+1))
+			continue
+		case pr.Exec == "":
+			cfg.Problems = append(cfg.Problems, fmt.Errorf("probe %q: needs an exec", pr.Name))
+			continue
 		}
-		cfg.Probes[i].Exec = probeExec(pr.Exec)
+		pr.Exec = probeExec(pr.Exec)
+		probes = append(probes, pr)
 	}
+	cfg.Probes = probes
 
-	if _, err := cfg.Theme(); err != nil {
-		return nil, err
+	// A name that does not resolve is drawn with the default, so the
+	// surface still opens and says what it did not use.
+	if _, err := theme.Lookup(cfg.UI.Theme, ""); err != nil {
+		cfg.Problems = append(cfg.Problems, fmt.Errorf("ui.theme: %w", err))
+		cfg.UI.Theme = ""
 	}
+	if _, err := theme.Lookup("", cfg.UI.Glyphs); err != nil {
+		cfg.Problems = append(cfg.Problems, fmt.Errorf("ui.glyphs: %w", err))
+		cfg.UI.Glyphs = ""
+	}
+	// A key that does not parse stays as written: the keys commands refuse
+	// it, rather than bind the default in place of the key the user chose.
 	if _, err := cfg.TriggerKey(); err != nil {
-		return nil, fmt.Errorf("ui.trigger_key: %w", err)
+		cfg.Problems = append(cfg.Problems, fmt.Errorf("ui.trigger_key: %w", err))
 	}
 	for i, err := range validateActions(cfg.Actions) {
 		if err != nil {

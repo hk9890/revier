@@ -21,9 +21,11 @@ import (
 // is added at the end when the file has none.
 //
 // The result is parsed and validated as Load does before anything is written,
-// and read back: a key the line editor does not find where it looks, such as
-// one written as a dotted key or an inline table, would otherwise land twice
-// or not at all. That is refused, and the file stays as it was.
+// and refused for a problem it adds that the file did not have (decisions.md
+// D85). It is also read back: a key the line editor does not find where it
+// looks, such as one written as a dotted key or an inline table, would
+// otherwise land twice or not at all. That is refused, and the file stays as
+// it was.
 func Set(root, table, key string, value any) error {
 	path := File(root)
 	old, err := os.ReadFile(path)
@@ -34,9 +36,19 @@ func Set(root, table, key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("%s.%s: %w", table, key, err)
 	}
+	// A file that does not decode has no problems to keep, and a write that
+	// mends the line it breaks on is how the config screen repairs it.
+	was, err := parse(old)
+	if err != nil {
+		was = &Config{}
+	}
 	text := setKey(string(old), table, key, literal)
-	if _, err := parse([]byte(text)); err != nil {
+	next, err := parse([]byte(text))
+	if err != nil {
 		return fmt.Errorf("%s: %s.%s: %w", path, table, key, err)
+	}
+	if err := problemsAdded(was, next); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
 	if got, err := valueAt(text, table, key); err != nil || got != literal {
 		return fmt.Errorf("%s: %s.%s is not written as a plain key under [%s]; change it by hand", path, table, key, table)

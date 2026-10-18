@@ -5,15 +5,14 @@ package core_test
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -26,16 +25,16 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
 		agent("2", "abc-123", "/home/user/dev/github/revier"),
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}, Ledger: &ledger{st: state.State{Current: "revier"}}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), report, "revier")
+	s, _ := c.Session(context.Background(), report)
 
 	if s.Current != "revier" {
-		t.Errorf("Current = %q, want the focused project", s.Current)
+		t.Errorf("Current = %q, want the ledger's focused project", s.Current)
 	}
 	if len(s.Projects) != 1 {
 		t.Fatalf("Projects = %+v, want one", s.Projects)
@@ -70,7 +69,7 @@ func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps := c.Session(context.Background(), report, "")
+	s, gaps := c.Session(context.Background(), report)
 
 	want := []session.Agent{
 		{Harness: "claude", Session: "first", Dir: "/a"},
@@ -93,7 +92,7 @@ func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, _ := c.Session(context.Background(), report, ""); len(s.Projects) != 0 {
+	if s, _ := c.Session(context.Background(), report); len(s.Projects) != 0 {
 		t.Errorf("Projects = %+v, want none", s.Projects)
 	}
 }
@@ -113,7 +112,7 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps := c.Session(context.Background(), report, "")
+	s, gaps := c.Session(context.Background(), report)
 	if gaps.Attached != 1 {
 		t.Errorf("gaps.Attached = %d, want the one attachment counted as left out", gaps.Attached)
 	}
@@ -141,7 +140,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps := plain.Session(context.Background(), report, "")
+	s, gaps := plain.Session(context.Background(), report)
 	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, noConversation) {
 		t.Errorf("agents = %+v, want the agent with no conversation from a probe that cannot name one", got)
 	}
@@ -156,7 +155,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps = broken.Session(context.Background(), report, "")
+	s, gaps = broken.Session(context.Background(), report)
 	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, noConversation) {
 		t.Errorf("agents = %+v, want the agent with no conversation when the probe failed", got)
 	}
@@ -192,7 +191,7 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, gaps := c.Session(context.Background(), report, "")
+	s, gaps := c.Session(context.Background(), report)
 
 	if probe.Calls != 1 {
 		t.Errorf("Sessions was called %d times, want once for the whole save", probe.Calls)
@@ -564,34 +563,6 @@ func TestResumeIsDroppedWhenNothingCanHonourIt(t *testing.T) {
 	}
 }
 
-// A save with nothing open is refused with a normal outcome, not written: an
-// empty session would become the newest, the one a plain restore opens. With
-// something open, the save is written and stamped as asked.
-func TestSaveSessionRefusesAnEmptySave(t *testing.T) {
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	projects := []core.Project{prepared(t, agentProject())}
-	root := t.TempDir()
-	if _, _, _, err := c.SaveSession(context.Background(), root, survey(t, c, projects, nil), "", "before", time.Now()); !errors.Is(err, core.ErrNothingOpen) {
-		t.Errorf("save = %v, want ErrNothingOpen", err)
-	}
-	if all, _ := session.List(root); len(all) != 0 {
-		t.Errorf("sessions = %+v, want none written", all)
-	}
-
-	c, _, _, projects = openDesktop(t, revier.StatusIdle)
-	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
-	stored, path, _, err := c.SaveSession(context.Background(), root, survey(t, c, projects, nil), "revier", "before", at)
-	if err != nil {
-		t.Fatalf("save: %v", err)
-	}
-	if stored.Name != "before" || !stored.At.Equal(at) || stored.Current != "revier" || len(stored.Projects) == 0 {
-		t.Errorf("stored = %+v, want the name, moment and current project as given", stored)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("path %s: %v, want the file written", path, err)
-	}
-}
-
 // A target its project file refuses is a mistake in the file, and the plan
 // says so rather than blaming the machine for having no host.
 func TestRestorePlanNamesARefusedTarget(t *testing.T) {
@@ -621,7 +592,7 @@ func TestSessionRecordsTheAgentsOfASharedInstanceOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := c.Session(context.Background(), report, "")
+	s, _ := c.Session(context.Background(), report)
 
 	if got := s.Conversations(); got != 1 {
 		t.Errorf("conversations = %d in %+v, want the one agent once", got, s.Projects)

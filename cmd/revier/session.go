@@ -12,6 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 )
@@ -56,8 +57,8 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	stored, path, gaps, err := a.core.SaveSession(ctx, a.stateRoot, report, a.core.Ledger.State().Current, *name, time.Now())
-	if errors.Is(err, core.ErrNothingOpen) {
+	stored, path, gaps, err := usecase.SaveSession(ctx, a.core, a.stateRoot, report, *name, time.Now())
+	if errors.Is(err, usecase.ErrNothingOpen) {
 		_, _ = fmt.Fprintln(a.out, err)
 		return nil
 	}

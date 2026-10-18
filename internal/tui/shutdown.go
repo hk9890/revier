@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
@@ -316,7 +317,6 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
-		current := c.Ledger.State().Current
 		opts := core.ShutdownOpts{Force: force, Projects: projects}
 		note := ""
 		if saves {
@@ -328,7 +328,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
 			opts.Before = func(saving context.Context, now core.Report) error {
-				stored, saved, _, err := c.SaveChanged(saving, root, now, current, time.Now())
+				stored, saved, _, err := app.SaveChanged(saving, c, root, now, time.Now())
 				if err != nil {
 					return err
 				}

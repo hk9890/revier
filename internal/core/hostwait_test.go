@@ -31,7 +31,7 @@ func TestASaveWaitsHostWaitForAHostThatNeverAnswers(t *testing.T) {
 
 	done := make(chan core.SessionGaps, 1)
 	go func() {
-		_, gaps := c.Session(context.Background(), r, "")
+		_, gaps := c.Session(context.Background(), r)
 		done <- gaps
 	}()
 	select {

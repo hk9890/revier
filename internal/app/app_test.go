@@ -22,21 +22,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// ledger is a ledger in memory: the state, and every event recorded.
-type ledger struct {
-	st     state.State
-	events []revier.Event
-}
-
-func (l *ledger) State() *state.State { st := l.st; return &st }
-
-func (l *ledger) Update(apply func(*state.State) bool) *state.State {
-	apply(&l.st)
-	return l.State()
-}
-
-func (l *ledger) Record(e revier.Event) { l.events = append(l.events, e) }
-
 // noTools empties PATH, so a project for a directory that is there starts
 // neither git nor mise: this layer starts no process, and mise's trust list
 // is left as it was.

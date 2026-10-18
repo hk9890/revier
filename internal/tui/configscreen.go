@@ -53,7 +53,7 @@ type runtimeMsg struct {
 // configScreen is the config screen: where its cursor is, the forms it has
 // open, and the keys of config.toml it changes itself.
 type configScreen struct {
-	ui        config.UI       // [ui] as config.toml holds it
+	ui        config.UI       // [ui] as Load resolved it: an unknown theme or glyph set is empty
 	runtime   []string        // [hosts] runtime as config.toml holds it
 	runtimes  []string        // the runtime hosts the screen offers besides auto
 	pick      RuntimeSelector // probes a runtime choice, as startup does
