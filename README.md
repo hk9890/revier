@@ -7,6 +7,8 @@
 
 A project-grouped control surface for running coding agents.
 
+![The revier TUI: projects sorted by agent state, with the selected project's targets, agents and agent screen](.github/assets/tui.gif)
+
 You run several projects at once. Each holds a coding agent, a shell, and the
 things that belong with them — an editor, a diff viewer, a page. revier answers
 the two questions that come up all day, in one keystroke each:
