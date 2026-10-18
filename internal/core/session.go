@@ -490,7 +490,7 @@ func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutc
 	if runs := c.harnessOf(*spec); !ok || (runs != "" && r.Harness != "" && runs != r.Harness) {
 		return AgentUnresumable
 	}
-	if !res.Holds(r.Session, r.Dir) {
+	if holder, ok := res.(revier.Holder); ok && !holder.Holds(r.Session, r.Dir) {
 		return AgentConversationGone
 	}
 	spec.Command = res.ResumeCommand(*spec, r.Session)

@@ -692,9 +692,8 @@ in the surface.
 
 Claude Code names a session from its start but files it at the first prompt,
 and prunes old ones; a resume of one it does not keep ends at once in a window
-whose command failed, which the restore counted as resumed. So a save records
-an agent with no filed conversation by its directory alone, and a restore asks
-the probe whether the harness still keeps the conversation before it resumes,
-starting the agent empty in its directory otherwise. Rejected: watching the
-panel after the launch, which sees the failure only after its window opened and
-makes every restore wait.
+whose command failed, which the restore counted as resumed. So a restore asks
+the probe whether the harness still keeps the conversation, and starts the
+agent empty in its directory when it does not. Rejected: dropping the id at the
+save, which loses a conversation prompted after it; and watching the panel
+after the launch, which sees the failure only once its window is open.

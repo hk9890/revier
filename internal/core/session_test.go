@@ -460,6 +460,24 @@ func TestRestoreStartsAnAgentWhoseConversationIsGoneEmptyInItsDirectory(t *testi
 	}
 }
 
+// A Resumable probe that cannot say whether its harness keeps a conversation
+// has every conversation resumed, as before the question existed: an adapter
+// written before it keeps working.
+func TestAProbeThatIsNoHolderResumesEveryConversation(t *testing.T) {
+	probe := resumable()
+	probe.Gone = []revier.SessionID{"abc-123"}
+	noHolder := struct {
+		revier.AgentProbe
+		revier.Resumable
+	}{probe, probe}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: []revier.AgentProbe{noHolder}}
+
+	outcomes := c.Resumes(prepared(t, agentProject()), "home", []core.Resume{{Harness: "claude", Session: "abc-123"}})
+	if want := []core.AgentOutcome{core.AgentResumed}; !slices.Equal(outcomes, want) {
+		t.Errorf("outcomes = %v, want %v", outcomes, want)
+	}
+}
+
 // A restore and `revier agent new` build an agent tab through the same code:
 // the tab a restore opens for an agent is the tab agent new opens for the same
 // conversation and directory.
