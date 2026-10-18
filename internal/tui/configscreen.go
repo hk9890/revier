@@ -54,6 +54,7 @@ type runtimeMsg struct {
 // open, and the keys of config.toml it changes itself.
 type configScreen struct {
 	ui        config.UI       // [ui] as Load resolved it: an unknown theme or glyph set is empty
+	problems  []error         // what config.toml declares that nothing can use, read at the open, after each write and with the files
 	runtime   []string        // [hosts] runtime as config.toml holds it
 	runtimes  []string        // the runtime hosts the screen offers besides auto
 	pick      RuntimeSelector // probes a runtime choice, as startup does
@@ -152,13 +153,15 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.layout()
 }
 
-// open is a new visit: the cursor on the first row, and no form.
+// open is a new visit: the cursor on the first row, no form, and the
+// problems of config.toml as it is now.
 func (cs *configScreen) open() {
 	cs.row = int(rowTheme)
 	cs.refused = ""
 	cs.aform = actionForm{}
 	cs.tform = targetForm{}
 	cs.dropping = false
+	cs.readProblems()
 }
 
 // key is every press on the config screen. Left and right change the row's
@@ -227,7 +230,7 @@ func (cs *configScreen) chordKey(sf surface, msg keyPress) (configResult, tea.Cm
 		if _, res.err = core.ParseChord(raw); res.err != nil {
 			return res, nil
 		}
-		if res.err = writeConfig("ui", "trigger_key", raw); res.err != nil {
+		if res.err = cs.set("ui", "trigger_key", raw); res.err != nil {
 			return res, nil
 		}
 		cs.ui.TriggerKey = raw
@@ -265,7 +268,7 @@ func (cs *configScreen) setUI(ui config.UI, key, value string) configResult {
 	if err != nil {
 		return configResult{err: err}
 	}
-	if err := writeConfig("ui", key, value); err != nil {
+	if err := cs.set("ui", key, value); err != nil {
 		return configResult{err: err}
 	}
 	cs.ui = ui
@@ -314,7 +317,7 @@ func (cs *configScreen) switched(msg runtimeMsg) error {
 		return msg.err
 	}
 	cs.refused = ""
-	if err := writeConfig("hosts", "runtime", msg.want); err != nil {
+	if err := cs.set("hosts", "runtime", msg.want); err != nil {
 		return err
 	}
 	cs.runtime = msg.want
@@ -353,8 +356,35 @@ func (cs *configScreen) helpKind(sf surface) configHelp {
 	return configOnSetting
 }
 
-func writeConfig(table, key string, value any) error {
-	return withConfigRoot(func(root string) error { return config.Set(root, table, key, value) })
+func (cs *configScreen) set(table, key string, value any) error {
+	return cs.write(func(root string) error { return config.Set(root, table, key, value) })
+}
+
+// write is every write the screen makes to config.toml. The problems are read
+// again after it, as a write can mend one: a theme chosen in place of an
+// unknown one.
+func (cs *configScreen) write(write func(root string) error) error {
+	if err := withConfigRoot(write); err != nil {
+		return err
+	}
+	cs.readProblems()
+	return nil
+}
+
+// readProblems takes the problems of config.toml as the file holds it now.
+// A file that does not decode, or a configuration root that does not
+// resolve, has that as its one problem.
+func (cs *configScreen) readProblems() {
+	var cfg *config.Config
+	err := withConfigRoot(func(root string) (err error) {
+		cfg, err = config.Read(root)
+		return err
+	})
+	if err != nil {
+		cs.problems = []error{err}
+		return
+	}
+	cs.problems = cfg.Problems
 }
 
 func withConfigRoot(write func(root string) error) error {
@@ -408,6 +438,13 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		b.WriteString(clipTo(line, w) + "\n")
 	}
 
+	// The problems stand over the rows: a theme the file names and the
+	// screen cannot draw is shown here as the default, and only this says
+	// why (decisions.md D85). Each is wrapped, not cut: a file that does not
+	// decode is named by its path before the reason.
+	for _, err := range cs.problems {
+		b.WriteString(hang("  ", err.Error(), w, th.Attention) + "\n")
+	}
 	b.WriteString(heading(th, "Appearance", w))
 	row(int(rowTheme), "theme", "‹ "+orDefault(cs.ui.Theme, theme.DefaultTheme)+" ›", "")
 	row(int(rowGlyphs), "glyphs", "‹ "+orDefault(cs.ui.Glyphs, theme.DefaultGlyphs)+" ›", "")

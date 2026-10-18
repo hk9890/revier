@@ -320,6 +320,7 @@ type reloadedMsg struct {
 	actions  []config.Action
 	statuses []core.Status
 	projects []core.Project
+	problems []error // config.toml's, for the config screen
 	err      error
 	assisted bool // read after the assistant, whose user is back to read the result
 }
@@ -338,6 +339,7 @@ func readFiles() reloadedMsg {
 			return err
 		}
 		msg.shared, msg.actions, msg.statuses, msg.projects = cfg.Targets, cfg.Actions, cfg.Statuses(), projects
+		msg.problems = cfg.Problems
 		return nil
 	})
 	return msg
@@ -926,6 +928,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.err == nil:
 			m.setFiles(msg.shared, msg.projects)
 			m.setActions(msg.actions)
+			// The config screen's rows are the files read again, so its
+			// problems are too.
+			m.config.problems = msg.problems
 			m.reloadViews()
 			statuses = msg.statuses
 		case msg.assisted:

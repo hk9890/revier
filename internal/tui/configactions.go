@@ -115,10 +115,10 @@ func (cs *configScreen) saveAction(sf surface) configResult {
 	}
 	actions := slices.Clone(sf.actions)
 	if f.index == len(actions) {
-		err = withConfigRoot(func(root string) error { return config.AddAction(root, sf.actions, act) })
+		err = cs.write(func(root string) error { return config.AddAction(root, sf.actions, act) })
 		actions = append(actions, act)
 	} else {
-		err = withConfigRoot(func(root string) error { return config.ReplaceAction(root, f.index, sf.actions[f.index], act) })
+		err = cs.write(func(root string) error { return config.ReplaceAction(root, f.index, sf.actions[f.index], act) })
 		actions[f.index] = act
 	}
 	if err != nil {
@@ -176,7 +176,7 @@ func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 		return res
 	}
 	act := sf.actions[i]
-	if err := withConfigRoot(func(root string) error { return config.RemoveAction(root, i, act) }); err != nil {
+	if err := cs.write(func(root string) error { return config.RemoveAction(root, i, act) }); err != nil {
 		res.err = err
 		return res
 	}

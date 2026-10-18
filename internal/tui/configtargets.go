@@ -193,7 +193,7 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 		}
 	}
 	var written config.TargetsWritten
-	err := withConfigRoot(func(root string) (err error) {
+	err := cs.write(func(root string) (err error) {
 		if i == len(sf.targets) {
 			written, err = config.AddTarget(root, sf.shared, t)
 			return err
@@ -220,7 +220,7 @@ func (cs *configScreen) dropTarget(sf surface, msg keyPress) configResult {
 		return res
 	}
 	var written config.TargetsWritten
-	err := withConfigRoot(func(root string) (err error) {
+	err := cs.write(func(root string) (err error) {
 		written, err = config.RemoveTarget(root, i, sf.shared)
 		return err
 	})

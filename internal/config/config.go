@@ -59,8 +59,8 @@ type Config struct {
 	// unbound, the target reaches no project, the probe is not run, an
 	// unknown theme or glyph set is the default, a trigger key that does not
 	// parse refuses only the keys commands, and the file is otherwise read
-	// whole. `revier
-	// doctor` is where these are read.
+	// whole. `revier doctor` and the TUI's config screen are where these
+	// are read.
 	Problems []error `toml:"-"`
 
 	// SelfLinks is the files of the links whose host is this machine, which
@@ -138,14 +138,9 @@ func Root() (string, error) {
 // (decisions.md D131). A missing root or a missing config.toml is not an
 // error: revier starts with no projects rather than refusing to run.
 func Load(root string) (*Config, []core.Project, error) {
-	cfgPath := File(root)
-	data, err := os.ReadFile(cfgPath)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
-	}
-	cfg, err := parse(data)
+	cfg, err := Read(root)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", cfgPath, err)
+		return nil, nil, err
 	}
 
 	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Shared())
@@ -161,6 +156,21 @@ func Load(root string) (*Config, []core.Project, error) {
 		projects[i].StatusRefused = append(projects[i].StatusRefused, unrun...)
 	}
 	return cfg, projects, nil
+}
+
+// Read is config.toml under root as Load reads it, without the projects: a
+// missing file is the empty configuration.
+func Read(root string) (*Config, error) {
+	path := File(root)
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	cfg, err := parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return cfg, nil
 }
 
 // elsewhere is projects without the links to this machine, and the files of

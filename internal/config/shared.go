@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 
@@ -272,14 +271,9 @@ func recode(tables any, into any) error {
 // sharedTargets is the shared targets a project gets from the config.toml
 // under root.
 func sharedTargets(root string) ([]map[string]any, error) {
-	path := File(root)
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	cfg, err := parse(data)
+	cfg, err := Read(root)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, err
 	}
 	return cfg.Shared(), nil
 }
