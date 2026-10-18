@@ -235,6 +235,45 @@ func TestALinkedHostIsAskedOnceAGap(t *testing.T) {
 	}
 }
 
+// A host that keeps giving no answer is asked at most once a minute, and the
+// first answer it gives brings its gap back to five seconds.
+func TestAHostThatGivesNoAnswerIsAskedOnceAMinuteAtMost(t *testing.T) {
+	m, _, remote := besideALink(t)
+	remote.Err = errors.New("buildbox: no answer")
+	now := time.Now()
+	m = m.WithClock(func() time.Time { return now })
+	round := func() {
+		t.Helper()
+		var cmd tea.Cmd
+		m, cmd = surveyedHere(m)
+		m, _ = deliver(m, cmd)
+	}
+	// waits checks that the host is not asked a second before gap has passed
+	// since its last round, and is asked once it has.
+	waits := func(gap time.Duration) {
+		t.Helper()
+		asked := len(remote.Asked)
+		now = now.Add(gap - time.Second)
+		round()
+		if len(remote.Asked) != asked {
+			t.Fatalf("the host was asked %s after its last round, want it to wait %s", gap-time.Second, gap)
+		}
+		now = now.Add(time.Second)
+		round()
+		if len(remote.Asked) != asked+1 {
+			t.Fatalf("the host was not asked %s after its last round", gap)
+		}
+	}
+
+	round() // the first round fails
+	for _, gap := range []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second, time.Minute, time.Minute} {
+		waits(gap)
+	}
+	remote.Err = nil
+	waits(time.Minute) // this round answers
+	waits(5 * time.Second)
+}
+
 // The focus regained asks every linked host that answered its last round at
 // once, whatever its gap: the rows aged while nobody looked.
 func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
