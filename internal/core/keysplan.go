@@ -128,7 +128,7 @@ const bindingIDPrefix = "revier-"
 
 // triggerEntry is the id the trigger key's entry was written under when its
 // row was named picker. It stays, so a changed trigger key moves that entry
-// instead of leaving it on the old chord (decisions.md D138).
+// instead of leaving it on the old chord.
 const triggerEntry = "picker"
 
 // bindingLabel is what the desktop's settings window shows.

@@ -1,7 +1,9 @@
 # Reviewing
 
-The review rules of this repository: the local delta that the review skills
-cannot know. Where this file and a skill disagree, this file wins.
+Call the Skill tool with `project-review:project-review-change` for the rules
+review, or with `worktree-flow:worktree-review` to review a PR and push the
+fixes. **Local delta:** the rules below, which win where they disagree with the
+skill.
 
 ## Quality rules
 

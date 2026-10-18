@@ -34,9 +34,10 @@ agent, the error lists an address for each.
 
 - `prompt` types one line and submits it. It refuses an agent in `attention`
   or `unknown`, because the Enter would answer a dialog. Use `send-keys` for
-  those. Put `--` before text that starts with `-`.
+  those.
 - `wait --until` takes `idle`, `running`, `attention`, or `stopped` (idle or
-  attention: the turn stopped, the agent did not exit). It exits 2 when `--timeout` runs out, so a script can tell a
+  attention: the turn stopped, the agent did not exit). A `--timeout` that
+  runs out has its own [exit code](cli.md#exit-codes), so a script can tell a
   timeout from a failure.
 - `read` needs a harness whose conversation revier can read, which today is
   Claude Code. `--screen` works for every harness.
@@ -45,8 +46,8 @@ agent, the error lists an address for each.
 - `revier agent focus shop` brings the agent to the front. Of the commands
   above, it is the only one that moves the keyboard.
 
-For a project on another machine, the same commands work, but `read` needs
-`--screen`. See [Projects on another machine](links.md).
+For a project on another machine, see
+[What does not work over a link](links.md#what-does-not-work-over-a-link).
 
 ## Open more agent and shell tabs
 
@@ -74,7 +75,7 @@ a conversation. revier adds the harness's resume flag, for Claude Code
 Code can resume.
 
 When your `command` wraps the agent in a shell, pass the arguments on, or the
-agent starts with no conversation:
+agent starts with no conversation ([Panels](configuration.md#panels)):
 
 ```toml
 # Right: the resume flag reaches my-agent as "$@".
@@ -113,5 +114,5 @@ In the TUI, alt+a raises `revier-config-assistant`, a project revier builds
 in: the same agent, in a workspace of its own beside the TUI. Its row has a
 cog where other rows have a folder. It shows in the agent list, and a saved
 session restores it. It is not told which project the cursor is on: name it.
-The TUI reads the files again when it gets the focus back. With no runtime
-host, alt+a hands the terminal over, as `revier assist` does.
+What the TUI reads again after its edits is in [Files](configuration.md#files).
+With no runtime host, alt+a hands the terminal over, as `revier assist` does.

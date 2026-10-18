@@ -257,7 +257,7 @@ func (s *linkScreen) open() error {
 // movement keys walk the rows, Enter takes the step, Esc goes back one, and
 // none of the surface's own keys act under it. On a host's projects what is
 // typed filters them, and Esc clears the query before it goes back, as on the
-// surface (decisions.md D44).
+// surface.
 func (s *linkScreen) key(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 	if s.step == linkNaming {
 		return s.nameKey(sf, msg)

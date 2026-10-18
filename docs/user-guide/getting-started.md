@@ -10,8 +10,10 @@ full-screen view in a terminal. [Concepts](concepts.md) explains the rest.
 
 - Linux, `x64` or `arm64`.
 - kitty or tmux. revier opens your workspaces in it.
-- Claude Code 2.1.212 or newer, as `claude` on your `PATH`. The project that
-  `revier new` writes runs it in its agent tab.
+- Claude Code, in the version
+  [Claude Code](integrations/claude-code.md#what-you-need) names, as `claude`
+  on your `PATH`. The project that `revier new` writes runs it in its agent
+  tab.
 - For window targets, desktop keys and the popup: GNOME with the Window
   Control extension and its `wctl`. See [GNOME](integrations/gnome.md) to
   install it. The popup also needs kitty.
@@ -48,17 +50,13 @@ proves the archive matches them.
 
 ## Set up your terminal
 
-- **kitty**: add these two lines to `~/.config/kitty/kitty.conf`, then
-  restart kitty. Without them, revier starts a kitty of its own. See
-  [kitty](integrations/kitty.md).
-
-  ```
-  allow_remote_control socket-only
-  listen_on unix:${XDG_RUNTIME_DIR}/kitty
-  ```
-
+- **kitty**: give kitty a control socket, as step 1 of
+  [kitty](integrations/kitty.md#set-it-up) shows, then restart kitty. Without
+  it, revier starts a kitty of its own.
 - **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
   to use tmux; see [tmux](integrations/tmux.md).
+- **Ghostty**: revier cannot drive it; run tmux in it, as
+  [Ghostty](integrations/ghostty.md) shows.
 
 ## Give your editor a key
 
@@ -90,8 +88,7 @@ revier new      # created /home/you/.config/revier/projects/demo.toml
 
 The project takes the name of the directory. The file declares `home`, a
 terminal window called `session:demo`, and `agent`, a tab in it with Claude
-Code beside a shell. Your shared `editor` is the third target. With no target
-in `config.toml`, the file gets an IntelliJ IDEA `editor`; change it to yours.
+Code beside a shell. Your shared `editor` is the third target.
 
 Run `revier status` to check which hosts revier found: the `runtime` line
 names kitty or tmux, the `window` line gnome, and `-` means none.
@@ -145,8 +142,10 @@ Claude Code asks for permission to write it. Do not answer. Press the trigger
 key, or run `revier` in a terminal.
 
 The project with an agent that needs you is at the top, and the pane shows
-the agent's terminal. Press Alt+Space in the TUI for the list of all agents. Select the agent and press Enter. revier raises
-its tab and window.
+the agent's terminal. For the list of all agents, press the trigger key
+again in the popup, or Alt+Space in a terminal. Select the agent and press
+Enter. revier raises its tab and
+window.
 
 From a shell, `revier list` prints one line per project with its most urgent
 agent state: `attention` means it needs you.

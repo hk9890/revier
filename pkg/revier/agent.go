@@ -125,7 +125,7 @@ type AgentState struct {
 	// Dir is the directory the agent works in, empty when the harness does
 	// not say. It is the agent's and not the panel's: an agent started in a
 	// project can work in one of its worktrees, which is what tells two
-	// agents of one project apart on the agent list (decisions.md D110).
+	// agents of one project apart on the agent list.
 	//
 	// A probe reports the directory as the harness names it. A project's
 	// view keeps it only when it is not the project's own directory, which

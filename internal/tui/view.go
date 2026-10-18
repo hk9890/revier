@@ -21,7 +21,7 @@ import (
 // There is no border. It drew a box around a surface that already fills the
 // terminal, which has its own edges, and charged two rows and four columns
 // for saying again where they are. The two rules inside do the separating a
-// box was doing (decisions.md D51).
+// box was doing.
 const (
 	chromeHeight = 5
 	queryRow     = 2 // the terminal row of the query line, below the margin
@@ -44,7 +44,7 @@ func (m Model) margins() (rows, cols int) {
 }
 
 // inner is the size available inside the margin. The surface takes the whole
-// terminal (decisions.md D39): the rows are a grid, and the pane takes the
+// terminal: the rows are a grid, and the pane takes the
 // width the list does not.
 func (m Model) inner() (w, h int) {
 	mr, mc := m.margins()
@@ -113,9 +113,9 @@ func (m Model) draw() string {
 	// The query sits on the rule over the rows it filters, as each of the
 	// pane's sections has its own over its rows. Beside the list the pane
 	// starts level with the query, so the query and the rule stand in the
-	// list's column and read as the list's, not the whole screen's
-	// (decisions.md D105). A terminal too narrow for both shows the pane in
-	// the list's place, under a query as wide as the screen.
+	// list's column and read as the list's, not the whole screen's. A
+	// terminal too narrow for both shows the pane in the list's place, under
+	// a query as wide as the screen.
 	// Beside the pane the rule stops a column short of its border rather
 	// than running into it. A row's own columns run to the border, so the
 	// rule can be a column short of a total the rows have the room for; it
@@ -173,9 +173,8 @@ func (m Model) top() string {
 // topLine is the whole first line: what the surface or the dialog puts there,
 // and the version at the right edge. The version is the only thing on the
 // screen about the installation rather than about what is on it, so it stands
-// where nothing else claims columns and takes the dim of a key hint
-// (decisions.md D103). Where the left side leaves it no room it is left off;
-// nothing else moves for it.
+// where nothing else claims columns and takes the dim of a key hint. Where
+// the left side leaves it no room it is left off; nothing else moves for it.
 func (m Model) topLine(width int) string {
 	left := clipTo(m.top(), width)
 	version := m.theme.Help.Render(build.Version)
@@ -262,7 +261,7 @@ func (m Model) subtitle() string {
 // the right it carries the totals, standing in the column the rows count
 // their agents in: a state's total sits over that state's counts, so the
 // column reads as one sum and its parts rather than as two tallies that
-// happen to use the same glyphs (decisions.md D96).
+// happen to use the same glyphs.
 func (m Model) rule(width int) string {
 	head := clipTo(pad0(m.ruleCount()), width)
 	col, after := lipgloss.Width(head), false

@@ -62,7 +62,7 @@ func newKeyMap(actions []config.Action) keyMap {
 		// holds. del is the query's forward delete as well, and closes only
 		// with nothing right of the query's cursor, where a forward delete has
 		// nothing to delete. ctrl+del is not the key: not every terminal
-		// sends it apart from del (decisions.md D93), and legacyKey drops it.
+		// sends it apart from del, and legacyKey drops it.
 		Close:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "close")),
 		Delete: key.NewBinding(key.WithKeys("alt+delete", "alt+d"), key.WithHelp("alt+del", "delete")),
 		// Tab walks the list and the agents only; the targets are one chord
@@ -126,7 +126,7 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	switch f {
 	case focusTargets:
 		// Tab is not a step through the sections here: the targets are
-		// reached by alt+t and left by Tab (decisions.md D105).
+		// reached by alt+t and left by Tab.
 		enter, esc, tab = "go", "back", "back to projects"
 	case focusAgents:
 		enter, esc = "go to agent", "clear/back"

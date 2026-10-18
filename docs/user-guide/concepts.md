@@ -87,8 +87,8 @@ reads its state:
 | `unknown` | unknown | A probe knows the agent but cannot read its state. |
 
 A program that no probe knows is not an agent, and revier does not list it.
-revier reads Claude Code 2.1.212 or newer with nothing to install. opencode is
-always `unknown`. To read another harness, write a
+revier reads [Claude Code](integrations/claude-code.md) with nothing to
+install. opencode is always `unknown`. To read another harness, write a
 [probe](extending/probes.md).
 
 ## Attached windows

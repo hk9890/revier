@@ -29,10 +29,11 @@ To make it a workspace's agent, put it in the agent panel's `command` (see
 
 - State: working, needs you, idle. An opencode agent never sorts first as one
   that needs you.
-- `revier agent prompt`: it refuses an agent in state `unknown`, because the
-  Enter could answer a dialog. Use `send-keys`.
+- `revier agent prompt`: it refuses an agent in state `unknown`
+  ([Agents](../agents.md#drive-an-agent-from-a-script)). Use `send-keys`.
 - `revier agent wait`: it ends only at its timeout.
-- `revier agent read` without `--screen`.
+- `revier agent read` without `--screen`
+  ([Agents](../agents.md#drive-an-agent-from-a-script)).
 - `revier shutdown` does not wait for an opencode turn to end.
 - A `[[probe]]` named `opencode`: the built-in probe claims the panel first,
   so yours never runs.

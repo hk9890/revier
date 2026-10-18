@@ -800,7 +800,7 @@ func TestAForcedCloseClosesTheTabTheRecheckReadAgain(t *testing.T) {
 
 // A shutdown whose every step leaves saves nothing: it changes nothing, so
 // there is nothing to record, and a session written from it would say the
-// desktop had been closed (decisions.md D99).
+// desktop had been closed.
 func TestAShutdownThatClosesNothingSavesNothing(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	c.Runtime = bareRuntime{hosttest.NewRuntime("rt")}

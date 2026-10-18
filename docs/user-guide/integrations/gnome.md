@@ -21,38 +21,24 @@ nothing; see [`[hosts]`](../configuration.md#hosts).
 
 1. Install the extension and `wctl`. Log out and in.
 2. Check that `wctl list --json` prints your windows.
-3. Give a target a window (see
-   [Realization fields](../configuration.md#realization-fields)):
-
-   ```toml
-   [[target]]
-   name = "editor"
-   key  = "ctrl-shift-o"
-
-     [target.window]
-     launch = ["code", "{{.Path}}"]
-     match  = { class = "^[Cc]ode$", title = "{{.Name}}" }
-   ```
-
-   `class` is the `wm_class` that `wctl list --json` shows.
-4. Claim the keys. Look first, then install:
-
-   ```bash
-   revier keys install --dry-run
-   revier keys install
-   ```
-
-   revier skips a key that something else holds, such as Alt+Space on stock
-   GNOME; see [Getting started](../getting-started.md#install-the-desktop-keys).
-   `revier keys status` shows who holds each key. The trigger key is
+3. Give a target a window, as
+   [Give your editor a key](../getting-started.md#give-your-editor-a-key)
+   shows.
+4. Claim the keys, as
+   [Install the desktop keys](../getting-started.md#install-the-desktop-keys)
+   shows. `revier keys status` shows who holds each key. The trigger key is
    `revier: popup` in GNOME Settings; an install renames one that an older
    revier wrote as `revier: picker`.
 
 ## Windows that open late
 
 Many applications open their window a while after the command starts. revier
-binds the one new window that matches the target within 60 seconds, even
-before its title matches.
+binds the one new window whose class matches the target within 60 seconds,
+even before its title matches.
+
+An action can open a window too, such as a browser page. While a TUI is open,
+the one new window that appears in the first seconds after the action, and
+that no target matches, is attached to the project, as `revier attach` does.
 
 To give a project a window no target describes, focus it and run
 `revier attach -p demo`.

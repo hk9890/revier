@@ -165,7 +165,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	indent := lipgloss.Width(prefix)
 
-	// The row is a table of two columns (decisions.md D39): the project - its
+	// The row is a table of two columns: the project - its
 	// name, and its path under it - and the agents, counted by state on the
 	// first line. The agent column says agent state and nothing else: what
 	// is open, and a checkout that is missing, are the pane's to say. The
@@ -319,7 +319,7 @@ type agentPiece struct {
 // on every row and in the rule above them. A state with no agent leaves its
 // slot empty rather than moving the ones after it.
 //
-// The column gives way in steps as room goes (decisions.md D39): the slots,
+// The column gives way in steps as room goes: the slots,
 // then the worst state's count alone, then its glyph alone, then nothing.
 // Whoever draws the pieces fills what is between them - a row with blanks,
 // the rule with its line.
@@ -424,7 +424,7 @@ func statusStyle(th theme.Theme, s revier.Status) lipgloss.Style {
 // attention sorting moves rows, so holding the index would move the cursor to
 // a different project while the user was reading it. A project that closed is
 // the exception: its row goes down among the stopped ones, and the cursor
-// keeps its place (decisions.md D109).
+// keeps its place.
 func (m *Model) reload() {
 	was, hadSelection := m.plist.SelectedItem().(projectItem)
 	at := m.plist.Index()
@@ -469,7 +469,7 @@ func (m *Model) reload() {
 		// its file gone while the popup was hidden - hands the cursor to the
 		// row that took its place, and the last row when it was the last.
 		// The pane's cursor was on a row of that project, so it goes back to
-		// the list (decisions.md D109).
+		// the list.
 		closed := m.closedSince(was)
 		if closed {
 			m.toList()
@@ -544,7 +544,7 @@ func (m *Model) endSearch() {
 //
 // A query is a view over the list, and clearing it, by Esc or by deleting
 // the last letter, is its undo: the cursor goes back to the project it was
-// on when the query began (decisions.md D44).
+// on when the query began.
 func (m *Model) setFilter(f string) {
 	if m.filter == "" && f != "" {
 		m.before, _ = m.selectedName()

@@ -3,14 +3,17 @@
 A probe tells revier the state of a coding agent that revier does not know.
 revier knows Claude Code and opencode. For another agent, write a small
 program: it reads one panel as JSON on stdin and prints one state as JSON.
-A probe sees only panels in kitty or tmux. For a link, declare and install the
-probe on the host; there the panel has no `title`, so use `pid` or `command`.
+On this machine, a probe reads the panels of kitty or tmux. For a link,
+declare and install the probe on the host. There it reads the process that
+`revier agent exec` started for the link's agent panel. That panel has no
+`title`, so use `pid` or `command`.
 
 ## Declare a probe
 
 Only in `config.toml`; in a project file revier ignores it. Restart the TUI
-after you add one, and run `revier doctor`: a `[[probe]]` without `name` or
-`exec` is not run, and `revier doctor` names it.
+after you add one ([Files](../configuration.md#files)), and run
+`revier doctor`: a `[[probe]]` without `name` or `exec` is not run, and
+`revier doctor` names it.
 
 ```toml
 [[probe]]
@@ -51,8 +54,8 @@ Print one JSON object and exit 0 within 500 ms:
 
 A non-zero exit, bad JSON, an unknown `status` or a run over 500 ms makes the
 panel `unknown`; the log has the reason and the probe's stderr. revier runs
-the probe for each panel on each refresh, so keep it fast. With a probe,
-`revier agent read` needs `--screen`, and a restore starts the agent fresh.
+the probe for each panel on each refresh, so keep it fast. What a probed agent
+cannot do, such as resume, is in [Agents](../agents.md).
 
 ## Example
 

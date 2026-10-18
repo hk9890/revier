@@ -27,7 +27,7 @@ A findability map: where things live, and how to search for them.
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
-| `docs/user-guide/` | The user guide. `embed.go` carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
+| `docs/user-guide/` | The [user guide](user-guide/README.md). `embed.go` carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
 | `cmd/revier/` | CLI entry point. `adapters.go` constructs every port's adapter; `assist.go` and `each.go` call adapter helpers directly, and `serve.go` reads `proc`'s variable names. |
 
 ## The ports
@@ -47,7 +47,7 @@ rg 'revier\.Host' --type go               # what implements or consumes the port
 rg -l '//go:build live'                   # tests needing a real substrate
 rg 'ErrNo' pkg internal                   # the normal-outcome sentinels
 rg 'func cmd' cmd/revier                  # every CLI command
-rg 'Dnn\b' docs/design                    # a decision a comment cites: its entry, and the design text tagged (Dnn)
+rg 'D85\b' docs                           # replace 85 with the cited number: the entry, the design text tagged (D85), and docs/ citations
 ```
 
 Behaviour is almost never in the adapter named after the tool. Search

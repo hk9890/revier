@@ -13,7 +13,7 @@ import (
 // The list keeps what it is good at - the filter, which item is
 // selected - and is given room for every row it holds, so it renders one page.
 // A viewport clips that page to the screen and scrolls it by one line at a
-// time (decisions.md D23).
+// time.
 //
 // The cost is that the delegate renders every visible item on every frame
 // rather than one screen of them: ninety projects is a hundred and eighty
@@ -140,7 +140,7 @@ func (m *Model) follow(top, height int) {
 }
 
 // startContext is how many rows above the one the surface opens on it keeps
-// in view (decisions.md D97).
+// in view.
 const startContext = 10
 
 // place positions the list around the row the surface opens on, which follow

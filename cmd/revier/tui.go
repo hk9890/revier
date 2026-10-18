@@ -52,7 +52,7 @@ func cmdTUI(a *app) error {
 
 // colourOf is the colour the environment allows the surface. Any NO_COLOR
 // that is not empty turns colour off, as no-color.org says; bold and reverse
-// video stay (decisions.md D133).
+// video stay.
 func colourOf(getenv func(string) string) []tea.ProgramOption {
 	if getenv("NO_COLOR") == "" {
 		return nil

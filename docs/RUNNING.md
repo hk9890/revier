@@ -1,7 +1,7 @@
 # Running
 
-**Local delta —** use the `run` skill for the generic launch-and-drive flow;
-everything below is this repository's delta and wins where the two disagree.
+Call the Skill tool with `run` for the generic launch-and-drive flow.
+**Local delta:** everything below wins where the two disagree.
 The automated suites are [TESTING.md](TESTING.md)'s.
 
 ## The rule
@@ -81,8 +81,11 @@ sessions directory, and write the pane's file there:
 export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
 printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"; chmod +x "$S/bin/claude"
 export PATH="$S/bin:$PATH"                            # every revier below asks this claude, never the real one
-pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
-pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1}')
+agentpane() {                                         # the workspace's agent pane, the first listed; again after a restart
+  pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
+  pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
+}
+agentpane
 st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
 st busy       # -> running
 st waiting    # -> attention
@@ -112,6 +115,7 @@ bindings are gone, project files and the saved session stay.
 tmux kill-server                                 # the private server only
 ./bin/revier session restore --dry-run           # what it would open
 ./bin/revier session restore                     # the newest, opened in file order
+agentpane                                        # the restore started a new agent pane
 ```
 
 The save asks `claude agents --json` which conversation each agent pane's
@@ -140,6 +144,7 @@ To drive a shutdown, open the workspace again and close it on the private
 server only:
 
 ```bash
+./bin/revier open demo; agentpane                # the pane st writes for
 ./bin/revier shutdown --dry-run                  # what it would close
 st busy; ./bin/revier shutdown                   # refused, names the agent
 ./bin/revier shutdown --force                    # saves when changed, then closes
@@ -151,6 +156,9 @@ a restore acts on; it holds names, conversations and directories, never a host
 or an argv.
 
 ## Drive a link without a host
+
+Run the agent monitor recipe first: this one needs its `$S/bin` on PATH and its
+session file.
 
 Put a stand-in `ssh` first on PATH that runs the panel's command line here,
 under a second configuration that plays the host:
@@ -248,16 +256,20 @@ kitten @ ls | jq '.[] | {id, wm_name, is_focused}'    # read-only, safe to run
 `revier open`, or `revier go` against a real host moves the user's focus, so it
 belongs in a command they run, not one you run for them.
 
-When the user has handed over the screen, verify the kitty host on a scratch
-project whose name collides with none of theirs, and close what it opened:
+When the user has handed over the screen, verify the kitty host on the scratch
+project. Its OS window is named after the home realization, `home`, so first
+check that `kitten @ ls` lists no `wm_name` `home` of the user's. The last line
+closes what it opened:
 
 ```bash
-export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above, with runtime = ["kitty"]
-./bin/revier open demo                                    # a kitty OS window titled by the home realization's name
-kitten @ ls | jq '.[] | select(.wm_name=="session:demo") | .tabs[].windows[] | {title, user_vars}'
-wctl focused --json | jq .title                           # session:demo
-./bin/revier go editor -p demo; ./bin/revier go editor -p demo   # away, and back to the workspace
-kitten @ close-window --match 'title:^session:demo$'      # or close-window per window id from ls
+export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above
+printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > "$S/config.toml"   # gnome raises the OS window
+./bin/revier open demo                                    # a kitty OS window titled home
+kitten @ ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
+wctl focused --json | jq .title                           # home
+./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home
+kitten @ close-window --match id:<id>                     # once per id the ls above printed
+printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
 ```
 
 Every `kitten @` command above addresses the socket of the kitty it runs
@@ -269,8 +281,8 @@ To check a binding's command as the desktop runs it, hand the user the same
 scratch project in the login shell the binding uses:
 
 ```bash
-sh -lc './bin/revier go editor -p demo'; wctl focused --json | jq .title
-sh -lc './bin/revier go editor -p demo'; wctl focused --json | jq .title   # back at the workspace
+sh -lc './bin/revier go agent -p demo'; wctl focused --json | jq .title   # home, on the agent tab
+sh -lc './bin/revier go agent -p demo'; wctl focused --json | jq .title   # home, back from the agent tab
 hyperfine --warmup 3 -N './bin/revier go home -p demo'                     # the keypress budget
 ```
 

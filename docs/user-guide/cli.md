@@ -6,10 +6,9 @@ exits. `revier help` lists the commands and their flags. `revier <command>
 `session help`, `keys help`, `each help` and `events help` give each family
 in full.
 
-- `-p <name>` names the project. Without it, revier uses the project of the
-  current directory, else of the focused window, else the one it acted on last.
-- An agent is `<project>`, or `<project>:<target>` or `<project>:<number>`
-  when the project has more than one ([Agents](agents.md#drive-an-agent-from-a-script)).
+- `-p <name>` names the project. Without it, revier finds the project as
+  [Concepts](concepts.md#project) says.
+- An agent is named by its [address](agents.md#drive-an-agent-from-a-script).
 - Put `--` before text that starts with a dash:
   `revier agent prompt demo -- "-v is the flag"`.
 
@@ -19,27 +18,27 @@ in full.
 |---|---|
 | `revier` | The TUI. See [The TUI](tui.md). |
 | `revier popup` | The TUI in a kitty window of its own. |
-| `revier list [--json [--conversations]] [<name>..]` | Print every project, its state, agent and targets. `--conversations` adds the conversation each agent holds to the JSON. |
-| `revier new [<name>]` | Write a project file for the current directory. |
-| `revier open [<name>] [--attach]` | Run-or-raise the project's workspace. `--attach` (tmux only) ends with this terminal on it. |
-| `revier go <target> [--picker]` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
+| `revier list` | Print every project, its state, agents and targets. |
+| `revier new` | Write a project file for the current directory. |
+| `revier open` | Run-or-raise the project's workspace. |
+| `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |
-| `revier link [<host> [<project>]]` | List hosts, list a host's projects, or link one. See [Projects on another machine](links.md). |
+| `revier link` | List hosts, list a host's projects, or link one. See [Projects on another machine](links.md). |
 | `revier run <action>` | Run an `[[action]]` in the project. |
-| `revier each [--filter '<sh>'] [-n] -- <cmd>` | Run a command in every project's directory. `revier each log` lists past runs; `revier each log <run> <project>` prints what the command printed there. |
+| `revier each -- <cmd>` | Run a command in every project's directory. `revier each log` shows past runs. |
 | `revier agent new` / `revier shell new` | Add an agent tab or a shell tab to an open workspace. |
-| `revier agent prompt <agent> <text>` | Type one line into the agent and submit it. Refuses an agent in `attention` or `unknown`; opencode's is always `unknown`. |
-| `revier agent wait <agent> --until <status>` | Wait for `idle`, `running`, `attention` or `stopped`. |
-| `revier agent read <agent> [--screen]` | Print the agent's last reply, or its screen. |
-| `revier agent send-keys <agent> <key>..` | Type keys, such as `esc` or `enter`. |
-| `revier agent focus <agent>` | Go to the agent's tab. |
+| `revier agent prompt` | Type one line into an agent and submit it. |
+| `revier agent wait` | Wait for an agent to reach a state. |
+| `revier agent read` | Print an agent's last reply, or its screen. |
+| `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
+| `revier agent focus` | Go to an agent's tab. |
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. |
-| `revier shutdown [<project>]` | Save the session, then close what is open. Refuses while an agent works or waits for you, unless `--force`. |
+| `revier shutdown` | Save the session, then close what is open. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
 | `revier status` | The project revier finds here (directory, focused window, last project), and the hosts it uses. |
 | `revier doctor` | Every configuration problem, and its fix. |
 | `revier assist` | Start Claude Code, briefed on your revier configuration. See [Agents](agents.md#let-an-agent-configure-revier). |
-| `revier events [--days <n>]` | Each time you used a project, as JSON lines. |
+| `revier events` | Each time you used a project, as JSON lines. |
 | `revier version` | The installed version. |
 
 `revier agent exec` and `revier shell exec` are what a link's panels run on the
@@ -74,7 +73,7 @@ doctor` says why), `?` its host did not answer.
 
 | Variable | Does |
 |---|---|
-| `REVIER_CONFIG_HOME` | The configuration directory. Default `$XDG_CONFIG_HOME/revier`, else `~/.config/revier`. |
+| `REVIER_CONFIG_HOME` | The configuration directory; see [Files](configuration.md#files). |
 | `REVIER_STATE_HOME` | The state directory: logs, events, sessions. Default `$XDG_STATE_HOME/revier`, else `~/.local/state/revier`. |
 | `REVIER_SSH_CONFIG` | The file revier reads ssh hosts from, in place of `~/.ssh/config`. |
 | `NO_COLOR` | A value that is not empty turns colour off in the TUI. |

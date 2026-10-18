@@ -23,8 +23,8 @@ claim-on-appear for windows opened after a launch, the TUI, the popup, every
 command in the [command line reference](docs/user-guide/cli.md), and the GNOME
 keybindings.
 
-To follow the design, read [docs/design/](docs/design/README.md) — it specifies
-the system and logs the decisions behind it.
+To follow the design, read [docs/design/](docs/design/README.md) — it states
+the model, its boundaries and the reasons, and logs the decisions behind it.
 
 ## Install
 

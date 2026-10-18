@@ -68,8 +68,8 @@ probed.
 
 Templates are rendered and matches compiled once, when the configuration is
 read, so no refresh re-derives them and no adapter ever sees a `{{ }}`. What a
-failure there costs is D85's. The TUI reads a file changed elsewhere on
-restart.
+failure there costs is D85's. A TUI prepares the project files again when it
+gets the focus back.
 
 ### D18 — a realization starts in the project directory
 
@@ -93,11 +93,6 @@ seconds, and never for a window that is ambiguous or that a target matches.
 
 kitty windows opened from a session file carry no name. The core pairs such a
 window with the one window of the same process on the window host.
-
-### D23 — the list component filters; the scrolling is ours
-
-`bubbles/list` paginates, and a held arrow key flickers through pages. It
-renders one page, and a viewport scrolls it.
 
 ### D24 — the compositor places what your script starts; revier places what revier starts
 
@@ -140,19 +135,6 @@ Replaces "bulk execution is a separate tool". Nobody built it, and the project
 list is revier's. Projects run one at a time, because the chores write shared
 state.
 
-### D33 — the TUI takes the mouse
-
-A popup that ignores the wheel reads as dead. Shift-drag still selects text.
-
-### D36 — a click selects a row, and a second click opens it
-
-Selecting a project costs nothing; opening one opens a window.
-
-### D39 — the list is a table as wide as its content, and the pane takes the rest
-
-Replaces a capped, centred frame and a full-width grid. Past its content width
-the list was blank. The agent column gives way in steps before a name is cut.
-
 ### D40 — a remote project is surveyed and driven by the revier on its host
 
 Containers stay out. An ssh-wrapping runtime would reimplement every adapter;
@@ -165,10 +147,6 @@ instance (D84).
 A file on the host defines a project; a file here refers to one. One shape for
 both cost two workarounds.
 
-### D44 — clearing the query puts the cursor back where it was
-
-A query reads as a temporary view, and clearing it as its undo.
-
 ### D45 — a link is made from the host's own list
 
 The ssh config and the remote revier know the hosts and projects. A failure is
@@ -180,43 +158,15 @@ exit status 255.
 Which projects and targets were open is revier's model, and a reboot loses it.
 Restore is run-or-raise over names, so a re-run is free.
 
-### D48 — a tmux pane's variables arrive in one option revier owns
-
-tmux cannot enumerate options in a format. `@revier` holds `NAME=value` pairs,
-and the host does not know which ones a probe reads.
-
-### D49 — actions about the installation stand on the top line, each with a key
-
-A bare letter filters, so these actions had no key anyone could find. A button
-is always a second way, never the only one.
-
-### D50 — the pointer lights what it is over, a step below the selection
-
-Hover says what a click would do, and it never selects.
-
-### D51 — no header and no border; the rule carries the count
-
-The header named the program just started, and the border repeated the
-terminal's edges. What else the rule carries is D96's.
-
 ### D53 — config is a screen, and a change applies as it is made
 
 `$EDITOR` opened an empty file with no list of settings. The file is edited
 line by line, so comments survive. A runtime is probed before it is written.
 
-### D54 — alt+h lists every key, read from where each key is declared
-
-The help screen cannot name a key that a press does not match.
-
 ### D55 — a conversation id comes from `claude agents --json`
 
 Replaces a `SessionStart` hook. Nothing to install, agents already running are
 named, and a pid match tells two agents in one repository apart.
-
-### D56 — actions are edited on the config screen
-
-A command is one line split as a shell splits it. An edit is refused if the file
-changed under the screen.
 
 ### D57 — a Claude agent's state comes from `claude agents --json`, not from its title
 
@@ -225,26 +175,11 @@ permission prompt then shows idle. The listing runs only when
 `~/.claude/sessions/*.json` modification times change, and at least every ten
 seconds. An unrecognised status is unknown, not idle.
 
-### D58 — the link dialog names every link
-
-The project's own name collides on machines that share projects. The dialog
-offers `rs-<host>-<project>`.
-
 ### D59 — targets most projects share are declared once, in config.toml
 
 Eighty-nine files repeated three targets. Tables merge key by key; any other
 value, a list included, replaces the shared one, because a panel has no identity
 to merge on.
-
-### D60 — shared targets are edited on the config screen
-
-A write is refused unless every project still loads, because a shared target is
-part of every project.
-
-### D61 — an action on one of revier's own keys is refused at load
-
-The surface matches its own keys first, so such an action never ran and nothing
-said so.
 
 ### D62 — a restore brings back every agent, in order, in the directory it worked in
 
@@ -279,17 +214,6 @@ group, so no second capability exists. The key finds its workspace through the
 runtime's optional `PanelFinder`, because a kitty window id is unique only in
 one kitty process.
 
-### D66 — a minimized window is a window revier can raise
-
-`wctl activate` restores a minimized window and switches to another workspace.
-Dropping hidden windows made an editor key launch a second copy. Only a window
-mutter has not shown yet is dropped.
-
-### D67 — every named window of the process must be seen before its unnamed sibling is paired
-
-Narrows D63. A named window the host does not list may be the one left over, and
-the unnamed window would take its title.
-
 ### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
 
 Recorded under the workspace, it was restored twice. The argv of a launch is
@@ -313,14 +237,6 @@ and the only thing a tab could be, and two terminals attached to two workspaces
 shared the session's current window and switched each other. A session per
 instance gives tmux the shape of a kitty OS window: `OpenTab` adds a window,
 and `attach-session` reaches one workspace.
-
-### D72 — a drag selects a box of the screen and copies it; revier draws it
-
-The terminal selects only with shift held, tells revier nothing, and clears the
-selection when a refresh rewrites a line under it; the surface must keep
-refreshing. So revier draws the box over the screen as the drag found it, and
-copies with OSC 52. A button or target runs on release, so a drag from one runs
-nothing.
 
 ### D74 — an agent is reached by making its tab current
 
@@ -362,15 +278,6 @@ differs from the newest one. An agent that works or waits for an answer would
 lose its turn, so the CLI refuses before the save and `--force` goes on; the
 TUI's confirm names the busy agents instead, and confirming them is the force.
 `Closer` and `PanelCloser` are optional and polite, so nothing is killed.
-
-### D79 — a project row counts its agents by state, and says nothing else on the right
-
-The row showed the worst state, its activity cut to fit, and under it the open
-targets or a missing checkout. In a narrow popup the cut activity read as
-noise, and a project with several agents showed only one. The right column now
-holds one count per state, closest to needing you first. The activity, the
-open targets and a missing checkout are the pane's; the folder glyph still
-marks a missing checkout on the row.
 
 ### D80 — the file name is the project's name, and a rename moves the file
 
@@ -485,16 +392,6 @@ adapter a directory of its own fixed only the adapters that had one, and every
 new adapter had to copy it. So each process settles its own directory before
 it starts anything, and no host sets one.
 
-### D93 — del closes, alt+del deletes, and a delete closes first
-
-One key closes whatever row the cursor is on, and a modifier on it deletes
-what the configuration holds of that row. A delete used to be refused while
-anything ran. It now closes first, through the same plan as a shutdown,
-because a refusal only sends the user to close by hand. A target of
-`config.toml` is every project's, so no project's row deletes it. Unlinking
-touches no file on the host. ctrl+del is not the key because not every
-terminal sends it apart from del.
-
 ### D94 — a tab closes as every panel in it, and its busy check covers them all
 
 A tab opened with a panel group holds panels that carry no target mark, so
@@ -502,7 +399,9 @@ closing the one panel the target is found by left the others on screen while
 the shutdown said "closed". A close step now carries every panel of the tab
 and closes each through `PanelCloser`; the tab ends with its last panel, so no
 close-a-tab capability is needed and tmux never kills a window linked into
-other sessions. The step's busy check covers every panel it carries.
+other sessions. The step's busy check covers every panel it carries. An
+agent's step closes its tab the same way, except the workspace's own tab,
+where the shell the layout declares beside the agent stays.
 
 ### D95 — an attachment is the window and the terminal inside it
 
@@ -512,23 +411,6 @@ agent in it unasked. `revier attach` and a claim now record the terminal
 beside the window when the window pairs with one beyond doubt, and the two
 are one row, the terminal's, since that side holds the panels. Rejected:
 folding from the terminal's side, where a shared title names two windows.
-
-### D96 — the rule totals the agents on the list, in the rows' own column
-
-Replaces D51's removal of the counts beside the rule's count. The rows show
-each project's state, but ninety of them do not fit on a screen, so "how many
-need me now" was a scroll. The totals stand in the column the rows count in,
-one layout placing both, so a state's total sits over that state's counts.
-They count the rows the filter left, and the rule's line runs through the slot
-of a state with no agent.
-
-### D97 — the surface opens with the rows above the starting project in view
-
-The list is sorted with the projects that need the user first, so opening on
-a project resolved from the working directory or the focused window put it
-alone on the last line and said nothing about what else was waiting. It keeps
-ten rows above it, fewer on a screen with no room, where it is the last row in
-view: a row the user was taken to and cannot see is worse than no context.
 
 ### D99 — the busy guard is in the close path, not in the surface that asks
 
@@ -570,16 +452,6 @@ an agent does now. A field on a port that no surface reads is a field every
 out-of-tree probe author fills for nothing, so it is gone; a product that
 wants an age can add it back with the reader that needs it.
 
-### D103 — the top line's right edge says which revier is running
-
-A released binary and one built from source draw the same surface, and nothing
-on it said which was which. The version stands at the right end of the first
-line: that line already carries what is about the installation rather than
-about the rows (D49), and its right side is the only place no column claims.
-It is not the header D51 removed - that named the program, which the user
-knows - and where less than two columns of air are left it is dropped, because
-the buttons are what the line is for.
-
 ### D104 — a surface shows the agents a panel here shows, and the survey keeps the rest
 
 A link's host lists every agent in its project, including the ones opened on
@@ -589,14 +461,6 @@ for an agent this machine serves to a terminal elsewhere. Every surface over
 this machine's projects draws `Core.Shown`, the agents a panel of this
 machine's runtime shows; the survey keeps the rest, which the other machine's
 revier and a shutdown still read.
-
-### D105 — Tab walks the projects and the agents; the targets are one chord away
-
-Replaces D73, where Tab walked the projects, the targets and the agents, each
-under a query. The agents are what the surface exists to reach, and a third
-stop put them two presses off; a project has a handful of targets, so a query
-over them found nothing a glance does not. The targets have no query, and a
-pane row takes D36's clicks, so one target can be chosen for del and alt+del.
 
 ### D106 — what an agent said last is read from its transcript, for display only
 
@@ -618,15 +482,6 @@ the agent list or `revier agent read` shows a line of it, and the row is set
 in revier's own colours.
 Rejected: trusting the harness, which does not own what a tool wrote into the
 transcript it keeps.
-
-### D109 — the cursor follows an open project, and keeps its place when the project closes
-
-A refresh restores the cursor by name, so a project that closed took the
-cursor down among the stopped rows, away from the open ones the user works in.
-The place is what the user was at: the cursor stays there, on the row that
-moved up, and a project that left the list hands it on the same way. An open
-project keeps the cursor through every reordering, attention included, so the
-rule has one test: is it still open. Replaces D98.
 
 ### D110 — the agents of every project are a second list, behind the key that opens the surface
 
@@ -658,14 +513,6 @@ conversation each agent holds, are appended to one file that is never pruned.
 reader's. A linked host is asked for its own lines, one hop. A line names what
 happened and where, never what was said. Rejected: agents writing their own
 entries, which a forge or the transcript already records better.
-
-### D113 — a query keeps the list's order, and the fuzzy score ranks only within it
-
-The fuzzy scorer alone put a stopped project above an open one, because it
-gives a letter after a separator more than a letter beside the last. A query
-is a view over the list (D44), so its rows stay in the groups the list sorts
-them into. Within a group a row that holds the query whole stands above one
-that holds its letters apart, and then the score decides.
 
 ### D114 — a surface surveys this machine apart from the linked hosts
 
@@ -811,23 +658,6 @@ by the HostName ssh gives it, is left out at load, and `revier doctor` names
 the files. The link dialog does not offer this machine. Rejected: answering
 the link from the local survey, which shows each agent there twice.
 
-### D132 — a target key reaches the TUI as pressed where the terminal tells it apart
-
-Replaces "a key the terminal cannot deliver works on the desktop only".
-Where the terminal reports key disambiguation, as kitty does, Ctrl+Shift+U
-arrives as itself, and a target bound to it runs before the press is read as
-Ctrl+U; Ctrl+U keeps its own meaning. Elsewhere Ctrl+Shift+U arrives as
-Ctrl+U, and the target key yields to any meaning that press already has in
-the TUI. Every other press is read as a terminal without disambiguation
-sends it, so the surface's own keys work alike in every terminal.
-
-### D133 — NO_COLOR turns colour off, and leaves bold and reverse video
-
-Any NO_COLOR that is not empty draws the surface without colour, as
-no-color.org says. Bold and reverse video stay: the selected row and the text
-field's cursor are still told apart, and the selection box is drawn as before.
-Rejected: dropping every style, which hides the cursor and the selection box.
-
 ### D134 — a status is a command, drawn at one of four places
 
 What a status shows is a command's output, so revier holds no fact of the
@@ -857,13 +687,3 @@ an agent selector under the box left the screen whole, and a full-screen view
 has no box to find. A cut that holds only for the layouts it was tested on is
 wrong on the next one. Rejected: a cut by the harness's layout, in the probe or
 in the surface.
-
-### D138 — the trigger key's entry is named for the popup it opens
-
-The key opens the popup, and the picker is no surface of its own (D8), so a
-shortcut named `revier: picker` sent a user looking for a thing that is not
-there. Its row and its name are `popup`; its entry keeps the id
-`revier-picker`, so a changed trigger key moves that entry and leaves no copy
-on the old chord. A keyed target can take neither name. An install renames an
-entry revier named, since one it names stays revier's whatever it is called
-(D77); a shortcut the user bound keeps the user's name.

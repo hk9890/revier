@@ -24,7 +24,8 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 1. Pick `vX.Y.Z` and confirm it is free: `git tag --list "v*"`.
 2. Write the `CHANGELOG.md` section (see below) and land it like any other
    change: worktree, PR, merge ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
-3. Create a worktree detached at the merged commit, and run the gate in it:
+3. Create a worktree detached at the merged commit, and run the gate in it.
+   Run steps 3 and 4 from the main checkout's root:
 
    ```bash
    git fetch origin
@@ -32,8 +33,7 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
    mise -C .claude/worktrees/release-vX.Y.Z run quality:full
    ```
 
-4. From the directory step 3 ran in, tag the worktree's commit, push the tag,
-   then remove the worktree:
+4. Tag the worktree's commit, push the tag, then remove the worktree:
 
    ```bash
    git -C .claude/worktrees/release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"
@@ -70,8 +70,18 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 **The dispatched ref must be the tagged commit.** `workflow_dispatch` reads
 the workflow file from the ref it runs on, and GoReleaser requires the
 checked-out commit to be the tagged one. A `release.yml` change that a release
-needs must live in the tagged commit — commit it, then move the tag
-(`git tag -f -a vX.Y.Z -m … && git push -f origin vX.Y.Z`).
+needs must live in the tagged commit. To move the tag onto such a fix:
+
+1. Land the `release.yml` fix by PR ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
+2. Create a new detached worktree at the new `origin/main` and run the gate,
+   as in step 3.
+3. From the main checkout's root, move the tag and remove the worktree:
+
+   ```bash
+   git -C .claude/worktrees/release-vX.Y.Z tag -f -a vX.Y.Z -m "revier vX.Y.Z"
+   git push -f origin vX.Y.Z
+   git worktree remove .claude/worktrees/release-vX.Y.Z
+   ```
 
 Re-dispatching against an existing tag overwrites its assets instead of
 failing (`release.replace_existing_artifacts`). To add a missing asset without

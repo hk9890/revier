@@ -68,7 +68,8 @@ that did not focus after `Open` passed L2 and failed L4.
     has `CLAUDE_CONFIG_DIR`, so `~/.claude` keeps it.
   - Set a new `REVIER_*` override in `testenv.Run`, and name it in the
     failure message there.
-  - Add the function that resolves it to the rule above.
+  - Add the function that resolves it to the list this rule opens with
+    (`config.Root`, `state.Root`, `sshconfig.Path`).
   - `testenv.Run` does not set the variable of another tool. Set it with
     `t.Setenv` in each test that reaches that tool's path.
 - Call `testenv.NoTools(t)` in a test that must start no tool, such as git or

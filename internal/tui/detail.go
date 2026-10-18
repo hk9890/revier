@@ -46,7 +46,7 @@ func (m Model) paneWidth() int {
 
 // paneCols is the columns the pane renders in: its share beside the list,
 // or, on a terminal too narrow to split, the whole width while the cursor is
-// on it, where it stands in the list's place (decisions.md D105). Zero is a
+// on it, where it stands in the list's place. Zero is a
 // pane not on screen.
 func (m Model) paneCols() int {
 	if pane := m.paneWidth(); pane > 0 {
