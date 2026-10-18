@@ -58,7 +58,7 @@ without it loses only what it would have given.
 **AgentProbe** reads a panel and reports the agent's state. It receives the
 whole panel rather than one signal, because which signal is trustworthy
 differs per harness and changes: the Claude probe moved from the title to
-`claude agents --json` and the port did not change (D57). Only a probe says
+Claude Code's own agent listing and the port did not change (D57). Only a probe says
 whether a program is an agent; a host says shell or tool (D119).
 
 **Remote** is a revier on another machine, not a host: it answers with the
@@ -73,7 +73,7 @@ Three things that look like ports and are not:
 
 - **The store.** Projects are TOML files on disk. There is no second storage
   backend planned, so it is a package, not an interface.
-- **Output format.** `--json` is a renderer over the same view type the TUI
+- **Output format.** JSON output is a renderer over the same view type the TUI
   reads. A format is not a port.
 - **Matching.** The core matches instances against realizations. Putting it
   behind the port would duplicate it in every adapter and let two adapters
@@ -126,6 +126,6 @@ convention puts an interface in the package that consumes it; this project
 overrides that convention because the ports are a product feature, and adapter
 authors need one obvious import path.
 
-Every adapter is constructed explicitly in one place, not through `init()`
-registration. Explicit wiring is greppable, and it makes the set of
+Every adapter is constructed explicitly in one place, not registered when
+its package loads. Explicit wiring is greppable, and it makes the set of
 compiled-in adapters one readable list.

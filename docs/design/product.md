@@ -39,7 +39,7 @@ the diff viewer *is* depends on which host can provide it (D14):
 | Host | The same target, realized |
 |---|---|
 | Compositor (GNOME) | a Meld window, found by its window class, raised by the compositor |
-| Runtime (kitty, tmux) | `nvim -d` in a pane, found by its title, focused by the terminal |
+| Runtime (kitty, tmux) | a diff in nvim, in a pane, found by its title, focused by the terminal |
 
 The key, the name, and the promise are identical. Only the resolution differs.
 This is why the same binding works on a desktop and on a headless SSH box, and
@@ -128,7 +128,7 @@ machine's rows never wait for a linked host (D114).
 - kitty runtime, GNOME window control, Claude probe
 - The popup the desktop key opens: the TUI in kitty on GNOME (D76), hidden and
   raised again (D86)
-- `--json` output
+- JSON output
 - Projects on another machine, surveyed by the revier installed there (D40)
 
 Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`

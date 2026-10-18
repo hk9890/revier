@@ -38,6 +38,6 @@ must never decide is in [CODING.md](../CODING.md#adapters-hold-no-policy).
 
 ## What is not extensible, on purpose
 
-The store is TOML files on disk. The output formats are the TUI and `--json`.
+The store is TOML files on disk. The output formats are the TUI and JSON.
 Neither is behind an interface, because neither has a second implementation
 anyone has asked for. When one appears, the interface gets written then.

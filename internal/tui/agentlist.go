@@ -267,7 +267,7 @@ func shortAgo(now, t time.Time) string {
 // agent list, keeping the query. The cursor stays on its agent through every
 // reordering, so the mirror beside it does not change under the reader; an
 // agent that left hands the cursor to the row that took its place, as a
-// project that closed does (decisions.md D110).
+// project that closed does.
 func (m *Model) reloadAgents() {
 	if m.agents.shown {
 		m.agents.reload(agentItems(m.views, m.adetails, m.now()))
