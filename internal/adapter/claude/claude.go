@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -277,13 +278,17 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 
 // Holds reports whether Claude Code keeps a transcript of the conversation:
 // one never prompted has none, and Claude Code prunes one older than its
-// cleanupPeriodDays.
+// cleanupPeriodDays. It looks as Detail does, with the same kept sweep: the
+// sessions screen asks for every recorded agent on every frame, and a
+// conversation filed nowhere would otherwise cost a stat per project
+// directory each time. A transcript that cannot be looked for is held.
 func (p *Probe) Holds(id revier.SessionID, dir string) bool {
-	return p.filed(listedSession{SessionID: string(id), Cwd: dir})
+	_, _, err := p.transcript(listedSession{SessionID: string(id), Cwd: dir})
+	return !errors.Is(err, revier.ErrNoDetail)
 }
 
 // filed reports whether Claude Code has filed a transcript for the session,
-// and true when a project directory could not be read to say.
+// and true when the projects directory could not be read to say.
 func (p *Probe) filed(s listedSession) bool {
 	if s.SessionID == "" {
 		return false
@@ -291,8 +296,8 @@ func (p *Probe) filed(s listedSession) bool {
 	if _, _, ok := p.underCwd(s); ok {
 		return true
 	}
-	_, found, err := p.sweepFor(s.SessionID)
-	return found != nil || err != nil
+	_, info, err := p.sweepFor(s.SessionID)
+	return info != nil || err != nil
 }
 
 const (

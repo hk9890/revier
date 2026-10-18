@@ -15,9 +15,11 @@ import (
 	"github.com/hk9890/revier/internal/session"
 )
 
-// agentStatus makes the fake claude list every agent pane in the status.
+// agentStatus makes the fake claude list every agent pane in the status, on
+// the filed conversation abc-123.
 func agentStatus(t *testing.T, status string) {
 	t.Helper()
+	fileConversation(t, "abc-123")
 	for _, pid := range agentPanes(t) {
 		body := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "abc-123", "status": "` + status + `"}`
 		if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(body), 0o644); err != nil {

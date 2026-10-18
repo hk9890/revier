@@ -421,6 +421,25 @@ func TestHolds(t *testing.T) {
 	}
 }
 
+// A projects directory that cannot be read cannot say a conversation is gone,
+// so the save keeps its id and the restore resumes it.
+func TestAConversationThatCannotBeLookedForIsKept(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "/home/user/dev/demo")
+	if err := os.WriteFile(filepath.Join(root, "projects"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Sessions(context.Background(), []revier.Panel{{ID: "1", PID: 101}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (revier.Conversation{ID: "s1", Dir: "/home/user/dev/demo"}); got[0] != want {
+		t.Errorf("Sessions = %+v, want %+v", got[0], want)
+	}
+	if !p.Holds("s1", "/home/user/dev/demo") {
+		t.Error("Holds = false, want true for a conversation that could not be looked for")
+	}
+}
+
 // A background session has no pid. It must not become the conversation of a
 // panel that reports none.
 func TestSessionsIgnoresBackgroundSessions(t *testing.T) {
