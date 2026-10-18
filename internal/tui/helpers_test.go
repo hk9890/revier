@@ -417,6 +417,15 @@ func clickCell(m tui.Model, x, y int) (tui.Model, tea.Cmd) {
 	return next.(tui.Model), tea.Batch(pressed, released)
 }
 
+// clocked gives the model a clock a test advances by hand, and returns the
+// hand: two clicks are as far apart as the test says, not as the machine ran.
+// The hand starts at the real now, so a launch or an agent that a fixture
+// stamps with time.Now keeps its age.
+func clocked(m tui.Model) (tui.Model, *time.Time) {
+	now := time.Now()
+	return m.WithClock(func() time.Time { return now }), &now
+}
+
 // barCell is a terminal cell inside the "new" button of the action bar: the
 // bar is the surface's first line, and "new" is the first button after the
 // switch between the two lists.

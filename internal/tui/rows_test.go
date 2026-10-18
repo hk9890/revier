@@ -123,13 +123,6 @@ func TestTypingOnTheTargetsFiltersNothing(t *testing.T) {
 	}
 }
 
-// clocked gives the model a clock a test advances by hand, and returns the
-// hand: two clicks are as far apart as the test says, not as the machine ran.
-func clocked(m tui.Model) (tui.Model, *time.Time) {
-	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
-	return m.WithClock(func() time.Time { return now }), &now
-}
-
 // A double click opens a row as Enter does, so it ends the search as Enter
 // does.
 func TestADoubleClickClearsTheQuery(t *testing.T) {
@@ -170,7 +163,7 @@ func TestATargetKeyClearsTheQuery(t *testing.T) {
 // pane cursor stays on the row clicked.
 func TestADoubleClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m := typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
+	m, _ := clocked(typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00"))
 	x, y := paneCell(t, m, "editor")
 	m, _ = clickCell(m, x, y)
 	m, cmd := clickCell(m, x, y)

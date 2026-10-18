@@ -435,7 +435,7 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 // row chosen.
 func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
 	runAll(cmd)
@@ -448,6 +448,7 @@ func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	if f := footer(m); !strings.Contains(f, "enter go") {
 		t.Errorf("footer = %q, want enter to say go", f)
 	}
+	*now = now.Add(399 * time.Millisecond)
 	m, cmd = clickCell(m, x, y)
 	runAll(cmd)
 	if len(wm.Opened) != 1 || wm.Opened[0].Launch[0] != "code" {
@@ -455,6 +456,25 @@ func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	}
 	if row := paneCursor(m); !strings.Contains(row, "editor") {
 		t.Errorf("pane cursor = %q, want it still on the row clicked", row)
+	}
+}
+
+// Two clicks on one target row 400 ms apart are two choices of the row, not a
+// run: the pane's window closes where the list's does (mouse.go).
+func TestASecondClickOnATargetAfterTheWindowRunsNothing(t *testing.T) {
+	_, wm, c, projects := world(t, 1)
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
+	x, y := paneCell(t, m, "editor")
+	m, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	*now = now.Add(400 * time.Millisecond)
+	m, cmd = clickCell(m, x, y)
+	runAll(cmd)
+	if len(wm.Opened) != 0 {
+		t.Errorf("Opened = %v after two clicks 400 ms apart, want nothing", wm.Opened)
+	}
+	if row := paneCursor(m); !strings.Contains(row, "editor") {
+		t.Errorf("pane cursor = %q, want it kept on the row clicked", row)
 	}
 }
 
