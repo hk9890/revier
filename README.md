@@ -7,7 +7,7 @@
 
 A project-grouped control surface for running coding agents.
 
-![The revier TUI: projects sorted by agent state, with the selected project's targets, agents and agent screen](.github/assets/tui.gif)
+![Alt+Space opens the popup, a search finds web-shop, Enter jumps to its agent; Alt+Space twice shows every agent, and Enter jumps to the one that needs you](.github/assets/demo.gif)
 
 You run several projects at once. Each holds a coding agent, a shell, and the
 things that belong with them — an editor, a diff viewer, a page. revier answers
@@ -18,6 +18,66 @@ the two questions that come up all day, in one keystroke each:
 
 A *Revier* is a hunting ground or a patrolled district. Your projects are the
 territory.
+
+## Features
+
+**Find the agent that needs you**
+
+- **Popup on a desktop key.** The trigger key opens the TUI in its own kitty
+  window, Alt+Space by default. The popup selects the project of the focused
+  window and hides when you bring a window to the front.
+  See [The popup](docs/user-guide/tui.md#the-popup).
+- **All agents in one list.** In the popup, press the trigger key again to
+  see every agent of every open project in one list. In a terminal, press
+  alt+space. Agents that need you are on top, then working, idle and
+  `unknown` agents. The project list shows each project with its agents
+  counted by state. See [The agent list](docs/user-guide/tui.md#the-agent-list).
+- **Jump to an agent.** Select an agent and press Enter. revier raises its
+  tab and its window. The pane shows the agent's terminal as it is now.
+  See [Move and act](docs/user-guide/tui.md#move-and-act).
+
+**Open a project and its tools**
+
+- **Search and open a workspace.** Type to fuzzy-filter the project list,
+  then press Enter. revier opens the project's workspace as a kitty window or
+  a tmux session, with its tabs, or raises it if it is open. From a shell,
+  run `revier open demo`.
+  See [Tabs](docs/user-guide/configuration.md#tabs).
+- **One key per tool.** Give the editor, the ticket viewer or any other
+  target its own key, for example Ctrl+Shift+O or Ctrl+Shift+T. A press opens
+  the target or raises it. A second press returns you to the project's
+  terminal workspace. A target declared in `config.toml` has the same key in
+  every project.
+  See [Go to a target and back](docs/user-guide/getting-started.md#go-to-a-target-and-back).
+- **Windows placed for you.** On GNOME, revier opens, raises and places
+  desktop windows through `wctl` from the
+  [Window Control extension](https://github.com/carlo9890/gnome-window-control).
+  `place = "right top 50% 100%"` sets where a new window goes.
+  See [Realization fields](docs/user-guide/configuration.md#realization-fields).
+
+**Stop and start again**
+
+- **Shut everything down.** `revier shutdown` saves the session, then closes
+  every open project. In the TUI, alt+q shows the plan first. An agent that
+  works or waits for you blocks the close until you add `--force`.
+  See [Shut everything down](docs/user-guide/projects.md#shut-everything-down).
+- **Restore a session.** `revier session restore` opens the saved projects
+  and targets again. Each Claude Code agent resumes its conversation. In the
+  TUI, alt+s opens the sessions.
+  See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
+
+**Reach further**
+
+- **Projects on another machine.** `revier link buildbox far` adds a project
+  on an ssh host as a row in your list. Its agents run on the host and show in
+  your local terminal. In the TUI, press alt+r.
+  See [Link a project](docs/user-guide/links.md#link-a-project).
+- **Drive agents from a script.** `revier agent prompt`, `wait`, `read` and
+  `send-keys` work with an agent, and none of them raises a window.
+  See [Drive an agent from a script](docs/user-guide/agents.md#drive-an-agent-from-a-script).
+- **Run one command in every project.** `revier each -- git pull --ff-only`
+  runs the command in each project directory and prints the result for each.
+  See [Run one command in every project](docs/user-guide/projects.md#run-one-command-in-every-project).
 
 ## Status
 
