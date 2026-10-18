@@ -329,7 +329,7 @@ func TestASessionRecordsATabAfterItsInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), report, "revier")
+	s, _ := c.Session(context.Background(), report)
 	targets := s.Projects[0].Targets
 	if len(targets) != 2 || targets[0].Name != "home" || targets[1].Name != "tickets" {
 		t.Fatalf("targets = %+v, want home, then the tickets tab", targets)
@@ -429,7 +429,7 @@ func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, _ := c.Session(context.Background(), report, "revier")
+	s, _ := c.Session(context.Background(), report)
 	if home := s.Projects[0].Targets[0]; len(home.Agents) != 2 || home.Agents[1].Session != "old-7" {
 		t.Errorf("home = %+v, want both agents of its instance", home)
 	}
@@ -470,7 +470,7 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
 	}
-	s, gaps := c.Session(context.Background(), report, "revier")
+	s, gaps := c.Session(context.Background(), report)
 	targets := s.Projects[0].Targets
 	if len(targets) != 2 || len(targets[0].Agents) != 1 || targets[0].Agents[0].Session != "abc-123" {
 		t.Fatalf("targets = %+v, want home with its own agent only", targets)

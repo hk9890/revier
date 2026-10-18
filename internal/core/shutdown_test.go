@@ -12,7 +12,6 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
-	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -473,43 +472,6 @@ func TestCloseLastPutsTheCallersOwnTerminalAtTheEnd(t *testing.T) {
 	}
 }
 
-// A shutdown saves what is open, once: a second shutdown of the same desktop
-// finds the newest session already holds it.
-func TestSaveChangedSavesOnlyWhatChanged(t *testing.T) {
-	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
-	c.Probes = []revier.AgentProbe{resumable()}
-	root := t.TempDir()
-	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
-
-	first, saved, _, err := c.SaveChanged(context.Background(), root, survey(t, c, projects, nil), "revier", at)
-	if err != nil || !saved {
-		t.Fatalf("first save = %v, %v; want a save", saved, err)
-	}
-	if _, saved, _, _ := c.SaveChanged(context.Background(), root, survey(t, c, projects, nil), "", at.Add(time.Minute)); saved {
-		t.Error("second save wrote a session, want the same desktop left unsaved")
-	}
-	rt.Remove(survey(t, c, projects, nil).Views[0].Targets[1].Ref)
-	second, saved, _, err := c.SaveChanged(context.Background(), root, survey(t, c, projects, nil), "", at.Add(2*time.Minute))
-	if err != nil || !saved || second.ID == first.ID {
-		t.Errorf("save after a change = %v, %v, id %q; want a new session", saved, err, second.ID)
-	}
-	all, _ := session.List(root)
-	if len(all) != 2 {
-		t.Errorf("sessions = %d, want 2", len(all))
-	}
-}
-
-// Nothing open is nothing to save: an empty session would become the newest,
-// the one a plain restore opens.
-func TestSaveChangedSavesNothingWhenNothingIsOpen(t *testing.T) {
-	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
-	projects := []core.Project{prepared(t, agentProject())}
-	root := t.TempDir()
-	if _, saved, _, err := c.SaveChanged(context.Background(), root, survey(t, c, projects, nil), "", time.Now()); saved || err != nil {
-		t.Errorf("save = %v, %v; want none", saved, err)
-	}
-}
-
 // A tab step is rechecked against every panel of its tab, so an agent that
 // turns busy in the panel beside the one that names the step refuses the
 // close.
@@ -744,6 +706,24 @@ func TestShutdownSavesOnItsOwnBudgetAfterASlowRecheck(t *testing.T) {
 	}
 	if closed, _, _ := out.Counts(); closed != 3 {
 		t.Errorf("counts = %d closed, want every step closed", closed)
+	}
+}
+
+// A save that fails is the shutdown's failure, and nothing closes: a desktop
+// closed with no session to restore loses what was open.
+func TestShutdownClosesNothingWhenTheSaveFails(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	full := errors.New("disk full")
+
+	_, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{Projects: projects, Before: func(context.Context, core.Report) error {
+		return full
+	}})
+	if !errors.Is(err, full) {
+		t.Errorf("shutdown = %v, want the save's error", err)
+	}
+	if len(rt.Closed) != 0 || len(rt.ClosedPanels) != 0 || len(wm.Closed) != 0 {
+		t.Errorf("closed %v, panels %v, windows %v; want nothing closed", rt.Closed, rt.ClosedPanels, wm.Closed)
 	}
 }
 

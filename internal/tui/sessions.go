@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
@@ -310,7 +311,7 @@ func (sc *sessionsScreen) save(sf surface) tea.Cmd {
 		if err != nil {
 			return savedMsg{err: err}
 		}
-		stored, _, gaps, err := c.SaveSession(ctx, root, report, c.Ledger.State().Current, name, time.Now())
+		stored, _, gaps, err := app.SaveSession(ctx, c, root, report, name, time.Now())
 		if err != nil {
 			return savedMsg{err: err}
 		}
@@ -323,7 +324,7 @@ func (sc *sessionsScreen) save(sf surface) tea.Cmd {
 func (sc *sessionsScreen) saved(root string, th theme.Theme, msg savedMsg) error {
 	sc.saving = false
 	switch {
-	case errors.Is(msg.err, core.ErrNothingOpen):
+	case errors.Is(msg.err, app.ErrNothingOpen):
 		// A normal outcome, as the CLI prints it, and not a failure.
 		slog.Info("session save: nothing open")
 		return msg.err
