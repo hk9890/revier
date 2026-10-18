@@ -121,10 +121,12 @@ agentpane                                        # the restore started a new age
 The save asks `claude agents --json` which conversation each agent pane's
 process holds, and in which directory. To run the resume path, give the pane's
 file a `sessionId` and a `cwd`, with the fake `claude` from the agent monitor
-recipe on PATH:
+recipe on PATH. File a transcript for the conversation too: revier records and
+resumes only a conversation Claude Code has filed.
 
 ```bash
 printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
+mkdir -p "$CLAUDE_CONFIG_DIR/projects/-filed" && echo '{"type":"user"}' > "$CLAUDE_CONFIG_DIR/projects/-filed/abc-123.jsonl"
 ./bin/revier session save   # prints "1 agent conversation recorded"
 ```
 
