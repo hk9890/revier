@@ -144,8 +144,7 @@ key, or run `revier` in a terminal.
 The project with an agent that needs you is at the top, and the pane shows
 the agent's terminal. For the list of all agents, press the trigger key
 again in the popup, or Alt+Space in a terminal. Select the agent and press
-Enter. revier raises its tab and
-window.
+Enter. revier raises its tab and window.
 
 From a shell, `revier list` prints one line per project with its most urgent
 agent state: `attention` means it needs you.

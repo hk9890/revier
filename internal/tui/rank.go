@@ -11,12 +11,12 @@ import (
 
 // ranked is the filter under every list that takes a query. The fuzzy scorer
 // says which rows match and is the last word on their order, not the first:
-// a query is a view over the list, so a row stays in the
-// group the list sorted it into, and within a group a row that holds the
-// query whole stands above one that holds its letters apart. The scorer alone
-// does neither: it gives a letter after a separator four times what it gives
-// a letter beside the last, so "cap" ranked claude-code-podman above
-// cap-data-intelligence, stopped above open.
+// a query is a view over the list, so a row stays in the group the list
+// sorted it into, and within a group a row that holds the query whole stands
+// above one that holds its letters apart. The scorer alone does neither: it
+// gives a letter after a separator four times what it gives a letter beside
+// the last, so "cap" ranked claude-code-podman above cap-data-intelligence,
+// stopped above open.
 //
 // group is the place the list's order gives row i, lowest first.
 func ranked(group func(i int) int) list.FilterFunc {

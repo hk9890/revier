@@ -165,14 +165,14 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	indent := lipgloss.Width(prefix)
 
-	// The row is a table of two columns: the project - its
-	// name, and its path under it - and the agents, counted by state on the
-	// first line. The agent column says agent state and nothing else: what
-	// is open, and a checkout that is missing, are the pane's to say. The
-	// agent column has a fixed width and sits at the right edge, with its
-	// text left-aligned inside it, so the counts line up in one column
-	// whatever the names and paths beside them do. Nothing from the project
-	// column crosses into it: a path is cut in the middle to fit.
+	// The row is a table of two columns: the project - its name, and its
+	// path under it - and the agents, counted by state on the first line.
+	// The agent column says agent state and nothing else: what is open, and a
+	// checkout that is missing, are the pane's to say. The agent column has a
+	// fixed width and sits at the right edge, with its text left-aligned
+	// inside it, so the counts line up in one column whatever the names and
+	// paths beside them do. Nothing from the project column crosses into it:
+	// a path is cut in the middle to fit.
 	//
 	// The project column is what the list is for, so it gives way last: the
 	// agent column shrinks first, to one glyph, and then goes, and only then
