@@ -79,6 +79,12 @@ that did not focus after `Open` passed L2 and failed L4.
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers
   with, `run` drops them. Feed by hand only to assert between the run and the
   feed, as `TestEnterOnATargetRunsGo` does.
+- In `internal/tui`, build a model that a test clicks with `refreshed` or
+  `projectSurface`, whose clocks stand still, or give it the `clocked`
+  helper's clock: on the real clock the double-click window in `mouse.go`
+  passes or fails with the machine's load.
+- In `internal/tui`, move time with the hand `clocked` returns, also on a model
+  `refreshed` built: `refreshed` keeps no hand of its own.
 - An adapter test that needs no recorded output and no tool stays untagged, so
   `mise run test` runs it: `internal/adapter/kitty/ref_internal_test.go`,
   `internal/adapter/gnome/keyswrite_test.go`.

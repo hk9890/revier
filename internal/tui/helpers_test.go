@@ -78,10 +78,11 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 }
 
 // refreshed builds the model over a state root and applies one survey, as the
-// timer does.
+// timer does. Its clock stands still, so no test measures a window on the
+// machine's own speed: one that moves time takes clocked's hand.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m := tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors()
+	m, _ := clocked(tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors())
 	return survey(m)
 }
 
@@ -689,7 +690,7 @@ func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRunt
 		t.Fatal(err)
 	}
 	stateRoot := stateWith(t, nil)
-	m := tui.New(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), "")
+	m, _ := clocked(tui.New(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), ""))
 	next, _ := m.Update(m.Survey()())
 	return resize(next.(tui.Model), 140, 60), file, stateRoot
 }
