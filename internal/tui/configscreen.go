@@ -54,7 +54,7 @@ type runtimeMsg struct {
 // open, and the keys of config.toml it changes itself.
 type configScreen struct {
 	ui        config.UI       // [ui] as Load resolved it: an unknown theme or glyph set is empty
-	problems  []error         // what config.toml declares that nothing can use, read at the open and after each write
+	problems  []error         // what config.toml declares that nothing can use, read at the open, after each write and with the files
 	runtime   []string        // [hosts] runtime as config.toml holds it
 	runtimes  []string        // the runtime hosts the screen offers besides auto
 	pick      RuntimeSelector // probes a runtime choice, as startup does
@@ -101,10 +101,6 @@ func (m Model) openConfig() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.toList()
 	m.config.open()
-	_ = withConfigRoot(func(root string) error {
-		m.config.readProblems(root)
-		return nil
-	})
 	m.body.SetYOffset(0)
 	m.dialog = dialogConfig
 	return m, nil
@@ -157,13 +153,15 @@ func (m *Model) applyTheme(th theme.Theme) {
 	m.layout()
 }
 
-// open is a new visit: the cursor on the first row, and no form.
+// open is a new visit: the cursor on the first row, no form, and the
+// problems of config.toml as it is now.
 func (cs *configScreen) open() {
 	cs.row = int(rowTheme)
 	cs.refused = ""
 	cs.aform = actionForm{}
 	cs.tform = targetForm{}
 	cs.dropping = false
+	cs.readProblems()
 }
 
 // key is every press on the config screen. Left and right change the row's
@@ -366,19 +364,22 @@ func (cs *configScreen) set(table, key string, value any) error {
 // again after it, as a write can mend one: a theme chosen in place of an
 // unknown one.
 func (cs *configScreen) write(write func(root string) error) error {
-	return withConfigRoot(func(root string) error {
-		if err := write(root); err != nil {
-			return err
-		}
-		cs.readProblems(root)
-		return nil
-	})
+	if err := withConfigRoot(write); err != nil {
+		return err
+	}
+	cs.readProblems()
+	return nil
 }
 
 // readProblems takes the problems of config.toml as the file holds it now.
-// A file that does not decode has that as its one problem.
-func (cs *configScreen) readProblems(root string) {
-	cfg, err := config.Read(root)
+// A file that does not decode, or a configuration root that does not
+// resolve, has that as its one problem.
+func (cs *configScreen) readProblems() {
+	var cfg *config.Config
+	err := withConfigRoot(func(root string) (err error) {
+		cfg, err = config.Read(root)
+		return err
+	})
 	if err != nil {
 		cs.problems = []error{err}
 		return
@@ -439,9 +440,10 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 
 	// The problems stand over the rows: a theme the file names and the
 	// screen cannot draw is shown here as the default, and only this says
-	// why (decisions.md D85).
+	// why (decisions.md D85). Each is wrapped, not cut: a file that does not
+	// decode is named by its path before the reason.
 	for _, err := range cs.problems {
-		b.WriteString(clipTo(th.Attention.Render("  "+strings.ReplaceAll(err.Error(), "\n", "; ")), w) + "\n")
+		b.WriteString(hang("  ", err.Error(), w, th.Attention) + "\n")
 	}
 	b.WriteString(heading(th, "Appearance", w))
 	row(int(rowTheme), "theme", "‹ "+orDefault(cs.ui.Theme, theme.DefaultTheme)+" ›", "")

@@ -59,8 +59,8 @@ type Config struct {
 	// unbound, the target reaches no project, the probe is not run, an
 	// unknown theme or glyph set is the default, a trigger key that does not
 	// parse refuses only the keys commands, and the file is otherwise read
-	// whole. `revier
-	// doctor` is where these are read.
+	// whole. `revier doctor` and the TUI's config screen are where these
+	// are read.
 	Problems []error `toml:"-"`
 
 	// SelfLinks is the files of the links whose host is this machine, which

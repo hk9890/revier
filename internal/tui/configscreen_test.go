@@ -3,9 +3,12 @@ package tui_test
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -105,6 +108,39 @@ func TestTheConfigScreenNamesAProblemOfConfigTomlUntilItIsMended(t *testing.T) {
 	}
 	if strings.Contains(screen(m), "unknown theme") {
 		t.Errorf("config screen still names the mended theme:\n%s", screen(m))
+	}
+}
+
+// The problems are read again with the files when the focus is back, as the
+// rows are: the assistant beside the surface mends config.toml while the
+// screen is up.
+func TestTheConfigScreenReadsTheProblemsAgainAtTheFocus(t *testing.T) {
+	root := configRoot(t, "[ui]\ntheme = \"dracula\"\n")
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+c")
+	if err := os.WriteFile(config.File(root), []byte("[ui]\ntheme = \"catppuccin-latte\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	m, cmd := update(m, tea.FocusMsg{})
+	m, _ = deliver(m, cmd) // the files read again
+	if strings.Contains(screen(m), "unknown theme") {
+		t.Errorf("config screen still names the theme mended while it was away:\n%s", screen(m))
+	}
+}
+
+// A problem wider than the screen is wrapped, not cut: a file that does not
+// decode is named by its path before the reason.
+func TestTheConfigScreenWrapsALongProblem(t *testing.T) {
+	configRoot(t, "[ui]\nglyphs = 3\n")
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 30)
+
+	m, _ = press(m, "alt+c")
+	if got := strings.Join(strings.Fields(screen(m)), " "); !strings.Contains(got, "destination has type string") {
+		t.Errorf("config screen cuts the reason config.toml does not decode:\n%s", screen(m))
 	}
 }
 
