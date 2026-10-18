@@ -27,7 +27,7 @@ A findability map: where things live, and how to search for them.
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
-| `scripts/demo/` | The README's TUI recording, `.github/assets/tui.gif`: `record` runs here, `guest/` on a scratch VM. |
+| `scripts/demo/` | The README's recording, `.github/assets/demo.gif`: `record` and `compose.py` run here, `guest/` on a VM's GNOME desktop. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). `embed.go` carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
 | `cmd/revier/` | CLI entry point. `adapters.go` constructs every port's adapter; `assist.go` and `each.go` call adapter helpers directly, and `serve.go` reads `proc`'s variable names. |
 

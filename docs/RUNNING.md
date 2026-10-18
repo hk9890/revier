@@ -230,22 +230,29 @@ with no window host, which is the expected headless result and not a failure.
 
 ## Record the README demo
 
-`scripts/demo/record` re-records `.github/assets/tui.gif`. It opens fake
-projects with `revier open` on another machine, so give it a scratch VM, never
-this one:
+`scripts/demo/record` re-records `.github/assets/demo.gif`: the popup from its
+desktop key, a search, a jump to an agent, then the agent list. It drives a
+libvirt VM's GNOME desktop with `virsh send-key` and records it with
+`virsh screenshot`, so nothing reaches this desktop:
 
 ```bash
 mise run build
-scripts/demo/record <ssh-host>             # writes .github/assets/tui.gif
-scripts/demo/record <ssh-host> /tmp/x.gif  # anywhere else, to compare first
+scripts/demo/record <vm>             # writes .github/assets/demo.gif
+scripts/demo/record <vm> /tmp/x.gif  # anywhere else, to compare first
 ```
 
-- The VM needs tmux and an ssh login. revier is copied in from `./bin`.
-- This machine needs `vhs` and the JetBrainsMono Nerd Font. Without the font,
-  the TUI's icons record as boxes.
-- The script removes `/tmp/rvdemo` from the VM when it exits.
-- Check the frames before you commit: `ffmpeg -ss 13 -i <gif> -frames:v 1 f.png`
-  shows web-shop above billing, at attention.
+- Give it a VM on `qemu:///system` whose domain name answers `ssh <vm>`.
+  Start it with `virsh -c qemu:///system start <vm>`.
+- Log in to the VM's desktop once first: the keys go to a GNOME session.
+- The VM needs kitty, `wctl`, and `revier keys install` run once: the script
+  finds the trigger key by its `revier popup` command.
+- This machine needs ffmpeg and the JetBrainsMono Nerd Font, which draws the
+  key labels.
+- The recording uses a scratch configuration and fake agents. The script
+  points the trigger key at them, sets a plain background and 1920x1080, and
+  puts all three back when it exits.
+- Check frames before you commit: `ffmpeg -ss 18 -i <gif> -frames:v 1 f.png`
+  shows the agent list with api-gateway on top, at "needs you".
 
 ## Inspect the private server
 

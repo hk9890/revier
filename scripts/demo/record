@@ -1,46 +1,75 @@
 #!/bin/sh
-# Records the README's TUI demo. revier runs on <ssh-host>, a scratch VM, on
-# fake projects and agents; vhs runs here and reaches it over ssh -t.
-# Needs ./bin/revier (mise run build), vhs, and the JetBrainsMono Nerd Font here,
-# and tmux on <ssh-host>.
+# Records the README demo on a libvirt VM with a logged-in GNOME desktop: the
+# popup from its desktop key, a search, a jump to an agent, then the agent list.
+# Keys go in with virsh send-key, frames come out with virsh screenshot, and
+# compose.py draws each key and caption on. Nothing runs on this desktop.
+# <vm> is the libvirt domain, reachable as `ssh <vm>`.
 set -eu
 
-host="${1:?usage: scripts/demo/record <ssh-host> [output.gif]}"
-out=$(realpath "${2:-.github/assets/tui.gif}")
-dir=$(dirname "$0")
-tape=$(mktemp --suffix=.tape)
-trap 'rm -f "$tape"; ssh "$host" "TMUX_TMPDIR=/tmp/rvdemo/tmux tmux kill-server 2>/dev/null; rm -rf /tmp/rvdemo"' EXIT
+vm="${1:?usage: scripts/demo/record <vm> [output.gif]}"
+out=$(realpath -m "${2:-.github/assets/demo.gif}")
+mkdir -p "$(dirname "$out")"
+dir=$(cd "$(dirname "$0")" && pwd)
+work=$(mktemp -d)
+virsh() { command virsh -c qemu:///system "$@"; }
+trap 'ssh "$vm" "sh /tmp/rvdemo/teardown.sh"; rm -rf "$work"' EXIT
 
-ssh "$host" 'rm -rf /tmp/rvdemo && mkdir -p /tmp/rvdemo/bin'
-scp -q "$dir"/guest/*.sh "$host":/tmp/rvdemo/
-scp -q bin/revier "$host":/tmp/rvdemo/bin/
-ssh "$host" 'sh /tmp/rvdemo/setup.sh'
+ssh "$vm" 'rm -rf /tmp/rvdemo && mkdir -p /tmp/rvdemo/bin'
+scp -q "$dir"/guest/* "$vm":/tmp/rvdemo/
+scp -q bin/revier "$vm":/tmp/rvdemo/bin/
+ssh "$vm" 'sh /tmp/rvdemo/setup.sh'
 
-cat > "$tape" <<EOF
-Output "$out"
-Set Shell bash
-Set FontFamily "JetBrainsMono Nerd Font Mono"
-Set FontSize 15
-Set Width 1280
-Set Height 720
-Set Padding 16
-Set Theme "Catppuccin Mocha"
-Set TypingSpeed 150ms
+send() { virsh send-key "$vm" --holdtime 60 "$@" >/dev/null; }
+mark() { echo "$(date +%s%N) $*" >> "$work/events.log"; }
+press() { label=$1; shift; mark key "$label"; send "$@"; }
+type_slowly() {
+	for c in $(echo "$1" | fold -w1); do
+		send "KEY_$(echo "$c" | tr a-z A-Z)"
+		sleep 0.35
+	done
+}
 
-Hide
-Type "ssh -t $host sh /tmp/rvdemo/tui.sh"
-Enter
-Sleep 4s
-Show
+# Start the popup once, so the recording shows it warm, then put billing in front.
+send KEY_LEFTALT KEY_SPACE
+sleep 4
+send KEY_ESC
+sleep 1
+ssh "$vm" '. /tmp/rvdemo/env.sh; revier go home -p billing >/dev/null'
+sleep 2
 
-Sleep 2s
-Up@700ms 3
-Sleep 3s
-Down@900ms 2
-Sleep 7s
-Type "bill"
-Sleep 3s
-Escape
-Sleep 2s
-EOF
-vhs "$tape"
+mkdir "$work/frames"
+(while [ ! -e "$work/stop" ]; do virsh screenshot "$vm" "$work/frames/$(date +%s%N).ppm" >/dev/null 2>&1; done) &
+capture=$!
+
+mark start
+mark caption "1  Open the popup, find a project, jump to its agent"
+sleep 2.5
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 2.2
+type_slowly web
+sleep 1.5
+press "Tab" KEY_TAB
+sleep 1.8
+press "Enter" KEY_ENTER
+sleep 3.5
+mark caption "2  See every agent, pick the one that needs you"
+sleep 1.5
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 2
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 2.5
+press "Down" KEY_DOWN
+sleep 1.2
+press "Down" KEY_DOWN
+sleep 1.2
+press "Up" KEY_UP
+sleep 0.9
+press "Up" KEY_UP
+sleep 1.5
+press "Enter" KEY_ENTER
+sleep 3.5
+mark end
+
+touch "$work/stop"
+wait $capture
+python3 "$dir/compose.py" "$work" "$out"
