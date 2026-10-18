@@ -435,7 +435,7 @@ func TestATargetKeyIgnoresThePaneCursor(t *testing.T) {
 // row chosen.
 func TestOneClickOnATargetSelectsItAndASecondRunsIt(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+	m, _ := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
 	x, y := paneCell(t, m, "editor")
 	m, cmd := clickCell(m, x, y)
 	runAll(cmd)

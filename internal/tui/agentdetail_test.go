@@ -430,6 +430,7 @@ func TestAClickOnTheMirrorBesideARowRunsNothing(t *testing.T) {
 		screen = append(screen, fmt.Sprintf("line %02d", i))
 	}
 	m, _, _ := shownWorld(t, 300, 40, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
+	m, _ = clocked(m)
 	_, y := paneCell(t, m, "agent-0 task")
 	raw := strings.Split(drawn(m), "\n")[y]
 	parts := strings.Split(raw, "│")
@@ -458,7 +459,7 @@ func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
 		}})
 	}
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
-	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 140, 30)
+	m, _ := clocked(resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 140, 30))
 
 	x, y := paneCell(t, m, "alpha work")
 	m, _ = clickCell(m, x, y)
