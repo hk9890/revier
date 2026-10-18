@@ -42,7 +42,8 @@ that did not focus after `Open` passed L2 and failed L4.
 ## Conventions
 
 - Tests sit next to the code. A live test file ends in `live_test.go` and
-  carries `//go:build live`.
+  carries `//go:build live`. An integration test file ends in
+  `integration_test.go` and carries `//go:build integration`.
 - Put a test file in the external `_test` package. When it needs an unexported
   name, put it in the package and end its name in `_internal_test.go`, or in
   `_internal_live_test.go` when it is live. Two exceptions: `export_test.go` is
@@ -70,6 +71,8 @@ that did not focus after `Open` passed L2 and failed L4.
   - Add the function that resolves it to the rule above.
   - `testenv.Run` does not set the variable of another tool. Set it with
     `t.Setenv` in each test that reaches that tool's path.
+- Call `testenv.NoTools(t)` in a test that must start no tool, such as git or
+  mise, rather than setting PATH inline.
 - In `internal/tui`, feed a command that a key press or an `Update` returned
   back to the model with a helper from `internal/tui/helpers_test.go`, not with
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers

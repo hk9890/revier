@@ -13,6 +13,7 @@ import (
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
@@ -85,7 +86,7 @@ func TestAltNOpensAndEscapesTheNewProjectScreen(t *testing.T) {
 func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	noTools(t)
+	testenv.NoTools(t)
 	dir := filepath.Join(t.TempDir(), "widget")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -105,19 +106,12 @@ func TestTheNewProjectScreenWritesTheProjectFile(t *testing.T) {
 	}
 }
 
-// noTools empties PATH, so the screen starts neither git nor mise: this
-// layer starts no process, and mise's trust list is left as it was.
-func noTools(t *testing.T) {
-	t.Helper()
-	t.Setenv("PATH", t.TempDir())
-}
-
 // Enter on a row chosen under the field adds that row's folder, not the
 // folder the field names.
 func TestEnterAddsTheChosenDirectory(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	noTools(t)
+	testenv.NoTools(t)
 	base := filepath.Join(t.TempDir(), "base")
 	if err := os.MkdirAll(filepath.Join(base, "widget"), 0o755); err != nil {
 		t.Fatal(err)
@@ -144,7 +138,7 @@ func TestTheHomeDirectoryIsRefused(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	t.Setenv("HOME", t.TempDir())
-	noTools(t)
+	testenv.NoTools(t)
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
@@ -239,7 +233,7 @@ func TestAnAltChordTypesNothing(t *testing.T) {
 func TestAMissingFullPathIsCreatedAfterAsking(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	noTools(t)
+	testenv.NoTools(t)
 	dir := filepath.Join(t.TempDir(), "fresh")
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
@@ -273,7 +267,7 @@ func TestAMissingFullPathIsCreatedAfterAsking(t *testing.T) {
 func TestANameIsAddedInTheChosenFolder(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	noTools(t)
+	testenv.NoTools(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {
@@ -398,7 +392,7 @@ func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 func TestACloneURLAddsAnExistingFolder(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	noTools(t)
+	testenv.NoTools(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.Mkdir(filepath.Join(home, "widget"), 0o755); err != nil {

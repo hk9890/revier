@@ -14,10 +14,10 @@ func (k *Keys) SetRunner(fn func(ctx context.Context, bin string, args ...string
 	k.run = fn
 }
 
-// SetRunner replaces wctl, so the L3 tests drive the host against a recorder
+// SetRunner replaces wctl, so the tests drive the host against a recorder
 // with no GNOME session and no process.
 func (h *Host) SetRunner(fn func(ctx context.Context, args ...string) ([]byte, error)) {
-	h.wctl = fn
+	h.run = fn
 }
 
 // ReadOnly exposes the guard that stands between Keys and the two tools'
@@ -26,13 +26,15 @@ func ReadOnly(bin string, args []string) error { return readOnly(bin, args) }
 
 func WriterAllows(bin string, args []string) error { return allowed(writeCommands, bin, args) }
 
-// DecodeCustom and DecodeBuiltin expose the parsers to the L3 tests.
+// DecodeCustom and DecodeBuiltin expose the parsers to the tests outside the
+// package.
 func DecodeCustom(dump, list []byte) []revier.Binding { return decodeCustom(dump, list) }
 
 func DecodeBuiltin(raw []byte) []revier.Binding { return decodeBuiltin(raw) }
 
-// Decode and DecodeFocused expose the parsers to the L3 tests, which run
-// against recorded wctl output rather than a live GNOME session.
+// Decode and DecodeFocused expose the parsers to the tests outside the
+// package, which run them against recorded or inline wctl output rather than
+// a live GNOME session.
 func (h *Host) Decode(raw []byte, active func() (int, bool)) ([]revier.Instance, error) {
 	return h.decode(raw, active)
 }

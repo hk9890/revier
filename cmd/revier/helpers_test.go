@@ -169,6 +169,20 @@ home = true
   match = { title = "^home$" }
 `
 
+// sound is a project file with one valid home target: nothing in it is a
+// problem.
+const sound = `
+path = "/tmp/sound"
+
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "home"
+  launch = ["sh"]
+  match = { title = "^home$" }
+`
+
 // dispatchers are the functions that switch on a command word, by the family
 // whose subcommands they accept; run accepts the top-level commands.
 var dispatchers = map[string]string{

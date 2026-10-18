@@ -62,9 +62,9 @@ const focusOption = "@revier-focus"
 type Host struct {
 	Socket string
 
-	// tmux runs tmux with the arguments and returns its standard output.
+	// run runs tmux with the arguments and returns its standard output.
 	// Tests replace it; production leaves it nil and runs the tmux on PATH.
-	tmux func(ctx context.Context, args ...string) (string, error)
+	run func(ctx context.Context, args ...string) (string, error)
 }
 
 func (h *Host) Name() string { return "tmux" }
@@ -86,9 +86,9 @@ func (h *Host) cmd(ctx context.Context, args ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, "tmux", append(full, args...)...)
 }
 
-func (h *Host) run(ctx context.Context, args ...string) (string, error) {
-	if h.tmux != nil {
-		return h.tmux(ctx, args...)
+func (h *Host) tmux(ctx context.Context, args ...string) (string, error) {
+	if h.run != nil {
+		return h.run(ctx, args...)
 	}
 	var out, errb bytes.Buffer
 	c := h.cmd(ctx, args...)
@@ -128,7 +128,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		"#{@" + varsOption + "}", "#{pane_title}",
 	}, sep)
 
-	out, err := h.run(ctx, "list-panes", "-a", "-F", format)
+	out, err := h.tmux(ctx, "list-panes", "-a", "-F", format)
 	if err != nil {
 		if noServer(err) {
 			return nil, nil
@@ -211,7 +211,7 @@ func owns(named map[string]bool, a, b string) bool {
 // its own query.
 func (h *Host) sessions(ctx context.Context) ([]revier.Instance, map[string]bool, error) {
 	format := "#{pid}" + sep + "#{session_id}" + sep + "#{?#{" + nameOption + "},1,0}" + sep + titleFormat
-	out, err := h.run(ctx, "list-sessions", "-F", format)
+	out, err := h.tmux(ctx, "list-sessions", "-F", format)
 	if err != nil {
 		if noServer(err) {
 			return nil, nil, nil
@@ -310,7 +310,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
 	if len(f) != 4 {
 		if len(f) > 1 && strings.HasPrefix(f[1], "$") {
-			_, _ = h.run(ctx, "kill-session", "-t", f[1])
+			_, _ = h.tmux(ctx, "kill-session", "-t", f[1])
 		}
 		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
@@ -319,7 +319,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		// Best effort: the error that failed the session is the one worth
 		// reporting. Left running, a session with no name or no shell would be
 		// matched, or would hold its name against the next Open.
-		_, _ = h.run(ctx, "kill-session", "-t", session)
+		_, _ = h.tmux(ctx, "kill-session", "-t", session)
 		return revier.TargetRef{}, err
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, session), Title: r.Name}, nil
@@ -332,16 +332,16 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 func (h *Host) newSession(ctx context.Context, name string, first revier.PanelSpec) (string, error) {
 	format := "#{pid}" + sep + "#{session_id}" + sep + "#{window_id}" + sep + "#{pane_id}"
 	args := []string{"new-session", "-d", "-P", "-F", format}
-	out, err := h.run(ctx, append(append(args, "-s", literal(name)), start(first)...)...)
+	out, err := h.tmux(ctx, append(append(args, "-s", literal(name)), start(first)...)...)
 	if err != nil && strings.Contains(err.Error(), "duplicate session") {
-		return h.run(ctx, append(args, start(first)...)...)
+		return h.tmux(ctx, append(args, start(first)...)...)
 	}
 	return out, err
 }
 
 // name leaves the realization's name on a new session and fills its window.
 func (h *Host) name(ctx context.Context, session, window, pane string, r revier.Realization, panels []revier.PanelSpec) error {
-	if _, err := h.run(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
+	if _, err := h.tmux(ctx, "set-option", "-t", session, nameOption, r.Name); err != nil {
 		return exited(err, panels[0])
 	}
 	panes, err := h.fill(ctx, window, pane, panels)
@@ -379,7 +379,7 @@ func (h *Host) fill(ctx context.Context, window, first string, panels []revier.P
 	panes := []string{first}
 	for i, p := range panels[1:] {
 		args := append([]string{"split-window", "-h", "-P", "-F", "#{pane_id}", "-t", window}, start(p)...)
-		out, err := h.run(ctx, args...)
+		out, err := h.tmux(ctx, args...)
 		if err != nil {
 			// The window goes with its last pane, so the panels before
 			// this one have all exited.
@@ -392,7 +392,7 @@ func (h *Host) fill(ctx context.Context, window, first string, panels []revier.P
 		panes = append(panes, pane)
 	}
 	if len(panels) > 1 {
-		if _, err := h.run(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
+		if _, err := h.tmux(ctx, "select-layout", "-t", window, "even-horizontal"); err != nil {
 			return nil, exited(err, panels[len(panels)-1])
 		}
 	}
@@ -475,7 +475,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 	args := []string{"new-window", "-d", "-a", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-t", sessionOf(ref.ID) + ":{end}"}
-	out, err := h.run(ctx, append(args, start(panels[0])...)...)
+	out, err := h.tmux(ctx, append(args, start(panels[0])...)...)
 	if err != nil {
 		return "", err
 	}
@@ -486,14 +486,14 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	window := f[0]
 	if len(f) != 2 {
 		if strings.HasPrefix(window, "@") {
-			_, _ = h.run(ctx, "kill-window", "-t", window)
+			_, _ = h.tmux(ctx, "kill-window", "-t", window)
 		}
 		return "", fmt.Errorf("tmux new-window: unexpected %q", out)
 	}
 	pane := f[1]
 	if err := h.tab(ctx, window, pane, panels, vars); err != nil {
 		// Best effort: the error that failed the tab is the one worth reporting.
-		_, _ = h.run(ctx, "kill-window", "-t", window)
+		_, _ = h.tmux(ctx, "kill-window", "-t", window)
 		return "", err
 	}
 	return revier.PanelID(pane), nil
@@ -526,7 +526,7 @@ func (h *Host) setVars(ctx context.Context, pane string, vars map[string]string)
 		pairs = append(pairs, name+"="+value)
 	}
 	sort.Strings(pairs)
-	_, err := h.run(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " "))
+	_, err := h.tmux(ctx, "set-option", "-p", "-t", pane, "@"+varsOption, strings.Join(pairs, " "))
 	return err
 }
 
@@ -539,14 +539,14 @@ func (h *Host) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revie
 	if err := h.own(ref); err != nil {
 		return err
 	}
-	out, err := h.run(ctx, "display-message", "-p", "-t", panel.String(), "#{window_id}")
+	out, err := h.tmux(ctx, "display-message", "-p", "-t", panel.String(), "#{window_id}")
 	if err != nil {
 		return err
 	}
-	if _, err := h.run(ctx, "select-window", "-t", sessionOf(ref.ID)+":"+strings.TrimSpace(out)); err != nil {
+	if _, err := h.tmux(ctx, "select-window", "-t", sessionOf(ref.ID)+":"+strings.TrimSpace(out)); err != nil {
 		return err
 	}
-	_, err = h.run(ctx, "select-pane", "-t", panel.String())
+	_, err = h.tmux(ctx, "select-pane", "-t", panel.String())
 	return err
 }
 
@@ -555,7 +555,7 @@ func (h *Host) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.P
 	if err := h.own(ref); err != nil {
 		return "", err
 	}
-	out, err := h.run(ctx, "display-message", "-p", "-t", sessionOf(ref.ID)+":", "#{pane_id}")
+	out, err := h.tmux(ctx, "display-message", "-p", "-t", sessionOf(ref.ID)+":", "#{pane_id}")
 	if err != nil {
 		return "", err
 	}
@@ -614,7 +614,7 @@ func (h *Host) title(ctx context.Context, pane, title string) error {
 	if title == "" {
 		return nil
 	}
-	_, err := h.run(ctx, "select-pane", "-t", pane, "-T", literal(title))
+	_, err := h.tmux(ctx, "select-pane", "-t", pane, "-T", literal(title))
 	return err
 }
 
@@ -633,14 +633,14 @@ func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return err
 	}
 	session := sessionOf(ref.ID)
-	if _, err := h.run(ctx, "set-option", "-s", focusOption, session); err != nil {
+	if _, err := h.tmux(ctx, "set-option", "-s", focusOption, session); err != nil {
 		return err
 	}
 	client, err := h.terminal(ctx)
 	if err != nil || client == "" {
 		return err
 	}
-	_, err = h.run(ctx, "switch-client", "-c", client, "-t", session)
+	_, err = h.tmux(ctx, "switch-client", "-c", client, "-t", session)
 	return err
 }
 
@@ -653,7 +653,7 @@ type client struct {
 // clients lists the terminals attached to the server, the most recently
 // active first. client_name is a tty path, free text, so it comes last.
 func (h *Host) clients(ctx context.Context) ([]client, error) {
-	out, err := h.run(ctx, "list-clients", "-F", "#{client_activity}"+sep+"#{session_id}"+sep+"#{client_name}")
+	out, err := h.tmux(ctx, "list-clients", "-F", "#{client_activity}"+sep+"#{session_id}"+sep+"#{client_name}")
 	if err != nil {
 		if noServer(err) {
 			return nil, nil
@@ -689,7 +689,7 @@ func (h *Host) terminal(ctx context.Context) (string, error) {
 		}
 		return "", nil
 	}
-	out, err := h.run(ctx, "display-message", "-p", "-t", pane, "#{session_id}")
+	out, err := h.tmux(ctx, "display-message", "-p", "-t", pane, "#{session_id}")
 	if err != nil {
 		return "", err
 	}
@@ -710,7 +710,7 @@ func (h *Host) callerPane(ctx context.Context) (string, error) {
 	if socket == "" || pane == "" {
 		return "", nil
 	}
-	out, err := h.run(ctx, "display-message", "-p", "#{socket_path}")
+	out, err := h.tmux(ctx, "display-message", "-p", "#{socket_path}")
 	if err != nil || strings.TrimSpace(out) != socket {
 		return "", err
 	}
@@ -725,7 +725,7 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	if err != nil || session == "" {
 		return revier.TargetRef{}, err
 	}
-	out, err := h.run(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}"+sep+titleFormat)
+	out, err := h.tmux(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}"+sep+titleFormat)
 	if err != nil {
 		if noServer(err) || strings.Contains(err.Error(), "can't find session") {
 			return revier.TargetRef{}, nil
@@ -752,7 +752,7 @@ func (h *Host) focusedSession(ctx context.Context) (string, error) {
 	if len(clients) == 1 {
 		return clients[0].session, nil
 	}
-	out, err := h.run(ctx, "show-options", "-s", "-v", "-q", focusOption)
+	out, err := h.tmux(ctx, "show-options", "-s", "-v", "-q", focusOption)
 	if err != nil {
 		if noServer(err) {
 			return "", nil
@@ -780,7 +780,7 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 // it is read as a key name, and "--" keeps a leading dash from reading as a
 // flag. A pane id is unique across the server, so the instance is not needed.
 func (h *Host) SendText(ctx context.Context, _ revier.TargetRef, panel revier.PanelID, text string) error {
-	_, err := h.run(ctx, "send-keys", "-t", panel.String(), "-l", "--", text)
+	_, err := h.tmux(ctx, "send-keys", "-t", panel.String(), "-l", "--", text)
 	return err
 }
 
@@ -792,7 +792,7 @@ func (h *Host) ReadPanel(ctx context.Context, _ revier.TargetRef, panel revier.P
 	if scrollback {
 		args = append(args, "-S", "-")
 	}
-	return h.run(ctx, args...)
+	return h.tmux(ctx, args...)
 }
 
 // Close kills the session and every pane in it. The server that assigned the
@@ -804,7 +804,7 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 		return err
 	}
 	session := sessionOf(ref.ID)
-	out, err := h.run(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}")
+	out, err := h.tmux(ctx, "display-message", "-p", "-t", session, "#{pid}"+sep+"#{session_id}")
 	if err != nil {
 		return err
 	}
@@ -812,14 +812,14 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	if len(f) != 2 || refID(f[0], f[1]) != ref.ID {
 		return fmt.Errorf("tmux: session %s is gone; %q answers for it now", ref.ID, strings.TrimRight(out, "\n"))
 	}
-	_, err = h.run(ctx, "kill-session", "-t", session)
+	_, err = h.tmux(ctx, "kill-session", "-t", session)
 	return err
 }
 
 // ClosePanel kills one pane. A pane id is unique across the server, so the
 // instance is not needed; a window left with no pane goes with it.
 func (h *Host) ClosePanel(ctx context.Context, _ revier.TargetRef, panel revier.PanelID) error {
-	_, err := h.run(ctx, "kill-pane", "-t", panel.String())
+	_, err := h.tmux(ctx, "kill-pane", "-t", panel.String())
 	return err
 }
 

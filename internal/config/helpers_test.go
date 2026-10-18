@@ -195,3 +195,32 @@ func refusalOf(p core.Project, name revier.TargetName) error {
 	}
 	return errors.New("no such target")
 }
+
+// projectRoot is a configuration root with the shared targets of sharedConfig
+// and one project file, and what the screen is handed: the file and the
+// shared targets.
+func projectRoot(t *testing.T, body string) (string, []map[string]any) {
+	t.Helper()
+	root := projectsRoot(t, sharedConfig, map[string]string{"demo.toml": body})
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	return config.ProjectFile(root, "demo"), cfg.Targets
+}
+
+// overriding is a project file that overrides the shared editor target and
+// adds a target of its own.
+const overriding = `# demo
+path = "~/demo"
+
+[[target]]
+name = "editor"
+key = "ctrl-o"
+
+[[target]]
+name = "pulls"
+  [target.window]
+  launch = ["chrome"]
+  match = { class = "^chrome$" }
+`

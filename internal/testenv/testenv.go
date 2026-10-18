@@ -1,7 +1,8 @@
 // Package testenv keeps a test binary off the user's own revier files: the
 // configuration, the state, and the ssh configuration a link is checked
 // against. A package whose code reaches any of them calls Run from its
-// TestMain; see docs/TESTING.md.
+// TestMain; see docs/TESTING.md. NoTools keeps one test off the tools on the
+// PATH.
 package testenv
 
 import (
@@ -43,6 +44,13 @@ func Run(m *testing.M) int {
 		return 1
 	}
 	return code
+}
+
+// NoTools empties PATH for the test, so the code under test finds no tool to
+// start: the test starts no process, and mise's trust list is left as it was.
+func NoTools(t *testing.T) {
+	t.Helper()
+	t.Setenv("PATH", t.TempDir())
 }
 
 // prepare makes the scratch configuration under dir and returns its root.

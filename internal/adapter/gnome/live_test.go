@@ -64,8 +64,8 @@ func TestOpenOutlivesTheKeypress(t *testing.T) {
 
 // A wctl without --no-animation says so on its standard error and exits
 // non-zero, and the host reads the refusal in the error its runner makes of
-// that. The recorder of the L3 tests writes that error itself, so this one
-// runs a wctl that is a process.
+// that. The recorder of the default-layer tests writes that error itself, so
+// this one runs a wctl that is a process.
 func TestARefusalReachesTheHostFromWctlsStandardError(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv")
