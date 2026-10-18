@@ -178,7 +178,6 @@ func TestEscClearsTheSectionsQueryThenGoesBack(t *testing.T) {
 // there.
 func TestADoubleClickOnAnAgentGoesToItAndOnItsFieldTypesThere(t *testing.T) {
 	rt, m := agentWorld(t)
-	m, _ = clocked(m)
 	x, y := paneCell(t, m, "UX and naming")
 	m, cmd := clickCell(m, x, y)
 	runAll(cmd)

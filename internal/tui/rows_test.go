@@ -163,7 +163,7 @@ func TestATargetKeyClearsTheQuery(t *testing.T) {
 // pane cursor stays on the row clicked.
 func TestADoubleClickOnAPaneTargetClearsTheQuery(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m, _ := clocked(typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00"))
+	m := typeInto(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), "00")
 	x, y := paneCell(t, m, "editor")
 	m, _ = clickCell(m, x, y)
 	m, cmd := clickCell(m, x, y)

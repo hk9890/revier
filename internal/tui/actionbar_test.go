@@ -642,7 +642,7 @@ func TestThePointerMovingWithinARowChangesNothing(t *testing.T) {
 // were moves no selection behind it, and runs nothing.
 func TestAClickOnTheNewProjectScreenReachesNoRow(t *testing.T) {
 	_, _, c, projects := world(t, 3)
-	m, _ := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 	_, mc := margins(m)
 	was := selectedRow(t, m)
 
