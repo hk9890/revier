@@ -86,7 +86,8 @@ command = ["sh", "-lc", "my-agent"]
 ```
 
 When the directory the agent worked in is gone, the agent starts fresh in the
-project.
+project. A Claude Code agent that never got a prompt has no conversation to
+resume, so it starts fresh in its directory.
 
 ## Let an agent configure revier
 

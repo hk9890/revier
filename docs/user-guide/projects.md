@@ -116,8 +116,8 @@ A shutdown, and closing a whole project in the TUI, save a session for you.
 A session records names, not windows. A restore reads the project files as
 they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
-the directory it worked in, or fresh in that directory when Claude Code named
-no conversation; see [Agents](agents.md#resume-an-agent). Other
+the directory it worked in, or fresh in that directory when it had no
+conversation yet; see [Agents](agents.md#resume-an-agent). Other
 agents start fresh in the project directory. An attached window is not saved.
 In the TUI, alt+s opens the sessions screen.
 

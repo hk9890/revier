@@ -248,8 +248,14 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // worktree is listed in the worktree. A session listed with no sessionId
 // still gives its directory, so the agent restores empty where it worked.
 //
-// It always runs the command rather than reuse the listing Inspect keeps: a
-// save records what holds now, and runs once.
+// So does a session with no transcript. Claude Code lists a session from its
+// start but files the transcript only at the first prompt, and refuses to
+// resume a session it has not filed: an agent opened and never prompted
+// restored as "No conversation found" in a window whose command failed. A
+// transcript that cannot be looked for keeps the id, as before the look.
+//
+// It always runs the command and looks for the transcripts again rather than
+// reuse what Inspect keeps: a save records what holds now, and runs once.
 func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
 	listed, err := p.list(ctx)
 	if err != nil {
@@ -257,11 +263,29 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 	}
 	out := make([]revier.Conversation, len(panels))
 	for i, panel := range panels {
-		if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
-			out[i] = revier.Conversation{ID: revier.SessionID(s.SessionID), Dir: s.Cwd}
+		s, ok := listed[panel.PID]
+		if !ok || panel.PID == 0 {
+			continue
+		}
+		out[i].Dir = s.Cwd
+		if p.filed(s) {
+			out[i].ID = revier.SessionID(s.SessionID)
 		}
 	}
 	return out, nil
+}
+
+// filed reports whether Claude Code has filed a transcript for the session,
+// and true when a project directory could not be read to say.
+func (p *Probe) filed(s listedSession) bool {
+	if s.SessionID == "" {
+		return false
+	}
+	if _, _, ok := p.underCwd(s); ok {
+		return true
+	}
+	_, found, err := p.sweepFor(s.SessionID)
+	return found != nil || err != nil
 }
 
 const (

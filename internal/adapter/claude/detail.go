@@ -104,8 +104,8 @@ type sweep struct {
 // transcript finds a session's transcript. Claude Code files it under a
 // directory named from a working directory, with every character that is not a
 // letter or a digit made a '-': mostly the one the session works in, which the
-// listing gives, so that file is looked at first. A session that entered a
-// worktree stays filed under the directory it started in, and a long path or
+// listing gives, so that file is looked at first. A session that left a
+// worktree can stay filed under it, and a long path or
 // CLAUDE_CODE_PROJECT_DIR_NAME spells the name otherwise; those are found by
 // looking in every project directory, where the file written last is the
 // session's own.
@@ -116,13 +116,8 @@ type sweep struct {
 // per project directory on every refresh, and still finds the file once it
 // appears.
 func (p *Probe) transcript(s listedSession) (string, os.FileInfo, error) {
-	projects := filepath.Join(filepath.Dir(p.sessionsDir()), "projects")
-	name := s.SessionID + ".jsonl"
-	if s.Cwd != "" {
-		path := filepath.Join(projects, projectDir(s.Cwd), name)
-		if info, err := os.Stat(path); err == nil {
-			return path, info, nil
-		}
+	if path, info, ok := p.underCwd(s); ok {
+		return path, info, nil
 	}
 	p.readsMu.Lock()
 	known, swept := p.found[s.SessionID]
@@ -135,19 +130,9 @@ func (p *Probe) transcript(s listedSession) (string, os.FileInfo, error) {
 	if swept && known.path == "" && p.now().Sub(known.at) < MaxAge {
 		return "", nil, noTranscript(s.SessionID)
 	}
-	// No projects directory at all is a Claude Code that has filed nothing
-	// yet, not a read that broke.
-	dirs, err := os.ReadDir(projects)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	found, newest, err := p.sweepFor(s.SessionID)
+	if err != nil {
 		return "", nil, err
-	}
-	var found string
-	var newest os.FileInfo
-	for _, d := range dirs {
-		path := filepath.Join(projects, d.Name(), name)
-		if info, err := os.Stat(path); err == nil && (newest == nil || info.ModTime().After(newest.ModTime())) {
-			found, newest = path, info
-		}
 	}
 	p.readsMu.Lock()
 	if p.found == nil {
@@ -159,6 +144,42 @@ func (p *Probe) transcript(s listedSession) (string, os.FileInfo, error) {
 		return "", nil, noTranscript(s.SessionID)
 	}
 	return found, newest, nil
+}
+
+// underCwd finds a session's transcript under the project directory named
+// from the cwd the listing gives.
+func (p *Probe) underCwd(s listedSession) (string, os.FileInfo, bool) {
+	if s.Cwd == "" {
+		return "", nil, false
+	}
+	path := filepath.Join(p.projectsDir(), projectDir(s.Cwd), s.SessionID+".jsonl")
+	info, err := os.Stat(path)
+	return path, info, err == nil
+}
+
+// sweepFor looks for a session's transcript in every project directory and
+// returns the one written last, with a nil FileInfo for none.
+func (p *Probe) sweepFor(session string) (string, os.FileInfo, error) {
+	projects := p.projectsDir()
+	// No projects directory at all is a Claude Code that has filed nothing
+	// yet, not a read that broke.
+	dirs, err := os.ReadDir(projects)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", nil, err
+	}
+	var found string
+	var newest os.FileInfo
+	for _, d := range dirs {
+		path := filepath.Join(projects, d.Name(), session+".jsonl")
+		if info, err := os.Stat(path); err == nil && (newest == nil || info.ModTime().After(newest.ModTime())) {
+			found, newest = path, info
+		}
+	}
+	return found, newest, nil
+}
+
+func (p *Probe) projectsDir() string {
+	return filepath.Join(filepath.Dir(p.sessionsDir()), "projects")
 }
 
 // noTranscript is a session Claude Code lists with no transcript under it yet:

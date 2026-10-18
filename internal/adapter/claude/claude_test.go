@@ -365,8 +365,11 @@ func agents(out string, err error) func(context.Context) ([]byte, error) {
 // zero where nothing matched. A session listed with no id still gives its
 // directory, so its agent restores empty where it worked.
 func TestSessions(t *testing.T) {
-	p := &claude.Probe{}
+	root := t.TempDir()
+	p := &claude.Probe{SessionsDir: filepath.Join(root, "sessions")}
 	p.SetAgents(agents(agentsJSON, nil))
+	writeTranscript(t, root, "-a", "b8f365f0-07ae-4464-867f-f8ac02c2f467", said("filed under its cwd"))
+	writeTranscript(t, root, "-a--claude-worktrees-x", "39120ccd-8abd-434a-92c7-83ecac81fc32", said("filed under a worktree it left"))
 	panels := []revier.Panel{
 		{ID: "1", PID: 610851},
 		{ID: "2", PID: 999999}, // a pid Claude does not list: claude typed into a shell
@@ -387,6 +390,20 @@ func TestSessions(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Sessions = %+v, want %+v", got, want)
+	}
+}
+
+// An agent opened and never prompted is listed with a session that has no
+// transcript, which Claude Code refuses to resume. It is recorded by its
+// directory alone, so it restores empty where it was.
+func TestSessionsLeavesOutASessionWithNoTranscript(t *testing.T) {
+	p, _ := transcriptsIn(t, t.TempDir(), "/home/user/dev/demo")
+	got, err := p.Sessions(context.Background(), []revier.Panel{{ID: "1", PID: 101}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (revier.Conversation{Dir: "/home/user/dev/demo"}); got[0] != want {
+		t.Errorf("Sessions = %+v, want %+v", got[0], want)
 	}
 }
 
