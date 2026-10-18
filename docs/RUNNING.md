@@ -81,9 +81,9 @@ sessions directory, and write the pane's file there:
 export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
 printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"; chmod +x "$S/bin/claude"
 export PATH="$S/bin:$PATH"                            # every revier below asks this claude, never the real one
-agentpane() {                                         # again after anything restarts the pane
-  pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1}')
-  pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1}')
+agentpane() {                                         # the workspace's agent pane, the first listed; again after a restart
+  pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
+  pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
 }
 agentpane
 st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
@@ -269,6 +269,7 @@ kitten @ ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, titl
 wctl focused --json | jq .title                           # home
 ./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home
 kitten @ close-window --match id:<id>                     # once per id the ls above printed
+printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
 ```
 
 Every `kitten @` command above addresses the socket of the kitty it runs

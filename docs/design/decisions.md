@@ -68,8 +68,8 @@ probed.
 
 Templates are rendered and matches compiled once, when the configuration is
 read, so no refresh re-derives them and no adapter ever sees a `{{ }}`. What a
-failure there costs is D85's. The TUI reads a file changed elsewhere on
-restart.
+failure there costs is D85's. A TUI prepares the project files again when it
+gets the focus back.
 
 ### D18 — a realization starts in the project directory
 
@@ -399,7 +399,9 @@ closing the one panel the target is found by left the others on screen while
 the shutdown said "closed". A close step now carries every panel of the tab
 and closes each through `PanelCloser`; the tab ends with its last panel, so no
 close-a-tab capability is needed and tmux never kills a window linked into
-other sessions. The step's busy check covers every panel it carries.
+other sessions. The step's busy check covers every panel it carries. An
+agent's step closes its tab the same way, except the workspace's own tab,
+where the shell the layout declares beside the agent stays.
 
 ### D95 — an attachment is the window and the terminal inside it
 

@@ -85,7 +85,8 @@ cursor. Attention decides the order because an agent that waits for you is the
 reason to open revier at all. Every command is in the
 [CLI reference](../user-guide/cli.md).
 
-The agents of every project are a second list behind the same key (D110). With
+The agents of every project are a second list behind the key that opens the
+surface (D110). With
 many agents across many projects the question is which agent, and the project
 list answers it one project at a time. The second list orders every agent by
 need. It is a list of its own, not a mode of the project list, which would hide

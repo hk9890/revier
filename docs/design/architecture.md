@@ -37,7 +37,7 @@ behind one of the four ports below.
 | **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter |
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
-| **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a `Host` (D26). |
+| **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a **Host** (D26). |
 
 **Host** is one interface because run-or-raise is one operation. A compositor
 provides instances as OS windows; a terminal provides them as panes and
@@ -91,8 +91,8 @@ policy:
 - **Resolution.** When both realizations of a target are available, the core
   picks: the target's own preference, otherwise the window host. A separate
   window is what a desktop user expects; one line of config overrides it.
-- **Toggle-back.** The core records the project's home before it activates a
-  target, and returns to it when the same key is pressed again.
+- **Toggle-back.** A press on a target that already has the focus goes to the
+  project's home instead, so a key is a round trip and not a one-way jump.
 - **Focus after open.** Some hosts focus what they launch and some do not, so
   the core focuses on the run path (D15). Without it the raise half of
   run-or-raise holds only by accident of the host.

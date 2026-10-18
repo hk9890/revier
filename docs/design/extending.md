@@ -25,12 +25,12 @@ without writing Go. The contract is the user guide's
 panel on every refresh, so it stays cheap or it becomes the reason the surface
 feels slow. A compiled-in probe wins for the harness it knows.
 
-Of the ports, only `AgentProbe` has a subprocess form. A `Host` is stateful and
+Of the ports, only the agent probe has a subprocess form. A host is stateful and
 sits in the latency path of every keystroke, so it is Go or nothing.
 
 ## Level 3 — a Go host
 
-A new terminal, multiplexer or compositor is a Go adapter behind the `Host`
+A new terminal, multiplexer or compositor is a Go adapter behind the host
 port ([architecture.md](architecture.md#four-ports)). It lists, opens and
 focuses, holds no policy, and reports whether it can work where it runs, which
 keeps automatic selection correct on a machine that has several. What a host

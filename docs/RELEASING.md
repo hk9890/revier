@@ -33,8 +33,7 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
    mise -C .claude/worktrees/release-vX.Y.Z run quality:full
    ```
 
-4. From the directory step 3 ran in, tag the worktree's commit, push the tag,
-   then remove the worktree:
+4. Tag the worktree's commit, push the tag, then remove the worktree:
 
    ```bash
    git -C .claude/worktrees/release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"

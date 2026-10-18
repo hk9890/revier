@@ -17,7 +17,8 @@ describing something absent from `internal/` is intent, not documentation drift.
 
 A design doc holds the model, its boundaries, scope and non-goals, and the
 reasons. Keys, flags, numbers, field names, widths and Go code belong to the
-user guide or the code; write them there and nowhere in `docs/design/`.
+user guide or the code; write them there, not in `product.md`,
+`architecture.md` or `extending.md`.
 
 `docs/design/decisions.md` holds only decisions in force:
 

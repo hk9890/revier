@@ -1,9 +1,9 @@
 // Package revier holds the ports and shared types of revier: the interfaces an
 // adapter implements and the values that cross between the core and a host.
 //
-// The design that this package implements is in docs/design/. Every operation
-// revier performs is the same one: run-or-raise a named target, and remember
-// where you came from.
+// What each port is for is in docs/design/architecture.md. Every operation
+// revier performs is the same one: run-or-raise a named target; a second press
+// returns to the project's home.
 package revier
 
 import (

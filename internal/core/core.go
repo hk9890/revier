@@ -1450,8 +1450,8 @@ func dirExists(path string) bool {
 }
 
 // elsewhere is the directory an agent works in as its project's view carries
-// it: the directory when it is not the project's own, and nothing when it is
-// (decisions.md D110). The two are compared where both are paths of one
+// it: the directory when it is not the project's own, and nothing when it is.
+// The two are compared where both are paths of one
 // machine, the one that read the agent, and with symbolic links resolved: a
 // project reached through a link and an agent that reports the physical
 // directory are in the same place. A path that cannot be resolved is compared

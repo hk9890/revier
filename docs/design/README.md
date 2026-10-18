@@ -1,7 +1,7 @@
 # Design
 
-Forward-looking specification for revier: what the system is intended to be, and
-why. How this tree relates to `docs/` is [../DOCUMENTING.md](../DOCUMENTING.md)'s.
+Forward-looking design for revier: the model it is intended to have, its
+boundaries, and why. How this tree relates to `docs/` is [../DOCUMENTING.md](../DOCUMENTING.md)'s.
 
 | Document | Owns |
 |---|---|
