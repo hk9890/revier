@@ -339,7 +339,10 @@ func TestSpinnerRanges(t *testing.T) {
 
 // The probe is Resumable, which is detected by type assertion and so is not
 // checked by the compiler anywhere else.
-var _ revier.Resumable = (*claude.Probe)(nil)
+var (
+	_ revier.Resumable = (*claude.Probe)(nil)
+	_ revier.Holder    = (*claude.Probe)(nil)
+)
 
 // agentsJSON is `claude agents --json` as Claude Code 2.1 prints it: a
 // background session with no pid, and interactive sessions with the pid of
@@ -387,6 +390,32 @@ func TestSessions(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Sessions = %+v, want %+v", got, want)
+	}
+}
+
+// A restore resumes only a conversation Claude Code still keeps: one filed
+// under the directory the agent worked in, or under any other.
+func TestHolds(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "")
+	writeTranscript(t, root, "-home-user-dev-demo", "under-its-dir", said("here"))
+	writeTranscript(t, root, "-home-user-dev-demo--claude-worktrees-x", "elsewhere", said("there"))
+	cases := map[revier.SessionID]bool{"under-its-dir": true, "elsewhere": true, "never-filed": false}
+	for id, want := range cases {
+		if got := p.Holds(id, "/home/user/dev/demo"); got != want {
+			t.Errorf("Holds(%s) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+// A projects directory that cannot be read cannot say a conversation is gone,
+// so the restore resumes it.
+func TestAConversationThatCannotBeLookedForIsHeld(t *testing.T) {
+	p, root := transcriptsIn(t, t.TempDir(), "/home/user/dev/demo")
+	if err := os.WriteFile(filepath.Join(root, "projects"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !p.Holds("s1", "/home/user/dev/demo") {
+		t.Error("Holds = false, want true for a conversation that could not be looked for")
 	}
 }
 

@@ -82,6 +82,10 @@ const (
 	// AgentInTab ran in a tab target. The tab is opened with its own launch
 	// argv, which need not be the agent, so no resume flag is added to it.
 	AgentInTab
+	// AgentConversationGone starts empty in its directory, because its
+	// harness no longer keeps the conversation recorded: one it never filed,
+	// or pruned since the save.
+	AgentConversationGone
 )
 
 var agentNames = map[AgentOutcome]string{
@@ -92,6 +96,8 @@ var agentNames = map[AgentOutcome]string{
 	AgentDropped:     "dropped",
 	AgentNotAdded:    "not added",
 	AgentInTab:       "in tab",
+
+	AgentConversationGone: "conversation gone",
 }
 
 func (o AgentOutcome) String() string { return agentNames[o] }
@@ -483,6 +489,9 @@ func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutc
 	res, ok := c.resumer(r.Harness)
 	if runs := c.harnessOf(*spec); !ok || (runs != "" && r.Harness != "" && runs != r.Harness) {
 		return AgentUnresumable
+	}
+	if holder, ok := res.(revier.Holder); ok && !holder.Holds(r.Session, r.Dir) {
+		return AgentConversationGone
 	}
 	spec.Command = res.ResumeCommand(*spec, r.Session)
 	return AgentResumed

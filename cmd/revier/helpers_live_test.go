@@ -209,6 +209,20 @@ func fakeClaude(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", home)
 }
 
+// fileConversation files a transcript of the conversation id where the fake
+// claude's config directory keeps them, as Claude Code does at the first
+// prompt. revier resumes only a conversation that is filed.
+func fileConversation(t *testing.T, id string) {
+	t.Helper()
+	dir := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", "-filed")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".jsonl"), []byte(`{"type":"user"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // tmuxRun runs a tmux command against the test's own server.
 func tmuxRun(t *testing.T, args ...string) string {
 	t.Helper()

@@ -104,8 +104,8 @@ type sweep struct {
 // transcript finds a session's transcript. Claude Code files it under a
 // directory named from a working directory, with every character that is not a
 // letter or a digit made a '-': mostly the one the session works in, which the
-// listing gives, so that file is looked at first. A session that entered a
-// worktree stays filed under the directory it started in, and a long path or
+// listing gives, so that file is looked at first. A session that left a
+// worktree can stay filed under it, and a long path or
 // CLAUDE_CODE_PROJECT_DIR_NAME spells the name otherwise; those are found by
 // looking in every project directory, where the file written last is the
 // session's own.

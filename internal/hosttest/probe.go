@@ -2,6 +2,7 @@ package hosttest
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 
@@ -85,6 +86,8 @@ type FakeResumableProbe struct {
 	// Calls counts Sessions calls, so a test can assert a save asks once
 	// whatever the number of agents.
 	Calls int
+	// Gone are the conversations the harness no longer keeps.
+	Gone []revier.SessionID
 }
 
 // NewResumableProbe returns a probe that claims every panel of the harness.
@@ -105,6 +108,10 @@ func (p *FakeResumableProbe) Sessions(_ context.Context, panels []revier.Panel) 
 		out[i] = revier.Conversation{ID: revier.SessionID(panel.Vars["session"]), Dir: panel.Vars["dir"]}
 	}
 	return out, nil
+}
+
+func (p *FakeResumableProbe) Holds(id revier.SessionID, _ string) bool {
+	return !slices.Contains(p.Gone, id)
 }
 
 func (p *FakeResumableProbe) ResumeCommand(spec revier.PanelSpec, id revier.SessionID) []string {

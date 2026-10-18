@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -248,6 +249,10 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // worktree is listed in the worktree. A session listed with no sessionId
 // still gives its directory, so the agent restores empty where it worked.
 //
+// A session not yet prompted is recorded too, though Claude Code files its
+// transcript only at the first prompt: it may be prompted after the save, and
+// the restore asks Holds whether there is a conversation to resume.
+//
 // It always runs the command rather than reuse the listing Inspect keeps: a
 // save records what holds now, and runs once.
 func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
@@ -262,6 +267,18 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 		}
 	}
 	return out, nil
+}
+
+// Holds reports whether Claude Code keeps a transcript of the conversation:
+// one never prompted has none, and Claude Code prunes one older than its
+// cleanupPeriodDays. Claude Code refuses to resume a conversation it does not
+// keep, and ends at once. It looks as Detail does, with the same kept sweep: the
+// sessions screen asks for every recorded agent on every frame, and a
+// conversation filed nowhere would otherwise cost a stat per project
+// directory each time. A transcript that cannot be looked for is held.
+func (p *Probe) Holds(id revier.SessionID, dir string) bool {
+	_, _, err := p.transcript(listedSession{SessionID: string(id), Cwd: dir})
+	return !errors.Is(err, revier.ErrNoDetail)
 }
 
 const (

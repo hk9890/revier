@@ -20,10 +20,11 @@ import (
 )
 
 // markConversation makes the fake claude list the agent's pane as holding a
-// conversation, by the pid tmux reports for that pane - the pid Claude Code
-// lists for its own process when it is the pane's command.
+// filed conversation, by the pid tmux reports for that pane - the pid Claude
+// Code lists for its own process when it is the pane's command.
 func markConversation(t *testing.T, id string) {
 	t.Helper()
+	fileConversation(t, id)
 	out := tmuxRun(t, "list-panes", "-a", "-F", "#{pane_pid} #{pane_current_command}")
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		pid, cmd, ok := strings.Cut(line, " ")
@@ -39,9 +40,10 @@ func markConversation(t *testing.T, id string) {
 }
 
 // listConversation makes the fake claude list the process pid as holding the
-// conversation id, worked on in dir.
+// filed conversation id, worked on in dir.
 func listConversation(t *testing.T, pid, id, dir string) {
 	t.Helper()
+	fileConversation(t, id)
 	session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "cwd": "` + dir + `", "status": "idle"}`
 	if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
 		t.Fatal(err)
