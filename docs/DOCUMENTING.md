@@ -75,15 +75,6 @@ user guide or the code; write them there, not in `product.md`,
 - No check runs on Markdown: `mise run quality` and CI test only Go. Check
   links and anchors by hand.
 
-## Deliberately absent
-
-Do not create these until there is something to record. Each would cost a load
-and return nothing:
-
-| File | Create when |
-|---|---|
-| `CONTRIBUTING.md` | someone other than the author builds from source |
-
 ## README scope
 
 `README.md` describes what revier is, how to install a release, a short first

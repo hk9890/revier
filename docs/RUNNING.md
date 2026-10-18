@@ -228,6 +228,25 @@ so a stale one skews the next session's first result.
 Read `survey` for `available`: a window-only target reports `false` on a machine
 with no window host, which is the expected headless result and not a failure.
 
+## Record the README demo
+
+`scripts/demo/record` re-records `.github/assets/tui.gif`. It opens fake
+projects with `revier open` on another machine, so give it a scratch VM, never
+this one:
+
+```bash
+mise run build
+scripts/demo/record <ssh-host>             # writes .github/assets/tui.gif
+scripts/demo/record <ssh-host> /tmp/x.gif  # anywhere else, to compare first
+```
+
+- The VM needs tmux and an ssh login. revier is copied in from `./bin`.
+- This machine needs `vhs` and the JetBrainsMono Nerd Font. Without the font,
+  the TUI's icons record as boxes.
+- The script removes `/tmp/rvdemo` from the VM when it exits.
+- Check the frames before you commit: `ffmpeg -ss 13 -i <gif> -frames:v 1 f.png`
+  shows web-shop above billing, at attention.
+
 ## Inspect the private server
 
 ```bash

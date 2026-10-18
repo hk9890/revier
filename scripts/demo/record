@@ -1,0 +1,46 @@
+#!/bin/sh
+# Records the README's TUI demo. revier runs on <ssh-host>, a scratch VM, on
+# fake projects and agents; vhs runs here and reaches it over ssh -t.
+# Needs ./bin/revier (mise run build), vhs, and the JetBrainsMono Nerd Font here,
+# and tmux on <ssh-host>.
+set -eu
+
+host="${1:?usage: scripts/demo/record <ssh-host> [output.gif]}"
+out=$(realpath "${2:-.github/assets/tui.gif}")
+dir=$(dirname "$0")
+tape=$(mktemp --suffix=.tape)
+trap 'rm -f "$tape"; ssh "$host" "TMUX_TMPDIR=/tmp/rvdemo/tmux tmux kill-server 2>/dev/null; rm -rf /tmp/rvdemo"' EXIT
+
+ssh "$host" 'rm -rf /tmp/rvdemo && mkdir -p /tmp/rvdemo/bin'
+scp -q "$dir"/guest/*.sh "$host":/tmp/rvdemo/
+scp -q bin/revier "$host":/tmp/rvdemo/bin/
+ssh "$host" 'sh /tmp/rvdemo/setup.sh'
+
+cat > "$tape" <<EOF
+Output "$out"
+Set Shell bash
+Set FontFamily "JetBrainsMono Nerd Font Mono"
+Set FontSize 15
+Set Width 1280
+Set Height 720
+Set Padding 16
+Set Theme "Catppuccin Mocha"
+Set TypingSpeed 150ms
+
+Hide
+Type "ssh -t $host sh /tmp/rvdemo/tui.sh"
+Enter
+Sleep 4s
+Show
+
+Sleep 2s
+Up@700ms 3
+Sleep 3s
+Down@900ms 2
+Sleep 7s
+Type "bill"
+Sleep 3s
+Escape
+Sleep 2s
+EOF
+vhs "$tape"
