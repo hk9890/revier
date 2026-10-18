@@ -4,8 +4,7 @@
 
 Ports and adapters. The core holds the domain and the orchestration and knows
 nothing about kitty, GNOME, tmux, or Claude. Every tool-specific fact lives
-behind one of the four ports below. [interfaces.md](interfaces.md) holds their
-contracts.
+behind one of the four ports below.
 
 ```
                         ┌──────────────┐
@@ -35,23 +34,40 @@ contracts.
 
 | Port | Answers | Second implementation |
 |---|---|---|
-| **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter. `Runtime` and `WindowController` are the same interface with different providers behind them. |
+| **Host** | What instances exist, how do I open one, how do I focus one? | Every adapter |
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
 | **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a `Host` (D26). |
 
-`Remote` is a revier on another machine, not a host: it answers with the view
-the core produces, and lists no instances here (D40). The core
-lays its answer over the local view of the projects that live there.
-
-`Host` is one interface because run-or-raise is one operation. A compositor
+**Host** is one interface because run-or-raise is one operation. A compositor
 provides instances as OS windows; a terminal provides them as panes and
-windows. The core asks the same questions of both: the methods of `Host` in
-[interfaces.md](interfaces.md#host).
+windows. The core asks the same questions of both, and the invariant it relies
+on is that what a host opens, the same realization's match finds (D15). A host
+holds two roles under two names:
 
-`Runtime` adds `Capabilities` and is the only host whose instances carry panels,
-because only it can see inside a terminal. `WindowController` adds nothing —
-the named type exists so the wiring states which role an adapter fills.
+- **Runtime** is a host plus the capabilities it declares, such as whether its
+  instances are OS windows (D19). It is the only host whose instances carry
+  panels, because only it can see inside a terminal.
+- **WindowController** is a host under a role name. It adds nothing; the name
+  exists so the wiring states which role an adapter fills.
+
+A host can also offer optional capabilities — open a tab, type into or read a
+panel, close, hide, place a window. The core detects each one, and a host
+without it loses only what it would have given.
+
+**AgentProbe** reads a panel and reports the agent's state. It receives the
+whole panel rather than one signal, because which signal is trustworthy
+differs per harness and changes: the Claude probe moved from the title to
+`claude agents --json` and the port did not change (D57). Only a probe says
+whether a program is an agent; a host says shell or tool (D119).
+
+**Remote** is a revier on another machine, not a host: it answers with the
+view the core produces, and lists, opens and focuses nothing here (D40). The
+core lays its answer over the local view of the projects that live there. The
+panels that show a link's agents are this machine's runtime's (D84).
+
+**KeyBinder** reads and writes the desktop's shortcut store, which is not the
+window host's tool even on one desktop.
 
 Three things that look like ports and are not:
 
@@ -65,78 +81,51 @@ Three things that look like ports and are not:
 
 ## Where the work happens
 
-The core owns everything that is not tool-specific:
+The core owns everything that is not tool-specific, and an adapter holds no
+policy:
 
-- **Template rendering.** A `Realization` is rendered once, at load, before it
-  reaches a host, so no adapter ever sees `{{.Path}}` and no refresh renders.
-- **Matching.** Each host returns its instances in a number of calls that does
-  not grow with the project count; the core matches them against every
-  project's realizations locally.
+- **Preparation.** Templates are rendered once, at load, so no adapter sees a
+  template and no refresh renders (D17).
+- **Matching.** Each host lists its instances at a cost that does not grow with
+  the project count; the core matches them against every project locally.
 - **Resolution.** When both realizations of a target are available, the core
-  picks: the target's `Prefer` field if set, otherwise the window host when a
-  `WindowController` is configured. A separate window is what a desktop user
-  expects; one line of config overrides it.
-- **Toggle-back.** The core records the home ref before activating a target and
-  returns to it when the same key is pressed again.
+  picks: the target's own preference, otherwise the window host. A separate
+  window is what a desktop user expects; one line of config overrides it.
+- **Toggle-back.** The core records the project's home before it activates a
+  target, and returns to it when the same key is pressed again.
 - **Focus after open.** Some hosts focus what they launch and some do not, so
-  the core focuses explicitly on the run path. Without it the raise half of
-  run-or-raise holds only by accident of the host: the instance opens behind on
-  every host that does not focus its own launches.
-- **Raising a terminal's OS window.** A runtime whose instances are OS windows
-  says so (`Capabilities.OSWindows`), and the core raises the window through
-  the window host after focusing inside the runtime. A terminal on Wayland
-  cannot raise itself.
+  the core focuses on the run path (D15). Without it the raise half of
+  run-or-raise holds only by accident of the host.
+- **Raising a terminal's OS window.** A terminal on Wayland cannot raise
+  itself, so the core raises a runtime's OS window through the window host
+  (D19).
 
 Each process settles its own working directory before it starts anything, so
-no host sets a directory for what it launches (D92). The TUI outlives the
-worktree it is often started in, so it reads its start project and then moves
-to the home directory, or to `/` without one. A command leaves a working
-directory it cannot read and keeps one that is still there, because `new`,
-`each` and the project of the working directory are read from it.
-
-An adapter implements the methods of `Host` in [interfaces.md](interfaces.md#host)
-and holds no policy.
+no host sets a directory for what it launches (D92). A directory set per
+adapter fixed only the adapters that set one.
 
 ## Adapter selection
 
-Each adapter implements `Probe(ctx) error`, which returns nil when the adapter
-can work in the current environment. Selection order:
+Each adapter reports whether it can work in the current environment. An
+adapter the config names and that cannot work is an error, because the user
+asked for it by name. Otherwise the first adapter in the preference list that
+can work is chosen. With no window host the core runs without one, and
+window-only targets report as unavailable rather than failing at the keystroke.
 
-1. The adapter named in config, if set. A named adapter that fails `Probe` is a
-   hard error — the user asked for it by name.
-2. Otherwise the first adapter in the preference list whose `Probe` succeeds.
-3. No `WindowController` probes successfully: the core runs without one, and
-   window-only targets report as unavailable rather than failing at the
-   keystroke.
-
-Detection signals the adapters use:
-
-| Adapter | Signal |
-|---|---|
-| kitty | `kitten` on PATH or beside `kitty`; a `$XDG_RUNTIME_DIR/kitty-<pid>` control socket answers, or no kitty runs yet |
-| tmux | `$TMUX`, `tmux` on PATH |
-| wezterm | `$WEZTERM_PANE` |
-| gnome | `$XDG_CURRENT_DESKTOP` contains GNOME, `wctl` on PATH |
-| hyprland | `$HYPRLAND_INSTANCE_SIGNATURE` |
-
-The host that lists what `revier agent exec` started for a terminal on another
-machine is not selected: it is wired beside whichever runtime was, because it
-holds what no runtime does, and no target resolves to it (D84).
+The host that lists what a link on another machine started here is not
+selected. It is wired beside whichever runtime was, because it holds what no
+runtime does, and no target resolves to it (D84).
 
 ## Package layout
 
-Where each package sits is the Layout table in
-[../OVERVIEW.md](../OVERVIEW.md#layout).
+Where each package sits is the [Layout table](../OVERVIEW.md#layout).
 
-`pkg/revier` is public because an out-of-tree adapter must import the
-interfaces. Everything else is `internal/` so the public surface stays small and
-stable. Go convention puts an interface in the package that consumes it; this
-project overrides that convention because the interfaces are a product feature,
-and adapter authors need one obvious import path.
+`pkg/revier` is public because an out-of-tree adapter must import the ports.
+Everything else is internal, so the public surface stays small and stable. Go
+convention puts an interface in the package that consumes it; this project
+overrides that convention because the ports are a product feature, and adapter
+authors need one obvious import path.
 
-The adapter of every port is constructed explicitly in `cmd/revier/adapters.go`,
-not through `init()` registration. Explicit wiring is greppable, and it makes
-the set of compiled-in adapters a single readable list. A command that
-needs one adapter helper calls it directly: `assist.go` starts the Claude
-assistant, `each.go` quotes for ssh, and `serve.go` tags what it starts with
-`proc`'s variable names.
+Every adapter is constructed explicitly in one place, not through `init()`
+registration. Explicit wiring is greppable, and it makes the set of
+compiled-in adapters one readable list.

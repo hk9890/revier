@@ -26,27 +26,24 @@ territory. revier is how you walk it.
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
 | **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation and directory (D46, D62) |
 
-Every operation in revier is the same one: **run-or-raise a named target, and
-remember where you came from.** Opening a project is run-or-raise on its home
-target. Pressing the editor key is run-or-raise on its editor target. There is
-no second mechanism.
+Every operation in revier is the same one: **run-or-raise a named target; a
+second press returns to the project's home.** Opening a project is
+run-or-raise on its home target. Pressing the editor key is run-or-raise on its
+editor target. There is no second mechanism.
 
 ## A target is logical; its realization is not
 
-`ctrl+shift+d` means "diff viewer" in every project that declares one. What the
-diff viewer *is* depends on which host can provide it:
+"Diff viewer" means the same thing in every project that declares one. What
+the diff viewer *is* depends on which host can provide it (D14):
 
 | Host | The same target, realized |
 |---|---|
-| Compositor (GNOME) | a Meld window, found by WM class, raised by the compositor |
-| Runtime (kitty, tmux) | `nvim -d` in a pane, found by title, focused by the terminal |
+| Compositor (GNOME) | a Meld window, found by its window class, raised by the compositor |
+| Runtime (kitty, tmux) | `nvim -d` in a pane, found by its title, focused by the terminal |
 
 The key, the name, and the promise are identical. Only the resolution differs.
 This is why the same binding works on a desktop and on a headless SSH box, and
 why a terminal TUI and a GUI application are not two features.
-
-Both realizations are in use from the first version on one machine: a ticket
-viewer is a terminal TUI in a kitty tab, an editor is an IntelliJ window.
 
 ## Two tiers of reach
 
@@ -59,291 +56,65 @@ viewer. They get no key. One key opens the list of everything bound to the
 current project, and you pick from it.
 
 A key is a promise about where you land. Only a declared target can make that
-promise, which is why the two tiers exist.
+promise, which is why the two tiers exist (D12).
 
 ## How an instance becomes bound
 
 | Mechanism | Reliability | Used for |
 |---|---|---|
-| revier launches it | Deterministic. revier launches, waits for the window of the target's class to appear, and binds it by id; every later press finds it by that id, whatever its title becomes | Keyed targets |
-| You attach it | Deterministic. `revier attach` binds the focused instance to the current project | Anything |
-| Claim on appear | Best effort. After an action runs, revier claims the next new instance no target matches, for a short interval | `xdg-open` from the terminal, as an action |
+| revier launches it | Deterministic. revier launches, waits for the window to appear, and binds it by its id, whatever its title becomes | Keyed targets |
+| You attach it | Deterministic. You bind the focused instance to the current project | Anything |
+| Claim on appear | Best effort. After an action runs, revier claims the one new instance that no target matches | An action that opens a link |
 
 The third mechanism exists because the interesting case is the unreliable one.
 Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
-window. Claim-on-appear settles an action's launch, and it runs in the TUI, the
-one long-lived process. The TUI diffs successive surveys and the claim lands
-within two refresh intervals, about two seconds; no host reports window events
-(D87). The claim happens only while the TUI is open, only within five seconds
-of the action, only for a window no declared target matches, and only when one such
-window appeared.
+window. Claim-on-appear runs in the TUI, the one long-lived process. No host
+reports window events, so the TUI finds the new instance by comparing one
+survey with the next (D87).
 
-A keyed target's launch is settled the same way but by the launching process
-itself, which waits for the window and binds it, so it needs no TUI. The TUI
-finishes the binding only when the window took longer than that wait.
-
-A window carries no panels, so an attachment or a claim records the terminal
-inside the window beside it (D95). It does so only when the window pairs with
-one beyond doubt, the pairing D63 and D67 refuse to guess at; an ambiguous
-window is recorded alone and reports no agent, which is the honest answer.
-The two are one attached row, the terminal's, because that side holds the
-panels. The row is chosen from the window's side, and the terminal the window
-names has to be attached too. Asked from the terminal's side, which window
-holds this terminal is a question a shared title answers twice, and the
-survey then folded the wrong window away and showed one attachment as two
-rows, in the pane and in a close plan.
-
-Declared targets live in the project's TOML as match rules. Attachments are
-per-session and live in revier's own state, because instance ids do not survive
-an application restart.
+Declared targets live in the project's configuration as match rules.
+Attachments live in revier's own state and last until the application
+restarts, because instance ids do not survive a restart.
 
 ## Surface
 
-```
-revier                 the TUI: every project, its agent state, its targets
-revier open [name]     run-or-raise the home target, without UI
-revier new [name]      write a project file for the current directory
-revier go <target>     run-or-raise a named target in the current project;
-                       --picker opens the popup when no project resolves
-revier popup           run-or-raise the TUI in a kitty window revier places (D76)
-revier run <action>    run a configured action in the current project
-revier attach          bind the focused instance to the current project
-revier list            what a person here reads: the agents a panel here shows
-revier list --json     the survey whole, which the revier on another machine
-                       reads about its own links (D104)
-revier status          the project for the current directory
-revier doctor          every file that did not load whole, and its fix (D85)
-revier each -- <cmd>   run one command in every project's directory (D32)
-revier events          what revier did in each project, one JSON line per
-                       event, with what each linked host recorded (D112)
-revier session save    record the projects that are open now (D46)
-revier session restore open what a saved session recorded
-revier session list    the saved sessions, newest first
-revier shutdown        save the session when it changed, then close (D78)
-revier agent ..        one agent, driven by a script (D31, D116, D117, D118)
-```
+The picker and the monitor are one surface (D8): a list of projects, sorted so
+the ones that need you come first, and a pane for the project under the
+cursor. Attention decides the order because an agent that waits for you is the
+reason to open revier at all. Every command is in the
+[CLI reference](../user-guide/cli.md).
 
-A script drives an agent in five steps, and none of them moves the keyboard
-or raises a window: `agent wait` blocks until the agent reaches a state, `agent prompt` types
-one line and submits it (D31), `agent read` prints what the agent said last,
-or with `--screen` what its panel shows (D116), `agent send-keys` types named
-keys whatever the agent is doing (D117), and `agent new --no-focus` adds an
-agent beside the workspace and prints its address (D118). The script is
-another agent as often as not: one session that asks the others and reads
-their answers.
+The agents of every project are a second list behind the same key (D110). With
+many agents across many projects the question is which agent, and the project
+list answers it one project at a time. The second list orders every agent by
+need. It is a list of its own, not a mode of the project list, which would hide
+the projects it is for.
 
-The TUI is one surface: a list of projects, sorted so the ones needing
-attention come first, and a pane beside it for the project under the cursor.
-A query keeps that order: the rows it matches stay in their groups, and
-within a group the name that holds the query whole comes first (D113).
-The cursor follows its project as the rows reorder while the project is open.
-When the project closes or is deleted the cursor keeps its place, on the row
-that moved up or the last row, and comes back from the pane to the list; a
-full shutdown that closed everything puts it on the first row (D109).
-A row says a project is open while anything here holds it - a target, or a
-terminal attached by hand - which is `ProjectView.Held`, while run-or-raise
-and a restore act on the home target alone. It counts the agents a panel here
-shows, which are the agents the surface can go to, type into and close. An
-agent of a link that was opened on its host, and one this machine serves to a
-terminal elsewhere, are in the survey and on no row (D104). Every surface over
-this machine's projects draws only the agents a panel here shows,
-`Core.Shown`; the survey keeps the rest, which `revier list --json` owes the
-revier on the other machine about the agents its own links started here, and
-which a shutdown reads to see that this machine is busy. The link dialog's
-pane is the host's inventory rather than this machine's projects, and draws
-the host's word whole. So every agent a surface shows sits in a panel of an
-instance `Held` counts, and "closed and no agents" is an invariant of the row
-rather than a coincidence of the filter.
-The rows refresh from this machine alone, and what a linked host says is laid
-over them when it answers: a project closed here is off its row within a
-refresh however long a host takes, and a link's pane says `surveying` until
-its host has answered once (D114). A host is asked at most once in five
-seconds, and less often while it does not answer (D130). A cursor nobody moved stays on the top row
-until the last host has answered, since an answer can put a link first.
-The pane starts level with the project query.
+A pane shows one agent's panel as the terminal draws it (D111, D125). No
+harness renders a running session for another process, and a transcript is one
+harness's format; the panel is what every harness draws. The mirror shows the
+whole screen, the harness's own frame included (D137), because a cut by one
+harness's layout breaks on its next layout. Only colour passes from the screen
+to the surface, so what an agent printed cannot repaint the surface that shows
+it.
 
-A link's agents are the host's and this machine's, added together (D101). A
-terminal attached to a link by hand is a terminal of this machine and is
-probed here. The link's own targets are not: they are panels running an ssh,
-and what the agent on the far side does is its host's word (D84). The two
-sides can still meet on one agent, since whether a probe claims a panel
-running an ssh is the probe's business and the host names that agent under
-the tag the panel gave it. They are told apart by the panel each landed on,
-not by assuming they cannot meet, and the local reading stands.
+The popup is the surface in a window revier places and run-or-raises (D76).
+Leaving it hides it, and the next press raises it as it was (D86). A cold start on
+every press — a terminal, the TUI, and a first survey of every linked host —
+is too slow for the one keystroke the product promises.
 
-The pane ends in the screen of one of the project's agents, under the heading
-`Screen`: the mirror the agent list's pane shows, described below (D125).
-Without a keypress it mirrors the agent that needs the user; else one at rest
-before one working, and one whose state is unknown last; the latest to speak
-among equals, which the pane waits to know before it reads a panel. It keeps
-that agent while no other is more worth a look: an equal that speaks does not
-take the mirror. Moving the agent cursor chooses, and the choice holds until
-another project is under the list's cursor. The mirror takes the rows the
-facts leave, and a pane with none left shows no mirror. A wide pane lays it
-beside the facts, level with the name, once that leaves it 100 columns. The
-wheel over the mirror scrolls it and the facts stay; over a pane with no
-mirror, or over the facts beside one, it scrolls the pane.
+A shutdown saves the session first, because it is the moment before a
+restart, and refuses while an agent works or waits for an answer, because that
+agent would lose its turn (D78). The guard sits in the close path, so every way
+to close passes it, and it reads the agents again at the close: the plan the
+user confirmed is older than the press (D99). Nothing is killed; a window an
+application keeps open stays open.
 
-A status stands in the thin rule under the top line, at its left end over the
-list or its right end, at the right end of the pane's first line where the
-name leaves room, or as a section of the pane over the targets, under its
-title (D134). It shows what its command printed last, each segment in the
-colour of its level. The pane's statuses are the selected project's. Each
-place runs one command at a time, so a cursor run down the list costs one
-project's runs: a project the cursor reaches runs at once, or when the run
-still out at that place answers. Each runs on its own timer and never holds
-up a frame. How a status
-fits its line, and what a failed run leaves, are in
-[the user guide](../user-guide/extending/status.md).
-
-The key that opens the surface, pressed on it, puts the agent list in the
-project list's place, and pressed again the projects; the bar's first button
-does the same and names where it goes (D110). A terminal too narrow for every
-button of the bar shows the first ones whole and ends in a burger, which turns
-the bar to the rest; it has no key, since each button behind it has its own
-(D49). The agent list is every agent a
-panel here shows, one row each: its state, what it is on, and how long ago it
-spoke, over its project and the directory it works in when that is not the
-project's own. An agent with no activity line yet shows the first line of what
-it said last. The rows stand by state - waiting for the user, working, at rest,
-unknown - and those waiting and at rest by when each spoke, the latest first;
-the working and the unknown stand by project. The cursor stays on its agent
-through every reordering, and the rule totals the rows by state. Typing filters
-them within their states (D113), Enter goes to the agent, and del closes its tab. The list opens on its
-first row, and the project list keeps its cursor and query across the switch.
-An agent the transcript says nothing about - another harness, a link's - has no
-age and stands last in its state.
-
-Beside the agent list the pane names the agent as it names a project - the
-agent's activity as the title, then its state, project, path, git URL, harness
-and when it spoke - and under that mirrors the agent's panel (D111): the end of
-what its terminal shows, read once a second, in the terminal's own colours. A
-line wider than the pane continues on the next at a word, so no word reads
-split, under its first word past any list mark, and a rule wider than the pane
-is shortened to fit (D111).
-The screen is shown whole, the harness's own frame included (D137). The
-wheel scrolls back into the panel's scrollback, which is read only while the view is scrolled into it, and
-the view holds its lines as more are written under them. A link's agent is
-mirrored as any other, since the panel is here. A panel no runtime here can
-read leaves a note in the mirror's place. Nothing a screen carries but its
-colour - its SGR sequences - reaches the terminal, and the first line of a
-message that a row shows is drawn as text (D108). Every line of the mirror
-closes the colour it opens, so what a screen holds cannot repaint the surface
-that shows it (D111). With NO_COLOR set no colour reaches the terminal, and
-bold and reverse video stay (D133).
-
-The list and the pane's agents each have a query over their rows, kept while
-their project is, until a press opens something; then both end, and each
-cursor stays on the row it found. Tab and shift+tab move between the two, and
-alt+t to the targets, which have no query; Tab from the targets goes back to
-the projects (D105). One click selects a row of the list or the pane, and a
-second opens it.
-
-Enter on a project opens its home target, or on one with no home puts the
-cursor on its targets; on a target it runs it, and on an agent it makes its tab
-current and raises its window (D74). alt+e, or the project's name over the
-pane, opens the project screen: the project file as the config screen is
-`config.toml`, with the shared targets shown beside what the project changes
-of them (D81). del closes the row under the cursor - a project, a target, an
-attached window or an agent's tab - and alt+del deletes what the configuration
-holds of it: a project's file, which for a link is the link alone, or a target
-the project file declares. What is open closes first (D93).
-A target's key runs that target of the selected project. Where the terminal
-tells a ctrl+shift key apart, as kitty does, the target runs and ctrl with the
-letter keeps its own meaning; elsewhere the press arrives as ctrl with the
-letter and yields to any meaning that has here (D132).
-
-The popup is the surface in a kitty window of class `revier-popup`, which
-`revier popup` run-or-raises and places under D24 (D76). It is centred at the
-workarea's full height and a fixed 1800 px width, or fills a narrower
-workarea, decided before the launch so the window never resizes. The width is
-fixed rather than a share of the workarea, so that on a wide screen everything
-stays in one spot. `go --picker` falls back to the popup, and plain `go` keeps
-its exit status for scripts.
-
-Esc minimizes the popup through the window host, and the next press raises it
-with the cursor and the query where they were (D86), on the projects whichever
-list it was hidden on (D110). Neither plays the shell's animation where the
-host can skip it. A press while the focused window shows the surface is typed into
-its panel as the key that switches the list, because the desktop takes the key
-before the terminal sees it. That window is the popup, or a terminal whose
-current panel runs revier with no command, paired with its window as an
-attachment is (D95); there no popup opens. A runtime that cannot type into the
-panel leaves the press what it was: the popup, raised or opened. Hidden, it
-surveys nothing and asks no linked host, since nobody reads the answer, unless
-a launch of its own is still coming up (D87); the
-terminal's focus report on the raise reads the project files again, since a
-press used to load them, then runs one survey and resumes the refresh. A press
-that goes to a target or an agent hides the popup too once it lands, unless the
-popup was hidden and raised again since the press: the raise is the user's
-next errand. Any surface without the focus refreshes every ten seconds, the
-mirror with it, the spinner stands, and the pointer is reported only when
-pressed; the focus regained reads the project files again, which the config
-assistant beside it writes (D135), and then surveys this machine and every
-linked host that answered its last round at once (D129, D130). The surface knows
-it is the popup, and which project to open on, from the environment its
-terminal is started with, read and dropped at start so nothing it launches
-inherits it.
-The project is resolved at the keypress, while the focused window is still the
-user's. In any other terminal, and where the host cannot hide, Esc exits.
-
-The sessions screen is the three `revier session` commands on the surface: the
-saved sessions, a pane with the restore plan for the one under the cursor,
-Enter to restore it and a save button on its top line (D46, D49).
-
-The shutdown wizard is `revier shutdown` on the surface: every project or one,
-then what of it - the whole, only its agents, or only what holds no agent -
-then the plan to confirm, and the result shown with the surface still up
-(D78). A window an application keeps open is named as still open, never
-killed, and a project's shutdown leaves an instance another project also
-holds. Every close reads the plan's agents again first, its
-own steps only, and the forced press reads them too: one busy since saves
-nothing and closes nothing, and the plan comes back with it named, where
-confirming it is the force (D99). A del that would have closed at once asks
-there too. A step whose agents that survey could not read - its host did not
-list, its project is no longer surveyed, its link host did not answer - is
-left open and named in the result, and the rest of the plan closes: one dead
-remote host does not stop the other projects. Neither survey of a close waits
-for a linked host the close is not about: the plan's asks the host of the
-project being closed, or of every link open here when all close, and the
-recheck the hosts its plan has a step for, so a close of
-a project on this machine costs nothing for a host that is gone. A save
-gives the hosts of the links open here ten seconds to say what their agents
-are working on, and asks the agents on this machine on what is left of its
-bound (D115).
-
-The guard is in `core.Shutdown`, so `revier shutdown`, the wizard and del all
-pass it (D99). A busy agent refuses the whole plan, because the user is about
-to be asked about it and the plan is what they read. The recheck is the
-freshest survey there is, so what closes, the saved session and the order
-that closes this process's own terminal last are all read off it, not off the
-listing the plan was drawn from. Forcing says not to refuse and nothing else:
-a force that skipped the reading wrote back into the session a window the
-user had closed by hand while the confirm stood, and kept a step marked
-unread by the refusal before it. A shutdown left with nothing to close saves
-nothing, since it changes nothing and a survey that could not read the desktop
-is not the one to write a session from. Whether anything closes is read from
-each step's action and not from the reason it carries: a step no host can
-close carries no reason and closes nothing either, and a shutdown of nothing
-but those would otherwise record the desktop as shut down.
-
-A step closes a tab as every panel in it (D94). `Panel` names the tab that
-holds it, and the step carries every panel of that tab and closes each
-through `PanelCloser`: kitty ends a tab with its last window and tmux a window
-with its last pane. The step holds the agents of all those panels, so a busy
-one beside the marked panel refuses it, and it counts as closed only once no
-panel of it is listed. An agent's own step closes its tab the same way,
-because the tab `revier agent new` opens carries no target mark to be closed
-by. The workspace's own tab is the exception, where the shell a layout
-declares beside the agent stays. An instance that names no own panel (D100)
-is read as that exception too: taking the tab there is a guess, and the wrong
-guess closes the declared shell, while the guess the other way leaves one
-shell of an added tab for the next shutdown. The panels are the tab as the
-close finds it, not as the plan drew it: the recheck reads a step's panels
-again with its agents, so a panel added between the confirm and the close
-closes with it, and an agent working there refuses the close like any other.
-The recheck adds and drops no step, which is what D78 holds fixed.
+A surface without the focus refreshes slowly, since nobody reads it (D129). A
+linked host is asked at a bounded rate, and less often while it does not
+answer, because each round is a whole survey on that host (D130). This
+machine's rows never wait for a linked host (D114).
 
 ## Scope
 
@@ -355,8 +126,8 @@ The recheck adds and drops no step, which is what D78 holds fixed.
 - Attached instances through the project-scoped picker
 - Agent state for Claude Code, shown per project
 - kitty runtime, GNOME window control, Claude probe
-- The popup the desktop key opens: the TUI in kitty on GNOME, sized to show
-  the detail pane (D76), hidden on Esc and raised by the next press (D86)
+- The popup the desktop key opens: the TUI in kitty on GNOME (D76), hidden and
+  raised again (D86)
 - `--json` output
 - Projects on another machine, surveyed by the revier installed there (D40)
 
@@ -377,12 +148,9 @@ revier is not a terminal multiplexer and does not replace one. It sits above
 whatever runtime you already use and gives it a project-shaped view.
 
 revier does not run your agent, wrap it, or proxy its output. It observes a
-panel and reports what it sees. The one agent it starts is its own: Claude
-Code, briefed to write revier's configuration and to find what is wrong with
-it, in `revier-config-assistant`, a project revier builds in and no file
-declares. alt+a raises it beside the surface, and it is surveyed, probed and
-restored as any project is. Where no surface can start, `revier assist` hands
-the terminal to the same agent instead (D135).
+panel and reports what it sees. The one agent it starts is its own config
+assistant, a project revier builds in, so that it gets run-or-raise, the
+survey and restore with no code of its own (D135).
 
 ## What degrades, and how far
 
@@ -393,26 +161,14 @@ that can realize it is available.
 |---|---|
 | kitty and GNOME | every target, both realizations |
 | tmux over SSH, no desktop | every target with a runtime realization; window-only targets are unavailable |
-| kitty, unsupported compositor | home and agent monitoring; window-only targets are unavailable |
+| kitty, unsupported compositor | home and agent monitoring; window-only targets are unavailable, and under Wayland the home opens but is not raised |
 
 The mechanism is portable. An individual target may not be, and its config says
 so by which realizations it declares.
 
-A mistake in the configuration degrades the same way. What is wrong is
-disabled; nothing above it is (D85). revier is how you reach a broken project,
-so it must not break with one. An edit revier itself makes is refused for what
-it breaks and not for what was broken before it, so a file is repaired one
-target at a time; what `revier new` and `revier link` write must come out
-whole.
-
-| What is wrong | What it costs |
-|---|---|
-| a key nothing reads | nothing: it is ignored |
-| a rule about one target | that target, which reports `invalid` with its reason; pressing its key fails and launches nothing |
-| a rule about the project — no home, no path, an unusable name | that project, listed with its reason; its sound targets still resolve |
-| a project file that is not TOML | that project, listed by its file name with the parse error |
-| `config.toml` itself unreadable | everything: there is nothing left to read the rest with |
-
-`revier doctor` reports every one of them, with the edit that answers it.
-Every other command runs, warns on stderr that some files have problems, and
-names `doctor`.
+A mistake in the configuration degrades the same way: what is wrong is
+disabled, and nothing above it is (D85). A rule about one target disables that
+target, a rule about the project disables that project, and neither disables
+the rest. revier is how you reach a broken project, so it must not break with
+one, and what is disabled stays listed with its reason, because the surface is
+the one place the reason can be read.

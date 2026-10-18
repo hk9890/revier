@@ -401,7 +401,7 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // process id was rejected for pairing a pane to a window, because every OS
 // window of one kitty process shares its pid (D19); that objection is exactly
 // this refusal, so an ambiguous process is left as it was rather than guessed
-// at (D63, D67). A named window the window host does not list could
+// at (D63). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
@@ -1002,7 +1002,7 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 // every OS window of one kitty process shares it - never the identity.
 //
 // It refuses as soon as two windows answer to one terminal, as runtimeOf
-// read the other way does and for the same reason (decisions.md D63, D67):
+// read the other way does and for the same reason (decisions.md D63):
 // the window that is raised, and the window a row is folded into, are both
 // the wrong one when the title is shared and the pairing was a guess.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
@@ -1027,7 +1027,7 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 // window. It is osWindowOf read the other way, through the same identity -
 // the title the two listings share, with the pid as a filter - and it refuses
 // as soon as two runtime instances answer to it, because a guess here would
-// attach a project to the wrong terminal (decisions.md D63, D67).
+// attach a project to the wrong terminal (decisions.md D63).
 func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier.Instance, bool) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows ||
 		w.Ref.Host != c.Window.Name() || w.Title == "" {

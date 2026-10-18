@@ -134,6 +134,13 @@ restore` brings back what it closed. While an agent works or waits for an
 answer, nothing closes and revier names the agent; `--force` closes it
 anyway. In the TUI, alt+q shows the plan before anything closes.
 
+- A window its application keeps open, for example to ask about unsaved
+  work, is named `still open`. revier does not kill it.
+- A shutdown of one project leaves open what another project also holds,
+  such as a shared target's window.
+- When revier cannot read a step's agents, for example because a host did
+  not answer, that step stays open and is named. The rest closes.
+
 ## See what revier did
 
 To see which projects you used most this week:

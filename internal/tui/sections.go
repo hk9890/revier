@@ -17,7 +17,7 @@ import (
 //
 // The pane's targets take the cursor too, but not by Tab: a click on one, or
 // alt+t, puts it there, and Tab takes it back to the list. They have no
-// query, so typing there filters nothing (decisions.md D105).
+// query, so typing there filters nothing.
 
 // sections are the sections the cursor can be in, for the project under it.
 func (m Model) sections() []focus {

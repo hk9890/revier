@@ -218,7 +218,7 @@ func (c Chord) GNOME() string {
 // without it sends ctrl+shift+<letter> as the byte of ctrl+<letter>, and
 // ctrl+i and ctrl+m as the bytes of tab and enter. The TUI folds every press
 // to what such a terminal sends, unless a target key binds the press as it
-// was made (decisions.md D132). The TUI binds no super chord, so the second
+// was made. The TUI binds no super chord, so the second
 // return is false for one.
 func (c Chord) Terminal(disambiguates bool) (Chord, bool) {
 	parts := strings.Split(string(c), "+")

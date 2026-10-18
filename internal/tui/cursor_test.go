@@ -14,7 +14,7 @@ import (
 )
 
 // The cursor follows its project while the project is open, and keeps its
-// place once the project closes (decisions.md D109).
+// place once the project closes.
 
 // openWorld is world with the named projects' workspaces running too, and the
 // surface over it. The rows are the last project, which needs the user, then

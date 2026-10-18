@@ -9,7 +9,7 @@ revier doctor
 ```
 
 It prints each file with a problem, one line per problem, and a `fix:` line
-where it knows the fix. It exits 1 when a file has a problem.
+where it knows the fix.
 
 ```
 /home/you/.config/revier/projects/demo.toml
@@ -64,8 +64,9 @@ The config screen (alt+c) shows which hosts revier uses.
 
 ## An agent shows no state
 
-- Claude Code needs version 2.1.212 or newer. See
-  [integrations/claude-code.md](integrations/claude-code.md).
+- Claude Code needs the version
+  [integrations/claude-code.md](integrations/claude-code.md#what-you-need)
+  names.
 - opencode reports no state. See [integrations/opencode.md](integrations/opencode.md).
 - Any other harness needs a [probe](extending/probes.md).
 
@@ -82,14 +83,9 @@ login shell on the host. Check it:
 ssh <host> '$SHELL -lc "command -v revier"'
 ```
 
-When the link hangs after a VPN change or a suspend, end the shared ssh
-connection. The next call opens a new one:
-
-```
-ssh -O exit -o ControlPath="$XDG_RUNTIME_DIR/revier/ssh-%C" <host>
-```
-
-See [links.md](links.md).
+When the link hangs after a VPN change or a suspend, close the shared ssh
+connection as [The ssh connection](links.md#the-ssh-connection) shows. The
+next call opens a new one.
 
 ## The popup does not open
 
@@ -99,9 +95,9 @@ names what is missing, kitty or the GNOME Window Control extension.
 ## The log
 
 Every revier process writes to one log file per day, one JSON line per
-record. The log is in `logs/` in the state directory: `$REVIER_STATE_HOME`,
-else `$XDG_STATE_HOME/revier`, else `~/.local/state/revier`. revier removes
-files older than 14 days.
+record. The log is in `logs/` in the state directory
+([Environment variables](cli.md#environment-variables)). revier removes files
+older than 14 days.
 
 ```bash
 L=${REVIER_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/revier}/logs/revier-$(date +%F).log

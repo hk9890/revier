@@ -16,7 +16,7 @@ import (
 //
 // A button carries its key. The bar is a second way to reach the same thing,
 // never the only way: an action with no key would be unreachable from the
-// keyboard, which is where this surface is driven from (decisions.md D49).
+// keyboard, which is where this surface is driven from.
 
 // barAction is one button: what it says, the key that does the same, and
 // what it runs.
@@ -90,7 +90,7 @@ const burgerLabel = "≡"
 // all. A narrower one has the first of them and the burger, which turns the
 // bar to the rest: a button cut at the edge cannot be pressed, and a line cut
 // in the middle of a label reads as broken. The burger has no key, because it
-// only leads to buttons that have theirs (decisions.md D49).
+// only leads to buttons that have theirs.
 func (m Model) barPage() []barAction {
 	all := m.buttons()
 	w, _ := m.inner()

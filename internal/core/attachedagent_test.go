@@ -54,7 +54,7 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 	}
 }
 
-// An ambiguous window is attached alone (decisions.md D63, D67), and then no
+// An ambiguous window is attached alone (decisions.md D63), and then no
 // agent is reported for it: two terminals of one process with one title
 // cannot be told apart, and attaching the wrong one is worse than attaching
 // no terminal at all.

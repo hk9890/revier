@@ -5,19 +5,21 @@
 Every change, docs included, is made in a worktree. The main checkout stays on
 a clean `main`: no edit, no commit, no branch switch there.
 
-- Create the worktree with Claude Code's worktree tool before the first edit.
+- Create the worktree with the `EnterWorktree` tool before the first edit.
   It checks out `origin/main` under `.claude/worktrees/<name>` on branch
   `worktree-<name>`.
 - Run every command from inside the worktree.
 - Tag a release from a detached worktree instead;
   [RELEASING.md](RELEASING.md) has the commands.
-- Remove the worktree and its branch once the PR is merged.
+- Remove the worktree and its branch once the PR is merged, from the main
+  checkout's root:
+  `git worktree remove .claude/worktrees/<name> && git branch -D worktree-<name>`.
 
 ## Commits
 
 Run `mise run quality` before each commit; it must pass.
 
-Use the `commit-commands:commit` skill for the standard flow.
+Call the Skill tool with `commit-commands:commit` for the standard flow.
 
 **Local delta:**
 
@@ -50,8 +52,8 @@ git push -u origin HEAD
 gh pr create --fill
 ```
 
-Review the PR against [REVIEWING.md](REVIEWING.md) with
-`/worktree-flow:worktree-review <pr>`.
+Review the PR against [REVIEWING.md](REVIEWING.md): call the Skill tool with
+`worktree-flow:worktree-review` and the PR number.
 
 Merge only when the user tells you to in that session, with a merge commit:
 `gh pr merge --merge`.

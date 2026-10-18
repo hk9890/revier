@@ -191,7 +191,7 @@ func TestEscOnTheLinkNameGoesBackToTheHostsProjects(t *testing.T) {
 
 // What is typed on a host's projects filters them, and Enter links the one
 // the filter left under the cursor. Esc clears the query, with the cursor
-// back where it was, before it goes back to the hosts (decisions.md D44).
+// back where it was, before it goes back to the hosts.
 func TestTypingFiltersTheHostsProjects(t *testing.T) {
 	m, _, _ := linkWorld(t, nil, "alpha", "beta", "gamma")
 	m = step(m, "alt+r")

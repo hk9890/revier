@@ -67,7 +67,7 @@ func TestTheFooterOffersTheTargetsKeyOnlyWhereThereAreTargets(t *testing.T) {
 }
 
 // Tab in the Targets section goes back to the projects, and the footer says
-// so: the targets are not a stop on the walk Tab makes (decisions.md D105).
+// so: the targets are not a stop on the walk Tab makes.
 func TestTheTargetsFooterSaysTabGoesBackToTheProjects(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 24)

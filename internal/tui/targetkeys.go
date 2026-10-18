@@ -38,7 +38,7 @@ func pressed(msg keyPress) (core.Chord, bool) {
 // of the surface's own keys, an action, a query editing key, or a target that
 // declares ctrl+o itself. Then it binds nothing here and stays a desktop key
 // only. Where the terminal disambiguates, unfolds is true and every chord is
-// bound as pressed (decisions.md D132).
+// bound as pressed.
 //
 // The second return is every chord a target declares as the chord itself,
 // which is what tells a folded binding to yield. It comes back with the
@@ -125,7 +125,7 @@ func (m Model) targetKey(msg keyPress) (Model, tea.Cmd, bool) {
 
 // unfolded is the chord pressed, where the terminal reports key
 // disambiguation, the press is not the key legacyKey folded it to, and a
-// target key binds it: such a press is that target's (decisions.md D132).
+// target key binds it: such a press is that target's.
 // Otherwise it is none, and the folded press is all the surface reads.
 func (m Model) unfolded(press, folded tea.KeyPressMsg) core.Chord {
 	if !m.unfolds {

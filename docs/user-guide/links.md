@@ -45,8 +45,8 @@ host = "buildbox"
 ```
 
 `path` and `git_url` are the host's; nothing is cloned here.
-[Configuration](configuration.md#link-file) has every field. You can copy the
-same project files to both machines: each skips the links to itself.
+[Link file](configuration.md#link-file) has every field, and says why you
+can copy the same project files to both machines.
 
 ## Open and work with the workspace
 
@@ -71,9 +71,10 @@ not wait for it.
   targets a link takes is in [Link file](configuration.md#link-file).
 - **Statuses** run on this machine, with `REVIER_PROJECT_HOST` set so the
   command can ssh to the host. See [Statuses](extending/status.md#per-project).
-- **Actions** run **on the host**. `revier run <action> -p far`, and an action
-  key in the TUI, run the host's action of that `name`, as the host's
-  `config.toml` defines it. When the host has none, revier says so.
+- **Actions** run **on the host**: `revier run <action> -p far`, and an action
+  key in the TUI, run the host's action of that `name`
+  ([Actions](configuration.md#actions)). When the host has none, revier says
+  so.
 
 ## The ssh connection
 
@@ -94,7 +95,6 @@ example `host key not known - run ssh <host> once to accept it`.
 - `--dir` on `revier agent new` and `revier shell new`: it is dropped.
 - An agent that no tab here shows, such as one you started on the host: it is
   not in your list, and you cannot reach it from here.
-- Statuses from `config.toml`, and shared targets without a remote part
-  ([Link file](configuration.md#link-file)).
+- Statuses from `config.toml`, shared targets without a remote part, and a
+  `~` in `path` ([Link file](configuration.md#link-file)).
 - `revier each`: it skips links.
-- A `~` in the link's `path`: write the path in full.

@@ -11,7 +11,8 @@ hook and no plugin.
   `claude agents --json` for the state of every session.
 - The agent in a kitty or tmux workspace. `revier new` writes one.
 
-revier reads Claude Code's files from `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
+revier reads Claude Code's files where `CLAUDE_CONFIG_DIR` says
+([Environment variables](../cli.md#environment-variables)).
 
 ## Run it with your own flags
 
@@ -37,17 +38,15 @@ revier agent read demo --screen   # the text of its panel
 
 ## More
 
-- `revier assist`, and alt+a in the TUI, start Claude Code in `assist/` in
-  the state directory, briefed to change your configuration; see
-  [Agents](../agents.md#let-an-agent-configure-revier) and
-  [Environment variables](../cli.md#environment-variables).
+- `revier assist`, and alt+a in the TUI, start Claude Code briefed to change
+  your configuration; see [Agents](../agents.md#let-an-agent-configure-revier).
 - To show your usage limits in the TUI, see
   [Statuses](../extending/status.md#example-claude-code-usage-limits).
 
 ## What does not work
 
-- `revier agent read` without `--screen` on a linked project: the
-  conversation is on the other machine.
+- A linked project: see
+  [What does not work over a link](../links.md#what-does-not-work-over-a-link).
 - `revier assist` with an agent other than Claude Code.
 
 **Every agent shows `unknown`.** Run `claude agents --json` in your shell.

@@ -33,7 +33,7 @@ func TestRunningProjectsSortAboveStoppedOnes(t *testing.T) {
 }
 
 // Clearing the query, by Esc or by deleting its last letter, puts the cursor
-// back on the project it was on when the query began (decisions.md D44).
+// back on the project it was on when the query began.
 func TestClearingTheFilterRestoresTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 12)
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)

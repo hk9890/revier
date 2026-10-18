@@ -67,13 +67,13 @@ keys, so every letter goes to the query.
 | ↑ ↓, ctrl+p ctrl+n, pgup pgdown, home end | Move |
 | Tab, shift+tab | Move between the project list and the Agents |
 | alt+t | Move to the Targets |
-| Enter | A project: open its home target. A target: run or raise it. An agent: bring its tab to the front. |
+| Enter | A project: open its home target; with no home target, move to its Targets. A target: run or raise it. An agent: bring its tab to the front. |
 | a target's key | Run or raise that target of the selected project |
 | an action's key | Run that action in the selected project |
 | del | Close the row: the project, the target or the agent. It asks first when this closes a whole project, a target that holds an agent, or an agent that works or waits for you. |
-| alt+del, alt+d | Delete the project file, or the target's entry in it. When nothing of it is open, it asks `y`; when something is open, it offers to close it and then delete. An agent is in no file. |
+| alt+del, alt+d | Delete the project file, or the target's entry in it. On a link, delete the link file alone: nothing on the host changes. When nothing of it is open, it asks `y`; when something is open, it offers to close it and then delete. An agent is in no file. |
 | alt+space | Switch between the project list and the [agent list](#the-agent-list) |
-| Esc | Clear the query, go back to the project list, then quit (or hide the popup) |
+| Esc | Clear the query. Then, from the Targets or the Agents, go back to the project list. Then quit, or hide the popup. In the agent list, Esc with no query quits or hides at once. |
 | ctrl+c | Quit |
 
 Closing a whole project saves the session first. You cannot rename a project
@@ -88,10 +88,10 @@ selection.
 
 Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. Agents that need you are on top, then working
-agents, then idle ones. Each row shows how long ago the agent spoke. Type to
-filter by project or by what the agent does. The pane shows the agent's
-terminal. Enter goes to the agent's tab.
-del closes it. alt+space goes back to the projects; Esc with no query quits.
+agents, then idle ones, then those in state `unknown`. Among those that need
+you and among the idle ones, the one that spoke last is first. Each row shows
+how long ago the agent spoke. Type to filter by project or by what the agent
+does. The pane shows the agent's terminal.
 
 ## The popup
 
@@ -108,9 +108,7 @@ kitty, and GNOME with the Window Control extension. See
 
 - The popup opens on the project of the window that had the focus.
 - When Enter or a target key brings a window to the front, the popup hides.
-- Esc with no query hides it. ctrl+c quits it.
-- Each raise reads the configuration files again. A revier in your own
-  terminal reads them again each time it gets the focus back.
+- Which edits a raise reads again is in [Files](configuration.md#files).
 
 ## Screens
 
@@ -128,4 +126,4 @@ Each screen takes the place of the list. Esc goes back one step.
 | alt+h | help | Every key the TUI knows, including your target keys and actions |
 
 In a form, Tab and ↑ ↓ move between fields, Enter saves, Esc cancels. The
-fields are those of [configuration.md](configuration.md#targets).
+fields are those of [configuration.md](configuration.md).

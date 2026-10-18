@@ -4,8 +4,8 @@
 
 revier is a project-grouped control surface for running coding agents: it shows
 what every agent across every project is doing and reaches the one that needs
-you. Every operation is the same one — run-or-raise a named target, and
-remember where you came from. Go, ports-and-adapters, with the policy in
+you. Every operation is the same one — run-or-raise a named target; a second
+press returns to the project's home. Go, ports-and-adapters, with the policy in
 `internal/core` and every tool-specific fact behind a port in `pkg/revier`.
 
 ## Use-case routing
@@ -34,10 +34,11 @@ visible from the code — what a host must never do, and what `Open` owes `Match
 
 ### Design intent, and any change to the model
 
-**MUST read [docs/design/README.md](docs/design/README.md) before adding a port,
-a type that crosses the port boundary, or a concept to the model.** The design
-set carries the decision log, including which earlier models were superseded and
-why, so a rejected idea is not re-proposed as new.
+**MUST read [docs/design/README.md](docs/design/README.md) before the first edit
+under `pkg/revier/`, `internal/core/` or `docs/design/`, and before writing a
+plan that changes what a `docs/design/decisions.md` entry describes.** The
+design set carries the decision log, including which earlier models were
+superseded and why, so a rejected idea is not re-proposed as new.
 
 ### Testing and verification
 

@@ -36,9 +36,9 @@ Which file can hold which table:
   part in the wrong file. If a field has no effect, check its spelling.
 - `revier new`, `revier link`, the project screen (alt+e) and the config
   screen (alt+c) also write these files. They keep your comments.
-- The popup reads the files again each time you raise it. A TUI in your own
-  terminal reads them at start. After you change `[ui]`, `[hosts]` or
-  `[[probe]]` by hand, restart the TUI.
+- Every TUI reads the files again when it gets the focus; the popup, when
+  you raise it. After you change `[ui]`, `[hosts]` or `[[probe]]` by hand,
+  restart the TUI.
 
 ## Project file
 
@@ -201,6 +201,8 @@ name = "agent"
 
 - A tab ignores `match` and `name`: revier finds it by the target's name.
 - `tabs` and `active` apply only when revier creates the instance.
+- When a tab of `tabs` fails to open, the tabs after it do not open. The
+  instance stays open with the tabs it has.
 - A tab that is not in `tabs` opens when you press its key.
 - Tabs need kitty or tmux.
 
@@ -219,7 +221,9 @@ file).
 The first agent and shell panels in the home's `tabs` are the workspace's
 agent and shell: `revier agent new` and `revier shell new` copy them. A
 restore adds the resume flag to the agent's `command`, so a wrapper must pass
-its arguments on: `["sh", "-lc", "exec my-agent \"$@\"", "sh"]`.
+its arguments on: `["sh", "-lc", "exec my-agent \"$@\"", "sh"]`. A restore
+resumes the agent panels of a tab in `tabs`. A tab that runs a `launch` comes
+back, but without a resume.
 
 ## Shared targets
 
@@ -331,8 +335,8 @@ Only in `config.toml`.
 | `glyphs` | `nerd` | `nerd` (needs a Nerd Font), `unicode`, `ascii` |
 | `trigger_key` | `alt-space` | The desktop key that opens the popup, in the [key](#keys) form. |
 
-You cannot set a single colour. Set `NO_COLOR` to a value that is not empty
-to turn colour off.
+You cannot set a single colour. To turn colour off, set `NO_COLOR`
+([Environment variables](cli.md#environment-variables)).
 
 ## `[hosts]`
 
@@ -374,5 +378,11 @@ it has the wrong type, such as `theme = 3`, no command that reads the
 projects runs. `revier doctor` prints the error, and `revier assist` starts
 to fix it.
 
-Run `revier doctor` to see every problem, with the fix where it knows one. It
-exits 1 when a file has a problem. See [troubleshooting.md](troubleshooting.md).
+Short of that exception, every command runs, and warns on stderr that some
+files have problems, naming `revier doctor`; `revier list` marks the projects
+instead. An edit revier makes, such as on the project screen, the
+config screen or a rename, is refused only for a problem it adds. A file that
+was broken before can be repaired one target at a time.
+
+Run `revier doctor` to see every problem, with the fix where it knows one. See
+[troubleshooting.md](troubleshooting.md).

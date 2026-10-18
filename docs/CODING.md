@@ -3,7 +3,6 @@
 ```bash
 mise run build      # ./bin/revier
 mise run fmt        # goimports -local; plain gofmt leaves import groups the gate rejects
-mise run quality    # the pre-commit gate
 ```
 
 ## Where a change goes
@@ -15,6 +14,7 @@ the behaviour associated with it.
 |---|---|
 | A new port, or a type crossing the port boundary | `pkg/revier` |
 | Any decision: which realization wins, what matches, when to toggle | `internal/core` |
+| A sequence that crosses project files, checkout, state, sessions or events | `internal/app` (`docs/design/decisions.md` D121) |
 | Speaking to one tool | `internal/adapter/<tool>` |
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
 | Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |

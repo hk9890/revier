@@ -3,7 +3,7 @@
 // project's targets, attached instances and agents, and the terminal of one of
 // its agents, mirrored. Tab moves the cursor between the projects and the
 // agents, and alt+t to the targets. Enter activates. It is the picker and the
-// monitor at once (decisions.md D8, D105, D125). The key that opens it puts a
+// monitor at once (decisions.md D8, D125). The key that opens it puts a
 // second list in the first one's place: every agent of every project, with
 // the terminal of the one under the cursor mirrored beside it as the project
 // pane mirrors it (D110, D111).
@@ -1108,7 +1108,7 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 	}
 	m.err = nil
 	// A target key the terminal delivers as pressed comes before every
-	// meaning of the key it folds to (decisions.md D132).
+	// meaning of the key it folds to.
 	if msg.exact != "" {
 		return m.goChord(msg.exact)
 	}
@@ -1310,9 +1310,9 @@ func (m Model) enter() (Model, tea.Cmd) {
 
 // opened ends the search once a press has something to run: Enter, a double
 // click, a click on a pane row, a target key or an action. The query was the
-// way to what now opens, so the surface comes back with empty fields
-// (decisions.md D105). The search ends also when the run fails later; the
-// failure is said in the footer.
+// way to what now opens, so the surface comes back with empty fields. The
+// search ends also when the run fails later; the failure is said in the
+// footer.
 func opened(m Model, cmd tea.Cmd) (Model, tea.Cmd) {
 	if cmd != nil {
 		m.endSearch()
