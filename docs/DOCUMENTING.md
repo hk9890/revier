@@ -22,6 +22,10 @@ user guide or the code; write them there, not in `product.md`,
 
 `docs/design/decisions.md` holds only decisions in force:
 
+- Keep the log one file. Two branches that take the same number then meet as
+  a merge conflict; one file per decision would merge both without a word,
+  and its entries would be a heading and a few lines each. Do not move the
+  log to a folder of ADR files.
 - Write an entry as the choice and the reason that decides it, in at most
   8 lines under its heading. Cut an entry that grows past 8 lines rather than
   extend the limit.
@@ -31,6 +35,13 @@ user guide or the code; write them there, not in `product.md`,
 - When a decision replaces another, delete the old entry, say "Replaces ..."
   in the new one, and repoint every `Dnn` citation in the tree. Git history
   keeps the old text.
+- When an entry is withdrawn and nothing replaces it, delete it and remove
+  every `Dnn` citation of it in the tree. A Go comment that cited it keeps its
+  own words, with no number.
+- Every `Dnn` cited in the tree names a `### Dnn` heading of
+  `decisions.md`, and no two headings share a number. A "Replaces Dnn" names
+  a deleted entry and is no citation. After a rebase onto
+  `main`, check the number of a new entry against `main`'s headings.
 - Never reuse a number.
 
 ## `docs/user-guide/`
