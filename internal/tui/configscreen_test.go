@@ -87,6 +87,27 @@ func TestTheConfigScreenWritesTheThemeAndKeepsComments(t *testing.T) {
 	}
 }
 
+// A theme config.toml names and revier does not have is drawn as the
+// default, and the screen says why over its rows. The theme chosen there
+// mends the file, and the problem goes with it.
+func TestTheConfigScreenNamesAProblemOfConfigTomlUntilItIsMended(t *testing.T) {
+	root := configRoot(t, "[ui]\ntheme = \"dracula\"\n")
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
+
+	m, _ = press(m, "alt+c")
+	if !strings.Contains(screen(m), `ui.theme: unknown theme "dracula"`) {
+		t.Fatalf("config screen does not name the unknown theme:\n%s", screen(m))
+	}
+	m, _ = press(m, "left")
+	if got := fileText(t, config.File(root)); strings.Contains(got, "dracula") {
+		t.Fatalf("config.toml = %q, want the theme chosen written over it", got)
+	}
+	if strings.Contains(screen(m), "unknown theme") {
+		t.Errorf("config screen still names the mended theme:\n%s", screen(m))
+	}
+}
+
 // The trigger key is typed and written on Enter. A key that does not parse is
 // named in the footer and nothing is written.
 func TestTheConfigScreenWritesTheTriggerKey(t *testing.T) {

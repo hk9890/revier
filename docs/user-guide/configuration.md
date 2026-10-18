@@ -380,7 +380,8 @@ to fix it.
 
 Short of that exception, every command runs, and warns on stderr that some
 files have problems, naming `revier doctor`; `revier list` marks the projects
-instead. An edit revier makes, such as on the project screen, the
+instead. The config screen (alt+c) lists each problem of `config.toml` over its
+rows. An edit revier makes, such as on the project screen, the
 config screen or a rename, is refused only for a problem it adds. A file that
 was broken before can be repaired one target at a time.
 
