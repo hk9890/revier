@@ -39,9 +39,9 @@ user guide or the code; write them there, not in `product.md`,
   every `Dnn` citation of it in the tree. A Go comment that cited it keeps its
   own words, with no number.
 - Every `Dnn` cited in the tree names a `### Dnn` heading of
-  `decisions.md`, and no two headings share a number. A "Replaces Dnn" names
-  a deleted entry and is no citation. After a rebase onto
-  `main`, check the number of a new entry against `main`'s headings.
+  `decisions.md`, and no two headings share a number. A "Replaces Dnn" is no
+  citation. After a rebase onto `main`, check the number of a new entry
+  against `main`'s headings.
 - Never reuse a number.
 
 ## `docs/user-guide/`
