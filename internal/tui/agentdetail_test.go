@@ -429,7 +429,7 @@ func TestAClickOnTheMirrorBesideARowRunsNothing(t *testing.T) {
 	for i := range 30 {
 		screen = append(screen, fmt.Sprintf("line %02d", i))
 	}
-	m, _, _ := shownWorld(t, 300, 40, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
+	m, rt, _ := shownWorld(t, 300, 40, shownAgent{status: revier.StatusIdle, screen: strings.Join(screen, "\n")})
 	m, _ = clocked(m)
 	_, y := paneCell(t, m, "agent-0 task")
 	raw := strings.Split(drawn(m), "\n")[y]
@@ -439,10 +439,15 @@ func TestAClickOnTheMirrorBesideARowRunsNothing(t *testing.T) {
 		t.Fatalf("no mirror text on the agent row's line %q", raw)
 	}
 	x := paneBorder(t, m) + 1 + lipgloss.Width(parts[1][:at])
-	m, _ = clickCell(m, x, y)
-	m, _ = clickCell(m, x, y)
+	m, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	m, cmd = clickCell(m, x, y)
+	runAll(cmd)
 	if row := paneCursor(m); row != "" {
 		t.Errorf("pane cursor = %q after a double click on the mirror, want it still on the list", row)
+	}
+	if len(rt.PanelFocuses) != 0 || len(rt.Focuses) != 0 {
+		t.Errorf("panel focuses = %v, focuses = %v after a double click on the mirror, want none", rt.PanelFocuses, rt.Focuses)
 	}
 }
 
