@@ -3,6 +3,7 @@ package tui_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -199,6 +200,71 @@ func TestADoubleClickOnAnAgentGoesToItAndOnItsFieldTypesThere(t *testing.T) {
 	m, _ = press(m, "z")
 	if body := pane(m); !strings.Contains(body, "❯ z") || strings.Contains(body, "fix-remote-work") {
 		t.Errorf("typing after a click on the agents' field did not filter the agents:\n%s", body)
+	}
+}
+
+// threeAgents is demo, open with three agents, on a clock the test
+// advances, and the ref of its workspace, for a test that closes one of them.
+func threeAgents(t *testing.T) (*hosttest.FakeRuntime, revier.TargetRef, tui.Model, *time.Time) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	ref := rt.Add("session:demo", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude idle fix-remote-work"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude idle UX and naming"},
+		revier.Panel{ID: "3", Kind: revier.PanelTool, Title: "claude idle release notes"})
+	projects := core.Prepare([]revier.Project{{Name: "demo", Path: "/p/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
+	}}})
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30).Said())
+	return rt, ref, m, now
+}
+
+// Two clicks on one cell of the Agents section are two choices when a refresh
+// between them moved another agent into that row: it was clicked once.
+func TestASecondClickOnAnAgentRowARefreshMovedGoesNowhere(t *testing.T) {
+	rt, ref, m, now := threeAgents(t)
+
+	x, y := paneCell(t, m, "UX and naming")
+	m, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	if err := rt.ClosePanel(t.Context(), ref, "1"); err != nil {
+		t.Fatal(err)
+	}
+	m = survey(m)
+	if rx, ry := paneCell(t, m, "release notes"); rx != x || ry != y {
+		t.Fatalf("release notes is at %d,%d after the refresh, the click was at %d,%d: the test needs one cell", rx, ry, x, y)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	_, cmd = clickCell(m, x, y)
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Errorf("panel focuses = %v, want none: one click on release notes", rt.PanelFocuses)
+	}
+}
+
+// Clicks on two rows of the Agents section are two choices when a refresh
+// between them moved the agent clicked first into the row clicked second.
+func TestAClickOnTheAgentRowARefreshMovedTheLastAgentToGoesNowhere(t *testing.T) {
+	rt, ref, m, now := threeAgents(t)
+
+	x, y := paneCell(t, m, "release notes")
+	ux, uy := paneCell(t, m, "UX and naming")
+	m, cmd := clickCell(m, x, y)
+	runAll(cmd)
+	if err := rt.ClosePanel(t.Context(), ref, "1"); err != nil {
+		t.Fatal(err)
+	}
+	m = survey(m)
+	if rx, ry := paneCell(t, m, "release notes"); rx != ux || ry != uy {
+		t.Fatalf("release notes is at %d,%d after the refresh, UX and naming was at %d,%d: the test needs it moved there", rx, ry, ux, uy)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	_, cmd = clickCell(m, ux, uy)
+	runAll(cmd)
+	if len(rt.PanelFocuses) != 0 {
+		t.Errorf("panel focuses = %v, want none: one click on each of two rows", rt.PanelFocuses)
 	}
 }
 

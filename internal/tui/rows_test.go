@@ -533,6 +533,59 @@ func TestASecondClickAfterTheWindowOpensNothing(t *testing.T) {
 	}
 }
 
+// Two clicks on one cell are two choices when a refresh between them moved
+// another project into that row: the second row was clicked once.
+func TestASecondClickOnARowARefreshMovedOpensNothing(t *testing.T) {
+	rt, _, c, projects := world(t, 3) // project-02, which needs you, then 00, 01
+	for i := range projects {
+		projects[i].Path = t.TempDir()
+	}
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
+
+	m = clickAt(m, 5, 7) // project-00
+	rt.Add("session:project-01", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
+	m = survey(m) // project-01 needs you too: 01, 02, 00
+	if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+		t.Fatalf("selected %q after the refresh, want project-00 kept", row)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	m, cmd := clickCell(m, 5, 7)
+	runAll(cmd)
+	if len(rt.Opened) != 0 || len(rt.Focuses) != 0 {
+		t.Errorf("opened %v, focused %v: one click on project-02 went to it", rt.Opened, rt.Focuses)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-02") {
+		t.Errorf("selected %q, want the row clicked", row)
+	}
+}
+
+// Clicks on two rows are two choices when a refresh between them moved the
+// project clicked first into the row clicked second: a double click is two
+// clicks on one place too.
+func TestAClickOnTheRowARefreshMovedTheLastProjectToOpensNothing(t *testing.T) {
+	rt, _, c, projects := world(t, 3) // project-02, which needs you, then 00, 01
+	for i := range projects {
+		projects[i].Path = t.TempDir()
+	}
+	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20))
+
+	m = clickAt(m, 5, 7) // project-00
+	rt.Add("session:project-00", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
+	m = survey(m) // project-00 needs you too: 00, 02, 01
+	if at := rowOf(t, m, "project-00"); at != 0 {
+		t.Fatalf("project-00 is row %d after the refresh, want the first: the test needs it moved", at)
+	}
+	*now = now.Add(100 * time.Millisecond)
+	m, cmd := clickCell(m, 5, 5)
+	runAll(cmd)
+	if len(rt.Opened) != 0 || len(rt.Focuses) != 0 {
+		t.Errorf("opened %v, focused %v: one click on the first row went to project-00", rt.Opened, rt.Focuses)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "project-00") {
+		t.Errorf("selected %q, want the row clicked", row)
+	}
+}
+
 // A target with nothing up says "stopped", where it said "-".
 func TestAStoppedTargetSaysStopped(t *testing.T) {
 	_, _, c, projects := world(t, 1)
