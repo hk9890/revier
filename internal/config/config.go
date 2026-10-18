@@ -56,8 +56,10 @@ type Config struct {
 	// its reason: an action the TUI could never run, a shared target no
 	// project could take, a probe half declared, a [ui] value that does not
 	// resolve. Each costs itself alone (decisions.md D85): the action stays
-	// unbound, the target reaches no project, the probe is not run, the [ui]
-	// value is the default, and the file is otherwise read whole. `revier
+	// unbound, the target reaches no project, the probe is not run, an
+	// unknown theme or glyph set is the default, a trigger key that does not
+	// parse refuses only the keys commands, and the file is otherwise read
+	// whole. `revier
 	// doctor` is where these are read.
 	Problems []error `toml:"-"`
 
@@ -235,8 +237,12 @@ func parse(data []byte) (*Config, error) {
 	}
 	probes := cfg.Probes[:0:0]
 	for i, pr := range cfg.Probes {
-		if pr.Name == "" || pr.Exec == "" {
-			cfg.Problems = append(cfg.Problems, fmt.Errorf("probe %d: needs both name and exec", i+1))
+		switch {
+		case pr.Name == "":
+			cfg.Problems = append(cfg.Problems, fmt.Errorf("probe %d: needs a name", i+1))
+			continue
+		case pr.Exec == "":
+			cfg.Problems = append(cfg.Problems, fmt.Errorf("probe %q: needs an exec", pr.Name))
 			continue
 		}
 		pr.Exec = probeExec(pr.Exec)
@@ -254,9 +260,10 @@ func parse(data []byte) (*Config, error) {
 		cfg.Problems = append(cfg.Problems, fmt.Errorf("ui.glyphs: %w", err))
 		cfg.UI.Glyphs = ""
 	}
+	// A key that does not parse stays as written: the keys commands refuse
+	// it, rather than bind the default in place of the key the user chose.
 	if _, err := cfg.TriggerKey(); err != nil {
 		cfg.Problems = append(cfg.Problems, fmt.Errorf("ui.trigger_key: %w", err))
-		cfg.UI.TriggerKey = ""
 	}
 	for i, err := range validateActions(cfg.Actions) {
 		if err != nil {

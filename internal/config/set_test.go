@@ -156,6 +156,18 @@ func TestSetIsNotRefusedForAProblemTheFileHadAlready(t *testing.T) {
 	}
 }
 
+// A file that does not decode is mended by a write over the line it breaks
+// on, as the config screen does when the theme row changes.
+func TestSetMendsAFileThatDoesNotDecode(t *testing.T) {
+	root := writeConfig(t, "[ui]\ntheme = dracula\n")
+	if err := config.Set(root, "ui", "theme", "catppuccin-latte"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got, want := readConfig(t, root), "[ui]\ntheme = \"catppuccin-latte\"\n"; got != want {
+		t.Errorf("config.toml = %q, want %q", got, want)
+	}
+}
+
 // A value the line editor cannot find where it looks - a dotted key - is
 // refused rather than written a second time.
 func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {

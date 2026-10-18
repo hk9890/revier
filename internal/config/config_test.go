@@ -651,8 +651,8 @@ func TestLoadProbes(t *testing.T) {
 	if len(cfg.Probes) != 1 || cfg.Probes[0].Name != "goose" {
 		t.Errorf("probes = %+v, want goose alone", cfg.Probes)
 	}
-	if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), "probe 1") {
-		t.Errorf("problems = %v, want the first probe named", cfg.Problems)
+	if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), `probe "aider"`) {
+		t.Errorf("problems = %v, want the probe named", cfg.Problems)
 	}
 	if len(projects) != 1 {
 		t.Errorf("loaded %d projects, want the project set untouched", len(projects))
@@ -870,10 +870,11 @@ func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
 }
 
 // A key that does not parse is named in Problems at load, with the value, and
-// the default key stands in. Reported at a keypress instead, it would look
-// like a broken keyboard; refusing the set for it would take the surface down
-// with it (decisions.md D85).
-func TestLoadNamesAnUnreadableTriggerKeyAndUsesTheDefault(t *testing.T) {
+// stays as written: the keys commands refuse it rather than bind the default
+// in place of the key the user chose, and nothing else is refused for it
+// (decisions.md D85). Reported at a keypress instead, it would look like a
+// broken keyboard.
+func TestLoadNamesAnUnreadableTriggerKeyAndKeepsIt(t *testing.T) {
 	root := projectsRoot(t, "[ui]\ntrigger_key = \"<Nonsense>space\"\n", map[string]string{"demo.toml": valid})
 
 	cfg, projects, err := config.Load(root)
@@ -883,9 +884,8 @@ func TestLoadNamesAnUnreadableTriggerKeyAndUsesTheDefault(t *testing.T) {
 	if len(projects) != 1 {
 		t.Errorf("loaded %d projects, want the project set untouched", len(projects))
 	}
-	want, _ := (&config.Config{}).TriggerKey()
-	if key, err := cfg.TriggerKey(); err != nil || key != want {
-		t.Errorf("TriggerKey = %q, %v, want the default %q", key, err, want)
+	if key, err := cfg.TriggerKey(); err == nil {
+		t.Errorf("TriggerKey = %q, want the error, not a default", key)
 	}
 	got := errors.Join(cfg.Problems...)
 	for _, want := range []string{"trigger_key", "Nonsense"} {

@@ -36,9 +36,11 @@ func Set(root, table, key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("%s.%s: %w", table, key, err)
 	}
+	// A file that does not decode has no problems to keep, and a write that
+	// mends the line it breaks on is how the config screen repairs it.
 	was, err := parse(old)
 	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
+		was = &Config{}
 	}
 	text := setKey(string(old), table, key, literal)
 	next, err := parse([]byte(text))

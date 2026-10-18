@@ -15,14 +15,14 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// desktop is a core whose runtime holds the workspace and the notes of demo,
-// the project the ledger focused last.
+// desktop is a core whose runtime holds the workspace, with an agent in it,
+// and the notes of demo, the project the ledger focused last.
 func desktop(t *testing.T) (*core.Core, *hosttest.FakeRuntime, core.Report, []core.Project) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:demo", "kitty")
+	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude", Vars: map[string]string{"session": "abc-123"}})
 	rt.Add("notes:demo", "kitty")
-	c := &core.Core{Runtime: rt, Ledger: &ledger{st: state.State{Current: "demo"}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}, Ledger: &ledger{st: state.State{Current: "demo"}}}
 	projects := []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: "/src/demo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}}},
 		{Name: "notes", Runtime: &revier.Realization{Name: "notes:demo", Launch: []string{"less"}, Match: revier.Match{Title: "^notes:demo$"}}},
@@ -62,6 +62,9 @@ func TestSaveSessionRefusesAnEmptySave(t *testing.T) {
 	}
 	if stored.Name != "before" || !stored.At.Equal(at) || stored.Current != "demo" || len(stored.Projects) == 0 {
 		t.Errorf("stored = %+v, want the name, the moment and the ledger's current project", stored)
+	}
+	if stored.Conversations() != 1 {
+		t.Errorf("conversations = %d, want the agent's recorded", stored.Conversations())
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("path %s: %v, want the file written", path, err)
