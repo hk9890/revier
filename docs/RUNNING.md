@@ -228,31 +228,31 @@ so a stale one skews the next session's first result.
 Read `survey` for `available`: a window-only target reports `false` on a machine
 with no window host, which is the expected headless result and not a failure.
 
-## Record the README demo
+## Record the README clips
 
-`scripts/demo/record` re-records `.github/assets/demo.gif`: the popup from its
-desktop key, a search, a jump to an agent, then the agent list. It drives a
-libvirt VM's GNOME desktop with `virsh send-key` and records it with
-`virsh screenshot`, so nothing reaches this desktop:
+`scripts/demo/record` re-records the README's four clips in
+`.github/assets/`: `popup.webp` (search and jump), `agents.webp` (the agent
+list), `tools.webp` (the editor and ticket keys) and `restore.webp` (shutdown
+and restore). It drives a libvirt VM's GNOME desktop with `virsh send-key` and
+records it with GNOME's own screencast, so nothing reaches this desktop:
 
 ```bash
-mise run build
-scripts/demo/record <vm>             # writes .github/assets/demo.gif
-scripts/demo/record <vm> /tmp/x.gif  # anywhere else, to compare first
+scripts/demo/record <vm>          # builds revier, writes .github/assets/*.webp
+scripts/demo/record <vm> /tmp/x   # anywhere else, to compare first
 ```
 
 - Give it a VM on `qemu:///system` whose domain name answers `ssh <vm>`.
   Start it with `virsh -c qemu:///system start <vm>`.
 - Log in to the VM's desktop once first: the keys go to a GNOME session.
-- The VM needs kitty, `wctl`, and `revier keys install` run once: the script
-  finds the trigger key by its `revier popup` command.
-- This machine needs ffmpeg and the JetBrainsMono Nerd Font, which draws the
-  key labels.
+- The VM needs kitty, `wctl`, GNOME Text Editor, and `revier keys install`
+  run once: the script finds the trigger key by its `revier popup` command.
+- This machine needs ffmpeg with libwebp, `python3-pil` for `/usr/bin/python3`,
+  and the JetBrainsMono Nerd Font, which draws the keycaps.
 - The recording uses a scratch configuration and fake agents. The script
-  points the trigger key at them, sets a plain background and 1920x1080, and
-  puts all three back when it exits.
-- Check frames before you commit: `ffmpeg -ss 18 -i <gif> -frames:v 1 f.png`
-  shows the agent list with api-gateway on top, at "needs you".
+  points the trigger key and the editor and ticket keys at them, sets a plain
+  background and 1920x1080, and puts all of it back when it exits.
+- Open each clip in a browser before you commit: ffmpeg cannot decode an
+  animated WebP.
 
 ## Inspect the private server
 
