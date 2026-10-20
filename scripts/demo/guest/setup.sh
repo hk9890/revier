@@ -7,7 +7,7 @@ S=/tmp/rvdemo
 . "$S/env.sh"
 mkdir -p "$REVIER_CONFIG_HOME/projects" "$REVIER_STATE_HOME" "$CLAUDE_CONFIG_DIR/sessions" "$S/mise" "$S/pids"
 printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"
-chmod +x "$S/bin/claude" "$S/popup.sh"
+chmod +x "$S/bin/claude" "$S/popup.sh" "$S/go.sh"
 printf '%s\n' "PS1='\\[\\e[38;5;111m\\]\\w\\[\\e[0m\\] \$ '" > "$S/bashrc"
 
 media=org.gnome.settings-daemon.plugins.media-keys
@@ -22,11 +22,30 @@ background=org.gnome.desktop.background
 quoted() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 saved() { echo "gsettings set $(quoted "$1") $2 $(quoted "$(gsettings get "$1" "$2")")"; }
 {
+	saved $media custom-keybindings
 	saved "$media.custom-keybinding:$trigger" command
 	saved $background picture-options
 	saved $background primary-color
 	echo "/usr/bin/python3 $S/display.py $(/usr/bin/python3 "$S/display.py")"
 } > "$S/restore.sh"
+
+# bind <chord> <target>: points the custom key that holds the chord at go.sh,
+# or adds one, and records how to put it back in restore.sh.
+bind() {
+	for path in $(gsettings get $media custom-keybindings | tr -d "[],'"); do
+		if [ "$(gsettings get "$media.custom-keybinding:$path" binding)" = "'$1'" ]; then
+			saved "$media.custom-keybinding:$path" command >> "$S/restore.sh"
+			gsettings set "$media.custom-keybinding:$path" command "$S/go.sh $2"
+			return
+		fi
+	done
+	path=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/rvdemo-$2/
+	echo "dconf reset -f $path" >> "$S/restore.sh"
+	gsettings set $media custom-keybindings "$(gsettings get $media custom-keybindings | sed "s|]\$|, '$path']|; s|^@as \[, |[|")"
+	gsettings set "$media.custom-keybinding:$path" name "revier demo: $2"
+	gsettings set "$media.custom-keybinding:$path" binding "$1"
+	gsettings set "$media.custom-keybinding:$path" command "$S/go.sh $2"
+}
 
 cat > "$REVIER_CONFIG_HOME/config.toml" <<'C'
 [ui]
@@ -36,6 +55,14 @@ glyphs = "nerd"
 [hosts]
 runtime = ["kitty"]
 window = ["gnome"]
+
+[[target]]
+name = "editor"
+key  = "ctrl-shift-o"
+  [target.window]
+  launch = ["gnome-text-editor", "--new-window", "{{.Path}}/src/tax.ts"]
+  match  = { class = "^org\\.gnome\\.TextEditor$", title = "/{{.Name}}/" }
+  place  = "left top 55% 100%"
 C
 
 # project | status | title | last message | minutes since it
@@ -48,7 +75,23 @@ docs-site|-|-|-|-
 D
 
 while IFS='|' read -r p status title said ago; do
-	[ -e "$HOME/dev/$p" ] || { mkdir -p "$HOME/dev/$p" && echo "$HOME/dev/$p" >> "$S/created"; }
+	if [ ! -e "$HOME/dev/$p" ]; then
+		mkdir -p "$HOME/dev/$p/src" && echo "$HOME/dev/$p" >> "$S/created"
+		printf '# %s\n' "$p" > "$HOME/dev/$p/README.md"
+		cat > "$HOME/dev/$p/src/tax.ts" <<'T'
+// Tax is computed per line and rounded once, on the order total.
+export function orderTax(lines: Line[], rate: number): number {
+  const exact = lines.reduce((sum, l) => sum + l.price * l.quantity * rate, 0);
+  return Math.round(exact * 100) / 100;
+}
+
+export interface Line {
+  sku: string;
+  price: number;
+  quantity: number;
+}
+T
+	fi
 	cat > "$REVIER_CONFIG_HOME/projects/$p.toml" <<P
 path = "$HOME/dev/$p"
 git_url = "https://github.com/acme/$p"
@@ -70,11 +113,19 @@ name = "agent"
     [[target.runtime.panels]]
     kind = "shell"
     command = ["bash", "--rcfile", "$S/bashrc", "-i"]
+[[target]]
+name = "tickets"
+key  = "ctrl-shift-t"
+  [target.runtime]
+  inside = "home"
+  launch = ["bash", "$S/tickets.sh", "$p"]
 P
 done < "$S/demo.txt"
 
 /usr/bin/python3 "$S/display.py" 1920x1080 >/dev/null
 gsettings set "$media.custom-keybinding:$trigger" command "$S/popup.sh"
+bind '<Shift><Control>o' editor
+bind '<Shift><Control>t' tickets
 gsettings set $background picture-options none
 gsettings set $background primary-color '#11111b'
 
