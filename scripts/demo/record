@@ -1,75 +1,112 @@
 #!/bin/sh
-# Records the README demo on a libvirt VM with a logged-in GNOME desktop: the
-# popup from its desktop key, a search, a jump to an agent, then the agent list.
-# Keys go in with virsh send-key, frames come out with virsh screenshot, and
-# compose.py draws each key and caption on. Nothing runs on this desktop.
-# <vm> is the libvirt domain, reachable as `ssh <vm>`.
+# Records the README's feature clips on a libvirt VM with a logged-in GNOME
+# desktop. Keys go in with virsh send-key, GNOME's own screencast records each
+# clip at 30 fps, and compose.py lays the pressed keys over it. Nothing runs on
+# this desktop. <vm> is the libvirt domain, reachable as `ssh <vm>`.
 set -eu
 
-vm="${1:?usage: scripts/demo/record <vm> [output.gif]}"
-out=$(realpath -m "${2:-.github/assets/demo.gif}")
-mkdir -p "$(dirname "$out")"
+vm="${1:?usage: scripts/demo/record <vm> [output dir]}"
+out=$(realpath -m "${2:-.github/assets}")
+mkdir -p "$out"
 dir=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 virsh() { command virsh -c qemu:///system "$@"; }
-trap 'ssh "$vm" "sh /tmp/rvdemo/teardown.sh"; rm -rf "$work"' EXIT
+guest() { ssh -o ControlMaster=auto -o ControlPath="$work/ssh" -o ControlPersist=120 "$vm" "$@"; }
+trap 'guest "sh /tmp/rvdemo/teardown.sh"; rm -rf "$work"' EXIT
 
-ssh "$vm" 'rm -rf /tmp/rvdemo && mkdir -p /tmp/rvdemo/bin'
-scp -q "$dir"/guest/* "$vm":/tmp/rvdemo/
-scp -q bin/revier "$vm":/tmp/rvdemo/bin/
-ssh "$vm" 'sh /tmp/rvdemo/setup.sh'
+go build -ldflags "-X github.com/hk9890/revier/internal/build.Version=$(git describe --tags --abbrev=0)" \
+	-o "$work/revier" ./cmd/revier
+guest 'test -f /tmp/rvdemo/teardown.sh && sh /tmp/rvdemo/teardown.sh; mkdir -p /tmp/rvdemo/bin /tmp/rvdemo/clips'
+scp -q -o ControlPath="$work/ssh" "$dir"/guest/* "$vm":/tmp/rvdemo/
+scp -q -o ControlPath="$work/ssh" "$work/revier" "$vm":/tmp/rvdemo/bin/
+guest 'sh /tmp/rvdemo/setup.sh'
 
 send() { virsh send-key "$vm" --holdtime 60 "$@" >/dev/null; }
-mark() { echo "$(date +%s%N) $*" >> "$work/events.log"; }
+mark() { echo "$(date +%s%N) $*" >> "$work/$clip.log"; }
 press() { label=$1; shift; mark key "$label"; send "$@"; }
 type_slowly() {
 	for c in $(echo "$1" | fold -w1); do
 		send "KEY_$(echo "$c" | tr a-z A-Z)"
-		sleep 0.35
+		sleep 0.25
 	done
 }
+start() {
+	clip=$1
+	guest ". /tmp/rvdemo/env.sh; cd \$S/clips
+		nohup /usr/bin/python3 \$S/screencast.py \$S/clips/$clip.webm > $clip.out 2>&1 & echo \$! > recorder.pid
+		until grep -q recording $clip.out; do kill -0 \$(cat recorder.pid) || exit 1; sleep 0.05; done"
+	mark start
+	sleep 0.8
+}
+stop() {
+	sleep "$1"
+	mark end
+	guest 'cd /tmp/rvdemo/clips; pid=$(cat recorder.pid); kill $pid; while kill -0 $pid 2>/dev/null; do sleep 0.1; done'
+	scp -q -o ControlPath="$work/ssh" "$vm:/tmp/rvdemo/clips/$clip.webm" "$work/"
+}
 
-# Start the popup once, so the recording shows it warm, then put billing in front.
+# Start the popup once, so the clips show it warm, then put billing in front.
 send KEY_LEFTALT KEY_SPACE
 sleep 4
 send KEY_ESC
 sleep 1
-ssh "$vm" '. /tmp/rvdemo/env.sh; revier go home -p billing >/dev/null'
+guest '. /tmp/rvdemo/env.sh; revier go home -p billing >/dev/null'
 sleep 2
 
-mkdir "$work/frames"
-(while [ ! -e "$work/stop" ]; do virsh screenshot "$vm" "$work/frames/$(date +%s%N).ppm" >/dev/null 2>&1; done) &
-capture=$!
-
-mark start
-mark caption "1  Open the popup, find a project, jump to its agent"
-sleep 2.5
+start popup
 press "Alt+Space" KEY_LEFTALT KEY_SPACE
-sleep 2.2
+sleep 1.2
 type_slowly web
-sleep 1.5
+sleep 0.8
 press "Tab" KEY_TAB
+sleep 1.2
+press "Enter" KEY_ENTER
+stop 2.2
+
+start agents
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 1.2
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 1.8
+press "Down" KEY_DOWN
+sleep 0.8
+press "Down" KEY_DOWN
+sleep 0.8
+press "Up" KEY_UP
+sleep 0.6
+press "Up" KEY_UP
+sleep 1.0
+press "Enter" KEY_ENTER
+stop 2.2
+
+guest '. /tmp/rvdemo/env.sh; revier go home -p web-shop >/dev/null'
+sleep 2
+start tools
+press "Ctrl+Shift+O" KEY_LEFTCTRL KEY_LEFTSHIFT KEY_O
+sleep 2.6
+press "Ctrl+Shift+O" KEY_LEFTCTRL KEY_LEFTSHIFT KEY_O
+sleep 1.6
+press "Ctrl+Shift+T" KEY_LEFTCTRL KEY_LEFTSHIFT KEY_T
+sleep 1.8
+press "Ctrl+Shift+T" KEY_LEFTCTRL KEY_LEFTSHIFT KEY_T
+stop 1.8
+
+start restore
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 1.0
+press "Alt+Q" KEY_LEFTALT KEY_Q
+sleep 1.0
+press "Enter" KEY_ENTER
 sleep 1.8
 press "Enter" KEY_ENTER
-sleep 3.5
-mark caption "2  See every agent, pick the one that needs you"
-sleep 1.5
-press "Alt+Space" KEY_LEFTALT KEY_SPACE
-sleep 2
-press "Alt+Space" KEY_LEFTALT KEY_SPACE
-sleep 2.5
-press "Down" KEY_DOWN
-sleep 1.2
-press "Down" KEY_DOWN
-sleep 1.2
-press "Up" KEY_UP
-sleep 0.9
-press "Up" KEY_UP
-sleep 1.5
+sleep 1.8
+press "Esc" KEY_ESC
+sleep 1.4
+press "Alt+S" KEY_LEFTALT KEY_S
+sleep 1.8
 press "Enter" KEY_ENTER
-sleep 3.5
-mark end
+stop 4.5
 
-touch "$work/stop"
-wait $capture
-python3 "$dir/compose.py" "$work" "$out"
+for clip in popup agents tools restore; do
+	/usr/bin/python3 "$dir/compose.py" "$work" "$clip" "$out/$clip.webp"
+done

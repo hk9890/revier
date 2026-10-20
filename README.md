@@ -7,7 +7,7 @@
 
 A project-grouped control surface for running coding agents.
 
-![Alt+Space opens the popup, a search finds web-shop, Enter jumps to its agent; Alt+Space twice shows every agent, and Enter jumps to the one that needs you](.github/assets/demo.gif)
+![Alt+Space opens the popup, typing web finds web-shop, and Enter jumps to its agent](.github/assets/popup.webp)
 
 You run several projects at once. Each holds a coding agent, a shell, and the
 things that belong with them — an editor, a diff viewer, a page. revier answers
@@ -36,6 +36,8 @@ territory.
   tab and its window. The pane shows the agent's terminal as it is now.
   See [Move and act](docs/user-guide/tui.md#move-and-act).
 
+![Alt+Space twice shows every agent, the one that needs you on top; Enter jumps to it](.github/assets/agents.webp)
+
 **Open a project and its tools**
 
 - **Search and open a workspace.** Type to fuzzy-filter the project list,
@@ -55,6 +57,8 @@ territory.
   `place = "right top 50% 100%"` sets where a new window goes.
   See [Realization fields](docs/user-guide/configuration.md#realization-fields).
 
+![Ctrl+Shift+O opens the editor on the left half and goes back; Ctrl+Shift+T opens the tickets tab and goes back](.github/assets/tools.webp)
+
 **Stop and start again**
 
 - **Shut everything down.** `revier shutdown` saves the session, then closes
@@ -65,6 +69,8 @@ territory.
   and targets again. Each Claude Code agent resumes its conversation. In the
   TUI, alt+s opens the sessions.
   See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
+
+![Alt+Q shows the shutdown plan and closes every project; Alt+S and Enter restore the session](.github/assets/restore.webp)
 
 **Reach further**
 

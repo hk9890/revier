@@ -1,50 +1,35 @@
-# Turns the captured frames and events.log into the GIF, with each pressed key
-# and each caption drawn on. Usage: compose.py <work dir> <output.gif>
+# Turns one clip's screencast and key log into an animated WebP, with each
+# pressed key shown as keycaps in the bottom right corner.
+# Usage: compose.py <work dir> <clip> <output.webp>
 import os
 import subprocess
 import sys
 
-work, out = sys.argv[1], os.path.abspath(sys.argv[2])
+work, clip, out = sys.argv[1], sys.argv[2], os.path.abspath(sys.argv[3])
+here = os.path.dirname(os.path.abspath(__file__))
 font = subprocess.run(["fc-match", "-f", "%{file}", "JetBrainsMono Nerd Font:bold"],
                       capture_output=True, text=True, check=True).stdout
 
-events = [line.rstrip("\n").split(" ", 2) for line in open(f"{work}/events.log")]
+events = [line.rstrip("\n").split(" ", 2) for line in open(f"{work}/{clip}.log")]
 start = next(int(e[0]) for e in events if e[1] == "start")
-end = next(int(e[0]) for e in events if e[1] == "end")
-seconds = lambda ns: (ns - start) / 1e9
-length = seconds(end)
+length = (next(int(e[0]) for e in events if e[1] == "end") - start) / 1e9
+keys = [((int(e[0]) - start) / 1e9, e[2]) for e in events if e[1] == "key"]
 
-frames = sorted(int(f[:-4]) for f in os.listdir(f"{work}/frames") if f.endswith(".ppm"))
-frames = [f for f in frames if start <= f <= end]
-with open(f"{work}/concat.txt", "w") as concat:
-    for frame, following in zip(frames, frames[1:] + [end]):
-        concat.write(f"file 'frames/{frame}.ppm'\nduration {(following - frame) / 1e9:.3f}\n")
-    concat.write(f"file 'frames/{frames[-1]}.ppm'\n")
+inputs, chain = ["-i", f"{work}/{clip}.webm"], []
+# The crop takes off GNOME's top bar, which shows a dot while it records.
+chain.append("[0]setpts=PTS-STARTPTS,fps=30,tpad=stop_mode=clone:stop_duration=10,"
+             f"trim=duration={length:.2f},crop=iw:ih-ih*32/1080:0:ih*32/1080[v0];")
+for i, (at, label) in enumerate(keys, 1):
+    until = min(at + 1.3, keys[i][0] - 0.05 if i < len(keys) else length)
+    png = f"{work}/{clip}-key{i}.png"
+    subprocess.run([sys.executable, f"{here}/keycap.py", font, label, png], check=True)
+    inputs += ["-loop", "1", "-framerate", "30", "-t", f"{length:.2f}", "-i", png]
+    chain.append(f"[{i}]format=rgba,fade=in:st={at:.2f}:d=0.12:alpha=1,"
+                 f"fade=out:st={until - 0.15:.2f}:d=0.15:alpha=1[k{i}];"
+                 f"[v{i - 1}][k{i}]overlay=W-w-48:H-h-40:enable='between(t,{at:.2f},{until:.2f})'[v{i}];")
+chain.append(f"[v{len(keys)}]fps=20,scale=1280:-1:flags=lanczos[out]")
 
-
-def shown(kind, longest):
-    """Each mark of a kind, shown until the next one of its kind, for at most longest seconds."""
-    marks = [(seconds(int(e[0])), e[2]) for e in events if e[1] == kind]
-    for i, (at, text) in enumerate(marks):
-        following = marks[i + 1][0] if i + 1 < len(marks) else length
-        yield at, min(at + longest, following), text
-
-
-draw = []
-for at, until, text in shown("caption", length):
-    draw.append(f"drawtext=fontfile={font}:text='{text}':fontsize=34:fontcolor=white:box=1:"
-                f"boxcolor=0x7287fd@0.92:boxborderw=18:x=(w-tw)/2:y=h-th-150:"
-                f"enable='between(t,{at:.2f},{until:.2f})'")
-for at, until, text in shown("key", 1.4):
-    draw.append(f"drawtext=fontfile={font}:text='{text}':fontsize=64:fontcolor=white:box=1:"
-                f"boxcolor=0x11111b@0.88:boxborderw=26:x=(w-tw)/2:y=(h-th)/2+260:"
-                f"enable='between(t,{at:.2f},{until:.2f})'")
-
-video = f"{work}/demo.mp4"
-subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "concat.txt",
-                "-vf", ",".join(draw + ["fps=8", "scale=1280:-1:flags=lanczos"]),
-                "-pix_fmt", "yuv420p", video], check=True, cwd=work)
-subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-vf",
-                "split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];"
-                "[b][p]paletteuse=dither=none:diff_mode=rectangle", out], check=True)
+subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", "".join(chain),
+                "-map", "[out]", "-c:v", "libwebp_anim", "-q:v", "90", "-compression_level", "6",
+                "-loop", "0", out], check=True)
 print(f"{out}: {os.path.getsize(out) // 1024} KB, {length:.1f} s")
