@@ -48,9 +48,9 @@ type sessionItem struct{ session session.Session }
 
 func (i sessionItem) FilterValue() string { return i.session.ID }
 
-// sessionDelegate draws a row as two columns, the id and the name, each as
-// wide as the widest on the screen: two saves in one second have ids of two
-// widths. What a session holds is the pane's.
+// sessionDelegate draws a row as two columns, the id and the label
+// (sessionLabel), each as wide as the widest on the screen: two saves in one
+// second have ids of two widths. What a session holds is the pane's.
 type sessionDelegate struct {
 	theme     theme.Theme
 	idWidth   int
@@ -64,10 +64,16 @@ func (d sessionDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 // maxSessionName is the widest the name column grows; a longer name is cut.
 const maxSessionName = 24
 
-// unnamed stands in the name column of a session saved without a name.
-const unnamed = "—"
+// sessionLabel is what the name column shows: the name, or else why the
+// session was saved. named reports the name.
+func sessionLabel(s session.Session) (text string, named bool) {
+	if s.Name != "" {
+		return s.Name, true
+	}
+	return s.Reason.Text(), false
+}
 
-// Render draws the id and the name.
+// Render draws the id and the name, or the reason in a dim style.
 func (d sessionDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	it, ok := item.(sessionItem)
 	if !ok {
@@ -84,9 +90,10 @@ func (d sessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	cell := func(text string, width int, st lipgloss.Style) string {
 		return style(st).Render(pad(ellipsis(text, width), width+2))
 	}
-	name, nameStyle := s.Name, th.Remote
-	if name == "" {
-		name, nameStyle = unnamed, th.NameDim
+	name, named := sessionLabel(s)
+	nameStyle := th.Remote
+	if !named {
+		nameStyle = th.NameDim
 	}
 	row := cursor(th, sel) + cell(s.ID, d.idWidth, th.ProjectName) +
 		cell(name, d.nameWidth, nameStyle)
@@ -219,10 +226,11 @@ func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
 			at = i
 		}
 	}
-	d := sessionDelegate{theme: th, nameWidth: lipgloss.Width(unnamed)}
+	d := sessionDelegate{theme: th}
 	for _, s := range all {
+		label, _ := sessionLabel(s)
 		d.idWidth = max(d.idWidth, len(s.ID))
-		d.nameWidth = max(d.nameWidth, lipgloss.Width(s.Name))
+		d.nameWidth = max(d.nameWidth, lipgloss.Width(label))
 	}
 	d.nameWidth = min(d.nameWidth, maxSessionName)
 	sc.list.SetDelegate(d)

@@ -66,8 +66,9 @@ func TestAltSListsTheSavedSessionsNewestFirst(t *testing.T) {
 	if !strings.Contains(body[1], "before-reboot") || strings.Contains(body[1], "projects") {
 		t.Errorf("row = %q, want the name, and the counts left to the pane", body[1])
 	}
-	// The name is a column: it starts in one place on every row, a dash for
-	// the session with none.
+	// The name is a column: it starts in one place on every row. A session
+	// with no name and no reason, as a file from before reasons were saved
+	// is, reads unknown there.
 	column := func(row, name string) int {
 		at := strings.Index(row, name)
 		if at < 0 {
@@ -75,7 +76,7 @@ func TestAltSListsTheSavedSessionsNewestFirst(t *testing.T) {
 		}
 		return lipgloss.Width(row[:at])
 	}
-	if a, b := column(body[0], "—"), column(body[1], "before-reboot"); a != b {
+	if a, b := column(body[0], "unknown"), column(body[1], "before-reboot"); a != b {
 		t.Errorf("rows = %q, want the names aligned, at %d and %d", body[:2], a, b)
 	}
 	if holds := pane(m); !strings.Contains(holds, "1 project · 1 target · 2 agents") {
@@ -85,6 +86,28 @@ func TestAltSListsTheSavedSessionsNewestFirst(t *testing.T) {
 	m, _ = press(m, "esc")
 	if bar := barLine(m); !strings.Contains(bar, "new") {
 		t.Errorf("top line = %q after esc, want the surface's bar", bar)
+	}
+}
+
+// A session with no name shows why it was saved in the name column, and the
+// column is wide enough for the longest reason.
+func TestTheSessionsScreenShowsWhyAnUnnamedSessionWasSaved(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	for minute, reason := range []session.Reason{session.ReasonSaved, session.ReasonProjectClosed, session.ReasonShutdown} {
+		if _, _, err := session.Save(root, session.Session{
+			Reason: reason, At: time.Date(2026, 9, 15, 18, minute, 0, 0, time.Local), Projects: []session.Project{homeOf("project-00")},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+	body := rows(m)
+	for i, want := range []string{"shutdown", "project closed", "saved by hand"} {
+		if !strings.Contains(body[i], want) {
+			t.Errorf("row %d = %q, want %q in it", i, body[i], want)
+		}
 	}
 }
 

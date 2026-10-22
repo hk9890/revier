@@ -315,6 +315,10 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
 	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
+	reason := session.ReasonProjectClosed
+	if s.whole {
+		reason = session.ReasonShutdown
+	}
 	force := confirmed && len(core.Busy(plan)) > 0
 	return m, func() tea.Msg {
 		opts := core.ShutdownOpts{Force: force, Projects: projects}
@@ -328,7 +332,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
 			opts.Before = func(saving context.Context, now core.Report) error {
-				stored, saved, _, err := app.SaveChanged(saving, c, root, now, time.Now())
+				stored, saved, _, err := app.SaveChanged(saving, c, root, now, reason, time.Now())
 				if err != nil {
 					return err
 				}

@@ -15,7 +15,8 @@ import (
 
 // The shutdown button is on the bar with its key. A full shutdown plans every
 // project, names the busy agent on the button that confirms, saves the
-// session, closes everything, and stays up to say what came of it.
+// session as a shutdown's, closes everything, and stays up to say what came
+// of it.
 func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -47,8 +48,8 @@ func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
 		t.Errorf("instances = %+v, want none", left)
 	}
-	if all, _ := session.List(root); len(all) != 1 {
-		t.Errorf("sessions = %d, want the one saved before the close", len(all))
+	if all, _ := session.List(root); len(all) != 1 || all[0].Reason != session.ReasonShutdown {
+		t.Errorf("sessions = %+v, want the one saved before the close, saved by a shutdown", all)
 	}
 	m, _ = press(m, "esc")
 	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {

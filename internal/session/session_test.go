@@ -18,7 +18,7 @@ func at(day int) time.Time { return time.Date(2026, 9, day, 14, 33, 5, 0, time.U
 
 func sample(day int, name string) session.Session {
 	return session.Session{
-		Name: name, At: at(day), Current: "revier",
+		Name: name, Reason: session.ReasonSaved, At: at(day), Current: "revier",
 		Projects: []session.Project{{
 			Name: "revier",
 			Targets: []session.Target{
@@ -76,8 +76,8 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 	if got.ID != "2026-09-12T14-33-05" {
 		t.Errorf("ID = %q, want the timestamp", got.ID)
 	}
-	if got.Name != "before-reboot" || got.Current != "revier" {
-		t.Errorf("label and current did not survive: %+v", got)
+	if got.Name != "before-reboot" || got.Current != "revier" || got.Reason != session.ReasonSaved {
+		t.Errorf("label, reason and current did not survive: %+v", got)
 	}
 	if len(got.Projects) != 1 || len(got.Projects[0].Targets) != 2 {
 		t.Fatalf("projects did not survive: %+v", got.Projects)
@@ -296,5 +296,35 @@ func TestSameAsComparesWhatIsOpen(t *testing.T) {
 	moved.Projects[0].Targets[0].Agents[0].Session = "other-id"
 	if sample(1, "").SameAs(moved) {
 		t.Error("another conversation is the same session")
+	}
+}
+
+// The reason is not what is open: a close that finds the newest session holds
+// the same projects writes none, whichever save wrote that one.
+func TestSameAsIgnoresTheReason(t *testing.T) {
+	shut, closed := sample(12, ""), sample(12, "")
+	shut.Reason, closed.Reason = session.ReasonShutdown, session.ReasonProjectClosed
+	if !shut.SameAs(closed) {
+		t.Error("SameAs = false, want sessions that differ only in reason the same")
+	}
+}
+
+// A file written before sessions carried a reason still loads, and reads
+// "unknown": it may have been a save by hand, so it must not claim shutdown.
+func TestAFileWithNoReasonReadsUnknown(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := "id = \"2026-09-12T14-33-05\"\nat = 2026-09-12T14:33:05Z\n\n[[project]]\nname = \"revier\"\n\n[[project.target]]\nname = \"home\"\n"
+	if err := os.WriteFile(filepath.Join(session.Dir(root), "2026-09-12T14-33-05.toml"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Reason != "" || got.Reason.Text() != "unknown" || len(got.Projects) != 1 {
+		t.Errorf("old session = %+v, reason text %q; want it loaded with an unknown reason", got, got.Reason.Text())
 	}
 }

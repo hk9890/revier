@@ -57,8 +57,8 @@ func TestShutdownSavesThenClosesEverything(t *testing.T) {
 	if got := workspaces(t); got != "" {
 		t.Errorf("workspaces after = %q, want none", got)
 	}
-	if n := len(savedSessions(t)); n != 1 {
-		t.Fatalf("sessions = %d, want 1", n)
+	if all := savedSessions(t); len(all) != 1 || all[0].Reason != session.ReasonShutdown {
+		t.Fatalf("sessions = %+v, want 1, saved by a shutdown", all)
 	}
 
 	capture(t, "session", "restore")
@@ -97,7 +97,8 @@ func TestShutdownRefusesABusyAgentUnlessForced(t *testing.T) {
 	}
 }
 
-// A project shutdown closes that project and leaves the other open.
+// A project shutdown closes that project and leaves the other open. The
+// session it saves first says a project was closed.
 func TestShutdownOfOneProjectLeavesTheOther(t *testing.T) {
 	work(t)
 	agentStatus(t, "idle")
@@ -107,6 +108,9 @@ func TestShutdownOfOneProjectLeavesTheOther(t *testing.T) {
 	got := workspaces(t)
 	if strings.Contains(got, "work") || !strings.Contains(got, "home") {
 		t.Errorf("workspaces = %q, want demo's home alone", got)
+	}
+	if all := savedSessions(t); len(all) != 1 || all[0].Reason != session.ReasonProjectClosed {
+		t.Errorf("sessions = %+v, want 1, saved by a project close", all)
 	}
 }
 
