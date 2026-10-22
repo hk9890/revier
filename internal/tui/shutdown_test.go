@@ -6,10 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/theme"
-	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -154,15 +152,6 @@ func TestAShutdownStartsNoSecondSurvey(t *testing.T) {
 	if _, after := deliver(m, cmd); after != nil {
 		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
 	}
-}
-
-// fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
-func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {
-	t.Helper()
-	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
-	m, _ = press(m, "alt+q")
-	m, cmd := press(m, "enter")
-	return run(m, cmd)
 }
 
 // An agent that starts a turn while the confirm is on screen is not closed

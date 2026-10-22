@@ -114,6 +114,23 @@ func TestSaveChangedSavesNothingWhenNothingIsOpen(t *testing.T) {
 	}
 }
 
+// A save its caller cancelled writes nothing and fails with the cancel: what
+// the cancel cut short would be the newest session, the one a plain restore
+// opens. A shutdown takes the failure as its own and closes nothing.
+func TestSaveChangedSavesNothingWhenTheCallerCancels(t *testing.T) {
+	c, _, report, _ := desktop(t)
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, saved, _, err := app.SaveChanged(ctx, c, root, report, session.ReasonShutdown, time.Now())
+	if !errors.Is(err, context.Canceled) || saved {
+		t.Errorf("save = %v, %v; want the cancel and nothing saved", saved, err)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %+v, want none written", all)
+	}
+}
+
 // A store that cannot be read is the save's failure, which a shutdown takes
 // as its own and closes nothing; it is not taken as no session at all.
 func TestSaveChangedFailsWhenTheStoreCannotBeRead(t *testing.T) {

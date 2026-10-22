@@ -697,3 +697,14 @@ the probe whether the harness still keeps the conversation, and starts the
 agent empty in its directory when it does not. Rejected: dropping the id at the
 save, which loses a conversation prompted after it; and watching the panel
 after the launch, which sees the failure only once its window is open.
+
+### D140 — a running shutdown or restore holds the input, and ctrl+c cancels it
+
+A shutdown or a restore can take a minute, and the surface showed one static
+line for it. Each now reports every step before and after it runs, so a host
+that hangs is the step left on the screen. While one runs, no key or click
+acts: a press that left the screen, or started a second close, acted on a
+desktop half changed. ctrl+c lets the step that runs finish and stops before
+the next, so the surface stays to say what was done; a second ctrl+c quits, for
+a step that hangs. Rejected: Esc leaving a running restore, which used the
+surface while the restore still opened windows.

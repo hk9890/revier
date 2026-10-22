@@ -108,6 +108,24 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
+	// Each step is named before it closes, so a host that hangs on one is
+	// the step left on the screen, and what came of it follows on that line.
+	pw, nw := 0, 0
+	for _, s := range plan {
+		pw, nw = max(pw, len(s.Project)), max(nw, len(s.Name()))
+	}
+	var said []string // what each step's line said, in the order it closed
+	opts.Progress = func(p core.Progress) {
+		if p.Phase != core.PhaseClose {
+			return
+		}
+		if !p.Done {
+			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Closed.Project, nw, p.Label)
+			return
+		}
+		said = append(said, p.Closed.Note())
+		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
+	}
 	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, opts)
 	var refused *core.BusyRefusal
 	switch {
@@ -119,12 +137,12 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	case err != nil:
 		return fmt.Errorf("%w; nothing closed", err)
 	}
-	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	for _, r := range closed {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", r.Project, r.Name(), r.Note())
-	}
-	if err := w.Flush(); err != nil {
-		return err
+	// A step is listed once more after the wait when what came of it changed:
+	// it did not go, or a close that failed went all the same.
+	for i, r := range closed {
+		if r.Note() != said[i] {
+			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  %s\n", pw, r.Project, nw, r.Name(), r.Note())
+		}
 	}
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)

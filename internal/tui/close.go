@@ -76,10 +76,6 @@ func (m Model) askClose() (tea.Model, tea.Cmd) {
 // is closed.
 func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label string, drop bool) (tea.Model, tea.Cmd) {
 	m.err = nil
-	if m.shut.running {
-		m.err = errors.New("a close is still running; press again once it is done")
-		return m, nil
-	}
 	whole := row == core.CloseRow{}
 	if whole && !drop {
 		if m.err = m.refuseSave(); m.err != nil {
@@ -170,6 +166,9 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	_, open, failed := msg.closed.Counts()
 	var err error
 	switch {
+	case one.walk.cancelled:
+		one.closed = msg.closed
+		err = errors.New(one.notReached())
 	case failed > 0:
 		err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	case open > 0:

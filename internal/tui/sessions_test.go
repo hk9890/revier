@@ -18,18 +18,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// saved writes a session into the state root, saved at the given minute.
-func saved(t *testing.T, root, name string, minute int, projects ...session.Project) session.Session {
-	t.Helper()
-	s, _, err := session.Save(root, session.Session{
-		Name: name, At: time.Date(2026, 9, 15, 18, minute, 0, 0, time.Local), Projects: projects,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
-}
-
 // homeOf is a recorded project with its home target open.
 func homeOf(name string) session.Project {
 	return session.Project{Name: revier.ProjectName(name), Targets: []session.Target{{Name: "home"}}}
@@ -216,15 +204,15 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	if foot := footer(m); !strings.Contains(foot, "restoring "+s.ID) {
 		t.Errorf("footer = %q, want the restore said as running", foot)
 	}
-	if again, _ := press(m, "enter"); !strings.Contains(footer(again), "still running") {
-		t.Errorf("footer = %q, want a second restore refused while one runs", footer(again))
+	if _, again := press(m, "enter"); again != nil {
+		t.Error("a second enter returned a command, want it held while the restore runs")
 	}
-	// The restore is a batch: the walk, and the wait that takes its writes
-	// into the surface. The walk runs first, as its writes come before the
-	// wait can read them.
+	// The restore is a batch: the walk, the wait that takes its writes into
+	// the surface, and the wait on its reports. The walk runs first, as its
+	// writes and reports come before the waits can read them.
 	batch, ok := cmd().(tea.BatchMsg)
 	if !ok {
-		t.Fatalf("enter returned %T, want the walk and the wait on its writes", cmd())
+		t.Fatalf("enter returned %T, want the walk and the waits on its writes and reports", cmd())
 	}
 	for _, part := range batch {
 		m = run(m, part)

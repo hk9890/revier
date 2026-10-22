@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -95,9 +96,21 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 // the window that appears after it, so two at once are two windows neither
 // can be attributed to. One step's failure is not the restore's: the other
 // workspaces still come back, and the one that did not is named.
-func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project) (out Restored, back error) {
+//
+// A caller that cancels stops the walk between two steps: the step that runs
+// does not see the cancel and finishes, and the result holds the steps
+// walked. A restore cancelled before its return home does not return, and
+// back is ErrHomeCancelled; one cancelled during it lets it finish.
+func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project, opts RestoreOpts) (out Restored, back error) {
 	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", false)
-	for _, step := range c.RestorePlan(s, r) {
+	plan := c.RestorePlan(s, r)
+	// Each step, and the return home, runs on a context the cancel does not
+	// reach, with its own deadline; the cancel is read between two steps.
+	walking := context.WithoutCancel(ctx)
+	for i, step := range plan {
+		if ctx.Err() != nil {
+			break
+		}
 		res := RestoreResult{RestoreStep: step}
 		p, loaded := projectNamed(projects, step.Project)
 		// The plan was built from a survey of these projects, so a project it
@@ -109,15 +122,26 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		// Logged before the launch, so a step that hangs on its window is
 		// the last one the log names.
 		logStep(res.RestoreStep, false)
+		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Restored: res})
 		if res.Action == RestoreLaunch {
-			res = c.restoreLaunch(ctx, p, step)
+			res = c.restoreLaunch(walking, p, step)
 			logAgents(res)
 		}
 		out = append(out, res)
+		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Done: true, Restored: res})
+	}
+	cancelled := ctx.Err() != nil
+	if cancelled {
+		slog.Info("session restore cancelled", "id", s.ID, "walked", len(out), "steps", len(plan))
 	}
 	if p, ok := projectNamed(projects, s.Current); ok {
-		if home, has := p.Home(); has && c.returnable(ctx, s, p, home.Name) {
-			if res := c.restoreLaunch(ctx, p, RestoreStep{Project: p.Name, Target: home.Name}); res.Err != nil {
+		home, has := p.Home()
+		switch {
+		case has && cancelled:
+			back = ErrHomeCancelled
+		case has && c.returnable(walking, s, p, home.Name):
+			opts.report(Progress{Phase: PhaseHome, Label: string(p.Name)})
+			if res := c.restoreLaunch(walking, p, RestoreStep{Project: p.Name, Target: home.Name}); res.Err != nil {
 				back = fmt.Errorf("could not return to %s: %w", s.Current, res.Err)
 			}
 		}
@@ -125,6 +149,25 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 	opened, pending, failed := out.Counts()
 	slog.Info("session restored", "id", s.ID, "opened", opened, "pending", pending, "failed", failed)
 	return out, back
+}
+
+// ErrHomeCancelled is the back of a restore cancelled before it returned
+// home: the steps it walked stand, and it did not return.
+var ErrHomeCancelled = errors.New("return home cancelled")
+
+// RestoreOpts is what a restore needs beyond its session.
+type RestoreOpts struct {
+	// Progress, when set, is told of each step before and after it is
+	// walked, and of the return home before it. It runs on the restore's own
+	// goroutine and must not block: the walk waits for it.
+	Progress func(Progress)
+}
+
+// report hands p to the caller's Progress, if it set one.
+func (o RestoreOpts) report(p Progress) {
+	if o.Progress != nil {
+		o.Progress(p)
+	}
 }
 
 // restoreLaunch is one step of a restore, walked by ActivateWaiting. It has
