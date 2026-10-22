@@ -136,7 +136,13 @@ revier shutdown --dry-run        # print the plan, close nothing
 A shutdown first saves the session when it changed, so `revier session
 restore` brings back what it closed. While an agent works or waits for an
 answer, nothing closes and revier names the agent; `--force` closes it
-anyway. In the TUI, alt+q shows the plan before anything closes.
+anyway. In the TUI, open the sessions screen with alt+s and press alt+q, or
+press alt+q in the project list: it shows the plan before anything closes.
+
+A shutdown of every project, all of each, is remembered. The TUI quits after
+it, and its next start offers to restore the saved session or to start
+fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
+you open first ends that offer.
 
 A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line

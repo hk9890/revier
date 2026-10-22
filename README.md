@@ -62,15 +62,16 @@ territory.
 **Stop and start again**
 
 - **Shut everything down.** `revier shutdown` saves the session, then closes
-  every open project. In the TUI, alt+q shows the plan first. An agent that
-  works or waits for you blocks the close until you add `--force`.
+  every open project. In the TUI, alt+s opens the sessions, and alt+q there
+  shows the plan first. An agent that works or waits for you blocks the
+  close until you add `--force`.
   See [Shut everything down](docs/user-guide/projects.md#shut-everything-down).
 - **Restore a session.** `revier session restore` opens the saved projects
-  and targets again. Each Claude Code agent resumes its conversation. In the
-  TUI, alt+s opens the sessions.
+  and targets again. Each Claude Code agent resumes its conversation. After a
+  full shutdown, the next TUI start offers the restore.
   See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
 
-![Alt+Q shows the shutdown plan and closes every project; Alt+S and Enter restore the session](.github/assets/restore.webp)
+![Alt+S and Alt+Q show the shutdown plan and close every project; the next start offers the restore](.github/assets/restore.webp)
 
 **Reach further**
 
