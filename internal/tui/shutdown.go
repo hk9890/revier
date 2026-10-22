@@ -344,8 +344,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			}
 		}
 		// No deadline over the close: each phase bounds its own, and once a
-		// deadline laid over the cancel passed, core.WithoutDeadline would no
-		// longer follow a ctrl+c.
+		// deadline laid over the cancel passed, a ctrl+c would no longer
+		// reach the walk.
 		answer := closeAnswer(c.Shutdown(cancelled, plan, core.CloseWait, opts))
 		if answer.err == nil && answer.recheck == nil {
 			answer.saved = note

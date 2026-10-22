@@ -433,8 +433,15 @@ func (m Model) onlyAssistant() bool {
 
 // footer is the key legend, or the last failure. An error replaces the legend
 // rather than being added to it: a survey that failed is the only thing worth
-// reading on that line.
+// reading on that line. A walk that runs is the exception: its line says how
+// to stop it, so no error hides it while it runs.
 func (m Model) footer() string {
+	if m.sessions.restoring != "" {
+		return m.sessions.progressLine(*m.theme)
+	}
+	if m.shut.running {
+		return m.theme.Meta.Render(" " + m.shut.walk.line())
+	}
 	if m.confirm != "" {
 		return m.deletePrompt()
 	}
@@ -456,11 +463,8 @@ func (m Model) footer() string {
 		// second line in the footer pushes the frame past the terminal.
 		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
 	}
-	if m.sessions.restoring != "" || m.sessions.saving {
+	if m.sessions.saving {
 		return m.sessions.progressLine(*m.theme)
-	}
-	if m.shut.running {
-		return m.theme.Meta.Render(" " + m.shut.walk.line())
 	}
 	if m.copied > 0 {
 		unit := "characters"

@@ -113,9 +113,9 @@ type sessionOutcome struct {
 	notes    []string // what the save could not record
 	restored core.Restored
 	back     error
-	// cancelled is a restore stopped by ctrl+c: restored holds the targets
-	// it walked before it stopped.
-	cancelled bool
+	// notReached is how many targets a restore stopped by ctrl+c left
+	// before it reached them; restored holds the targets it walked.
+	notReached int
 }
 
 // savedMsg is a save's answer.
@@ -127,10 +127,11 @@ type savedMsg struct {
 
 // restoredMsg is a restore's answer.
 type restoredMsg struct {
-	id       string
-	restored core.Restored
-	back     error
-	err      error
+	id         string
+	restored   core.Restored
+	notReached int
+	back       error
+	err        error
 }
 
 func newSessionList(th theme.Theme) list.Model { return plainList(sessionDelegate{theme: th}) }
@@ -374,7 +375,7 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 		}
 		// No deadline over the whole walk: each step bounds its own.
 		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) { progress <- p }})
-		return restoredMsg{id: s.ID, restored: out, back: back}
+		return restoredMsg{id: s.ID, restored: out, notReached: len(c.RestorePlan(s, report)) - len(out), back: back}
 	}
 	return tea.Batch(restoring, waitLedger(written), waitProgress(progress)), nil
 }
@@ -384,16 +385,15 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 // the footer's too.
 func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	sc.restoring = ""
-	cancelled := sc.walk.cancelled
 	switch {
-	case msg.err != nil && cancelled:
+	case msg.err != nil && sc.walk.cancelled:
 		return fmt.Errorf("the restore of %s was cancelled; nothing opened", msg.id)
 	case msg.err != nil:
 		return msg.err
 	}
-	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back, cancelled: cancelled}
-	if cancelled {
-		return fmt.Errorf("the restore of %s was cancelled after %s", msg.id, core.Count(len(msg.restored), "target"))
+	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back, notReached: msg.notReached}
+	if msg.notReached > 0 {
+		return fmt.Errorf("the restore of %s was cancelled: %s not reached", msg.id, core.Count(msg.notReached, "target"))
 	}
 	if _, _, failed := msg.restored.Counts(); failed > 0 {
 		return fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
@@ -513,7 +513,7 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		b.WriteString(heading(th, "Restoring", w))
 		restoreSteps(sf, &b, sc.walk.restored, w)
 		say(th.Meta, "\n"+sc.walk.line())
-	case out.id == s.ID && (out.restored != nil || out.cancelled):
+	case out.id == s.ID && (out.restored != nil || out.notReached > 0 || out.back != nil):
 		b.WriteString(heading(th, "Restored", w))
 		restoreSteps(sf, &b, out.restored, w)
 		opened, pending, failed := out.restored.Counts()
@@ -525,8 +525,8 @@ func (sc *sessionsScreen) detail(sf surface) string {
 			summary += fmt.Sprintf(", %d failed", failed)
 		}
 		say(th.NameDim, "\n"+summary)
-		if out.cancelled {
-			say(th.Attention, "cancelled: the targets after these were not opened")
+		if out.notReached > 0 {
+			say(th.Attention, "cancelled: "+core.Count(out.notReached, "target")+" not reached")
 		}
 		if out.back != nil {
 			say(th.Attention, out.back.Error())

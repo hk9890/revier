@@ -122,8 +122,9 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	defer stop()
 	// Each target is named before it opens, so a launch that hangs is the
 	// line left on the screen, and what came of it follows on that line.
+	plan := a.core.RestorePlan(s, report)
 	pw, tw := 0, 0
-	for _, step := range a.core.RestorePlan(s, report) {
+	for _, step := range plan {
 		pw, tw = max(pw, len(step.Project)), max(tw, len(step.Target))
 	}
 	restored, back := a.core.Restore(walk, s, report, a.projects, core.RestoreOpts{Progress: func(p core.Progress) {
@@ -143,6 +144,9 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		_, _ = fmt.Fprintf(a.out, "%s: opened %d, %d not up yet\n", s.ID, opened, pending)
 	} else {
 		_, _ = fmt.Fprintf(a.out, "%s: opened %d\n", s.ID, opened)
+	}
+	if left := len(plan) - len(restored); left > 0 {
+		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(left, "target"))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d targets did not open", failed)

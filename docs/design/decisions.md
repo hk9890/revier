@@ -704,6 +704,7 @@ A shutdown or a restore can take a minute, and the surface showed one static
 line for it. Each now reports every step before and after it runs, so a host
 that hangs is the step left on the screen. While one runs, no key or click
 acts: a press that left the screen, or started a second close, acted on a
-desktop half changed. ctrl+c cancels it between two steps instead of quitting,
-so the surface stays to say what was done. Rejected: letting Esc leave a
-running restore, which used the surface while the restore still opened windows.
+desktop half changed. ctrl+c lets the step that runs finish and stops before
+the next, so the surface stays to say what was done; a second ctrl+c quits, for
+a step that hangs. Rejected: Esc leaving a running restore, which used the
+surface while the restore still opened windows.

@@ -12,8 +12,9 @@ import (
 
 // A shutdown and a restore report each step as they walk it, and the surface
 // draws the walk as it goes. While one runs, the surface takes no key and no
-// click but ctrl+c, which cancels it and leaves the surface up to say what it
-// did (decisions.md D140).
+// click but ctrl+c: the first cancels the walk once the step that runs is
+// done, and leaves the surface up to say what it did; a second quits, for a
+// step that hangs (decisions.md D140).
 
 // walk is what a running shutdown or restore has reported so far, and how to
 // stop it.
@@ -55,7 +56,7 @@ func (w walk) line() string {
 	now := ""
 	switch {
 	case w.cancelled:
-		return "cancelling once the step that runs is done…"
+		return "cancelling once the step that runs is done… ctrl+c again quits"
 	case p.Phase == core.PhaseRecheck:
 		now = "reading the agents again"
 	case p.Phase == core.PhaseSave:
@@ -115,8 +116,8 @@ func (m Model) walking() bool {
 	return m.shut.running || m.sessions.restoring != ""
 }
 
-// lockedKey is a press while a walk runs: ctrl+c cancels the walk, and every
-// other press does nothing.
+// lockedKey is a press while a walk runs: ctrl+c cancels the walk, a second
+// quits, and every other press does nothing.
 func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 	if !key.Matches(msg, m.keys.Quit) {
 		return m, nil
@@ -124,6 +125,9 @@ func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 	w := &m.sessions.walk
 	if m.shut.running {
 		w = &m.shut.walk
+	}
+	if w.cancelled {
+		return m, tea.Quit
 	}
 	w.cancel()
 	w.cancelled = true

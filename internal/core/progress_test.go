@@ -120,13 +120,88 @@ func TestRestoreReportsEachStepAndTheReturnHome(t *testing.T) {
 	}
 }
 
-// A cancel during a restore stops it before the next step: the result holds
-// what it walked, the next target is not opened, and it does not return home.
+// cancelAware is a runtime that fails a call whose context the caller
+// cancelled while it ran, as a real host does. onFocus runs as Focus is
+// called.
+type cancelAware struct {
+	*hosttest.FakeRuntime
+	onFocus func(revier.TargetRef)
+}
+
+func (r cancelAware) Open(ctx context.Context, real revier.Realization) (revier.TargetRef, error) {
+	ref, err := r.FakeRuntime.Open(ctx, real)
+	return ref, errors.Join(err, ctx.Err())
+}
+
+func (r cancelAware) Focus(ctx context.Context, ref revier.TargetRef) error {
+	if r.onFocus != nil {
+		r.onFocus(ref)
+	}
+	return errors.Join(r.FakeRuntime.Focus(ctx, ref), ctx.Err())
+}
+
+// cancelAwareWindows is a window host whose Close fails on a context the
+// caller cancelled while it ran.
+type cancelAwareWindows struct{ *hosttest.Fake }
+
+func (w cancelAwareWindows) Close(ctx context.Context, ref revier.TargetRef) error {
+	return errors.Join(w.Fake.Close(ctx, ref), ctx.Err())
+}
+
+// A cancel during a close lets that close finish, closes nothing after it,
+// and still waits for what closed: a step that did not go reads as still open.
+func TestACancelledShutdownFinishesTheStepThatRunsAndWaitsForIt(t *testing.T) {
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	c.Self = func(p revier.Panel) bool { return p.ID == "1" }
+	c.Window = cancelAwareWindows{wm}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, s := range plan {
+		if s.Target == "editor" {
+			wm.Refuses = map[string]bool{s.Ref.ID: true}
+		}
+	}
+	wm.OnClose = func(revier.TargetRef) { cancel() }
+	var got progressLog
+	var editorErr error
+
+	out, err := c.Shutdown(ctx, plan, 0, core.ShutdownOpts{Projects: projects, Progress: func(p core.Progress) {
+		got.add(p)
+		if p.Done && p.Label == "editor" {
+			editorErr = p.Closed.Err
+		}
+	}})
+	if err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if editorErr != nil {
+		t.Errorf("the editor's close failed with %v, want it to finish unaware of the cancel", editorErr)
+	}
+	if len(out) != 2 || len(rt.Closed) != 1 {
+		t.Errorf("walked %d steps, runtime closed %v; want notes and the editor, and home not reached", len(out), rt.Closed)
+	}
+	if closed, open, _ := out.Counts(); closed != 1 || open != 1 {
+		t.Errorf("closed %d, %d still open; want the wait to find the editor still listed", closed, open)
+	}
+	want := progressLog{
+		"recheck 0/3 ",
+		"close 1/3 notes", "close 1/3 notes done",
+		"close 2/3 editor", "close 2/3 editor done",
+		"wait 0/3 ",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("progress =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// A cancel during a restore lets the launch that runs finish and stops before
+// the next: the result holds what it walked, and it does not return home.
 func TestACancelledRestoreStopsBeforeTheNextStep(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	home := rt.Add("session:revier", "kitty")
 	wm := hosttest.New("wm")
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}, Window: wm}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "notes"}, {Name: "editor"},
@@ -137,11 +212,11 @@ func TestACancelledRestoreStopsBeforeTheNextStep(t *testing.T) {
 	var got progressLog
 
 	out, back := c.Restore(ctx, s, survey(t, c, projects, nil), projects, core.RestoreOpts{Progress: got.add})
-	if back != nil {
-		t.Errorf("back = %v, want none: a cancelled restore does not try to return", back)
+	if !errors.Is(back, core.ErrHomeCancelled) {
+		t.Errorf("back = %v, want the return home cancelled", back)
 	}
-	if len(out) != 1 || out[0].Target != "notes" {
-		t.Errorf("walked %+v, want notes alone", out)
+	if len(out) != 1 || out[0].Target != "notes" || out[0].Err != nil {
+		t.Errorf("walked %+v, want notes alone, opened unaware of the cancel", out)
 	}
 	if len(wm.Opened) != 0 {
 		t.Errorf("window host opened %+v, want the editor left after the cancel", wm.Opened)
@@ -151,5 +226,53 @@ func TestACancelledRestoreStopsBeforeTheNextStep(t *testing.T) {
 	}
 	if want := (progressLog{"launch 1/2 notes", "launch 1/2 notes done"}); !slices.Equal(got, want) {
 		t.Errorf("progress = %q, want %q", got, want)
+	}
+}
+
+// A cancel during the last launch leaves no target unreached: every target
+// is reported as it came, and only the return home is cancelled.
+func TestARestoreCancelledOnItsLastStepCancelsTheReturnHomeAlone(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	home := rt.Add("session:revier", "kitty")
+	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}}
+	projects := []core.Project{prepared(t, agentProject())}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rt.OnOpen = func(revier.Realization) { cancel() }
+
+	out, back := c.Restore(ctx, s, survey(t, c, projects, nil), projects, core.RestoreOpts{})
+	if !errors.Is(back, core.ErrHomeCancelled) {
+		t.Errorf("back = %v, want the return home cancelled", back)
+	}
+	if opened, pending, failed := out.Counts(); len(out) != 1 || opened+pending != 1 || failed != 0 {
+		t.Errorf("walked %+v, want notes opened", out)
+	}
+	if slices.Contains(rt.Focuses, home) {
+		t.Errorf("Focuses = %+v, want no return home", rt.Focuses)
+	}
+}
+
+// A cancel during the return home lets it finish: the restore lands home, and
+// says nothing failed.
+func TestACancelDuringTheReturnHomeLetsItFinish(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	home := rt.Add("session:revier", "kitty")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt, onFocus: func(ref revier.TargetRef) {
+		if ref == home {
+			cancel()
+		}
+	}}}
+	projects := []core.Project{prepared(t, agentProject())}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
+
+	_, back := c.Restore(ctx, s, survey(t, c, projects, nil), projects, core.RestoreOpts{})
+	if back != nil {
+		t.Errorf("back = %v, want the return home finished unaware of the cancel", back)
+	}
+	if !slices.Contains(rt.Focuses, home) {
+		t.Errorf("Focuses = %+v, want home raised", rt.Focuses)
 	}
 }

@@ -74,12 +74,14 @@ keys, so every letter goes to the query.
 | alt+del, alt+d | Delete the project file, or the target's entry in it. On a link, delete the link file alone: nothing on the host changes. When nothing of it is open, it asks `y`; when something is open, it offers to close it and then delete. An agent is in no file. |
 | alt+space | Switch between the project list and the [agent list](#the-agent-list) |
 | Esc | Clear the query. Then, from the Targets or the Agents, go back to the project list. Then quit, or hide the popup. In the agent list, Esc with no query quits or hides at once. |
-| ctrl+c | Quit. While a shutdown, a close or a restore runs: cancel it. |
+| ctrl+c | Quit. While a shutdown, a close or a restore runs: cancel it; a second ctrl+c quits. |
 
 While a shutdown, a close or a restore runs, the TUI shows each step as it
 runs and what came of it. No other key and no click does anything until it
-ends. ctrl+c stops it after the step that runs, and the TUI stays open to
-show what was done and what was not reached.
+ends. ctrl+c lets the step that runs finish, then stops, and the TUI stays
+open to show what was done and what was not reached. A restore stopped after
+its last target says `return home cancelled`. When a step hangs, press ctrl+c
+again to quit.
 
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.

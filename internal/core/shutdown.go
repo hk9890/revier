@@ -540,13 +540,15 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // refused close saves nothing, and a saved session holds what is open now
 // rather than what was open when the plan was drawn.
 //
-// The closes and the wait after them then run on a budget of their own
-// (phaseContext), as the save before them does, so however long the recheck
-// took, the save is made and every step is asked to close.
+// The closes and the wait after them then run on a budget of their own, as
+// the save before them does (phaseContext), so however long the recheck took,
+// the save is made and every step is asked to close.
 //
-// A caller that cancels stops the walk between two steps: the steps not yet
-// reached are left out of the result, and nothing is waited for. A budget
-// that runs out is no such decision, and every step is still asked.
+// A caller that cancels stops the walk between two steps: the step that runs
+// does not see the cancel and finishes, the steps not yet reached are left out
+// of the result, and the wait still runs for the steps that closed, so what
+// the result says is still open is true. A budget that runs out is no such
+// decision, and every step is still asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
@@ -573,10 +575,12 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			return nil, err
 		}
 	}
-	closing, stop := phaseContext(ctx, CloseBudget+wait)
+	// The steps and the wait run on a budget the cancel does not reach; the
+	// cancel is read between two steps.
+	closing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseBudget+wait)
 	defer stop()
+	cancelled := func() bool { return errors.Is(ctx.Err(), context.Canceled) }
 	out := make(Closed, 0, len(plan))
-	cancelled := func() bool { return errors.Is(closing.Err(), context.Canceled) }
 	for i, s := range plan {
 		if cancelled() {
 			break
@@ -605,10 +609,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	}
 	if cancelled() {
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
-	} else {
-		opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
-		c.awaitClosed(closing, out, wait)
 	}
+	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
+	c.awaitClosed(closing, out, wait)
 	closed, open, failed := out.Counts()
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	return out, nil

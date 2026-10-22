@@ -1,9 +1,11 @@
 package tui_test
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -61,11 +63,14 @@ func readReports(t *testing.T, m tui.Model, wait tea.Cmd, n int) (tui.Model, tea
 var ctrlC = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 
 // A shutdown names the step it closes while it closes it. While it runs the
-// surface takes no key and no click; ctrl+c cancels it rather than quitting,
-// and the surface stays up to say what closed and what was not reached.
+// surface takes no key and no click, and no error hides its footer; ctrl+c
+// cancels it rather than quitting, the close that runs finishes, and the
+// surface stays up to say what closed, what the wait still found open, and
+// what was not reached.
 func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
-	wm.Add("editor", "code-project-00")
+	ref := wm.Add("editor", "code-project-00")
+	wm.Refuses = map[string]bool{ref.ID: true}
 	editor := newHeld()
 	wm.OnClose = func(revier.TargetRef) { editor.hold() }
 	m := fullShutdownPlanned(t, c, projects, stateWith(t, nil))
@@ -91,13 +96,21 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	if next, out := update(m, tea.MouseClickMsg{X: 3, Y: 0, Button: tea.MouseLeft}); out != nil || !strings.Contains(pane(next), "Closing") {
 		t.Error("a click while the shutdown runs did something, want it held")
 	}
+	rt.SetInstancesErr(errors.New("kitty went away"))
+	if foot := footer(survey(m)); !strings.Contains(foot, "closing 1 of 2: editor") || !strings.Contains(foot, "ctrl+c cancels") {
+		t.Errorf("footer after a survey failed = %q, want the walk and its cancel kept", foot)
+	}
+	rt.SetInstancesErr(nil)
 
 	m, quit := send(m, ctrlC)
 	if quit != nil {
 		t.Error("ctrl+c while the shutdown runs returned a command, want the cancel alone and the surface up")
 	}
-	if foot := footer(m); !strings.Contains(foot, "cancelling") {
-		t.Errorf("footer = %q, want the cancel said", foot)
+	if foot := footer(m); !strings.Contains(foot, "cancelling") || !strings.Contains(foot, "ctrl+c again quits") {
+		t.Errorf("footer = %q, want the cancel and the way out said", foot)
+	}
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Error("a second ctrl+c while the shutdown runs did not quit")
 	}
 	close(editor.release)
 	m, _ = update(m, <-answer)
@@ -106,7 +119,7 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 		t.Errorf("runtime closed %v, want project-01's home not reached after the cancel", rt.Closed)
 	}
 	body := strings.Join(rows(m), "\n")
-	for _, want := range []string{"closed 1, 0 still open", "cancelled: 1 step not reached"} {
+	for _, want := range []string{"closed 0, 1 still open", "cancelled: 1 step not reached"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rows lack %q:\n%s", want, body)
 		}
@@ -172,7 +185,41 @@ func TestARestoreShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 			t.Errorf("pane lacks %q:\n%s", want, p)
 		}
 	}
-	if foot := footer(m); !strings.Contains(foot, "cancelled after 1 target") {
+	if foot := footer(m); !strings.Contains(foot, "cancelled: 1 target not reached") {
 		t.Errorf("footer = %q, want the cancel said", foot)
+	}
+}
+
+// A restore cancelled during its last target reports every target as it came
+// and the return home as cancelled, not a target as not opened.
+func TestARestoreCancelledOnItsLastTargetCancelsTheReturnHomeAlone(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	if _, _, err := session.Save(root, session.Session{
+		Current: "project-00", At: time.Date(2026, 9, 15, 18, 10, 0, 0, time.Local),
+		Projects: []session.Project{{Name: "project-00", Targets: []session.Target{{Name: "home"}, {Name: "editor"}}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	editor := newHeld()
+	wm.OnOpen = func(revier.Realization) { editor.hold() }
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	<-editor.entered
+	// home before and after, and the editor begun.
+	m, _ = readReports(t, m, wait, 3)
+	m, _ = send(m, ctrlC)
+	close(editor.release)
+	m, _ = update(m, <-answer)
+
+	p := pane(m)
+	if !strings.Contains(p, "opened 2") || !strings.Contains(p, "return home cancelled") || strings.Contains(p, "not reached") {
+		t.Errorf("pane = %q, want both targets opened and the return home cancelled", p)
+	}
+	if foot := footer(m); !strings.Contains(foot, "return home cancelled") {
+		t.Errorf("footer = %q, want the return home cancelled", foot)
 	}
 }
