@@ -901,6 +901,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// that raises it is the one that opened it (decisions.md D110).
 			m.hidden, m.agents.shown = false, false
 			m.raises++
+			m.offerResume()
 			m.askAgain()
 			m.mirror.restart()
 			// A tick still out was set while nobody looked, up to the slow
@@ -1066,6 +1067,19 @@ func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	if m.dialog == dialogResume && st.ShutDown == nil {
 		m.dialog = dialogNone
+	}
+}
+
+// offerResume puts the start dialog up on the raise of the popup when a full
+// shutdown was recorded while it was hidden, as `revier shutdown` records
+// one: the popup outlives that shutdown and would otherwise never offer its
+// restore (decisions.md D141). A walk that runs keeps its screen.
+func (m *Model) offerResume() {
+	if m.walking() {
+		return
+	}
+	if st := m.core.Ledger.State(); st.ShutDown != nil {
+		m.openResume(*st.ShutDown)
 	}
 }
 

@@ -716,5 +716,5 @@ restore was three keys deep. The state now records a full shutdown, written
 after the save and before the first close, since the close may end revier's own
 terminal; a cancel takes it back. The surface then quits, the popup too, so
 the next press is a cold start (D86) that opens on a start dialog: restore,
-pick another session, or start fresh. Any open clears the record, so the
-dialog never offers a restore over what a hotkey already opened (D85).
+pick another session, or start fresh. Any open clears the record: the user
+has started again, so the desktop is no longer the one the shutdown left.

@@ -157,3 +157,21 @@ func TestAnOpenElsewhereTakesTheStartDialogDown(t *testing.T) {
 		t.Errorf("bar = %q, want the surface once something opened", bar)
 	}
 }
+
+// A popup that a full shutdown left up, as `revier shutdown` leaves it while
+// it is hidden, offers the restore on its next raise.
+func TestARaisedPopupOffersTheRestoreOfAShutdownRecordedWhileHidden(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	m = m.Raised()
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Errorf("subtitle = %q after the raise, want the start dialog", sub)
+	}
+}

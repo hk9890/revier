@@ -54,8 +54,10 @@ const (
 
 // shutdown is the wizard while it is up.
 type shutdown struct {
-	step    shutStep
-	row     int
+	step shutStep
+	row  int
+	// whole is a shutdown of every project, all of each: the one the state
+	// records (decisions.md D141). A del never sets it.
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
@@ -87,12 +89,6 @@ type shutdown struct {
 // and a project about to be deleted is no project a session can restore.
 func (s shutdown) saves() bool {
 	return !s.one || (s.pick == core.CloseRow{} && !s.drop)
-}
-
-// full reports a shutdown of every project, all of each: the one the state
-// records (decisions.md D141).
-func (s shutdown) full() bool {
-	return s.whole && s.scope == core.ShutdownAll && !s.one
 }
 
 // plannedMsg is the plan the confirm step shows, for the choice it was asked
@@ -334,7 +330,7 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, plan, saves, full := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.full()
+	c, root, projects, plan, saves, full := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.whole
 	reason := session.ReasonProjectClosed
 	if s.whole {
 		reason = session.ReasonShutdown

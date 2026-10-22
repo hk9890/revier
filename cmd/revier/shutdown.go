@@ -32,7 +32,7 @@ var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was ma
 // saves the session first when it changed, so a restore brings back what the
 // shutdown closed, and it refuses while an agent is busy unless forced. A
 // shutdown of every project, all of each, is recorded in the state, so the
-// next surface offers the restore (D141).
+// next surface offers the restore (D141). ctrl+c stops it between two steps.
 func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("shutdown", flag.ContinueOnError)
 	agents := fs.Bool("agents", false, "close only the agents")
@@ -130,7 +130,12 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
 	full := only == "" && scope == core.ShutdownAll
-	closed, err := usecase.Shutdown(ctx, a.core, plan, core.CloseWait, opts, save, full)
+	// ctrl+c stops the close between two steps; a full shutdown it stops is
+	// no longer on record, since what it did not reach is still open.
+	walk, stop := interruptible(ctx)
+	defer stop()
+	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, full)
+	cancelled := errors.Is(walk.Err(), context.Canceled)
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):
@@ -138,6 +143,11 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			return err
 		}
 		return errShutdownTurnedBusy
+	// A cancel before the first close fails the save on the context it
+	// ended; the user's word for that is the cancel.
+	case cancelled && errors.Is(err, context.Canceled):
+		_, _ = fmt.Fprintln(a.out, "cancelled; nothing closed")
+		return nil
 	case err != nil:
 		return fmt.Errorf("%w; nothing closed", err)
 	}
@@ -150,6 +160,9 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
+	if cancelled {
+		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(len(plan)-len(closed), "step"))
+	}
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}

@@ -116,7 +116,9 @@ kitty, and GNOME with the Window Control extension. See
 - The popup opens on the project of the window that had the focus.
 - When Enter or a target key brings a window to the front, the popup hides.
 - After a full shutdown the popup quits, so the next press starts it again
-  and shows the [start dialog](#after-a-full-shutdown).
+  and shows the [start dialog](#after-a-full-shutdown). When `revier shutdown`
+  shut everything down while the popup was hidden, the next raise shows the
+  dialog.
 - Which edits a raise reads again is in [Files](configuration.md#files).
 
 ## Screens
@@ -140,8 +142,9 @@ fields are those of [configuration.md](configuration.md).
 ## After a full shutdown
 
 A full shutdown shows what it closed for about 1.5 seconds, then the TUI
-quits. Press any key to quit at once. A project shutdown, or a close with
-del, keeps the TUI open.
+quits. Press any key to quit at once. A project shutdown, a close with del,
+and a full shutdown that found nothing left to close when it ran keep the TUI
+open, and the next start does not show the dialog.
 
 The next start of the TUI, or of the popup, opens on a dialog:
 `revier was shut down at 18:30. 3 projects, 4 agents saved.`
@@ -152,5 +155,6 @@ The next start of the TUI, or of the popup, opens on a dialog:
 - **Start fresh**, or Esc, opens the project list. It deletes no session.
 
 Anything you open before that, with a desktop key, `revier go`,
-`revier open`, `revier run` or `revier session restore`, ends the shutdown,
-and the dialog does not show.
+`revier open` or `revier run`, ends the shutdown, and the dialog does not
+show. `revier session restore` ends it as it starts, also when it opens
+nothing.
