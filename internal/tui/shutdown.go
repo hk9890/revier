@@ -433,10 +433,9 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
 	_, _, failed := msg.closed.Counts()
-	switch {
-	case s.walk.cancelled:
-		m.err = errors.New(s.notReached())
-	case failed > 0:
+	// A cancel is said on the result's own rows, so the footer keeps its
+	// keys.
+	if failed > 0 && !s.walk.cancelled {
 		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}
 	// A full shutdown leaves nothing to come back to: the surface says what
@@ -459,7 +458,34 @@ func (m Model) shutQuit() (tea.Model, tea.Cmd) {
 
 // notReached says how much of a cancelled close was left open.
 func (s shutdown) notReached() string {
-	return "cancelled: " + core.Count(len(s.plan)-len(s.closed), "step") + " not reached"
+	return "cancelled: " + core.Count(len(s.unreached()), "step") + " not reached"
+}
+
+// unreached are the steps of the plan a close never walked, which a cancel
+// leaves open. The close walks the steps in an order of its own, so a step
+// is found by what it closes, not by its place.
+func (s shutdown) unreached() []core.CloseStep {
+	type closes struct {
+		project revier.ProjectName
+		target  revier.TargetName
+		host    string
+		id      string
+		panel   revier.PanelID
+	}
+	what := func(c core.CloseStep) closes {
+		return closes{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
+	}
+	walked := make(map[closes]bool, len(s.closed))
+	for _, r := range s.closed {
+		walked[what(r.CloseStep)] = true
+	}
+	var out []core.CloseStep
+	for _, step := range s.plan {
+		if !walked[what(step)] {
+			out = append(out, step)
+		}
+	}
+	return out
 }
 
 // shutdownTitle is the question the step asks, on the line over the rule.
@@ -524,6 +550,9 @@ func (m Model) shutdownScreen() string {
 		rows = []string{run, "Cancel"}
 	case shutDone:
 		n, open, _ := s.closed.Counts()
+		if s.walk.cancelled {
+			open += len(s.unreached())
+		}
 		done := say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
 			say(th.Meta, s.saved)
 		if s.walk.cancelled {
@@ -580,7 +609,14 @@ func (m Model) shutdownDetail() string {
 		}
 	case s.step == shutDone:
 		b.WriteString(th.Header.Render("Closed") + "\n")
-		closedRows(s.closed)
+		project := closedRows(s.closed)
+		if !s.walk.cancelled {
+			break
+		}
+		for _, step := range s.unreached() {
+			project = m.shutProjectLine(&b, project, step.Project, w)
+			b.WriteString(planRow(th, skipOp(th, "open"), th.ProjectName.Render(step.Name()), "", "not reached", th.PathMissing, w) + "\n")
+		}
 	case s.step == shutConfirm && s.planned:
 		header := "Shutdown plan"
 		if s.one {

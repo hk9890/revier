@@ -120,12 +120,13 @@ func (m Model) draw() string {
 	// Beside the pane the rule stops a column short of its border rather
 	// than running into it. A row's own columns run to the border, so the
 	// rule can be a column short of a total the rows have the room for; it
-	// leaves that total off and keeps the rest.
+	// leaves that total off and keeps the rest. The line over the rule stops
+	// where the rule does, so its text does not run into the border either.
 	list, rule := m.listWidth(), m.listWidth()-1
 	if m.paneWidth() == 0 {
 		list, rule = w, w
 	}
-	head := clipTo(m.subtitle(), list) + "\n" + m.rule(rule)
+	head := clipTo(m.subtitle(), rule) + "\n" + m.rule(rule)
 	switch {
 	case m.paneWidth() > 0:
 		left := lipgloss.NewStyle().Width(list).Render(head) + "\n" + m.body.View()

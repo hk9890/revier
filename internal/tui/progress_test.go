@@ -126,7 +126,7 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 		t.Errorf("runtime closed %v, want project-01's home not reached after the cancel", rt.Closed)
 	}
 	body := strings.Join(rows(m), "\n")
-	for _, want := range []string{"closed 0, 1 still open", "cancelled: 1 step not reached"} {
+	for _, want := range []string{"closed 0, 2 still open", "cancelled: 1 step not reached"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rows lack %q:\n%s", want, body)
 		}
@@ -229,4 +229,61 @@ func TestARestoreCancelledOnItsLastTargetCancelsTheReturnHomeAlone(t *testing.T)
 	if foot := footer(m); !strings.Contains(foot, "return home cancelled") {
 		t.Errorf("footer = %q, want the return home cancelled", foot)
 	}
+}
+
+// A shutdown cancelled during its first step counts the step it never
+// reached as still open and lists it, and its footer keeps the keys.
+func TestACancelledShutdownCountsTheStepsNotReachedAsOpen(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	editor := newHeld()
+	wm.OnClose = func(revier.TargetRef) { editor.hold() }
+	m := fullShutdownPlanned(t, c, projects, stateWith(t, nil))
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	<-editor.entered
+	m, _ = readReports(t, m, wait, 3)
+	m, _ = send(m, ctrlC)
+	close(editor.release)
+	m, _ = update(m, <-answer)
+
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 1 still open") {
+		t.Errorf("rows = %q, want the step not reached counted as still open", body)
+	}
+	if p := pane(m); !strings.Contains(p, "project-01") || !strings.Contains(p, "not reached") {
+		t.Errorf("pane = %q, want project-01's home listed as not reached", p)
+	}
+	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") {
+		t.Errorf("footer = %q, want the result screen's keys", foot)
+	}
+}
+
+// While a restore runs, a target it opened and an agent it started carry no
+// state: the survey they would be read from is older than the step.
+func TestARestoreInProgressClaimsNoStateItHasNotRead(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	saved(t, root, "work", 10, session.Project{Name: "project-00", Targets: []session.Target{
+		{Name: "home", Agents: []session.Agent{{Harness: "claude"}}}, {Name: "editor"},
+	}})
+	editor := newHeld()
+	wm.OnOpen = func(revier.Realization) { editor.hold() }
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	<-editor.entered
+	// home before and after, and the editor begun.
+	m, _ = readReports(t, m, wait, 3)
+	p := pane(m)
+	if !strings.Contains(p, "opened") || !strings.Contains(p, "claude") {
+		t.Errorf("pane = %q, want home opened and its agent named", p)
+	}
+	if strings.Contains(p, "stopped") {
+		t.Errorf("pane = %q, want no state read off the survey before the restore", p)
+	}
+	close(editor.release)
+	<-answer
 }

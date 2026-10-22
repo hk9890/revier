@@ -521,11 +521,11 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		// The targets walked, then what runs now: a launch that hangs is the
 		// line left on the screen.
 		b.WriteString(heading(th, "Restoring", w))
-		restoreSteps(sf, &b, sc.walk.restored, w)
+		restoreSteps(sf, &b, sc.walk.restored, w, false)
 		say(th.Meta, "\n"+sc.walk.line())
 	case out.id == s.ID && (out.restored != nil || out.notReached > 0 || out.back != nil):
 		b.WriteString(heading(th, "Restored", w))
-		restoreSteps(sf, &b, out.restored, w)
+		restoreSteps(sf, &b, out.restored, w, true)
 		opened, pending, failed := out.restored.Counts()
 		summary := fmt.Sprintf("opened %d", opened)
 		if pending > 0 {
@@ -546,7 +546,7 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		say(th.Meta, "surveying")
 	default:
 		b.WriteString(heading(th, "Restore plan", w))
-		restoreSteps(sf, &b, sf.core.RestorePreview(s, core.Report{Views: sf.views}, sf.projects), w)
+		restoreSteps(sf, &b, sf.core.RestorePreview(s, core.Report{Views: sf.views}, sf.projects), w, true)
 		say(th.Meta, "\nEnter: restore")
 	}
 	return b.String()
@@ -556,7 +556,10 @@ func (sc *sessionsScreen) detail(sf surface) string {
 // the pane's grid: each recorded target as the Targets section draws it, and
 // under it each agent it held as the Agents section draws it, each behind the
 // operation the restore makes of it - start it, keep the one open, or skip it.
-func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
+// surveyed is whether the survey on the screen is newer than the steps: while
+// a restore runs it is not, so no row claims a state, and the operation alone
+// says what the step did.
+func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int, surveyed bool) {
 	th := sf.spun
 	var project revier.ProjectName
 	for _, r := range steps {
@@ -567,7 +570,10 @@ func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
 			project = r.Project
 			b.WriteString(th.ProjectName.Bold(true).Render(clipTo(string(r.Project), w)) + "\n")
 		}
-		tv, _ := targetView(sf.views, r.Project, r.Target)
+		var tv revier.TargetView
+		if surveyed {
+			tv, _ = targetView(sf.views, r.Project, r.Target)
+		}
 		mark, markStyle := th.Glyphs.Stopped+" stopped", th.Count
 		switch {
 		case !tv.Ref.IsZero():
@@ -576,21 +582,27 @@ func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
 			mark = "no host here"
 		case r.Action == core.RestoreRefused:
 			mark = "refused"
+		case !surveyed:
+			mark = ""
 		}
 		op, reason := targetOp(th, r)
 		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), markStyle.Render(mark),
 			reason, th.PathMissing, w) + "\n")
-		live := liveAgents(sf.views, r.Project, tv.Ref)
+		var live []revier.AgentView
+		if surveyed {
+			live = liveAgents(sf.views, r.Project, tv.Ref)
+		}
 		for i, a := range r.Resumes {
-			b.WriteString(planAgent(sf.projects, th, r, i, a, live, w) + "\n")
+			b.WriteString(planAgent(sf.projects, th, r, i, a, live, w, surveyed) + "\n")
 		}
 	}
 }
 
 // planAgent is one recorded agent of a step: its operation, then the harness,
 // state and activity of the agent now running in its place, or, where none
-// runs, what the restore said about it or the conversation it holds.
-func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int) string {
+// runs, what the restore said about it or the conversation it holds. With no
+// survey newer than the step (surveyed false) it claims no state.
+func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int, surveyed bool) string {
 	op, reason := agentOp(th, r, i)
 	harness := a.Harness
 	if harness == "" {
@@ -603,7 +615,7 @@ func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i 
 	}
 	// A restore keeps a running target as it is, so an agent that no longer
 	// runs in it is not started.
-	if r.Action == core.RestoreRunning {
+	if surveyed && r.Action == core.RestoreRunning {
 		op, reason = skipOp(th, planTense(r)("skip", "skipped")), "not running, and its target is kept as it is"
 	}
 	text, style := reason, th.PathMissing
@@ -616,7 +628,11 @@ func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i 
 			text += " in " + config.ContractHome(a.Dir)
 		}
 	}
-	return planRow(th, op, th.ProjectName.Render(harness), th.Count.Render(th.Glyphs.Stopped+" stopped"), text, style, w)
+	state := ""
+	if surveyed {
+		state = th.Count.Render(th.Glyphs.Stopped + " stopped")
+	}
+	return planRow(th, op, th.ProjectName.Render(harness), state, text, style, w)
 }
 
 // planRow is a row of the Targets or Agents section behind an operation: the

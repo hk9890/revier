@@ -40,14 +40,36 @@ func opened(rt *hosttest.FakeRuntime, name string) bool {
 func TestTheStartDialogOffersTheRestoreAfterAFullShutdown(t *testing.T) {
 	m, _, _, _ := shutDownWorld(t)
 
-	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30. 1 project, 1 agent saved.") {
-		t.Errorf("subtitle = %q, want when and what was saved", sub)
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Errorf("subtitle = %q, want when revier was shut down", sub)
+	}
+	if p := pane(m); !strings.Contains(p, "1 project · 1 target · 1 agent") {
+		t.Errorf("pane = %q, want what was saved", p)
 	}
 	body := strings.Join(rows(m), "\n")
 	for _, want := range []string{"Restore this session", "Pick another session", "Start fresh"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rows lack %q:\n%s", want, body)
 		}
+	}
+}
+
+// The start dialog's line over the rule fits the list's column at 120
+// columns, whole, and keeps a column of air before the pane's border.
+func TestTheStartDialogTitleKeepsClearOfThePane(t *testing.T) {
+	m, _, _, _ := shutDownWorld(t)
+	m = resize(m, 120, 30)
+	border := paneBorder(t, m)
+	sub := []rune(lines(m)[2])
+	if len(sub) <= border {
+		t.Fatalf("subtitle line = %q, want the pane beside it", string(sub))
+	}
+	left := string(sub[:border])
+	if !strings.Contains(left, "revier was shut down at 2026-09-15 18:30.") {
+		t.Errorf("subtitle = %q, want when revier was shut down, whole, left of the pane", left)
+	}
+	if !strings.HasSuffix(left, " ") {
+		t.Errorf("subtitle = %q, want a column of air before the pane's border", left)
 	}
 }
 
@@ -133,8 +155,8 @@ func TestAShutdownThatSavedNoSessionOffersNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
-	if sub := lines(m)[2]; !strings.Contains(sub, "No session was saved.") {
-		t.Errorf("subtitle = %q, want no session named", sub)
+	if p := pane(m); !strings.Contains(p, "No session was saved.") {
+		t.Errorf("pane = %q, want no session named", p)
 	}
 	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "Restore this session") {
 		t.Errorf("rows = %q, want no restore offered", body)

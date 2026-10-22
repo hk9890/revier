@@ -10,7 +10,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/app"
-	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 )
@@ -113,8 +112,9 @@ func (m Model) startFresh() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// resumeTitle is the line over the rule: when revier was shut down, and what
-// the session it offers holds.
+// resumeTitle is the line over the rule: when revier was shut down. What the
+// session holds is the pane's, which wraps; this line is one line in the
+// list's column.
 func (m Model) resumeTitle() string {
 	r := m.resume
 	at := r.at.Local()
@@ -122,11 +122,7 @@ func (m Model) resumeTitle() string {
 	if now := m.now().Local(); at.YearDay() != now.YearDay() || at.Year() != now.Year() {
 		when = at.Format("2006-01-02 15:04")
 	}
-	saved := "No session was saved."
-	if s := r.session; s.ID != "" {
-		saved = core.Count(len(s.Projects), "project") + ", " + core.Count(s.Agents(), "agent") + " saved."
-	}
-	return "revier was shut down at " + when + ". " + saved
+	return "revier was shut down at " + when + "."
 }
 
 // resumeScreenRows is the dialog's choices, in the list's place.
@@ -151,6 +147,8 @@ func (m Model) resumeDetail() string {
 	if s.ID != "" {
 		say(th.Path, "session "+s.ID+": "+sessionCounts(s))
 		say(th.Meta, "\nRestore opens what it recorded, and shows each step as it goes.")
+	} else {
+		say(th.Path, "No session was saved.")
 	}
 	say(th.Meta, "Pick another session lists every saved session.")
 	say(th.Meta, "Start fresh opens nothing and deletes no session. Esc does the same.")

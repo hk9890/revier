@@ -147,7 +147,7 @@ and a full shutdown that found nothing left to close when it ran keep the TUI
 open, and the next start does not show the dialog.
 
 The next start of the TUI, or of the popup, opens on a dialog:
-`revier was shut down at 18:30. 3 projects, 4 agents saved.`
+`revier was shut down at 18:30.` The pane shows what the saved session holds.
 
 - **Restore this session** restores the session the shutdown saved. The
   sessions screen shows each step.
