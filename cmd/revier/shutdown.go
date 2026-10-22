@@ -114,6 +114,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	for _, s := range plan {
 		pw, nw = max(pw, len(s.Project)), max(nw, len(s.Name()))
 	}
+	var said []string // what each step's line said, in the order it closed
 	opts.Progress = func(p core.Progress) {
 		if p.Phase != core.PhaseClose {
 			return
@@ -122,7 +123,8 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Closed.Project, nw, p.Label)
 			return
 		}
-		_, _ = fmt.Fprintln(a.out, p.Closed.Note())
+		said = append(said, p.Closed.Note())
+		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
 	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, opts)
 	var refused *core.BusyRefusal
@@ -135,9 +137,10 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	case err != nil:
 		return fmt.Errorf("%w; nothing closed", err)
 	}
-	// A step closed is listed once more after the wait when it did not go.
-	for _, r := range closed {
-		if r.Open {
+	// A step is listed once more after the wait when what came of it changed:
+	// it did not go, or a close that failed went all the same.
+	for i, r := range closed {
+		if r.Note() != said[i] {
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  %s\n", pw, r.Project, nw, r.Name(), r.Note())
 		}
 	}

@@ -343,9 +343,10 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				return nil
 			}
 		}
-		ctx, cancel := context.WithTimeout(cancelled, shutdownWait)
-		defer cancel()
-		answer := closeAnswer(c.Shutdown(ctx, plan, core.CloseWait, opts))
+		// No deadline over the close: each phase bounds its own, and once a
+		// deadline laid over the cancel passed, core.WithoutDeadline would no
+		// longer follow a ctrl+c.
+		answer := closeAnswer(c.Shutdown(cancelled, plan, core.CloseWait, opts))
 		if answer.err == nil && answer.recheck == nil {
 			answer.saved = note
 		}
@@ -377,21 +378,14 @@ func closeAnswer(closed core.Closed, err error) shutdownMsg {
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = false
-	// A cancel before the first close fails the recheck or the save on a
-	// context it ended; the user's word for that is the cancel.
-	if msg.err != nil && s.walk.cancelled {
+	// A cancel before the first close fails the save on the context it
+	// ended; the user's word for that is the cancel. Any other failure is
+	// said as it came.
+	if s.walk.cancelled && errors.Is(msg.err, context.Canceled) {
 		msg.err = errors.New("cancelled; nothing closed")
 	}
 	if msg.recheck != nil {
 		m.err = errors.New("an agent turned busy since the plan was shown; nothing closed")
-		// A screen or a delete confirm opened while the close ran is the
-		// user's: nothing closed, so the press is dropped rather than shown
-		// over it, as an answer to a del that a screen has outlived is
-		// dropped (close.go).
-		if m.confirm != "" || (m.dialog != dialogNone && m.dialog != dialogShutdown) {
-			m.shut = shutdown{}
-			return m, nil
-		}
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
 		// A del that closed at once asks here instead, so its second press
