@@ -139,8 +139,8 @@ func titleOf(w workspace) string {
 // refID is an instance id: the workspace id, behind the pid of the server that
 // assigned it. herdr numbers workspaces per server, so after a restart a bare
 // workspace id can name an unrelated workspace, and a binding kept in state
-// would raise it. The core trusts a runtime binding without re-checking it
-// (decisions.md D25), so the id has to stay unique across servers.
+// would raise it. The core trusts a runtime binding without re-checking it,
+// so the id has to stay unique across servers.
 func refID(serverPID int, workspace string) string {
 	return strconv.Itoa(serverPID) + "/" + workspace
 }
