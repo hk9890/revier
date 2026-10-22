@@ -18,6 +18,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/internal/theme"
@@ -780,4 +781,25 @@ func listColumn(m tui.Model) string {
 		out = append(out, left)
 	}
 	return strings.Join(out, "\n")
+}
+
+// saved writes a session into the state root, saved at the given minute.
+func saved(t *testing.T, root, name string, minute int, projects ...session.Project) session.Session {
+	t.Helper()
+	s, _, err := session.Save(root, session.Session{
+		Name: name, At: time.Date(2026, 9, 15, 18, minute, 0, 0, time.Local), Projects: projects,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
+func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {
+	t.Helper()
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+q")
+	m, cmd := press(m, "enter")
+	return run(m, cmd)
 }

@@ -18,18 +18,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// saved writes a session into the state root, saved at the given minute.
-func saved(t *testing.T, root, name string, minute int, projects ...session.Project) session.Session {
-	t.Helper()
-	s, _, err := session.Save(root, session.Session{
-		Name: name, At: time.Date(2026, 9, 15, 18, minute, 0, 0, time.Local), Projects: projects,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
-}
-
 // homeOf is a recorded project with its home target open.
 func homeOf(name string) session.Project {
 	return session.Project{Name: revier.ProjectName(name), Targets: []session.Target{{Name: "home"}}}
