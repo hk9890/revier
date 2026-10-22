@@ -216,8 +216,8 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	if foot := footer(m); !strings.Contains(foot, "restoring "+s.ID) {
 		t.Errorf("footer = %q, want the restore said as running", foot)
 	}
-	if again, _ := press(m, "enter"); !strings.Contains(footer(again), "still running") {
-		t.Errorf("footer = %q, want a second restore refused while one runs", footer(again))
+	if _, again := press(m, "enter"); again != nil {
+		t.Error("a second enter returned a command, want it held while the restore runs")
 	}
 	// The restore is a batch: the walk, and the wait that takes its writes
 	// into the surface. The walk runs first, as its writes come before the

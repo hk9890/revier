@@ -459,11 +459,8 @@ func (m Model) footer() string {
 	if m.sessions.restoring != "" || m.sessions.saving {
 		return m.sessions.progressLine(*m.theme)
 	}
-	if m.shut.running && m.shut.saves() {
-		return m.theme.Meta.Render(" saving the session when it changed, and closing…")
-	}
 	if m.shut.running {
-		return m.theme.Meta.Render(" closing…")
+		return m.theme.Meta.Render(" " + m.shut.walk.line())
 	}
 	if m.copied > 0 {
 		unit := "characters"

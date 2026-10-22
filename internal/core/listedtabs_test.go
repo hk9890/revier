@@ -584,7 +584,7 @@ func restoredInto(t *testing.T, project revier.Project, s session.Session) (*hos
 	projects := []core.Project{prepared(t, project)}
 	report := survey(t, c, projects, nil)
 	preview := c.RestorePreview(s, report, projects)
-	out, back := c.Restore(context.Background(), s, report, projects)
+	out, back := c.Restore(context.Background(), s, report, projects, core.RestoreOpts{})
 	if back != nil {
 		t.Fatalf("Restore: %v", back)
 	}

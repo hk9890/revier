@@ -43,6 +43,9 @@ type Fake struct {
 	// OnClose runs after a close is recorded and before it takes effect, so
 	// a test can make a host go away in the middle of a shutdown.
 	OnClose func(revier.TargetRef)
+	// OnOpen runs after an open is recorded and before it takes effect, so
+	// a test can hold a restore in the middle of its walk.
+	OnOpen func(revier.Realization)
 
 	// Opened records every realization passed to Open, in order. A test
 	// asserts on it to prove the core rendered templates before the host saw
@@ -450,7 +453,11 @@ func (f *Fake) Instances(context.Context) ([]revier.Instance, error) {
 func (f *Fake) Open(_ context.Context, r revier.Realization) (revier.TargetRef, error) {
 	f.mu.Lock()
 	f.Opened = append(f.Opened, r)
+	then := f.OnOpen
 	f.mu.Unlock()
+	if then != nil {
+		then(r)
+	}
 	if f.OpenErr != nil {
 		return revier.TargetRef{}, f.OpenErr
 	}

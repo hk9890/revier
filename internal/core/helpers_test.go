@@ -522,7 +522,7 @@ func restoreOf(t *testing.T, c *core.Core, s session.Session) (core.Restored, *l
 	report := survey(t, c, projects, nil)
 	l := &ledger{}
 	c.Ledger = l
-	out, back := c.Restore(context.Background(), s, report, projects)
+	out, back := c.Restore(context.Background(), s, report, projects, core.RestoreOpts{})
 	return out, l, back
 }
 

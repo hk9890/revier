@@ -113,6 +113,9 @@ type sessionOutcome struct {
 	notes    []string // what the save could not record
 	restored core.Restored
 	back     error
+	// cancelled is a restore stopped by ctrl+c: restored holds the targets
+	// it walked before it stopped.
+	cancelled bool
 }
 
 // savedMsg is a save's answer.
@@ -150,6 +153,7 @@ type sessionsScreen struct {
 	name      textinput.Model // the name field of a session being saved
 	saving    bool            // whether a save is out
 	restoring string          // the session a restore is walking, while it is
+	walk      walk            // what that restore has reported, and its cancel
 	outcome   sessionOutcome  // what the last save or restore came to
 }
 
@@ -270,11 +274,6 @@ func (sc *sessionsScreen) openName() (tea.Cmd, error) {
 	if sc.saving {
 		return nil, errors.New("a save is still running")
 	}
-	// A save during a restore records a desktop half restored, and it would
-	// be the newest session, the one a plain restore opens.
-	if sc.restoring != "" {
-		return nil, fmt.Errorf("the restore of %s is still running; save once it is done", sc.restoring)
-	}
 	sc.name.SetValue("")
 	sc.naming = true
 	return sc.name.Focus(), nil
@@ -347,34 +346,37 @@ func (sc *sessionsScreen) saved(root string, th theme.Theme, msg savedMsg) error
 
 // restore is Enter on a session: it opens what the session recorded, as
 // `revier session restore` does, off the terminal. The restore walks one
-// target at a time and waits for each window, so it can take a while, and a
-// second one is refused while it runs.
+// target at a time and waits for each window, so it can take a while; the
+// surface holds every press but ctrl+c, its cancel, until it is done.
 func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	it, ok := sc.list.SelectedItem().(sessionItem)
 	if !ok {
 		return nil, nil
-	}
-	if sc.restoring != "" {
-		return nil, fmt.Errorf("the restore of %s is still running", sc.restoring)
 	}
 	sc.restoring = it.session.ID
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
 	// The restore's own ledger, on the same state: it says when it wrote.
 	c := sf.core.WithLedger(ledger.File{Root: sf.stateRoot, Written: written})
-	walk := func() tea.Msg {
+	// A report before and after each step, and the return home. The survey
+	// before the walk is the restore's first phase until the walk reports.
+	w, progress, cancelled := startWalk(core.PhaseSurvey, 1+2*s.Targets())
+	sc.walk = w
+	restoring := func() tea.Msg {
 		defer close(written)
-		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
+		defer close(progress)
+		defer w.cancel()
+		ctx, cancel := context.WithTimeout(cancelled, localHostWait)
 		report, err := c.Survey(ctx, projects)
 		cancel()
 		if err != nil {
 			return restoredMsg{id: s.ID, err: err}
 		}
 		// No deadline over the whole walk: each step bounds its own.
-		out, back := c.Restore(context.Background(), s, report, projects)
+		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) { progress <- p }})
 		return restoredMsg{id: s.ID, restored: out, back: back}
 	}
-	return tea.Batch(walk, waitLedger(written)), nil
+	return tea.Batch(restoring, waitLedger(written), waitProgress(progress)), nil
 }
 
 // restored takes a restore's answer. What each target came to is the pane's;
@@ -382,10 +384,17 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 // the footer's too.
 func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	sc.restoring = ""
-	if msg.err != nil {
+	cancelled := sc.walk.cancelled
+	switch {
+	case msg.err != nil && cancelled:
+		return fmt.Errorf("the restore of %s was cancelled; nothing opened", msg.id)
+	case msg.err != nil:
 		return msg.err
 	}
-	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back}
+	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back, cancelled: cancelled}
+	if cancelled {
+		return fmt.Errorf("the restore of %s was cancelled after %s", msg.id, core.Count(len(msg.restored), "target"))
+	}
 	if _, _, failed := msg.restored.Counts(); failed > 0 {
 		return fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
 	}
@@ -499,9 +508,12 @@ func (sc *sessionsScreen) detail(sf surface) string {
 	}
 	switch {
 	case sc.restoring == s.ID:
-		b.WriteString(heading(th, "Restore", w))
-		say(th.Meta, "restoring, one target at a time…")
-	case out.id == s.ID && out.restored != nil:
+		// The targets walked, then what runs now: a launch that hangs is the
+		// line left on the screen.
+		b.WriteString(heading(th, "Restoring", w))
+		restoreSteps(sf, &b, sc.walk.restored, w)
+		say(th.Meta, "\n"+sc.walk.line())
+	case out.id == s.ID && (out.restored != nil || out.cancelled):
 		b.WriteString(heading(th, "Restored", w))
 		restoreSteps(sf, &b, out.restored, w)
 		opened, pending, failed := out.restored.Counts()
@@ -513,6 +525,9 @@ func (sc *sessionsScreen) detail(sf surface) string {
 			summary += fmt.Sprintf(", %d failed", failed)
 		}
 		say(th.NameDim, "\n"+summary)
+		if out.cancelled {
+			say(th.Attention, "cancelled: the targets after these were not opened")
+		}
 		if out.back != nil {
 			say(th.Attention, out.back.Error())
 		}
@@ -724,7 +739,7 @@ func liveAgents(views []revier.ProjectView, project revier.ProjectName, ref revi
 // progressLine is the footer while a save or a restore runs.
 func (sc *sessionsScreen) progressLine(th theme.Theme) string {
 	if sc.restoring != "" {
-		return th.Meta.Render(fmt.Sprintf(" restoring %s…", sc.restoring))
+		return th.Meta.Render(fmt.Sprintf(" restoring %s: %s", sc.restoring, sc.walk.line()))
 	}
 	return th.Meta.Render(" saving the projects open now…")
 }

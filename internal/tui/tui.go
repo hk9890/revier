@@ -993,6 +993,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.closePlanned(msg)
 	case ledgerMsg:
 		return m.ledgerWritten(msg)
+	case progressMsg:
+		return m.progressed(msg)
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
@@ -1014,6 +1016,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		return m.keyIn(pastedText(msg.Content))
 	case tea.MouseMsg:
+		if m.walking() {
+			m.press, m.sel = nil, selection{}
+			return m, nil
+		}
 		return m.mouse(msg)
 	}
 	// A blink is a field's own timer message; the field it is not for
@@ -1028,6 +1034,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // keyIn is a press or a paste, which a drag in progress holds back.
 func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 	m.copied = 0
+	if m.walking() {
+		return m.lockedKey(msg)
+	}
 	if m.sel.active {
 		return m.selectingKey(msg)
 	}

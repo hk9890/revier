@@ -492,6 +492,18 @@ type ShutdownOpts struct {
 	// the caller's remains: the recheck may have waited for the hosts its
 	// plan names, and the save asks the host of every link open here.
 	Before func(context.Context, Report) error
+
+	// Progress, when set, is told of each phase as it starts and of each
+	// step before and after it closes. It runs on the shutdown's own
+	// goroutine and must not block: the closes wait for it.
+	Progress func(Progress)
+}
+
+// report hands p to the caller's Progress, if it set one.
+func (o ShutdownOpts) report(p Progress) {
+	if o.Progress != nil {
+		o.Progress(p)
+	}
 }
 
 // ErrAgentBusy is a close refused because a step would end an agent that
@@ -531,8 +543,13 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // The closes and the wait after them then run on a budget of their own
 // (phaseContext), as the save before them does, so however long the recheck
 // took, the save is made and every step is asked to close.
+//
+// A caller that cancels stops the walk between two steps: the steps not yet
+// reached are left out of the result, and nothing is waited for. A budget
+// that runs out is no such decision, and every step is still asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
+	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
 	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
@@ -546,6 +563,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	// reason, and closes nothing all the same.
 	closes := slices.ContainsFunc(plan, func(s CloseStep) bool { return !s.Action.Leaves() })
 	if opts.Before != nil && closes {
+		opts.report(Progress{Phase: PhaseSave, Of: len(plan)})
 		saving, stop := phaseContext(ctx, SaveBudget)
 		saved := time.Now()
 		err := opts.Before(saving, r)
@@ -558,10 +576,15 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	closing, stop := phaseContext(ctx, CloseBudget+wait)
 	defer stop()
 	out := make(Closed, 0, len(plan))
-	for _, s := range plan {
+	cancelled := func() bool { return errors.Is(closing.Err(), context.Canceled) }
+	for i, s := range plan {
+		if cancelled() {
+			break
+		}
 		// The plan may come from a core whose hosts have changed since, as the
 		// TUI's does after a runtime switch: a host that is gone cannot close.
 		res := CloseResult{CloseStep: c.closeStep(s)}
+		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Closed: res})
 		switch res.Action {
 		case CloseInstance:
 			closer, _ := c.closer(s.Ref)
@@ -578,8 +601,14 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
 			"unread", s.Unread, "err", res.Err)
 		out = append(out, res)
+		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
-	c.awaitClosed(closing, out, wait)
+	if cancelled() {
+		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
+	} else {
+		opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
+		c.awaitClosed(closing, out, wait)
+	}
 	closed, open, failed := out.Counts()
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	return out, nil

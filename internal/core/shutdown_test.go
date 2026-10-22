@@ -727,11 +727,11 @@ func TestShutdownClosesNothingWhenTheSaveFails(t *testing.T) {
 	}
 }
 
-// A caller that cancels cancels the closes too: a deadline that passed before
-// them is not a decision, and a cancel is.
+// A caller that cancels stops the closes too: a deadline that passed before
+// them is not a decision, and a cancel is. The walk stops before the next
+// step rather than asking each host to close on a context already done.
 func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
-	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
-	c.Window = ctxCloser{wm}
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -743,8 +743,8 @@ func TestShutdownStopsClosingWhenTheCallerCancels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shutdown: %v", err)
 	}
-	if _, _, failed := out.Counts(); failed == 0 {
-		t.Errorf("counts = %d failed, want the cancelled close to fail", failed)
+	if len(out) != 0 || len(rt.Closed) != 0 || len(rt.ClosedPanels) != 0 || len(wm.Closed) != 0 {
+		t.Errorf("walked %d steps, closed %v, %v, %v; want the cancel to stop the walk before any close", len(out), rt.Closed, rt.ClosedPanels, wm.Closed)
 	}
 }
 
@@ -903,8 +903,7 @@ func TestShutdownRechecksOnItsOwnBudgetAfterASlowPlan(t *testing.T) {
 // each phase counts for itself drops the caller's deadline and not the
 // caller's cancellation, which is a decision about this close.
 func TestShutdownStopsWhenTheCallerCancelledBeforeIt(t *testing.T) {
-	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
-	c.Window = ctxCloser{wm}
+	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	ctx, cancel := context.WithCancel(context.Background())
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 	cancel()
@@ -913,7 +912,7 @@ func TestShutdownStopsWhenTheCallerCancelledBeforeIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shutdown: %v", err)
 	}
-	if _, _, failed := out.Counts(); failed == 0 {
-		t.Errorf("counts = %d failed, want the cancelled close to fail", failed)
+	if len(out) != 0 || len(rt.Closed) != 0 || len(rt.ClosedPanels) != 0 || len(wm.Closed) != 0 {
+		t.Errorf("walked %d steps, closed %v, %v, %v; want the cancel to stop the walk before any close", len(out), rt.Closed, rt.ClosedPanels, wm.Closed)
 	}
 }

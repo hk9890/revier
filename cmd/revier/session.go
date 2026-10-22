@@ -79,7 +79,7 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 }
 
 // cmdSessionRestore opens what a saved session recorded, as core.Restore
-// walks it, and prints a line per recorded target.
+// walks it, and prints a line per recorded target as it is walked.
 func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("session restore", flag.ContinueOnError)
 	dry := fs.Bool("dry-run", false, "print what it would open, and open nothing")
@@ -120,10 +120,21 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	// cancel that comes before that deadline still stops the walk.
 	walk, stop := core.WithoutDeadline(ctx)
 	defer stop()
-	restored, back := a.core.Restore(walk, s, report, a.projects)
-	if err := printRestored(a.out, restored); err != nil {
-		return err
+	// Each target is named before it opens, so a launch that hangs is the
+	// line left on the screen, and what came of it follows on that line.
+	pw, tw := 0, 0
+	for _, step := range a.core.RestorePlan(s, report) {
+		pw, tw = max(pw, len(step.Project)), max(tw, len(step.Target))
 	}
+	restored, back := a.core.Restore(walk, s, report, a.projects, core.RestoreOpts{Progress: func(p core.Progress) {
+		switch {
+		case p.Phase != core.PhaseLaunch:
+		case !p.Done:
+			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Restored.Project, tw, p.Label)
+		default:
+			_, _ = fmt.Fprintln(a.out, p.Restored.Note())
+		}
+	}})
 	if back != nil {
 		_, _ = fmt.Fprintln(a.out, back)
 	}
