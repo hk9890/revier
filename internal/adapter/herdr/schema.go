@@ -24,7 +24,6 @@ type snapshotResult struct {
 }
 
 type snapshot struct {
-	Version            string      `json:"version"`
 	FocusedWorkspaceID string      `json:"focused_workspace_id"`
 	Workspaces         []workspace `json:"workspaces"`
 	Panes              []pane      `json:"panes"`

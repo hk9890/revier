@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // socketPath is the API socket of the server herdr's own CLI would talk to
@@ -58,30 +59,36 @@ func (h *Host) request(ctx context.Context, method string, params, out any) (int
 		return 0, fmt.Errorf("herdr %s: %w", method, err)
 	}
 	defer func() { _ = conn.Close() }()
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
+	// A server that accepts and never answers must not hold the caller past
+	// its context: an end of ctx, by deadline or by cancel, ends the exchange.
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
+	defer stop()
+	fail := func(err error) (int, error) {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return 0, fmt.Errorf("herdr %s: %w", method, err)
 	}
 
 	pid, err := peerPID(conn.(*net.UnixConn))
 	if err != nil {
-		return 0, fmt.Errorf("herdr %s: %w", method, err)
+		return fail(err)
 	}
 
 	line, err := json.Marshal(map[string]any{"id": "revier", "method": method, "params": params})
 	if err != nil {
-		return 0, fmt.Errorf("herdr %s: %w", method, err)
+		return fail(err)
 	}
 	if _, err := conn.Write(append(line, '\n')); err != nil {
-		return 0, fmt.Errorf("herdr %s: %w", method, err)
+		return fail(err)
 	}
-	r := bufio.NewReader(conn)
-	reply, err := r.ReadBytes('\n')
+	reply, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
-		return 0, fmt.Errorf("herdr %s: %w", method, err)
+		return fail(err)
 	}
 	var resp response
 	if err := json.Unmarshal(reply, &resp); err != nil {
-		return 0, fmt.Errorf("herdr %s: %w", method, err)
+		return fail(err)
 	}
 	if resp.Error != nil {
 		return 0, fmt.Errorf("herdr %s: %s: %s", method, resp.Error.Code, resp.Error.Message)

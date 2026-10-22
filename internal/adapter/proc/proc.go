@@ -12,7 +12,8 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// Foreground, which the tmux host reads a pane's command with, and RunsUnder,
+// ParentIn, which the herdr host finds a pane's process with, Foreground,
+// which the tmux and herdr hosts read a pane's command with, and RunsUnder,
 // the panels a shutdown closes last.
 package proc
 
@@ -250,8 +251,12 @@ func statFields(stat []byte) []string {
 }
 
 // Parent reads a process's parent from this machine's /proc.
-func Parent(pid int) (int, bool) {
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+func Parent(pid int) (int, bool) { return ParentIn("/proc", pid) }
+
+// ParentIn reads a process's parent from the /proc tree at root, which a test
+// replaces.
+func ParentIn(root string, pid int) (int, bool) {
+	stat, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "stat"))
 	if err != nil {
 		return 0, false
 	}

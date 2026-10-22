@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
@@ -82,13 +81,15 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		byWorkspace[w.ID] = &instances[i]
 	}
 
-	processes := paneProcesses(h.root(), h.socket())
+	processes := paneProcesses(h.root(), h.socket(), pid)
 	for _, p := range snap.Panes {
 		inst, ok := byWorkspace[p.WorkspaceID]
 		if !ok {
 			continue
 		}
-		fg, command := foreground(processes[p.ID])
+		// A pane whose process was not found has no foreground: proc reads
+		// none for pid 0.
+		fg, command, _ := proc.Foreground(processes[p.ID])
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(p.ID),
 			Kind:    kindOf(command),
@@ -130,7 +131,7 @@ func (h *Host) snapshot(ctx context.Context) (int, snapshot, error) {
 }
 
 func titleOf(w workspace) string {
-	if name, ok := w.Tokens[nameToken]; ok {
+	if name := w.Tokens[nameToken]; name != "" {
 		return name
 	}
 	return w.Label
@@ -145,22 +146,9 @@ func refID(serverPID int, workspace string) string {
 	return strconv.Itoa(serverPID) + "/" + workspace
 }
 
-// foreground is the pid and argv of the foreground process of the terminal a
-// pane's process runs in, as a probe reads them. A pane whose process was not
-// found has neither.
-func foreground(pid int) (int, []string) {
-	if pid == 0 {
-		return 0, nil
-	}
-	if fg, argv, ok := proc.Foreground(pid); ok {
-		return fg, argv
-	}
-	return 0, nil
-}
-
 // kindOf classifies a pane by its foreground command: a shell or a tool.
 func kindOf(argv []string) revier.PanelKind {
-	if len(argv) > 0 && revier.IsShell(filepath.Base(argv[0])) {
+	if len(argv) > 0 && revier.IsShell(argv[0]) {
 		return revier.PanelShell
 	}
 	return revier.PanelTool

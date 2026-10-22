@@ -5,11 +5,14 @@ package herdr_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
 )
@@ -54,11 +57,13 @@ func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 }
 
 // The token revier leaves on a workspace is its title, so a rename in herdr
-// does not lose it; a workspace without one is known by its label.
+// does not lose it; a workspace without one, or with an empty one, is known
+// by its label.
 func TestTheNameTokenWinsOverTheLabel(t *testing.T) {
 	result := `{"snapshot":{"focused_workspace_id":"w2","workspaces":[
 		{"workspace_id":"w1","label":"renamed","tokens":{"revier_name":"home"}},
-		{"workspace_id":"w2","label":"by hand"}]}}`
+		{"workspace_id":"w2","label":"by hand"},
+		{"workspace_id":"w3","label":"emptied","tokens":{"revier_name":""}}]}}`
 	h := &herdr.Host{}
 	h.SetProcRoot(t.TempDir())
 	h.SetCaller(func(context.Context, string, any) (int, []byte, error) { return 7, []byte(result), nil })
@@ -67,8 +72,8 @@ func TestTheNameTokenWinsOverTheLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
 	}
-	if len(got) != 2 || got[0].Title != "home" || got[1].Title != "by hand" {
-		t.Errorf("titles = %+v, want home and by hand", got)
+	if len(got) != 3 || got[0].Title != "home" || got[1].Title != "by hand" || got[2].Title != "emptied" {
+		t.Errorf("titles = %+v, want home, by hand and emptied", got)
 	}
 	focused, err := h.Focused(context.Background())
 	if err != nil {
@@ -110,6 +115,47 @@ func TestTheSocketCarriesOneRequestAndItsAnswer(t *testing.T) {
 	}
 	if want := fmt.Sprintf("%d/w1", os.Getpid()); len(got) != 1 || got[0].Ref.ID != want {
 		t.Errorf("instances = %+v, want one with id %s", got, want)
+	}
+}
+
+// A server that accepts and never answers holds the host no longer than the
+// caller's context, also a context that is cancelled and has no deadline.
+func TestACancelEndsARequestTheServerNeverAnswers(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "s.sock")
+	l, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		if conn, err := l.Accept(); err == nil {
+			accepted <- conn
+		}
+	}()
+	t.Cleanup(func() {
+		_ = l.Close()
+		select {
+		case conn := <-accepted:
+			_ = conn.Close()
+		default:
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	time.AfterFunc(50*time.Millisecond, cancel)
+	done := make(chan error, 1)
+	go func() {
+		_, err := (&herdr.Host{Socket: sock}).Instances(ctx)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("err = %v, want one that says the caller cancelled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Instances still waits on a silent server after its context was cancelled")
 	}
 }
 
