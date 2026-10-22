@@ -66,18 +66,22 @@ var ctrlC = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 // surface takes no key and no click, and no error hides its footer; ctrl+c
 // cancels it rather than quitting, the close that runs finishes, and the
 // surface stays up to say what closed, what the wait still found open, and
-// what was not reached.
+// what was not reached. The full shutdown the save recorded is taken back.
 func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	ref := wm.Add("editor", "code-project-00")
 	wm.Refuses = map[string]bool{ref.ID: true}
 	editor := newHeld()
 	wm.OnClose = func(revier.TargetRef) { editor.hold() }
-	m := fullShutdownPlanned(t, c, projects, stateWith(t, nil))
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
 
 	m, cmd := press(m, "enter")
 	answer, wait := walkInBackground(t, cmd)
 	<-editor.entered
+	if shutDownOnRecord(t, root) == nil {
+		t.Error("no shutdown on record when the first close ran, want it written after the save")
+	}
 	// The recheck, the save, and the editor's close begun.
 	m, _ = readReports(t, m, wait, 3)
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closing 1 of 2: editor") {
@@ -115,6 +119,9 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	close(editor.release)
 	m, _ = update(m, <-answer)
 
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v after the cancel, want it taken back", sd)
+	}
 	if len(rt.Closed) != 0 {
 		t.Errorf("runtime closed %v, want project-01's home not reached after the cancel", rt.Closed)
 	}
@@ -128,7 +135,7 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 		t.Errorf("pane = %q, want the step that closed", p)
 	}
 	m, _ = press(m, "esc")
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface back once the shutdown ended", bar)
 	}
 	if _, out := send(m, ctrlC); out == nil {

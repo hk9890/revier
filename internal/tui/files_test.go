@@ -136,7 +136,7 @@ func TestDeleteClosesARunningProjectFirst(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); !os.IsNotExist(err) {
 		t.Errorf("alpha.toml is still there: %v", err)
 	}
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface back", bar)
 	}
 }
@@ -178,7 +178,7 @@ func TestDeleteDeclinedOnTheConfirmClosesNothing(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
 		t.Errorf("alpha.toml went on a declined delete: %v", err)
 	}
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface back", bar)
 	}
 }

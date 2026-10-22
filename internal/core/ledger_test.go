@@ -183,3 +183,25 @@ func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
 		t.Errorf("attached = %v, want %v", st.Attached["revier"], want)
 	}
 }
+
+// An open ends the full shutdown on record, so the next surface does not
+// offer a restore over what the user opened since (decisions.md D141). A
+// survey and its settle open nothing, and leave it.
+func TestAnOpenEndsTheShutdownOnRecordAndASettleDoesNot(t *testing.T) {
+	shortBindWait(t)
+	l := &ledger{}
+	l.st.MarkShutDown(time.Now(), "s1")
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm")}
+	settle := settling(t, c, l, time.Now())
+
+	settle()
+	if st := settle(); st.ShutDown == nil {
+		t.Fatal("a settle ended the shutdown on record, want it kept")
+	}
+	if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, project()), "editor", nil); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if st := l.State(); st.ShutDown != nil {
+		t.Errorf("shutdown on record = %+v after an open, want none", st.ShutDown)
+	}
+}

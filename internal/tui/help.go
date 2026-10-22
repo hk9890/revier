@@ -111,12 +111,14 @@ func (m Model) helpSections() []helpSection {
 		{title: "Sessions", entries: []helpEntry{
 			{key: "enter", desc: "restore the session: open what it recorded and is not running"},
 			{key: sessionsBarKey, desc: "save the projects open now, under an optional name"},
+			{key: k.Shutdown.Help().Key, desc: "shut down: save the session when it changed, and close every project or one; from the projects too"},
 			{key: "esc", desc: "back to the projects"},
 		}},
 		{title: "Shutdown", entries: []helpEntry{
 			{key: "↑ / ↓", desc: "choose: every project or one, then what of it"},
 			{key: "enter", desc: "next step; on the plan, shut down"},
 			{key: "esc", desc: "one step back"},
+			{key: "any key", desc: "after a full shutdown, quit at once rather than after its result"},
 		}},
 		{title: "Query editing", entries: []helpEntry{
 			{key: "ctrl+a", desc: "start of the line"},
@@ -143,8 +145,7 @@ func barHelpEntries() []helpEntry {
 	descs := map[string]string{
 		"new":      "add a project on this machine",
 		"remote":   "link a project on another machine",
-		"sessions": "save and restore the set of open projects",
-		"shutdown": "save the session when it changed, and close every project or one",
+		"sessions": "save, restore and shut down the set of open projects",
 		"config":   "change the configuration",
 		"assist":   "raise revier-config-assistant, the coding agent briefed to configure revier",
 		"help":     "show this screen",

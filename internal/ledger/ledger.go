@@ -4,6 +4,7 @@
 package ledger
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/hk9890/revier/internal/events"
@@ -73,7 +74,9 @@ func (f File) State() *state.State {
 // returns must not lose its bindings to a lock it could not take.
 func (f File) Update(apply func(*state.State) bool) *state.State {
 	changed := false
+	var before *state.ShutDown
 	st, err := state.Update(f.Root, func(st *state.State) bool {
+		before = st.ShutDown
 		changed = apply(st)
 		return changed
 	})
@@ -88,6 +91,7 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 	// one it reported as unchanged is not in the file.
 	if changed && err == nil {
 		f.keep(st)
+		logShutDown(before, st.ShutDown)
 	}
 	if f.Written != nil {
 		// A write still waiting to be read already stands for this one: the
@@ -98,6 +102,18 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 		}
 	}
 	return st
+}
+
+// logShutDown says when a write set or ended the full shutdown on record.
+// Every write goes through here, so one line covers the shutdown that sets
+// it and each open that ends it.
+func logShutDown(before, after *state.ShutDown) {
+	switch {
+	case before == nil && after != nil:
+		slog.Info("shutdown state set", "at", after.At, "session", after.Session)
+	case before != nil && after == nil:
+		slog.Info("shutdown state cleared", "set_at", before.At)
+	}
 }
 
 // Record appends one event to the file events.Setup named.

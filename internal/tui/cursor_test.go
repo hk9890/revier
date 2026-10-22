@@ -148,22 +148,3 @@ func TestAClosedProjectTakesThePaneCursorBackToTheList(t *testing.T) {
 		t.Errorf("pane cursor = %q, want none: the project it was in closed", row)
 	}
 }
-
-// A full shutdown closes every project, so the cursor has no place to keep:
-// it goes to the first row.
-func TestAFullShutdownPutsTheCursorOnTheFirstRow(t *testing.T) {
-	_, m, _ := openWorld(t, 4, "project-00", "project-01")
-
-	m, _ = press(m, "down")
-	m, _ = press(m, "down")
-	wantSelected(t, m, "project-01", "the second open row")
-
-	m, _ = press(m, "alt+q")
-	m, cmd := press(m, "enter")
-	m = run(m, cmd)
-	m, cmd = press(m, "enter")
-	m = run(m, cmd)
-	m, _ = press(m, "esc")
-	m = survey(m)
-	wantSelected(t, m, "project-00", "the first row once everything closed")
-}

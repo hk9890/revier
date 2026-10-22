@@ -6,22 +6,25 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The shutdown button is on the bar with its key. A full shutdown plans every
+// The shutdown's button is on the sessions screen, not on the surface's bar,
+// and its key opens the wizard from the surface. A full shutdown plans every
 // project, names the busy agent on the button that confirms, saves the
-// session as a shutdown's, closes everything, and stays up to say what came
-// of it.
+// session as a shutdown's, records the shutdown, closes everything, says what
+// came of it, and quits on the next key.
 func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
 	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
 
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
-		t.Errorf("bar = %q, want the shutdown button and its key", bar)
+	if bar := barLine(m); strings.Contains(bar, "shutdown") {
+		t.Errorf("bar = %q, want no shutdown button on the surface", bar)
 	}
 	m, _ = press(m, "alt+q")
 	if bar := barLine(m); !strings.Contains(bar, "Shutdown") || !strings.Contains(screen(m), "Full shutdown") {
@@ -40,18 +43,62 @@ func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 
 	m, cmd = press(m, "enter")
 	m = run(m, cmd)
-	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") || !strings.Contains(body, "saved as session") {
-		t.Errorf("rows = %q, want the result and the save", body)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") || !strings.Contains(body, "saved as session") ||
+		!strings.Contains(body, "revier quits") {
+		t.Errorf("rows = %q, want the result, the save and the quit", body)
 	}
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
 		t.Errorf("instances = %+v, want none", left)
 	}
-	if all, _ := session.List(root); len(all) != 1 || all[0].Reason != session.ReasonShutdown {
-		t.Errorf("sessions = %+v, want the one saved before the close, saved by a shutdown", all)
+	all, _ := session.List(root)
+	if len(all) != 1 || all[0].Reason != session.ReasonShutdown {
+		t.Fatalf("sessions = %+v, want the one saved before the close, saved by a shutdown", all)
+	}
+	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != all[0].ID {
+		t.Errorf("shutdown on record = %+v, want one naming session %s", sd, all[0].ID)
+	}
+	if _, quit := press(m, "esc"); quit == nil || quit() != tea.Quit() {
+		t.Error("a key on the result of a full shutdown did not quit")
+	}
+}
+
+// The sessions screen's bar has the save and the shutdown buttons. Its
+// shutdown opens the wizard, and Esc from the wizard's first step goes back to
+// the sessions screen.
+func TestTheSessionsScreenOpensTheShutdown(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	m, _ = press(m, "alt+s")
+	if bar := barLine(m); !strings.Contains(bar, "save alt+s") || !strings.Contains(bar, "shutdown alt+q") {
+		t.Fatalf("bar = %q, want the save and the shutdown buttons", bar)
+	}
+	m, _ = press(m, "alt+q")
+	if sub := lines(m)[2]; !strings.Contains(sub, "What to shut down?") {
+		t.Fatalf("subtitle = %q, want the wizard's first step", sub)
 	}
 	m, _ = press(m, "esc")
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
-		t.Errorf("bar = %q, want the surface back after the result", bar)
+	if bar := barLine(m); !strings.Contains(bar, "Sessions") {
+		t.Errorf("bar = %q, want the sessions screen back", bar)
+	}
+	m, _ = press(m, "esc")
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the surface", bar)
+	}
+}
+
+// A full shutdown says what came of it, and quits once the wait is over.
+func TestAFullShutdownQuitsAfterItsResult(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	m, cmd := press(m, "enter")
+	m, after := deliver(m, cmd)
+	if after == nil {
+		t.Fatal("the full shutdown's answer returned no command, want the wait before the quit")
+	}
+	if _, quit := deliver(m, after); quit == nil || quit() != tea.Quit() {
+		t.Error("the end of the wait did not quit")
 	}
 }
 
@@ -134,23 +181,38 @@ func TestEscWalksTheShutdownWizardBack(t *testing.T) {
 		t.Errorf("subtitle = %q, want the first step", sub)
 	}
 	m, _ = press(m, "esc")
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface", bar)
 	}
 }
 
-// A shutdown's answer starts no survey: the timer's chain shows what closed,
-// and a survey started here would be a second chain that never ends.
-func TestAShutdownStartsNoSecondSurvey(t *testing.T) {
+// A project's shutdown answer starts no survey: the timer's chain shows what
+// closed, and a survey started here would be a second chain that never ends.
+// It records no shutdown, and the surface stays up.
+func TestAProjectShutdownStartsNoSecondSurveyAndStaysUp(t *testing.T) {
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	root := stateWith(t, nil)
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
 
 	m, _ = press(m, "alt+q")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
 	m, cmd = press(m, "enter")
-	if _, after := deliver(m, cmd); after != nil {
+	m, after := deliver(m, cmd)
+	if after != nil {
 		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") || strings.Contains(body, "revier quits") {
+		t.Errorf("rows = %q, want the result and no quit", body)
+	}
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v, want none for one project", sd)
+	}
+	if m, _ = press(m, "esc"); !strings.Contains(barLine(m), "sessions alt+s") {
+		t.Errorf("bar = %q after Esc on a project's result, want the surface back", barLine(m))
 	}
 }
 

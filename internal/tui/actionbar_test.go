@@ -462,7 +462,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 	}
 	screen := strings.Join(lines(m), "\n")
 	for _, want := range []string{
-		"alt+n", "alt+r", "alt+c", "alt+h", "alt+e", "alt+d", "ctrl+w", "ctrl+c",
+		"alt+n", "alt+r", "alt+s", "alt+q", "alt+c", "alt+h", "alt+e", "alt+d", "ctrl+w", "ctrl+c",
 		"ctrl+y", "sync",
 		"ctrl+shift+u", "go to home",
 		"alt+space", "open revier", "switch between the projects and the agents",
@@ -514,12 +514,13 @@ func TestANarrowBarKeepsItsLastButtonsBehindTheBurger(t *testing.T) {
 	}
 }
 
-// A terminal with room for every button has no burger.
+// A terminal with room for every button has no burger. The shutdown's button
+// is the sessions screen's, so the surface's bar fits 125 columns.
 func TestAWideBarHasNoBurger(t *testing.T) {
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
-	if bar := barLine(m); strings.Contains(bar, "≡") || !strings.Contains(bar, "help alt+h") {
-		t.Errorf("bar = %q, want every button and no burger", bar)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 125, 20)
+	if bar := barLine(m); strings.Contains(bar, "≡") || !strings.Contains(bar, "help alt+h") || strings.Contains(bar, "shutdown") {
+		t.Errorf("bar = %q, want every button, no shutdown and no burger", bar)
 	}
 }
 

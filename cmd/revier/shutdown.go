@@ -30,7 +30,9 @@ var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was ma
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent (decisions.md D78). It
 // saves the session first when it changed, so a restore brings back what the
-// shutdown closed, and it refuses while an agent is busy unless forced.
+// shutdown closed, and it refuses while an agent is busy unless forced. A
+// shutdown of every project, all of each, is recorded in the state, so the
+// next surface offers the restore (D141).
 func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("shutdown", flag.ContinueOnError)
 	agents := fs.Bool("agents", false, "close only the agents")
@@ -126,7 +128,8 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
-	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, opts)
+	full := only == "" && scope == core.ShutdownAll
+	closed, err := usecase.Shutdown(ctx, a.core, a.stateRoot, plan, core.CloseWait, opts, full)
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):

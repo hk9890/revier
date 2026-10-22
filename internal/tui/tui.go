@@ -68,9 +68,9 @@ const (
 
 // dialog is a screen standing over the surface: the link dialog (decisions.md
 // D45), the new-project field, the sessions screen, the config screen, the
-// help screen, the shutdown wizard, or the project screen. A screen's step is
-// the screen's own. dialogNone is the surface itself, which is where it is
-// nearly always.
+// help screen, the shutdown wizard, the project screen, or the start dialog
+// after a full shutdown. A screen's step is the screen's own. dialogNone is
+// the surface itself, which is where it is nearly always.
 type dialog int
 
 const (
@@ -82,6 +82,7 @@ const (
 	dialogSessions
 	dialogShutdown
 	dialogProject
+	dialogResume
 )
 
 // hasRows reports a screen whose body is list rows: what a click selects and
@@ -147,6 +148,7 @@ type Model struct {
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file
 	dialog    dialog             // the screen standing over the surface
 	shut      shutdown           // the shutdown wizard, while it is up
+	resume    resumeScreen       // the start dialog, while it is up (resume.go)
 	width     int
 	height    int
 
@@ -252,7 +254,13 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.status.beating = m.anyStatus()
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
-	m.takeState()
+	st := c.Ledger.State()
+	m.keep(st)
+	// After a full shutdown the first screen offers the restore (decisions.md
+	// D141).
+	if st.ShutDown != nil {
+		m.openResume(*st.ShutDown)
+	}
 	// The project field has the cursor from the start: the surface filters as
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
@@ -989,6 +997,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.planned(msg)
 	case shutdownMsg:
 		return m.shutDown(msg)
+	case shutQuitMsg:
+		return m.shutQuit()
 	case closePlannedMsg:
 		return m.closePlanned(msg)
 	case ledgerMsg:
@@ -1116,6 +1126,8 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 		return m.sessionsKey(msg)
 	case dialogShutdown:
 		return m.shutdownKey(msg)
+	case dialogResume:
+		return m.resumeKey(msg)
 	}
 	if m.agents.shown {
 		return m.agentsKey(msg)

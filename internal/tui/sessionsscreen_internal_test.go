@@ -26,7 +26,7 @@ func TestTheSessionsScreenListsAndNamesWithNoRootModel(t *testing.T) {
 	th := theme.Default()
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), stateRoot: root, list: 60, pane: 40}
 	sc := newSessionsScreen(th)
-	if err := sc.open(root, th); err != nil {
+	if err := sc.open(root, th, ""); err != nil {
 		t.Fatal(err)
 	}
 	if it, ok := sc.list.SelectedItem().(sessionItem); !ok || it.session.ID != stored.ID {

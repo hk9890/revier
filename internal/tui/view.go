@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -164,6 +165,8 @@ func (m Model) top() string {
 		name = "Save the projects open now"
 	case dialogShutdown:
 		name = "Shutdown"
+	case dialogResume:
+		name = "Welcome back"
 	default:
 		return m.bar()
 	}
@@ -249,6 +252,8 @@ func (m Model) subtitle() string {
 		return m.sessions.subtitle(m.surface())
 	case dialogShutdown:
 		return " " + m.theme.Meta.Render(m.shutdownTitle())
+	case dialogResume:
+		return " " + m.theme.Meta.Render(m.resumeTitle())
 	}
 	if m.agents.shown {
 		return " " + m.fieldView(m.agents.query, focusList)
@@ -331,7 +336,8 @@ func (m Model) ruleCount() string {
 		return m.link.count(th)
 	case m.dialog == dialogSessions && !m.sessions.naming:
 		return th.NameDim.Render(core.Count(len(m.sessions.list.Items()), "session"))
-	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessions, m.dialog == dialogShutdown:
+	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessions, m.dialog == dialogShutdown,
+		m.dialog == dialogResume:
 		return ""
 	case !m.ready():
 		return th.NameDim.Render("surveying")
@@ -487,6 +493,9 @@ func (m Model) footer() string {
 	}
 	if m.dialog == dialogSessions {
 		return " " + m.help.ShortHelpView(m.sessions.help(m.keys))
+	}
+	if m.dialog == dialogShutdown && m.shut.quitting {
+		return " " + m.help.ShortHelpView([]key.Binding{helpKey("any key", "quit")})
 	}
 	if m.dialog != dialogNone {
 		return " " + m.help.ShortHelpView(m.keys.helpForDialog(m.dialog))

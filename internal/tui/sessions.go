@@ -21,15 +21,17 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The sessions screen: the saved sets of open projects, newest first, as
 // `revier session list` prints them. The pane says what restoring the one
-// under the cursor would do here now, Enter restores it, and the save button
-// records what is open now under an optional name. Both go through the core
-// paths `revier session save` and `revier session restore` use.
+// under the cursor would do here now, Enter restores it, the save button
+// records what is open now under an optional name, and the shutdown button
+// opens the shutdown wizard (shutdown.go). They go through the core paths
+// `revier session save`, `revier session restore` and `revier shutdown` use.
 
 // sessionsBarKey opens the screen from the surface, and on the screen saves.
 // A second press is the name step, never a save on its own.
@@ -38,6 +40,7 @@ const sessionsBarKey = "alt+s"
 // sessionActions are the screen's own buttons.
 var sessionActions = []barAction{
 	{label: "save", key: sessionsBarKey, run: Model.nameSession},
+	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 }
 
 // saveWait bounds a save: one survey, and one ask of each agent probe.
@@ -174,12 +177,15 @@ type sessionsResult struct {
 func (m Model) openSessions() (tea.Model, tea.Cmd) {
 	m.toList()
 	m.dialog = dialogSessions
-	m.err = m.sessions.open(m.stateRoot, *m.theme)
+	m.err = m.sessions.open(m.stateRoot, *m.theme, "")
 	return m, nil
 }
 
 // sessionsKey is every press on the screen, and what it left for the surface.
 func (m Model) sessionsKey(msg keyPress) (tea.Model, tea.Cmd) {
+	if !m.sessions.naming && key.Matches(msg, m.keys.Shutdown) {
+		return m.openShutdown()
+	}
 	res, cmd := m.sessions.key(m.surface(), msg)
 	m.err = res.err
 	if res.closed {
@@ -211,12 +217,13 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// open is a new visit. What the last save or restore came to is about the
-// visit before, and the plan is what a new visit is for.
-func (sc *sessionsScreen) open(root string, th theme.Theme) error {
+// open is a new visit, with the cursor on the session of that id, or on the
+// newest. What the last save or restore came to is about the visit before,
+// and the plan is what a new visit is for.
+func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 	sc.naming = false
 	sc.outcome = sessionOutcome{}
-	return sc.load(root, th, "")
+	return sc.load(root, th, id)
 }
 
 // load reads the saved sessions under root into the screen's rows, with the
@@ -355,6 +362,10 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 		return nil, nil
 	}
 	sc.restoring = it.session.ID
+	// A restore is an open, so the shutdown on record ends as it starts: a
+	// restore that never reaches its first launch does not bring the start
+	// dialog back (decisions.md D141).
+	sf.core.Ledger.Update(func(st *state.State) bool { return st.ClearShutDown() })
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
 	// The restore's own ledger, on the same state: it says when it wrote.
@@ -406,7 +417,7 @@ func (sc *sessionsScreen) help(k keyMap) []key.Binding {
 	if sc.naming {
 		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "back"), k.Quit}
 	}
-	return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey("esc", "back"), k.Quit}
+	return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey(shutdownBarKey, "shutdown"), helpKey("esc", "back"), k.Quit}
 }
 
 // subtitle is the line over the rule: where the sessions are, or the name

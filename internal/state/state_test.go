@@ -76,6 +76,7 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	s.Attach("p", ref)
 	s.Bind("p", "editor", ref)
 	s.Launched("p", "home", time.Now())
+	s.MarkShutDown(time.Now(), "s1")
 	fields := reflect.ValueOf(*s)
 	for i := range fields.NumField() {
 		if fields.Field(i).IsZero() {
@@ -88,9 +89,26 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 		t.Fatalf("clone = %+v, want %+v", c, s)
 	}
 	other := revier.TargetRef{Host: "gnome", ID: "9"}
-	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project = other, other, "q"
-	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" {
+	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project, c.ShutDown.Session = other, other, "q", "s2"
+	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" || s.ShutDown.Session != "s1" {
 		t.Errorf("state = %+v, launch = %+v after its clone changed, want it as it was", s, s.Launch)
+	}
+}
+
+// A launch and a landing are opens, and each ends the full shutdown on
+// record.
+func TestAnOpenEndsTheShutdownOnRecord(t *testing.T) {
+	opens := map[string]func(*state.State){
+		"launch":  func(s *state.State) { s.Launched("p", "home", time.Now()) },
+		"landing": func(s *state.State) { s.Landed("p", "home", revier.TargetRef{Host: "rt", ID: "1"}) },
+	}
+	for name, open := range opens {
+		s := &state.State{}
+		s.MarkShutDown(time.Now(), "s1")
+		open(s)
+		if s.ShutDown != nil {
+			t.Errorf("%s: shutdown on record = %+v, want none", name, s.ShutDown)
+		}
 	}
 }
 
