@@ -17,7 +17,8 @@ import (
 )
 
 // del on a project asks first, naming the busy agent, and then closes it as
-// a project shutdown does: the session is saved, and the surface is back.
+// a project shutdown does: the session is saved as a project close's, and
+// the surface is back.
 func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -37,8 +38,8 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	if len(rt.Closed) != 1 {
 		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
 	}
-	if all, _ := session.List(root); len(all) != 1 {
-		t.Errorf("sessions = %d, want the one saved before the close", len(all))
+	if all, _ := session.List(root); len(all) != 1 || all[0].Reason != session.ReasonProjectClosed {
+		t.Errorf("sessions = %+v, want the one saved before the close, saved by a project close", all)
 	}
 	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
 		t.Errorf("bar = %q, want the surface back", bar)

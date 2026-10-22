@@ -113,10 +113,10 @@ revier session restore work --dry-run
 ```
 
 A shutdown, and closing a whole project in the TUI, save a session for you.
-The sessions list shows the name of a session, or else why it was saved:
-`shutdown`, `project closed` or `saved by hand`. A session saved by a
-revier older than this label reads `unknown`. `revier session list` shows
-the reason in its REASON column.
+`revier session list` shows why each session was saved in its REASON column:
+`shutdown`, `project closed` or `saved by hand`. The TUI sessions screen
+shows it in place of a missing name. A session saved by a revier older than
+this label reads `unknown`.
 A session records names, not windows. A restore reads the project files as
 they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in

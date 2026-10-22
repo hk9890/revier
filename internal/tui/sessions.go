@@ -48,9 +48,9 @@ type sessionItem struct{ session session.Session }
 
 func (i sessionItem) FilterValue() string { return i.session.ID }
 
-// sessionDelegate draws a row as two columns, the id and the name, each as
-// wide as the widest on the screen: two saves in one second have ids of two
-// widths. What a session holds is the pane's.
+// sessionDelegate draws a row as two columns, the id and the label
+// (sessionLabel), each as wide as the widest on the screen: two saves in one
+// second have ids of two widths. What a session holds is the pane's.
 type sessionDelegate struct {
 	theme     theme.Theme
 	idWidth   int

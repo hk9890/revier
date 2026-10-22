@@ -49,8 +49,9 @@ type Session struct {
 	// wins when a restore asks for it by name.
 	Name string `toml:"name,omitempty" json:"name,omitempty"`
 
-	// Reason is why it was saved, for a list to show when it has no Name.
-	// It is not folded into Name, because a restore resolves a ref by Name.
+	// Reason is why it was saved: `revier session list` shows it beside the
+	// Name, and the TUI list in place of a missing one. It is not folded into
+	// Name, because a restore resolves a ref by Name.
 	// A file written before the field existed has none.
 	Reason Reason `toml:"reason,omitempty" json:"reason,omitempty"`
 
