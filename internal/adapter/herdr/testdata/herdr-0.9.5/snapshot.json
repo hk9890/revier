@@ -1,0 +1,256 @@
+{
+    "id": "r1",
+    "result": {
+        "type": "session_snapshot",
+        "snapshot": {
+            "version": "0.9.5",
+            "protocol": 22,
+            "focused_workspace_id": "w1",
+            "focused_tab_id": "w1:t1",
+            "focused_pane_id": "w1:p1",
+            "workspaces": [
+                {
+                    "workspace_id": "w1",
+                    "number": 1,
+                    "label": "demo|pipe\nline",
+                    "focused": true,
+                    "pane_count": 3,
+                    "tab_count": 2,
+                    "active_tab_id": "w1:t1",
+                    "agent_status": "idle",
+                    "tokens": {
+                        "revier_name": "demo|pipe"
+                    }
+                },
+                {
+                    "workspace_id": "w2",
+                    "number": 2,
+                    "label": "by hand | with\ttab",
+                    "focused": false,
+                    "pane_count": 1,
+                    "tab_count": 1,
+                    "active_tab_id": "w2:t1",
+                    "agent_status": "unknown"
+                }
+            ],
+            "tabs": [
+                {
+                    "tab_id": "w1:t1",
+                    "workspace_id": "w1",
+                    "number": 1,
+                    "label": "1",
+                    "focused": true,
+                    "pane_count": 1,
+                    "agent_status": "unknown"
+                },
+                {
+                    "tab_id": "w1:t2",
+                    "workspace_id": "w1",
+                    "number": 2,
+                    "label": "agents",
+                    "focused": false,
+                    "pane_count": 2,
+                    "agent_status": "idle"
+                },
+                {
+                    "tab_id": "w2:t1",
+                    "workspace_id": "w2",
+                    "number": 1,
+                    "label": "1",
+                    "focused": false,
+                    "pane_count": 1,
+                    "agent_status": "unknown"
+                }
+            ],
+            "panes": [
+                {
+                    "pane_id": "w1:p1",
+                    "terminal_id": "term_65e72e32d05501",
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t1",
+                    "focused": true,
+                    "cwd": "/tmp",
+                    "foreground_cwd": "/tmp",
+                    "agent_status": "unknown",
+                    "scroll": {
+                        "offset_from_bottom": 0,
+                        "max_offset_from_bottom": 1,
+                        "viewport_rows": 40
+                    },
+                    "revision": 0
+                },
+                {
+                    "pane_id": "w1:p2",
+                    "terminal_id": "term_65e72e3eb3d142",
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t2",
+                    "focused": false,
+                    "cwd": "/tmp",
+                    "foreground_cwd": "/tmp",
+                    "agent": "claude",
+                    "agent_status": "idle",
+                    "tokens": {
+                        "revier_target": "agent",
+                        "revier_home": "home"
+                    },
+                    "scroll": {
+                        "offset_from_bottom": 0,
+                        "max_offset_from_bottom": 0,
+                        "viewport_rows": 38
+                    },
+                    "revision": 1
+                },
+                {
+                    "pane_id": "w1:p3",
+                    "terminal_id": "term_65e72e3eb40c03",
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t2",
+                    "focused": false,
+                    "cwd": "/tmp",
+                    "foreground_cwd": "/tmp",
+                    "agent_status": "unknown",
+                    "scroll": {
+                        "offset_from_bottom": 0,
+                        "max_offset_from_bottom": 9,
+                        "viewport_rows": 38
+                    },
+                    "revision": 0
+                },
+                {
+                    "pane_id": "w2:p1",
+                    "terminal_id": "term_65e72ed8c9bee4",
+                    "workspace_id": "w2",
+                    "tab_id": "w2:t1",
+                    "focused": false,
+                    "cwd": "/tmp",
+                    "foreground_cwd": "/tmp",
+                    "agent_status": "unknown",
+                    "scroll": {
+                        "offset_from_bottom": 0,
+                        "max_offset_from_bottom": 1,
+                        "viewport_rows": 40
+                    },
+                    "revision": 0
+                }
+            ],
+            "layouts": [
+                {
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t1",
+                    "zoomed": false,
+                    "area": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 120,
+                        "height": 40
+                    },
+                    "focused_pane_id": "w1:p1",
+                    "panes": [
+                        {
+                            "pane_id": "w1:p1",
+                            "focused": true,
+                            "rect": {
+                                "x": 0,
+                                "y": 0,
+                                "width": 120,
+                                "height": 40
+                            }
+                        }
+                    ],
+                    "splits": []
+                },
+                {
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t2",
+                    "zoomed": false,
+                    "area": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 120,
+                        "height": 40
+                    },
+                    "focused_pane_id": "w1:p2",
+                    "panes": [
+                        {
+                            "pane_id": "w1:p2",
+                            "focused": true,
+                            "rect": {
+                                "x": 0,
+                                "y": 0,
+                                "width": 60,
+                                "height": 40
+                            }
+                        },
+                        {
+                            "pane_id": "w1:p3",
+                            "focused": false,
+                            "rect": {
+                                "x": 60,
+                                "y": 0,
+                                "width": 60,
+                                "height": 40
+                            }
+                        }
+                    ],
+                    "splits": [
+                        {
+                            "id": "split_0_root",
+                            "direction": "right",
+                            "ratio": 0.5,
+                            "rect": {
+                                "x": 0,
+                                "y": 0,
+                                "width": 120,
+                                "height": 40
+                            }
+                        }
+                    ]
+                },
+                {
+                    "workspace_id": "w2",
+                    "tab_id": "w2:t1",
+                    "zoomed": false,
+                    "area": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 120,
+                        "height": 40
+                    },
+                    "focused_pane_id": "w2:p1",
+                    "panes": [
+                        {
+                            "pane_id": "w2:p1",
+                            "focused": true,
+                            "rect": {
+                                "x": 0,
+                                "y": 0,
+                                "width": 120,
+                                "height": 40
+                            }
+                        }
+                    ],
+                    "splits": []
+                }
+            ],
+            "agents": [
+                {
+                    "terminal_id": "term_65e72e3eb3d142",
+                    "agent": "claude",
+                    "agent_status": "idle",
+                    "tokens": {
+                        "revier_target": "agent",
+                        "revier_home": "home"
+                    },
+                    "workspace_id": "w1",
+                    "tab_id": "w1:t2",
+                    "pane_id": "w1:p2",
+                    "focused": false,
+                    "state_change_seq": 1,
+                    "cwd": "/tmp",
+                    "foreground_cwd": "/tmp",
+                    "revision": 1
+                }
+            ]
+        }
+    }
+}

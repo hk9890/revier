@@ -3,7 +3,7 @@
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
-mise run test:live         # L4        real processes: tmux and sh, still headless
+mise run test:live         # L4        real processes: tmux, herdr and sh, still headless
 mise run test:all          # everything runnable without a screen
 mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
 mise run quality:full      # + L4                               (pre-handoff)
@@ -19,7 +19,7 @@ Only L6 ever reaches one. L5 was retired and its number is not reused.
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
 | L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json` |
-| L4 | real processes: tmux on a private socket, `sh` scripts | `live` | the tmux host, the core against a real substrate, and the adapters that run a shell (`claude`, `execprobe`, `ssh`) |
+| L4 | real processes: tmux and herdr on private sockets, `sh` scripts | `live` | the tmux and herdr hosts, the core against a real substrate, and the adapters that run a shell (`claude`, `execprobe`, `ssh`) |
 | L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
@@ -94,6 +94,12 @@ that did not focus after `Open` passed L2 and failed L4.
   stay green on a machine without tmux.
 - Leave tmux unpinned in `.mise.toml`: the live layer runs against
   whatever is installed, which is how CI caught the delimiter difference above.
+- Keep herdr pinned in `.github/workflows/ci.yml`: it is pre-1.0 and its JSON
+  API has no version. `.github/workflows/herdr-latest.yml` runs its live tests
+  against the latest release weekly. To bump the pin, record a new
+  `internal/adapter/herdr/testdata/herdr-<version>/` with the private server
+  in [RUNNING.md](RUNNING.md#run-a-private-herdr-server), and update the version
+  and digest in `ci.yml`.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

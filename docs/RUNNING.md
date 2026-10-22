@@ -264,6 +264,26 @@ tmux -L revier-drive show-options -s -v @revier-focus   # the session Focus left
 `-L revier-drive` is what keeps this off the user's default server. A tmux
 command without it addresses their real sessions.
 
+## Run a private herdr server
+
+Start herdr with its config, state and socket in a scratch directory. The
+user's herdr is at `~/.config/herdr/herdr.sock`; every command below names the
+scratch socket instead. Keep the directory short: a socket path over 107 bytes
+cannot be bound.
+
+```bash
+D=$(mktemp -d /tmp/hd.XXXX)
+hd() { env -u HERDR_ENV -u HERDR_SESSION XDG_CONFIG_HOME=$D XDG_STATE_HOME=$D HERDR_SOCKET_PATH=$D/s.sock "$@"; }
+hd setsid herdr server </dev/null >/dev/null 2>&1 &   # headless, no client attaches
+hd herdr workspace create --label demo --no-focus
+hd herdr api snapshot | jq .                          # what Instances reads, in one request
+hd herdr server stop; rm -rf "$D"
+```
+
+To record a fixture for `internal/adapter/herdr/testdata/herdr-<version>/`,
+build the state the L3 test reads with `hd herdr ...` commands and save
+`hd herdr api snapshot`. The test reads only the `result` the line carries.
+
 ## Verify an adapter against its real tool
 
 Run `mise run test:live`, the L4 layer [TESTING.md](TESTING.md) owns; it is

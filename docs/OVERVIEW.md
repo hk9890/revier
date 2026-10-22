@@ -9,7 +9,7 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and every type that crosses them. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` and `tmux` (runtime), `gnome` (window), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher in `assist.go`), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `herdr` (runtime; `herdr` lists only and is not wired in yet), `gnome` (window), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher in `assist.go`), `opencode` and `execprobe` (probes), `ssh` (remote). |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/ledger/` | The state file and the event file as the core reads and writes them: the one caller of the state lock. |
