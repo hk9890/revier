@@ -106,10 +106,10 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 
 // logShutDown says when a write set or ended the full shutdown on record.
 // Every write goes through here, so one line covers the shutdown that sets
-// it and each open that ends it.
+// it, a second one that sets it over the first, and each open that ends it.
 func logShutDown(before, after *state.ShutDown) {
 	switch {
-	case before == nil && after != nil:
+	case after != nil && after != before:
 		slog.Info("shutdown state set", "at", after.At, "session", after.Session)
 	case before != nil && after == nil:
 		slog.Info("shutdown state cleared", "set_at", before.At)

@@ -106,12 +106,14 @@ type plannedMsg struct {
 
 // shutdownMsg is a shutdown's answer. recheck is set instead when an agent
 // of the plan turned busy after the plan was shown: the plan with its agents
-// as they are now, and nothing closed.
+// as they are now, and nothing closed. recorded is a full shutdown the state
+// now records, which the surface quits after.
 type shutdownMsg struct {
-	saved   string
-	closed  core.Closed
-	recheck []core.CloseStep
-	err     error
+	saved    string
+	closed   core.Closed
+	recheck  []core.CloseStep
+	err      error
+	recorded bool
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -346,7 +348,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		defer close(progress)
 		defer w.cancel()
 		opts := core.ShutdownOpts{Force: force, Projects: projects, Progress: func(p core.Progress) { progress <- p }}
-		note := ""
+		note, ran := "", false
+		var save func(context.Context, core.Report) (session.Session, error)
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so
 			// the result says why rather than showing a blank line.
@@ -355,11 +358,12 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// leaves no session file behind either, and it records the survey
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
-			opts.Before = func(saving context.Context, now core.Report) error {
+			save = func(saving context.Context, now core.Report) (session.Session, error) {
 				stored, saved, _, err := app.SaveChanged(saving, c, root, now, reason, time.Now())
 				if err != nil {
-					return err
+					return session.Session{}, err
 				}
+				ran = true
 				note = "nothing open to save"
 				switch {
 				case saved:
@@ -367,15 +371,17 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				case stored.ID != "":
 					note = "session " + stored.ID + " already holds what was open"
 				}
-				return nil
+				return stored, nil
 			}
 		}
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(app.Shutdown(cancelled, c, root, plan, core.CloseWait, opts, full))
+		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, full))
 		if answer.err == nil && answer.recheck == nil {
-			answer.saved = note
+			// A full shutdown is recorded where its save ran: one whose
+			// recheck left nothing to close recorded nothing.
+			answer.saved, answer.recorded = note, full && ran
 		}
 		return answer
 	}
@@ -440,7 +446,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
 	// offers the restore (decisions.md D141).
-	if s.full() && !s.walk.cancelled {
+	if msg.recorded && !s.walk.cancelled {
 		s.quitting = true
 		return m, tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
 	}

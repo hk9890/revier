@@ -10,6 +10,7 @@ import (
 
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -97,8 +98,28 @@ func TestAFullShutdownQuitsAfterItsResult(t *testing.T) {
 	if after == nil {
 		t.Fatal("the full shutdown's answer returned no command, want the wait before the quit")
 	}
-	if _, quit := deliver(m, after); quit == nil || quit() != tea.Quit() {
+	if _, quit := update(m, tui.ShutQuit()); quit == nil || quit() != tea.Quit() {
 		t.Error("the end of the wait did not quit")
+	}
+}
+
+// A full shutdown whose recheck left nothing to close saved and recorded
+// nothing, so the surface stays up: the next start would offer no restore.
+func TestAFullShutdownThatClosedNothingStaysUp(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	rt.InstancesErr = errors.New("socket gone")
+	m, cmd := press(m, "enter")
+	m, after := deliver(m, cmd)
+	if after != nil {
+		t.Error("the answer returned a command, want no wait before a quit")
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "nothing was saved") || strings.Contains(body, "revier quits") {
+		t.Errorf("rows = %q, want the result and no quit", body)
+	}
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v, want none", sd)
 	}
 }
 

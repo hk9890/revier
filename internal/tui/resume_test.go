@@ -120,3 +120,40 @@ func TestPickAnotherSessionOpensTheSessionsScreen(t *testing.T) {
 		t.Error("no shutdown on record, want it kept until something opens")
 	}
 }
+
+// A shutdown that saved no session offers none, though an older one is saved:
+// that one is not what the shutdown closed.
+func TestAShutdownThatSavedNoSessionOffersNone(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := t.TempDir()
+	saved(t, root, "", 10, session.Project{Name: "project-00", Targets: []session.Target{{Name: "home"}}})
+	st := &state.State{}
+	st.MarkShutDown(time.Now(), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	if sub := lines(m)[2]; !strings.Contains(sub, "No session was saved.") {
+		t.Errorf("subtitle = %q, want no session named", sub)
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "Restore this session") {
+		t.Errorf("rows = %q, want no restore offered", body)
+	}
+}
+
+// An open elsewhere while the dialog is up ends the shutdown, and the next
+// read of the state takes the dialog down: it never offers a restore over
+// what was opened since.
+func TestAnOpenElsewhereTakesTheStartDialogDown(t *testing.T) {
+	m, _, root, _ := shutDownWorld(t)
+	if _, err := state.Update(root, func(st *state.State) bool {
+		st.Launched("project-00", "home", time.Now())
+		return true
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m = survey(m)
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the surface once something opened", bar)
+	}
+}

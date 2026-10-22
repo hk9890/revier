@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
@@ -35,11 +36,14 @@ type resumeRow struct {
 
 // openResume puts the dialog up over the surface for the shutdown on record.
 // The session it names comes first; one deleted since gives way to the
-// newest.
+// newest. A shutdown that saved none offers none.
 func (m *Model) openResume(sd state.ShutDown) {
-	s, err := session.Load(m.stateRoot, sd.Session)
-	if err != nil {
-		s, _ = session.Load(m.stateRoot, "")
+	var s session.Session
+	if sd.Session != "" {
+		var err error
+		if s, err = session.Load(m.stateRoot, sd.Session); err != nil {
+			s, _ = session.Load(m.stateRoot, "")
+		}
 	}
 	m.resume = resumeScreen{at: sd.At, session: s}
 	m.dialog = dialogResume
@@ -104,7 +108,7 @@ func (m Model) resumePick() (tea.Model, tea.Cmd) {
 // deletes no session.
 func (m Model) startFresh() (tea.Model, tea.Cmd) {
 	slog.Info("start dialog: start fresh")
-	m.core.Ledger.Update(func(st *state.State) bool { return st.ClearShutDown() })
+	app.ClearShutDown(m.core)
 	m.dialog = dialogNone
 	return m, nil
 }

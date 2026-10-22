@@ -21,7 +21,6 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -365,7 +364,7 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	// A restore is an open, so the shutdown on record ends as it starts: a
 	// restore that never reaches its first launch does not bring the start
 	// dialog back (decisions.md D141).
-	sf.core.Ledger.Update(func(st *state.State) bool { return st.ClearShutDown() })
+	app.ClearShutDown(sf.core)
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
 	// The restore's own ledger, on the same state: it says when it wrote.

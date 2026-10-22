@@ -81,6 +81,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 
 	opts := core.ShutdownOpts{Force: *force, Projects: a.projects}
+	var save func(context.Context, core.Report) (session.Session, error)
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the
@@ -92,11 +93,11 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		if only != "" {
 			reason = session.ReasonProjectClosed
 		}
-		opts.Before = func(saving context.Context, now core.Report) error {
+		save = func(saving context.Context, now core.Report) (session.Session, error) {
 			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, reason, time.Now())
 			switch {
 			case err != nil:
-				return err
+				return session.Session{}, err
 			case saved:
 				_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
 					core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
@@ -106,7 +107,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			case stored.ID != "":
 				_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
 			}
-			return nil
+			return stored, nil
 		}
 	}
 
@@ -129,7 +130,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
 	full := only == "" && scope == core.ShutdownAll
-	closed, err := usecase.Shutdown(ctx, a.core, a.stateRoot, plan, core.CloseWait, opts, full)
+	closed, err := usecase.Shutdown(ctx, a.core, plan, core.CloseWait, opts, save, full)
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):

@@ -1058,8 +1058,15 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // the ledger. A state file that cannot be read is the state the ledger read
 // last, and one that cannot be written costs the next keypress a fallback,
 // not the surface, so the ledger logs it and nothing is shown.
+//
+// The start dialog goes once its shutdown is no longer on record: something
+// opened since, and a restore over it is what the dialog must never offer
+// (decisions.md D141).
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
+	if m.dialog == dialogResume && st.ShutDown == nil {
+		m.dialog = dialogNone
+	}
 }
 
 // takeState takes the ledger's state into the surface: what an activation
