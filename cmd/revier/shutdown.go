@@ -12,6 +12,7 @@ import (
 
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -85,8 +86,12 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		// from: a window closed by hand since is not saved and restored. It
 		// runs on the budget the shutdown hands it, not on what the two
 		// surveys left of this command's.
+		reason := session.ReasonShutdown
+		if only != "" {
+			reason = session.ReasonProjectClosed
+		}
 		opts.Before = func(saving context.Context, now core.Report) error {
-			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, time.Now())
+			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, reason, time.Now())
 			switch {
 			case err != nil:
 				return err

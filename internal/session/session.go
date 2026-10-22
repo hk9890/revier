@@ -49,6 +49,11 @@ type Session struct {
 	// wins when a restore asks for it by name.
 	Name string `toml:"name,omitempty" json:"name,omitempty"`
 
+	// Reason is why it was saved, for a list to show when it has no Name.
+	// It is not folded into Name, because a restore resolves a ref by Name.
+	// A file written before the field existed has none.
+	Reason Reason `toml:"reason,omitempty" json:"reason,omitempty"`
+
 	At time.Time `toml:"at" json:"at"`
 
 	// Current is the project that was focused. Restore ends on it, so a
@@ -56,6 +61,33 @@ type Session struct {
 	Current revier.ProjectName `toml:"current,omitempty" json:"current,omitempty"`
 
 	Projects []Project `toml:"project" json:"projects"`
+}
+
+// Reason is why a session was saved.
+type Reason string
+
+const (
+	// ReasonShutdown is the save a full shutdown makes before it closes.
+	ReasonShutdown Reason = "shutdown"
+	// ReasonProjectClosed is the save made before one project is closed.
+	ReasonProjectClosed Reason = "project-closed"
+	// ReasonSaved is a save asked for by hand.
+	ReasonSaved Reason = "saved"
+)
+
+// Text is the reason as a list shows it. A file with no reason, or one
+// this build does not know, reads "unknown" rather than a guess.
+func (r Reason) Text() string {
+	switch r {
+	case ReasonShutdown:
+		return "shutdown"
+	case ReasonProjectClosed:
+		return "project closed"
+	case ReasonSaved:
+		return "saved by hand"
+	default:
+		return "unknown"
+	}
 }
 
 // Project is one project and the targets that were live in it.
@@ -249,8 +281,8 @@ func (s Session) Targets() int {
 }
 
 // SameAs reports whether two sessions hold the same projects, targets and
-// agents: what a restore of either would open. The id, the name, the moment
-// and the project ended on are not what is open, and the order of the
+// agents: what a restore of either would open. The id, the name, the reason,
+// the moment and the project ended on are not what is open, and the order of the
 // projects is the survey's; the order of the agents is their identity.
 func (s Session) SameAs(o Session) bool {
 	byName := func(ps []Project) []Project {

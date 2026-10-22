@@ -27,15 +27,15 @@ func SaveSession(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 	if len(s.Projects) == 0 {
 		return session.Session{}, "", gaps, ErrNothingOpen
 	}
-	s.At, s.Name = at, name
-	stored, path, err := store(stateRoot, s, gaps, "save")
+	s.At, s.Name, s.Reason = at, name, session.ReasonSaved
+	stored, path, err := store(stateRoot, s, gaps)
 	return stored, path, gaps, err
 }
 
-// SaveChanged saves the session a shutdown ends, unless the newest saved
-// session already holds the same, or nothing is open. saved is false when it
-// wrote nothing.
-func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Report, at time.Time) (stored session.Session, saved bool, gaps core.SessionGaps, err error) {
+// SaveChanged saves the session a close ends, for the given reason, unless
+// the newest saved session already holds the same, or nothing is open. saved
+// is false when it wrote nothing.
+func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Report, reason session.Reason, at time.Time) (stored session.Session, saved bool, gaps core.SessionGaps, err error) {
 	s, gaps := c.Session(ctx, r)
 	if len(s.Projects) == 0 {
 		return session.Session{}, false, gaps, nil
@@ -47,22 +47,22 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 	case err != nil && !errors.Is(err, session.ErrNoSession):
 		return session.Session{}, false, gaps, err
 	}
-	s.At = at
-	stored, _, err = store(stateRoot, s, gaps, "shutdown")
+	s.At, s.Reason = at, reason
+	stored, _, err = store(stateRoot, s, gaps)
 	if err != nil {
 		return session.Session{}, false, gaps, err
 	}
 	return stored, true, gaps, nil
 }
 
-// store writes s and logs what it holds and what it lacks. by names the
-// caller, so the log says which save wrote the file.
-func store(stateRoot string, s session.Session, gaps core.SessionGaps, by string) (session.Session, string, error) {
+// store writes s and logs what it holds and what it lacks, and by its reason
+// which save wrote the file.
+func store(stateRoot string, s session.Session, gaps core.SessionGaps) (session.Session, string, error) {
 	stored, path, err := session.Save(stateRoot, s)
 	if err != nil {
 		return session.Session{}, "", fmt.Errorf("save the session: %w", err)
 	}
-	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path, "by", by,
+	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path, "by", string(stored.Reason),
 		"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
 		"unnamed_agents", gaps.Unnamed, "agents_in_tab", gaps.InTab, "attached_not_recorded", gaps.Attached)
 	for _, err := range gaps.Failed {

@@ -167,9 +167,9 @@ func cmdSessionList(a *app, args []string) error {
 		return nil
 	}
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tNAME\tPROJECTS\tTARGETS\tAGENTS")
+	_, _ = fmt.Fprintln(w, "ID\tREASON\tNAME\tPROJECTS\tTARGETS\tAGENTS")
 	for _, s := range all {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n", s.ID, s.Name, len(s.Projects), s.Targets(), s.Agents())
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\n", s.ID, s.Reason.Text(), s.Name, len(s.Projects), s.Targets(), s.Agents())
 	}
 	return w.Flush()
 }
