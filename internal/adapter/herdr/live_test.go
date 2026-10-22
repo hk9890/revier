@@ -10,11 +10,8 @@
 package herdr_test
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +29,9 @@ import (
 // server starts a herdr server of this test's own, headless, with its config,
 // state and socket in a scratch directory, and stops it when the test ends.
 // Nothing attaches a client, and the user's own herdr is never reached: the
-// environment that names it is left out of the server's.
+// environment that names it is left out of the server's. A pane's shell is
+// sh, not the user's: their shell's startup files would run in every pane,
+// and could attach their own tmux or hold a pane's foreground.
 func server(t *testing.T) *herdr.Host {
 	t.Helper()
 	bin, err := exec.LookPath("herdr")
@@ -50,7 +49,7 @@ func server(t *testing.T) *herdr.Host {
 
 	cmd := exec.Command(bin, "server")
 	cmd.Env = append(scrubbed(os.Environ()),
-		"XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir, "HERDR_SOCKET_PATH="+sock)
+		"XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir, "HERDR_SOCKET_PATH="+sock, "SHELL=/bin/sh")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start herdr server: %v", err)
@@ -60,14 +59,17 @@ func server(t *testing.T) *herdr.Host {
 		_, _ = cmd.Process.Wait()
 	})
 
+	h := &herdr.Host{Socket: sock}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		var pong map[string]any
-		if ask(sock, "ping", struct{}{}, &pong) == nil {
-			return &herdr.Host{Socket: sock}
+		ping, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := h.Request(ping, "ping", struct{}{}, nil)
+		cancel()
+		if err == nil {
+			return h
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("herdr server on %s never answered ping", sock)
+			t.Fatalf("herdr server on %s never answered ping: %v", sock, err)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -89,9 +91,6 @@ func scrubbed(env []string) []string {
 	return out
 }
 
-// call sends one request to the server on sock and decodes its result into
-// out, and fails the test when either goes wrong. It is how a test arranges
-// the server: the host does not open yet.
 // shortName is the test's name with its letters and digits alone, at most 40
 // of them: enough to tell which test left a socket behind.
 func shortName(t *testing.T) string {
@@ -104,42 +103,14 @@ func shortName(t *testing.T) string {
 	return name[:min(len(name), 40)]
 }
 
-func call(t *testing.T, sock, method string, params, out any) {
+// call sends one request to the host's server and decodes its result into
+// out, and fails the test when either goes wrong. It is how a test arranges
+// the server: the host does not open yet.
+func call(t *testing.T, h *herdr.Host, method string, params, out any) {
 	t.Helper()
-	if err := ask(sock, method, params, out); err != nil {
-		t.Fatalf("herdr %s: %v", method, err)
+	if err := h.Request(ctx(t), method, params, out); err != nil {
+		t.Fatal(err)
 	}
-}
-
-// ask is call for a server that may not answer yet.
-func ask(sock, method string, params, out any) error {
-	conn, err := net.Dial("unix", sock)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-	line, _ := json.Marshal(map[string]any{"id": "test", "method": method, "params": params})
-	if _, err := conn.Write(append(line, '\n')); err != nil {
-		return err
-	}
-	reply, err := bufio.NewReader(conn).ReadBytes('\n')
-	if err != nil {
-		return err
-	}
-	var resp struct {
-		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Code, Message string
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(reply, &resp); err != nil {
-		return err
-	}
-	if resp.Error != nil {
-		return fmt.Errorf("%s: %s", resp.Error.Code, resp.Error.Message)
-	}
-	return json.Unmarshal(resp.Result, out)
 }
 
 func ctx(t *testing.T) context.Context {
@@ -178,13 +149,13 @@ func TestInstancesListAWorkspaceWithItsPanes(t *testing.T) {
 			ID string `json:"workspace_id"`
 		} `json:"workspace"`
 	}
-	call(t, h.Socket, "workspace.create", map[string]any{"label": label, "cwd": t.TempDir(), "focus": false}, &created)
+	call(t, h, "workspace.create", map[string]any{"label": label, "cwd": t.TempDir(), "focus": false}, &created)
 	var applied struct {
 		Layout struct {
 			TabID string `json:"tab_id"`
 		} `json:"layout"`
 	}
-	call(t, h.Socket, "layout.apply", map[string]any{
+	call(t, h, "layout.apply", map[string]any{
 		"workspace_id": created.Workspace.ID, "focus": false,
 		"root": map[string]any{"type": "pane", "command": []string{"bash", "-c", "exec -a claude sleep 600"}},
 	}, &applied)
@@ -193,9 +164,9 @@ func TestInstancesListAWorkspaceWithItsPanes(t *testing.T) {
 			FocusedPaneID string `json:"focused_pane_id"`
 		} `json:"layout"`
 	}
-	call(t, h.Socket, "layout.export", map[string]any{"tab_id": applied.Layout.TabID}, &tab)
+	call(t, h, "layout.export", map[string]any{"tab_id": applied.Layout.TabID}, &tab)
 	agentPane := tab.Layout.FocusedPaneID
-	call(t, h.Socket, "pane.report_metadata", map[string]any{
+	call(t, h, "pane.report_metadata", map[string]any{
 		"pane_id": agentPane, "source": "revier", "tokens": map[string]string{"revier_target": "agent"},
 	}, &struct{}{})
 
@@ -244,10 +215,10 @@ func TestFocusedIsTheWorkspaceTheServerLastMovedTo(t *testing.T) {
 				ID string `json:"workspace_id"`
 			} `json:"workspace"`
 		}
-		call(t, h.Socket, "workspace.create", map[string]any{"label": fmt.Sprintf("w-%d", i), "focus": false}, &created)
+		call(t, h, "workspace.create", map[string]any{"label": fmt.Sprintf("w-%d", i), "focus": false}, &created)
 		ids = append(ids, created.Workspace.ID)
 	}
-	call(t, h.Socket, "workspace.focus", map[string]any{"workspace_id": ids[1]}, &struct{}{})
+	call(t, h, "workspace.focus", map[string]any{"workspace_id": ids[1]}, &struct{}{})
 
 	focused, err := h.Focused(ctx(t))
 	if err != nil {
@@ -274,18 +245,18 @@ func TestAMovedPaneKeepsItsProcess(t *testing.T) {
 			ID string `json:"tab_id"`
 		} `json:"tab"`
 	}
-	call(t, h.Socket, "workspace.create", map[string]any{"label": "from", "focus": false}, &from)
-	call(t, h.Socket, "workspace.create", map[string]any{"label": "to", "focus": false}, &to)
+	call(t, h, "workspace.create", map[string]any{"label": "from", "focus": false}, &from)
+	call(t, h, "workspace.create", map[string]any{"label": "to", "focus": false}, &to)
 	var applied struct {
 		Layout struct {
 			FocusedPaneID string `json:"focused_pane_id"`
 		} `json:"layout"`
 	}
-	call(t, h.Socket, "layout.apply", map[string]any{
+	call(t, h, "layout.apply", map[string]any{
 		"workspace_id": from.Workspace.ID, "focus": false,
 		"root": map[string]any{"type": "pane", "command": []string{"bash", "-c", "exec -a claude sleep 600"}},
 	}, &applied)
-	call(t, h.Socket, "pane.move", map[string]any{
+	call(t, h, "pane.move", map[string]any{
 		"pane_id": applied.Layout.FocusedPaneID, "focus": false,
 		"destination": map[string]any{"type": "tab", "tab_id": to.Tab.ID, "split": "right"},
 	}, &struct{}{})

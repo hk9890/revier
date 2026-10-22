@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // One request, whatever the project count, while each pane's process carries
@@ -55,8 +56,9 @@ func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 	if ref := got[1].Ref; ref.ID != "4242/w1" || ref.Title != "project-1" {
 		t.Errorf("ref = %+v, want id 4242/w1 titled project-1", ref)
 	}
-	if p := got[1].Panels; len(p) != 2 || p[0].ID != "w1:p1" || p[0].Tab != "w1:t1" || p[1].Tab != "w1:t2" {
-		t.Errorf("panels = %+v, want w1:p1 in w1:t1 and w1:p2 in w1:t2", p)
+	if p := got[1].Panels; len(p) != 2 || p[0].ID != "w1:p1" || p[0].Tab != "w1:t1" || p[1].Tab != "w1:t2" ||
+		p[0].PID != 1003 || p[1].PID != 1004 {
+		t.Errorf("panels = %+v, want w1:p1 in w1:t1 running 1003 and w1:p2 in w1:t2 running 1004", p)
 	}
 	if len(calls) != 1 {
 		t.Errorf("herdr asked %d times, want 1: %q", len(calls), calls)
@@ -65,7 +67,7 @@ func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 
 // A pane moved to another workspace has a new id while its process carries
 // the old one, so herdr is asked for that pane's process, and for no other.
-// A pane herdr cannot answer for is listed with no process.
+// A pane herdr cannot answer for is listed with no process, as a shell.
 func TestAMovedPaneIsAskedForItsProcessAlone(t *testing.T) {
 	const sock = "/run/herdr.sock"
 	root := t.TempDir()
@@ -99,7 +101,10 @@ func TestAMovedPaneIsAskedForItsProcessAlone(t *testing.T) {
 		t.Errorf("asked %q, want %q", asked, want)
 	}
 	if len(got) != 2 || len(got[1].Panels) != 2 {
-		t.Errorf("instances = %+v, want w2 with both its panes listed", got)
+		t.Fatalf("instances = %+v, want w2 with both its panes listed", got)
+	}
+	if moved, unknown := got[1].Panels[0], got[1].Panels[1]; moved.PID != 1002 || unknown.PID != 0 || unknown.Kind != revier.PanelShell {
+		t.Errorf("panels = %+v, want w2:p2 running 1002 and w2:p3 a shell with no process", got[1].Panels)
 	}
 }
 

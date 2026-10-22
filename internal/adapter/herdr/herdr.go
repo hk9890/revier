@@ -96,7 +96,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		}
 		// A pane whose process was not found has no foreground: proc reads
 		// none for pid 0.
-		fg, command, _ := proc.Foreground(shell)
+		fg, command, _ := proc.ForegroundIn(h.root(), shell)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(p.ID),
 			Kind:    kindOf(command),
@@ -163,9 +163,11 @@ func refID(serverPID int, workspace string) string {
 	return strconv.Itoa(serverPID) + "/" + workspace
 }
 
-// kindOf classifies a pane by its foreground command: a shell or a tool.
+// kindOf classifies a pane by its foreground command: a shell or a tool. A
+// pane with no command read is a shell, as the kitty and proc hosts report
+// one.
 func kindOf(argv []string) revier.PanelKind {
-	if len(argv) > 0 && revier.IsShell(argv[0]) {
+	if len(argv) == 0 || revier.IsShell(argv[0]) {
 		return revier.PanelShell
 	}
 	return revier.PanelTool

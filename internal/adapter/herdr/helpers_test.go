@@ -39,19 +39,25 @@ func serve(t *testing.T, answer func(req map[string]any) string) string {
 	return sock
 }
 
-// writeProc writes a process into a fake /proc at root: its parent in stat,
-// with a command name that holds spaces and parentheses, and its environment.
+// writeProc writes a process into a fake /proc at root: a shell, sh, in the
+// foreground of a terminal of its own. Its stat names its parent, with a
+// command name that holds spaces and parentheses; environ holds env.
 func writeProc(t *testing.T, root string, pid, ppid int, env ...string) {
 	t.Helper()
 	dir := filepath.Join(root, strconv.Itoa(pid))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stat := strconv.Itoa(pid) + " (a (b) c) S " + strconv.Itoa(ppid) + " 1 1 0 -1\n"
-	if err := os.WriteFile(filepath.Join(dir, "stat"), []byte(stat), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "environ"), []byte(strings.Join(env, "\x00")+"\x00"), 0o644); err != nil {
-		t.Fatal(err)
+	id := strconv.Itoa(pid)
+	// state, ppid, pgrp, session, tty_nr, tpgid.
+	stat := id + " (a (b) c) S " + strconv.Itoa(ppid) + " " + id + " " + id + " 34816 " + id + "\n"
+	for name, content := range map[string]string{
+		"stat":    stat,
+		"cmdline": "sh\x00",
+		"environ": strings.Join(env, "\x00") + "\x00",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

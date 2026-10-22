@@ -269,11 +269,12 @@ command without it addresses their real sessions.
 Start herdr with its config, state and socket in a scratch directory. The
 user's herdr is at `~/.config/herdr/herdr.sock`; every command below names the
 scratch socket instead. Keep the directory short: a socket path over 107 bytes
-cannot be bound.
+cannot be bound. Give the panes `sh`: a pane runs `$SHELL`, and the user's
+shell startup files can attach their tmux.
 
 ```bash
 D=$(mktemp -d /tmp/hd.XXXX)
-hd() { env -u HERDR_ENV -u HERDR_SESSION XDG_CONFIG_HOME=$D XDG_STATE_HOME=$D HERDR_SOCKET_PATH=$D/s.sock "$@"; }
+hd() { env -u HERDR_ENV -u HERDR_SESSION -u HERDR_CONFIG_PATH SHELL=/bin/sh XDG_CONFIG_HOME=$D XDG_STATE_HOME=$D HERDR_SOCKET_PATH=$D/s.sock "$@"; }
 hd setsid herdr server </dev/null >/dev/null 2>&1 &   # headless, no client attaches
 hd herdr workspace create --label demo --no-focus
 hd herdr api snapshot | jq .                          # what Instances reads, in one request

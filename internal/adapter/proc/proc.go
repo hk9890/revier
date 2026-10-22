@@ -12,8 +12,9 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// ParentIn, which the herdr host finds a pane's process with, Foreground,
-// which the tmux and herdr hosts read a pane's command with, and RunsUnder,
+// ParentIn, which the herdr host finds a pane's process with, Foreground and
+// ForegroundIn, which the tmux and herdr hosts read a pane's command with, and
+// RunsUnder,
 // the panels a shutdown closes last.
 package proc
 
@@ -271,8 +272,12 @@ func ParentIn(root string, pid int) (int, bool) {
 // Foreground reads the foreground process of the terminal pid runs in: the
 // leader of the terminal's foreground process group, and its argv. That is
 // the process tmux names in pane_current_command, so the two agree.
-func Foreground(pid int) (int, []string, bool) {
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+func Foreground(pid int) (int, []string, bool) { return ForegroundIn("/proc", pid) }
+
+// ForegroundIn is Foreground from the /proc tree at root, which a test
+// replaces.
+func ForegroundIn(root string, pid int) (int, []string, bool) {
+	stat, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "stat"))
 	if err != nil {
 		return 0, nil, false
 	}
@@ -285,7 +290,7 @@ func Foreground(pid int) (int, []string, bool) {
 	if err != nil || fg <= 0 {
 		return 0, nil, false
 	}
-	cmdline, err := os.ReadFile("/proc/" + strconv.Itoa(fg) + "/cmdline")
+	cmdline, err := os.ReadFile(filepath.Join(root, strconv.Itoa(fg), "cmdline"))
 	// A process that cleared its argv reads as NULs alone, and names no
 	// program.
 	args := strings.TrimRight(string(cmdline), "\x00")
