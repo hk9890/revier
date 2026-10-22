@@ -94,16 +94,18 @@ stop 1.8
 start restore
 press "Alt+Space" KEY_LEFTALT KEY_SPACE
 sleep 1.0
+press "Alt+S" KEY_LEFTALT KEY_S
+sleep 1.4
 press "Alt+Q" KEY_LEFTALT KEY_Q
 sleep 1.0
 press "Enter" KEY_ENTER
 sleep 1.8
 press "Enter" KEY_ENTER
-sleep 1.8
-press "Esc" KEY_ESC
-sleep 1.4
-press "Alt+S" KEY_LEFTALT KEY_S
-sleep 1.8
+# The popup shows the result, then quits; the next press starts it cold on
+# the start dialog.
+sleep 3.0
+press "Alt+Space" KEY_LEFTALT KEY_SPACE
+sleep 2.2
 press "Enter" KEY_ENTER
 stop 4.5
 

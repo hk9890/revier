@@ -27,9 +27,10 @@ import (
 
 // The sessions screen: the saved sets of open projects, newest first, as
 // `revier session list` prints them. The pane says what restoring the one
-// under the cursor would do here now, Enter restores it, and the save button
-// records what is open now under an optional name. Both go through the core
-// paths `revier session save` and `revier session restore` use.
+// under the cursor would do here now, Enter restores it, the save button
+// records what is open now under an optional name, and the shutdown button
+// opens the shutdown wizard (shutdown.go). They go through the core paths
+// `revier session save`, `revier session restore` and `revier shutdown` use.
 
 // sessionsBarKey opens the screen from the surface, and on the screen saves.
 // A second press is the name step, never a save on its own.
@@ -38,6 +39,7 @@ const sessionsBarKey = "alt+s"
 // sessionActions are the screen's own buttons.
 var sessionActions = []barAction{
 	{label: "save", key: sessionsBarKey, run: Model.nameSession},
+	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 }
 
 // saveWait bounds a save: one survey, and one ask of each agent probe.
@@ -174,12 +176,15 @@ type sessionsResult struct {
 func (m Model) openSessions() (tea.Model, tea.Cmd) {
 	m.toList()
 	m.dialog = dialogSessions
-	m.err = m.sessions.open(m.stateRoot, *m.theme)
+	m.err = m.sessions.open(m.stateRoot, *m.theme, "")
 	return m, nil
 }
 
 // sessionsKey is every press on the screen, and what it left for the surface.
 func (m Model) sessionsKey(msg keyPress) (tea.Model, tea.Cmd) {
+	if !m.sessions.naming && key.Matches(msg, m.keys.Shutdown) {
+		return m.openShutdown()
+	}
 	res, cmd := m.sessions.key(m.surface(), msg)
 	m.err = res.err
 	if res.closed {
@@ -211,12 +216,13 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// open is a new visit. What the last save or restore came to is about the
-// visit before, and the plan is what a new visit is for.
-func (sc *sessionsScreen) open(root string, th theme.Theme) error {
+// open is a new visit, with the cursor on the session of that id, or on the
+// newest. What the last save or restore came to is about the visit before,
+// and the plan is what a new visit is for.
+func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 	sc.naming = false
 	sc.outcome = sessionOutcome{}
-	return sc.load(root, th, "")
+	return sc.load(root, th, id)
 }
 
 // load reads the saved sessions under root into the screen's rows, with the
@@ -355,6 +361,10 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 		return nil, nil
 	}
 	sc.restoring = it.session.ID
+	// A restore is an open, so the shutdown on record ends as it starts: a
+	// restore that never reaches its first launch does not bring the start
+	// dialog back (decisions.md D141).
+	app.ClearShutDown(sf.core)
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
 	// The restore's own ledger, on the same state: it says when it wrote.
@@ -406,7 +416,7 @@ func (sc *sessionsScreen) help(k keyMap) []key.Binding {
 	if sc.naming {
 		return []key.Binding{helpKey("enter", "save"), helpKey("esc", "back"), k.Quit}
 	}
-	return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey("esc", "back"), k.Quit}
+	return []key.Binding{helpKey("enter", "restore"), helpKey(sessionsBarKey, "save"), helpKey(shutdownBarKey, "shutdown"), helpKey("esc", "back"), k.Quit}
 }
 
 // subtitle is the line over the rule: where the sessions are, or the name
@@ -511,11 +521,11 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		// The targets walked, then what runs now: a launch that hangs is the
 		// line left on the screen.
 		b.WriteString(heading(th, "Restoring", w))
-		restoreSteps(sf, &b, sc.walk.restored, w)
+		restoreSteps(sf, &b, sc.walk.restored, w, false)
 		say(th.Meta, "\n"+sc.walk.line())
 	case out.id == s.ID && (out.restored != nil || out.notReached > 0 || out.back != nil):
 		b.WriteString(heading(th, "Restored", w))
-		restoreSteps(sf, &b, out.restored, w)
+		restoreSteps(sf, &b, out.restored, w, true)
 		opened, pending, failed := out.restored.Counts()
 		summary := fmt.Sprintf("opened %d", opened)
 		if pending > 0 {
@@ -536,7 +546,7 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		say(th.Meta, "surveying")
 	default:
 		b.WriteString(heading(th, "Restore plan", w))
-		restoreSteps(sf, &b, sf.core.RestorePreview(s, core.Report{Views: sf.views}, sf.projects), w)
+		restoreSteps(sf, &b, sf.core.RestorePreview(s, core.Report{Views: sf.views}, sf.projects), w, true)
 		say(th.Meta, "\nEnter: restore")
 	}
 	return b.String()
@@ -546,7 +556,10 @@ func (sc *sessionsScreen) detail(sf surface) string {
 // the pane's grid: each recorded target as the Targets section draws it, and
 // under it each agent it held as the Agents section draws it, each behind the
 // operation the restore makes of it - start it, keep the one open, or skip it.
-func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
+// surveyed is whether the survey on the screen is newer than the steps: while
+// a restore runs it is not, so no row claims a state, and the operation alone
+// says what the step did.
+func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int, surveyed bool) {
 	th := sf.spun
 	var project revier.ProjectName
 	for _, r := range steps {
@@ -557,7 +570,10 @@ func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
 			project = r.Project
 			b.WriteString(th.ProjectName.Bold(true).Render(clipTo(string(r.Project), w)) + "\n")
 		}
-		tv, _ := targetView(sf.views, r.Project, r.Target)
+		var tv revier.TargetView
+		if surveyed {
+			tv, _ = targetView(sf.views, r.Project, r.Target)
+		}
 		mark, markStyle := th.Glyphs.Stopped+" stopped", th.Count
 		switch {
 		case !tv.Ref.IsZero():
@@ -566,21 +582,27 @@ func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int) {
 			mark = "no host here"
 		case r.Action == core.RestoreRefused:
 			mark = "refused"
+		case !surveyed:
+			mark = ""
 		}
 		op, reason := targetOp(th, r)
 		b.WriteString(planRow(th, op, th.ProjectName.Render(string(r.Target)), markStyle.Render(mark),
 			reason, th.PathMissing, w) + "\n")
-		live := liveAgents(sf.views, r.Project, tv.Ref)
+		var live []revier.AgentView
+		if surveyed {
+			live = liveAgents(sf.views, r.Project, tv.Ref)
+		}
 		for i, a := range r.Resumes {
-			b.WriteString(planAgent(sf.projects, th, r, i, a, live, w) + "\n")
+			b.WriteString(planAgent(sf.projects, th, r, i, a, live, w, surveyed) + "\n")
 		}
 	}
 }
 
 // planAgent is one recorded agent of a step: its operation, then the harness,
 // state and activity of the agent now running in its place, or, where none
-// runs, what the restore said about it or the conversation it holds.
-func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int) string {
+// runs, what the restore said about it or the conversation it holds. With no
+// survey newer than the step (surveyed false) it claims no state.
+func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i int, a core.Resume, live []revier.AgentView, w int, surveyed bool) string {
 	op, reason := agentOp(th, r, i)
 	harness := a.Harness
 	if harness == "" {
@@ -593,7 +615,7 @@ func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i 
 	}
 	// A restore keeps a running target as it is, so an agent that no longer
 	// runs in it is not started.
-	if r.Action == core.RestoreRunning {
+	if surveyed && r.Action == core.RestoreRunning {
 		op, reason = skipOp(th, planTense(r)("skip", "skipped")), "not running, and its target is kept as it is"
 	}
 	text, style := reason, th.PathMissing
@@ -606,7 +628,11 @@ func planAgent(projects []core.Project, th theme.Theme, r core.RestoreResult, i 
 			text += " in " + config.ContractHome(a.Dir)
 		}
 	}
-	return planRow(th, op, th.ProjectName.Render(harness), th.Count.Render(th.Glyphs.Stopped+" stopped"), text, style, w)
+	state := ""
+	if surveyed {
+		state = th.Count.Render(th.Glyphs.Stopped + " stopped")
+	}
+	return planRow(th, op, th.ProjectName.Render(harness), state, text, style, w)
 }
 
 // planRow is a row of the Targets or Agents section behind an operation: the

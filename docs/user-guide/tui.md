@@ -14,7 +14,7 @@ the `revier list` table and exits.
 ## The screen
 
 - **The top line** has a button for each thing that is not about one project:
-  agents, new, remote, sessions, shutdown, config, assist and help. Each
+  agents, new, remote, sessions, config, assist and help. Each
   button shows its key. In a narrow terminal the last buttons fold into `≡`;
   their keys still work.
 - **The query line** filters the rows under it.
@@ -115,6 +115,10 @@ kitty, and GNOME with the Window Control extension. See
 
 - The popup opens on the project of the window that had the focus.
 - When Enter or a target key brings a window to the front, the popup hides.
+- After a full shutdown the popup quits, so the next press starts it again
+  and shows the [start dialog](#after-a-full-shutdown). When `revier shutdown`
+  shut everything down while the popup was hidden, the next raise shows the
+  dialog.
 - Which edits a raise reads again is in [Files](configuration.md#files).
 
 ## Screens
@@ -126,11 +130,31 @@ Each screen takes the place of the list. Esc goes back one step.
 | alt+n | new | Add a project. Type a path, a name, or a git URL to clone. |
 | alt+r | remote | Link a project on another machine: pick a host, a project, a name. See [links.md](links.md). |
 | alt+e | project | Edit the project's name, path, git URL and targets. Each change is written at once. |
-| alt+s | sessions | Restore a saved session with Enter, or save the open projects with alt+s. See [projects.md](projects.md#save-and-restore-sessions). |
-| alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. |
+| alt+s | sessions | Restore a saved session with Enter, save the open projects with alt+s, or shut down with alt+q. Its top line has the save and shutdown buttons. See [projects.md](projects.md#save-and-restore-sessions). |
+| alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. It belongs to the sessions screen; alt+q opens it from the project list too, and Esc goes back to where you opened it. |
 | alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |
 | alt+a | assist | Raise `revier-config-assistant`: Claude Code beside the TUI, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
 | alt+h | help | Every key the TUI knows, including your target keys and actions |
 
 In a form, Tab and ↑ ↓ move between fields, Enter saves, Esc cancels. The
 fields are those of [configuration.md](configuration.md).
+
+## After a full shutdown
+
+A full shutdown shows what it closed for about 1.5 seconds, then the TUI
+quits. Press any key to quit at once. A project shutdown, a close with del,
+and a full shutdown that found nothing left to close when it ran keep the TUI
+open, and the next start does not show the dialog.
+
+The next start of the TUI, or of the popup, opens on a dialog:
+`revier was shut down at 18:30.` The pane shows what the saved session holds.
+
+- **Restore this session** restores the session the shutdown saved. The
+  sessions screen shows each step.
+- **Pick another session** opens the sessions screen.
+- **Start fresh**, or Esc, opens the project list. It deletes no session.
+
+Anything you open before that, with a desktop key, `revier go`,
+`revier open` or `revier run`, ends the shutdown, and the dialog does not
+show. `revier session restore` ends it as it starts, also when it opens
+nothing.

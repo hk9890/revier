@@ -21,10 +21,20 @@ import (
 // The shutdown wizard: a full shutdown or one project's, for a project what of
 // it, then the plan to confirm. The run saves the session when it changed and
 // closes what the plan names, through the core paths `revier shutdown` uses
-// (decisions.md D78). The surface stays up and shows what came of it.
+// (decisions.md D78). It belongs to the sessions screen, whose bar has its
+// button; its key opens it from the surface too. A project's shutdown leaves
+// the surface up to say what came of it. A full one says it briefly and
+// quits, the popup included, so the next start offers the restore (D141).
 
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
+
+// quitAfterShutdown is how long the result of a full shutdown stays on the
+// screen before the surface quits. Any key quits sooner.
+const quitAfterShutdown = 1500 * time.Millisecond
+
+// shutQuitMsg is the end of that wait.
+type shutQuitMsg struct{}
 
 // shutdownWait bounds the survey a plan is made from. The close keeps none
 // of it: the recheck, the save and the closes each run on a budget of their
@@ -44,8 +54,10 @@ const (
 
 // shutdown is the wizard while it is up.
 type shutdown struct {
-	step    shutStep
-	row     int
+	step shutStep
+	row  int
+	// whole is a shutdown of every project, all of each: the one the state
+	// records (decisions.md D141). A del never sets it.
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
@@ -59,6 +71,8 @@ type shutdown struct {
 	walk     walk   // what the close that runs has reported, and its cancel
 	saved    string // what the save before the close came to
 	closed   core.Closed
+	quitting bool   // a full shutdown is done: the surface quits on the next key or the wait
+	back     dialog // the screen the wizard was opened from, which Esc returns to
 
 	// one is a close del or alt+del asked for (close.go): of the project,
 	// or of its row when pick is set. It starts at the confirm step, or runs
@@ -88,12 +102,14 @@ type plannedMsg struct {
 
 // shutdownMsg is a shutdown's answer. recheck is set instead when an agent
 // of the plan turned busy after the plan was shown: the plan with its agents
-// as they are now, and nothing closed.
+// as they are now, and nothing closed. recorded is a full shutdown the state
+// now records, which the surface quits after.
 type shutdownMsg struct {
-	saved   string
-	closed  core.Closed
-	recheck []core.CloseStep
-	err     error
+	saved    string
+	closed   core.Closed
+	recheck  []core.CloseStep
+	err      error
+	recorded bool
 }
 
 var kindRows = []string{"Full shutdown: every project", "Project shutdown: one project"}
@@ -107,14 +123,16 @@ var scopeRows = []struct {
 	{"Only targets: what holds no agent", core.ShutdownTargets},
 }
 
-// openShutdown is the "shutdown" button and alt+q.
+// openShutdown is the sessions screen's "shutdown" button, and alt+q there
+// and on the surface. Esc from its first step goes back to where it was
+// opened.
 func (m Model) openShutdown() (tea.Model, tea.Cmd) {
 	if m.err = m.refuseSave(); m.err != nil {
 		return m, nil
 	}
 	m.toList()
+	m.shut = shutdown{back: m.dialog}
 	m.dialog = dialogShutdown
-	m.shut = shutdown{}
 	return m, nil
 }
 
@@ -170,8 +188,11 @@ func (m Model) shutRows() int {
 // shutdownKey is every press in the wizard. A shutdown that runs never gets
 // here: the surface holds every press but its cancel (lockedKey).
 func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
-	m.err = nil
 	s := &m.shut
+	if s.quitting {
+		return m, tea.Quit
+	}
+	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -188,7 +209,8 @@ func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 }
 
 // shutBack is Esc: one step back, and from the first step or the result back
-// to the surface.
+// to the screen the wizard was opened from. The sessions screen is read
+// again: the shutdown may have saved one.
 func (m *Model) shutBack() {
 	s := &m.shut
 	if s.one {
@@ -197,14 +219,17 @@ func (m *Model) shutBack() {
 	}
 	switch s.step {
 	case shutKind, shutDone:
-		m.dialog = dialogNone
+		m.dialog = s.back
+		if m.dialog == dialogSessions {
+			m.err = m.sessions.open(m.stateRoot, *m.theme, "")
+		}
 	case shutProject:
-		*s = shutdown{step: shutKind, row: 1}
+		*s = shutdown{step: shutKind, row: 1, back: s.back}
 	case shutScope:
 		s.step, s.row = shutProject, indexOf(m.openProjects(), s.project)
 	case shutConfirm:
 		if s.whole {
-			*s = shutdown{step: shutKind}
+			*s = shutdown{step: shutKind, back: s.back}
 			return
 		}
 		s.step, s.row, s.planned, s.plan = shutScope, int(s.scope), false, nil
@@ -305,7 +330,7 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, plan, saves := m.core, m.stateRoot, s.projects, s.plan, s.saves()
+	c, root, projects, plan, saves, full := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.whole
 	reason := session.ReasonProjectClosed
 	if s.whole {
 		reason = session.ReasonShutdown
@@ -319,7 +344,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		defer close(progress)
 		defer w.cancel()
 		opts := core.ShutdownOpts{Force: force, Projects: projects, Progress: func(p core.Progress) { progress <- p }}
-		note := ""
+		note, ran := "", false
+		var save func(context.Context, core.Report) (session.Session, error)
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so
 			// the result says why rather than showing a blank line.
@@ -328,11 +354,12 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 			// leaves no session file behind either, and it records the survey
 			// the close works from: a window closed by hand while the confirm
 			// was on screen is not saved and reopened by a later restore.
-			opts.Before = func(saving context.Context, now core.Report) error {
+			save = func(saving context.Context, now core.Report) (session.Session, error) {
 				stored, saved, _, err := app.SaveChanged(saving, c, root, now, reason, time.Now())
 				if err != nil {
-					return err
+					return session.Session{}, err
 				}
+				ran = true
 				note = "nothing open to save"
 				switch {
 				case saved:
@@ -340,15 +367,17 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				case stored.ID != "":
 					note = "session " + stored.ID + " already holds what was open"
 				}
-				return nil
+				return stored, nil
 			}
 		}
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(c.Shutdown(cancelled, plan, core.CloseWait, opts))
+		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, full))
 		if answer.err == nil && answer.recheck == nil {
-			answer.saved = note
+			// A full shutdown is recorded where its save ran: one whose
+			// recheck left nothing to close recorded nothing.
+			answer.saved, answer.recorded = note, full && ran
 		}
 		return answer
 	}
@@ -403,24 +432,60 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
-	// Every project closed, so no row is the one the cursor was left on: it
-	// goes to the top.
-	_, open, failed := msg.closed.Counts()
-	if s.whole && open == 0 && failed == 0 {
-		m.plist.Select(0)
-	}
-	switch {
-	case s.walk.cancelled:
-		m.err = errors.New(s.notReached())
-	case failed > 0:
+	_, _, failed := msg.closed.Counts()
+	// A cancel is said on the result's own rows, so the footer keeps its
+	// keys.
+	if failed > 0 && !s.walk.cancelled {
 		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
+	}
+	// A full shutdown leaves nothing to come back to: the surface says what
+	// it did and quits, the popup too, so the next start is a cold one that
+	// offers the restore (decisions.md D141).
+	if msg.recorded && !s.walk.cancelled {
+		s.quitting = true
+		return m, tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
 	}
 	return m, nil
 }
 
+// shutQuit is the end of the wait after a full shutdown.
+func (m Model) shutQuit() (tea.Model, tea.Cmd) {
+	if !m.shut.quitting {
+		return m, nil
+	}
+	return m, tea.Quit
+}
+
 // notReached says how much of a cancelled close was left open.
 func (s shutdown) notReached() string {
-	return "cancelled: " + core.Count(len(s.plan)-len(s.closed), "step") + " not reached"
+	return "cancelled: " + core.Count(len(s.unreached()), "step") + " not reached"
+}
+
+// unreached are the steps of the plan a close never walked, which a cancel
+// leaves open. The close walks the steps in an order of its own, so a step
+// is found by what it closes, not by its place.
+func (s shutdown) unreached() []core.CloseStep {
+	type closes struct {
+		project revier.ProjectName
+		target  revier.TargetName
+		host    string
+		id      string
+		panel   revier.PanelID
+	}
+	what := func(c core.CloseStep) closes {
+		return closes{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
+	}
+	walked := make(map[closes]bool, len(s.closed))
+	for _, r := range s.closed {
+		walked[what(r.CloseStep)] = true
+	}
+	var out []core.CloseStep
+	for _, step := range s.plan {
+		if !walked[what(step)] {
+			out = append(out, step)
+		}
+	}
+	return out
 }
 
 // shutdownTitle is the question the step asks, on the line over the rule.
@@ -485,10 +550,16 @@ func (m Model) shutdownScreen() string {
 		rows = []string{run, "Cancel"}
 	case shutDone:
 		n, open, _ := s.closed.Counts()
+		if s.walk.cancelled {
+			open += len(s.unreached())
+		}
 		done := say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
 			say(th.Meta, s.saved)
 		if s.walk.cancelled {
 			done += "\n" + say(th.Attention, s.notReached())
+		}
+		if s.quitting {
+			done += "\n\n" + say(th.NameDim, "revier quits; the next start offers the restore")
 		}
 		return done
 	}
@@ -538,7 +609,14 @@ func (m Model) shutdownDetail() string {
 		}
 	case s.step == shutDone:
 		b.WriteString(th.Header.Render("Closed") + "\n")
-		closedRows(s.closed)
+		project := closedRows(s.closed)
+		if !s.walk.cancelled {
+			break
+		}
+		for _, step := range s.unreached() {
+			project = m.shutProjectLine(&b, project, step.Project, w)
+			b.WriteString(planRow(th, skipOp(th, "open"), th.ProjectName.Render(step.Name()), "", "not reached", th.PathMissing, w) + "\n")
+		}
 	case s.step == shutConfirm && s.planned:
 		header := "Shutdown plan"
 		if s.one {

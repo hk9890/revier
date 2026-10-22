@@ -33,7 +33,7 @@ in full.
 | `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
 | `revier agent focus` | Go to an agent's tab. |
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. |
-| `revier shutdown` | Save the session, then close what is open. |
+| `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
 | `revier status` | The project revier finds here (directory, focused window, last project), and the hosts it uses. |
 | `revier doctor` | Every configuration problem, and its fix. |

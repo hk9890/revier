@@ -31,6 +31,7 @@ type keyMap struct {
 	Delete   key.Binding
 	Targets  key.Binding
 	Switch   key.Binding
+	Shutdown key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -72,6 +73,9 @@ func newKeyMap(actions []config.Action) keyMap {
 		// is declared as a chord and matched as one (switches), because a
 		// press of space has no name a binding can spell.
 		Switch: key.NewBinding(key.WithKeys(string(switchChord)), key.WithHelp(string(switchChord), "agents/projects")),
+		// The shutdown's button is on the sessions screen; its key reaches
+		// the wizard from the surface as well, so it is the surface's own.
+		Shutdown: key.NewBinding(key.WithKeys(shutdownBarKey), key.WithHelp(shutdownBarKey, "shutdown")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {
@@ -115,7 +119,7 @@ func (k keyMap) claims(c core.Chord) bool {
 
 // own is every binding of the surface's own, the action bar's aside.
 func (k keyMap) own() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets, k.Switch}
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets, k.Switch, k.Shutdown}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each
@@ -147,6 +151,8 @@ func (k keyMap) helpForDialog(d dialog) []key.Binding {
 		return []key.Binding{helpKey("↑↓", "scroll"), helpKey("esc", "back"), k.Quit}
 	case dialogShutdown:
 		return []key.Binding{helpKey("↑↓", "choose"), helpKey("enter", "next"), helpKey("esc", "back"), k.Quit}
+	case dialogResume:
+		return []key.Binding{helpKey("↑↓", "move"), helpKey("enter", "choose"), helpKey("esc", "start fresh"), k.Quit}
 	}
 	return nil
 }

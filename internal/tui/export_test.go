@@ -23,6 +23,10 @@ func (m Model) Interval() time.Duration { return m.interval() }
 // without waiting it out.
 func (m Model) Ticked() tea.Msg { return tickMsg{chain: m.chain} }
 
+// ShutQuit is the end of the wait after a full shutdown, as it arrives: a
+// test delivers it without waiting it out.
+func ShutQuit() tea.Msg { return shutQuitMsg{} }
+
 // WithClock replaces the clock the double-click window and the gap between
 // two rounds to a linked host are measured on, so a test decides how far
 // apart two clicks or two surveys were.

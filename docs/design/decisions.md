@@ -708,3 +708,13 @@ desktop half changed. ctrl+c lets the step that runs finish and stops before
 the next, so the surface stays to say what was done; a second ctrl+c quits, for
 a step that hangs. Rejected: Esc leaving a running restore, which used the
 surface while the restore still opened windows.
+
+### D141 — a full shutdown is remembered until anything opens
+
+Extends D78. After a full shutdown the next start offered nothing, and the
+restore was three keys deep. The state now records a full shutdown, written
+after the save and before the first close, since the close may end revier's own
+terminal; a cancel takes it back. The surface then quits, the popup too, so
+the next press is a cold start (D86) that opens on a start dialog: restore,
+pick another session, or start fresh. Any open clears the record: the user
+has started again, so the desktop is no longer the one the shutdown left.

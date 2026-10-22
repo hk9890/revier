@@ -44,6 +44,10 @@ func (m *Model) syncBody() {
 		m.body.SetContent(m.shutdownScreen())
 		m.body.SetYOffset(0)
 		return
+	case dialogResume:
+		m.body.SetContent(m.resumeScreenRows())
+		m.body.SetYOffset(0)
+		return
 	case dialogConfig:
 		m.body.SetWidth(m.listWidth())
 		text, at := m.config.screen(m.surface())

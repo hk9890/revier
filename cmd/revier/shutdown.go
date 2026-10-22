@@ -30,7 +30,9 @@ var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was ma
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent (decisions.md D78). It
 // saves the session first when it changed, so a restore brings back what the
-// shutdown closed, and it refuses while an agent is busy unless forced.
+// shutdown closed, and it refuses while an agent is busy unless forced. A
+// shutdown of every project, all of each, is recorded in the state, so the
+// next surface offers the restore (D141). ctrl+c stops it between two steps.
 func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("shutdown", flag.ContinueOnError)
 	agents := fs.Bool("agents", false, "close only the agents")
@@ -79,6 +81,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 
 	opts := core.ShutdownOpts{Force: *force, Projects: a.projects}
+	var save func(context.Context, core.Report) (session.Session, error)
 	if !*noSave {
 		// The save runs after the busy guard, so a shutdown the guard
 		// refuses leaves no session file behind either, and it records the
@@ -90,11 +93,11 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		if only != "" {
 			reason = session.ReasonProjectClosed
 		}
-		opts.Before = func(saving context.Context, now core.Report) error {
+		save = func(saving context.Context, now core.Report) (session.Session, error) {
 			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, reason, time.Now())
 			switch {
 			case err != nil:
-				return err
+				return session.Session{}, err
 			case saved:
 				_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
 					core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
@@ -104,7 +107,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			case stored.ID != "":
 				_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
 			}
-			return nil
+			return stored, nil
 		}
 	}
 
@@ -126,7 +129,13 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
-	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, opts)
+	full := only == "" && scope == core.ShutdownAll
+	// ctrl+c stops the close between two steps; a full shutdown it stops is
+	// no longer on record, since what it did not reach is still open.
+	walk, stop := interruptible(ctx)
+	defer stop()
+	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, full)
+	cancelled := errors.Is(walk.Err(), context.Canceled)
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):
@@ -134,6 +143,11 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			return err
 		}
 		return errShutdownTurnedBusy
+	// A cancel before the first close fails the save on the context it
+	// ended; the user's word for that is the cancel.
+	case cancelled && errors.Is(err, context.Canceled):
+		_, _ = fmt.Fprintln(a.out, "cancelled; nothing closed")
+		return nil
 	case err != nil:
 		return fmt.Errorf("%w; nothing closed", err)
 	}
@@ -146,6 +160,9 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
+	if cancelled {
+		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(len(plan)-len(closed), "step"))
+	}
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}

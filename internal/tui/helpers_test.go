@@ -803,3 +803,14 @@ func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, ro
 	m, cmd := press(m, "enter")
 	return run(m, cmd)
 }
+
+// shutDownOnRecord is the full shutdown the state under root records, nil
+// with none.
+func shutDownOnRecord(t *testing.T, root string) *state.ShutDown {
+	t.Helper()
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st.ShutDown
+}

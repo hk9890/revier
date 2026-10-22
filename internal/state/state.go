@@ -46,6 +46,32 @@ type State struct {
 	// process that launches may exit before the window appears; the TUI
 	// reads this and finishes the job.
 	Launch *Launch `json:"launch,omitempty"`
+
+	// ShutDown is the full shutdown on record, until anything opens again:
+	// the next surface offers to restore what it closed (decisions.md D141).
+	ShutDown *ShutDown `json:"shutdown,omitempty"`
+}
+
+// ShutDown is a full shutdown: when it saved, and the session it saved,
+// empty when it saved none.
+type ShutDown struct {
+	At      time.Time `json:"at"`
+	Session string    `json:"session,omitempty"`
+}
+
+// MarkShutDown records a full shutdown. Only a shutdown of every project,
+// all of each, is one: a project's close leaves the others open.
+func (s *State) MarkShutDown(at time.Time, session string) {
+	s.ShutDown = &ShutDown{At: at, Session: session}
+}
+
+// ClearShutDown ends the shutdown on record and reports whether there was
+// one. Anything opened since ends it (decisions.md D141), so a launch and a
+// landing clear it too.
+func (s *State) ClearShutDown() bool {
+	had := s.ShutDown != nil
+	s.ShutDown = nil
+	return had
 }
 
 // Clone is a copy that shares nothing with s.
@@ -63,6 +89,10 @@ func (s *State) Clone() *State {
 	if s.Launch != nil {
 		l := *s.Launch
 		c.Launch = &l
+	}
+	if s.ShutDown != nil {
+		d := *s.ShutDown
+		c.ShutDown = &d
 	}
 	return c
 }
@@ -198,15 +228,19 @@ func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time
 }
 
 // Launched records a launch whose window has not appeared, and makes its
-// project the current one. An action's launch has no target.
+// project the current one. An action's launch has no target. It is an open,
+// so it ends the shutdown on record.
 func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
+	s.ClearShutDown()
 	s.Current = p
 	s.Launch = &Launch{Project: p, Target: t, At: at}
 }
 
 // Landed records the instance a target landed on and makes its project the
-// current one. Every binding of a target consumes its launch.
+// current one. Every binding of a target consumes its launch. It is an open,
+// so it ends the shutdown on record.
 func (s *State) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+	s.ClearShutDown()
 	s.Current = p
 	s.Bind(p, t, ref)
 	if s.Launch != nil && s.Launch.Project == p && s.Launch.Target == t {

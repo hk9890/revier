@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -30,7 +31,6 @@ var barActions = []barAction{
 	{label: "new", key: "alt+n", run: Model.openCreate},
 	{label: "remote", key: "alt+r", run: Model.openLink},
 	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
-	{label: "shutdown", key: shutdownBarKey, run: Model.openShutdown},
 	{label: "config", key: "alt+c", run: Model.openConfig},
 	{label: "assist", key: "alt+a", run: Model.openAssist},
 	{label: "help", key: helpBarKey, run: Model.openHelp},
@@ -195,13 +195,19 @@ func (m Model) barAt(x, y int) int {
 	return -1
 }
 
-// barKey runs the button a press names, if a button declares it.
+// barKey runs the button a press names, if a button declares it. The
+// shutdown's button is on the sessions screen, and its key opens it from
+// here too.
 func (m Model) barKey(msg keyPress) (tea.Model, tea.Cmd, bool) {
 	for _, a := range barActions {
 		if msg.String() == a.key {
 			next, cmd := a.run(m)
 			return next, cmd, true
 		}
+	}
+	if key.Matches(msg, m.keys.Shutdown) {
+		next, cmd := m.openShutdown()
+		return next, cmd, true
 	}
 	return m, nil, false
 }

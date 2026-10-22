@@ -103,7 +103,9 @@ it.
 The popup is the surface in a window revier places and run-or-raises (D76).
 Leaving it hides it, and the next press raises it as it was (D86). A cold start on
 every press — a terminal, the TUI, and a first survey of every linked host —
-is too slow for the one keystroke the product promises.
+is too slow for the one keystroke the product promises. A full shutdown is the
+exception: it quits the popup, because nothing is left to raise it over, and
+the next press is a cold start that offers the restore (D141).
 
 A shutdown saves the session first, because it is the moment before a
 restart, and refuses while an agent works or waits for an answer, because that
@@ -111,6 +113,11 @@ agent would lose its turn (D78). The guard sits in the close path, so every way
 to close passes it, and it reads the agents again at the close: the plan the
 user confirmed is older than the press (D99). Nothing is killed; a window an
 application keeps open stays open.
+
+A full shutdown is remembered until anything opens again (D141). The surface
+quits after it, and its next start opens on the restore of what it closed, or
+on a fresh start. Any open ends the memory, so a desktop key pressed in the
+meantime is never answered later by a dialog about a desktop that is gone.
 
 A surface without the focus refreshes slowly, since nobody reads it (D129). A
 linked host is asked at a bounded rate, and less often while it does not

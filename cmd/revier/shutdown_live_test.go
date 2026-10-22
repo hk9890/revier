@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 )
 
 // agentStatus makes the fake claude list every agent pane in the status, on
@@ -37,7 +38,18 @@ func savedSessions(t *testing.T) []session.Session {
 	return all
 }
 
-// A shutdown saves what is open, closes all of it, and a second shutdown of
+// shutDownOnRecord is the full shutdown the state records, nil with none.
+func shutDownOnRecord(t *testing.T) *state.ShutDown {
+	t.Helper()
+	st, err := state.Load(filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st.ShutDown
+}
+
+// A shutdown saves what is open, closes all of it, and records that revier
+// was shut down; the restore after it ends the record. A second shutdown of
 // the same desktop saves nothing new.
 func TestShutdownSavesThenClosesEverything(t *testing.T) {
 	work(t)
@@ -57,11 +69,18 @@ func TestShutdownSavesThenClosesEverything(t *testing.T) {
 	if got := workspaces(t); got != "" {
 		t.Errorf("workspaces after = %q, want none", got)
 	}
-	if all := savedSessions(t); len(all) != 1 || all[0].Reason != session.ReasonShutdown {
+	all := savedSessions(t)
+	if len(all) != 1 || all[0].Reason != session.ReasonShutdown {
 		t.Fatalf("sessions = %+v, want 1, saved by a shutdown", all)
+	}
+	if sd := shutDownOnRecord(t); sd == nil || sd.Session != all[0].ID {
+		t.Errorf("shutdown on record = %+v, want one naming session %s", sd, all[0].ID)
 	}
 
 	capture(t, "session", "restore")
+	if sd := shutDownOnRecord(t); sd != nil {
+		t.Errorf("shutdown on record = %+v after the restore, want none", sd)
+	}
 	agentStatus(t, "idle")
 	if out := capture(t, "shutdown"); !strings.Contains(out, "already holds what is open") {
 		t.Errorf("second shutdown printed %q, want the session found unchanged", out)
@@ -111,6 +130,9 @@ func TestShutdownOfOneProjectLeavesTheOther(t *testing.T) {
 	}
 	if all := savedSessions(t); len(all) != 1 || all[0].Reason != session.ReasonProjectClosed {
 		t.Errorf("sessions = %+v, want 1, saved by a project close", all)
+	}
+	if sd := shutDownOnRecord(t); sd != nil {
+		t.Errorf("shutdown on record = %+v, want none for one project", sd)
 	}
 }
 

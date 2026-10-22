@@ -115,6 +115,9 @@ func (m *Model) syncDetail() {
 	case dialogShutdown:
 		m.detail.SetContent(m.shutdownDetail())
 		return
+	case dialogResume:
+		m.detail.SetContent(m.resumeDetail())
+		return
 	}
 	// The agent list's pane scrolls its mirror itself, under a head that
 	// stays (mirror.go).

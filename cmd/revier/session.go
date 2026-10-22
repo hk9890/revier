@@ -79,7 +79,8 @@ func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 }
 
 // cmdSessionRestore opens what a saved session recorded, as core.Restore
-// walks it, and prints a line per recorded target as it is walked.
+// walks it, and prints a line per recorded target as it is walked. ctrl+c
+// stops it between two targets.
 func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("session restore", flag.ContinueOnError)
 	dry := fs.Bool("dry-run", false, "print what it would open, and open nothing")
@@ -116,10 +117,14 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return printRestored(a.out, preview)
 	}
 	// Each step bounds its own launch and wait. The command's deadline is
-	// one keypress's, and a walk of several cold starts outlasts it; a
-	// cancel that comes before that deadline still stops the walk.
-	walk, stop := core.WithoutDeadline(ctx)
+	// one keypress's, and a walk of several cold starts outlasts it; ctrl+c
+	// stops the walk between two steps.
+	walk, stop := interruptible(ctx)
 	defer stop()
+	// A restore is an open, so the shutdown on record ends as it starts, as
+	// in the surface: a restore that opens nothing does not leave the start
+	// dialog to offer it again (decisions.md D141).
+	usecase.ClearShutDown(a.core)
 	// Each target is named before it opens, so a launch that hangs is the
 	// line left on the screen, and what came of it follows on that line.
 	plan := a.core.RestorePlan(s, report)

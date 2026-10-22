@@ -18,7 +18,8 @@ import (
 
 // del on a project asks first, naming the busy agent, and then closes it as
 // a project shutdown does: the session is saved as a project close's, and
-// the surface is back.
+// the surface is back. It closes the one project open, and is no full
+// shutdown all the same: nothing records one, and the surface stays.
 func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -41,7 +42,10 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	if all, _ := session.List(root); len(all) != 1 || all[0].Reason != session.ReasonProjectClosed {
 		t.Errorf("sessions = %+v, want the one saved before the close, saved by a project close", all)
 	}
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v, want none for a del", sd)
+	}
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface back", bar)
 	}
 }
@@ -67,7 +71,7 @@ func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	if all, _ := session.List(root); len(all) != 0 {
 		t.Errorf("sessions = %d, want none saved for one target", len(all))
 	}
-	if bar := barLine(m); !strings.Contains(bar, "shutdown alt+q") {
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface as it was", bar)
 	}
 }
