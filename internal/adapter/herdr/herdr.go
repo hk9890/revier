@@ -61,6 +61,9 @@ func (h *Host) Probe(ctx context.Context) error {
 // One request, whatever the project count: session.snapshot carries every
 // workspace, tab and pane. herdr names no pane's process, so one read of /proc
 // finds them, and each pane's foreground process is then read as tmux's is.
+// A pane moved to another workspace has a new id, and its process still
+// carries the old one, so herdr is asked for that pane's process alone: one
+// request per moved pane, not per pane (decisions.md D142).
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	pid, snap, err := h.snapshot(ctx)
 	if err != nil {
@@ -87,9 +90,13 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if !ok {
 			continue
 		}
+		shell, ok := processes[p.ID]
+		if !ok {
+			shell = h.shellPID(ctx, p.ID)
+		}
 		// A pane whose process was not found has no foreground: proc reads
 		// none for pid 0.
-		fg, command, _ := proc.Foreground(processes[p.ID])
+		fg, command, _ := proc.Foreground(shell)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(p.ID),
 			Kind:    kindOf(command),
@@ -122,6 +129,16 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 		}
 	}
 	return revier.TargetRef{}, nil
+}
+
+// shellPID asks herdr for the process it started in a pane. A pane it cannot
+// answer for has none: one pane must not fail the listing of every project.
+func (h *Host) shellPID(ctx context.Context, pane string) int {
+	var res processInfoResult
+	if _, err := h.request(ctx, "pane.process_info", map[string]string{"pane_id": pane}, &res); err != nil {
+		return 0
+	}
+	return res.ProcessInfo.ShellPID
 }
 
 func (h *Host) snapshot(ctx context.Context) (int, snapshot, error) {

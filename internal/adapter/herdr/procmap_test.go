@@ -4,10 +4,6 @@ package herdr_test
 
 import (
 	"maps"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
@@ -22,26 +18,13 @@ import (
 func TestAPanesProcessIsTheTopmostWithItsIdAndSocket(t *testing.T) {
 	root := t.TempDir()
 	const sock = "/run/herdr.sock"
-	write := func(pid, ppid int, env ...string) {
-		dir := filepath.Join(root, strconv.Itoa(pid))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		stat := strconv.Itoa(pid) + " (a (b) c) S " + strconv.Itoa(ppid) + " 1 1 0 -1\n"
-		if err := os.WriteFile(filepath.Join(dir, "stat"), []byte(stat), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "environ"), []byte(strings.Join(env, "\x00")+"\x00"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(50, 1, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock)                  // left by an earlier server
-	write(100, 1, "HOME=/home/u")                                                   // the server
-	write(101, 100, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)               // a shell
-	write(102, 101, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)               // what it runs
-	write(103, 100, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock+"/")           // the same socket, written otherwise
-	write(104, 1, "HERDR_PANE_ID=w2:p1", "HERDR_SOCKET_PATH="+sock)                 // outlived a handoff
-	write(105, 1, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH=/elsewhere/herdr.sock") // another server's pane
+	writeProc(t, root, 50, 1, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock)                  // left by an earlier server
+	writeProc(t, root, 100, 1, "HOME=/home/u")                                                   // the server
+	writeProc(t, root, 101, 100, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)               // a shell
+	writeProc(t, root, 102, 101, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)               // what it runs
+	writeProc(t, root, 103, 100, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock+"/")           // the same socket, written otherwise
+	writeProc(t, root, 104, 1, "HERDR_PANE_ID=w2:p1", "HERDR_SOCKET_PATH="+sock)                 // outlived a handoff
+	writeProc(t, root, 105, 1, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH=/elsewhere/herdr.sock") // another server's pane
 
 	got := herdr.PaneProcesses(root, sock, 100)
 	want := map[string]int{"w1:p1": 101, "w1:p2": 103, "w2:p1": 104}

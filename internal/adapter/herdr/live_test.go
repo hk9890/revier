@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
 	"github.com/hk9890/revier/pkg/revier"
@@ -38,9 +39,9 @@ func server(t *testing.T) *herdr.Host {
 	if err != nil {
 		t.Skip("herdr not installed; L4 needs it")
 	}
-	// Short: a Unix socket path longer than 107 bytes cannot be bound, and
-	// t.TempDir carries the test's name.
-	dir, err := os.MkdirTemp("", "rvh")
+	// Named after the test, cut short: a Unix socket path longer than 107
+	// bytes cannot be bound, and t.TempDir carries the test's whole name.
+	dir, err := os.MkdirTemp("", "rvh-"+shortName(t)+"-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,6 +92,18 @@ func scrubbed(env []string) []string {
 // call sends one request to the server on sock and decodes its result into
 // out, and fails the test when either goes wrong. It is how a test arranges
 // the server: the host does not open yet.
+// shortName is the test's name with its letters and digits alone, at most 40
+// of them: enough to tell which test left a socket behind.
+func shortName(t *testing.T) string {
+	name := strings.Map(func(r rune) rune {
+		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return r
+		}
+		return -1
+	}, strings.TrimPrefix(t.Name(), "Test"))
+	return name[:min(len(name), 40)]
+}
+
 func call(t *testing.T, sock, method string, params, out any) {
 	t.Helper()
 	if err := ask(sock, method, params, out); err != nil {
@@ -246,5 +259,53 @@ func TestFocusedIsTheWorkspaceTheServerLastMovedTo(t *testing.T) {
 	}
 	if i := slices.IndexFunc(got, func(in revier.Instance) bool { return in.Title == "w-1" }); i < 0 || focused != got[i].Ref {
 		t.Errorf("Focused = %+v, want w-1 among %+v", focused, got)
+	}
+}
+
+// A pane moved to another workspace gets a new id while its process keeps the
+// old one in its environment; the panel still names the process it runs.
+func TestAMovedPaneKeepsItsProcess(t *testing.T) {
+	h := server(t)
+	var from, to struct {
+		Workspace struct {
+			ID string `json:"workspace_id"`
+		} `json:"workspace"`
+		Tab struct {
+			ID string `json:"tab_id"`
+		} `json:"tab"`
+	}
+	call(t, h.Socket, "workspace.create", map[string]any{"label": "from", "focus": false}, &from)
+	call(t, h.Socket, "workspace.create", map[string]any{"label": "to", "focus": false}, &to)
+	var applied struct {
+		Layout struct {
+			FocusedPaneID string `json:"focused_pane_id"`
+		} `json:"layout"`
+	}
+	call(t, h.Socket, "layout.apply", map[string]any{
+		"workspace_id": from.Workspace.ID, "focus": false,
+		"root": map[string]any{"type": "pane", "command": []string{"bash", "-c", "exec -a claude sleep 600"}},
+	}, &applied)
+	call(t, h.Socket, "pane.move", map[string]any{
+		"pane_id": applied.Layout.FocusedPaneID, "focus": false,
+		"destination": map[string]any{"type": "tab", "tab_id": to.Tab.ID, "split": "right"},
+	}, &struct{}{})
+
+	c := ctx(t)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		i := slices.IndexFunc(got, func(in revier.Instance) bool { return in.Title == "to" })
+		if i >= 0 && slices.ContainsFunc(got[i].Panels, func(p revier.Panel) bool {
+			return p.PID != 0 && p.Runs("claude") && string(p.ID) != applied.Layout.FocusedPaneID
+		}) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("instances = %+v; want the moved claude pane in workspace to, under a new id, with its process", got)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

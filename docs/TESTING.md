@@ -18,7 +18,7 @@ Only L6 ever reaches one. L5 was retired and its number is not reused.
 |---|---|---|---|
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
-| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json` |
+| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, herdr `session.snapshot` |
 | L4 | real processes: tmux and herdr on private sockets, `sh` scripts | `live` | the tmux and herdr hosts, the core against a real substrate, and the adapters that run a shell (`claude`, `execprobe`, `ssh`) |
 | L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 

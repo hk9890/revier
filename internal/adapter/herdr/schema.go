@@ -35,6 +35,12 @@ type workspace struct {
 	Tokens map[string]string `json:"tokens"`
 }
 
+type processInfoResult struct {
+	ProcessInfo struct {
+		ShellPID int `json:"shell_pid"`
+	} `json:"process_info"`
+}
+
 type pane struct {
 	ID            string            `json:"pane_id"`
 	WorkspaceID   string            `json:"workspace_id"`

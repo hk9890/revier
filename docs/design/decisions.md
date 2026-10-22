@@ -718,3 +718,13 @@ terminal; a cancel takes it back. The surface then quits, the popup too, so
 the next press is a cold start (D86) that opens on a start dialog: restore,
 pick another session, or start fresh. Any open clears the record: the user
 has started again, so the desktop is no longer the one the shutdown left.
+
+### D142 — a herdr instance is a workspace, named by a token revier leaves on it
+
+One herdr server holds every workspace, as a tmux server holds every session
+(D70): a workspace is an instance, its tabs are tabs, its panes are panels. A
+user renames a workspace in herdr freely, so the title is a token revier sets,
+and the label only where revier opened nothing. herdr names no pane's process,
+so a pane's is the one whose environment carries its id; a moved pane gets an
+id its process never learns, and herdr is asked for that pane alone.
+Rejected: asking herdr for every pane's process, a request per pane per refresh.

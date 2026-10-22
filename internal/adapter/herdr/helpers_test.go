@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"net"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -34,4 +37,21 @@ func serve(t *testing.T, answer func(req map[string]any) string) string {
 		}
 	}()
 	return sock
+}
+
+// writeProc writes a process into a fake /proc at root: its parent in stat,
+// with a command name that holds spaces and parentheses, and its environment.
+func writeProc(t *testing.T, root string, pid, ppid int, env ...string) {
+	t.Helper()
+	dir := filepath.Join(root, strconv.Itoa(pid))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stat := strconv.Itoa(pid) + " (a (b) c) S " + strconv.Itoa(ppid) + " 1 1 0 -1\n"
+	if err := os.WriteFile(filepath.Join(dir, "stat"), []byte(stat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "environ"), []byte(strings.Join(env, "\x00")+"\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }

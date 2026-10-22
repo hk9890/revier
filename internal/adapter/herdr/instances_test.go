@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,11 +18,17 @@ import (
 	"github.com/hk9890/revier/internal/adapter/herdr"
 )
 
-// One request, whatever the project count.
+// One request, whatever the project count, while each pane's process carries
+// its pane id.
 func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 	const projects = 90
+	const sock = "/run/herdr.sock"
+	root := t.TempDir()
 	var workspaces, panes []string
 	for i := range projects {
+		for p := 1; p <= 2; p++ {
+			writeProc(t, root, 1000+2*i+p, 4242, fmt.Sprintf("HERDR_PANE_ID=w%d:p%d", i, p), "HERDR_SOCKET_PATH="+sock)
+		}
 		workspaces = append(workspaces, fmt.Sprintf(`{"workspace_id":"w%d","label":"project-%d"}`, i, i))
 		panes = append(panes,
 			fmt.Sprintf(`{"pane_id":"w%d:p1","workspace_id":"w%d","tab_id":"w%d:t1"}`, i, i, i),
@@ -31,8 +38,8 @@ func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 		`],"panes":[` + strings.Join(panes, ",") + `]}}`
 
 	var calls []string
-	h := &herdr.Host{}
-	h.SetProcRoot(t.TempDir())
+	h := &herdr.Host{Socket: sock}
+	h.SetProcRoot(root)
 	h.SetCaller(func(_ context.Context, method string, _ any) (int, []byte, error) {
 		calls = append(calls, method)
 		return 4242, []byte(result), nil
@@ -53,6 +60,46 @@ func TestInstancesCostOneRequestWhateverTheProjectCount(t *testing.T) {
 	}
 	if len(calls) != 1 {
 		t.Errorf("herdr asked %d times, want 1: %q", len(calls), calls)
+	}
+}
+
+// A pane moved to another workspace has a new id while its process carries
+// the old one, so herdr is asked for that pane's process, and for no other.
+// A pane herdr cannot answer for is listed with no process.
+func TestAMovedPaneIsAskedForItsProcessAlone(t *testing.T) {
+	const sock = "/run/herdr.sock"
+	root := t.TempDir()
+	writeProc(t, root, 1001, 4242, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)
+	writeProc(t, root, 1002, 4242, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock) // now w2:p2
+	snapshot := `{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"a"},{"workspace_id":"w2","label":"b"}],
+		"panes":[{"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1"},
+			{"pane_id":"w2:p2","workspace_id":"w2","tab_id":"w2:t1"},
+			{"pane_id":"w2:p3","workspace_id":"w2","tab_id":"w2:t1"}]}}`
+
+	var asked []string
+	h := &herdr.Host{Socket: sock}
+	h.SetProcRoot(root)
+	h.SetCaller(func(_ context.Context, method string, params any) (int, []byte, error) {
+		if method == "session.snapshot" {
+			return 4242, []byte(snapshot), nil
+		}
+		pane := params.(map[string]string)["pane_id"]
+		asked = append(asked, method+" "+pane)
+		if pane == "w2:p3" {
+			return 0, nil, errors.New("herdr pane.process_info: not_found: pane not found")
+		}
+		return 4242, []byte(`{"process_info":{"pane_id":"w2:p2","shell_pid":1002}}`), nil
+	})
+
+	got, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if want := []string{"pane.process_info w2:p2", "pane.process_info w2:p3"}; !slices.Equal(asked, want) {
+		t.Errorf("asked %q, want %q", asked, want)
+	}
+	if len(got) != 2 || len(got[1].Panels) != 2 {
+		t.Errorf("instances = %+v, want w2 with both its panes listed", got)
 	}
 }
 
