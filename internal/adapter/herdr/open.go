@@ -41,10 +41,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("herdr: realization has no name to give the workspace")
 	}
 	panels := r.PanelSpecs()
-	if len(panels) > maxPanes {
-		return revier.TargetRef{}, fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
-	}
-	if err := startable(panels); err != nil {
+	if err := buildable(panels); err != nil {
 		return revier.TargetRef{}, err
 	}
 	if err := h.running(ctx); err != nil {
@@ -93,7 +90,7 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 		}
 	}
 
-	_, panes, err := h.apply(ctx, map[string]any{"tab_id": tab}, panels)
+	_, panes, err := h.apply(ctx, "tab_id", tab, panels)
 	if err != nil {
 		return err
 	}
@@ -191,6 +188,15 @@ func (n layoutNode) panes() []string {
 		}
 	}
 	return out
+}
+
+// buildable refuses panels that one tab cannot hold, or that startable
+// refuses.
+func buildable(panels []revier.PanelSpec) error {
+	if len(panels) > maxPanes {
+		return fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
+	}
+	return startable(panels)
 }
 
 // startable refuses panels whose program is not on PATH before herdr starts
@@ -353,16 +359,17 @@ func (h *Host) current(ctx context.Context, ref revier.TargetRef) (string, error
 	if err != nil {
 		return "", err
 	}
-	server, workspace, _ := strings.Cut(ref.ID, "/")
-	if server != strconv.Itoa(pid) {
-		return "", gone(ref, pid)
-	}
-	return workspace, nil
+	return workspaceAt(ref, pid)
 }
 
-// gone says a workspace's server is not the one answering now.
-func gone(ref revier.TargetRef, pid int) error {
-	return fmt.Errorf("herdr: workspace %s is gone; the server that answers now is %d", ref.ID, pid)
+// workspaceAt is the workspace ref names, once pid, the server that answered,
+// is the server that assigned its id.
+func workspaceAt(ref revier.TargetRef, pid int) (string, error) {
+	server, workspace, _ := strings.Cut(ref.ID, "/")
+	if server != strconv.Itoa(pid) {
+		return "", fmt.Errorf("herdr: workspace %s is gone; the server that answers now is %d", ref.ID, pid)
+	}
+	return workspace, nil
 }
 
 // AttachCommand is the argv that puts the calling terminal onto the server.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -26,13 +25,10 @@ const maxTokens = 16
 // agent as not added, and it must not be running without its shell.
 func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	panels := r.PanelSpecs()
-	if len(panels) > maxPanes {
-		return "", fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
-	}
 	if err := keeps(vars); err != nil {
 		return "", err
 	}
-	if err := startable(panels); err != nil {
+	if err := buildable(panels); err != nil {
 		return "", err
 	}
 	workspace, err := h.current(ctx, ref)
@@ -40,7 +36,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 
-	tab, panes, err := h.apply(ctx, map[string]any{"workspace_id": workspace}, panels)
+	tab, panes, err := h.apply(ctx, "workspace_id", workspace, panels)
 	if err == nil {
 		for i, id := range panes {
 			if err = h.mark(ctx, id, vars); err != nil {
@@ -82,16 +78,14 @@ func keeps(vars map[string]string) error {
 	return nil
 }
 
-// apply builds the panels side by side in the tab the target names, a new one
-// after a workspace's tabs or one it replaces, without moving the focus. It
-// returns the tab and its panes, left to right, and fails when a panel's
-// command exited as soon as it started. The tab is returned with a failure
-// too, once herdr made it, for the caller to close.
-func (h *Host) apply(ctx context.Context, target map[string]any, panels []revier.PanelSpec) (string, []string, error) {
-	params := map[string]any{"focus": false, "root": layout(panels)}
-	for k, v := range target {
-		params[k] = v
-	}
+// apply builds the panels side by side, without moving the focus, in a new
+// tab after the tabs of the workspace a "workspace_id" key names, or in the
+// tab a "tab_id" key names, which they replace. It returns the tab and its
+// panes, left to right, and fails when a panel's command exited as soon as it
+// started. The tab is returned with a failure too, once herdr made it, for
+// the caller to close.
+func (h *Host) apply(ctx context.Context, key, id string, panels []revier.PanelSpec) (string, []string, error) {
+	params := map[string]any{key: id, "focus": false, "root": layout(panels)}
 	var applied struct {
 		Layout struct {
 			TabID string     `json:"tab_id"`
@@ -138,9 +132,9 @@ func (h *Host) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.P
 	if err != nil {
 		return "", err
 	}
-	server, id, _ := strings.Cut(ref.ID, "/")
-	if server != strconv.Itoa(pid) {
-		return "", gone(ref, pid)
+	id, err := workspaceAt(ref, pid)
+	if err != nil {
+		return "", err
 	}
 	i := slices.IndexFunc(snap.Workspaces, func(w workspace) bool { return w.ID == id })
 	if i < 0 {
@@ -170,8 +164,9 @@ const maxReadLines = 1000
 
 // ReadPanel is what the pane shows, with the colour of each run as SGR
 // sequences, which is all of the terminal herdr's ansi read carries; with
-// scrollback, the last 1000 lines, the most herdr reads at once. herdr ends a
-// line with "\r\n", and a line ends with "\n" here, as tmux ends it.
+// scrollback, the last 1000 lines, the most herdr reads at once. herdr puts
+// "\r\n" between two lines and nothing after the last; here a "\n" goes
+// between them, the line end tmux uses.
 func (h *Host) ReadPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, scrollback bool) (string, error) {
 	if _, err := h.current(ctx, ref); err != nil {
 		return "", err

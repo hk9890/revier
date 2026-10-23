@@ -17,7 +17,7 @@ type response struct {
 }
 
 // apiError is herdr's error object. Code is the stable part, such as
-// not_found; Message is for a person.
+// pane_not_found; Message is for a person.
 type apiError struct {
 	Method  string `json:"-"`
 	Code    string `json:"code"`
