@@ -46,6 +46,7 @@ type snapshot struct {
 }
 
 type tabLayout struct {
+	WorkspaceID   string `json:"workspace_id"`
 	TabID         string `json:"tab_id"`
 	FocusedPaneID string `json:"focused_pane_id"`
 }

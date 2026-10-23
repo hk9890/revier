@@ -35,6 +35,10 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	if err != nil {
 		return "", err
 	}
+	before, err := h.tabs(ctx, workspace)
+	if err != nil {
+		return "", err
+	}
 
 	tab, panes, err := h.apply(ctx, "workspace_id", workspace, panels)
 	if err == nil {
@@ -50,16 +54,43 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		}
 	}
 	if err != nil {
+		// The close has a bound of its own: the end of ctx may be what failed
+		// the tab.
+		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if tab == "" {
+			// herdr may have made the tab and its answer been lost, the end
+			// of ctx while it was read. A tab of the workspace that was not
+			// there before is then that one: unmarked, nothing would find it.
+			if now, err := h.tabs(closing, workspace); err == nil {
+				for id := range now {
+					if !before[id] {
+						tab = id
+					}
+				}
+			}
+		}
 		if tab != "" {
-			// The close has a bound of its own: the end of ctx may be what
-			// failed the tab.
-			closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
 			_, _ = h.request(closing, "tab.close", map[string]string{"tab_id": tab}, nil)
 		}
 		return "", err
 	}
 	return revier.PanelID(panes[0]), nil
+}
+
+// tabs is the set of the workspace's tabs.
+func (h *Host) tabs(ctx context.Context, workspace string) (map[string]bool, error) {
+	_, snap, err := h.snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, l := range snap.Layouts {
+		if l.WorkspaceID == workspace {
+			out[l.TabID] = true
+		}
+	}
+	return out, nil
 }
 
 // keeps refuses vars herdr would not keep as written as tokens.
@@ -166,7 +197,9 @@ const maxReadLines = 1000
 // sequences, which is all of the terminal herdr's ansi read carries; with
 // scrollback, the last 1000 lines, the most herdr reads at once. herdr puts
 // "\r\n" between two lines and nothing after the last; here a "\n" goes
-// between them, the line end tmux uses.
+// between them, the line end tmux uses. herdr's screen follows the pane's
+// scroll: while the user has scrolled a pane up in herdr, the screen read is
+// the lines shown there, not the newest, and herdr reads no other.
 func (h *Host) ReadPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, scrollback bool) (string, error) {
 	if _, err := h.current(ctx, ref); err != nil {
 		return "", err

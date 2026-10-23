@@ -43,6 +43,40 @@ func TestOpenTabRefusesAVarHerdrWouldChange(t *testing.T) {
 	}
 }
 
+// herdr can make the tab and its answer be lost, the end of the context while
+// it is read: the tab of the workspace that was not there before is closed,
+// since nothing would ever find it unmarked.
+func TestOpenTabClosesATabWhoseAnswerWasLost(t *testing.T) {
+	snapshots := []string{
+		`{"snapshot":{"layouts":[{"workspace_id":"w1","tab_id":"w1:t1"},{"workspace_id":"w2","tab_id":"w2:t1"}]}}`,
+		`{"snapshot":{"layouts":[{"workspace_id":"w1","tab_id":"w1:t1"},{"workspace_id":"w1","tab_id":"w1:t3"},
+			{"workspace_id":"w2","tab_id":"w2:t1"},{"workspace_id":"w2","tab_id":"w2:t2"}]}}`,
+	}
+	var closed []string
+	h := &herdr.Host{}
+	h.SetCaller(func(_ context.Context, method string, params any) (int, []byte, error) {
+		switch method {
+		case "session.snapshot":
+			s := snapshots[0]
+			snapshots = snapshots[1:]
+			return 9, []byte(s), nil
+		case "layout.apply":
+			return 0, nil, context.DeadlineExceeded
+		case "tab.close":
+			closed = append(closed, params.(map[string]string)["tab_id"])
+		}
+		return 9, []byte(`{}`), nil
+	})
+	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "herdr", ID: "9/w1"},
+		revier.Realization{Launch: []string{"sh"}}, map[string]string{"revier_target": "agent"})
+	if err == nil {
+		t.Fatal("OpenTab succeeded with no answer to its layout")
+	}
+	if !slices.Equal(closed, []string{"w1:t3"}) {
+		t.Errorf("closed %q, want the new tab of w1 alone", closed)
+	}
+}
+
 // Every panel operation that acts on a pane first checks the server is the
 // one that assigned the ref: herdr numbers panes per server too.
 func TestPanelOperationsRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
