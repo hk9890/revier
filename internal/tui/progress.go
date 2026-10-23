@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 )
 
@@ -118,6 +119,11 @@ func (m Model) walking() bool {
 
 // lockedKey is a press while a walk runs: ctrl+c cancels the walk, a second
 // quits, and every other press does nothing.
+//
+// The surface quits before the walk returns, so the record of a full
+// shutdown that left a step is taken back here, as the walk would have taken
+// it back on its cancel (decisions.md D141). The first press cancelled the
+// walk, so the walk writes no record after this.
 func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 	if !key.Matches(msg, m.keys.Quit) {
 		return m, nil
@@ -127,6 +133,9 @@ func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 		w = &m.shut.walk
 	}
 	if w.cancelled {
+		if s := m.shut; s.running && s.whole && len(w.closed) < len(s.plan) {
+			app.ClearShutDown(m.core)
+		}
 		return m, tea.Quit
 	}
 	w.cancel()

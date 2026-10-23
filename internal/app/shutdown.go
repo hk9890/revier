@@ -19,9 +19,12 @@ import (
 //
 // The record is written once the save is made and before the first close,
 // because the close may end the caller's own terminal last. A close the busy
-// guard refuses, or whose save fails, records nothing; a close cancelled on
-// its walk takes the record back, since what it did not reach is still open.
-// A close that leaves some steps open keeps it.
+// guard refuses, or whose save fails, records nothing, and neither does one
+// cancelled before the record is written: the cancel stops it before its
+// first step. A close cancelled on its walk takes the record back, since what
+// it did not reach is still open; a cancel that came after the last step was
+// walked reached nothing, and the record stays. A close that leaves some
+// steps open keeps it.
 func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait time.Duration, opts core.ShutdownOpts,
 	save func(context.Context, core.Report) (session.Session, error), full bool,
 ) (core.Closed, error) {
@@ -36,18 +39,25 @@ func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait tim
 				}
 			}
 			if full {
+				// The cancel is read under the state's lock, so a surface that
+				// takes the record back after its cancel - on the second
+				// ctrl+c, as it quits - is never followed by this write.
 				at := time.Now()
 				c.Ledger.Update(func(st *state.State) bool {
-					st.MarkShutDown(at, stored.ID)
-					return true
+					if marked = ctx.Err() == nil; marked {
+						st.MarkShutDown(at, stored.ID)
+					}
+					return marked
 				})
-				marked = true
+				if !marked {
+					return ctx.Err()
+				}
 			}
 			return nil
 		}
 	}
 	closed, err := c.Shutdown(ctx, plan, wait, opts)
-	if marked && errors.Is(ctx.Err(), context.Canceled) {
+	if marked && errors.Is(ctx.Err(), context.Canceled) && len(closed) < len(plan) {
 		ClearShutDown(c)
 	}
 	return closed, err

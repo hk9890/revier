@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -22,7 +23,7 @@ import (
 func TestTheFirstInterruptCancelsTheWalkAndTheDeadlineDoesNot(t *testing.T) {
 	spent, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
-	walk, stop := interruptible(spent)
+	walk, stop := interruptible(spent, nil)
 	defer stop()
 	if err := walk.Err(); err != nil {
 		t.Fatalf("walk = %v before any interrupt, want it running past the spent deadline", err)
@@ -43,21 +44,32 @@ func TestTheFirstInterruptCancelsTheWalkAndTheDeadlineDoesNot(t *testing.T) {
 
 // interruptedBy makes the walk of a shutdown or a restore one that cancel
 // stops, as the first interrupt does, without signalling the test's process.
-func interruptedBy(t *testing.T) (cancel func()) {
+// abandon runs what the second interrupt runs before the process ends.
+func interruptedBy(t *testing.T) (cancel, abandon func()) {
 	t.Helper()
 	was := interruptible
 	t.Cleanup(func() { interruptible = was })
 	var cancels []context.CancelFunc
-	interruptible = func(ctx context.Context) (context.Context, context.CancelFunc) {
+	var abandons []func()
+	interruptible = func(ctx context.Context, abandon func()) (context.Context, context.CancelFunc) {
 		walk, cancel := context.WithCancel(context.WithoutCancel(ctx))
 		cancels = append(cancels, cancel)
+		if abandon != nil {
+			abandons = append(abandons, abandon)
+		}
 		return walk, cancel
 	}
-	return func() {
+	cancel = func() {
 		for _, c := range cancels {
 			c()
 		}
 	}
+	abandon = func() {
+		for _, a := range abandons {
+			a()
+		}
+	}
+	return cancel, abandon
 }
 
 // demoDesktop is the demo project with the targets named open on the
@@ -84,7 +96,7 @@ func shutDownState() *state.State {
 // what it did not reach is still open.
 func TestACtrlCStopsTheShutdownAfterTheStepThatRuns(t *testing.T) {
 	a, rt := demoDesktop(t, &state.State{}, "home", "diff")
-	cancel := interruptedBy(t)
+	cancel, _ := interruptedBy(t)
 	rt.OnClose = func(revier.TargetRef) { cancel() }
 
 	out := output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
@@ -99,6 +111,82 @@ func TestACtrlCStopsTheShutdownAfterTheStepThatRuns(t *testing.T) {
 	}
 }
 
+// ctrl+c during the last close of `revier shutdown` reaches no step: the
+// command says no step was left, and the full shutdown stays on record.
+func TestACtrlCDuringTheLastCloseLeavesTheShutdownOnRecord(t *testing.T) {
+	a, rt := demoDesktop(t, &state.State{}, "home", "diff")
+	cancel, _ := interruptedBy(t)
+	rt.OnClose = func(revier.TargetRef) {
+		if len(rt.Closed) == 2 {
+			cancel()
+		}
+	}
+
+	out := output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	if len(rt.Closed) != 2 {
+		t.Errorf("closed %v, want both steps", rt.Closed)
+	}
+	if strings.Contains(out, "cancelled") {
+		t.Errorf("output = %q, want no step said to be left", out)
+	}
+	if a.core.Ledger.State().ShutDown == nil {
+		t.Error("a shutdown that closed every step was taken off the record")
+	}
+}
+
+// A second ctrl+c ends `revier shutdown` before the shutdown returns, so it
+// takes a full shutdown that left a step off the record as it goes.
+func TestASecondCtrlCTakesTheFullShutdownOffTheRecord(t *testing.T) {
+	a, rt := demoDesktop(t, &state.State{}, "home", "diff")
+	cancel, abandon := interruptedBy(t)
+	var onRecord []bool
+	rt.OnClose = func(revier.TargetRef) {
+		if len(rt.Closed) == 1 {
+			onRecord = append(onRecord, a.core.Ledger.State().ShutDown != nil)
+			cancel()
+			abandon()
+			onRecord = append(onRecord, a.core.Ledger.State().ShutDown != nil)
+		}
+	}
+
+	output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	if want := []bool{true, false}; !slices.Equal(onRecord, want) {
+		t.Errorf("on record before and after the second ctrl+c = %v, want %v", onRecord, want)
+	}
+}
+
+// The second interrupt runs what the walk leaves to it, then ends the
+// process.
+func TestASecondInterruptAbandonsTheWalkAndEnds(t *testing.T) {
+	was := interrupted
+	t.Cleanup(func() { interrupted = was })
+	var ran []string
+	ended := make(chan struct{})
+	interrupted = func() {
+		ran = append(ran, "end")
+		close(ended)
+	}
+	walk, stop := interruptible(context.Background(), func() { ran = append(ran, "abandon") })
+	defer stop()
+
+	for range 2 {
+		if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+			t.Fatal(err)
+		}
+		if walk.Err() == nil {
+			<-walk.Done()
+		}
+	}
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second interrupt did not end the process")
+	}
+	if want := []string{"abandon", "end"}; !slices.Equal(ran, want) {
+		t.Errorf("ran %v, want %v", ran, want)
+	}
+}
+
 // ctrl+c on `revier session restore` lets the target that opens finish and
 // reaches no other.
 func TestACtrlCStopsTheRestoreAfterTheTargetThatOpens(t *testing.T) {
@@ -108,7 +196,7 @@ func TestACtrlCStopsTheRestoreAfterTheTargetThatOpens(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	cancel := interruptedBy(t)
+	cancel, _ := interruptedBy(t)
 	rt.OnOpen = func(revier.Realization) { cancel() }
 
 	out := output(t, a, func() error { return cmdSessionRestore(context.Background(), a, nil) })

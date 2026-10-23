@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"text/tabwriter"
 	"time"
 
@@ -118,6 +119,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		pw, nw = max(pw, len(s.Project)), max(nw, len(s.Name()))
 	}
 	var said []string // what each step's line said, in the order it closed
+	var walked atomic.Int64
 	opts.Progress = func(p core.Progress) {
 		if p.Phase != core.PhaseClose {
 			return
@@ -126,13 +128,24 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Closed.Project, nw, p.Label)
 			return
 		}
+		walked.Add(1)
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
 	full := only == "" && scope == core.ShutdownAll
 	// ctrl+c stops the close between two steps; a full shutdown it stops is
-	// no longer on record, since what it did not reach is still open.
-	walk, stop := interruptible(ctx)
+	// no longer on record, since what it did not reach is still open. A
+	// second ctrl+c ends the command before the shutdown returns, so the
+	// record is taken back here when a step was left.
+	var abandon func()
+	if full {
+		abandon = func() {
+			if walked.Load() < int64(len(plan)) {
+				usecase.ClearShutDown(a.core)
+			}
+		}
+	}
+	walk, stop := interruptible(ctx, abandon)
 	defer stop()
 	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, full)
 	cancelled := errors.Is(walk.Err(), context.Canceled)
@@ -160,8 +173,9 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
-	if cancelled {
-		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(len(plan)-len(closed), "step"))
+	// A cancel that came after the last step was walked stopped nothing.
+	if left := len(plan) - len(closed); cancelled && left > 0 {
+		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(left, "step"))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))

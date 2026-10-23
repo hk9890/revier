@@ -400,8 +400,8 @@ func closeAnswer(closed core.Closed, err error) shutdownMsg {
 	return shutdownMsg{closed: closed}
 }
 
-// shutDown takes a shutdown's answer: the result is the pane's, a step that
-// did not close is the footer's too. The timer's next survey shows what
+// shutDown takes a shutdown's answer: the result is the pane's and the
+// result screen's, a step that did not close included. The timer's next survey shows what
 // closed; starting one here would add a second survey-tick chain that never
 // ends, as it would for actedMsg.
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
@@ -432,11 +432,10 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
-	_, _, failed := msg.closed.Counts()
-	// A cancel is said on the result's own rows, so the footer keeps its
-	// keys.
-	if failed > 0 && !s.walk.cancelled {
-		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
+	// A cancel that came after the last step was walked stopped nothing: the
+	// result is that of a shutdown nobody cancelled, and a full one quits.
+	if len(s.unreached()) == 0 {
+		s.walk.cancelled = false
 	}
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
@@ -549,12 +548,17 @@ func (m Model) shutdownScreen() string {
 		}
 		rows = []string{run, "Cancel"}
 	case shutDone:
-		n, open, _ := s.closed.Counts()
+		n, open, failed := s.closed.Counts()
 		if s.walk.cancelled {
 			open += len(s.unreached())
 		}
 		done := say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
 			say(th.Meta, s.saved)
+		// What did not close, and what a cancel left, are said on the
+		// result's own rows, so the footer keeps the result's keys.
+		if failed > 0 {
+			done += "\n" + say(th.Attention, core.Count(failed, "step")+" did not close")
+		}
 		if s.walk.cancelled {
 			done += "\n" + say(th.Attention, s.notReached())
 		}

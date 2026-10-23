@@ -116,6 +116,11 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
 		t.Error("a second ctrl+c while the shutdown runs did not quit")
 	}
+	// The surface is gone before the walk returns, so the record is taken
+	// back as it quits.
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v as the second ctrl+c quits, want it taken back", sd)
+	}
 	close(editor.release)
 	m, _ = update(m, <-answer)
 
@@ -256,6 +261,62 @@ func TestACancelledShutdownCountsTheStepsNotReachedAsOpen(t *testing.T) {
 	}
 	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") {
 		t.Errorf("footer = %q, want the result screen's keys", foot)
+	}
+}
+
+// A cancel during the last close stops nothing: the full shutdown stays on
+// record, its result says nothing was left, and the surface quits as after
+// one nobody cancelled.
+func TestAShutdownCancelledDuringItsLastCloseQuitsAsAFullOne(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	home := newHeld()
+	rt.OnClose = func(revier.TargetRef) { home.hold() }
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	<-home.entered
+	// The recheck, the save, the editor before and after, and the home begun.
+	m, _ = readReports(t, m, wait, 5)
+	m, _ = send(m, ctrlC)
+	close(home.release)
+	m, quit := update(m, <-answer)
+
+	if shutDownOnRecord(t, root) == nil {
+		t.Error("a shutdown that walked every step was taken off the record")
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "cancelled") || !strings.Contains(body, "revier quits") {
+		t.Errorf("rows = %q, want no step left and the quit said", body)
+	}
+	if quit == nil {
+		t.Error("the surface waits after a full shutdown that walked every step, want it to quit")
+	}
+}
+
+// A step that did not close is said on the result's rows, and the footer
+// keeps the result's keys.
+func TestAShutdownStepThatDidNotCloseIsSaidOnTheResult(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-01")
+	wm.CloseErr = errors.New("window refused")
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	// A project shutdown of project-01, all of it: it stays up to say what
+	// came of it.
+	m, _ = press(m, "alt+q")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
+	m = run(press(m, "enter"))
+
+	m = run(press(m, "enter"))
+
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "1 step did not close") {
+		t.Errorf("rows = %q, want the step that did not close said", body)
+	}
+	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") || strings.Contains(foot, "did not close") {
+		t.Errorf("footer = %q, want the result screen's keys and no error", foot)
 	}
 }
 

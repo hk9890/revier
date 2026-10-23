@@ -121,3 +121,46 @@ func TestACancelledFullShutdownTakesItsRecordBack(t *testing.T) {
 		t.Error("the cancelled shutdown is still on record")
 	}
 }
+
+// A cancel that comes during the last close reaches no step: the full
+// shutdown closed everything, and stays on record.
+func TestAFullShutdownCancelledDuringItsLastCloseKeepsItsRecord(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rt.OnClose = func(revier.TargetRef) {
+		if len(rt.Closed) == len(plan) {
+			cancel()
+		}
+	}
+
+	closed, err := app.Shutdown(ctx, c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), true)
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if len(plan) < 2 || len(closed) != len(plan) {
+		t.Fatalf("closed %d of %d steps, want every step of a plan of two or more", len(closed), len(plan))
+	}
+	if !shutDownOnRecord(c) {
+		t.Error("a shutdown that walked every step was taken off the record")
+	}
+}
+
+// A cancel that comes before the record is written records nothing: the
+// shutdown closes nothing, and a surface that took the record back on its
+// cancel is not followed by a write.
+func TestAFullShutdownCancelledDuringItsSaveRecordsNothing(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	save := func(context.Context, core.Report) (session.Session, error) {
+		cancel()
+		return session.Session{}, nil
+	}
+
+	_, err := app.Shutdown(ctx, c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, true)
+	if !errors.Is(err, context.Canceled) || shutDownOnRecord(c) || len(rt.Closed) != 0 {
+		t.Errorf("err = %v, recorded %v, closed %v; want the cancel, nothing recorded, nothing closed", err, shutDownOnRecord(c), rt.Closed)
+	}
+}

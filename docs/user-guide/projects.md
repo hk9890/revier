@@ -151,7 +151,8 @@ on the screen.
 To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
 the rest is not reached, and revier prints how many steps it left. A full
 shutdown you stop is not remembered, because what it did not reach is still
-open. When a step hangs, press ctrl+c again to quit at once.
+open; one you stop after its last step ran is. When a step hangs, press
+ctrl+c again to quit at once.
 
 - A window its application keeps open, for example to ask about unsaved
   work, is named `still open`. revier does not kill it.
