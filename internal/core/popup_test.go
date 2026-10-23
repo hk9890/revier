@@ -18,10 +18,10 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.Add("session:demo", "kitty", shellPanel("1"))
-	own := rt.Add("revier", core.PopupClass, shellPanel("2"), shellPanel("3"))
+	own := rt.Add("revier", "kitty", shellPanel("2"), shellPanel("3"))
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
-	osw := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1002})
+	osw := wm.AddInstance(revier.Instance{Title: "revier", Class: "kitty", PID: 1002})
 	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
 
 	if err := c.RaiseSelf(context.Background()); err != nil {
@@ -32,6 +32,27 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 	}
 	if !slices.Equal(wm.Focuses, []revier.TargetRef{osw}) {
 		t.Errorf("window focuses = %v, want %v", wm.Focuses, osw)
+	}
+}
+
+// The popup's terminal is raised by its class, as the press that raises it
+// is. One kitty process holds every window, so neither its pid nor the
+// title the runtime gives it names the popup's window.
+func TestRaiseSelfRaisesThePopupByItsClass(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	rt.Add("billing", "kitty", shellPanel("1"))
+	rt.Add("revier-popup", core.PopupClass, shellPanel("2"))
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "billing", Class: "kitty", PID: 1001})
+	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1001})
+	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "2" }}
+
+	if err := c.RaiseSelf(context.Background()); err != nil {
+		t.Fatalf("RaiseSelf: %v", err)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{popup}) {
+		t.Errorf("window focuses = %v, want the popup %v", wm.Focuses, popup)
 	}
 }
 

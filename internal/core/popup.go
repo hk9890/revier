@@ -197,7 +197,10 @@ func surface(p revier.Panel) bool {
 // the result. The terminal is the runtime's panel that c.Self names. A
 // surface in a terminal no runtime here lists - or with no Self - is left
 // where it is, and so is one whose window the window host cannot pair with
-// it: raising a guess would raise somebody else's window.
+// it: raising a guess would raise somebody else's window. The popup's
+// terminal is raised by its class, as the press that raises it does: its
+// title is no match for the window host where one terminal process holds
+// every window.
 func (c *Core) RaiseSelf(ctx context.Context) error {
 	if c.Self == nil || c.Runtime == nil {
 		return nil
@@ -211,6 +214,11 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 	for _, inst := range snap[c.Runtime.Name()] {
 		for _, p := range inst.Panels {
 			if c.Self(p) {
+				if inst.Class == PopupClass {
+					err := c.raisePopup(ctx)
+					logging.Op("surface raise", start, err, "ref", inst.Ref, "popup", true)
+					return err
+				}
 				err := c.focusPanel(ctx, snap, inst.Ref, p.ID, "revier")
 				logging.Op("surface raise", start, err, "ref", inst.Ref, "panel", p.ID)
 				return err
@@ -239,6 +247,22 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	}
 	slog.Info("popup: hide", "ref", w.Ref)
 	return hider.Hide(ctx, w.Ref)
+}
+
+// raisePopup raises the popup's window, found by its class.
+func (c *Core) raisePopup(ctx context.Context) error {
+	if c.Window == nil {
+		return ErrNoPopupHost
+	}
+	windows, err := c.Window.Instances(ctx)
+	if err != nil {
+		return err
+	}
+	w, ok := popupWindow(windows)
+	if !ok {
+		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
+	}
+	return c.Window.Focus(ctx, w.Ref)
 }
 
 // popupWindow is the popup among the windows listed: the first of its class.
