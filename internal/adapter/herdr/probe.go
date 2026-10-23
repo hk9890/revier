@@ -17,7 +17,7 @@ const (
 
 // Probe reads the state herdr detected for an agent in one of its panes. It
 // knows no harness itself: it takes herdr's word, so it is placed after the
-// probes that read a harness directly.
+// probes that read a harness directly, a user's included.
 type Probe struct{}
 
 func (p *Probe) Name() string { return "herdr" }

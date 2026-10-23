@@ -1,5 +1,6 @@
 // Package herdr implements a Runtime host over herdr, a terminal multiplexer
-// for coding agents (https://github.com/herdrdev/herdr).
+// for coding agents (https://github.com/herdrdev/herdr), and the probe that
+// reads herdr's own agent detection.
 //
 // An instance is a herdr workspace, the way a tmux instance is a session: its
 // tabs are the tabs, and the panes of every tab are the panels a probe reads.

@@ -23,7 +23,7 @@ An external probe lets a user add a coding agent revier does not know yet,
 without writing Go. The contract is the user guide's
 [agent probes](../user-guide/extending/probes.md) page. A probe runs for every
 panel on every refresh, so it stays cheap or it becomes the reason the surface
-feels slow. A compiled-in probe wins for the harness it knows.
+feels slow. It wins over every compiled-in probe except the Claude probe.
 
 Of the ports, only the agent probe has a subprocess form. A host is stateful and
 sits in the latency path of every keystroke, so it is Go or nothing.

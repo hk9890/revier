@@ -734,4 +734,5 @@ and the label where there is none.
 Extends D119. herdr names the agent in each of its panes and its state, for
 more harnesses than revier has probes for. The host passes both on as panel
 vars, as kitty passes a harness's user vars, so the host still names no agent.
-The herdr probe reads them, after the Claude probe (D57).
+The herdr probe reads them after the Claude probe (D57) and after every probe
+a configuration declares, so a probe written for a harness runs on herdr too.
