@@ -233,6 +233,31 @@ func TestAnAbandonBeforeTheRecordIsWrittenKeepsAnEarlierRecord(t *testing.T) {
 	}
 }
 
+// A surface that quits on the second ctrl+c while the last step hangs keeps
+// the record: the walk reached every step, the hung one too.
+func TestAnAbandonDuringTheLastStepKeepsTheRecord(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	record := app.NewShutdownRecord(c)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var onRecord bool
+	rt.OnClose = func(revier.TargetRef) {
+		if len(rt.Closed) == len(plan) {
+			cancel()
+			record.Abandon()
+			onRecord = shutDownOnRecord(c)
+		}
+	}
+
+	if _, err := app.Shutdown(ctx, c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if len(plan) < 2 || !onRecord || !shutDownOnRecord(c) {
+		t.Errorf("abandoned during the last of %d steps: on record %v, then %v; want it kept", len(plan), onRecord, shutDownOnRecord(c))
+	}
+}
+
 // A surface that quits on the second ctrl+c takes the record back when the
 // walk left a step not reached, and keeps it once every step was walked.
 func TestAnAbandonTakesTheRecordBackOnlyWhenAStepWasNotReached(t *testing.T) {

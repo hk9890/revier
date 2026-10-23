@@ -32,8 +32,8 @@ func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait tim
 		record.start(len(plan))
 		progress := opts.Progress
 		opts.Progress = func(p core.Progress) {
-			if p.Phase == core.PhaseClose && p.Done {
-				record.walked()
+			if p.Phase == core.PhaseClose && !p.Done {
+				record.reach()
 			}
 			if progress != nil {
 				progress(p)
@@ -66,23 +66,24 @@ func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait tim
 }
 
 // ShutdownRecord is one full shutdown's entry in the state: whether this
-// shutdown wrote it, and how many of its steps the walk has walked. It alone
+// shutdown wrote it, and how many of its steps the walk has reached. It alone
 // decides whether a cancelled shutdown takes its record back, for the walk's
 // own end and for a surface that quits before the walk returns.
 //
 // A cancel takes the record back only when this shutdown wrote it and the
 // walk left a step not reached: what it did not reach is still open. A cancel
 // that came before the record was written takes nothing back, so an earlier
-// shutdown's record stays. One that came after the last step was walked
-// reached nothing, and the record stays. The count of steps walked is the
-// core's, read as it reports each step, not a surface's reading of those
-// reports, which lags the walk.
+// shutdown's record stays. One that came once the last step was reached left
+// nothing, and the record stays, also when the second ctrl+c ends that step
+// as it hangs. A step is reached as the core starts it, not as it ends: the
+// count is the core's, read as it reports each step, not a surface's reading
+// of those reports, which lags the walk.
 type ShutdownRecord struct {
-	c     *core.Core
-	mu    sync.Mutex
-	at    time.Time // when this shutdown wrote its record; zero when it holds none
-	steps int
-	done  int
+	c       *core.Core
+	mu      sync.Mutex
+	at      time.Time // when this shutdown wrote its record; zero when it holds none
+	steps   int
+	reached int
 }
 
 // NewShutdownRecord is the record of a full shutdown about to run.
@@ -108,10 +109,10 @@ func (r *ShutdownRecord) start(steps int) {
 	r.steps = steps
 }
 
-func (r *ShutdownRecord) walked() {
+func (r *ShutdownRecord) reach() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.done++
+	r.reached++
 }
 
 // write records the shutdown unless ctx was cancelled. The cancel is read
@@ -137,7 +138,7 @@ func (r *ShutdownRecord) takeBack() {
 	r.c.Ledger.Update(func(st *state.State) bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if r.at.IsZero() || r.done >= r.steps || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
+		if r.at.IsZero() || r.reached >= r.steps || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
 			return false
 		}
 		r.at = time.Time{}
