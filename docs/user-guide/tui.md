@@ -83,7 +83,8 @@ open to show what was done and what was not reached. A restore stopped after
 its last target says `return home cancelled`. When a step hangs, press ctrl+c
 again to quit: the command the step waits for ends too.
 
-Each window a restore opens comes up over the TUI. When the restore ends,
+revier does not bring the windows a restore opens to the front, but the
+desktop brings most of them up over the TUI. When the restore ends,
 done, failed or cancelled, the TUI brings its own window back to the front
 once, so you see the result. A TUI in a terminal that revier does not list
 stays where it is.

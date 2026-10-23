@@ -126,7 +126,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		logStep(res.RestoreStep, false)
 		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Restored: res})
 		if res.Action == RestoreLaunch {
-			res = c.restoreLaunch(walking, p, step)
+			res = c.restoreLaunch(walking, p, step, false)
 			logAgents(res)
 		}
 		out = append(out, res)
@@ -150,7 +150,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 			back = ErrHomeCancelled
 		case returns:
 			opts.report(Progress{Phase: PhaseHome, Label: string(p.Name)})
-			if res := c.restoreLaunch(walking, p, RestoreStep{Project: p.Name, Target: home.Name}); res.Err != nil {
+			if res := c.restoreLaunch(walking, p, RestoreStep{Project: p.Name, Target: home.Name}, true); res.Err != nil {
 				back = fmt.Errorf("could not return to %s: %w", s.Current, res.Err)
 			}
 		}
@@ -181,11 +181,14 @@ func (o RestoreOpts) report(p Progress) {
 
 // restoreLaunch is one step of a restore, walked by ActivateWaiting. It has
 // the deadline a keypress and the bind after it have, so a host that never
-// answers costs the restore one step and not the rest of the walk.
-func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep) RestoreResult {
+// answers costs the restore one step and not the rest of the walk. raise is
+// whether a window it binds is raised: only the return home raises, so the
+// desktop does not flip through every window a restore opens (decisions.md
+// D15).
+func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, raise bool) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
-	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes)
+	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes, raise)
 	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
 }
 
@@ -206,7 +209,7 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep) R
 // window comes after it, and a press made during that wait happened later.
 func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume) (revier.TargetRef, Result, error) {
 	pressed := time.Now()
-	ref, res, err := c.activateWaiting(ctx, p, name, resumes)
+	ref, res, err := c.activateWaiting(ctx, p, name, resumes, true)
 	if err == nil && !res.ComingUp {
 		landed := res.Target
 		if res.Tab != "" {
@@ -217,7 +220,7 @@ func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.Targe
 	return ref, res, err
 }
 
-func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume) (revier.TargetRef, Result, error) {
+func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, raise bool) (revier.TargetRef, Result, error) {
 	st := c.state()
 	res, err := c.activate(ctx, p, name, st.Bound[p.Name], st.Pending(p.Name, name, time.Now()), resumes)
 	ref := res.Ref
@@ -226,7 +229,7 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 		c.update(func(st *state.State) { st.Launched(p.Name, res.Target, at) })
 		var inst revier.Instance
 		var ok bool
-		inst, ok, err = c.bindWindow(ctx, p, res.Target, res.Before, BindWait)
+		inst, ok, err = c.bindWindow(ctx, p, res.Target, res.Before, BindWait, raise)
 		if ok {
 			ref = inst.Ref
 		}

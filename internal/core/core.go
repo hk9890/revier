@@ -825,7 +825,7 @@ func (c *Core) isUp(ctx context.Context, p Project, name revier.TargetName, boun
 const BindPoll = 50 * time.Millisecond
 
 // bindWindow waits for the window a detached launch produces and binds it, then
-// raises it. The window is the first one, new since before, that the target's
+// raises it when raise is set. The window is the first one, new since before, that the target's
 // rule accepts by class alone: the class is right from the first frame while
 // a title settles later, which is exactly when a rule would miss it. A window
 // the full rule matches is taken at once; otherwise a single class candidate
@@ -833,15 +833,15 @@ const BindPoll = 50 * time.Millisecond
 // which. It gives up after wait and reports false. A window it found and
 // could not raise is reported with the failure, as goTo reports an instance it
 // launched and could not focus, so the activation pins it.
-func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (inst revier.Instance, ok bool, err error) {
+func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("bind", start, err, "project", p.Name, "target", name, "bound", ok, "ref", inst.Ref)
 	}()
-	return c.bind(ctx, p, name, before, wait)
+	return c.bind(ctx, p, name, before, wait, raise)
 }
 
-func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration) (revier.Instance, bool, error) {
+func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (revier.Instance, bool, error) {
 	i, ok := p.index(name)
 	if !ok || c.Window == nil || p.Targets[i].Window == nil {
 		return revier.Instance{}, false, nil
@@ -872,8 +872,10 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	if err != nil || !found {
 		return revier.Instance{}, false, err
 	}
-	if err := c.Window.Focus(ctx, w.Ref); err != nil {
-		return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
+	if raise {
+		if err := c.Window.Focus(ctx, w.Ref); err != nil {
+			return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
+		}
 	}
 	c.place(ctx, *p.Targets[i].Window, w.Ref)
 	return w, true, nil
