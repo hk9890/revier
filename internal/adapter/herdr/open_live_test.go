@@ -241,24 +241,3 @@ func TestOpenStartsTheServerWhenNoneRuns(t *testing.T) {
 		t.Errorf("instances = %+v, %v; want the workspace Open made", got, err)
 	}
 }
-
-// waitFor polls the listing until ok accepts it: a pane's process starts
-// after the request that made the pane returns.
-func waitFor(t *testing.T, h *herdr.Host, ok func([]revier.Instance) bool) {
-	t.Helper()
-	c := ctx(t)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		got, err := h.Instances(c)
-		if err != nil {
-			t.Fatalf("Instances: %v", err)
-		}
-		if ok(got) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("instances never settled: %+v", got)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}

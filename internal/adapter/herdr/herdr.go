@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os/exec"
 	"strconv"
 
@@ -112,15 +113,15 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 }
 
 // vars is a pane's tokens, and the agent herdr detected in it with its state,
-// which the herdr probe reads.
+// which the herdr probe reads. Any client can set a token, so a token of the
+// same name does not stand in for herdr's detection.
 func vars(p pane) map[string]string {
 	if p.Agent == "" {
 		return p.Tokens
 	}
-	out := map[string]string{agentVar: p.Agent, statusVar: p.AgentStatus}
-	for k, v := range p.Tokens {
-		out[k] = v
-	}
+	out := map[string]string{}
+	maps.Copy(out, p.Tokens)
+	out[agentVar], out[statusVar] = p.Agent, p.AgentStatus
 	return out
 }
 

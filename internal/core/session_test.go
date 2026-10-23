@@ -84,6 +84,26 @@ func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 	}
 }
 
+// A shell in the foreground overrules a probe in a save as in the survey: a
+// probe that reads what a host passed on, not the program, can still claim the
+// panel of an agent that has ended, and a restore would open it again.
+func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "codex"},
+	)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "any"}}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+	if got := s.Projects[0].Targets[0].Agents; len(got) != 1 {
+		t.Errorf("agents = %+v, want the tool's alone", got)
+	}
+}
+
 // A project with nothing open is not in the file: restoring it would open a
 // workspace the save did not have.
 func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {

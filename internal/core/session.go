@@ -184,7 +184,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 					if !open || panel.ID != id {
 						continue
 					}
-					if probe, ok := c.probeFor(panel); ok {
+					if probe, ok := c.agentProbe(panel); ok {
 						tab.Agents = append(tab.Agents, session.Agent{Harness: probe.Name()})
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
@@ -222,7 +222,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 				if recordedAsTab(v, inst, panel) {
 					continue
 				}
-				if probe, ok := c.probeFor(panel); ok {
+				if probe, ok := c.agentProbe(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
 						panel: panel, probe: probe,
