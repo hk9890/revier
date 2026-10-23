@@ -724,4 +724,4 @@ has started again, so the desktop is no longer the one the shutdown left.
 One herdr server holds every workspace, as a tmux server holds every session
 (D70): a workspace is an instance, its tabs are tabs, its panes are panels. A
 user renames a workspace in herdr freely, so the title is a token revier sets,
-and the label only where revier opened nothing.
+and the label where there is none.

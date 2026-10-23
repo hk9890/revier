@@ -5,8 +5,8 @@
 // Every test here runs against a server of its own, on a socket in a scratch
 // directory, started and stopped by the test. Nothing attaches a client,
 // nothing reaches a display, and the user's own herdr is never visible to it.
-// The host opens nothing yet, so a test arranges the server through herdr's
-// API directly.
+// A test arranges what the host does not make, such as a moved pane,
+// through herdr's API directly.
 package herdr_test
 
 import (
@@ -105,7 +105,7 @@ func shortName(t *testing.T) string {
 
 // call sends one request to the host's server and decodes its result into
 // out, and fails the test when either goes wrong. It is how a test arranges
-// the server: the host does not open yet.
+// the server, for what the host does not make.
 func call(t *testing.T, h *herdr.Host, method string, params, out any) {
 	t.Helper()
 	if err := h.Request(ctx(t), method, params, out); err != nil {

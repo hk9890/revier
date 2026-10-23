@@ -6,8 +6,8 @@
 // One herdr server holds every workspace, and the host speaks its JSON API on
 // the server's Unix socket, one request per connection.
 //
-// The host lists and reports focus. It opens nothing yet, so the command line
-// does not offer it.
+// The host lists, opens, focuses and closes workspaces. It opens no tab yet,
+// so the command line does not offer it.
 package herdr
 
 import (
