@@ -254,13 +254,9 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.status.beating = m.anyStatus()
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
-	st := c.Ledger.State()
-	m.keep(st)
 	// After a full shutdown the first screen offers the restore (decisions.md
-	// D141).
-	if st.ShutDown != nil {
-		m.openResume(*st.ShutDown)
-	}
+	// D141), which keep puts up.
+	m.keep(c.Ledger.State())
 	// The project field has the cursor from the start: the surface filters as
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
@@ -1062,18 +1058,35 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 //
 // The start dialog goes once its shutdown is no longer on record: something
 // opened since, and a restore over it is what the dialog must never offer
-// (decisions.md D141).
+// (decisions.md D141). It comes up for a shutdown this surface has not
+// offered yet - the first state it reads, or a `revier shutdown` run
+// elsewhere while it stays on the screen - but only over the plain surface:
+// a screen, a query, a question or a walk the user is in is left alone, and
+// the next state read after it offers the dialog. A shutdown already offered
+// is not offered again, so a user who went on to pick a session and came
+// back is not asked twice.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
-	if m.dialog == dialogResume && st.ShutDown == nil {
+	switch sd := st.ShutDown; {
+	case m.dialog == dialogResume && sd == nil:
 		m.dialog = dialogNone
+	case sd != nil && !sd.At.Equal(m.resume.at) && m.plain():
+		m.openResume(*sd)
 	}
 }
 
+// plain reports the surface itself, with nothing the user is in the middle
+// of: no screen over it, no query, no question, and no walk.
+func (m *Model) plain() bool {
+	return m.dialog == dialogNone && m.filter == "" && m.confirm == "" && !m.walking()
+}
+
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown was recorded while it was hidden, as `revier shutdown` records
-// one: the popup outlives that shutdown and would otherwise never offer its
-// restore (decisions.md D141). A walk that runs keeps its screen.
+// shutdown is on record, as `revier shutdown` records one while it is
+// hidden: the popup outlives that shutdown (decisions.md D141). The raise is
+// a new errand, so it offers the dialog at once and over any screen, also a
+// shutdown the popup offered before; a refresh offers only one it has not
+// (keep). A walk that runs keeps its screen.
 func (m *Model) offerResume() {
 	if m.walking() {
 		return

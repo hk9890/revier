@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -187,6 +188,36 @@ func (c *Core) surfacePanel(ctx context.Context, instances []revier.Instance, wi
 // of its own: the TUI. `revier agent wait` in a panel is not one.
 func surface(p revier.Panel) bool {
 	return len(p.Command) == 1 && p.Runs("revier")
+}
+
+// RaiseSelf brings the terminal this process runs in back to the front: its
+// panel current, and its window raised, as a press on an agent brings that
+// agent's. The surface calls it once a restore has ended, because each
+// window the restore opened came up over it, the popup included, and hid
+// the result. The terminal is the runtime's panel that c.Self names. A
+// surface in a terminal no runtime here lists - or with no Self - is left
+// where it is, and so is one whose window the window host cannot pair with
+// it: raising a guess would raise somebody else's window.
+func (c *Core) RaiseSelf(ctx context.Context) error {
+	if c.Self == nil || c.Runtime == nil {
+		return nil
+	}
+	start := time.Now()
+	snap, err := c.answered(ctx, c.Runtime.Name())
+	if err != nil {
+		logging.Op("surface raise", start, err)
+		return err
+	}
+	for _, inst := range snap[c.Runtime.Name()] {
+		for _, p := range inst.Panels {
+			if c.Self(p) {
+				err := c.focusPanel(ctx, snap, inst.Ref, p.ID, "revier")
+				logging.Op("surface raise", start, err, "ref", inst.Ref, "panel", p.ID)
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // HidePopup takes the open popup off the screen and keeps it, for the next

@@ -83,6 +83,11 @@ open to show what was done and what was not reached. A restore stopped after
 its last target says `return home cancelled`. When a step hangs, press ctrl+c
 again to quit.
 
+Each window a restore opens comes up over the TUI. When the restore ends,
+done, failed or cancelled, the TUI brings its own window back to the front
+once, so you see the result. A TUI in a terminal that revier does not list
+stays where it is.
+
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.
 
@@ -148,6 +153,9 @@ open, and the next start does not show the dialog.
 
 The next start of the TUI, or of the popup, opens on a dialog:
 `revier was shut down at 18:30.` The pane shows what the saved session holds.
+A TUI that stays open while `revier shutdown` runs elsewhere shows the same
+dialog at its next refresh, once you are back on the project list with no
+query.
 
 - **Restore this session** restores the session the shutdown saved. The
   sessions screen shows each step.

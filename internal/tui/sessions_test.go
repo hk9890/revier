@@ -3,6 +3,7 @@ package tui_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -233,6 +234,29 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	}
 	if st.Bound["project-00"]["home"].IsZero() {
 		t.Errorf("state bound = %+v, want project-00's home landed", st.Bound)
+	}
+}
+
+// The windows a restore opens come up over the surface, so once the restore
+// ends the surface brings its own terminal back, once, after the last of
+// them.
+func TestARestoreRaisesTheSurfaceOnceItEnds(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	self := rt.Add("revier", "kitty", revier.Panel{ID: "9", Kind: revier.PanelShell})
+	c.Self = func(p revier.Panel) bool { return p.ID == "9" }
+	root := stateWith(t, nil)
+	saved(t, root, "work", 10, homeOf("project-00"), homeOf("project-01"))
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+
+	if len(rt.Focuses) < 2 || rt.Focuses[len(rt.Focuses)-1] != self || slices.Index(rt.Focuses, self) != len(rt.Focuses)-1 {
+		t.Errorf("Focuses = %v, want the restore's, then the surface's terminal %v once", rt.Focuses, self)
+	}
+	if body := pane(m); !strings.Contains(body, "Restored") {
+		t.Errorf("pane = %q, want the result", body)
 	}
 }
 

@@ -385,6 +385,12 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 		}
 		// No deadline over the whole walk: each step bounds its own.
 		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) { progress <- p }})
+		// Each window the restore opened came up over the surface; it comes
+		// back once, at the end, so the result is not hidden. A raise that
+		// fails leaves it where it is, which is where it was.
+		raising, stop := context.WithTimeout(context.Background(), localHostWait)
+		_ = c.RaiseSelf(raising)
+		stop()
 		return restoredMsg{id: s.ID, restored: out, notReached: len(c.RestorePlan(s, report)) - len(out), back: back}
 	}
 	return tea.Batch(restoring, waitLedger(written), waitProgress(progress)), nil
