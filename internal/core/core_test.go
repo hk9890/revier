@@ -1181,6 +1181,32 @@ func TestAHostThatCannotPlaceIgnoresThePlacement(t *testing.T) {
 	}
 }
 
+// A terminal's new OS window is placed through the window host once that host
+// lists it. The wait reads the terminal and the window host alone, so a host
+// whose instances it does not need, failing, costs nothing.
+func TestATerminalsNewWindowIsPlacedWhileAnotherHostCannotList(t *testing.T) {
+	raw := project()
+	raw.Targets[0].Runtime.Place = "right top 75% 100%"
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	wm := hosttest.New("wm")
+	var osw revier.TargetRef
+	rt.OnOpen = func(revier.Realization) {
+		// The first instance the fake runtime opens has the pid 1001.
+		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	}
+	served := hosttest.New("served")
+	served.SetInstancesErr(errors.New("served: down"))
+	c := &core.Core{Runtime: rt, Window: wm, Served: served}
+
+	if _, err := press(context.Background(), c, prepared(t, raw), "home"); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if want := []string{"right", "top", "75%", "100%"}; !slices.Equal(wm.Placements[osw.ID], want) {
+		t.Errorf("placements = %v, want %v on the new OS window %v", wm.Placements, want, osw)
+	}
+}
+
 // A window manager reuses window ids, so the id a target was bound to can
 // come back as an unrelated window. Nothing about that failure is visible -
 // the wrong window simply comes forward - so the binding is re-checked

@@ -89,6 +89,32 @@ func TestARestoredWindowIsLaunchedThenLanded(t *testing.T) {
 	}
 }
 
+// A window a restore step binds is not raised: the return home is the one
+// raise a restore makes, so the desktop does not flip through every window it
+// opens. A press still raises the window it binds.
+func TestARestoreStepDoesNotRaiseTheWindowItBinds(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	home := rt.Add("session:revier", "kitty")
+	wm := hosttest.New("wm")
+	wm.Detached = true
+	c := &core.Core{Runtime: rt, Window: wm}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "editor"}}}}}
+
+	out, _, back := restoreOf(t, c, s)
+	if back != nil {
+		t.Fatalf("back = %v", back)
+	}
+	if out[0].Ref.IsZero() {
+		t.Fatalf("editor = %+v, want it bound", out[0])
+	}
+	if len(wm.Focuses) != 0 {
+		t.Errorf("window focuses = %v, want none: the bound window stays where the desktop put it", wm.Focuses)
+	}
+	if n := len(rt.Focuses); n == 0 || rt.Focuses[n-1] != home {
+		t.Errorf("runtime focuses = %v, want the restore to end on home", rt.Focuses)
+	}
+}
+
 // A restore ends on the project the save was left on.
 func TestRestoreEndsOnTheSavedCurrentProject(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")

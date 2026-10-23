@@ -8,19 +8,20 @@ revier also writes its desktop keys into GNOME, and the popup needs it.
 ## What you need
 
 - The [Window Control extension](https://github.com/carlo9890/gnome-window-control),
-  switched on, and its command `wctl` on your PATH. GNOME gives no window list
-  to an outside program; `wctl` does.
+  switched on, and its command `wctl` 0.16.0 or later on your PATH. GNOME
+  gives no window list to an outside program; `wctl` does.
 - `revier` on the PATH of a login shell. Each desktop key runs it through
   `sh -lc`.
 
 revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
-`wctl list --json` answers. Else it runs with no window host and says
-nothing; see [`[hosts]`](../configuration.md#hosts).
+`wctl version --json` names a running extension. Else it runs with no window
+host and says nothing; see [`[hosts]`](../configuration.md#hosts).
 
 ## Set it up
 
 1. Install the extension and `wctl`. Log out and in.
-2. Check that `wctl list --json` prints your windows.
+2. Check that `wctl version --json` shows `wctl` 0.16.0 or later and an
+   `extension` version, and that `wctl list --json` prints your windows.
 3. Give a target a window, as
    [Give your editor a key](../getting-started.md#give-your-editor-a-key)
    shows.

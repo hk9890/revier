@@ -95,7 +95,7 @@ machine reports that it is unavailable.
 | `match` | inline table | both | How revier finds an open instance. Required, except on a tab. |
 | `name` | string | runtime; required, except on a tab | The name of the instance revier opens: the kitty OS window title, the tmux session name. `match` must find this name. |
 | `dir` | string | both | The directory `launch` and the panels start in. Default: the project's `path`. |
-| `place` | string | both | Where a new window goes: x, y, width, height as `wctl place` reads them, for example `"right top 75% 100%"`. Needs GNOME. Applies on launch only. |
+| `place` | string | both | Where a new window goes: x, y, width, height as `wctl place` reads them, for example `"right top 75% 100%"`. Needs GNOME. Applies on launch only. A rule of the Window Control extension for the same window must name the same position, or the window jumps from the rule's position to this one. |
 | `inside` | string | runtime | Makes the target a tab of the named target. See [Tabs](#tabs). |
 | `tabs` | list of strings | runtime | The tabs a new instance opens with, in order. |
 | `active` | string | runtime | The entry of `tabs` that has the focus in a new instance. Default: the first. |

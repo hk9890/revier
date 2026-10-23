@@ -56,7 +56,10 @@ cannot disagree.
 
 Without the first, run-or-raise opens a new instance on every press; a
 multiplexer needs `Realization.Name` for it. The second holds because a window
-manager need not focus what it launched.
+manager need not focus what it launched. A window a step of a restore binds is
+the exception: the step is no press, and raising each such window flips the
+desktop through every window the restore opens. A terminal it opens is still
+focused, which picks its current tab (D126).
 
 ### D16 — only the focus authority judges toggle-back; every instance is probed
 

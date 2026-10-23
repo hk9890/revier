@@ -50,8 +50,8 @@ const SwitchKey = "\x1b "
 // raises the popup when it is open. Otherwise it launches what argv
 // returns, which must start a terminal of class PopupClass running the
 // surface, then raises the new window and places it (D76). The
-// size is decided before the launch, so the window moves once and is never
-// resized after it shows. argv is a function, asked only for a launch: what
+// size is decided before the launch, so revier places the window once and
+// never measures it to place it again. argv is a function, asked only for a launch: what
 // it carries - the project the surface opens on - costs a listing the raise
 // must not pay.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
@@ -66,7 +66,15 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	if ref, ok := c.switchSurface(ctx, before); ok {
+	// The window the key was pressed over decides a switch, and is in a
+	// launch's line by its id alone, as its title is the user's: a launch with
+	// no window focused is what a popup that went away while it had the focus
+	// leaves behind.
+	over, err := c.Window.Focused(ctx)
+	if err != nil {
+		slog.Warn("popup: focused window", "err", err)
+	}
+	if ref, ok := c.switchSurface(ctx, before, over); ok {
 		slog.Info("popup: switch", "ref", ref)
 		return ref, nil
 	}
@@ -77,13 +85,6 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	width, err := area.WorkareaWidth(ctx)
 	if err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
-	}
-	// The window the key was pressed over is in the launch's line, by its id
-	// alone, as its title is the user's: a launch with no window focused is
-	// what a popup that went away while it had the focus leaves behind.
-	over, err := c.Window.Focused(ctx)
-	if err != nil {
-		slog.Warn("popup: focused window", "err", err)
 	}
 	if _, err := c.Window.Open(ctx, revier.Realization{
 		Launch: argv(ctx),
@@ -104,8 +105,7 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	ref := w.Ref
 	geometry := popupGeometry(width)
 	slog.Info("popup: launched", "ref", ref, "over", over.ID, "workarea_width", width, "place", geometry)
-	// The raise goes first: the placement returns only once the frame has
-	// settled, and the window must not wait that long for the keyboard.
+	// The raise goes first, so the keyboard reaches the window before it moves.
 	if err := c.Window.Focus(ctx, ref); err != nil {
 		return ref, err
 	}
@@ -114,7 +114,8 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 }
 
 // switchSurface types SwitchKey into the surface the focused window shows,
-// and reports that window and whether it did. The surface is the popup, or a
+// and reports that window and whether it did. focused is the window host's
+// focused window, zero for none. The surface is the popup, or a
 // revier the user started in a terminal of their own: the key means the same
 // on both, and the desktop takes it from both. windows is the window host's
 // listing.
@@ -123,13 +124,9 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 // type, a focused window that is no terminal of it, and a terminal whose
 // current panel runs something else all leave the press what it was before
 // the surface had a second list: the popup, raised or opened.
-func (c *Core) switchSurface(ctx context.Context, windows []revier.Instance) (revier.TargetRef, bool) {
+func (c *Core) switchSurface(ctx context.Context, windows []revier.Instance, focused revier.TargetRef) (revier.TargetRef, bool) {
 	w, ok := c.Runtime.(revier.PanelWriter)
-	if !ok {
-		return revier.TargetRef{}, false
-	}
-	focused, err := c.Window.Focused(ctx)
-	if err != nil || focused.IsZero() {
+	if !ok || focused.IsZero() {
 		return revier.TargetRef{}, false
 	}
 	at := slices.IndexFunc(windows, func(in revier.Instance) bool { return in.Ref.ID == focused.ID })

@@ -62,28 +62,34 @@ func TestOpenOutlivesTheKeypress(t *testing.T) {
 	}
 }
 
-// A wctl without --no-animation says so on its standard error and exits
-// non-zero, and the host reads the refusal in the error its runner makes of
-// that. The recorder of the default-layer tests writes that error itself, so
-// this one runs a wctl that is a process.
-func TestARefusalReachesTheHostFromWctlsStandardError(t *testing.T) {
+// wctl prints its version document on standard output and exits non-zero
+// when the loaded extension is outside the versions it was built for, and
+// the host still reads the document. The recorder of the default-layer tests
+// hands the document over itself, so this one runs a wctl that is a process.
+func TestProbeReadsTheDocumentOfAWctlThatExitsNonZero(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv")
+	doc := `{"wctl":"0.17.0","expects_extension":"17","extension":"16","compatible":false,"capabilities":["no-animation"]}`
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + log + "'\n" +
-		"case \"$*\" in *--no-animation) echo 'Error: Usage: wctl minimize <WINDOW>' >&2; exit 1;; esac\n"
+		"case \"$*\" in 'version --json') echo '" + doc + "'; exit 5;; esac\n"
 	if err := os.WriteFile(filepath.Join(dir, "wctl"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CURRENT_DESKTOP", "GNOME")
 
-	if err := (&gnome.Host{}).Hide(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
+	h := &gnome.Host{}
+	if err := h.Probe(context.Background()); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	if err := h.Hide(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"}); err != nil {
 		t.Fatalf("Hide: %v", err)
 	}
 	got, err := os.ReadFile(log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "minimize 4181121382 --no-animation\nminimize 4181121382\n"; string(got) != want {
+	if want := "version --json\nminimize 4181121382 --no-animation\n"; string(got) != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
 }

@@ -59,6 +59,9 @@ type Fake struct {
 	// InstancesCalls counts Instances calls, so a test can assert that a
 	// refresh costs one call whatever the project count.
 	InstancesCalls int
+	// FocusedCalls counts Focused calls, so a test can assert that a press
+	// asks for the focused window once.
+	FocusedCalls int
 	// Placements records every geometry passed to Place, by ref. A window
 	// host that cannot place windows leaves this nil, which is the
 	// degradation a test also has to cover.
@@ -523,6 +526,7 @@ func (f *Fake) WorkareaWidth(context.Context) (int, error) {
 func (f *Fake) Focused(context.Context) (revier.TargetRef, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.FocusedCalls++
 	if f.FocusedErr != nil {
 		return revier.TargetRef{}, f.FocusedErr
 	}

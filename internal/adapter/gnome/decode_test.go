@@ -84,6 +84,23 @@ func TestDecodeKeepsAHiddenWindowWhenTheWorkspaceIsUnknown(t *testing.T) {
 	}
 }
 
+// Only an application's main window is listed: a splash or a dialog of the
+// same class would otherwise be bound to a launch that waits for that window.
+func TestDecodeKeepsOnlyNormalWindows(t *testing.T) {
+	raw := `[
+		{"id": 1, "title": "", "wm_class": "jetbrains-idea", "window_type_name": "splashscreen"},
+		{"id": 2, "title": "Trust Project", "wm_class": "jetbrains-idea", "window_type_name": "dialog"},
+		{"id": 3, "title": "revier", "wm_class": "jetbrains-idea", "window_type_name": "normal"}
+	]`
+	got, err := (&gnome.Host{}).Decode([]byte(raw), func() (int, bool) { return 0, true })
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if len(got) != 1 || got[0].Ref.ID != "3" {
+		t.Errorf("got %+v, want the normal window alone", got)
+	}
+}
+
 // Nothing focused is a normal desktop state, so it must not error: the survey
 // still has to render.
 func TestDecodeFocusedEmpty(t *testing.T) {
