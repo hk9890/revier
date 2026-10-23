@@ -91,7 +91,8 @@ func (h *Host) request(ctx context.Context, method string, params, out any) (int
 		return fail(err)
 	}
 	if resp.Error != nil {
-		return 0, fmt.Errorf("herdr %s: %s: %s", method, resp.Error.Code, resp.Error.Message)
+		resp.Error.Method = method
+		return 0, resp.Error
 	}
 	return pid, decode(method, resp.Result, out)
 }

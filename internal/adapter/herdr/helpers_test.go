@@ -2,6 +2,7 @@ package herdr_test
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"net"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/adapter/herdr"
 )
 
 // serve listens on a socket of its own and answers each request line with
@@ -60,4 +63,16 @@ func writeProc(t *testing.T, root string, pid, ppid int, env ...string) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// recording is a host whose server has pid 9 and answers every request with
+// an empty result, and the methods it was asked.
+func recording() (*herdr.Host, *[]string) {
+	var asked []string
+	h := &herdr.Host{}
+	h.SetCaller(func(_ context.Context, method string, _ any) (int, []byte, error) {
+		asked = append(asked, method)
+		return 9, []byte(`{}`), nil
+	})
+	return h, &asked
 }
