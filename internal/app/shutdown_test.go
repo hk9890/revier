@@ -108,6 +108,51 @@ func TestARefusedOrUnsavedShutdownRecordsNothing(t *testing.T) {
 	})
 }
 
+// unsaved is a ledger whose state file takes no write, as on a full disk:
+// Update applies the change to the state it returns and loses it.
+type unsaved struct{ *ledger }
+
+func (l unsaved) Update(apply func(*state.State) bool) *state.State {
+	st := l.State().Clone()
+	apply(st)
+	return st
+}
+
+// A full shutdown whose record did not reach the state still closes, but is
+// not on record: the surface would quit into a start that offers nothing.
+func TestAFullShutdownWhoseRecordWasNotSavedIsNotRecorded(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	c = c.WithLedger(unsaved{c.Ledger.(*ledger)})
+	record := app.NewShutdownRecord(c)
+
+	if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if record.Recorded() || len(rt.Closed) == 0 {
+		t.Errorf("recorded %v, closed %v; want the closes made and nothing recorded", record.Recorded(), rt.Closed)
+	}
+}
+
+// A full shutdown whose record an open ended on its walk is not on record
+// either (decisions.md D141): the next start offers nothing.
+func TestAFullShutdownWhoseRecordAnOpenEndedIsNotRecorded(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	rt.OnClose = func(revier.TargetRef) {
+		c.Ledger.Update(func(st *state.State) bool {
+			st.Launched("demo", "notes", time.Now())
+			return true
+		})
+	}
+	record := app.NewShutdownRecord(c)
+
+	if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if record.Recorded() || len(rt.Closed) == 0 {
+		t.Errorf("recorded %v, closed %v; want the closes made and nothing recorded", record.Recorded(), rt.Closed)
+	}
+}
+
 // A full shutdown cancelled on its walk takes its record back: what it did
 // not reach is still open.
 func TestACancelledFullShutdownTakesItsRecordBack(t *testing.T) {

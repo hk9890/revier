@@ -23,8 +23,9 @@ import (
 // because the close may end the caller's own terminal last. A close the busy
 // guard refuses, or whose save fails, records nothing, and neither does one
 // cancelled before the record is written: the cancel stops it before its
-// first step. A close cancelled on its walk takes the record back as
-// ShutdownRecord says.
+// first step. A record whose write did not reach the state does not stop the
+// close; the shutdown is then not on record. A close cancelled on its walk
+// takes the record back as ShutdownRecord says.
 func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait time.Duration, opts core.ShutdownOpts,
 	save func(context.Context, core.Report) (session.Session, error), record *ShutdownRecord,
 ) (core.Closed, error) {
@@ -81,7 +82,7 @@ func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait tim
 type ShutdownRecord struct {
 	c       *core.Core
 	mu      sync.Mutex
-	at      time.Time // when this shutdown wrote its record; zero when it holds none
+	at      time.Time // when this shutdown wrote its record, which the state may not hold; zero when it holds none
 	steps   int
 	reached int
 }
@@ -95,12 +96,20 @@ func NewShutdownRecord(c *core.Core) *ShutdownRecord { return &ShutdownRecord{c:
 // walk, so the walk writes no record after this.
 func (r *ShutdownRecord) Abandon() { r.takeBack() }
 
-// Recorded reports whether the shutdown is on record: written by it, and not
-// taken back.
+// Recorded reports whether the shutdown is on record: written by it, not
+// taken back, and held by the state now. The ledger does not report a write
+// that failed, and an open since ends the record (decisions.md D141), so the
+// state is read: the surface that quits on a recorded shutdown stays when the
+// state does not hold it, since its next start would not offer this one.
 func (r *ShutdownRecord) Recorded() bool {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	return !r.at.IsZero()
+	at := r.at
+	r.mu.Unlock()
+	if at.IsZero() {
+		return false
+	}
+	sd := r.c.Ledger.State().ShutDown
+	return sd != nil && sd.At.Equal(at)
 }
 
 func (r *ShutdownRecord) start(steps int) {
