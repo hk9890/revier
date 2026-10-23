@@ -530,8 +530,7 @@ func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
 }
 
 // One project the survey could not reach leaves its own steps open and closes
-// every other project's: a refusal disables the smallest thing that is wrong
-// (decisions.md D85).
+// every other project's: a refusal disables the smallest thing that is wrong.
 func TestShutdownClosesTheProjectsTheRecheckCouldRead(t *testing.T) {
 	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
 	other := agentProject()
@@ -834,7 +833,7 @@ func TestAShutdownThatClosesNothingSavesNothing(t *testing.T) {
 // none carries the home one, as an instance opened before the mark existed
 // can - closes an agent as that panel alone. Reading it as a tab opened
 // beside the workspace is a guess, and the guess that is wrong takes the
-// shell the layout declares with it (decisions.md D94, D100).
+// shell the layout declares with it.
 func TestAnAgentClosesAloneWhenTheInstanceNamesNoOwnPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	marked := func(id revier.PanelID, tab string, p revier.Panel) revier.Panel {

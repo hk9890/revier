@@ -153,8 +153,7 @@ run = ["again"]
 }
 
 // A status table TOML cannot decode is refused with the line it stands on.
-// An edit above it moves that line and breaks nothing new, so it is written
-// (decisions.md D85).
+// An edit above it moves that line and breaks nothing new, so it is written.
 func TestProjectEditAboveABrokenStatusIsWritten(t *testing.T) {
 	file, shared := projectRoot(t, overriding+"\n[[status]]\nat = \"project\"\nrun = [\"x\"]\nevery = 10\n")
 	if _, err := config.SetProjectValue(file, "git_url", "git@github.com:me/demo.git", shared); err != nil {

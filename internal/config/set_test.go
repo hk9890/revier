@@ -140,9 +140,9 @@ func TestSetRefusesAValueLoadRefuses(t *testing.T) {
 	}
 }
 
-// A write is refused for what it breaks, not for what was broken before it
-// (decisions.md D85): an unknown theme already in the file does not lock the
-// trigger key, and writing a valid theme in its place mends it.
+// A write is refused for what it breaks, not for what was broken before it:
+// an unknown theme already in the file does not lock the trigger key, and
+// writing a valid theme in its place mends it.
 func TestSetIsNotRefusedForAProblemTheFileHadAlready(t *testing.T) {
 	root := writeConfig(t, "[ui]\ntheme = \"solarized\"\n")
 	if err := config.Set(root, "ui", "trigger_key", "alt-j"); err != nil {

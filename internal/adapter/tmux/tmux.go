@@ -238,8 +238,8 @@ func (h *Host) sessions(ctx context.Context) ([]revier.Instance, map[string]bool
 // refID is an instance id: the session id, behind the pid of the server that
 // assigned it. tmux numbers sessions per server from $0, so after a restart a
 // bare session id names an unrelated session, and a binding kept in state
-// would raise it. The core trusts a runtime binding without re-checking it
-// (decisions.md D25), so the id has to stay unique across servers.
+// would raise it. The core trusts a runtime binding without re-checking it,
+// so the id has to stay unique across servers.
 func refID(serverPID, session string) string { return serverPID + "/" + session }
 
 // sessionOf is the tmux session id an instance id carries.
@@ -352,9 +352,8 @@ func (h *Host) name(ctx context.Context, session, window, pane string, r revier.
 	for _, pane := range panes {
 		if err := h.setVars(ctx, pane, r.Vars); err != nil {
 			// The mark is best effort: an unmarked panel falls back to the
-			// guess it replaces (decisions.md D100). Failing here would kill a
-			// session whose panes are already running, over a mark nothing
-			// depends on.
+			// guess it replaces. Failing here would kill a session whose panes
+			// are already running, over a mark nothing depends on.
 			slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", pane, "err", err)
 		}
 	}

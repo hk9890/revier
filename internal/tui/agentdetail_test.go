@@ -353,9 +353,9 @@ func TestAPanelTheProjectPaneCannotReadLeavesANote(t *testing.T) {
 	}
 }
 
-// A link's agent is in a panel here, so the pane mirrors it as any other
-// (decisions.md D104): the screen is this machine's terminal, and nothing is
-// asked of the agent's host for it.
+// A link's agent is in a panel here, so the pane mirrors it as any other:
+// the screen is this machine's terminal, and nothing is asked of the agent's
+// host for it.
 func TestALinksAgentIsMirroredFromItsPanelHere(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	rt := openHere("alpha")

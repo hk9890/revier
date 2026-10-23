@@ -11,7 +11,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// ShutdownScope is what a shutdown closes (decisions.md D78).
+// ShutdownScope is what a shutdown closes.
 type ShutdownScope uint8
 
 const (
@@ -65,7 +65,7 @@ type CloseStep struct {
 
 	// Unread is why the recheck could not read this step's agents. A step
 	// that carries one closes nothing and is named in the result; the rest
-	// of the plan closes (decisions.md D85, D99).
+	// of the plan closes (decisions.md D99).
 	Unread string
 }
 
@@ -112,8 +112,7 @@ func (s CloseStep) Busy() bool { return len(s.BusyAgents()) > 0 }
 // BusyAgents are the step's agents that work or wait for an answer. A step
 // the recheck could not read has none: its Agents are the ones the plan was
 // drawn with, and closing nothing ends nobody's turn. That refusal is the
-// step's alone (decisions.md D85), so the stale reading must not refuse the
-// whole plan.
+// step's alone, so the stale reading must not refuse the whole plan.
 func (s CloseStep) BusyAgents() []revier.AgentView {
 	if s.Unread != "" {
 		return nil
@@ -647,7 +646,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 
 // rechecked is the plan with each step's agents as a later survey finds them.
 // It adds and drops no step: a plan confirmed is the plan that runs, and only
-// what its agents do now can stop it (decisions.md D78).
+// what its agents do now can stop it.
 //
 // A step the survey could not answer for - the host that lists its instance
 // did not answer, its project is no longer surveyed, or the link host that
@@ -655,7 +654,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 // degraded survey reports no agents, and no agents read is not idle: taking
 // it as idle would close it in the one case the survey knows least about.
 // The refusal is that step's alone, so one dead remote host does not stop the
-// other projects closing (decisions.md D85).
+// other projects closing.
 func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
 	unreachable := map[revier.ProjectName]string{}
@@ -687,9 +686,9 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 			// The panels are read again with the agents. A step that closes
 			// a tab means that tab, not the panels it held when the plan was
 			// drawn: a panel added to it since closes with it, and an agent
-			// working in that panel refuses the close like any other
-			// (decisions.md D94). This adds and drops no step: the plan the
-			// user confirmed is the plan that runs (D78).
+			// working in that panel refuses the close like any other. This
+			// adds and drops no step: the plan the user confirmed is the plan
+			// that runs.
 			step.Panels = c.panelsOf(r.Instances, step)
 			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}

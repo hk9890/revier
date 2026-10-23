@@ -3,7 +3,7 @@ package revier
 import "time"
 
 // The kinds of Event. They are a contract with whatever reads `revier
-// events`: a kind is added, never renamed (decisions.md D112).
+// events`: a kind is added, never renamed.
 const (
 	// EventGo is one press of a target that ran or raised it. A step of a
 	// restore is not one.

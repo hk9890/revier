@@ -421,8 +421,8 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		// The cursor lands on Cancel: the close it refused is one keypress
 		// away, and that press is the force, not a second Enter nobody aimed.
 		// A del that closed at once asks here instead, so its second press
-		// is the force too (decisions.md D99). That force surveys again
-		// like any other close, so it carries no listing from here.
+		// is the force too. That force surveys again like any other close,
+		// so it carries no listing from here.
 		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
 		m.dialog = dialogShutdown
 		return m, nil

@@ -15,8 +15,8 @@ import (
 )
 
 // An activation through the ledger writes the launch before the wait for its
-// window, so a second press finds it and does not launch again
-// (decisions.md D21), and lands where the window then is.
+// window, so a second press finds it and does not launch again, and lands
+// where the window then is.
 func TestActivateWaitingWritesTheLaunchThenTheLanding(t *testing.T) {
 	defer func(w time.Duration) { core.BindWait = w }(core.BindWait)
 	core.BindWait = 20 * time.Millisecond
@@ -146,7 +146,7 @@ func TestSettleKeepsARefWrittenSinceTheSurveyStarted(t *testing.T) {
 
 // A launch stamped after the settle's clock was read was written since, by a
 // press in another process. It is not past its window: the settle keeps it,
-// or the next press would launch the target a second time (decisions.md D21).
+// or the next press would launch the target a second time.
 func TestSettleKeepsALaunchWrittenSinceItsClockWasRead(t *testing.T) {
 	now := time.Now()
 	l := &ledger{}

@@ -334,8 +334,7 @@ func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 }
 
 // An agent this machine serves to a terminal elsewhere ends with that
-// terminal (decisions.md D84): a shutdown here plans nothing for it, and no
-// busy check names it.
+// terminal: a shutdown here plans nothing for it, and no busy check names it.
 func TestAShutdownLeavesAServedAgentToItsTerminal(t *testing.T) {
 	served := hosttest.New("proc")
 	served.Add("session:revier", "", revier.Panel{ID: "box.4242", Kind: revier.PanelTool, Title: "agent", PID: 7})

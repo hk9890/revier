@@ -215,8 +215,8 @@ func Usable(targets []map[string]any) []map[string]any {
 
 // problemsAdded is what after holds against config.toml's rules that before
 // did not: the reasons a write is refused for. A write is refused for what
-// it breaks and not for what was broken before it (decisions.md D85), else
-// one bad action would lock the config screen against every other edit.
+// it breaks and not for what was broken before it, else one bad action would
+// lock the config screen against every other edit.
 func problemsAdded(before, after *Config) error {
 	had := map[string]bool{}
 	for _, err := range before.Problems {
@@ -473,10 +473,10 @@ func Problems(p core.Project) []error {
 // newProblems is what after is not whole for that before was: the reasons a
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
-// edit of the file, and the file could only be repaired by hand
-// (decisions.md D85). A problem is the project's, one target's by name, or
-// one status place's: the opening of its refusal, since a TOML error in the
-// tables names a line, and an edit above them moves it.
+// edit of the file, and the file could only be repaired by hand. A problem
+// is the project's, one target's by name, or one status place's: the opening
+// of its refusal, since a TOML error in the tables names a line, and an edit
+// above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}
 	if before.Invalid != nil {

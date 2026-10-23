@@ -407,7 +407,7 @@ func TestALinkSurvivesASurveyThatPredatesIt(t *testing.T) {
 
 // The dialog stands over the surface and owns the keys: a letter does not
 // filter the list behind it, and Tab does not move a cursor that is not on
-// the surface (decisions.md D45).
+// the surface.
 func TestTheDialogOwnsTheKeys(t *testing.T) {
 	m, _, _ := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha")
 	m = step(m, "alt+r")

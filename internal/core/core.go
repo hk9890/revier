@@ -1008,9 +1008,9 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 // every OS window of one kitty process shares it - never the identity.
 //
 // It refuses as soon as two windows answer to one terminal, as runtimeOf
-// read the other way does and for the same reason (decisions.md D63):
-// the window that is raised, and the window a row is folded into, are both
-// the wrong one when the title is shared and the pairing was a guess.
+// read the other way does and for the same reason: the window that is
+// raised, and the window a row is folded into, are both the wrong one when
+// the title is shared and the pairing was a guess.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
 	if !c.bridged(inst) || inst.Title == "" {
 		return revier.Instance{}, false
@@ -1033,7 +1033,7 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 // window. It is osWindowOf read the other way, through the same identity -
 // the title the two listings share, with the pid as a filter - and it refuses
 // as soon as two runtime instances answer to it, because a guess here would
-// attach a project to the wrong terminal (decisions.md D63).
+// attach a project to the wrong terminal.
 func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier.Instance, bool) {
 	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows ||
 		w.Ref.Host != c.Window.Name() || w.Title == "" {
@@ -1057,7 +1057,7 @@ func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier
 // at, and the terminal inside it when that window is one this machine's
 // runtime holds and the two listings pair beyond doubt (decisions.md D95). It
 // takes its own listing; a host that could not answer costs the pairing and
-// not the attachment, so the window alone is recorded (decisions.md D89).
+// not the attachment, so the window alone is recorded.
 func (c *Core) Attachment(ctx context.Context, ref revier.TargetRef) []revier.TargetRef {
 	snap, _ := c.listing(ctx)
 	var instances []revier.Instance
@@ -1428,7 +1428,7 @@ func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetNa
 // declared reports whether any project's rule matches the instance: it is
 // then a declared target, not a stray. A runtime rule counts as well as a
 // window rule: a terminal's OS window carries the title its runtime rule
-// matches, and the window host lists it (decisions.md D19).
+// matches, and the window host lists it.
 func (c *Core) declared(inst revier.Instance, projects []Project) bool {
 	for _, p := range projects {
 		for i, t := range p.Targets {
@@ -1575,7 +1575,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// A gone attachment is left out rather than shown dead: the caller prunes
 	// it from state against this same listing. A live one is probed like a
 	// target, so a shutdown sees the agent in an attached terminal and keeps
-	// it from ending unasked (decisions.md D78).
+	// it from ending unasked.
 	//
 	// A terminal attached by hand is recorded as the window and the terminal
 	// inside it (decisions.md D95), and is one row here: the terminal's, the

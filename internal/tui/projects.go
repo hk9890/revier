@@ -53,7 +53,7 @@ type tableRow interface {
 	// rowHeld reports the project open, which decides the row's mark. A
 	// project here is held by an attachment the survey was not asked about
 	// too; a host's project in the link dialog is held by what the host said
-	// and nothing of this machine's (decisions.md D104).
+	// and nothing of this machine's.
 	rowHeld() bool
 	// rowBuiltin reports the project revier builds in, which takes the
 	// folder column.

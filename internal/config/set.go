@@ -21,11 +21,10 @@ import (
 // is added at the end when the file has none.
 //
 // The result is parsed and validated as Load does before anything is written,
-// and refused for a problem it adds that the file did not have (decisions.md
-// D85). It is also read back: a key the line editor does not find where it
-// looks, such as one written as a dotted key or an inline table, would
-// otherwise land twice or not at all. That is refused, and the file stays as
-// it was.
+// and refused for a problem it adds that the file did not have. It is also
+// read back: a key the line editor does not find where it looks, such as one
+// written as a dotted key or an inline table, would otherwise land twice or
+// not at all. That is refused, and the file stays as it was.
 func Set(root, table, key string, value any) error {
 	path := File(root)
 	old, err := os.ReadFile(path)
