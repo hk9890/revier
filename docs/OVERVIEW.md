@@ -15,6 +15,7 @@ A findability map: where things live, and how to search for them.
 | `internal/ledger/` | The state file and the event file as the core reads and writes them: the one caller of the state lock. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
+| `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
 | `internal/fsutil/` | The atomic file write every store uses. |
 | `internal/logging/` | The daily log file every process appends to, and the helpers that time an operation. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |

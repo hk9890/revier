@@ -18,9 +18,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -117,16 +117,12 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, "ssh", full...)
 	c.Stdout, c.Stderr = &out, &errb
-	// A process group of its own: the ctrl+c a terminal sends to revier's
-	// group cancels a shutdown or a restore after its step, and must not end
-	// the step's command with it.
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// A call over the shared connection hands its output to the master,
 	// which holds it open until the remote command ends, or until the
 	// keepalives give a dead network up a minute later. The call is over at
 	// its context, so the wait for its output is bounded too.
 	c.WaitDelay = waitDelay
-	if err := c.Run(); err != nil {
+	if err := procgroup.Run(c); err != nil {
 		return nil, errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
 	}
 	return out.Bytes(), errb.Bytes(), nil

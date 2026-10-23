@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -224,14 +225,10 @@ func (h *Host) kittenIn(ctx context.Context, socket, stdin string, args ...strin
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, append([]string{"@", "--to", socket}, args...)...)
 	c.Stdout, c.Stderr = &out, &errb
-	// A process group of its own: the ctrl+c a terminal sends to revier's
-	// group cancels a shutdown or a restore after its step, and must not end
-	// the step's command with it.
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if stdin != "" {
 		c.Stdin = strings.NewReader(stdin)
 	}
-	if err := c.Run(); err != nil {
+	if err := procgroup.Run(c); err != nil {
 		return nil, fmt.Errorf("kitten @ --to %s %s: %w: %s", socket, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil

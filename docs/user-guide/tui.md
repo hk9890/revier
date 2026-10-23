@@ -81,7 +81,7 @@ runs and what came of it. No other key and no click does anything until it
 ends. ctrl+c lets the step that runs finish, then stops, and the TUI stays
 open to show what was done and what was not reached. A restore stopped after
 its last target says `return home cancelled`. When a step hangs, press ctrl+c
-again to quit.
+again to quit: the command the step waits for ends too.
 
 Each window a restore opens comes up over the TUI. When the restore ends,
 done, failed or cancelled, the TUI brings its own window back to the front

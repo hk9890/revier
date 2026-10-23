@@ -29,9 +29,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -299,17 +299,12 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
 	cmd.WaitDelay = waitDelay
-	// A process group of its own: the ctrl+c a terminal sends to revier's
-	// group cancels a shutdown or a restore after its step, and must not end
-	// the step's command with it.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
+	var out, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &stderr
+	if err := procgroup.Run(cmd); err != nil {
 		return nil, fmt.Errorf("claude agents --json: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	return out, nil
+	return out.Bytes(), nil
 }
 
 // ResumeCommand folds --resume into the panel as it is configured now, so a

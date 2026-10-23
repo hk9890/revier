@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -29,6 +30,10 @@ func cmdTUI(a *app) error {
 	if err != nil {
 		return err
 	}
+	// The surface quits on a second ctrl+c while a step of a shutdown or a
+	// restore still runs. That step's host command is in a process group of
+	// its own, so it is ended as the surface ends rather than left running.
+	defer procgroup.KillAll()
 	start, popup := tuiStart(a)
 	// The surface owns the terminal, so a state write that fails is in the
 	// log and not on stderr.

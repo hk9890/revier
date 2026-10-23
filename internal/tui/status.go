@@ -18,6 +18,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -237,10 +238,9 @@ func runStatus(key statusKey, s core.Status, env []string) tea.Cmd {
 		c := exec.CommandContext(ctx, s.Run[0], s.Run[1:]...)
 		c.Env = append(os.Environ(), env...)
 		c.Stdout, c.Stderr = &out, &errb
-		c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGKILL) }
 		c.WaitDelay = 50 * time.Millisecond
-		err := c.Run()
+		err := procgroup.Run(c)
 		switch {
 		case err == nil:
 		case ctx.Err() != nil:

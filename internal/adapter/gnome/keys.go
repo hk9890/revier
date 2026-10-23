@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -146,11 +146,7 @@ func execRun(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, args...)
 	c.Stdout, c.Stderr = &out, &errb
-	// A process group of its own: the ctrl+c a terminal sends to revier's
-	// group cancels a shutdown or a restore after its step, and must not end
-	// the step's command with it.
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := c.Run(); err != nil {
+	if err := procgroup.Run(c); err != nil {
 		return nil, fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil

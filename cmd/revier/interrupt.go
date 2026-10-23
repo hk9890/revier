@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+
+	"github.com/hk9890/revier/internal/procgroup"
 )
 
 // interruptible is ctx without its deadline, cancelled by the first
@@ -62,6 +64,11 @@ var interruptible = func(ctx context.Context, abandon func()) (context.Context, 
 }
 
 // interrupted ends the process as the second interrupt asks: with the status
-// a shell gives a command that an interrupt killed. A variable, so a test
-// sees the end without its process ending.
-var interrupted = func() { os.Exit(130) }
+// a shell gives a command that an interrupt killed. The host command of the
+// step that hangs is in a process group of its own, which the interrupt did
+// not reach, so it is ended first rather than left running. A variable, so a
+// test sees the end without its process ending.
+var interrupted = func() {
+	procgroup.KillAll()
+	os.Exit(130)
+}
