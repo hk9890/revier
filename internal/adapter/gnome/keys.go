@@ -142,12 +142,14 @@ func allowed(set map[string][]string, bin string, args []string) error {
 	return fmt.Errorf("gnome keys: %s %s is not allowed here", base, args[0])
 }
 
+// execRun runs a command and returns its standard output, also beside the
+// error of one that exits non-zero: wctl prints its version document then too.
 func execRun(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, args...)
 	c.Stdout, c.Stderr = &out, &errb
 	if err := procgroup.Run(c); err != nil {
-		return nil, fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
+		return out.Bytes(), fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil
 }

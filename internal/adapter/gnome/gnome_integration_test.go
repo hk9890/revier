@@ -3,10 +3,12 @@
 // Layer L3: the wctl parsers, against recorded output. No GNOME session, no
 // wctl binary, no display. The fixtures are hand-written to the shape wctl
 // 0.7.0 emits; real captured output carries the user's window titles and does
-// not belong in a repository.
+// not belong in a repository. version.json is captured: it names no window.
 package gnome_test
 
 import (
+	"context"
+	"slices"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/gnome"
@@ -77,5 +79,27 @@ func TestDecodeFocused(t *testing.T) {
 	}
 	if ref.ID != "3811157401" || ref.Host != "gnome" {
 		t.Errorf("ref = %+v", ref)
+	}
+}
+
+// The version document of wctl 0.16.0, recorded: the host takes it as usable,
+// and reads that the extension minimizes and activates without the animation.
+func TestProbeReadsTheRecordedVersion(t *testing.T) {
+	onGNOME(t)
+	w := &wctl{reply: versionReply(string(read(t, "version.json")), 0)}
+	h := w.host()
+	if err := h.Probe(context.Background()); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	w.calls = nil
+	ref := revier.TargetRef{Host: "gnome", ID: "1"}
+	if err := h.Hide(context.Background(), ref); err != nil {
+		t.Fatalf("Hide: %v", err)
+	}
+	if err := h.Focus(context.Background(), ref); err != nil {
+		t.Fatalf("Focus: %v", err)
+	}
+	if want := []string{"minimize 1 --no-animation", "activate 1 --no-animation"}; !slices.Equal(w.calls, want) {
+		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }

@@ -7,7 +7,7 @@
 // logged-in session - wctl talks to a running Shell - which is why
 // docs/TESTING.md confines the manual layer to this package.
 //
-// wctl 0.7.0 has no event or watch command, so claim-on-appear diffs
+// wctl has no event or watch command, so claim-on-appear diffs
 // successive Instances calls on the refresh the TUI already runs
 // (decisions.md D87).
 package gnome
@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -29,13 +29,28 @@ import (
 
 // Host is a GNOME WindowController.
 type Host struct {
-	// run runs wctl with the arguments and returns its standard output.
-	// Tests replace it; production leaves it nil and runs the wctl on PATH.
+	// run runs wctl with the arguments and returns its standard output, also
+	// beside the error of a wctl that exits non-zero. Tests replace it;
+	// production leaves it nil and runs the wctl on PATH.
 	run func(ctx context.Context, args ...string) ([]byte, error)
 
-	// animatedHide and animatedFocus are each set once wctl has refused to
-	// hide or to activate without the animation, and has then done it with it.
-	animatedHide, animatedFocus atomic.Bool
+	// quietHide and quietFocus are whether the extension the shell has loaded
+	// minimizes and activates without the animation, as Probe read it. A host
+	// that was never probed asks for the animation.
+	quietHide, quietFocus bool
+}
+
+// minWctl is the oldest wctl this host drives.
+var minWctl = [3]int{0, 16, 0}
+
+// versionDoc is what `wctl version --json` prints, on every outcome.
+type versionDoc struct {
+	Wctl string `json:"wctl"`
+	// Extension is the version the shell has loaded, nil when no extension
+	// answers.
+	Extension    *string  `json:"extension"`
+	Capabilities []string `json:"capabilities"`
+	Message      string   `json:"message"`
 }
 
 func (h *Host) Name() string { return "gnome" }
@@ -49,6 +64,9 @@ type window struct {
 	PID         int    `json:"pid"`
 	IsHidden    bool   `json:"is_hidden"`
 	IsMinimized bool   `json:"is_minimized"`
+	// Type is mutter's window type: "normal" for an application's main
+	// window, else a dialog, a splash or a menu.
+	Type string `json:"window_type_name"`
 	// Workspace is -1 for a window on no workspace, and for one on all of
 	// them; nil only from a wctl that does not report it.
 	Workspace *int `json:"workspace_index"`
@@ -88,9 +106,16 @@ func shownWorkspace(windows []window) (int, bool) {
 	return 0, false
 }
 
-// Probe reports GNOME usable when wctl is on PATH and answers. It also checks
-// the desktop, so that a wctl left on PATH after a session change does not
-// make this host claim a compositor it cannot drive.
+// Probe reports GNOME usable when wctl is on PATH, is minWctl or later, and
+// names the extension the shell has loaded. It also checks the desktop, so
+// that a wctl left on PATH after a session change does not make this host
+// claim a compositor it cannot drive. What the extension can do without the
+// animation is read here, once a process.
+//
+// wctl exits non-zero when the loaded extension is outside the versions it
+// was built for, and prints the same document. That stack still works: an
+// upgrade the shell has not reloaded yet is one. So the exit decides nothing
+// while the document names an extension.
 func (h *Host) Probe(ctx context.Context) error {
 	if _, err := exec.LookPath("wctl"); err != nil {
 		return fmt.Errorf("wctl not on PATH: %w", err)
@@ -98,10 +123,45 @@ func (h *Host) Probe(ctx context.Context) error {
 	if d := os.Getenv("XDG_CURRENT_DESKTOP"); d != "" && !strings.Contains(strings.ToUpper(d), "GNOME") {
 		return fmt.Errorf("XDG_CURRENT_DESKTOP is %q, not GNOME", d)
 	}
-	if _, err := h.wctl(ctx, "list", "--json"); err != nil {
-		return fmt.Errorf("wctl is present but not answering: %w", err)
+	raw, err := h.wctl(ctx, "version", "--json")
+	var doc versionDoc
+	if json.Unmarshal(bytes.TrimSpace(raw), &doc) != nil || doc.Wctl == "" {
+		if err != nil {
+			return fmt.Errorf("wctl is present but not answering: %w", err)
+		}
+		return fmt.Errorf("wctl version --json names no version: revier needs wctl %s or later", minWctlText())
 	}
+	if !atLeast(doc.Wctl, minWctl) {
+		return fmt.Errorf("wctl %s is older than %s, the oldest revier drives", doc.Wctl, minWctlText())
+	}
+	if doc.Extension == nil {
+		return fmt.Errorf("wctl is present but no extension answers: %s", doc.Message)
+	}
+	h.quietHide = slices.Contains(doc.Capabilities, "no-animation")
+	h.quietFocus = slices.Contains(doc.Capabilities, "activate-no-animation")
 	return nil
+}
+
+func minWctlText() string { return fmt.Sprintf("%d.%d.%d", minWctl[0], minWctl[1], minWctl[2]) }
+
+// atLeast reports whether a version such as "0.16.0" is min or later. A
+// pre-release or build suffix is ignored, and a version that does not parse
+// is not.
+func atLeast(version string, min [3]int) bool {
+	core, _, _ := strings.Cut(strings.SplitN(version, "+", 2)[0], "-")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	var v [3]int
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return false
+		}
+		v[i] = n
+	}
+	return slices.Compare(v[:], min[:]) >= 0
 }
 
 func (h *Host) wctl(ctx context.Context, args ...string) ([]byte, error) {
@@ -168,6 +228,11 @@ func (h *Host) decode(raw []byte, active func() (int, bool)) ([]revier.Instance,
 			// mutter does, and mutter's own placement would then win.
 			continue
 		}
+		if w.Type != "" && w.Type != "normal" {
+			// A splash or a dialog shares its application's class, and a
+			// launch would bind it in place of the window it waits for.
+			continue
+		}
 		out = append(out, revier.Instance{
 			Ref:   revier.TargetRef{Host: h.Name(), ID: strconv.FormatInt(w.ID, 10), Title: w.Title},
 			Title: w.Title,
@@ -208,14 +273,13 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // uses activate.
 //
 // --no-animation restores a minimized window without the shell's animation,
-// in the same call, so a hidden popup comes back in place. It needs a wctl
-// and an extension with the 'activate-no-animation' capability. Where either
-// refuses it, Focus activates with the animation, under the rules of Hide.
+// in the same call, so a hidden popup comes back in place. It is sent where
+// the loaded extension reports 'activate-no-animation'.
 func (h *Host) Focus(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot focus a zero ref")
 	}
-	return h.withoutAnimation(ctx, &h.animatedFocus, "activate", ref.ID)
+	return h.onWindow(ctx, "activate", ref.ID, h.quietFocus)
 }
 
 // Close asks the window to close, as its close button does: an application
@@ -230,56 +294,24 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 
 // Hide minimizes the window without the shell's minimize animation, so it
 // leaves in place instead of shrinking into a corner. activate restores a
-// minimized window, so Focus brings it back.
-//
-// --no-animation needs a wctl and an extension with the 'no-animation'
-// capability, wctl 0.13.0 at the earliest. Where either refuses it, Hide
-// minimizes with the animation, and goes on doing so: a process pays for the
-// refusal once, not on every hide.
-//
-// The refusal is remembered only when the minimize with the animation then
-// works. Where the shell's locale is not English, wctl words an extension
-// that is not running as one without the method, and that is no refusal.
+// minimized window, so Focus brings it back. --no-animation is sent where the
+// loaded extension reports 'no-animation'; elsewhere the window minimizes
+// with the animation.
 func (h *Host) Hide(ctx context.Context, ref revier.TargetRef) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot hide a zero ref")
 	}
-	return h.withoutAnimation(ctx, &h.animatedHide, "minimize", ref.ID)
+	return h.onWindow(ctx, "minimize", ref.ID, h.quietHide)
 }
 
-// withoutAnimation runs a wctl command on a window with --no-animation, and
-// without the flag where wctl refuses it. animated is that command's memory
-// of a refusal.
-func (h *Host) withoutAnimation(ctx context.Context, animated *atomic.Bool, command, id string) error {
-	if !animated.Load() {
-		_, err := h.wctl(ctx, command, id, "--no-animation")
-		if !refusesNoAnimation(err, command) {
-			return err
-		}
+// onWindow runs a wctl command on a window, with --no-animation when quiet.
+func (h *Host) onWindow(ctx context.Context, command, id string, quiet bool) error {
+	args := []string{command, id}
+	if quiet {
+		args = append(args, "--no-animation")
 	}
-	_, err := h.wctl(ctx, command, id)
-	if err == nil {
-		animated.Store(true)
-	}
+	_, err := h.wctl(ctx, args...)
 	return err
-}
-
-// refusesNoAnimation reports whether a command failed because nothing knows
-// its --no-animation. A wctl without the flag answers minimize with the
-// command's usage, and activate, which has its own parser, with the option it
-// does not know. A wctl with the flag says so when the extension the shell
-// has loaded lacks the method. The text decides, because wctl exits the same
-// way when the extension is not running at all, and that failure is the
-// caller's to see. The method error is matched on wctl's own words: the D-Bus
-// detail in front of them is in the shell's locale.
-func refusesNoAnimation(err error, command string) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "Usage: wctl "+command) ||
-		strings.Contains(msg, "Unknown option: --no-animation") ||
-		strings.Contains(msg, "older than this wctl")
 }
 
 // Place positions a window through the extension and returns once the move
