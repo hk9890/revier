@@ -40,7 +40,8 @@ agents. One herdr server holds every workspace.
   Attach one terminal.
 - revier does not raise the desktop window that shows herdr, and a second
   press does not return home on GNOME. `place` does nothing.
-- While you scroll a pane up in herdr, the agent mirror shows those lines.
+- While you scroll a pane up in herdr, the TUI and `revier agent read --screen`
+  show those lines, not the newest.
 - After the herdr server restarts, herdr brings its workspaces back as shells,
   without revier's marks: a tab target then opens a second tab. Close those
   workspaces in herdr, then run `revier session restore`.

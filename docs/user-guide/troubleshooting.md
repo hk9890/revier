@@ -58,7 +58,7 @@ No host on this machine can open the target.
 
 - A window target needs GNOME with the Window Control extension and `wctl`.
   See [integrations/gnome.md](integrations/gnome.md).
-- A tab target needs [kitty](integrations/kitty.md) or [tmux](integrations/tmux.md).
+- A tab target needs a runtime host.
 
 The config screen (alt+c) shows which hosts revier uses.
 
