@@ -168,6 +168,7 @@ type Model struct {
 	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	raises    int                              // the times the popup was raised; a go hides it only when it was not raised since the press
 	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
@@ -300,6 +301,15 @@ func (m Model) WithStart(lookup StartLookup) Model {
 // D86, D129).
 func (m Model) WithPopup() Model {
 	m.popup = true
+	return m
+}
+
+// WithHungEnd sets what the second ctrl+c runs before the surface quits on a
+// step that hangs: the end of that step's host command, which runs in a
+// process group of its own and would outlive the surface. No other quit runs
+// it, so a go or an open still running when the user quits completes.
+func (m Model) WithHungEnd(end func()) Model {
+	m.endHung = end
 	return m
 }
 

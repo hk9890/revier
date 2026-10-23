@@ -183,12 +183,14 @@ func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
 	}
 }
 
-// The second interrupt runs what the walk leaves to it, then ends the
-// process.
-func TestASecondInterruptAbandonsTheWalkAndEnds(t *testing.T) {
-	was := interrupted
-	t.Cleanup(func() { interrupted = was })
+// The second interrupt ends the hung step's command, runs what the walk
+// leaves to it, then ends the process. The command is ended before the
+// abandon, which can wait on the state's lock until a third interrupt.
+func TestASecondInterruptEndsTheCommandAbandonsTheWalkAndEnds(t *testing.T) {
+	was, wasEnd := interrupted, endHung
+	t.Cleanup(func() { interrupted, endHung = was, wasEnd })
 	var ran []string
+	endHung = func() { ran = append(ran, "end the command") }
 	ended := make(chan struct{})
 	interrupted = func() {
 		ran = append(ran, "end")
@@ -210,7 +212,7 @@ func TestASecondInterruptAbandonsTheWalkAndEnds(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the second interrupt did not end the process")
 	}
-	if want := []string{"abandon", "end"}; !slices.Equal(ran, want) {
+	if want := []string{"end the command", "abandon", "end"}; !slices.Equal(ran, want) {
 		t.Errorf("ran %v, want %v", ran, want)
 	}
 }

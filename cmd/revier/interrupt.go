@@ -17,11 +17,12 @@ import (
 // them too.
 //
 // A second interrupt ends the process at once, for a step that hangs: it
-// runs abandon first, when set, then exits as an interrupt would. abandon is
-// what the walk would have done on its cancel had it got to its end, such as
-// taking a full shutdown off the record. The handler goes before abandon
-// runs, so a third interrupt ends the process even when abandon waits on the
-// state's lock.
+// ends the step's host command, runs abandon, when set, then exits as an
+// interrupt would. abandon is what the walk would have done on its cancel had
+// it got to its end, such as taking a full shutdown off the record. The
+// command is ended and the handler goes before abandon runs, so a third
+// interrupt ends the process even when abandon waits on the state's lock, and
+// leaves no command running.
 //
 // The deadline is dropped because each step bounds its own, and a cancel that
 // comes after a deadline is not seen (core.WithoutDeadline). It is a variable
@@ -47,6 +48,7 @@ var interruptible = func(ctx context.Context, abandon func()) (context.Context, 
 		if !interrupt() {
 			return
 		}
+		endHung()
 		signal.Stop(interrupts)
 		if abandon != nil {
 			abandon()
@@ -63,12 +65,15 @@ var interruptible = func(ctx context.Context, abandon func()) (context.Context, 
 	}
 }
 
+// endHung ends the host command of the step that hangs as the second
+// interrupt ends the process. The command is in a process group of its own,
+// which the interrupt did not reach, so it would outlive revier. A variable,
+// so a test does not end the commands of its own process.
+var endHung = procgroup.KillAll
+
 // interrupted ends the process as the second interrupt asks: with the status
-// a shell gives a command that an interrupt killed. The host command of the
-// step that hangs is in a process group of its own, which the interrupt did
-// not reach, so it is ended first rather than left running. A variable, so a
-// test sees the end without its process ending.
+// a shell gives a command that an interrupt killed. A variable, so a test
+// sees the end without its process ending.
 var interrupted = func() {
-	procgroup.KillAll()
 	os.Exit(130)
 }

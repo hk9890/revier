@@ -149,6 +149,55 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	}
 }
 
+// Only the second ctrl+c on a step that hangs ends the step's host command,
+// and before the record is taken back, which can wait on the state's lock. A
+// quit with no walk running leaves a command that runs to complete.
+func TestOnlyASecondCtrlCOnAHungStepEndsItsCommand(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	ref := wm.Add("editor", "code-project-00")
+	wm.Refuses = map[string]bool{ref.ID: true}
+	editor := newHeld()
+	wm.OnClose = func(revier.TargetRef) { editor.hold() }
+	root := stateWith(t, nil)
+	ended := 0
+	var onRecord *state.ShutDown
+	end := func() {
+		ended++
+		onRecord = shutDownOnRecord(t, root)
+	}
+
+	idle := resize(refreshed(t, c, projects, root, nil), 150, 30).WithHungEnd(end)
+	if _, quit := send(idle, ctrlC); quit == nil {
+		t.Fatal("ctrl+c with nothing running did not quit")
+	}
+	if _, quit := press(idle, "esc"); quit == nil {
+		t.Fatal("esc with nothing running did not quit")
+	}
+	if ended != 0 {
+		t.Fatalf("a quit with nothing running ended the commands %d times, want none", ended)
+	}
+
+	m := fullShutdownPlanned(t, c, projects, root).WithHungEnd(end)
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-editor.entered
+	m, _ = send(m, ctrlC)
+	if ended != 0 {
+		t.Fatal("the first ctrl+c ended the commands, want the step left to finish")
+	}
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Fatal("a second ctrl+c while the shutdown runs did not quit")
+	}
+	if ended != 1 {
+		t.Errorf("the second ctrl+c ended the commands %d times, want once", ended)
+	}
+	if onRecord == nil {
+		t.Error("the commands were ended after the record was taken back, want before")
+	}
+	close(editor.release)
+	<-answer
+}
+
 // A second ctrl+c before the shutdown wrote its record quits and takes
 // nothing back: the record of an earlier full shutdown stays.
 func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {

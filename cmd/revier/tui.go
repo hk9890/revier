@@ -30,15 +30,12 @@ func cmdTUI(a *app) error {
 	if err != nil {
 		return err
 	}
-	// The surface quits on a second ctrl+c while a step of a shutdown or a
-	// restore still runs. That step's host command is in a process group of
-	// its own, so it is ended as the surface ends rather than left running.
-	defer procgroup.KillAll()
 	start, popup := tuiStart(a)
 	// The surface owns the terminal, so a state write that fails is in the
 	// log and not on stderr.
 	m := tui.New(a.core.WithLedger(ledger.File{Root: a.stateRoot}), a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithAssistant(a.assistant).
+		WithHungEnd(procgroup.KillAll).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
 		})
