@@ -12,7 +12,7 @@ func (h *Host) SetCaller(fn func(ctx context.Context, method string, params any)
 }
 
 // Request is request without the server's pid, for a live test that arranges
-// the server through herdr's API: the host does not open yet.
+// the server through herdr's API, for what the host does not make.
 func (h *Host) Request(ctx context.Context, method string, params, out any) error {
 	_, err := h.request(ctx, method, params, out)
 	return err
