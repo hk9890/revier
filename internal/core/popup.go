@@ -206,8 +206,8 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 		return nil
 	}
 	start := time.Now()
-	snap, err := c.answered(ctx, c.Runtime.Name())
-	if err != nil {
+	snap, failed := c.listing(ctx)
+	if err := failed[c.Runtime.Name()]; err != nil {
 		logging.Op("surface raise", start, err)
 		return err
 	}
@@ -215,7 +215,7 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 		for _, p := range inst.Panels {
 			if c.Self(p) {
 				if inst.Class == PopupClass {
-					err := c.raisePopup(ctx)
+					err := c.raisePopup(ctx, snap, failed)
 					logging.Op("surface raise", start, err, "ref", inst.Ref, "popup", true)
 					return err
 				}
@@ -249,16 +249,16 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	return hider.Hide(ctx, w.Ref)
 }
 
-// raisePopup raises the popup's window, found by its class.
-func (c *Core) raisePopup(ctx context.Context) error {
+// raisePopup raises the popup's window, found by its class on a listing
+// already taken.
+func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) error {
 	if c.Window == nil {
 		return ErrNoPopupHost
 	}
-	windows, err := c.Window.Instances(ctx)
-	if err != nil {
+	if err := failed[c.Window.Name()]; err != nil {
 		return err
 	}
-	w, ok := popupWindow(windows)
+	w, ok := popupWindow(snap[c.Window.Name()])
 	if !ok {
 		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
 	}

@@ -1064,21 +1064,24 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // a screen, a query, a question or a walk the user is in is left alone, and
 // the next state read after it offers the dialog. A shutdown already offered
 // is not offered again, so a user who went on to pick a session and came
-// back is not asked twice.
+// back is not asked twice. A dialog up for an older shutdown is put up again
+// for the newer one, so it never offers a session no shutdown on record saved.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	switch sd := st.ShutDown; {
 	case m.dialog == dialogResume && sd == nil:
 		m.dialog = dialogNone
-	case sd != nil && !sd.At.Equal(m.resume.at) && m.plain():
+	case sd != nil && !sd.At.Equal(m.resume.at) && (m.plain() || m.dialog == dialogResume):
 		m.openResume(*sd)
 	}
 }
 
 // plain reports the surface itself, with nothing the user is in the middle
-// of: no screen over it, no query, no question, and no walk.
+// of: no screen over it, no query on either list or on the pane's agents, no
+// question, and no walk.
 func (m *Model) plain() bool {
-	return m.dialog == dialogNone && m.filter == "" && m.confirm == "" && !m.walking()
+	agentQuery := m.afilter != "" || (m.agents.shown && m.agents.filter != "")
+	return m.dialog == dialogNone && m.filter == "" && !agentQuery && m.confirm == "" && !m.walking()
 }
 
 // offerResume puts the start dialog up on the raise of the popup when a full

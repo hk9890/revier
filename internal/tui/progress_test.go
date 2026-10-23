@@ -295,6 +295,31 @@ func TestAShutdownCancelledDuringItsLastCloseQuitsAsAFullOne(t *testing.T) {
 	}
 }
 
+// A cancel during the last close of a del stops nothing: the footer says no
+// step was left, as after a close nobody cancelled.
+func TestADelCancelledDuringItsLastCloseLeavesNoStep(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	workspace := newHeld()
+	rt.OnClose = func(revier.TargetRef) { workspace.hold() }
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	m, cmd := press(m, "delete")
+	m = run(m, cmd)
+
+	m, cmd = press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-workspace.entered
+	m, _ = send(m, ctrlC)
+	close(workspace.release)
+	m, _ = update(m, <-answer)
+
+	if len(rt.Closed) != 1 {
+		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
+	}
+	if foot := footer(m); strings.Contains(foot, "cancelled") {
+		t.Errorf("footer = %q, want no step said to be left", foot)
+	}
+}
+
 // A step that did not close is said on the result's rows, and the footer
 // keeps the result's keys.
 func TestAShutdownStepThatDidNotCloseIsSaidOnTheResult(t *testing.T) {

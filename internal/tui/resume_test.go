@@ -207,6 +207,44 @@ func TestAVisibleSurfaceOffersTheRestoreOfAShutdownRunElsewhere(t *testing.T) {
 	}
 }
 
+// A query on the agent list is an errand the user is in, as one on the
+// projects is: the start dialog waits for it, so the Enter that picks an
+// agent does not restore a session.
+func TestAnAgentQueryHoldsTheStartDialogBack(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := switched(resize(refreshed(t, c, projects, root, nil), 150, 30))
+	m, _ = press(m, "n")
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if m = survey(m); strings.Contains(lines(m)[2], "revier was shut down") {
+		t.Errorf("subtitle = %q over the agent query, want the query kept", lines(m)[2])
+	}
+}
+
+// A start dialog up for one shutdown is put up again for a later one, so it
+// offers the session the shutdown on record saved.
+func TestTheStartDialogFollowsALaterShutdown(t *testing.T) {
+	m, _, root, _ := shutDownWorld(t)
+	later := saved(t, root, "", 20, session.Project{Name: "project-01", Targets: []session.Target{{Name: "home"}}})
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 16, 9, 15, 0, 0, time.Local), later.ID)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if m = survey(m); !strings.Contains(lines(m)[2], "revier was shut down at 2026-09-16 09:15.") {
+		t.Errorf("subtitle = %q, want the later shutdown", lines(m)[2])
+	}
+	if p := pane(m); !strings.Contains(p, "session "+later.ID) {
+		t.Errorf("pane = %q, want the session the later shutdown saved", p)
+	}
+}
+
 // A shutdown offered once is not offered again by the next state read: the
 // user who went on to the sessions screen and came back is not asked twice.
 func TestAShutdownOfferedOnceIsNotOfferedAgainOnARefresh(t *testing.T) {
