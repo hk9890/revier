@@ -152,7 +152,7 @@ To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
 the rest is not reached, and revier prints how many steps it left. A full
 shutdown you stop is not remembered, because what it did not reach is still
 open; one you stop after its last step ran is, and one you stop before it
-closed anything leaves an earlier one remembered. When a step hangs, press
+saved the session leaves an earlier one remembered. When a step hangs, press
 ctrl+c again to quit at once: the command the step waits for ends too.
 
 - A window its application keeps open, for example to ask about unsaved
