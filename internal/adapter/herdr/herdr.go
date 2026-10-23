@@ -63,7 +63,7 @@ func (h *Host) Probe(ctx context.Context) error {
 // finds them, and each pane's foreground process is then read as tmux's is.
 // A pane moved to another workspace has a new id, and its process still
 // carries the old one, so herdr is asked for that pane's process alone: one
-// request per moved pane, not per pane (decisions.md D142).
+// request per moved pane, not per pane.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	pid, snap, err := h.snapshot(ctx)
 	if err != nil {
