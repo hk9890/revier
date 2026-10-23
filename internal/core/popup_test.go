@@ -263,7 +263,8 @@ func TestPopupSwitchesTheSurfaceInAFocusedTerminal(t *testing.T) {
 
 // A focused terminal opens the popup as before when the panel current in it
 // is not the surface: a shell, a revier command that is not the TUI, or the
-// surface in a tab the user is not looking at.
+// surface in a tab the user is not looking at. The window the key was pressed
+// over is asked for once, for the switch and for the launch's line both.
 func TestPopupOpensOverATerminalWhoseCurrentPanelIsNoSurface(t *testing.T) {
 	for name, panels := range map[string][]revier.Panel{
 		"a shell":                    {{ID: "1", Command: []string{"zsh"}}},
@@ -278,6 +279,9 @@ func TestPopupOpensOverATerminalWhoseCurrentPanelIsNoSurface(t *testing.T) {
 		}
 		if len(rt.Sent) != 0 || len(wm.Opened) != 1 {
 			t.Errorf("%s: sent = %+v, opened = %v; want nothing typed and the popup launched", name, rt.Sent, wm.Opened)
+		}
+		if wm.FocusedCalls != 1 {
+			t.Errorf("%s: asked for the focused window %d times, want once", name, wm.FocusedCalls)
 		}
 	}
 }

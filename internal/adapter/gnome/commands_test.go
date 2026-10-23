@@ -20,9 +20,9 @@ func refused(args string, code int, stderr string) error {
 	return fmt.Errorf("wctl %s: exit status %d: %s", args, code, stderr)
 }
 
-// Place builds the command the extension expects. --settled is the part worth
-// pinning: without it the request is made before the compositor has placed the
-// window, and the compositor's own placement overwrites it.
+// Place builds the command the extension expects, and asks wctl for no wait
+// on the frame: a placement holds a launch and every step of a restore for as
+// long as wctl waits.
 func TestPlaceBuildsTheCommand(t *testing.T) {
 	w := &wctl{}
 	err := w.host().Place(context.Background(),
@@ -31,7 +31,7 @@ func TestPlaceBuildsTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Place: %v", err)
 	}
-	if want := []string{"place 4181121382 right top 75% 100% --settled"}; !slices.Equal(w.calls, want) {
+	if want := []string{"place 4181121382 right top 75% 100%"}; !slices.Equal(w.calls, want) {
 		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }

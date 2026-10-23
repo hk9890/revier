@@ -43,19 +43,12 @@ func (h *Host) Name() string { return "gnome" }
 // window is wctl's JSON shape. Only the fields revier uses are decoded; wctl
 // reports geometry and state flags that a project switcher has no use for.
 type window struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	WMClass  string `json:"wm_class"`
-	PID      int    `json:"pid"`
-	HasFocus bool   `json:"has_focus"`
-	// AppearsFocused is set for a window that looks focused to the user even
-	// when the compositor gives keyboard focus elsewhere, which happens with
-	// override-redirect popups. Focused() prefers has_focus and falls back to
-	// it, so a popup open over the workspace does not read as "nothing
-	// focused".
-	AppearsFocused bool `json:"appears_focused"`
-	IsHidden       bool `json:"is_hidden"`
-	IsMinimized    bool `json:"is_minimized"`
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	WMClass     string `json:"wm_class"`
+	PID         int    `json:"pid"`
+	IsHidden    bool   `json:"is_hidden"`
+	IsMinimized bool   `json:"is_minimized"`
 	// Workspace is -1 for a window on no workspace, and for one on all of
 	// them; nil only from a wctl that does not report it.
 	Workspace *int `json:"workspace_index"`
@@ -289,10 +282,12 @@ func refusesNoAnimation(err error, command string) bool {
 		strings.Contains(msg, "older than this wctl")
 }
 
-// Place positions a window through the extension. `--settled` makes wctl hold
-// the reply until the compositor has mapped and placed the window, so a
-// geometry request made straight after a launch is not overwritten by the
-// compositor's own initial placement.
+// Place positions a window through the extension and returns once the move
+// is applied, without waiting for the frame to come to rest. The window is
+// one mutter has shown, as decode drops one it has not, so mutter's own
+// initial placement is already done. An application that resizes its window
+// after the move, as kitty snaps to its cell grid, has the last word either
+// way: waiting for the frame moves nothing back.
 //
 // A refusal is not an error the caller should act on: a window pinned by
 // maximize, fullscreen or tiling keeps its geometry, and the launch it
@@ -304,8 +299,7 @@ func (h *Host) Place(ctx context.Context, ref revier.TargetRef, geometry []strin
 	if len(geometry) != 4 {
 		return fmt.Errorf("gnome: place needs four tokens, got %d", len(geometry))
 	}
-	args := append([]string{"place", ref.ID}, geometry...)
-	_, err := h.wctl(ctx, append(args, "--settled")...)
+	_, err := h.wctl(ctx, append([]string{"place", ref.ID}, geometry...)...)
 	return err
 }
 
