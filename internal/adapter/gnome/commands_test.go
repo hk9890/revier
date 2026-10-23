@@ -5,18 +5,11 @@ package gnome_test
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// refused is what the host gets from a wctl that exits non-zero: the command,
-// the exit status, and what wctl wrote to its standard error.
-func refused(args string, code int, stderr string) error {
-	return fmt.Errorf("wctl %s: exit status %d: %s", args, code, stderr)
-}
 
 // Place builds the command the extension expects, and asks wctl for no wait
 // on the frame: a placement holds a launch and every step of a restore for as

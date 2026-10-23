@@ -5,39 +5,11 @@ package gnome_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// onGNOME puts a wctl on PATH and names GNOME as the desktop, so Probe gets
-// as far as asking the recorder.
-func onGNOME(t *testing.T) {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "wctl"), nil, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir)
-	t.Setenv("XDG_CURRENT_DESKTOP", "GNOME")
-}
-
-// versionReply answers `version --json` with doc, failing with code when it
-// is not zero, as wctl does; every other call succeeds and prints nothing.
-func versionReply(doc string, code int) func(string) ([]byte, error) {
-	return func(args string) ([]byte, error) {
-		if args != "version --json" {
-			return nil, nil
-		}
-		if code != 0 {
-			return []byte(doc), refused(args, code, "")
-		}
-		return []byte(doc), nil
-	}
-}
 
 // The host is usable when wctl is recent enough and its document names the
 // extension the shell has loaded. A document that says the two do not match
