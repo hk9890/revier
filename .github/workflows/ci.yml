@@ -38,11 +38,28 @@ jobs:
       - name: L3 adapter parsing
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
-      # ubuntu-latest ships tmux and sh, which is all L4 needs: every tmux test
-      # starts a private server on its own socket and kills it in cleanup.
+      # herdr is pinned, unlike tmux: it is pre-1.0 and its JSON API carries no
+      # version, so a new release is taken on purpose, with new fixtures
+      # (herdr-latest.yml runs the latest one weekly). The digest is the one
+      # GitHub lists for the release asset.
+      - name: Install herdr
+        env:
+          HERDR_VERSION: v0.9.5
+          HERDR_SHA256: 14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d
+        run: |
+          mkdir -p "$RUNNER_TEMP/herdr"
+          curl -fsSL -o "$RUNNER_TEMP/herdr/herdr" "https://github.com/herdrdev/herdr/releases/download/$HERDR_VERSION/herdr-linux-x86_64"
+          echo "$HERDR_SHA256  $RUNNER_TEMP/herdr/herdr" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/herdr/herdr"
+          echo "$RUNNER_TEMP/herdr" >> "$GITHUB_PATH"
+
+      # ubuntu-latest ships tmux and sh; herdr comes from the step above. Every
+      # tmux or herdr test starts a private server on its own socket and stops
+      # it in cleanup.
       - name: L4 live
         run: |
           tmux -V
+          herdr --version
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...
 
       - name: build

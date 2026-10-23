@@ -1,0 +1,42 @@
+name: herdr latest
+
+# CI pins herdr. This job runs the herdr host's live tests against the latest
+# herdr release once a week, so an API change shows before the pin is bumped.
+# A failure here does not block a merge; it says the next bump needs work.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: L4 herdr against the latest release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install the latest herdr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/herdr"
+          gh release download -R herdrdev/herdr -p herdr-linux-x86_64 -O "$RUNNER_TEMP/herdr/herdr"
+          chmod +x "$RUNNER_TEMP/herdr/herdr"
+          echo "$RUNNER_TEMP/herdr" >> "$GITHUB_PATH"
+
+      - name: L4 herdr
+        run: |
+          herdr --version
+          CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./internal/adapter/herdr/...
