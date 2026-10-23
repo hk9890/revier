@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -70,10 +71,9 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	// wait on that pipe for as long as the child lives. So the probe runs in
 	// its own process group, the group is killed on timeout, and the pipes are
 	// abandoned shortly after.
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGKILL) }
 	c.WaitDelay = 50 * time.Millisecond
-	if err := c.Run(); err != nil {
+	if err := procgroup.Run(c); err != nil {
 		if ctx.Err() != nil {
 			return revier.AgentState{}, fmt.Errorf("probe %s: %w", p.name, ctx.Err())
 		}

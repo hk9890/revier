@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -250,6 +252,82 @@ func TestARestoreCancelledOnItsLastStepCancelsTheReturnHomeAlone(t *testing.T) {
 	}
 	if slices.Contains(rt.Focuses, home) {
 		t.Errorf("Focuses = %+v, want no return home", rt.Focuses)
+	}
+}
+
+// hangsOnList is a runtime whose listing, once hang is set, hangs until its
+// context ends. entered, when set, runs as the listing starts to hang.
+type hangsOnList struct {
+	*hosttest.FakeRuntime
+	hang    *atomic.Bool
+	entered func()
+}
+
+func (r hangsOnList) Instances(ctx context.Context) ([]revier.Instance, error) {
+	if !r.hang.Load() {
+		return r.FakeRuntime.Instances(ctx)
+	}
+	if r.entered != nil {
+		r.entered()
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// restoreWithHungHome restores notes of a session that did not record home
+// open, so the restore asks the runtime whether home is up, and that listing
+// hangs. It fails the test when the restore does not return.
+func restoreWithHungHome(t *testing.T, ctx context.Context, entered func()) (core.Restored, *hosttest.FakeRuntime, error) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty")
+	hang := new(atomic.Bool)
+	c := &core.Core{Runtime: hangsOnList{FakeRuntime: rt, hang: hang, entered: entered}}
+	projects := []core.Project{prepared(t, agentProject())}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
+	report := survey(t, c, projects, nil)
+	type result struct {
+		out  core.Restored
+		back error
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, back := c.Restore(ctx, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) {
+			if p.Phase == core.PhaseLaunch && p.Done {
+				hang.Store(true)
+			}
+		}})
+		done <- result{out, back}
+	}()
+	select {
+	case r := <-done:
+		return r.out, rt, r.back
+	case <-time.After(5 * time.Second):
+		t.Fatal("the restore hangs on the listing that asks whether home is up")
+	}
+	return nil, nil, nil
+}
+
+// The listing that asks whether home is up has a deadline of its own: a
+// host that hangs on it costs the return home, not the restore.
+func TestARestoreDoesNotWaitOutAHomeListingThatHangs(t *testing.T) {
+	shortBindWait(t)
+	out, rt, back := restoreWithHungHome(t, context.Background(), nil)
+	if back != nil || len(out) != 1 {
+		t.Errorf("walked %+v, back %v; want notes walked and no return home", out, back)
+	}
+	if len(rt.Focuses) != 1 {
+		t.Errorf("Focuses = %+v, want notes' alone", rt.Focuses)
+	}
+}
+
+// A cancel while the restore asks whether home is up cancels the return.
+func TestACancelWhileARestoreAsksForHomeCancelsTheReturn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, _, back := restoreWithHungHome(t, ctx, cancel)
+	if !errors.Is(back, core.ErrHomeCancelled) {
+		t.Errorf("back = %v, want the return home cancelled", back)
 	}
 }
 

@@ -99,13 +99,15 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 //
 // A caller that cancels stops the walk between two steps: the step that runs
 // does not see the cancel and finishes, and the result holds the steps
-// walked. A restore cancelled before its return home does not return, and
-// back is ErrHomeCancelled; one cancelled during it lets it finish.
+// walked. A restore cancelled before its return home launches does not
+// return, and back is ErrHomeCancelled; one cancelled during that launch lets
+// it finish.
 func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project, opts RestoreOpts) (out Restored, back error) {
 	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", false)
 	plan := c.RestorePlan(s, r)
-	// Each step, and the return home, runs on a context the cancel does not
-	// reach, with its own deadline; the cancel is read between two steps.
+	// Each step, and the launch that returns home, runs on a context the
+	// cancel does not reach, with its own deadline; the cancel is read
+	// between two steps.
 	walking := context.WithoutCancel(ctx)
 	for i, step := range plan {
 		if ctx.Err() != nil {
@@ -136,10 +138,17 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 	}
 	if p, ok := projectNamed(projects, s.Current); ok {
 		home, has := p.Home()
+		// Whether home is there to return to is read on the caller's
+		// context, so a cancel during that read cancels the return, and with
+		// a deadline of its own, so a host that hangs on its listing costs
+		// the restore its return and not the rest of the session.
+		asking, stop := context.WithTimeout(ctx, BindWait)
+		returns := has && !cancelled && c.returnable(asking, s, p, home.Name)
+		stop()
 		switch {
-		case has && cancelled:
+		case has && ctx.Err() != nil:
 			back = ErrHomeCancelled
-		case has && c.returnable(walking, s, p, home.Name):
+		case returns:
 			opts.report(Progress{Phase: PhaseHome, Label: string(p.Name)})
 			if res := c.restoreLaunch(walking, p, RestoreStep{Project: p.Name, Target: home.Name}); res.Err != nil {
 				back = fmt.Errorf("could not return to %s: %w", s.Current, res.Err)

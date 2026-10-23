@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -121,7 +122,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	// keepalives give a dead network up a minute later. The call is over at
 	// its context, so the wait for its output is bounded too.
 	c.WaitDelay = waitDelay
-	if err := c.Run(); err != nil {
+	if err := procgroup.Run(c); err != nil {
 		return nil, errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
 	}
 	return out.Bytes(), errb.Bytes(), nil

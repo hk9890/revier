@@ -51,7 +51,13 @@ func (c *Core) focusAgent(ctx context.Context, ref revier.TargetRef, panel revie
 	if err != nil {
 		return err
 	}
-	name := revier.TargetName("agent " + panel.String())
+	return c.focusPanel(ctx, snap, ref, panel, revier.TargetName("agent "+panel.String()))
+}
+
+// focusPanel focuses the instance, makes the panel current in it, and raises
+// the instance's window, on a listing already taken. name is what a failure
+// calls the panel.
+func (c *Core) focusPanel(ctx context.Context, snap snapshot, ref revier.TargetRef, panel revier.PanelID, name revier.TargetName) error {
 	inst, ok := byRef(snap, ref)
 	if !ok || !slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool { return p.ID == panel }) {
 		return fmt.Errorf("%s: %w", name, ErrAgentGone)

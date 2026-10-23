@@ -168,6 +168,7 @@ type Model struct {
 	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	raises    int                              // the times the popup was raised; a go hides it only when it was not raised since the press
 	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
@@ -254,13 +255,9 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.status.beating = m.anyStatus()
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
-	st := c.Ledger.State()
-	m.keep(st)
 	// After a full shutdown the first screen offers the restore (decisions.md
-	// D141).
-	if st.ShutDown != nil {
-		m.openResume(*st.ShutDown)
-	}
+	// D141), which keep puts up.
+	m.keep(c.Ledger.State())
 	// The project field has the cursor from the start: the surface filters as
 	// you type, so it is where a keystroke lands. Init focuses it again for
 	// the blink command; this is what makes it accept keys at all.
@@ -304,6 +301,15 @@ func (m Model) WithStart(lookup StartLookup) Model {
 // D86, D129).
 func (m Model) WithPopup() Model {
 	m.popup = true
+	return m
+}
+
+// WithHungEnd sets what the second ctrl+c runs before the surface quits on a
+// step that hangs: the end of that step's host command, which runs in a
+// process group of its own and would outlive the surface. No other quit runs
+// it, so a go or an open still running when the user quits completes.
+func (m Model) WithHungEnd(end func()) Model {
+	m.endHung = end
 	return m
 }
 
@@ -1062,18 +1068,38 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 //
 // The start dialog goes once its shutdown is no longer on record: something
 // opened since, and a restore over it is what the dialog must never offer
-// (decisions.md D141).
+// (decisions.md D141). It comes up for a shutdown this surface has not
+// offered yet - the first state it reads, or a `revier shutdown` run
+// elsewhere while it stays on the screen - but only over the plain surface:
+// a screen, a query, a question or a walk the user is in is left alone, and
+// the next state read after it offers the dialog. A shutdown already offered
+// is not offered again, so a user who went on to pick a session and came
+// back is not asked twice. A dialog up for an older shutdown is put up again
+// for the newer one, so it never offers a session no shutdown on record saved.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
-	if m.dialog == dialogResume && st.ShutDown == nil {
+	switch sd := st.ShutDown; {
+	case m.dialog == dialogResume && sd == nil:
 		m.dialog = dialogNone
+	case sd != nil && !sd.At.Equal(m.resume.at) && (m.plain() || m.dialog == dialogResume):
+		m.openResume(*sd)
 	}
 }
 
+// plain reports the surface itself, with nothing the user is in the middle
+// of: no screen over it, no query on either list or on the pane's agents, no
+// question, and no walk.
+func (m *Model) plain() bool {
+	agentQuery := m.afilter != "" || (m.agents.shown && m.agents.filter != "")
+	return m.dialog == dialogNone && m.filter == "" && !agentQuery && m.confirm == "" && !m.walking()
+}
+
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown was recorded while it was hidden, as `revier shutdown` records
-// one: the popup outlives that shutdown and would otherwise never offer its
-// restore (decisions.md D141). A walk that runs keeps its screen.
+// shutdown is on record, as `revier shutdown` records one while it is
+// hidden: the popup outlives that shutdown (decisions.md D141). The raise is
+// a new errand, so it offers the dialog at once and over any screen, also a
+// shutdown the popup offered before; a refresh offers only one it has not
+// (keep). A walk that runs keeps its screen.
 func (m *Model) offerResume() {
 	if m.walking() {
 		return

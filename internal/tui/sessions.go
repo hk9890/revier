@@ -208,12 +208,30 @@ func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// restored takes a restore's answer.
+// restored takes a restore's answer, and then raises the surface: each
+// window the restore opened came up over it, so it comes back once, at the
+// end, for the result not to be hidden. The raise follows the result rather
+// than coming before it, so a slow host holds neither the result nor the
+// input.
 func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.restored(msg); err != nil {
 		m.err = err
 	}
-	return m, nil
+	if msg.err != nil {
+		return m, nil
+	}
+	return m, raiseSelf(m.core)
+}
+
+// raiseSelf brings the surface's own terminal to the front. A raise that
+// fails leaves it where it is, which is where it was.
+func raiseSelf(c *core.Core) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
+		defer cancel()
+		_ = c.RaiseSelf(ctx)
+		return nil
+	}
 }
 
 // open is a new visit, with the cursor on the session of that id, or on the

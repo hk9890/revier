@@ -607,7 +607,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
-	if cancelled() {
+	// A cancel that came during the last step stopped nothing.
+	if cancelled() && len(out) < len(plan) {
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
 	}
 	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})

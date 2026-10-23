@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -189,6 +190,44 @@ func surface(p revier.Panel) bool {
 	return len(p.Command) == 1 && p.Runs("revier")
 }
 
+// RaiseSelf brings the terminal this process runs in back to the front: its
+// panel current, and its window raised, as a press on an agent brings that
+// agent's. The surface calls it once a restore has ended, because each
+// window the restore opened came up over it, the popup included, and hid
+// the result. The terminal is the runtime's panel that c.Self names. A
+// surface in a terminal no runtime here lists - or with no Self - is left
+// where it is, and so is one whose window the window host cannot pair with
+// it: raising a guess would raise somebody else's window. The popup's
+// terminal is raised by its class, as the press that raises it does: its
+// title is no match for the window host where one terminal process holds
+// every window.
+func (c *Core) RaiseSelf(ctx context.Context) error {
+	if c.Self == nil || c.Runtime == nil {
+		return nil
+	}
+	start := time.Now()
+	snap, failed := c.listing(ctx)
+	if err := failed[c.Runtime.Name()]; err != nil {
+		logging.Op("surface raise", start, err)
+		return err
+	}
+	for _, inst := range snap[c.Runtime.Name()] {
+		for _, p := range inst.Panels {
+			if c.Self(p) {
+				if inst.Class == PopupClass {
+					err := c.raisePopup(ctx, snap, failed)
+					logging.Op("surface raise", start, err, "ref", inst.Ref, "popup", true)
+					return err
+				}
+				err := c.focusPanel(ctx, snap, inst.Ref, p.ID, "revier")
+				logging.Op("surface raise", start, err, "ref", inst.Ref, "panel", p.ID)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // HidePopup takes the open popup off the screen and keeps it, for the next
 // press to raise with everything it holds (decisions.md D86). It is
 // ErrNoPopupHost where the window host cannot hide, and an error when no
@@ -208,6 +247,22 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	}
 	slog.Info("popup: hide", "ref", w.Ref)
 	return hider.Hide(ctx, w.Ref)
+}
+
+// raisePopup raises the popup's window, found by its class on a listing
+// already taken.
+func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) error {
+	if c.Window == nil {
+		return ErrNoPopupHost
+	}
+	if err := failed[c.Window.Name()]; err != nil {
+		return err
+	}
+	w, ok := popupWindow(snap[c.Window.Name()])
+	if !ok {
+		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
+	}
+	return c.Window.Focus(ctx, w.Ref)
 }
 
 // popupWindow is the popup among the windows listed: the first of its class.

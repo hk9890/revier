@@ -11,6 +11,74 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
+// RaiseSelf brings back the terminal this process runs in: its instance
+// focused, its panel current, and its window raised, as a press on an agent
+// brings that agent's.
+func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	rt.Add("session:demo", "kitty", shellPanel("1"))
+	own := rt.Add("revier", "kitty", shellPanel("2"), shellPanel("3"))
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
+	osw := wm.AddInstance(revier.Instance{Title: "revier", Class: "kitty", PID: 1002})
+	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
+
+	if err := c.RaiseSelf(context.Background()); err != nil {
+		t.Fatalf("RaiseSelf: %v", err)
+	}
+	if !slices.Equal(rt.Focuses, []revier.TargetRef{own}) || !slices.Equal(rt.PanelFocuses, []revier.PanelID{"3"}) {
+		t.Errorf("runtime focuses %v, panels %v; want %v and panel 3", rt.Focuses, rt.PanelFocuses, own)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{osw}) {
+		t.Errorf("window focuses = %v, want %v", wm.Focuses, osw)
+	}
+}
+
+// The popup's terminal is raised by its class, as the press that raises it
+// is. One kitty process holds every window, so neither its pid nor the
+// title the runtime gives it names the popup's window.
+func TestRaiseSelfRaisesThePopupByItsClass(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	rt.Add("billing", "kitty", shellPanel("1"))
+	rt.Add("revier-popup", core.PopupClass, shellPanel("2"))
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "billing", Class: "kitty", PID: 1001})
+	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1001})
+	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "2" }}
+
+	if err := c.RaiseSelf(context.Background()); err != nil {
+		t.Fatalf("RaiseSelf: %v", err)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{popup}) {
+		t.Errorf("window focuses = %v, want the popup %v", wm.Focuses, popup)
+	}
+}
+
+// A process that runs in no terminal the runtime lists, or that cannot say
+// which it runs in, raises nothing.
+func TestRaiseSelfRaisesNothingWhereItRunsInNoListedTerminal(t *testing.T) {
+	for name, self := range map[string]func(revier.Panel) bool{
+		"no Self":          nil,
+		"in no panel here": func(revier.Panel) bool { return false },
+	} {
+		rt := hosttest.NewRuntime("kitty")
+		rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+		rt.Add("session:demo", "kitty", shellPanel("1"))
+		wm := hosttest.New("wm")
+		wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
+		c := &core.Core{Runtime: rt, Window: wm, Self: self}
+
+		if err := c.RaiseSelf(context.Background()); err != nil {
+			t.Errorf("%s: RaiseSelf: %v", name, err)
+		}
+		if len(rt.Focuses)+len(wm.Focuses) != 0 {
+			t.Errorf("%s: focused %v and %v, want nothing", name, rt.Focuses, wm.Focuses)
+		}
+	}
+}
+
 // A press with the popup open raises it where the user left it: no second
 // terminal, and no placement.
 func TestPopupRaisesTheOneAlreadyOpen(t *testing.T) {

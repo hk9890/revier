@@ -14,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -34,6 +35,7 @@ func cmdTUI(a *app) error {
 	// log and not on stderr.
 	m := tui.New(a.core.WithLedger(ledger.File{Root: a.stateRoot}), a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithAssistant(a.assistant).
+		WithHungEnd(procgroup.KillAll).
 		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
 			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
 		})

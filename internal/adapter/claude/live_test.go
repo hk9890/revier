@@ -8,6 +8,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -62,5 +65,23 @@ func TestInspectReturnsWithoutADeadlineOfItsCaller(t *testing.T) {
 	}
 	if took := time.Since(start); took > 10*time.Second {
 		t.Errorf("Inspect took %v, want the listing's own bound", took)
+	}
+}
+
+// The listing runs in a process group of its own, so the ctrl+c a terminal
+// sends to revier's group, which cancels a shutdown or a restore after its
+// step, does not end the listing that step runs.
+func TestTheListingRunsInAProcessGroupOfItsOwn(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "pgrp")
+	fakeClaude(t, "cut -d' ' -f5 /proc/$$/stat > '"+file+"'\necho '[]'")
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+
+	_, _ = p.Inspect(context.Background(), revier.Panel{PID: 101})
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("the listing never ran: %v", err)
+	}
+	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
+		t.Errorf("the listing's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
 	}
 }

@@ -6,10 +6,14 @@ package ssh_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
@@ -56,5 +60,28 @@ func TestAPanelCommandTagsWhatItStartsWithItsOwnPid(t *testing.T) {
 	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
 	if !want.Match(line) {
 		t.Errorf("on the host it runs %q, want %s", line, want)
+	}
+}
+
+// ssh runs in a process group of its own, so the ctrl+c a terminal sends to
+// revier's group, which cancels a shutdown or a restore after its step, does
+// not end the call that step makes. The ssh is a script first on PATH.
+func TestSSHRunsInAProcessGroupOfItsOwn(t *testing.T) {
+	bin := t.TempDir()
+	file := filepath.Join(bin, "pgrp")
+	script := "#!/bin/sh\ncut -d' ' -f5 /proc/$$/stat > '" + file + "'\necho '[]'\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	_, _ = ssh.New("box").Survey(context.Background(), nil)
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ssh never ran: %v", err)
+	}
+	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
+		t.Errorf("ssh's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
 	}
 }

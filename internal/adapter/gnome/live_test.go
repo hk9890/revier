@@ -87,3 +87,25 @@ func TestARefusalReachesTheHostFromWctlsStandardError(t *testing.T) {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
 }
+
+// wctl runs in a process group of its own, so the ctrl+c a terminal sends to
+// revier's group, which cancels a shutdown or a restore after its step, does
+// not end the call that step makes.
+func TestWctlRunsInAProcessGroupOfItsOwn(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "pgrp")
+	script := "#!/bin/sh\ncut -d' ' -f5 /proc/$$/stat > '" + file + "'\n"
+	if err := os.WriteFile(filepath.Join(dir, "wctl"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_ = (&gnome.Host{}).Focus(context.Background(), revier.TargetRef{Host: "gnome", ID: "4181121382"})
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("wctl never ran: %v", err)
+	}
+	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
+		t.Errorf("wctl's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
+	}
+}

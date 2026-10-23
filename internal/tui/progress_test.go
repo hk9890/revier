@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -116,6 +117,11 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
 		t.Error("a second ctrl+c while the shutdown runs did not quit")
 	}
+	// The surface is gone before the walk returns, so the record is taken
+	// back as it quits.
+	if sd := shutDownOnRecord(t, root); sd != nil {
+		t.Errorf("shutdown on record = %+v as the second ctrl+c quits, want it taken back", sd)
+	}
 	close(editor.release)
 	m, _ = update(m, <-answer)
 
@@ -140,6 +146,110 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	}
 	if _, out := send(m, ctrlC); out == nil {
 		t.Error("ctrl+c with nothing running returned no command, want it to quit")
+	}
+}
+
+// Only the second ctrl+c on a step that hangs ends the step's host command,
+// and before the record is taken back, which can wait on the state's lock. A
+// quit with no walk running leaves a command that runs to complete.
+func TestOnlyASecondCtrlCOnAHungStepEndsItsCommand(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	ref := wm.Add("editor", "code-project-00")
+	wm.Refuses = map[string]bool{ref.ID: true}
+	editor := newHeld()
+	wm.OnClose = func(revier.TargetRef) { editor.hold() }
+	root := stateWith(t, nil)
+	ended := 0
+	var onRecord *state.ShutDown
+	end := func() {
+		ended++
+		onRecord = shutDownOnRecord(t, root)
+	}
+
+	idle := resize(refreshed(t, c, projects, root, nil), 150, 30).WithHungEnd(end)
+	if _, quit := send(idle, ctrlC); quit == nil {
+		t.Fatal("ctrl+c with nothing running did not quit")
+	}
+	if _, quit := press(idle, "esc"); quit == nil {
+		t.Fatal("esc with nothing running did not quit")
+	}
+	if ended != 0 {
+		t.Fatalf("a quit with nothing running ended the commands %d times, want none", ended)
+	}
+
+	m := fullShutdownPlanned(t, c, projects, root).WithHungEnd(end)
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-editor.entered
+	m, _ = send(m, ctrlC)
+	if ended != 0 {
+		t.Fatal("the first ctrl+c ended the commands, want the step left to finish")
+	}
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Fatal("a second ctrl+c while the shutdown runs did not quit")
+	}
+	if ended != 1 {
+		t.Errorf("the second ctrl+c ended the commands %d times, want once", ended)
+	}
+	if onRecord == nil {
+		t.Error("the commands were ended after the record was taken back, want before")
+	}
+	close(editor.release)
+	<-answer
+}
+
+// A second ctrl+c before the shutdown wrote its record quits and takes
+// nothing back: the record of an earlier full shutdown stays.
+func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.UTC), "earlier")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	recheck := newHeld()
+	rt.OnInstances = recheck.hold
+
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-recheck.entered
+	m, _ = send(m, ctrlC)
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Error("a second ctrl+c while the shutdown runs did not quit")
+	}
+	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != "earlier" {
+		t.Errorf("shutdown on record = %+v as the second ctrl+c quits, want the earlier one kept", sd)
+	}
+	close(recheck.release)
+	<-answer
+	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != "earlier" {
+		t.Errorf("shutdown on record = %+v after the walk, want the earlier one kept", sd)
+	}
+}
+
+// A second ctrl+c once the walk walked every step keeps the record, however
+// few of the walk's reports the surface has read.
+func TestASecondCtrlCAfterEveryStepKeepsTheRecord(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-answer
+	m, _ = send(m, ctrlC)
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Error("a second ctrl+c while the shutdown's answer is out did not quit")
+	}
+	if shutDownOnRecord(t, root) == nil {
+		t.Error("a shutdown that walked every step was taken off the record")
 	}
 }
 
@@ -256,6 +366,87 @@ func TestACancelledShutdownCountsTheStepsNotReachedAsOpen(t *testing.T) {
 	}
 	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") {
 		t.Errorf("footer = %q, want the result screen's keys", foot)
+	}
+}
+
+// A cancel during the last close stops nothing: the full shutdown stays on
+// record, its result says nothing was left, and the surface quits as after
+// one nobody cancelled.
+func TestAShutdownCancelledDuringItsLastCloseQuitsAsAFullOne(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	home := newHeld()
+	rt.OnClose = func(revier.TargetRef) { home.hold() }
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	<-home.entered
+	// The recheck, the save, the editor before and after, and the home begun.
+	m, _ = readReports(t, m, wait, 5)
+	m, _ = send(m, ctrlC)
+	close(home.release)
+	m, quit := update(m, <-answer)
+
+	if shutDownOnRecord(t, root) == nil {
+		t.Error("a shutdown that walked every step was taken off the record")
+	}
+	if body := strings.Join(rows(m), "\n"); strings.Contains(body, "cancelled") || !strings.Contains(body, "revier quits") {
+		t.Errorf("rows = %q, want no step left and the quit said", body)
+	}
+	if quit == nil {
+		t.Error("the surface waits after a full shutdown that walked every step, want it to quit")
+	}
+}
+
+// A cancel during the last close of a del stops nothing: the footer says no
+// step was left, as after a close nobody cancelled.
+func TestADelCancelledDuringItsLastCloseLeavesNoStep(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	workspace := newHeld()
+	rt.OnClose = func(revier.TargetRef) { workspace.hold() }
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	m, cmd := press(m, "delete")
+	m = run(m, cmd)
+
+	m, cmd = press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-workspace.entered
+	m, _ = send(m, ctrlC)
+	close(workspace.release)
+	m, _ = update(m, <-answer)
+
+	if len(rt.Closed) != 1 {
+		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
+	}
+	if foot := footer(m); strings.Contains(foot, "cancelled") {
+		t.Errorf("footer = %q, want no step said to be left", foot)
+	}
+}
+
+// A step that did not close is said on the result's rows, and the footer
+// keeps the result's keys.
+func TestAShutdownStepThatDidNotCloseIsSaidOnTheResult(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-01")
+	wm.CloseErr = errors.New("window refused")
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	// A project shutdown of project-01, all of it: it stays up to say what
+	// came of it.
+	m, _ = press(m, "alt+q")
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
+	m = run(press(m, "enter"))
+
+	m = run(press(m, "enter"))
+
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "1 step did not close") {
+		t.Errorf("rows = %q, want the step that did not close said", body)
+	}
+	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") || strings.Contains(foot, "did not close") {
+		t.Errorf("footer = %q, want the result screen's keys and no error", foot)
 	}
 }
 

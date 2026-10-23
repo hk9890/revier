@@ -119,7 +119,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	// Each step bounds its own launch and wait. The command's deadline is
 	// one keypress's, and a walk of several cold starts outlasts it; ctrl+c
 	// stops the walk between two steps.
-	walk, stop := interruptible(ctx)
+	walk, stop := interruptible(ctx, nil)
 	defer stop()
 	// A restore is an open, so the shutdown on record ends as it starts, as
 	// in the surface: a restore that opens nothing does not leave the start

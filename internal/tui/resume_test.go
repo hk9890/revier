@@ -180,6 +180,84 @@ func TestAnOpenElsewhereTakesTheStartDialogDown(t *testing.T) {
 	}
 }
 
+// A surface that stays on the screen through a `revier shutdown` run
+// elsewhere offers the restore at the next state it reads, but only over the
+// plain surface: the screen the user is on stays, and the dialog comes once
+// they are back.
+func TestAVisibleSurfaceOffersTheRestoreOfAShutdownRunElsewhere(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+h")
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	offered := func(m tui.Model) bool {
+		return strings.Contains(lines(m)[2], "revier was shut down at 2026-09-15 18:30.")
+	}
+
+	if m = survey(m); offered(m) {
+		t.Error("the start dialog took the help screen's place, want the screen the user is on kept")
+	}
+	m, _ = press(m, "esc")
+	if m = survey(m); !offered(m) {
+		t.Errorf("subtitle = %q on the surface after the shutdown, want the start dialog", lines(m)[2])
+	}
+}
+
+// A query on the agent list is an errand the user is in, as one on the
+// projects is: the start dialog waits for it, so the Enter that picks an
+// agent does not restore a session.
+func TestAnAgentQueryHoldsTheStartDialogBack(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := switched(resize(refreshed(t, c, projects, root, nil), 150, 30))
+	m, _ = press(m, "n")
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if m = survey(m); strings.Contains(lines(m)[2], "revier was shut down") {
+		t.Errorf("subtitle = %q over the agent query, want the query kept", lines(m)[2])
+	}
+}
+
+// A start dialog up for one shutdown is put up again for a later one, so it
+// offers the session the shutdown on record saved.
+func TestTheStartDialogFollowsALaterShutdown(t *testing.T) {
+	m, _, root, _ := shutDownWorld(t)
+	later := saved(t, root, "", 20, session.Project{Name: "project-01", Targets: []session.Target{{Name: "home"}}})
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 16, 9, 15, 0, 0, time.Local), later.ID)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if m = survey(m); !strings.Contains(lines(m)[2], "revier was shut down at 2026-09-16 09:15.") {
+		t.Errorf("subtitle = %q, want the later shutdown", lines(m)[2])
+	}
+	if p := pane(m); !strings.Contains(p, "session "+later.ID) {
+		t.Errorf("pane = %q, want the session the later shutdown saved", p)
+	}
+}
+
+// A shutdown offered once is not offered again by the next state read: the
+// user who went on to the sessions screen and came back is not asked twice.
+func TestAShutdownOfferedOnceIsNotOfferedAgainOnARefresh(t *testing.T) {
+	m, _, _, _ := shutDownWorld(t)
+	m, _ = press(m, "down")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "esc")
+
+	if m = survey(m); strings.Contains(lines(m)[2], "revier was shut down") {
+		t.Error("the start dialog came back on a refresh after the user left it")
+	}
+}
+
 // A popup that a full shutdown left up, as `revier shutdown` leaves it while
 // it is hidden, offers the restore on its next raise.
 func TestARaisedPopupOffersTheRestoreOfAShutdownRecordedWhileHidden(t *testing.T) {

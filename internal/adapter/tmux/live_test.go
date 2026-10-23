@@ -16,7 +16,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1250,4 +1252,26 @@ func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
 	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
 	return res, err
+}
+
+// tmux runs in a process group of its own, so the ctrl+c a terminal sends to
+// revier's group, which cancels a shutdown or a restore after its step, does
+// not end the call that step makes. The tmux is a script first on PATH.
+func TestTmuxRunsInAProcessGroupOfItsOwn(t *testing.T) {
+	bin := t.TempDir()
+	file := filepath.Join(bin, "pgrp")
+	script := "#!/bin/sh\ncut -d' ' -f5 /proc/$$/stat > '" + file + "'\n"
+	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, _ = (&tmux.Host{}).Instances(ctx(t))
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("tmux never ran: %v", err)
+	}
+	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
+		t.Errorf("tmux's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
+	}
 }

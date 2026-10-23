@@ -163,11 +163,12 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, nil
 	}
+	one.closed = msg.closed
 	_, open, failed := msg.closed.Counts()
 	var err error
 	switch {
-	case one.walk.cancelled:
-		one.closed = msg.closed
+	// A cancel that came after the last step was walked stopped nothing.
+	case one.walk.cancelled && len(one.unreached()) > 0:
 		err = errors.New(one.notReached())
 	case failed > 0:
 		err = fmt.Errorf("%s did not close", core.Count(failed, "step"))

@@ -68,8 +68,9 @@ type shutdown struct {
 	projects []core.Project
 	plan     []core.CloseStep
 	running  bool
-	walk     walk   // what the close that runs has reported, and its cancel
-	saved    string // what the save before the close came to
+	walk     walk                // what the close that runs has reported, and its cancel
+	record   *app.ShutdownRecord // the record of a whole shutdown that runs
+	saved    string              // what the save before the close came to
 	closed   core.Closed
 	quitting bool   // a full shutdown is done: the surface quits on the next key or the wait
 	back     dialog // the screen the wizard was opened from, which Esc returns to
@@ -340,11 +341,16 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
 	s.walk = w
+	s.record = nil
+	if full {
+		s.record = app.NewShutdownRecord(c)
+	}
+	record := s.record
 	closing := func() tea.Msg {
 		defer close(progress)
 		defer w.cancel()
 		opts := core.ShutdownOpts{Force: force, Projects: projects, Progress: func(p core.Progress) { progress <- p }}
-		note, ran := "", false
+		note := ""
 		var save func(context.Context, core.Report) (session.Session, error)
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so
@@ -359,7 +365,6 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				if err != nil {
 					return session.Session{}, err
 				}
-				ran = true
 				note = "nothing open to save"
 				switch {
 				case saved:
@@ -373,11 +378,9 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, full))
+		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, record))
 		if answer.err == nil && answer.recheck == nil {
-			// A full shutdown is recorded where its save ran: one whose
-			// recheck left nothing to close recorded nothing.
-			answer.saved, answer.recorded = note, full && ran
+			answer.saved, answer.recorded = note, record != nil && record.Recorded()
 		}
 		return answer
 	}
@@ -400,8 +403,8 @@ func closeAnswer(closed core.Closed, err error) shutdownMsg {
 	return shutdownMsg{closed: closed}
 }
 
-// shutDown takes a shutdown's answer: the result is the pane's, a step that
-// did not close is the footer's too. The timer's next survey shows what
+// shutDown takes a shutdown's answer: the result is the pane's and the
+// result screen's, a step that did not close included. The timer's next survey shows what
 // closed; starting one here would add a second survey-tick chain that never
 // ends, as it would for actedMsg.
 func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
@@ -432,11 +435,10 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
-	_, _, failed := msg.closed.Counts()
-	// A cancel is said on the result's own rows, so the footer keeps its
-	// keys.
-	if failed > 0 && !s.walk.cancelled {
-		m.err = fmt.Errorf("%s did not close", core.Count(failed, "step"))
+	// A cancel that came after the last step was walked stopped nothing: the
+	// result is that of a shutdown nobody cancelled, and a full one quits.
+	if len(s.unreached()) == 0 {
+		s.walk.cancelled = false
 	}
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
@@ -549,12 +551,17 @@ func (m Model) shutdownScreen() string {
 		}
 		rows = []string{run, "Cancel"}
 	case shutDone:
-		n, open, _ := s.closed.Counts()
+		n, open, failed := s.closed.Counts()
 		if s.walk.cancelled {
 			open += len(s.unreached())
 		}
 		done := say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
 			say(th.Meta, s.saved)
+		// What did not close, and what a cancel left, are said on the
+		// result's own rows, so the footer keeps the result's keys.
+		if failed > 0 {
+			done += "\n" + say(th.Attention, core.Count(failed, "step")+" did not close")
+		}
 		if s.walk.cancelled {
 			done += "\n" + say(th.Attention, s.notReached())
 		}

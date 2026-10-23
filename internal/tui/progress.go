@@ -118,6 +118,11 @@ func (m Model) walking() bool {
 
 // lockedKey is a press while a walk runs: ctrl+c cancels the walk, a second
 // quits, and every other press does nothing.
+//
+// The surface quits before the walk returns, so the hung step's command is
+// ended here, and a full shutdown's record is abandoned here, and the record
+// decides whether it is taken back (decisions.md D141). The command is ended
+// first: the abandon can wait on the state's lock.
 func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 	if !key.Matches(msg, m.keys.Quit) {
 		return m, nil
@@ -127,6 +132,12 @@ func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 		w = &m.shut.walk
 	}
 	if w.cancelled {
+		if m.endHung != nil {
+			m.endHung()
+		}
+		if s := m.shut; s.running && s.record != nil {
+			s.record.Abandon()
+		}
 		return m, tea.Quit
 	}
 	w.cancel()
