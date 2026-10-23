@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -145,6 +146,61 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	}
 	if _, out := send(m, ctrlC); out == nil {
 		t.Error("ctrl+c with nothing running returned no command, want it to quit")
+	}
+}
+
+// A second ctrl+c before the shutdown wrote its record quits and takes
+// nothing back: the record of an earlier full shutdown stays.
+func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.UTC), "earlier")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	recheck := newHeld()
+	rt.OnInstances = recheck.hold
+
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-recheck.entered
+	m, _ = send(m, ctrlC)
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Error("a second ctrl+c while the shutdown runs did not quit")
+	}
+	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != "earlier" {
+		t.Errorf("shutdown on record = %+v as the second ctrl+c quits, want the earlier one kept", sd)
+	}
+	close(recheck.release)
+	<-answer
+	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != "earlier" {
+		t.Errorf("shutdown on record = %+v after the walk, want the earlier one kept", sd)
+	}
+}
+
+// A second ctrl+c once the walk walked every step keeps the record, however
+// few of the walk's reports the surface has read.
+func TestASecondCtrlCAfterEveryStepKeepsTheRecord(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+
+	m, cmd := press(m, "enter")
+	answer, _ := walkInBackground(t, cmd)
+	<-answer
+	m, _ = send(m, ctrlC)
+	if _, quit := send(m, ctrlC); quit == nil || quit() != tea.Quit() {
+		t.Error("a second ctrl+c while the shutdown's answer is out did not quit")
+	}
+	if shutDownOnRecord(t, root) == nil {
+		t.Error("a shutdown that walked every step was taken off the record")
 	}
 }
 

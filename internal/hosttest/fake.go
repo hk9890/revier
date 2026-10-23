@@ -46,6 +46,9 @@ type Fake struct {
 	// OnOpen runs after an open is recorded and before it takes effect, so
 	// a test can hold a restore in the middle of its walk.
 	OnOpen func(revier.Realization)
+	// OnInstances runs before each listing, so a test can act while a
+	// survey runs, such as the recheck before a shutdown's first close.
+	OnInstances func()
 
 	// Opened records every realization passed to Open, in order. A test
 	// asserts on it to prove the core rendered templates before the host saw
@@ -437,6 +440,12 @@ func (f *Fake) Name() string { return f.name }
 func (f *Fake) Probe(context.Context) error { return f.ProbeErr }
 
 func (f *Fake) Instances(context.Context) ([]revier.Instance, error) {
+	f.mu.Lock()
+	then := f.OnInstances
+	f.mu.Unlock()
+	if then != nil {
+		then()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.InstancesCalls++

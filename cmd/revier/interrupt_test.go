@@ -155,6 +155,34 @@ func TestASecondCtrlCTakesTheFullShutdownOffTheRecord(t *testing.T) {
 	}
 }
 
+// A second ctrl+c before `revier shutdown` wrote its record takes nothing
+// back: the record of an earlier full shutdown stays.
+func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
+	a, rt := demoDesktop(t, shutDownState(), "home", "diff")
+	earlier := *a.core.Ledger.State().ShutDown
+	cancel, abandon := interruptedBy(t)
+	// The plan's survey lists the runtime first, and the recheck before the
+	// save second: both presses come there.
+	listed := 0
+	rt.OnInstances = func() {
+		if listed++; listed == 2 {
+			cancel()
+			abandon()
+		}
+	}
+
+	output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	if listed < 2 {
+		t.Fatalf("the runtime was listed %d times, want the recheck to list it", listed)
+	}
+	if len(rt.Closed) != 0 {
+		t.Errorf("closed %v, want nothing", rt.Closed)
+	}
+	if sd := a.core.Ledger.State().ShutDown; sd == nil || !sd.At.Equal(earlier.At) {
+		t.Errorf("shutdown on record = %+v, want the earlier one %+v kept", sd, earlier)
+	}
+}
+
 // The second interrupt runs what the walk leaves to it, then ends the
 // process.
 func TestASecondInterruptAbandonsTheWalkAndEnds(t *testing.T) {

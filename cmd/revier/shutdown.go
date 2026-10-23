@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync/atomic"
 	"text/tabwriter"
 	"time"
 
@@ -119,7 +118,6 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		pw, nw = max(pw, len(s.Project)), max(nw, len(s.Name()))
 	}
 	var said []string // what each step's line said, in the order it closed
-	var walked atomic.Int64
 	opts.Progress = func(p core.Progress) {
 		if p.Phase != core.PhaseClose {
 			return
@@ -128,26 +126,21 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Closed.Project, nw, p.Label)
 			return
 		}
-		walked.Add(1)
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
-	full := only == "" && scope == core.ShutdownAll
-	// ctrl+c stops the close between two steps; a full shutdown it stops is
-	// no longer on record, since what it did not reach is still open. A
-	// second ctrl+c ends the command before the shutdown returns, so the
-	// record is taken back here when a step was left.
+	// ctrl+c stops the close between two steps. A second ctrl+c ends the
+	// command before the shutdown returns, so it abandons the record of a
+	// full shutdown, which takes it back or keeps it.
+	var record *usecase.ShutdownRecord
 	var abandon func()
-	if full {
-		abandon = func() {
-			if walked.Load() < int64(len(plan)) {
-				usecase.ClearShutDown(a.core)
-			}
-		}
+	if only == "" && scope == core.ShutdownAll {
+		record = usecase.NewShutdownRecord(a.core)
+		abandon = record.Abandon
 	}
 	walk, stop := interruptible(ctx, abandon)
 	defer stop()
-	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, full)
+	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, record)
 	cancelled := errors.Is(walk.Err(), context.Canceled)
 	var refused *core.BusyRefusal
 	switch {

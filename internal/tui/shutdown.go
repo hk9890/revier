@@ -68,8 +68,9 @@ type shutdown struct {
 	projects []core.Project
 	plan     []core.CloseStep
 	running  bool
-	walk     walk   // what the close that runs has reported, and its cancel
-	saved    string // what the save before the close came to
+	walk     walk                // what the close that runs has reported, and its cancel
+	record   *app.ShutdownRecord // the record of a whole shutdown that runs
+	saved    string              // what the save before the close came to
 	closed   core.Closed
 	quitting bool   // a full shutdown is done: the surface quits on the next key or the wait
 	back     dialog // the screen the wizard was opened from, which Esc returns to
@@ -340,11 +341,16 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
 	s.walk = w
+	s.record = nil
+	if full {
+		s.record = app.NewShutdownRecord(c)
+	}
+	record := s.record
 	closing := func() tea.Msg {
 		defer close(progress)
 		defer w.cancel()
 		opts := core.ShutdownOpts{Force: force, Projects: projects, Progress: func(p core.Progress) { progress <- p }}
-		note, ran := "", false
+		note := ""
 		var save func(context.Context, core.Report) (session.Session, error)
 		if saves {
 			// The save is skipped when the recheck left nothing to close, so
@@ -359,7 +365,6 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 				if err != nil {
 					return session.Session{}, err
 				}
-				ran = true
 				note = "nothing open to save"
 				switch {
 				case saved:
@@ -373,11 +378,9 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, full))
+		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, record))
 		if answer.err == nil && answer.recheck == nil {
-			// A full shutdown is recorded where its save ran: one whose
-			// recheck left nothing to close recorded nothing.
-			answer.saved, answer.recorded = note, full && ran
+			answer.saved, answer.recorded = note, record != nil && record.Recorded()
 		}
 		return answer
 	}
