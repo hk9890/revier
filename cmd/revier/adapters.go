@@ -43,9 +43,12 @@ func windowAdapters() map[string]revier.WindowController {
 }
 
 // probes lists the compiled-in probes first, then the ones config declares
-// as subprocesses, so a compiled probe wins for the harness it knows.
+// as subprocesses, so a compiled probe wins for the harness it knows. The
+// herdr probe takes herdr's word for an agent, so it comes after the probe
+// that reads Claude Code itself, and before the opencode probe, which knows
+// no state.
 func probes(cfg *config.Config) []revier.AgentProbe {
-	out := []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
+	out := []revier.AgentProbe{&claude.Probe{}, &herdr.Probe{}, &opencode.Probe{}}
 	for _, pr := range cfg.Probes {
 		out = append(out, execprobe.New(pr.Name, pr.Exec))
 	}

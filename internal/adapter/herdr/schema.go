@@ -70,4 +70,6 @@ type pane struct {
 	TabID         string            `json:"tab_id"`
 	TerminalTitle string            `json:"terminal_title"`
 	Tokens        map[string]string `json:"tokens"`
+	Agent         string            `json:"agent"`
+	AgentStatus   string            `json:"agent_status"`
 }

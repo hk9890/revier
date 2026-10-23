@@ -101,13 +101,26 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			ID:      revier.PanelID(p.ID),
 			Kind:    kindOf(command),
 			Title:   p.TerminalTitle,
-			Vars:    p.Tokens,
+			Vars:    vars(p),
 			PID:     fg,
 			Command: command,
 			Tab:     p.TabID,
 		})
 	}
 	return instances, nil
+}
+
+// vars is a pane's tokens, and the agent herdr detected in it with its state,
+// which the herdr probe reads.
+func vars(p pane) map[string]string {
+	if p.Agent == "" {
+		return p.Tokens
+	}
+	out := map[string]string{agentVar: p.Agent, statusVar: p.AgentStatus}
+	for k, v := range p.Tokens {
+		out[k] = v
+	}
+	return out
 }
 
 // Focused is the workspace the server shows by default: the one the client

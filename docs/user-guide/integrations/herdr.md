@@ -2,7 +2,8 @@
 
 herdr is a runtime host. revier opens each workspace as a herdr workspace, its
 tabs as herdr tabs and its panels as panes, and reads every pane to find the
-agents. One herdr server holds every workspace.
+agents. One herdr server holds every workspace. For an agent other than Claude
+Code, revier shows the state herdr detects.
 
 ## What you need
 

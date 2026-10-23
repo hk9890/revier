@@ -1,7 +1,7 @@
 # opencode
 
 revier finds opencode in your workspace panels and counts it as an agent, but
-its state is always `unknown`. opencode shows nothing a panel can read: its
+outside herdr its state is `unknown`. opencode shows nothing a panel can read: its
 title, its variables and its process stay the same when it works and when it
 is idle. revier shows it as present rather than guess.
 

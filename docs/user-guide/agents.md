@@ -9,8 +9,9 @@ tabs, resume an agent on its conversation, and let an agent configure revier.
 A probe reads each agent panel and reports one of four
 [states](concepts.md#agents): `attention`, `running`, `idle` or `unknown`.
 Claude Code reports every state, its conversation and its last answer; see
-[Claude Code](integrations/claude-code.md). opencode is always `unknown`; see
-[opencode](integrations/opencode.md). For any other agent, write a probe:
+[Claude Code](integrations/claude-code.md). In [herdr](integrations/herdr.md),
+any other agent herdr detects reports the state herdr reads. Elsewhere opencode
+is always `unknown`; see [opencode](integrations/opencode.md). For any other agent, write a probe:
 [Agent probes](extending/probes.md).
 
 ## Drive an agent from a script
