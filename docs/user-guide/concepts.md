@@ -20,12 +20,12 @@ A press on the home target itself only raises it.
 
 revier drives two kinds of program, called hosts:
 
-- **The runtime host** runs terminals: kitty or tmux. It opens the workspace
+- **The runtime host** runs terminals: kitty, tmux or herdr. It opens the workspace
   and its tabs, and lets a probe read each panel.
 - **The window host** manages desktop windows: GNOME, through `wctl`. It opens
   and raises window targets, and tells which window has the focus.
 
-revier uses the first host of each kind it finds: kitty, then tmux, and GNOME
+revier uses the first host of each kind it finds: kitty, tmux, then herdr, and GNOME
 ([Hosts](configuration.md#hosts)). There is no daemon: each keypress is one
 revier process.
 

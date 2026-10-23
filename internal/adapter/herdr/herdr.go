@@ -5,9 +5,6 @@
 // tabs are the tabs, and the panes of every tab are the panels a probe reads.
 // One herdr server holds every workspace, and the host speaks its JSON API on
 // the server's Unix socket, one request per connection.
-//
-// The host is in no runtime registry yet, so the command line does not offer
-// it.
 package herdr
 
 import (

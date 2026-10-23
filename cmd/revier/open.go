@@ -85,7 +85,7 @@ func (a *app) attach(ref revier.TargetRef) error {
 		if a.core.Runtime != nil {
 			name = a.core.Runtime.Name()
 		}
-		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes tmux", name)
+		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes tmux or herdr", name)
 	}
 	if ref.IsZero() {
 		return errors.New("--attach: the workspace has not come up yet, so there is nothing to attach to")

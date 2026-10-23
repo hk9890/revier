@@ -7,7 +7,7 @@ is idle. revier shows it as present rather than guess.
 
 ## What you need
 
-- `opencode` in a kitty or tmux workspace. Nothing to install or set.
+- `opencode` in a workspace. Nothing to install or set.
 
 To make it a workspace's agent, put it in the agent panel's `command` (see
 [Panels](../configuration.md#panels)):

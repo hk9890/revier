@@ -9,7 +9,7 @@ hook and no plugin.
 
 - Claude Code 2.1.212 or newer, as `claude` on your PATH. revier asks it
   `claude agents --json` for the state of every session.
-- The agent in a kitty or tmux workspace. `revier new` writes one.
+- The agent in a workspace. `revier new` writes one.
 
 revier reads Claude Code's files where `CLAUDE_CONFIG_DIR` says
 ([Environment variables](../cli.md#environment-variables)).

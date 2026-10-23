@@ -37,7 +37,7 @@ usage:
   revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
                                 missing directory is cloned from git_url; --attach
-                                ends with this terminal on it (tmux)
+                                ends with this terminal on it (tmux, herdr)
   revier new [name]             write a project file for this directory
   revier link [host [project]] [--name name]
                                 the ssh hosts other than this machine; a host's

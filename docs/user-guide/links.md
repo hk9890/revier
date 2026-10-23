@@ -10,7 +10,7 @@ host knows the project; this machine asks it over ssh.
 
 ## What you need
 
-- On this machine: kitty or tmux. A link's workspace opens in it.
+- On this machine: a runtime host. A link's workspace opens in it.
 - The host: a Linux machine you reach with `ssh <host>` and a key. revier
   cannot type a password.
 - On the host: revier on the `PATH` of your **login** shell. revier runs each

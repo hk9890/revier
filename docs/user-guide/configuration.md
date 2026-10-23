@@ -79,7 +79,7 @@ page.
 | `home` | bool | `false` | The workspace: what opens the project, and where toggle-back returns. |
 | `prefer` | `"window"` or `"runtime"` | `"window"` | Which realization wins when the target has both and both hosts work. |
 | `[target.window]` | table | none | How the window host (GNOME) opens and finds it. |
-| `[target.runtime]` | table | none | How the runtime host (kitty or tmux) opens and finds it. |
+| `[target.runtime]` | table | none | How the runtime host opens and finds it. |
 | `[target.remote.window]`, `[target.remote.runtime]` | tables | none | The same, for a link. Only in a link file and in `config.toml`. |
 
 A target needs at least one realization. A realization with no host on this
@@ -204,7 +204,7 @@ name = "agent"
 - When a tab of `tabs` fails to open, the tabs after it do not open. The
   instance stays open with the tabs it has.
 - A tab that is not in `tabs` opens when you press its key.
-- Tabs need kitty or tmux.
+- Tabs need a runtime host.
 
 ### Panels
 
@@ -351,7 +351,7 @@ window  = ["none"]
 
 | Key | Values | Default |
 |---|---|---|
-| `runtime` | `kitty`, `tmux`, `none` | `["kitty", "tmux"]` |
+| `runtime` | `kitty`, `tmux`, `herdr`, `none` | `["kitty", "tmux", "herdr"]` |
 | `window` | `gnome`, `none` | `["gnome"]` |
 
 A key you leave out uses its default, and revier skips a default host that

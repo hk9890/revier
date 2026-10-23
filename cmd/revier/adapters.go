@@ -11,6 +11,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/adapter/execprobe"
 	"github.com/hk9890/revier/internal/adapter/gnome"
+	"github.com/hk9890/revier/internal/adapter/herdr"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
 	"github.com/hk9890/revier/internal/adapter/proc"
@@ -28,6 +29,7 @@ func runtimeAdapters() map[string]revier.Runtime {
 	return map[string]revier.Runtime{
 		"kitty": &kitty.Host{},
 		"tmux":  &tmux.Host{},
+		"herdr": &herdr.Host{},
 	}
 }
 
@@ -52,7 +54,7 @@ func probes(cfg *config.Config) []revier.AgentProbe {
 
 // preference order used when config names none.
 var (
-	defaultRuntimeOrder = []string{"kitty", "tmux"}
+	defaultRuntimeOrder = []string{"kitty", "tmux", "herdr"}
 	defaultWindowOrder  = []string{"gnome"}
 )
 
