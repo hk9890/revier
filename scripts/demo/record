@@ -107,7 +107,9 @@ sleep 3.0
 press "Alt+Space" KEY_LEFTALT KEY_SPACE
 sleep 2.2
 press "Enter" KEY_ENTER
-stop 4.5
+# The restore opens each window over the popup, then raises the popup again
+# on what it restored.
+stop 12.0
 
 for clip in popup agents tools restore; do
 	/usr/bin/python3 "$dir/compose.py" "$work" "$clip" "$out/$clip.webp"
