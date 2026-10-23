@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -71,7 +72,11 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.fill(ctx, workspace, created.Tab.ID, r, panels); err != nil {
 		// Best effort: the error that failed the workspace is the one worth
 		// reporting, and a workspace whose panes all exited is gone already.
-		_, _ = h.request(ctx, "workspace.close", map[string]string{"workspace_id": workspace}, nil)
+		// The close has a bound of its own: the end of ctx may be what failed
+		// the workspace.
+		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_, _ = h.request(closing, "workspace.close", map[string]string{"workspace_id": workspace}, nil)
 		return revier.TargetRef{}, err
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(pid, workspace), Title: r.Name}, nil
@@ -98,6 +103,9 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 		return err
 	}
 	panes := applied.Layout.Root.panes()
+	if len(panes) != len(panels) {
+		return fmt.Errorf("herdr layout.apply: answered with %d panes for %d panels", len(panes), len(panels))
+	}
 
 	_, snap, err := h.snapshot(ctx)
 	if err != nil {
@@ -109,8 +117,9 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 		}
 	}
 
+	tokens := h.keepable(r.Name, r.Vars)
 	for _, id := range panes {
-		if err := h.mark(ctx, id, r.Vars); err != nil {
+		if err := h.mark(ctx, id, tokens); err != nil {
 			// The mark is best effort, as it is on tmux: an unmarked panel
 			// falls back to the guess it replaces (decisions.md D100).
 			slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", id, "err", err)
@@ -119,18 +128,24 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 	return nil
 }
 
-// mark leaves vars on a pane as tokens. herdr trims a token, takes out its
-// control characters and cuts it at 80 characters, and a var changed on the
-// way would never match again, so one that would not survive is left off.
-func (h *Host) mark(ctx context.Context, pane string, vars map[string]string) error {
+// keepable is the vars herdr keeps as written, as tokens. herdr trims a
+// token, takes out its control characters and cuts it at 80 characters, and a
+// var changed on the way would never match again, so one that would not
+// survive is left off.
+func (h *Host) keepable(name string, vars map[string]string) map[string]string {
 	tokens := map[string]string{}
 	for k, v := range vars {
 		if !validKey(k) || !survives(v) {
-			slog.Warn("panel var herdr cannot keep", "host", h.Name(), "panel", pane, "var", k)
+			slog.Warn("panel var herdr cannot keep", "host", h.Name(), "name", name, "var", k)
 			continue
 		}
 		tokens[k] = v
 	}
+	return tokens
+}
+
+// mark leaves tokens on a pane.
+func (h *Host) mark(ctx context.Context, pane string, tokens map[string]string) error {
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -140,7 +155,7 @@ func (h *Host) mark(ctx context.Context, pane string, vars map[string]string) er
 
 // survives reports whether herdr keeps a token value as written.
 func survives(v string) bool {
-	return v != "" && v == strings.TrimSpace(v) && len([]rune(v)) <= 80 &&
+	return v != "" && v == strings.TrimSpace(v) && utf8.RuneCountInString(v) <= 80 &&
 		!strings.ContainsFunc(v, unicode.IsControl)
 }
 
@@ -165,19 +180,21 @@ type layoutNode struct {
 	Second    *layoutNode `json:"second,omitempty"`
 }
 
-// layout puts the panels side by side in equal widths: each split gives its
-// first pane its share of what is left. A panel with no command runs the
-// shell herdr starts.
+// layout puts the panels side by side in equal widths: each split halves the
+// panels and gives its first half its share of the width. Halves, not one
+// panel per split: herdr refuses a layout more than 16 levels deep, and a
+// split per panel would be 24 levels deep for 24 panels. A panel with no
+// command runs the shell herdr starts.
 func layout(panels []revier.PanelSpec) layoutNode {
-	p := panels[0]
-	leaf := layoutNode{Type: "pane", Label: p.Title, Cwd: p.Dir, Command: p.Command}
 	if len(panels) == 1 {
-		return leaf
+		p := panels[0]
+		return layoutNode{Type: "pane", Label: p.Title, Cwd: p.Dir, Command: p.Command}
 	}
-	rest := layout(panels[1:])
+	half := len(panels) / 2
+	first, second := layout(panels[:half]), layout(panels[half:])
 	return layoutNode{
-		Type: "split", Direction: "right", Ratio: 1 / float64(len(panels)),
-		First: &leaf, Second: &rest,
+		Type: "split", Direction: "right", Ratio: float64(half) / float64(len(panels)),
+		First: &first, Second: &second,
 	}
 }
 
@@ -272,7 +289,9 @@ func (h *Host) waitPing(ctx context.Context) (string, error) {
 }
 
 // start starts a herdr server in a session of its own, so it outlives this
-// process, with no terminal to write to.
+// process, with no terminal to write to. It is waited for, so a server that
+// ends while this process runs, as a second one started on the same socket
+// does at once, leaves no zombie behind.
 func (h *Host) start() error {
 	cmd := exec.Command("herdr", "server")
 	cmd.Env = os.Environ()
@@ -283,26 +302,39 @@ func (h *Host) start() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("herdr: start the server: %w", err)
 	}
-	return cmd.Process.Release()
+	go func() { _ = cmd.Wait() }()
+	return nil
 }
 
 // older reports whether version a is older than b, both as major.minor.patch.
-// A part that is not a number counts as zero.
+// Each part counts by the digits it starts with, so 0.9.6-dev is 0.9.6; a part
+// with none counts as zero.
 func older(a, b string) bool {
 	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
 	for i := range max(len(pa), len(pb)) {
 		var x, y int
 		if i < len(pa) {
-			x, _ = strconv.Atoi(pa[i])
+			x = leadingNumber(pa[i])
 		}
 		if i < len(pb) {
-			y, _ = strconv.Atoi(pb[i])
+			y = leadingNumber(pb[i])
 		}
 		if x != y {
 			return x < y
 		}
 	}
 	return false
+}
+
+// leadingNumber is the number s starts with, and zero when s starts with no
+// digit.
+func leadingNumber(s string) int {
+	end := strings.IndexFunc(s, func(r rune) bool { return r < '0' || r > '9' })
+	if end < 0 {
+		end = len(s)
+	}
+	n, _ := strconv.Atoi(s[:end])
+	return n
 }
 
 // Focus makes the workspace the one the server shows, and every terminal

@@ -72,6 +72,8 @@ func TestOnlyAValueHerdrKeepsAsWrittenIsAToken(t *testing.T) {
 	}
 }
 
+// Each part counts by the digits it starts with, so a pre-release of a newer
+// herdr is not taken for an older one.
 func TestOlderComparesEachPartAsANumber(t *testing.T) {
 	for _, c := range []struct {
 		a, b string
@@ -82,6 +84,8 @@ func TestOlderComparesEachPartAsANumber(t *testing.T) {
 		{"0.10.0", "0.9.5", false},
 		{"1.0", "0.9.5", false},
 		{"0.9", "0.9.5", true},
+		{"0.9.6-dev", "0.9.5", false},
+		{"0.9.4-rc1", "0.9.5", true},
 	} {
 		if got := older(c.a, c.b); got != c.want {
 			t.Errorf("older(%q, %q) = %v, want %v", c.a, c.b, got, c.want)

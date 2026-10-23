@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -65,15 +66,20 @@ func server(t *testing.T) *herdr.Host {
 	}
 }
 
-// scrubbed is the environment without what points herdr at another server or
-// tells it it runs inside one.
+// herdrEnv names what points herdr at another server or tells it it runs
+// inside one.
+var herdrEnv = []string{
+	"HERDR_ENV", "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH",
+	"HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID",
+}
+
+// scrubbed is the environment without herdrEnv, and without the directories
+// a test server is given its own of.
 func scrubbed(env []string) []string {
 	var out []string
 	for _, kv := range env {
 		name, _, _ := strings.Cut(kv, "=")
-		switch name {
-		case "HERDR_ENV", "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH",
-			"HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID", "XDG_CONFIG_HOME", "XDG_STATE_HOME":
+		if slices.Contains(herdrEnv, name) || name == "XDG_CONFIG_HOME" || name == "XDG_STATE_HOME" {
 			continue
 		}
 		out = append(out, kv)

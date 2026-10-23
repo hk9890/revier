@@ -24,7 +24,8 @@ import (
 // nameToken is the workspace metadata token that holds the name revier gave
 // the workspace. A user can rename the workspace label in herdr; the token
 // stays, so the instance keeps the title its realization's Match finds. A
-// workspace revier did not open has no such token and is known by its label.
+// workspace with no such token, one revier did not open or one whose name
+// herdr cannot keep as a token, is known by its label.
 const nameToken = "revier_name"
 
 // Host is a herdr Runtime. Socket selects the server's API socket; an empty

@@ -47,6 +47,41 @@ func TestOpenThenMatchFindsIt(t *testing.T) {
 	}
 }
 
+// A user renames a workspace in herdr freely: the token Open left on it keeps
+// the title its Match finds.
+func TestARenamedWorkspaceKeepsItsTitle(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "diff", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_, workspace, _ := strings.Cut(ref.ID, "/")
+	if err := h.Request(c, "workspace.rename", map[string]string{"workspace_id": workspace, "label": "renamed"}, nil); err != nil {
+		t.Fatalf("workspace.rename: %v", err)
+	}
+	got, err := h.Instances(c)
+	if err != nil || len(got) != 1 || got[0].Title != "diff" || got[0].Ref != ref {
+		t.Errorf("instances = %+v, %v; want one titled diff with ref %+v", got, err, ref)
+	}
+}
+
+// The most panels a tab holds open side by side: herdr refuses a layout more
+// than 16 levels deep, which one split per panel would exceed.
+func TestOpenLaysOutTheMostPanelsATabHolds(t *testing.T) {
+	h, c := server(t), ctx(t)
+	panels := make([]revier.PanelSpec, 24)
+	for i := range panels {
+		panels[i] = revier.PanelSpec{Kind: revier.PanelShell, Command: []string{"sh", "-c", "sleep 30"}}
+	}
+	if _, err := h.Open(c, revier.Realization{Name: "wide", Panels: panels}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	got, err := h.Instances(c)
+	if err != nil || len(got) != 1 || len(got[0].Panels) != len(panels) {
+		t.Errorf("instances = %+v, %v; want one with %d panels", got, err, len(panels))
+	}
+}
+
 // A name herdr cannot keep as a token - a newline is taken out of one - is
 // still the workspace's label, which then stands as the title.
 func TestANameHerdrCannotKeepAsATokenIsTheLabel(t *testing.T) {
@@ -182,7 +217,7 @@ func TestOpenStartsTheServerWhenNoneRuns(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_STATE_HOME", dir)
 	t.Setenv("SHELL", "/bin/sh")
-	for _, name := range []string{"HERDR_ENV", "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH"} {
+	for _, name := range herdrEnv {
 		t.Setenv(name, "")
 		_ = os.Unsetenv(name)
 	}
