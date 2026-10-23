@@ -92,7 +92,9 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		}
 		shell, ok := processes[p.ID]
 		if !ok {
-			shell = h.shellPID(ctx, p.ID)
+			if shell, err = h.shellPID(ctx, p.ID); err != nil {
+				return nil, err
+			}
 		}
 		// A pane whose process was not found has no foreground: proc reads
 		// none for pid 0.
@@ -133,12 +135,17 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 
 // shellPID asks herdr for the process it started in a pane. A pane it cannot
 // answer for has none: one pane must not fail the listing of every project.
-func (h *Host) shellPID(ctx context.Context, pane string) int {
+// A caller that gave up does fail it: the panes left unasked would list with
+// no process, and their agents would read as gone.
+func (h *Host) shellPID(ctx context.Context, pane string) (int, error) {
 	var res processInfoResult
 	if _, err := h.request(ctx, "pane.process_info", map[string]string{"pane_id": pane}, &res); err != nil {
-		return 0
+		if ctx.Err() != nil {
+			return 0, err
+		}
+		return 0, nil
 	}
-	return res.ProcessInfo.ShellPID
+	return res.ProcessInfo.ShellPID, nil
 }
 
 func (h *Host) snapshot(ctx context.Context) (int, snapshot, error) {

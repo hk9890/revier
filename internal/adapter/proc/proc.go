@@ -14,8 +14,7 @@
 // this machine: Parent, which the kitty host walks a window's processes with,
 // ParentIn, which the herdr host finds a pane's process with, Foreground and
 // ForegroundIn, which the tmux and herdr hosts read a pane's command with, and
-// RunsUnder,
-// the panels a shutdown closes last.
+// RunsUnder, the panels a shutdown closes last.
 package proc
 
 import (

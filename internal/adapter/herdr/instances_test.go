@@ -108,6 +108,29 @@ func TestAMovedPaneIsAskedForItsProcessAlone(t *testing.T) {
 	}
 }
 
+// A caller that gives up while a moved pane is asked about gets an error, not
+// a listing with that pane and no process in it: the survey would read its
+// agent as gone, where a host that fails is read as unknown.
+func TestACancelWhileAMovedPaneIsAskedFailsTheListing(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := &herdr.Host{Socket: "/run/herdr.sock"}
+	h.SetProcRoot(t.TempDir())
+	h.SetCaller(func(ctx context.Context, method string, _ any) (int, []byte, error) {
+		if method == "session.snapshot" {
+			return 4242, []byte(`{"snapshot":{"workspaces":[{"workspace_id":"w2","label":"b"}],
+				"panes":[{"pane_id":"w2:p2","workspace_id":"w2","tab_id":"w2:t1"}]}}`), nil
+		}
+		cancel()
+		return 0, nil, ctx.Err()
+	})
+
+	got, err := h.Instances(ctx)
+	if !errors.Is(err, context.Canceled) || got != nil {
+		t.Errorf("Instances = %+v, %v; want nothing and an error that says the caller cancelled", got, err)
+	}
+}
+
 // The token revier leaves on a workspace is its title, so a rename in herdr
 // does not lose it; a workspace without one, or with an empty one, is known
 // by its label.

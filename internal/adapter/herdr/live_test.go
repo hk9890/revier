@@ -185,7 +185,9 @@ func TestInstancesListAWorkspaceWithItsPanes(t *testing.T) {
 				agent = inst.Panels[i]
 			}
 		}
-		if agent.PID != 0 && slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool { return p.PID != 0 && p.Kind == revier.PanelShell }) {
+		// The agent pane runs bash until bash execs claude, and a listing
+		// taken in between must not end the wait.
+		if agent.Runs("claude") && slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool { return p.PID != 0 && p.Kind == revier.PanelShell }) {
 			break
 		}
 		if time.Now().After(deadline) {
