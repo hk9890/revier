@@ -148,8 +148,10 @@ fields are those of [configuration.md](configuration.md).
 
 A full shutdown shows what it closed for about 1.5 seconds, then the TUI
 quits. Press any key to quit at once. A project shutdown, a close with del,
-and a full shutdown that found nothing left to close when it ran keep the TUI
-open, and the next start does not show the dialog.
+and a full shutdown that is not remembered when it ends keep the TUI open,
+and the next start does not show the dialog. A full shutdown is not
+remembered when it found nothing left to close, when revier could not write
+its state, or when you opened something while it ran.
 
 The next start of the TUI, or of the popup, opens on a dialog:
 `revier was shut down at 18:30.` The pane shows what the saved session holds.
