@@ -90,7 +90,7 @@ territory.
 
 Early, but usable. Linux only.
 
-- **Terminals:** kitty and tmux. Ghostty works through tmux.
+- **Terminals:** kitty, tmux and herdr. Ghostty works through tmux.
 - **Desktop:** GNOME, for window targets and desktop keys.
 - **Agents:** Claude Code 2.1.212 or newer reports its state. opencode is
   recognised but reports no state. An external probe adds any other tool.
@@ -141,7 +141,7 @@ revier                         # every project, its agent state, its targets
 The [user guide](docs/user-guide/README.md) covers the rest: getting started,
 the concepts, the TUI and every key, projects, agents, projects on another
 machine, the configuration reference, every command, troubleshooting,
-statuses and agent probes, and how to set revier up with kitty, tmux, Ghostty,
+statuses and agent probes, and how to set revier up with kitty, tmux, herdr, Ghostty,
 GNOME, Claude Code and opencode.
 
 ## Building

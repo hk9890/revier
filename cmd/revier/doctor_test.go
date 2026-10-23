@@ -223,7 +223,7 @@ func TestDoctorReportsAnUnknownHostName(t *testing.T) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	for _, want := range []string{
-		`hosts.runtime unknown host "ghostty"; known: kitty, tmux, none`,
+		`hosts.runtime unknown host "ghostty"; known: herdr, kitty, tmux, none`,
 		`hosts.window  unknown host "sway"; known: gnome, none`,
 		"1 project, 1 file with problems",
 	} {

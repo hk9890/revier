@@ -3,7 +3,7 @@
 A probe tells revier the state of a coding agent that revier does not know.
 revier knows Claude Code and opencode. For another agent, write a small
 program: it reads one panel as JSON on stdin and prints one state as JSON.
-On this machine, a probe reads the panels of kitty or tmux. For a link,
+On this machine, a probe reads the runtime's panels. For a link,
 declare and install the probe on the host. There it reads the process that
 `revier agent exec` started for the link's agent panel. That panel has no
 `title`, so use `pid` or `command`.

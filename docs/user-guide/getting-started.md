@@ -9,7 +9,7 @@ full-screen view in a terminal. [Concepts](concepts.md) explains the rest.
 ## What you need
 
 - Linux, `x64` or `arm64`.
-- kitty or tmux. revier opens your workspaces in it.
+- kitty, tmux or herdr. revier opens your workspaces in it.
 - Claude Code, in the version
   [Claude Code](integrations/claude-code.md#what-you-need) names, as `claude`
   on your `PATH`. The project that `revier new` writes runs it in its agent
@@ -91,13 +91,13 @@ terminal window called `session:demo`, and `agent`, a tab in it with Claude
 Code beside a shell. Your shared `editor` is the third target.
 
 Run `revier status` to check which hosts revier found: the `runtime` line
-names kitty or tmux, the `window` line gnome, and `-` means none.
+names the terminal host, the `window` line gnome, and `-` means none.
 
 ## Open it
 
 Run `revier open`. revier opens the workspace with the `agent` tab. Run it
 again, and revier raises the same window instead of a second one. This is
-run-or-raise. From another directory, run `revier open demo`. On tmux,
+run-or-raise. From another directory, run `revier open demo`. On tmux or herdr,
 `revier open --attach` puts your terminal on the workspace.
 
 ## Install the desktop keys
