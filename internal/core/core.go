@@ -308,11 +308,6 @@ func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realizatio
 // one per project.
 type snapshot map[string][]revier.Instance
 
-func (c *Core) snapshot(ctx context.Context) (snapshot, error) {
-	s, failed := c.listing(ctx)
-	return s, failed.err()
-}
-
 // answered is a listing the named hosts answered. Another host's failure
 // costs only what that host lists (decisions.md D89), so an operation names
 // the hosts whose instances it reads, and no others. An empty name is no host.
@@ -825,7 +820,9 @@ func (c *Core) isUp(ctx context.Context, p Project, name revier.TargetName, boun
 }
 
 // BindPoll is how often the wait for a launch's window asks the window host.
-const BindPoll = 250 * time.Millisecond
+// A window is bound on average half of this after it shows, and one listing
+// costs the window host a few milliseconds, so the wait asks often.
+const BindPoll = 50 * time.Millisecond
 
 // bindWindow waits for the window a detached launch produces and binds it, then
 // raises it. The window is the first one, new since before, that the target's
@@ -928,6 +925,11 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // never maps holds the keypress this long, so the wait stays short.
 const PlaceWait = 2 * time.Second
 
+// placePoll is how often that wait lists the hosts. Slower than BindPoll,
+// because each look lists the runtime too, and a terminal lists itself once
+// per process it runs in.
+const placePoll = 250 * time.Millisecond
+
 // place positions a window a launch has just produced. It applies to a launch
 // and never to a raise: moving a window the user has already put somewhere is
 // not revier's business (decisions.md D24).
@@ -960,11 +962,13 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 
 // windowOfNew waits for the window host to report the OS window of a runtime
 // instance that has just been opened. A terminal reports its window before the
-// compositor has mapped it, so the first look often finds nothing.
+// compositor has mapped it, so the first look often finds nothing. It reads
+// the runtime and the window host alone, so another host that cannot list
+// does not cost the placement (decisions.md D89).
 func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.TargetRef, bool) {
 	deadline := time.Now().Add(PlaceWait)
 	for {
-		snap, err := c.snapshot(ctx)
+		snap, err := c.answered(ctx, ref.Host, c.Window.Name())
 		if err == nil {
 			if inst, ok := byRef(snap, ref); ok {
 				if w, ok := c.osWindowOf(snap, inst); ok {
@@ -981,7 +985,7 @@ func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.Ta
 		select {
 		case <-ctx.Done():
 			return revier.TargetRef{}, false
-		case <-time.After(BindPoll):
+		case <-time.After(placePoll):
 		}
 	}
 }
