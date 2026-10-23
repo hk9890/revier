@@ -29,6 +29,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -298,6 +299,10 @@ func claudeAgents(ctx context.Context) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "claude", "agents", "--json")
 	cmd.WaitDelay = waitDelay
+	// A process group of its own: the ctrl+c a terminal sends to revier's
+	// group cancels a shutdown or a restore after its step, and must not end
+	// the step's command with it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

@@ -48,6 +48,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
@@ -223,6 +224,10 @@ func (h *Host) kittenIn(ctx context.Context, socket, stdin string, args ...strin
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, append([]string{"@", "--to", socket}, args...)...)
 	c.Stdout, c.Stderr = &out, &errb
+	// A process group of its own: the ctrl+c a terminal sends to revier's
+	// group cancels a shutdown or a restore after its step, and must not end
+	// the step's command with it.
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if stdin != "" {
 		c.Stdin = strings.NewReader(stdin)
 	}
@@ -784,6 +789,10 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	}
 	c := exec.CommandContext(ctx, "kitty", args...)
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
+	// A process group of its own: the ctrl+c a terminal sends to revier's
+	// group cancels a shutdown or a restore after its step, and must not end
+	// the step's command with it.
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("kitty: start: %w", err)
 	}
