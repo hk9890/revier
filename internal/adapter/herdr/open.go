@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -94,34 +93,16 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 		}
 	}
 
-	var applied struct {
-		Layout struct {
-			Root layoutNode `json:"root"`
-		} `json:"layout"`
-	}
-	if _, err := h.request(ctx, "layout.apply", map[string]any{"tab_id": tab, "focus": false, "root": layout(panels)}, &applied); err != nil {
-		return err
-	}
-	panes := applied.Layout.Root.panes()
-	if len(panes) != len(panels) {
-		return fmt.Errorf("herdr layout.apply: answered with %d panes for %d panels", len(panes), len(panels))
-	}
-
-	_, snap, err := h.snapshot(ctx)
+	_, panes, err := h.apply(ctx, map[string]any{"tab_id": tab}, panels)
 	if err != nil {
 		return err
-	}
-	for i, id := range panes {
-		if !slices.ContainsFunc(snap.Panes, func(p pane) bool { return p.ID == id }) {
-			return exitedAtOnce(panels[i])
-		}
 	}
 
 	tokens := h.keepable(r.Name, r.Vars)
 	for _, id := range panes {
 		if err := h.mark(ctx, id, tokens); err != nil {
 			// The mark is best effort, as it is on tmux: an unmarked panel
-			// falls back to the guess it replaces (decisions.md D100).
+			// falls back to the guess it replaces.
 			slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", id, "err", err)
 		}
 	}
@@ -374,9 +355,14 @@ func (h *Host) current(ctx context.Context, ref revier.TargetRef) (string, error
 	}
 	server, workspace, _ := strings.Cut(ref.ID, "/")
 	if server != strconv.Itoa(pid) {
-		return "", fmt.Errorf("herdr: workspace %s is gone; the server that answers now is %d", ref.ID, pid)
+		return "", gone(ref, pid)
 	}
 	return workspace, nil
+}
+
+// gone says a workspace's server is not the one answering now.
+func gone(ref revier.TargetRef, pid int) error {
+	return fmt.Errorf("herdr: workspace %s is gone; the server that answers now is %d", ref.ID, pid)
 }
 
 // AttachCommand is the argv that puts the calling terminal onto the server.
