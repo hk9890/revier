@@ -144,10 +144,10 @@ func (h *Host) Probe(ctx context.Context) error {
 
 func minWctlText() string { return fmt.Sprintf("%d.%d.%d", minWctl[0], minWctl[1], minWctl[2]) }
 
-// atLeast reports whether a version such as "0.16.0" is min or later. A
+// atLeast reports whether a version such as "0.16.0" is oldest or later. A
 // pre-release or build suffix is ignored, and a version that does not parse
 // is not.
-func atLeast(version string, min [3]int) bool {
+func atLeast(version string, oldest [3]int) bool {
 	core, _, _ := strings.Cut(strings.SplitN(version, "+", 2)[0], "-")
 	parts := strings.Split(core, ".")
 	if len(parts) != 3 {
@@ -161,7 +161,7 @@ func atLeast(version string, min [3]int) bool {
 		}
 		v[i] = n
 	}
-	return slices.Compare(v[:], min[:]) >= 0
+	return slices.Compare(v[:], oldest[:]) >= 0
 }
 
 func (h *Host) wctl(ctx context.Context, args ...string) ([]byte, error) {
@@ -316,10 +316,11 @@ func (h *Host) onWindow(ctx context.Context, command, id string, quiet bool) err
 
 // Place positions a window through the extension and returns once the move
 // is applied, without waiting for the frame to come to rest. The window is
-// one mutter has shown, as decode drops one it has not, so mutter's own
-// initial placement is already done. An application that resizes its window
-// after the move, as kitty snaps to its cell grid, has the last word either
-// way: waiting for the frame moves nothing back.
+// one mutter has shown, as decode drops one it has not, unless decode cannot
+// tell the active workspace and keeps an unshown window (see unmapped), which
+// mutter may then place over the move. An application
+// that resizes its window after the move, as kitty snaps to its cell grid,
+// has the last word either way: waiting for the frame moves nothing back.
 //
 // A refusal is not an error the caller should act on: a window pinned by
 // maximize, fullscreen or tiling keeps its geometry, and the launch it
