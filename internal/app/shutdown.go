@@ -118,6 +118,11 @@ func (r *ShutdownRecord) reach() {
 // write records the shutdown unless ctx was cancelled. The cancel is read
 // under the state's lock, so a surface that takes the record back after its
 // cancel is never followed by this write.
+//
+// The ledger does not report a write that failed, so the record is read
+// back: one the state does not hold is not this shutdown's, and the surface
+// that quits on a recorded shutdown stays, since its next start would offer
+// nothing. A record an open cleared since is not held either.
 func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 	at := time.Now().Round(0)
 	r.c.Ledger.Update(func(st *state.State) bool {
@@ -130,6 +135,14 @@ func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 		r.at = at
 		return true
 	})
+	if sd := r.c.Ledger.State().ShutDown; sd != nil && sd.At.Equal(at) {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.at.Equal(at) {
+		r.at = time.Time{}
+	}
 }
 
 // takeBack ends the record this shutdown wrote when its walk left a step not

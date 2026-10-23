@@ -1095,8 +1095,8 @@ func (m *Model) plain() bool {
 }
 
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown is on record, as `revier shutdown` records one while it is
-// hidden: the popup outlives that shutdown (decisions.md D141). The raise is
+// shutdown is on record (decisions.md D141), as `revier shutdown` records one
+// while it is hidden: the popup outlives that shutdown. The raise is
 // a new errand, so it offers the dialog at once and over any screen, also a
 // shutdown the popup offered before; a refresh offers only one it has not
 // (keep). A walk that runs keeps its screen.
