@@ -6,8 +6,8 @@ agents. One herdr server holds every workspace.
 
 ## What you need
 
-- herdr 0.9.5 or newer as `herdr` on your PATH. revier starts the server when
-  none runs.
+- herdr 0.9.5 or newer as `herdr` on your PATH. revier uses the server that
+  `herdr` would attach to, and starts it when none runs.
 
 ## Set it up
 
@@ -42,8 +42,10 @@ agents. One herdr server holds every workspace.
   press does not return home on GNOME. `place` does nothing.
 - While you scroll a pane up in herdr, the TUI and `revier agent read --screen`
   show those lines, not the newest.
-- After the herdr server restarts, herdr brings its workspaces back as shells,
-  without revier's marks: a tab target then opens a second tab. Close those
-  workspaces in herdr, then run `revier session restore`.
+- herdr brings its workspaces back as shells, without revier's marks, each
+  time its server starts. A tab target in such a workspace opens a second
+  tab, and the revier open that starts the server, as the first one after a
+  reboot does, opens a second workspace beside the one herdr brought back.
+  Run `herdr`, close those workspaces, then run `revier session restore`.
 - The popup is a kitty window. With herdr and no kitty, run `revier` in a
   terminal.

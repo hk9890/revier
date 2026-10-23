@@ -93,7 +93,7 @@ machine reports that it is unavailable.
 |---|---|---|---|
 | `launch` | list of strings | both | The command revier runs when `match` finds nothing. An argv list, not a shell string. Required, except on a runtime part with `tabs`, and on a tab with `panels`. |
 | `match` | inline table | both | How revier finds an open instance. Required, except on a tab. |
-| `name` | string | runtime; required, except on a tab | The name of the instance revier opens: the kitty OS window title, the tmux session name. `match` must find this name. |
+| `name` | string | runtime; required, except on a tab | The name of the instance revier opens: the kitty OS window title, the tmux session name, the herdr workspace label. `match` must find this name. |
 | `dir` | string | both | The directory `launch` and the panels start in. Default: the project's `path`. |
 | `place` | string | both | Where a new window goes: x, y, width, height as `wctl place` reads them, for example `"right top 75% 100%"`. Needs GNOME. Applies on launch only. A rule of the Window Control extension for the same window must name the same position, or the window jumps from the rule's position to this one. |
 | `inside` | string | runtime | Makes the target a tab of the named target. See [Tabs](#tabs). |
