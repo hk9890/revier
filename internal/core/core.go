@@ -1092,7 +1092,7 @@ func (c *Core) bridged(inst revier.Instance) bool {
 // since an attachment is the terminal as well as its window (decisions.md
 // D95) that ref can be a terminal that cannot raise itself. A terminal whose
 // window the window host does not list is not focused at all, as an
-// activation of one is not (decisions.md D63).
+// activation of one is not (D63).
 func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 	snap, failed := c.listing(ctx)
 	inst, ok := byRef(snap, ref)
@@ -1575,10 +1575,10 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// A gone attachment is left out rather than shown dead: the caller prunes
 	// it from state against this same listing. A live one is probed like a
 	// target, so a shutdown sees the agent in an attached terminal and keeps
-	// it from ending unasked.
+	// it from ending unasked (decisions.md D95).
 	//
 	// A terminal attached by hand is recorded as the window and the terminal
-	// inside it (decisions.md D95), and is one row here: the terminal's, the
+	// inside it (D95), and is one row here: the terminal's, the
 	// side that holds the panels, so the agents of the row and the close that
 	// ends them are the same instance's.
 	//

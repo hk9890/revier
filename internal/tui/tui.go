@@ -13,8 +13,8 @@
 // the terminal has no focus (D129), with what core.AskRemotes last brought
 // from the linked hosts laid over it (D114), and every action goes through
 // the same core paths the CLI commands use. The three reads outside that path
-// are core.Details, when an agent spoke last and what it said, which the
-// surface asks for on its own and no survey carries, core.Screen, the
+// are core.Details, when an agent spoke last and what it said (D106), which
+// the surface asks for on its own and no survey carries, core.Screen, the
 // mirror's, and the [[status]] commands, which it runs on a timer of their
 // own.
 //
@@ -1095,11 +1095,11 @@ func (m *Model) plain() bool {
 }
 
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown is on record, as `revier shutdown` records one while it is hidden:
-// the popup outlives that shutdown. The raise is a new errand, so it offers
-// the dialog at once and over any screen, also a shutdown the popup offered
-// before; a refresh offers only one it has not (keep). A walk that runs keeps
-// its screen.
+// shutdown is on record (decisions.md D141). `revier shutdown` records one
+// while the popup is hidden: the popup outlives that shutdown. The raise is a
+// new errand, so it offers the dialog at once and over any screen, also a
+// shutdown the popup offered before; a refresh offers only one it has not
+// (keep). A walk that runs keeps its screen.
 func (m *Model) offerResume() {
 	if m.walking() {
 		return

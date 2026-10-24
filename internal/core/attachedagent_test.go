@@ -54,8 +54,8 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 	}
 }
 
-// An ambiguous window is attached alone, and then no agent is reported
-// for it: two terminals of one process with one title cannot be told apart,
+// An ambiguous window is attached alone (decisions.md D95), and then no
+// agent is reported for it: two terminals of one process with one title cannot be told apart,
 // and attaching the wrong one is worse than attaching no terminal at all.
 func TestAnAmbiguousWindowAttachesAlone(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusRunning)

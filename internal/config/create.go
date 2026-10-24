@@ -139,7 +139,7 @@ func SharedHome(shared []map[string]any) bool {
 // CreateLink writes a link file for a project on another machine
 // (decisions.md D41), and loads it back as Create does. on is the project as
 // the host reports it: its name there, empty for the link's own name, and
-// the path and repository a target here renders (decisions.md D83).
+// the path and repository a target here renders (D83).
 func CreateLink(root string, name revier.ProjectName, host string, on revier.Project) (core.Project, error) {
 	if err := validateHost(host); err != nil {
 		return core.Project{}, fmt.Errorf("host: %w", err)

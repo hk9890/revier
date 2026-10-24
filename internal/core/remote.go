@@ -284,9 +284,9 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // what this side's own file was refused for, since the two are separate
 // mistakes in separate files.
 //
-// The agents add to the ones read here rather than replacing them
-// (decisions.md D101): a terminal attached to the link by hand can hold an
-// agent this side read for itself. merge returns the ones it added, which are
+// The agents add to the ones read here rather than replacing them (D101): a
+// terminal attached to the link by hand can hold an agent this side read for
+// itself. merge returns the ones it added, which are
 // the only ones the host named and so the only ones localise has a tag for;
 // dropDoubles then settles the ones both sides reported.
 //

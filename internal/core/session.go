@@ -471,7 +471,8 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool)
 // claude conversation laid over an opencode panel would start `opencode
 // --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
 //
-// A link's agent panel is an ssh onto the host, and the host resumes.
+// A link's agent panel is an ssh onto the host (decisions.md D84), and the
+// host resumes.
 func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutcome {
 	if link {
 		return startLinkAgent(spec, r)

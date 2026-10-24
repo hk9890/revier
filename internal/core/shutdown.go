@@ -687,9 +687,9 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 			// The panels are read again with the agents. A step that closes
 			// a tab means that tab, not the panels it held when the plan was
 			// drawn: a panel added to it since closes with it, and an agent
-			// working in that panel refuses the close like any other. This
-			// adds and drops no step: the plan the user confirmed is the plan
-			// that runs.
+			// working in that panel refuses the close like any other
+			// (decisions.md D94). This adds and drops no step: the plan the
+			// user confirmed is the plan that runs.
 			step.Panels = c.panelsOf(r.Instances, step)
 			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}
