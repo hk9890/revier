@@ -6,6 +6,137 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.20.0
+
+- **Action required: on GNOME, revier needs `wctl` 0.16.0 or later.** revier
+  uses GNOME only when `wctl` is 0.16.0 or later and a Window Control
+  extension runs. With an older `wctl` and no `[hosts] window`, revier now
+  runs with no window host and says nothing: no window targets, no raise, no
+  return home, no `place` and no popup. With `[hosts] window = ["gnome"]`, commands stop with
+  `no configured window host is usable: gnome: wctl X is older than 0.16.0, the oldest revier drives`.
+  To fix it, update the Window Control extension and `wctl` to 0.16.0 or
+  later, then log out and in. Then check that `wctl version --json` shows
+  `wctl` 0.16.0 or later and an `extension` version.
+- **Action required: a script that reads `revier session list` by position
+  must read NAME from the third column.** REASON is now the second column,
+  after ID, so NAME and every column after it move one place to the right.
+- **herdr is a new runtime host.** Before, revier ran workspaces in kitty or
+  tmux only. Now revier can open each workspace as a herdr workspace, its tabs
+  as herdr tabs and its panels as panes, and it reads every pane to find
+  agents. You need herdr 0.9.5 or later on your PATH. revier uses the server
+  that `herdr` would attach to, and starts it when none runs. The default
+  runtime order is now kitty, tmux, herdr: a machine with only herdr uses it.
+  When kitty or tmux is installed, set `[hosts] runtime = ["herdr"]`.
+  `revier open --attach` and tab targets work with herdr, and `revier doctor`
+  knows herdr. So that `revier session restore` resumes the agents and herdr
+  does not, set `resume_agents_on_restore = false` under `[session]` in
+  herdr's own `config.toml`. Some things do not work with herdr:
+  - A focus moves every terminal that is attached to herdr. Attach one
+    terminal.
+  - revier does not raise the desktop window that shows herdr, a second press
+    does not return home on GNOME, and `place` does nothing.
+  - While you scroll a pane up, the TUI and `revier agent read --screen` show
+    those lines, not the newest.
+  - When the herdr server starts, for example at the first open after a
+    reboot, herdr brings its workspaces back as shells that revier does not
+    know. revier then opens a second workspace or tab. Run `herdr`, close
+    those workspaces, then run `revier session restore`.
+  - The popup is a kitty window. With herdr and no kitty, run `revier` in a
+    terminal.
+- **In herdr, agents other than Claude Code show a state.** Before, only
+  Claude Code and agents with a `[[probe]]` of your own showed a state, and
+  opencode was always `unknown`. Now, in herdr, an agent such as Codex, Gemini
+  or opencode shows the state that herdr detects: working, needs you, idle, or
+  unknown. A `[[probe]]` that you declared for that agent still wins. Outside
+  herdr, opencode still shows no state.
+- **The TUI and `revier shutdown` show each step of a shutdown or a restore
+  while it runs, and ctrl+c stops between steps.** Before, a shutdown or a
+  restore could run for a minute and showed nothing until it ended: the TUI
+  showed one line, and the CLI printed one table at the end. A host that hung
+  on one step looked like a hung revier. Keys and clicks in the TUI still acted
+  on a half-changed desktop, and ctrl+c killed `revier shutdown` or
+  `revier session restore` in the middle of a step. Now:
+  - The TUI shows each step of a shutdown, a close or a restore, and its
+    result. No other key or click does anything until it ends.
+  - `revier shutdown` and `revier session restore` print one line per step:
+    its name before the step, its result after it. A hung step is the last
+    line.
+  - ctrl+c lets the running step finish, then stops. revier counts and lists
+    the steps it did not reach, and the TUI stays open to show the result. A
+    restore stopped after its last target says `return home cancelled`. A save
+    stopped by ctrl+c writes no incomplete session. An alt+del stopped
+    during its last close still deletes the entry.
+  - When a step hangs, a second ctrl+c quits at once and also stops the
+    command that the step waits for, such as kitten, tmux, ssh, `wctl` or
+    claude.
+- **After a full shutdown, the next start offers to restore it.** Before,
+  the next start offered nothing, the restore was three keys deep on the
+  sessions screen, and the TUI stayed open after the shutdown. Now revier
+  remembers a shutdown of all of every project. The TUI and the popup show the
+  result for about 1.5 seconds, then quit; any key quits at once. The next
+  start of the TUI or the popup opens on a dialog, for example
+  `revier was shut down at 18:30.`, with Restore this session, Pick another
+  session, and Start fresh (or Esc). A TUI that stays open, or a hidden popup,
+  while `revier shutdown` runs in another place shows the same dialog at its
+  next refresh or raise. The offer ends when you open something first, with a
+  desktop key, `revier go`, `revier open` or `revier run`, and when
+  `revier session restore` starts. revier does not remember the shutdown, and
+  the TUI stays open, when:
+  - you shut down one project, or closed with del;
+  - the shutdown found nothing to close;
+  - revier could not write what it remembers;
+  - you opened something while the shutdown ran;
+  - you stopped it with ctrl+c before its last step. A ctrl+c after its last
+    step started keeps it.
+- **`revier session list` shows why each session was saved.** Before, a
+  session without a name showed a dash on the TUI sessions screen and a blank
+  NAME in `revier session list`, and you could not tell the saves of a
+  shutdown, a project close and a save by hand apart. Now
+  `revier session list` has a REASON column: `shutdown`, `project closed` or
+  `saved by hand`. The TUI sessions screen shows the reason where a name is
+  missing. A session that an older revier saved shows `unknown`. NAME is still
+  the value that `revier session restore` accepts.
+- **The shutdown button moved to the sessions screen.** Before, the top line
+  of the TUI had a shutdown button. Now the sessions screen (alt+s) has the
+  save and shutdown buttons on its top line, and alt+q there opens the
+  shutdown. alt+q in the project list still opens it, and Esc goes back to
+  where you opened it.
+- **A restore no longer brings each window that it opens to the front, and
+  the TUI comes back to the front when the restore ends.** Before, a restore
+  raised every window that it opened, so the desktop flipped through each
+  editor and browser, and the last window hid the result of the restore. Now
+  revier still finds and places each window, but does not raise it. GNOME
+  itself still shows most new windows over the TUI. A terminal that a restore
+  opens still gets the focus, so its tabs come up as saved. When the restore
+  ends (done, failed or cancelled), the TUI or the popup brings its own window
+  to the front once. A TUI in a terminal that revier does not list stays where
+  it is. A normal key press still raises the window that it opens.
+- **A `[[probe]]` named `opencode` now runs.** Before, revier ran its own
+  opencode probe before your `[[probe]]` entries, so a `[[probe]]` named
+  `opencode` never ran. Now the Claude Code probe runs first, then your
+  `[[probe]]` entries in file order, then the probes that come with revier.
+- **A press that opens a window, and each step of a restore, end sooner.**
+  Placing each window takes about 150 ms less, and revier finds a new window
+  sooner.
+- **A new terminal window is placed also when another host does not
+  answer.** Before, when one other host, such as tmux or herdr, could not
+  list what it runs, revier left the new terminal window where it opened.
+- **A del or alt+del question from before the popup hid no longer answers
+  itself with your next key.** Before, when you pressed del or alt+del in the
+  popup just before it hid, for example while the window that Enter opened
+  came up, the popup could hide with the question still open. The next raise
+  showed that question, and the first key answered it: Enter closed the
+  project, and after alt+del also deleted the project file. Now a raise drops
+  a question from before the hide. Press del or alt+del again. When you press
+  a key, click or turn the wheel before the window comes up, the popup now
+  stays on the screen.
+- **`revier open --attach` in a tmux pane no longer ends with an error.**
+  Before, in a pane of the tmux server that holds the workspace, the command
+  switched the pane to the workspace and then printed
+  `sessions should be nested with care, unset $TMUX to force`. Now it switches
+  the pane, prints the workspace, and exits 0. A terminal that you started
+  from a tmux pane still attaches.
+
 ## v0.19.0
 
 - **A wrong `[ui]` value or `[[probe]]` in `config.toml` no longer stops every
