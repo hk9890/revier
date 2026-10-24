@@ -740,7 +740,8 @@ a configuration declares, so a probe written for a harness runs on herdr too.
 ### D144 — revier trusts the programs that run as its user
 
 A panel's vars, title and command come from programs that run as the user,
-and any of them can set a var a probe reads, such as herdr's agent name.
+and any of them can set a var a probe reads, such as herdr's agent name on a
+kitty or tmux panel.
 revier takes them as they are: such a program can already do worse than show
 an agent that is not there, and a shutdown it holds back gives way to
 `--force`. A host keeps a tool's own report (D143), such as herdr's agent
