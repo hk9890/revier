@@ -112,7 +112,8 @@ func (s CloseStep) Busy() bool { return len(s.BusyAgents()) > 0 }
 // BusyAgents are the step's agents that work or wait for an answer. A step
 // the recheck could not read has none: its Agents are the ones the plan was
 // drawn with, and closing nothing ends nobody's turn. That refusal is the
-// step's alone, so the stale reading must not refuse the whole plan.
+// step's alone, so the stale reading must not refuse the whole plan
+// (decisions.md D99).
 func (s CloseStep) BusyAgents() []revier.AgentView {
 	if s.Unread != "" {
 		return nil
@@ -654,7 +655,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 // degraded survey reports no agents, and no agents read is not idle: taking
 // it as idle would close it in the one case the survey knows least about.
 // The refusal is that step's alone, so one dead remote host does not stop the
-// other projects closing.
+// other projects closing (decisions.md D99).
 func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
 	unreachable := map[revier.ProjectName]string{}

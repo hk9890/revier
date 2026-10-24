@@ -38,8 +38,9 @@ type Remote interface {
 
 	// PanelCommand is the argv a panel of this machine's runtime runs to show
 	// the project's agent or shell: `revier <kind> exec -p <project>` on the
-	// remote, kind being PanelAgent or PanelShell. Arguments appended to the
-	// argv reach that command as they are, which is how a restore passes the
-	// conversation to resume and the directory to start in.
+	// remote, kind being PanelAgent or PanelShell (decisions.md D84).
+	// Arguments appended to the argv reach that command as they are, which is
+	// how a restore passes the conversation to resume and the directory to
+	// start in.
 	PanelCommand(project ProjectName, kind PanelKind) []string
 }

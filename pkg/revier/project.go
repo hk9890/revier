@@ -29,11 +29,11 @@ type Project struct {
 	GitURL string `toml:"git_url" json:"git_url,omitempty"`
 
 	// Remote is set for a link: a project that lives on another machine and
-	// is surveyed and driven by the revier installed there. Its runtime
-	// instances, its agents and its checkout are that machine's; what is
-	// here is the pane that reaches it, and any target the link declares.
-	// Path, when set, is the path on the host, kept as written for
-	// templates; a link has no directory here.
+	// is surveyed and driven by the revier installed there (decisions.md
+	// D40). Its runtime instances, its agents and its checkout are that
+	// machine's; what is here is the pane that reaches it, and any target the
+	// link declares. Path, when set, is the path on the host, kept as written
+	// for templates; a link has no directory here.
 	Remote *Link `toml:"remote" json:"remote,omitempty"`
 
 	Targets []Target          `toml:"target" json:"targets"`
@@ -165,8 +165,8 @@ type Realization struct {
 	// open instance is not changed.
 	Tabs []TargetName `toml:"tabs" json:"tabs,omitempty"`
 
-	// Active names the entry of Tabs that has the focus in a new instance.
-	// Empty means the first entry.
+	// Active names the entry of Tabs that has the focus in a new instance
+	// (decisions.md D126). Empty means the first entry.
 	Active TargetName `toml:"active" json:"active,omitempty"`
 }
 

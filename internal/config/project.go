@@ -20,7 +20,7 @@ import (
 //
 // A target the project shares with config.toml is written as the values that
 // differ from the shared one: the file never repeats a shared value, and
-// config.toml is never written from here.
+// config.toml is never written from here (decisions.md D81).
 
 // Source is where a project's target comes from.
 type Source int

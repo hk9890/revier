@@ -192,7 +192,7 @@ var agentRank = map[revier.Status]int{
 }
 
 // firstAgent is the row most worth a look, by agentRank. Among equals, the
-// one that spoke last.
+// one that spoke last (decisions.md D125).
 func (m Model) firstAgent(rows []agentRow) int {
 	best := 0
 	for i := range rows {

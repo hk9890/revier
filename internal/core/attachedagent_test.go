@@ -195,7 +195,8 @@ func TestShutdownAgentsEndsAnAgentInAnAttachedTerminal(t *testing.T) {
 
 // The picker focuses an attached instance by its ref alone, and an
 // attachment is now a terminal as well as a window: the OS window it lives in
-// is raised with it, because kitty on Wayland cannot raise its own.
+// is raised with it, because kitty on Wayland cannot raise its own
+// (decisions.md D19).
 func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	term, _ := attachScratch(t, c, rt, wm)

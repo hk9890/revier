@@ -11,12 +11,12 @@
 // Every project, target and agent it draws comes from core.SurveyLocal,
 // refreshed on a timer that never overlaps itself and that slows down while
 // the terminal has no focus (D129), with what core.AskRemotes last brought
-// from the linked hosts laid over it (D114), and every action
-// goes through the same core paths the CLI commands use. The three reads
-// outside that path are core.Details, when an agent spoke last and what it
-// said, which the surface asks for on its own and no survey carries,
-// core.Screen, the mirror's, and the [[status]] commands, which it runs on a
-// timer of their own.
+// from the linked hosts laid over it (D114), and every action goes through
+// the same core paths the CLI commands use. The three reads outside that path
+// are core.Details, when an agent spoke last and what it said, which the
+// surface asks for on its own and no survey carries, core.Screen, the
+// mirror's, and the [[status]] commands, which it runs on a timer of their
+// own.
 //
 // It is also where claim-on-appear runs, because it is the one long-lived
 // process: successive surveys are diffed, and a window that opens shortly
@@ -69,8 +69,8 @@ const (
 // dialog is a screen standing over the surface: the link dialog, the
 // new-project field, the sessions screen, the config screen, the help screen,
 // the shutdown wizard, the project screen, or the start dialog after a full
-// shutdown. A screen's step is the screen's own. dialogNone is
-// the surface itself, which is where it is nearly always.
+// shutdown. A screen's step is the screen's own. dialogNone is the surface
+// itself, which is where it is nearly always.
 type dialog int
 
 const (
@@ -1095,11 +1095,11 @@ func (m *Model) plain() bool {
 }
 
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown is on record, as `revier shutdown` records one
-// while it is hidden: the popup outlives that shutdown. The raise is
-// a new errand, so it offers the dialog at once and over any screen, also a
-// shutdown the popup offered before; a refresh offers only one it has not
-// (keep). A walk that runs keeps its screen.
+// shutdown is on record, as `revier shutdown` records one while it is hidden:
+// the popup outlives that shutdown. The raise is a new errand, so it offers
+// the dialog at once and over any screen, also a shutdown the popup offered
+// before; a refresh offers only one it has not (keep). A walk that runs keeps
+// its screen.
 func (m *Model) offerResume() {
 	if m.walking() {
 		return
@@ -1344,11 +1344,11 @@ func (m Model) agentsOnPage(dir int) int {
 }
 
 // heldHere reports anything on this machine holding the project, as every surface
-// over this machine's projects draws it. It is
-// ProjectView.Held plus the instances attached by hand: the survey is asked
-// with no attachments, because the surface reads those from state, where a
-// claim writes one between surveys so a claimed window shows at once rather
-// than a refresh later.
+// over this machine's projects draws it. It is ProjectView.Held plus the
+// instances attached by hand: the survey is asked with no attachments,
+// because the surface reads those from state, where a claim writes one
+// between surveys so a claimed window shows at once rather than a refresh
+// later.
 func (m *Model) heldHere(v revier.ProjectView) bool {
 	return heldHere(m.attached, v)
 }
@@ -1475,10 +1475,10 @@ func (m Model) goRow(i int) tea.Cmd {
 // goTarget is one activation, the whole run-or-raise as core.ActivateWaiting
 // walks it against the state on disk: the launch is written before the wait
 // for its window, so a second press - here or on a desktop key - finds it
-// and does not launch again, and the ref it lands on is
-// written after. The wait runs in the command, off the update loop, so the
-// surface stays live. Enter on a row of the pane and a target key on the
-// list are the same operation, so they are the same command.
+// and does not launch again, and the ref it lands on is written after. The
+// wait runs in the command, off the update loop, so the surface stays live.
+// Enter on a row of the pane and a target key on the list are the same
+// operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 	c, raises := m.core, m.raises
 	return func() tea.Msg {
