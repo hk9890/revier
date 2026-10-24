@@ -170,7 +170,8 @@ type Model struct {
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
-	errands   int                              // the raises, presses, clicks and wheel turns so far; a go hides the popup only when none came since its own press
+	errands   int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
+	raises    int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
 	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
@@ -908,11 +909,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The surface opens on the projects, a raise included: the press
 			// that raises it is the one that opened it (decisions.md D110). A
 			// delete, or a close a del planned, still asked from before the
-			// hide is not asked again.
+			// hide is not asked again, nor once a plan still out lands.
 			m.hidden, m.agents.shown = false, false
+			m.raises++
 			m.confirm, m.ctarget = "", ""
 			if m.shut.one && !m.shut.running {
-				m.dialog, m.shut = dialogNone, shutdown{}
+				m.shutBack()
 			}
 			m.offerResume()
 			m.askAgain()

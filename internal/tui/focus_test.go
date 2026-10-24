@@ -292,7 +292,7 @@ func TestAGoFromThePopupHidesIt(t *testing.T) {
 
 // A go that lands after the popup hid and was raised again leaves it on the
 // screen, with no press since its own: the user raised it for the next
-// errand. The hide is an earlier go's, which landed after this press.
+// errand.
 func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	_, wm, c, projects := world(t, 2)
 	wm.Add("revier", core.PopupClass)
@@ -341,19 +341,21 @@ func TestALateGoDoesNotHideAPopupScrolledOrRefocusedSinceThePress(t *testing.T) 
 		"wheel": tea.MouseWheelMsg{X: 2, Y: 4, Button: tea.MouseWheelDown},
 		"focus": tea.FocusMsg{},
 	} {
-		_, wm, c, projects := world(t, 2)
-		wm.Add("revier", core.PopupClass)
-		m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
-		m = survey(m)
-		m, slow := press(m, "enter")
-		if slow == nil {
-			t.Fatal("enter on a project returned no command")
-		}
-		m, _ = update(m, tea.BlurMsg{})
-		m, _ = update(m, since)
-		if _, cmd := deliver(m, slow); cmd != nil {
-			t.Errorf("%s: a go that landed past it answered with a command, want none: the popup stays", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			_, wm, c, projects := world(t, 2)
+			wm.Add("revier", core.PopupClass)
+			m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+			m = survey(m)
+			m, slow := press(m, "enter")
+			if slow == nil {
+				t.Fatal("enter on a project returned no command")
+			}
+			m, _ = update(m, tea.BlurMsg{})
+			m, _ = update(m, since)
+			if _, cmd := deliver(m, slow); cmd != nil {
+				t.Error("a go that landed past it answered with a command, want none: the popup stays")
+			}
+		})
 	}
 }
 

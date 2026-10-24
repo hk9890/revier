@@ -28,6 +28,7 @@ type closePlannedMsg struct {
 	drop     bool
 	projects []core.Project // what the survey covered, for the recheck inside the close
 	plan     []core.CloseStep
+	raises   int // Model.raises at the press
 }
 
 // atEnd reports a query field with nothing right of its cursor, where del has
@@ -93,7 +94,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 		projects = []core.Project{p}
 	}
 	c := m.core
-	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects}
+	asked := closePlannedMsg{project: project, row: row, label: label, drop: drop, projects: projects, raises: m.raises}
 	return m, func() tea.Msg {
 		asked.plan = surveyPlan(c, projects, project, func(r core.Report) []core.CloseStep {
 			if whole {
@@ -105,10 +106,11 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	}
 }
 
-// closePlanned takes the plan a del asked for. A screen opened since, or a
-// close started since, drops it: the press it answers is no longer the last.
+// closePlanned takes the plan a del asked for. A screen opened since, a close
+// started since, or a raise of the popup since drops it: the press it answers
+// is no longer the last.
 func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
-	if m.dialog != dialogNone || m.shut.running || m.confirm != "" {
+	if msg.raises != m.raises || m.dialog != dialogNone || m.shut.running || m.confirm != "" {
 		return m, nil
 	}
 	if len(msg.plan) == 0 && msg.drop {

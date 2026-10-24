@@ -213,6 +213,21 @@ func TestARaiseDropsACloseAndDeleteAskedBeforeTheHide(t *testing.T) {
 	}
 }
 
+// The plan of a close and delete asked before the hide asks nothing when it
+// lands after the raise: its press is no longer the last.
+func TestARaiseDropsACloseAndDeletePlannedBeforeTheHide(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:alpha", "sh")
+	projects, _ := onDisk(t, []string{"alpha"}, nil, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m, plan := press(m, "alt+d")
+
+	m = run(m.Raised(), plan)
+	if sub := lines(m)[2]; strings.Contains(sub, "Close and delete alpha?") {
+		t.Errorf("subtitle = %q after the plan landed past the raise, want no confirm", sub)
+	}
+}
+
 // The pane shows where a project was cloned from.
 func TestDetailPaneShowsTheGitURL(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
