@@ -104,6 +104,23 @@ func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
 	}
 }
 
+// A save records the harness the probe read in the panel, not the probe's own
+// name: the herdr probe claims any agent herdr detected, such as codex.
+func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "codex"})
+	probe := &hosttest.FakeProbe{Harness: "herdr", State: revier.AgentState{Harness: "codex", Status: revier.StatusIdle}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+	if got := s.Projects[0].Targets[0].Agents; len(got) != 1 || got[0].Harness != "codex" {
+		t.Errorf("agents = %+v, want the one codex", got)
+	}
+}
+
 // A project with nothing open is not in the file: restoring it would open a
 // workspace the save did not have.
 func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {

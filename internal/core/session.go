@@ -44,7 +44,7 @@ var restoreNames = map[RestoreAction]string{
 
 func (a RestoreAction) String() string { return restoreNames[a] }
 
-// Resume is one recorded agent of a target: which probe claimed it, the
+// Resume is one recorded agent of a target: the harness its probe named, the
 // probe's own word for its conversation, and the directory it worked in.
 // Either of the last two may be empty.
 type Resume struct {
@@ -185,7 +185,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 						continue
 					}
 					if probe, ok := c.agentProbe(panel); ok {
-						tab.Agents = append(tab.Agents, session.Agent{Harness: probe.Name()})
+						tab.Agents = append(tab.Agents, session.Agent{Harness: harnessIn(v, inst, panel, probe)})
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
@@ -225,7 +225,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 				if probe, ok := c.agentProbe(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
-						panel: panel, probe: probe,
+						panel: panel, probe: probe, harness: harnessIn(v, inst, panel, probe),
 					})
 				}
 			}
@@ -243,7 +243,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 			gaps.Unnamed++
 		}
 		t := &s.Projects[a.project].Targets[a.target]
-		t.Agents = append(t.Agents, session.Agent{Harness: a.probe.Name(), Session: named[i].ID, Dir: named[i].Dir})
+		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir})
 	}
 	return s, gaps
 }
@@ -282,6 +282,19 @@ type agentPanel struct {
 	project, target int
 	panel           revier.Panel
 	probe           revier.AgentProbe
+	harness         string
+}
+
+// harnessIn is the harness the survey read in the panel, else the name of the
+// probe that claimed it. A probe can name another harness than its own: the
+// herdr probe reports the agent herdr detected.
+func harnessIn(v revier.ProjectView, inst revier.Instance, panel revier.Panel, probe revier.AgentProbe) string {
+	for _, a := range v.Agents {
+		if a.Panel == panel.ID && key(a.Ref) == key(inst.Ref) && a.State.Harness != "" {
+			return a.State.Harness
+		}
+	}
+	return probe.Name()
 }
 
 // conversations asks each resumable probe once, for every panel it claimed
