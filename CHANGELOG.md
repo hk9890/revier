@@ -121,6 +121,15 @@ Each section is also the text of its release on the
 - **A new terminal window is placed also when another host does not
   answer.** Before, when one other host, such as tmux or herdr, could not
   list what it runs, revier left the new terminal window where it opened.
+- **A del or alt+del question from before the popup hid no longer answers
+  itself with your next key.** Before, when you pressed del or alt+del in the
+  popup just before it hid, for example while the window that Enter opened
+  came up, the popup could hide with the question still open. The next raise
+  showed that question, and the first key answered it: Enter closed the
+  project, and after alt+del also deleted the project file. Now a raise drops
+  a question from before the hide. Press del or alt+del again. When you press
+  a key, click or turn the wheel before the window comes up, the popup now
+  stays on the screen.
 - **`revier open --attach` in a tmux pane no longer ends with an error.**
   Before, in a pane of the tmux server that holds the workspace, the command
   switched the pane to the workspace and then printed
