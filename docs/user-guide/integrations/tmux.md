@@ -30,7 +30,9 @@ with no display or over ssh.
    revier open demo --attach
    ```
 
-   Detach with tmux's own key. The agents go on.
+   Detach with tmux's own key. The agents go on. In a pane of the same tmux
+   server, the command switches that pane's client to the session and
+   attaches nothing, because tmux does not nest in itself.
 
 3. From another terminal, run `revier` or `revier list` to see the agents.
 

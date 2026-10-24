@@ -66,7 +66,9 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	if *attach {
-		return a.attach(ref)
+		if err := a.attach(ctx, ref); err != nil {
+			return err
+		}
 	}
 	_, _ = fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
 	return nil
@@ -78,7 +80,11 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 // terminal. Only a runtime that can attach a terminal offers it; a runtime
 // whose instances are windows of their own has been raised already, and
 // there is nothing to become.
-func (a *app) attach(ref revier.TargetRef) error {
+//
+// It returns nil, having exec'd nothing, only in a pane of the server it would
+// attach to: the focus has put that pane's terminal on the instance already,
+// and the attach would nest the server in itself.
+func (a *app) attach(ctx context.Context, ref revier.TargetRef) error {
 	att, ok := a.core.Runtime.(revier.Attacher)
 	if !ok {
 		name := "none"
@@ -89,6 +95,12 @@ func (a *app) attach(ref revier.TargetRef) error {
 	}
 	if ref.IsZero() {
 		return errors.New("--attach: the workspace has not come up yet, so there is nothing to attach to")
+	}
+	if enc, ok := att.(revier.Encloser); ok {
+		inside, err := enc.Encloses(ctx)
+		if err != nil || inside {
+			return err
+		}
 	}
 	argv, err := att.AttachCommand(ref)
 	if err != nil {
@@ -101,8 +113,12 @@ func (a *app) attach(ref revier.TargetRef) error {
 	// The exec replaces the process, so the command's own line is never
 	// written: this one stands for it.
 	slog.Info("attach", "ref", ref, "argv", argv)
-	return syscall.Exec(path, argv, os.Environ())
+	return execve(path, argv, os.Environ())
 }
+
+// execve replaces the process. A variable, so a test sees the attach without
+// its process being replaced.
+var execve = syscall.Exec
 
 // describe is how a command names the instance it landed on.
 func describe(ref revier.TargetRef) string {

@@ -776,6 +776,13 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 	return append(argv, "attach-session", "-t", sessionOf(ref.ID)), nil
 }
 
+// Encloses reports whether this process runs in a pane of the server the
+// host speaks to (revier.Encloser).
+func (h *Host) Encloses(ctx context.Context) (bool, error) {
+	pane, err := h.callerPane(ctx)
+	return pane != "", err
+}
+
 // SendText types text into a pane. -l sends it as characters, so no word of
 // it is read as a key name, and "--" keeps a leading dash from reading as a
 // flag. A pane id is unique across the server, so the instance is not needed.

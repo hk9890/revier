@@ -386,6 +386,14 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 	return []string{"herdr"}, nil
 }
 
+// Encloses reports whether this process runs in a pane of the server the
+// host speaks to: herdr starts each pane with HERDR_PANE_ID, and with
+// HERDR_SOCKET_PATH naming the socket of its server (revier.Encloser).
+func (h *Host) Encloses(context.Context) (bool, error) {
+	socket := os.Getenv("HERDR_SOCKET_PATH")
+	return os.Getenv("HERDR_PANE_ID") != "" && socket != "" && socket == h.socket(), nil
+}
+
 // own refuses a ref this host did not produce.
 func (h *Host) own(ref revier.TargetRef) error {
 	if ref.Host != h.Name() || !strings.Contains(ref.ID, "/") {

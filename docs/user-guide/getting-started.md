@@ -100,7 +100,9 @@ names the terminal host, the `window` line gnome, and `-` means none.
 Run `revier open`. revier opens the workspace with the `agent` tab. Run it
 again, and revier raises the same window instead of a second one. This is
 run-or-raise. From another directory, run `revier open demo`. On tmux or herdr,
-`revier open --attach` puts your terminal on the workspace.
+`revier open --attach` puts your terminal on the workspace. In a pane of the
+same tmux or herdr server, it switches that pane to the workspace and
+attaches nothing, because the server does not attach to itself.
 
 ## Install the desktop keys
 

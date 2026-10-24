@@ -217,3 +217,14 @@ type PanelCloser interface {
 type Attacher interface {
 	AttachCommand(ref TargetRef) ([]string, error)
 }
+
+// Encloser is an optional capability of an Attacher, detected by type
+// assertion. Encloses reports whether the calling process runs in a pane of
+// the server AttachCommand attaches to. There the focus has already put the
+// pane's own terminal on the instance, and the attach would only nest the
+// server in itself, which tmux and herdr refuse; so `revier open --attach`
+// prints what it focused instead. An Attacher that does not implement it is
+// attached to wherever the command runs.
+type Encloser interface {
+	Encloses(ctx context.Context) (bool, error)
+}
