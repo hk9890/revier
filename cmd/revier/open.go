@@ -83,7 +83,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 //
 // It returns nil, having exec'd nothing, only in a pane of the server it would
 // attach to: the focus has put that pane's terminal on the instance already,
-// and the attach would nest the server in itself.
+// and the attach would nest the server in itself. A check that fails attaches.
 func (a *app) attach(ctx context.Context, ref revier.TargetRef) error {
 	att, ok := a.core.Runtime.(revier.Attacher)
 	if !ok {
@@ -98,8 +98,12 @@ func (a *app) attach(ctx context.Context, ref revier.TargetRef) error {
 	}
 	if enc, ok := att.(revier.Encloser); ok {
 		inside, err := enc.Encloses(ctx)
-		if err != nil || inside {
-			return err
+		if err != nil {
+			// The check only spares a refusal; it must not cost the attach.
+			slog.Warn("attach", "err", err)
+		}
+		if inside {
+			return nil
 		}
 	}
 	argv, err := att.AttachCommand(ref)

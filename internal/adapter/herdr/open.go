@@ -386,15 +386,14 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 	return []string{"herdr"}, nil
 }
 
-// Encloses reports whether this process runs in a pane of the server the
-// host speaks to: herdr starts each pane with HERDR_PANE_ID, and with
-// HERDR_SOCKET_PATH naming the socket of its server (revier.Encloser).
-// herdr refuses to nest from the HERDR_ENV it inherits, whatever the
-// terminal, so a check of the environment alone follows herdr's own rule:
-// unlike tmux, a terminal started from a pane is refused too.
+// Encloses reports whether herdr refuses the attach as nested, and the
+// focus has already moved the host's server (revier.Encloser). herdr starts
+// each pane with HERDR_ENV and refuses to start wherever it is set, whatever
+// the terminal, so a terminal started from a pane is refused too. A pane of
+// another server still execs the attach, and herdr refuses it.
 func (h *Host) Encloses(context.Context) (bool, error) {
 	socket := os.Getenv("HERDR_SOCKET_PATH")
-	return os.Getenv("HERDR_PANE_ID") != "" && socket != "" && socket == h.socket(), nil
+	return os.Getenv("HERDR_ENV") != "" && socket != "" && socket == h.socket(), nil
 }
 
 // own refuses a ref this host did not produce.

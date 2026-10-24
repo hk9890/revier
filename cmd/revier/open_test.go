@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -19,11 +20,12 @@ type enclosingRuntime struct {
 	*hosttest.FakeRuntime
 	argv   []string
 	inside bool
+	err    error
 }
 
 func (r enclosingRuntime) AttachCommand(revier.TargetRef) ([]string, error) { return r.argv, nil }
 
-func (r enclosingRuntime) Encloses(context.Context) (bool, error) { return r.inside, nil }
+func (r enclosingRuntime) Encloses(context.Context) (bool, error) { return r.inside, r.err }
 
 // openAttach runs `revier open demo --attach` against rt, with the exec
 // recorded instead of done, and returns what it printed and the argv exec'd.
@@ -63,6 +65,16 @@ func TestOpenAttachInAPaneOfTheServerExecsNothing(t *testing.T) {
 func TestOpenAttachOutsideAPaneExecsTheAttach(t *testing.T) {
 	argv := []string{"sh", "-c", "attach"}
 	_, execd := openAttach(t, enclosingRuntime{FakeRuntime: hosttest.NewRuntime("tmux"), argv: argv})
+	if !slices.Equal(execd, argv) {
+		t.Errorf("exec'd %q, want %q", execd, argv)
+	}
+}
+
+// A check that cannot tell still attaches: it only spares a refusal, and the
+// attach worked before there was a check.
+func TestOpenAttachExecsTheAttachWhenTheCheckFails(t *testing.T) {
+	argv := []string{"sh", "-c", "attach"}
+	_, execd := openAttach(t, enclosingRuntime{FakeRuntime: hosttest.NewRuntime("tmux"), argv: argv, err: errors.New("list-panes failed")})
 	if !slices.Equal(execd, argv) {
 		t.Errorf("exec'd %q, want %q", execd, argv)
 	}
