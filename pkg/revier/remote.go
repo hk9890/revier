@@ -7,7 +7,7 @@ import "context"
 // nothing here. What runs on the remote machine is that revier's business,
 // surveyed by its own hosts and probes, and this side reads the view it
 // produces. The terminals that show what runs there are panels of this
-// machine's runtime, and are driven as such (decisions.md D84).
+// machine's runtime, and are driven as such (D84).
 type Remote interface {
 	// Name is the host as the project file names it.
 	Name() string
@@ -38,9 +38,9 @@ type Remote interface {
 
 	// PanelCommand is the argv a panel of this machine's runtime runs to show
 	// the project's agent or shell: `revier <kind> exec -p <project>` on the
-	// remote, kind being PanelAgent or PanelShell. Arguments appended to the
-	// argv reach that command as they are, which is how a restore passes the
-	// conversation to resume and the directory to start in
-	// (decisions.md D84).
+	// remote, kind being PanelAgent or PanelShell (decisions.md D84).
+	// Arguments appended to the argv reach that command as they are, which is
+	// how a restore passes the conversation to resume and the directory to
+	// start in.
 	PanelCommand(project ProjectName, kind PanelKind) []string
 }

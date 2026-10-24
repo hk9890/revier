@@ -479,7 +479,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 // active tab of an instance that was there, and that has lost every panel
 // with the home mark, gets that mark again: every other tab of such an
 // instance carries a target mark, so nothing else names where a return home
-// lands (decisions.md D100). An instance this press opened has its mark.
+// lands. An instance this press opened has its mark (decisions.md D100).
 func (c *Core) tabVars(p Project, t revier.Target, in revier.Instance, opened bool) map[string]string {
 	vars := map[string]string{PanelTargetVar: string(t.Name)}
 	if opened || slices.ContainsFunc(in.Panels, func(panel revier.Panel) bool { return panel.Vars[PanelHomeVar] != "" }) {

@@ -28,9 +28,9 @@ var errShutdownBusy = errors.New("agents are busy; nothing saved and nothing clo
 var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was made; nothing saved and nothing closed. use --force to shut down anyway")
 
 // cmdShutdown closes what is open: every project's targets, or one project's,
-// or only their agents or only what holds no agent (decisions.md D78). It
-// saves the session first when it changed, so a restore brings back what the
-// shutdown closed, and it refuses while an agent is busy unless forced. A
+// or only their agents or only what holds no agent. It saves the session
+// first when it changed, so a restore brings back what the shutdown closed,
+// and it refuses while an agent is busy unless forced (decisions.md D78). A
 // shutdown of every project, all of each, is recorded in the state, so the
 // next surface offers the restore (D141). ctrl+c stops it between two steps.
 func cmdShutdown(ctx context.Context, a *app, args []string) error {

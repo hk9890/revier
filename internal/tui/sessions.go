@@ -457,7 +457,7 @@ type ledgerMsg struct {
 // waitLedger delivers the next write of a restore to the update loop, which
 // takes state from disk into the surface at once: a press on a target the
 // restore is launching must find the launch before the next survey does, or
-// it launches a second copy (decisions.md D21).
+// it launches a second copy.
 func waitLedger(written <-chan struct{}) tea.Cmd {
 	return func() tea.Msg {
 		_, ok := <-written

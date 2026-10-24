@@ -17,7 +17,7 @@ import (
 // The start dialog: the first screen after a full shutdown, while the state
 // records one (decisions.md D141). It offers the session the shutdown saved,
 // the sessions screen, or the surface as it is. It is a screen like the
-// others (D8), not a second surface.
+// others, not a second surface.
 
 // resumeScreen is the start dialog: when revier was shut down, and the
 // session to offer, which is zero when none is saved.

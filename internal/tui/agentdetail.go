@@ -40,7 +40,7 @@ type detailsMsg struct {
 // cursor said last, and when: when another project comes under it, and again
 // on every survey. The pane draws none of it (decisions.md D125): which agent
 // it mirrors first depends on when each spoke. The read runs off the update
-// loop, so the screen never waits on it (D106).
+// loop, so the screen never waits on it.
 //
 // The agent list asks for every agent on the surface instead: its rows stand
 // in the order the agents spoke in (D110).

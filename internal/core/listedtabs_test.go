@@ -857,7 +857,7 @@ func TestTheAgentOfAListedTabThatRunsALaunchIsNotRecordedUnderTheWorkspace(t *te
 
 // A tab that holds panels and that its workspace does not list is not a part
 // of the layout either: it keeps its step, so a restore opens it again, and
-// its agent is recorded under it by harness alone (decisions.md D68).
+// its agent is recorded under it by harness alone.
 func TestATabWithPanelsThatIsNotListedKeepsItsStep(t *testing.T) {
 	dir := t.TempDir()
 	project := listedTabsProject("agent")

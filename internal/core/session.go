@@ -437,7 +437,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each
-// comes to (decisions.md D62, D63).
+// comes to (decisions.md D62).
 //
 // The first recorded agent goes to the first panel declared as an agent, the
 // second to the second, and so on. The agents past the declared ones are
@@ -471,8 +471,8 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool)
 // claude conversation laid over an opencode panel would start `opencode
 // --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
 //
-// A link's agent panel is an ssh onto the host, and the host resumes
-// (decisions.md D84).
+// A link's agent panel is an ssh onto the host (decisions.md D84), and the
+// host resumes.
 func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutcome {
 	if link {
 		return startLinkAgent(spec, r)

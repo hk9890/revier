@@ -98,7 +98,7 @@ func (c *Core) here(a revier.AgentView) bool {
 // agentsHere is the agents a shutdown can close: the ones a panel of this
 // machine's runtime shows. A link's agent no panel here shows is its host's,
 // and an agent this machine serves to a terminal elsewhere ends with that
-// terminal (decisions.md D84); neither is a step of a shutdown here.
+// terminal; neither is a step of a shutdown here.
 func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
 	var out []revier.AgentView
 	for _, a := range v.Agents {

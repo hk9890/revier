@@ -96,8 +96,7 @@ type WindowPlacer interface {
 // WorkareaReader is an optional capability, detected by type assertion. A
 // host that implements it reports the width in pixels of the usable area of
 // the primary monitor, which is how the popup decides before its launch
-// whether a centred window is wide enough for the detail pane
-// (decisions.md D76).
+// whether a centred window is wide enough for the detail pane.
 type WorkareaReader interface {
 	WorkareaWidth(ctx context.Context) (int, error)
 }

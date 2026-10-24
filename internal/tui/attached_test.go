@@ -11,9 +11,9 @@ import (
 
 // A project whose only live instance is a window attached by hand is open:
 // its row carries the running mark, its pane says running, and it sorts with
-// the projects that are up (decisions.md D104). The surface surveys with no
-// attachments - it reads those from state, so a claim shows at once - so the
-// view alone does not know about them and the surface adds them.
+// the projects that are up. The surface surveys with no attachments - it reads
+// those from state, so a claim shows at once - so the view alone does not know
+// about them and the surface adds them.
 func TestAProjectHeldOnlyByAnAttachedWindowReadsAsOpen(t *testing.T) {
 	_, wm, c, projects := world(t, 3)
 	ref := wm.Add("Pull requests", "chrome")

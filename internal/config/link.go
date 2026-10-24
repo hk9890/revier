@@ -81,17 +81,17 @@ func linkTOML(name revier.ProjectName, host string, on revier.Project) string {
 // tab `revier new` writes.
 const agentTab revier.TargetName = "agent"
 
-// link fills in what a link file leaves to be derived (decisions.md D41).
+// link fills in what a link file leaves to be derived.
 // The project's name on the host is the link's own name unless the file
 // says otherwise. The home target is the workspace as it is laid out here: a
 // container that lists one tab, and that tab, a target named agent inside it
 // with an agent panel and a shell panel, each reaching the host to run
-// `revier agent exec` or `revier shell exec` there (D84, D128).
+// `revier agent exec` or `revier shell exec` there (decisions.md D84, D128).
 // What argv reaches the host is the remote port's to say, and the core asks
 // it where the tabs are read: a panel here carries its kind and no command.
 // Which harness and which directory is the host's project file's to say. A
 // link may declare further targets, which run here and reach the host
-// themselves - an editor over ssh, a page (D82).
+// themselves - an editor over ssh, a page.
 //
 // A home target the link already has - its own, or the remote part of the
 // shared one - keeps every field it sets, and the derived name and match

@@ -12,7 +12,7 @@ import (
 
 // A launch a restore writes reaches the surface on its update loop, before
 // the next survey: a press on that target in between must find it coming up,
-// not launch a second copy (decisions.md D21).
+// not launch a second copy.
 func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 	root := t.TempDir()
 	if err := (&state.State{}).Save(root); err != nil {

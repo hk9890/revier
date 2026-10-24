@@ -54,10 +54,9 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 	}
 }
 
-// An ambiguous window is attached alone (decisions.md D63), and then no
-// agent is reported for it: two terminals of one process with one title
-// cannot be told apart, and attaching the wrong one is worse than attaching
-// no terminal at all.
+// An ambiguous window is attached alone (decisions.md D95), and then no
+// agent is reported for it: two terminals of one process with one title cannot be told apart,
+// and attaching the wrong one is worse than attaching no terminal at all.
 func TestAnAmbiguousWindowAttachesAlone(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusRunning)
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
@@ -179,7 +178,7 @@ func TestSurveyReadsATerminalAttachedToTwoProjectsOnce(t *testing.T) {
 // A shutdown of the agents alone ends the agent in a hand-attached terminal
 // too, and leaves the terminal open. An agent is an agent wherever the user
 // put it: the scope is about agents and not about how their instance came to
-// be known (decisions.md D78).
+// be known.
 func TestShutdownAgentsEndsAnAgentInAnAttachedTerminal(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	term, attached := attachScratch(t, c, rt, wm)
@@ -197,7 +196,7 @@ func TestShutdownAgentsEndsAnAgentInAnAttachedTerminal(t *testing.T) {
 // The picker focuses an attached instance by its ref alone, and an
 // attachment is now a terminal as well as a window: the OS window it lives in
 // is raised with it, because kitty on Wayland cannot raise its own
-// (decisions.md D63).
+// (decisions.md D19).
 func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	term, _ := attachScratch(t, c, rt, wm)

@@ -18,9 +18,9 @@ var BindWait = 30 * time.Second
 // activate is one press of a target: run-or-raise it, unless pending says a
 // launch of it by an earlier press, here or from another process, is still on
 // record. That press is waiting for the window, and a second launch opens a
-// duplicate (decisions.md D21), so while the target has no instance the press
-// does nothing and the Result reports ComingUp. A pending launch whose window
-// has appeared is raised like any other.
+// duplicate, so while the target has no instance the press does nothing and
+// the Result reports ComingUp. A pending launch whose window has appeared is
+// raised like any other.
 //
 // Every Ref in the Result, also one returned with an error, names an instance
 // the activation pins; a launched Result with a zero Ref is a window to bind.

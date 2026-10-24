@@ -54,7 +54,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 	if *asJSON {
 		// What a save on another machine records for its link to a project
-		// here (decisions.md D84).
+		// here.
 		if *conversations {
 			a.core.NameConversations(ctx, report)
 		}

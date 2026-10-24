@@ -44,7 +44,7 @@ func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 
 // A window no terminal pairs with beyond doubt is attached alone: two
 // unnamed terminals of one process cannot be told apart, and attaching the
-// wrong one is worse than attaching none (decisions.md D63).
+// wrong one is worse than attaching none (decisions.md D95).
 func TestAttachRecordsAnAmbiguousWindowAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})

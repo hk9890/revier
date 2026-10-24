@@ -287,8 +287,8 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	}
 	// Only worth saying when it is the reason nothing can start. A running
 	// project whose directory has since gone is a different problem, and the
-	// red path already says it. A remote project's host clones it on open
-	// (decisions.md D40), so Enter is the same answer there.
+	// red path already says it. A remote project's host clones it on open,
+	// so Enter is the same answer there.
 	// A file that did not load has no path to be missing and nothing to
 	// clone into: what is wrong with it is the reason printed above.
 	if !v.PathExists && !m.heldHere(v) && v.Unreachable == "" && v.Invalid == "" && answered {
