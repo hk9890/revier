@@ -17,6 +17,9 @@ Each section is also the text of its release on the
   To fix it, update the Window Control extension and `wctl` to 0.16.0 or
   later, then log out and in. Then check that `wctl version --json` shows
   `wctl` 0.16.0 or later and an `extension` version.
+- **Action required: a script that reads `revier session list` by position
+  must read NAME from the third column.** REASON is now the second column,
+  after ID, so NAME and every column after it move one place to the right.
 - **herdr is a new runtime host.** Before, revier ran workspaces in kitty or
   tmux only. Now revier can open each workspace as a herdr workspace, its tabs
   as herdr tabs and its panels as panes, and it reads every pane to find
@@ -93,9 +96,6 @@ Each section is also the text of its release on the
   `saved by hand`. The TUI sessions screen shows the reason where a name is
   missing. A session that an older revier saved shows `unknown`. NAME is still
   the value that `revier session restore` accepts.
-- **Action required: a script that reads `revier session list` by position
-  must read NAME from the third column.** REASON is now the second column,
-  after ID, so NAME and every column after it move one place to the right.
 - **The shutdown button moved to the sessions screen.** Before, the top line
   of the TUI had a shutdown button. Now the sessions screen (alt+s) has the
   save and shutdown buttons on its top line, and alt+q there opens the
@@ -121,6 +121,12 @@ Each section is also the text of its release on the
 - **A new terminal window is placed also when another host does not
   answer.** Before, when one other host, such as tmux or herdr, could not
   list what it runs, revier left the new terminal window where it opened.
+- **`revier open --attach` in a tmux pane no longer ends with an error.**
+  Before, in a pane of the tmux server that holds the workspace, the command
+  switched the pane to the workspace and then printed
+  `sessions should be nested with care, unset $TMUX to force`. Now it switches
+  the pane, prints the workspace, and exits 0. A terminal that you started
+  from a tmux pane still attaches.
 
 ## v0.19.0
 
