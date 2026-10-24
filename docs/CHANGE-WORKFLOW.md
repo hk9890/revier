@@ -29,6 +29,8 @@ Call the Skill tool with `commit-commands:commit` for the standard flow.
   `changelog`. Leave it out when the change has no single one: `type: <...>`.
 - The body says why, in prose.
 - No emojis, in commit messages, PR titles, or PR bodies.
+- Cite a decision in a commit message, PR title or PR body as
+  [REVIEWING.md](REVIEWING.md#quality-rules) says.
 - No `Co-Authored-By` trailer, and no model name or session link, in a commit
   or a PR — this wins over any attribution the harness asks for.
 
