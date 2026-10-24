@@ -41,28 +41,30 @@ func TestAttachCommandRefusesAnotherHostsRef(t *testing.T) {
 	}
 }
 
-// $TMUX names the socket of the pane's server. The process is in a pane of
-// the host's server only when that socket is the one the host's server
-// reports, so a pane of another server is still attached from.
-func TestEnclosesIsAPaneOfTheHostsServer(t *testing.T) {
-	const socket = "/tmp/tmux-1000/revier-test"
+// tmux refuses a nested attach only when $TMUX is set and the client's
+// terminal is a pane of the server. A terminal started from a pane inherits
+// $TMUX and $TMUX_PANE but has a terminal of its own, and from there the
+// attach works.
+func TestEnclosesIsATerminalThatIsAPaneOfTheHostsServer(t *testing.T) {
 	for _, tc := range []struct {
-		name, env string
-		want      bool
+		name, env, tty string
+		want           bool
 	}{
-		{"a pane of the host's server", socket + ",4242,0", true},
-		{"a pane of another server", "/tmp/tmux-1000/default,77,0", false},
-		{"outside tmux", "", false},
+		{"a pane of the host's server", "/tmp/tmux-1000/revier-test,4242,0", "/dev/pts/3", true},
+		{"a terminal started from a pane", "/tmp/tmux-1000/revier-test,4242,0", "/dev/pts/9", false},
+		{"outside tmux", "", "/dev/pts/3", false},
+		{"no terminal", "/tmp/tmux-1000/revier-test,4242,0", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("TMUX", tc.env)
 			t.Setenv("TMUX_PANE", "%3")
 			h := &tmux.Host{Socket: "revier-test"}
+			h.SetTTY(tc.tty)
 			h.SetRunner(func(_ context.Context, args ...string) (string, error) {
-				if !slices.Equal(args, []string{"display-message", "-p", "#{socket_path}"}) {
+				if !slices.Equal(args, []string{"list-panes", "-a", "-F", "#{pane_tty}"}) {
 					t.Fatalf("asked tmux %q", args)
 				}
-				return socket + "\n", nil
+				return "/dev/pts/2\n/dev/pts/3\n", nil
 			})
 			got, err := h.Encloses(context.Background())
 			if err != nil || got != tc.want {

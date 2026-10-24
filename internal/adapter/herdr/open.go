@@ -389,6 +389,9 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 // Encloses reports whether this process runs in a pane of the server the
 // host speaks to: herdr starts each pane with HERDR_PANE_ID, and with
 // HERDR_SOCKET_PATH naming the socket of its server (revier.Encloser).
+// herdr refuses to nest from the HERDR_ENV it inherits, whatever the
+// terminal, so a check of the environment alone follows herdr's own rule:
+// unlike tmux, a terminal started from a pane is refused too.
 func (h *Host) Encloses(context.Context) (bool, error) {
 	socket := os.Getenv("HERDR_SOCKET_PATH")
 	return os.Getenv("HERDR_PANE_ID") != "" && socket != "" && socket == h.socket(), nil
