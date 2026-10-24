@@ -18,3 +18,6 @@ with the correct form.
   [OVERVIEW.md](OVERVIEW.md#finding-things) has the search. Flag a number on
   any other fact: the comment states that fact in its own words, with no
   number.
+- **Decision citation, outside Go**: a commit message or a PR body cites a
+  decision as `decisions.md Dnn`, and only for a fact that its entry or the
+  design text tagged `(Dnn)` carries. Flag any other citation.

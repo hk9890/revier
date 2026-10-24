@@ -736,3 +736,12 @@ more harnesses than revier has probes for. The host passes both on as panel
 vars, as kitty passes a harness's user vars, so the host still names no agent.
 The herdr probe reads them after the Claude probe (D57) and after every probe
 a configuration declares, so a probe written for a harness runs on herdr too.
+
+### D144 — revier trusts the programs that run as its user
+
+A panel's vars, title and command come from programs that run as the user,
+and any of them can set a var a probe reads, such as herdr's agent name.
+revier takes them as they are: such a program can already do worse than show
+an agent that is not there, and a shutdown it holds back gives way to
+`--force`. A host keeps a tool's own report (D143), such as herdr's agent
+detection, apart from what any client can set, where the tool keeps them apart.
