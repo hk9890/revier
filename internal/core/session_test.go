@@ -104,6 +104,52 @@ func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
 	}
 }
 
+// A save records the harness the probe read in the panel, not the probe's own
+// name, for the agent of the instance and of a tab target alike: the herdr
+// probe claims any agent herdr detected, such as codex.
+func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty",
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "codex"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "codex", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
+	)
+	probe := &hosttest.FakeProbe{Harness: "herdr", State: revier.AgentState{Harness: "codex", Status: revier.StatusIdle}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+	targets := s.Projects[0].Targets
+	if len(targets) != 2 {
+		t.Fatalf("targets = %+v, want home and the tickets tab", targets)
+	}
+	for _, target := range targets {
+		if !slices.Equal(target.Agents, []session.Agent{{Harness: "codex"}}) {
+			t.Errorf("%s agents = %+v, want the one codex", target.Name, target.Agents)
+		}
+	}
+}
+
+// A probe that can resume is recorded by its name whatever harness it reads:
+// a restore finds the probe that resumes the conversation by that name.
+func TestSessionRecordsAResumableProbeByItsName(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", agent("1", "first", "/a"))
+	probe := resumable()
+	probe.State = revier.AgentState{Harness: "claude-code", Status: revier.StatusIdle}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+	want := []session.Agent{{Harness: "claude", Session: "first", Dir: "/a"}}
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
+		t.Errorf("agents = %+v, want %+v", got, want)
+	}
+}
+
 // A project with nothing open is not in the file: restoring it would open a
 // workspace the save did not have.
 func TestSessionLeavesOutAProjectWithNothingOpen(t *testing.T) {

@@ -30,7 +30,7 @@ type surface struct {
 	targets   []revier.Target                  // the shared targets, as config.toml holds them
 	usable    []map[string]any                 // the shared targets a project file gets
 	err       error                            // what the footer shows now, for a press that leaves it
-	raises    int                              // Model.raises, which a go carries to its answer
+	errands   int                              // Model.errands, which a go carries to its answer
 	list      int                              // the columns the list has
 	pane      int                              // the columns the pane's text has
 	page      int                              // the list rows on the screen at once
@@ -40,7 +40,7 @@ func (m Model) surface() surface {
 	return surface{
 		theme: *m.theme, spun: m.spun(), keys: m.keys, core: m.core, stateRoot: m.stateRoot,
 		views: m.views, surveyed: m.surveyed, attached: m.attached, projects: m.projects, targets: m.targets, usable: m.usable,
-		actions: m.actions, shared: m.shared, tkeys: m.tkeys, err: m.err, raises: m.raises,
+		actions: m.actions, shared: m.shared, tkeys: m.tkeys, err: m.err, errands: m.errands,
 		list: m.listWidth(), pane: m.paneCols() - paneChrome, page: m.listPage(),
 	}
 }

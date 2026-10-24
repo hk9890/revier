@@ -170,7 +170,8 @@ type Model struct {
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
-	raises    int                              // the times the popup was raised; a go hides it only when it was not raised since the press
+	errands   int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
+	raises    int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
 	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
@@ -435,11 +436,11 @@ func spin() tea.Cmd {
 // result. An activation wrote what it learned through the ledger, and the
 // surface takes state in on the update loop. went is a press that brought a
 // target or an agent to the front, not an action that had the terminal.
-// raises is Model.raises at the press.
+// errands is Model.errands at the press.
 type actedMsg struct {
-	err    error
-	went   bool
-	raises int
+	err     error
+	went    bool
+	errands int
 }
 
 // Init surveys immediately; the timer starts once the first survey answers.
@@ -900,13 +901,21 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.FocusMsg:
 		refocused := m.blurred
 		m.blurred = false
+		// A raise, also of a popup still on the screen, is the next errand.
+		m.errands++
 		// The raise: the files again, then one survey, then the chain as
 		// before. A chain still running while hidden goes on by itself.
 		if m.hidden {
 			// The surface opens on the projects, a raise included: the press
-			// that raises it is the one that opened it (decisions.md D110).
+			// that raises it is the one that opened it (decisions.md D110). A
+			// delete, or a close a del planned, still asked from before the
+			// hide is not asked again, nor once a plan still out lands.
 			m.hidden, m.agents.shown = false, false
 			m.raises++
+			m.confirm, m.ctarget = "", ""
+			if m.shut.one && !m.shut.running {
+				m.shutBack()
+			}
 			m.offerResume()
 			m.askAgain()
 			m.mirror.restart()
@@ -989,8 +998,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A press that brought a target or an agent to the front is done
 		// with the popup: it leaves the screen, and with it the refresh
 		// (decisions.md D129). A failure stays on the screen to be read, and
-		// a popup raised again since the press is the user's next errand.
-		if msg.went && msg.err == nil && m.popup && !m.hidden && msg.raises == m.raises {
+		// a raise, a press, a click or a wheel turn since the go is the
+		// user's next errand: a delete asked after it keeps the popup up to
+		// be answered.
+		if msg.went && msg.err == nil && m.popup && !m.hidden && msg.errands == m.errands {
 			return m, m.hide(true)
 		}
 		return m, nil
@@ -1021,6 +1032,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.goTarget(msg.project, msg.home)
 	case keyPress:
+		m.errands++
 		return m.keyIn(msg)
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
@@ -1031,8 +1043,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setKeys()
 		return m, nil
 	case tea.PasteMsg:
+		m.errands++
 		return m.keyIn(pastedText(msg.Content))
 	case tea.MouseMsg:
+		switch msg.(type) {
+		case tea.MouseClickMsg, tea.MouseWheelMsg:
+			m.errands++
+		}
 		if m.walking() {
 			m.press, m.sel = nil, selection{}
 			return m, nil
@@ -1454,14 +1471,14 @@ func (m Model) goRow(i int) tea.Cmd {
 	}
 	row := rows[i]
 	if ref := row.attached; !ref.IsZero() {
-		c, raises := m.core, m.raises
+		c, errands := m.core, m.errands
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)
 			logging.Op("focus attached", start, err, "ref", ref)
-			return actedMsg{err: err, went: true, raises: raises}
+			return actedMsg{err: err, went: true, errands: errands}
 		}
 	}
 	v, _ := m.selected()
@@ -1480,12 +1497,12 @@ func (m Model) goRow(i int) tea.Cmd {
 // Enter on a row of the pane and a target key on the list are the same
 // operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
-	c, raises := m.core, m.raises
+	c, errands := m.core, m.errands
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
 		_, _, err := c.ActivateWaiting(ctx, p, name, nil)
-		return actedMsg{err: err, went: true, raises: raises}
+		return actedMsg{err: err, went: true, errands: errands}
 	}
 }
 

@@ -109,9 +109,9 @@ type Target struct {
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
-// Agent is one agent: which probe claimed it, and what that probe could say
-// about its conversation. An agent with neither holds its place in the order,
-// so the agents after it keep theirs.
+// Agent is one agent: the harness its probe named, and what that probe could
+// say about its conversation. An agent with neither holds its place in the
+// order, so the agents after it keep theirs.
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`

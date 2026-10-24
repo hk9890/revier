@@ -116,12 +116,13 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 // which the herdr probe reads. Any client can set a token, so a token of the
 // same name does not stand in for herdr's detection.
 func vars(p pane) map[string]string {
-	if p.Agent == "" {
-		return p.Tokens
-	}
 	out := map[string]string{}
 	maps.Copy(out, p.Tokens)
-	out[agentVar], out[statusVar] = p.Agent, p.AgentStatus
+	delete(out, agentVar)
+	delete(out, statusVar)
+	if p.Agent != "" {
+		out[agentVar], out[statusVar] = p.Agent, p.AgentStatus
+	}
 	return out
 }
 

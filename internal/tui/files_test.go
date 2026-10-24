@@ -183,6 +183,51 @@ func TestDeleteDeclinedOnTheConfirmClosesNothing(t *testing.T) {
 	}
 }
 
+// A raise drops the confirm of a close and delete still asked from before the
+// hide, as it drops a delete question: the first key on the raised popup
+// closes and deletes nothing.
+func TestARaiseDropsACloseAndDeleteAskedBeforeTheHide(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:alpha", "sh")
+	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m, cmd := press(m, "alt+d")
+	m = run(m, cmd)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close and delete alpha?") {
+		t.Fatalf("subtitle = %q, want the confirm naming the delete", sub)
+	}
+
+	m = m.Raised()
+	if sub := lines(m)[2]; strings.Contains(sub, "Close and delete alpha?") {
+		t.Errorf("subtitle = %q after the raise, want the confirm gone", sub)
+	}
+	m, cmd = press(m, "enter")
+	if cmd != nil {
+		run(m, cmd)
+	}
+	if len(rt.Closed) != 0 {
+		t.Errorf("runtime closed %v on the first key after the raise, want nothing", rt.Closed)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "alpha.toml")); err != nil {
+		t.Errorf("alpha.toml went on the first key after the raise: %v", err)
+	}
+}
+
+// The plan of a close and delete asked before the hide asks nothing when it
+// lands after the raise: its press is no longer the last.
+func TestARaiseDropsACloseAndDeletePlannedBeforeTheHide(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:alpha", "sh")
+	projects, _ := onDisk(t, []string{"alpha"}, nil, nil)
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m, plan := press(m, "alt+d")
+
+	m = run(m.Raised(), plan)
+	if sub := lines(m)[2]; strings.Contains(sub, "Close and delete alpha?") {
+		t.Errorf("subtitle = %q after the plan landed past the raise, want no confirm", sub)
+	}
+}
+
 // The pane shows where a project was cloned from.
 func TestDetailPaneShowsTheGitURL(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
