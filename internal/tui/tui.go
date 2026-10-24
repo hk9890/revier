@@ -904,8 +904,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// before. A chain still running while hidden goes on by itself.
 		if m.hidden {
 			// The surface opens on the projects, a raise included: the press
-			// that raises it is the one that opened it (decisions.md D110).
+			// that raises it is the one that opened it (decisions.md D110). A
+			// delete still asked from before the hide is not asked again.
 			m.hidden, m.agents.shown = false, false
+			m.confirm, m.ctarget = "", ""
 			m.raises++
 			m.offerResume()
 			m.askAgain()

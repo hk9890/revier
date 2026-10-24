@@ -50,11 +50,12 @@ func TestTheProbeMapsHerdrsStates(t *testing.T) {
 }
 
 // A pane herdr named an agent in carries it in its vars, beside its tokens; a
-// pane with no agent carries its tokens alone.
+// pane with no agent carries its tokens alone, without the tokens a client
+// set under the names of herdr's detection.
 func TestAPaneCarriesTheAgentHerdrNamedInIt(t *testing.T) {
 	result := `{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"home"}],"panes":[
 		{"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1","agent":"codex","agent_status":"blocked","tokens":{"revier_target":"agent"}},
-		{"pane_id":"w1:p2","workspace_id":"w1","tab_id":"w1:t1","agent_status":"unknown","tokens":{"revier_home":"home"}}]}}`
+		{"pane_id":"w1:p2","workspace_id":"w1","tab_id":"w1:t1","agent_status":"unknown","tokens":{"revier_home":"home","herdr_agent":"x","herdr_agent_status":"working"}}]}}`
 	h := &herdr.Host{}
 	h.SetProcRoot(t.TempDir())
 	h.SetCaller(func(_ context.Context, method string, _ any) (int, []byte, error) {
@@ -73,5 +74,8 @@ func TestAPaneCarriesTheAgentHerdrNamedInIt(t *testing.T) {
 	}
 	if _, ok := shell["herdr_agent"]; ok || shell["revier_home"] != "home" {
 		t.Errorf("shell pane vars = %v, want its token alone", shell)
+	}
+	if (&herdr.Probe{}).Match(got[0].Panels[1]) {
+		t.Error("the herdr probe claims a pane herdr named no agent in")
 	}
 }
