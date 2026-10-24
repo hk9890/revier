@@ -69,7 +69,7 @@ func TestOpenOutlivesTheKeypress(t *testing.T) {
 func TestProbeReadsTheDocumentOfAWctlThatExitsNonZero(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv")
-	doc := `{"wctl":"0.17.0","expects_extension":"17","min_extension":"16","extension":"15","compatible":false,"capabilities":["no-animation"]}`
+	doc := `{"wctl":"0.17.0","expects_extension":"17","min_extension":"16","extension":"15","compatible":false,"capabilities":["no-animation"],"message":"wctl 0.17.0 works with extension versions 16 to 17."}`
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + log + "'\n" +
 		"case \"$*\" in 'version --json') echo '" + doc + "'; exit 5;; esac\n"
 	if err := os.WriteFile(filepath.Join(dir, "wctl"), []byte(script), 0o755); err != nil {

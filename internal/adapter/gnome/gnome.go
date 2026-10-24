@@ -7,9 +7,10 @@
 // logged-in session - wctl talks to a running Shell - which is why
 // docs/TESTING.md confines the manual layer to this package.
 //
-// wctl reports no events - `wctl wait` answers once, with the first window
-// that matches, open or new - so claim-on-appear diffs successive Instances
-// calls on the refresh the TUI already runs (decisions.md D87).
+// wctl reports no events, so claim-on-appear diffs successive Instances calls
+// on the refresh the TUI already runs (decisions.md D87). `wctl wait` is no
+// event either: it answers once, with the first window that matches, open or
+// new.
 package gnome
 
 import (
@@ -380,10 +381,10 @@ func (h *Host) decodeFocused(raw []byte) (revier.TargetRef, error) {
 	}
 	var w window
 	if err := json.Unmarshal(trimmed, &w); err != nil {
-		return revier.TargetRef{}, fmt.Errorf("wctl focused --json: %w", err)
+		return revier.TargetRef{}, fmt.Errorf("wctl focused --json: %w: %s", err, trimmed)
 	}
 	if w.ID == 0 {
-		return revier.TargetRef{}, nil
+		return revier.TargetRef{}, fmt.Errorf("wctl focused --json: no window id in %s", trimmed)
 	}
 	return revier.TargetRef{
 		Host: h.Name(), ID: strconv.FormatInt(w.ID, 10), Title: w.Title,
