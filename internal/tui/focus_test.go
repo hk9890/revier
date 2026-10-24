@@ -316,6 +316,29 @@ func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	}
 }
 
+// A go that lands after the next press leaves the popup on the screen: the
+// press began the user's next errand, such as a delete still to be answered.
+func TestALateGoDoesNotHideAPopupPressedSinceThePress(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+	c.Window.(*hosttest.Fake).Add("revier", core.PopupClass)
+	projects, _ := onDisk(t, []string{"alpha", "beta"}, nil, nil)
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m = survey(m)
+	m, slow := press(m, "enter")
+	if slow == nil {
+		t.Fatal("enter on a project returned no command")
+	}
+	m, _ = press(m, "alt+d")
+
+	m, cmd := deliver(m, slow)
+	if cmd != nil {
+		t.Error("a go that landed past a press answered with a command, want none: the popup stays")
+	}
+	if f := footer(m); !strings.Contains(f, "delete alpha?") {
+		t.Errorf("footer = %q, want the delete question still asked", f)
+	}
+}
+
 // A go that landed while the popup could not hide leaves the popup where it
 // is, with its query and cursor: only Esc, which had nothing else to do,
 // quits instead.

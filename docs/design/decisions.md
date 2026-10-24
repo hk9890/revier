@@ -638,7 +638,8 @@ focus reports set the pace now: without the focus the surface and its mirror
 refresh every ten seconds and the spinner stands, and the focus regained
 surveys this machine and every linked host that answered its last round at
 once (D130). A launch still coming up keeps the second, since the survey
-claims its window (D87). A go hides the popup. Rejected: a full stop, which
+claims its window (D87). A go hides the popup, unless a raise, a press or a
+click came after it: that began the next errand. Rejected: a full stop, which
 leaves rows of any age on a second screen.
 
 ### D130 — a linked host is asked at most once in five seconds

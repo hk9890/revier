@@ -452,18 +452,18 @@ func (al *agentList) goSelected(sf surface) tea.Cmd {
 		return nil
 	}
 	al.endSearch()
-	return goAgent(sf.core, p, it.agent, sf.raises)
+	return goAgent(sf.core, p, it.agent, sf.errands)
 }
 
 // goAgent brings an agent to the front: the panel here that shows it, for a
-// link's agent too, unless the link's workspace is still coming up. raises
-// is Model.raises at the press.
-func goAgent(c *core.Core, p core.Project, agent revier.AgentView, raises int) tea.Cmd {
+// link's agent too, unless the link's workspace is still coming up. errands
+// is Model.errands at the press.
+func goAgent(c *core.Core, p core.Project, agent revier.AgentView, errands int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), core.BindWait)
 		defer cancel()
 		_, err := c.ActivateAgentWaiting(ctx, p, agent)
-		return actedMsg{err: err, went: true, raises: raises}
+		return actedMsg{err: err, went: true, errands: errands}
 	}
 }
 

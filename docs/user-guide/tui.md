@@ -122,6 +122,8 @@ kitty, and GNOME with the Window Control extension. See
 
 - The popup opens on the project of the window that had the focus.
 - When Enter or a target key brings a window to the front, the popup hides.
+  It stays when you press a key or click before the window comes up, so a
+  question you started, such as a delete, waits for your answer.
 - After a full shutdown the popup quits, so the next press starts it again
   and shows the [start dialog](#after-a-full-shutdown). When `revier shutdown`
   shut everything down while the popup was hidden, the next raise shows the
