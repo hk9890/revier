@@ -170,7 +170,7 @@ type Model struct {
 	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
 	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
-	errands   int                              // the raises, presses and clicks so far; a go hides the popup only when none came since its own press
+	errands   int                              // the raises, presses, clicks and wheel turns so far; a go hides the popup only when none came since its own press
 	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
 	surveying bool                             // a survey is out, so a focus regained starts no second one
@@ -900,15 +900,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.FocusMsg:
 		refocused := m.blurred
 		m.blurred = false
+		// A raise, also of a popup still on the screen, is the next errand.
+		m.errands++
 		// The raise: the files again, then one survey, then the chain as
 		// before. A chain still running while hidden goes on by itself.
 		if m.hidden {
 			// The surface opens on the projects, a raise included: the press
 			// that raises it is the one that opened it (decisions.md D110). A
-			// delete still asked from before the hide is not asked again.
+			// delete, or a close a del planned, still asked from before the
+			// hide is not asked again.
 			m.hidden, m.agents.shown = false, false
 			m.confirm, m.ctarget = "", ""
-			m.errands++
+			if m.shut.one && !m.shut.running {
+				m.dialog, m.shut = dialogNone, shutdown{}
+			}
 			m.offerResume()
 			m.askAgain()
 			m.mirror.restart()
@@ -991,8 +996,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A press that brought a target or an agent to the front is done
 		// with the popup: it leaves the screen, and with it the refresh
 		// (decisions.md D129). A failure stays on the screen to be read, and
-		// a raise, a press or a click since the go is the user's next errand:
-		// a delete asked after it keeps the popup up to be answered.
+		// a raise, a press, a click or a wheel turn since the go is the
+		// user's next errand: a delete asked after it keeps the popup up to
+		// be answered.
 		if msg.went && msg.err == nil && m.popup && !m.hidden && msg.errands == m.errands {
 			return m, m.hide(true)
 		}
@@ -1038,7 +1044,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.errands++
 		return m.keyIn(pastedText(msg.Content))
 	case tea.MouseMsg:
-		if _, click := msg.(tea.MouseClickMsg); click {
+		switch msg.(type) {
+		case tea.MouseClickMsg, tea.MouseWheelMsg:
 			m.errands++
 		}
 		if m.walking() {

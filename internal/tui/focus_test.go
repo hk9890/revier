@@ -290,8 +290,9 @@ func TestAGoFromThePopupHidesIt(t *testing.T) {
 	_ = m
 }
 
-// A go that lands after the user hid the popup and raised it again leaves it
-// on the screen: the user raised it for the next errand.
+// A go that lands after the popup hid and was raised again leaves it on the
+// screen, with no press since its own: the user raised it for the next
+// errand. The hide is an earlier go's, which landed after this press.
 func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	_, wm, c, projects := world(t, 2)
 	wm.Add("revier", core.PopupClass)
@@ -303,13 +304,7 @@ func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	if slow == nil {
 		t.Fatal("enter on a target returned no command")
 	}
-	m, _ = press(m, "esc") // out of the pane
-	m, hide := press(m, "esc")
-	m = run(m, hide)
-	if len(wm.Hidden) != 1 {
-		t.Fatalf("hidden = %v after esc, want the popup", wm.Hidden)
-	}
-	m, _ = update(m, tea.FocusMsg{})
+	m = m.Raised()
 
 	if _, cmd := deliver(m, slow); cmd != nil {
 		t.Error("a go that landed past the raise answered with a command, want none: the popup stays")
@@ -336,6 +331,29 @@ func TestALateGoDoesNotHideAPopupPressedSinceThePress(t *testing.T) {
 	}
 	if f := footer(m); !strings.Contains(f, "delete alpha?") {
 		t.Errorf("footer = %q, want the delete question still asked", f)
+	}
+}
+
+// A go that lands after a wheel turn, or after the trigger key brought the
+// popup still on the screen back to the front, leaves the popup there.
+func TestALateGoDoesNotHideAPopupScrolledOrRefocusedSinceThePress(t *testing.T) {
+	for name, since := range map[string]tea.Msg{
+		"wheel": tea.MouseWheelMsg{X: 2, Y: 4, Button: tea.MouseWheelDown},
+		"focus": tea.FocusMsg{},
+	} {
+		_, wm, c, projects := world(t, 2)
+		wm.Add("revier", core.PopupClass)
+		m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+		m = survey(m)
+		m, slow := press(m, "enter")
+		if slow == nil {
+			t.Fatal("enter on a project returned no command")
+		}
+		m, _ = update(m, tea.BlurMsg{})
+		m, _ = update(m, since)
+		if _, cmd := deliver(m, slow); cmd != nil {
+			t.Errorf("%s: a go that landed past it answered with a command, want none: the popup stays", name)
+		}
 	}
 }
 
