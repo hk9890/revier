@@ -287,8 +287,12 @@ type agentPanel struct {
 
 // harnessIn is the harness the survey read in the panel, else the name of the
 // probe that claimed it. A probe can name another harness than its own: the
-// herdr probe reports the agent herdr detected.
+// herdr probe reports the agent herdr detected. A probe that can resume keeps
+// its name, which is what a restore finds it by.
 func harnessIn(v revier.ProjectView, inst revier.Instance, panel revier.Panel, probe revier.AgentProbe) string {
+	if _, ok := probe.(revier.Resumable); ok {
+		return probe.Name()
+	}
 	for _, a := range v.Agents {
 		if a.Panel == panel.ID && key(a.Ref) == key(inst.Ref) && a.State.Harness != "" {
 			return a.State.Harness

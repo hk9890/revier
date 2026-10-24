@@ -295,6 +295,9 @@ func TestARaiseDropsADeleteAskedBeforeTheHide(t *testing.T) {
 	}
 
 	m = m.Raised()
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down") {
+		t.Fatalf("subtitle = %q after the raise, want the start dialog", sub)
+	}
 	if f := footer(m); strings.Contains(f, "y: delete") {
 		t.Errorf("footer = %q after the raise, want no delete question", f)
 	}

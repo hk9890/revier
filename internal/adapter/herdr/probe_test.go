@@ -72,7 +72,7 @@ func TestAPaneCarriesTheAgentHerdrNamedInIt(t *testing.T) {
 	if agent["herdr_agent"] != "codex" || agent["herdr_agent_status"] != "blocked" || agent["revier_target"] != "agent" {
 		t.Errorf("agent pane vars = %v, want codex, blocked and its token", agent)
 	}
-	if _, ok := shell["herdr_agent"]; ok || shell["revier_home"] != "home" {
+	if len(shell) != 1 || shell["revier_home"] != "home" {
 		t.Errorf("shell pane vars = %v, want its token alone", shell)
 	}
 	if (&herdr.Probe{}).Match(got[0].Panels[1]) {
