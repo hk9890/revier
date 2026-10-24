@@ -36,6 +36,9 @@ Code, revier shows the state herdr detects, unless a
    revier open demo --attach
    ```
 
+   In a pane of the same herdr server, the command moves herdr to the
+   workspace and attaches nothing, because herdr does not nest in itself.
+
 ## What does not work
 
 - A focus moves every terminal attached to herdr: herdr cannot move one alone.

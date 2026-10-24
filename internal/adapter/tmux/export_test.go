@@ -13,3 +13,9 @@ var KindOf = kindOf
 func (h *Host) SetRunner(fn func(ctx context.Context, args ...string) (string, error)) {
 	h.run = fn
 }
+
+// SetTTY replaces the terminal on standard input, so the tests need no
+// terminal.
+func (h *Host) SetTTY(tty string) {
+	h.tty = func() string { return tty }
+}

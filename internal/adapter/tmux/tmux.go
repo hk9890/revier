@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,6 +67,10 @@ type Host struct {
 	// run runs tmux with the arguments and returns its standard output.
 	// Tests replace it; production leaves it nil and runs the tmux on PATH.
 	run func(ctx context.Context, args ...string) (string, error)
+
+	// tty returns the terminal on this process's standard input, or "" for
+	// none. Tests replace it; production leaves it nil and reads /proc.
+	tty func() string
 }
 
 func (h *Host) Name() string { return "tmux" }
@@ -774,6 +779,38 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 		argv = append(argv, "-L", h.Socket)
 	}
 	return append(argv, "attach-session", "-t", sessionOf(ref.ID)), nil
+}
+
+// Encloses reports whether tmux refuses the attach as nested
+// (revier.Encloser). tmux refuses it only when $TMUX is set and the client's
+// terminal is a pane of the server. A terminal or an editor started from a
+// pane inherits $TMUX but has a terminal of its own, so from there the attach
+// works. The panes come from the host's own server, so a pane of another
+// server does not match.
+func (h *Host) Encloses(ctx context.Context) (bool, error) {
+	tty := h.stdinTTY()
+	if os.Getenv("TMUX") == "" || tty == "" {
+		return false, nil
+	}
+	out, err := h.tmux(ctx, "list-panes", "-a", "-F", "#{pane_tty}")
+	if err != nil {
+		if noServer(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return slices.Contains(strings.Split(out, "\n"), tty), nil
+}
+
+func (h *Host) stdinTTY() string {
+	if h.tty != nil {
+		return h.tty()
+	}
+	tty, err := os.Readlink("/proc/self/fd/0")
+	if err != nil || !strings.HasPrefix(tty, "/dev/") {
+		return ""
+	}
+	return tty
 }
 
 // SendText types text into a pane. -l sends it as characters, so no word of

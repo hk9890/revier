@@ -386,6 +386,16 @@ func (h *Host) AttachCommand(ref revier.TargetRef) ([]string, error) {
 	return []string{"herdr"}, nil
 }
 
+// Encloses reports whether herdr refuses the attach as nested, and the
+// focus has already moved the host's server (revier.Encloser). herdr starts
+// each pane with HERDR_ENV and refuses to start wherever it is set, whatever
+// the terminal, so a terminal started from a pane is refused too. A pane of
+// another server still execs the attach, and herdr refuses it.
+func (h *Host) Encloses(context.Context) (bool, error) {
+	socket := os.Getenv("HERDR_SOCKET_PATH")
+	return os.Getenv("HERDR_ENV") != "" && socket != "" && socket == h.socket(), nil
+}
+
 // own refuses a ref this host did not produce.
 func (h *Host) own(ref revier.TargetRef) error {
 	if ref.Host != h.Name() || !strings.Contains(ref.ID, "/") {

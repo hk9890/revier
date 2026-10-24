@@ -117,12 +117,12 @@ func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {
 	a := &app{core: &core.Core{Runtime: hosttest.NewRuntime("kitty")}}
-	err := a.attach(revier.TargetRef{Host: "kitty", ID: "1"})
+	err := a.attach(context.Background(), revier.TargetRef{Host: "kitty", ID: "1"})
 	if err == nil || !strings.Contains(err.Error(), "kitty") || !strings.Contains(err.Error(), "tmux") {
 		t.Errorf("err = %v, want the runtime named and tmux suggested", err)
 	}
 	a = &app{core: &core.Core{}}
-	if err := a.attach(revier.TargetRef{}); err == nil {
+	if err := a.attach(context.Background(), revier.TargetRef{}); err == nil {
 		t.Error("want a refusal with no runtime")
 	}
 }
