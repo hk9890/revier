@@ -63,11 +63,12 @@ func TestInstancesReadARecordedSnapshot(t *testing.T) {
 	var agent []string
 	for _, p := range named.Panels {
 		if p.Vars["revier_target"] == "agent" {
-			agent = append(agent, fmt.Sprintf("%s %s %s %d", p.ID, p.Tab, p.Vars["revier_home"], p.PID))
+			agent = append(agent, fmt.Sprintf("%s %s %s %d %s %s", p.ID, p.Tab, p.Vars["revier_home"], p.PID,
+				p.Vars["herdr_agent"], p.Vars["herdr_agent_status"]))
 		}
 	}
-	if len(named.Panels) != 3 || len(agent) != 1 || agent[0] != "w1:p2 w1:t2 home 102" {
-		t.Errorf("panels = %+v, want three, one of them w1:p2 in w1:t2 with its tokens, running 102", named.Panels)
+	if len(named.Panels) != 3 || len(agent) != 1 || agent[0] != "w1:p2 w1:t2 home 102 claude idle" {
+		t.Errorf("panels = %+v, want three, one of them w1:p2 in w1:t2 with its tokens, running 102, the claude herdr named in it", named.Panels)
 	}
 
 	focused, err := h.Focused(context.Background())

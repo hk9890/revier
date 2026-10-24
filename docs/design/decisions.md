@@ -728,3 +728,11 @@ One herdr server holds every workspace, as a tmux server holds every session
 (D70): a workspace is an instance, its tabs are tabs, its panes are panels. A
 user renames a workspace in herdr freely, so the title is a token revier sets,
 and the label where there is none.
+
+### D143 — herdr's own agent detection reaches a probe as panel vars
+
+Extends D119. herdr names the agent in each of its panes and its state, for
+more harnesses than revier has probes for. The host passes both on as panel
+vars, as kitty passes a harness's user vars, so the host still names no agent.
+The herdr probe reads them after the Claude probe (D57) and after every probe
+a configuration declares, so a probe written for a harness runs on herdr too.

@@ -42,14 +42,16 @@ func windowAdapters() map[string]revier.WindowController {
 	}
 }
 
-// probes lists the compiled-in probes first, then the ones config declares
-// as subprocesses, so a compiled probe wins for the harness it knows.
+// probes lists the Claude probe, then the ones config declares as
+// subprocesses, then the probes that know less than a probe a user wrote:
+// herdr's, which takes herdr's word for an agent and knows no harness itself,
+// and opencode's, which knows no state.
 func probes(cfg *config.Config) []revier.AgentProbe {
-	out := []revier.AgentProbe{&claude.Probe{}, &opencode.Probe{}}
+	out := []revier.AgentProbe{&claude.Probe{}}
 	for _, pr := range cfg.Probes {
 		out = append(out, execprobe.New(pr.Name, pr.Exec))
 	}
-	return out
+	return append(out, &herdr.Probe{}, &opencode.Probe{})
 }
 
 // preference order used when config names none.

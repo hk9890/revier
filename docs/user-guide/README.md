@@ -41,4 +41,4 @@ once. Read the other pages when you need them.
 | Ghostty: revier has no host for it | [Ghostty](integrations/ghostty.md) |
 | GNOME: window targets and desktop keys | [GNOME](integrations/gnome.md) |
 | Claude Code: the agent revier reads the most from | [Claude Code](integrations/claude-code.md) |
-| opencode: recognised, but its state is unknown | [opencode](integrations/opencode.md) |
+| opencode: its state is unknown outside herdr | [opencode](integrations/opencode.md) |

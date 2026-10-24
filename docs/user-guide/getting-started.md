@@ -55,6 +55,8 @@ proves the archive matches them.
   it, revier starts a kitty of its own.
 - **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
   to use tmux; see [tmux](integrations/tmux.md).
+- **herdr**: when kitty or tmux is also installed, tell revier to use herdr;
+  see [herdr](integrations/herdr.md).
 - **Ghostty**: revier cannot drive it; run tmux in it, as
   [Ghostty](integrations/ghostty.md) shows.
 

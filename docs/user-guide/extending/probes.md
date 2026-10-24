@@ -1,7 +1,8 @@
 # Agent probes
 
 A probe tells revier the state of a coding agent that revier does not know.
-revier knows Claude Code and opencode. For another agent, write a small
+revier knows Claude Code, opencode, and in herdr every agent herdr
+detects. For another agent, write a small
 program: it reads one panel as JSON on stdin and prints one state as JSON.
 On this machine, a probe reads the runtime's panels. For a link,
 declare and install the probe on the host. There it reads the process that
@@ -28,8 +29,8 @@ exec = "~/bin/aider-probe"
 
 A probe named `aider` reads the panels whose program is `aider` (with any
 directory), or `node`, `bun`, `deno` or `python…` with `aider` as the first
-argument that is not a flag. The built-in probes go first, then yours in file
-order.
+argument that is not a flag. The Claude Code probe goes first, then yours in
+file order, then the others.
 
 ## Input and output
 

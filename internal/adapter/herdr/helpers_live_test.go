@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // server starts a herdr server of this test's own, headless, with its config,
@@ -103,4 +104,25 @@ func ctx(t *testing.T) context.Context {
 	c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
 	return c
+}
+
+// waitFor polls the listing until ok accepts it: a pane's process starts
+// after the request that made the pane returns.
+func waitFor(t *testing.T, h *herdr.Host, ok func([]revier.Instance) bool) {
+	t.Helper()
+	c := ctx(t)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got, err := h.Instances(c)
+		if err != nil {
+			t.Fatalf("Instances: %v", err)
+		}
+		if ok(got) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("instances never settled: %+v", got)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }

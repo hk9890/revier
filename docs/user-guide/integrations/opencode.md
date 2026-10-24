@@ -1,9 +1,9 @@
 # opencode
 
 revier finds opencode in your workspace panels and counts it as an agent, but
-its state is always `unknown`. opencode shows nothing a panel can read: its
-title, its variables and its process stay the same when it works and when it
-is idle. revier shows it as present rather than guess.
+outside herdr its state is `unknown`. opencode shows nothing a panel can read:
+its title, its variables and its process stay the same when it works and when
+it is idle. revier shows it as present rather than guess.
 
 ## What you need
 
@@ -27,13 +27,14 @@ To make it a workspace's agent, put it in the agent panel's `command` (see
 
 ## What does not work
 
+- `revier agent read` without `--screen`
+  ([Agents](../agents.md#drive-an-agent-from-a-script)).
+
+Outside herdr:
+
 - State: working, needs you, idle. An opencode agent never sorts first as one
   that needs you.
 - `revier agent prompt`: it refuses an agent in state `unknown`
   ([Agents](../agents.md#drive-an-agent-from-a-script)). Use `send-keys`.
 - `revier agent wait`: it ends only at its timeout.
-- `revier agent read` without `--screen`
-  ([Agents](../agents.md#drive-an-agent-from-a-script)).
 - `revier shutdown` does not wait for an opencode turn to end.
-- A `[[probe]]` named `opencode`: the built-in probe claims the panel first,
-  so yours never runs.

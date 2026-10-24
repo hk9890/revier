@@ -67,8 +67,8 @@ The config screen (alt+c) shows which hosts revier uses.
 - Claude Code needs the version
   [integrations/claude-code.md](integrations/claude-code.md#what-you-need)
   names.
-- opencode reports no state. See [integrations/opencode.md](integrations/opencode.md).
-- Any other harness needs a [probe](extending/probes.md).
+- Outside herdr, opencode reports no state. See [integrations/opencode.md](integrations/opencode.md).
+- Outside herdr, any other harness needs a [probe](extending/probes.md).
 
 When a probe fails, the agent shows `unknown` and the log has the reason.
 

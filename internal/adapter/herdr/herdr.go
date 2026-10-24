@@ -1,5 +1,6 @@
 // Package herdr implements a Runtime host over herdr, a terminal multiplexer
-// for coding agents (https://github.com/herdrdev/herdr).
+// for coding agents (https://github.com/herdrdev/herdr), and the probe that
+// reads herdr's own agent detection.
 //
 // An instance is a herdr workspace, the way a tmux instance is a session: its
 // tabs are the tabs, and the panes of every tab are the panels a probe reads.
@@ -11,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os/exec"
 	"strconv"
 
@@ -101,13 +103,26 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			ID:      revier.PanelID(p.ID),
 			Kind:    kindOf(command),
 			Title:   p.TerminalTitle,
-			Vars:    p.Tokens,
+			Vars:    vars(p),
 			PID:     fg,
 			Command: command,
 			Tab:     p.TabID,
 		})
 	}
 	return instances, nil
+}
+
+// vars is a pane's tokens, and the agent herdr detected in it with its state,
+// which the herdr probe reads. Any client can set a token, so a token of the
+// same name does not stand in for herdr's detection.
+func vars(p pane) map[string]string {
+	if p.Agent == "" {
+		return p.Tokens
+	}
+	out := map[string]string{}
+	maps.Copy(out, p.Tokens)
+	out[agentVar], out[statusVar] = p.Agent, p.AgentStatus
+	return out
 }
 
 // Focused is the workspace the server shows by default: the one the client

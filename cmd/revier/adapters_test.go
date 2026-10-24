@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -76,5 +77,18 @@ func TestSelectWindowWithNoDefaultsAvailable(t *testing.T) {
 	}
 	if got != nil {
 		t.Fatalf("selected %v, want nil", got)
+	}
+}
+
+// A probe the configuration declares runs before every compiled-in probe but
+// Claude Code's: herdr's takes herdr's word and opencode's knows no state, so
+// a probe written for the same harness knows more.
+func TestAConfiguredProbeRunsBeforeHerdrAndOpencode(t *testing.T) {
+	var names []string
+	for _, p := range probes(&config.Config{Probes: []config.Probe{{Name: "codex", Exec: "codex-probe"}}}) {
+		names = append(names, p.Name())
+	}
+	if got, want := strings.Join(names, " "), "claude codex herdr opencode"; got != want {
+		t.Errorf("probes = %q, want %q", got, want)
 	}
 }

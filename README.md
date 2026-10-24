@@ -92,8 +92,9 @@ Early, but usable. Linux only.
 
 - **Terminals:** kitty, tmux and herdr. Ghostty works through tmux.
 - **Desktop:** GNOME, for window targets and desktop keys.
-- **Agents:** Claude Code 2.1.212 or newer reports its state. opencode is
-  recognised but reports no state. An external probe adds any other tool.
+- **Agents:** Claude Code 2.1.212 or newer reports its state. In herdr, every
+  agent herdr detects reports one; elsewhere opencode reports none. An external
+  probe adds any other tool.
 - **Commands:** every command in the
   [command line reference](docs/user-guide/cli.md).
 
