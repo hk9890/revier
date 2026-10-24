@@ -104,7 +104,7 @@ func TestDecodeKeepsOnlyNormalWindows(t *testing.T) {
 // Nothing focused is a normal desktop state, so it must not error: the survey
 // still has to render.
 func TestDecodeFocusedEmpty(t *testing.T) {
-	for _, raw := range []string{"", "null", "[]", "  \n", "No window focused\n"} {
+	for _, raw := range []string{"null\n", "No window focused\n"} {
 		ref, err := (&gnome.Host{}).DecodeFocused([]byte(raw))
 		if err != nil {
 			t.Errorf("DecodeFocused(%q) errored: %v", raw, err)
@@ -120,15 +120,5 @@ func TestDecodeFocusedEmpty(t *testing.T) {
 func TestDecodeFocusedRejectsOtherText(t *testing.T) {
 	if _, err := (&gnome.Host{}).DecodeFocused([]byte("Error: extension not enabled\n")); err == nil {
 		t.Error("DecodeFocused took text that is not JSON for a window")
-	}
-}
-
-func TestDecodeFocusedArrayForm(t *testing.T) {
-	ref, err := (&gnome.Host{}).DecodeFocused([]byte(`[{"id":7,"title":"x"}]`))
-	if err != nil {
-		t.Fatalf("DecodeFocused: %v", err)
-	}
-	if ref.ID != "7" {
-		t.Errorf("ref = %+v, want id 7", ref)
 	}
 }

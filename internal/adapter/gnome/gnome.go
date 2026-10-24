@@ -7,9 +7,9 @@
 // logged-in session - wctl talks to a running Shell - which is why
 // docs/TESTING.md confines the manual layer to this package.
 //
-// wctl has no event or watch command, so claim-on-appear diffs
-// successive Instances calls on the refresh the TUI already runs
-// (decisions.md D87).
+// wctl reports no events - `wctl wait` answers once, with the first window
+// that matches, open or new - so claim-on-appear diffs successive Instances
+// calls on the refresh the TUI already runs (decisions.md D87).
 package gnome
 
 import (
@@ -368,27 +368,19 @@ func (h *Host) Focused(ctx context.Context) (revier.TargetRef, error) {
 	return h.decodeFocused(raw)
 }
 
-// noFocus is what wctl 0.13 prints when no window has the focus: plain text
-// with exit 0, with --json too.
+// noFocus is what wctl 0.16 and older print when no window has the focus:
+// plain text with exit 0, with --json too. wctl 0.17 prints null.
 const noFocus = "No window focused"
 
 func (h *Host) decodeFocused(raw []byte) (revier.TargetRef, error) {
 	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte(noFocus)) {
+	if bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte(noFocus)) {
 		// Nothing focused is a normal desktop state, not a failure.
 		return revier.TargetRef{}, nil
 	}
 	var w window
 	if err := json.Unmarshal(trimmed, &w); err != nil {
-		// wctl focused --json may answer with a single-element array.
-		var list []window
-		if err2 := json.Unmarshal(trimmed, &list); err2 != nil {
-			return revier.TargetRef{}, fmt.Errorf("wctl focused --json: %w", err)
-		}
-		if len(list) == 0 {
-			return revier.TargetRef{}, nil
-		}
-		w = list[0]
+		return revier.TargetRef{}, fmt.Errorf("wctl focused --json: %w", err)
 	}
 	if w.ID == 0 {
 		return revier.TargetRef{}, nil

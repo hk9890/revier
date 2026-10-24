@@ -28,7 +28,7 @@ func TestProbeNeedsARecentWctlAndALoadedExtension(t *testing.T) {
 		},
 		{
 			name:   "an extension outside the range wctl was built for",
-			doc:    `{"wctl":"0.17.0","expects_extension":"17","extension":"16","compatible":false,"capabilities":[],"message":"wctl 0.17.0 works with extension versions 16 to 17."}`,
+			doc:    `{"wctl":"0.17.0","expects_extension":"17","min_extension":"16","extension":"15","compatible":false,"capabilities":[],"message":"wctl 0.17.0 works with extension versions 16 to 17."}`,
 			code:   5,
 			usable: true,
 		},
