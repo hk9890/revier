@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
@@ -273,5 +274,32 @@ func TestARaisedPopupOffersTheRestoreOfAShutdownRecordedWhileHidden(t *testing.T
 	m = m.Raised()
 	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
 		t.Errorf("subtitle = %q after the raise, want the start dialog", sub)
+	}
+}
+
+// A delete still asked when the popup hid is not asked on the raise that
+// offers the restore: the first key goes to the start dialog.
+func TestARaiseDropsADeleteAskedBeforeTheHide(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	projects, _ := onDisk(t, []string{"alpha"}, nil, nil)
+	root := stateWith(t, nil)
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+d")
+	if f := footer(m); !strings.Contains(f, "y: delete") {
+		t.Fatalf("footer = %q, want the delete question", f)
+	}
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	m = m.Raised()
+	if f := footer(m); strings.Contains(f, "y: delete") {
+		t.Errorf("footer = %q after the raise, want no delete question", f)
+	}
+	m, _ = press(m, "esc")
+	if sub := lines(m)[2]; strings.Contains(sub, "revier was shut down") {
+		t.Errorf("subtitle = %q, want the start dialog closed by the first key", sub)
 	}
 }
