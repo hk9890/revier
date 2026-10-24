@@ -8,13 +8,11 @@ Each section is also the text of its release on the
 
 ## v0.20.0
 
-- **Action required: on GNOME, revier needs `wctl` 0.16.0 or later.** Before,
-  revier used GNOME when `wctl list --json` answered, with any `wctl`
-  version. Now revier asks `wctl version --json`, and uses GNOME only when
-  `wctl` is 0.16.0 or later and a Window Control extension runs. With an older
-  `wctl` and no `[hosts] window`, revier runs with no window host and says
-  nothing: no window targets, no raise, no return home, no `place` and no
-  popup. With `[hosts] window = ["gnome"]`, commands stop with
+- **Action required: on GNOME, revier needs `wctl` 0.16.0 or later.** revier
+  uses GNOME only when `wctl` is 0.16.0 or later and a Window Control
+  extension runs. With an older `wctl` and no `[hosts] window`, revier now
+  runs with no window host and says nothing: no window targets, no raise, no
+  return home, no `place` and no popup. With `[hosts] window = ["gnome"]`, commands stop with
   `no configured window host is usable: gnome: wctl X is older than 0.16.0, the oldest revier drives`.
   To fix it, update the Window Control extension and `wctl` to 0.16.0 or
   later, then log out and in. Then check that `wctl version --json` shows
@@ -27,9 +25,9 @@ Each section is also the text of its release on the
   runtime order is now kitty, tmux, herdr: a machine with only herdr uses it.
   When kitty or tmux is installed, set `[hosts] runtime = ["herdr"]`.
   `revier open --attach` and tab targets work with herdr, and `revier doctor`
-  knows herdr. To let `revier session restore` resume the agents, set
-  `resume_agents_on_restore = false` under `[session]` in herdr's own
-  `config.toml`. Some things do not work with herdr:
+  knows herdr. So that `revier session restore` resumes the agents and herdr
+  does not, set `resume_agents_on_restore = false` under `[session]` in
+  herdr's own `config.toml`. Some things do not work with herdr:
   - A focus moves every terminal that is attached to herdr. Attach one
     terminal.
   - revier does not raise the desktop window that shows herdr, a second press
@@ -63,11 +61,11 @@ Each section is also the text of its release on the
   - ctrl+c lets the running step finish, then stops. revier counts and lists
     the steps it did not reach, and the TUI stays open to show the result. A
     restore stopped after its last target says `return home cancelled`. A save
-    stopped by ctrl+c writes no incomplete session. del and alt+del stopped
-    during their last close still delete the entry.
+    stopped by ctrl+c writes no incomplete session. An alt+del stopped
+    during its last close still deletes the entry.
   - When a step hangs, a second ctrl+c quits at once and also stops the
     command that the step waits for, such as kitten, tmux, ssh, `wctl` or
-    claude. A normal quit does not stop a command that you just started.
+    claude.
 - **After a full shutdown, the next start offers to restore it.** Before,
   the next start offered nothing, the restore was three keys deep on the
   sessions screen, and the TUI stayed open after the shutdown. Now revier
@@ -94,8 +92,10 @@ Each section is also the text of its release on the
   `revier session list` has a REASON column: `shutdown`, `project closed` or
   `saved by hand`. The TUI sessions screen shows the reason where a name is
   missing. A session that an older revier saved shows `unknown`. NAME is still
-  the value that `revier session restore` accepts. A script that reads the
-  columns of `revier session list` by position sees one more column.
+  the value that `revier session restore` accepts.
+- **Action required: a script that reads `revier session list` by position
+  must read NAME from the third column.** REASON is now the second column,
+  after ID, so NAME and every column after it move one place to the right.
 - **The shutdown button moved to the sessions screen.** Before, the top line
   of the TUI had a shutdown button. Now the sessions screen (alt+s) has the
   save and shutdown buttons on its top line, and alt+q there opens the
@@ -115,16 +115,12 @@ Each section is also the text of its release on the
   opencode probe before your `[[probe]]` entries, so a `[[probe]]` named
   `opencode` never ran. Now the Claude Code probe runs first, then your
   `[[probe]]` entries in file order, then the probes that come with revier.
-- **`revier open <target> --attach` from a pane of the server that holds the
-  target focuses the target.** Before, run from a shell in a tmux or herdr
-  pane, it focused the target and then started a tmux or herdr inside that
-  pane, which refused to run and printed an error, for example
-  `nested herdr is disabled by default`. Now it focuses the target and exits
-  0. For tmux this fixes v0.19.0.
 - **A press that opens a window, and each step of a restore, end sooner.**
-  Each placed window ends about 150 ms sooner, and revier finds a new window
-  sooner. A new terminal window is now placed also when a host that it does
-  not need cannot list its windows. Before, revier did not place it.
+  Placing each window takes about 150 ms less, and revier finds a new window
+  sooner.
+- **A new terminal window is placed also when another host does not
+  answer.** Before, when one other host, such as tmux or herdr, could not
+  list what it runs, revier left the new terminal window where it opened.
 
 ## v0.19.0
 
