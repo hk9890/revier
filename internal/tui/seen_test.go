@@ -1,0 +1,156 @@
+package tui_test
+
+import (
+	"errors"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// seenWorld is world(t, 2) on a surface over root that refreshes at once, so
+// a test runs what each survey answers with: the check for an end with no
+// shutdown, and the write of what it saw. project-01's workspace holds no
+// agent, so no mirror's tick holds a test up for its second.
+func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
+	t.Helper()
+	rt, _, c, projects := world(t, 2)
+	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
+	rt.Add("session:project-01", "kitty")
+	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	return resize(m, 150, 30), rt
+}
+
+// seenSurvey is one survey with every command it answers with run and fed
+// back.
+func seenSurvey(m tui.Model) tui.Model {
+	m, cmd := deliver(m, m.Survey())
+	return run(m, cmd)
+}
+
+// seenOnDisk is what the surface last wrote under root, and whether it wrote
+// anything.
+func seenOnDisk(t *testing.T, root string) (session.Session, bool) {
+	t.Helper()
+	s, err := session.LoadSeen(root)
+	if errors.Is(err, session.ErrNoSession) {
+		return session.Session{}, false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, true
+}
+
+// forget removes what the surface wrote, so a test sees whether it writes
+// again.
+func forget(t *testing.T, root string) {
+	t.Helper()
+	if err := os.Remove(session.SeenPath(root)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A survey that finds the same as the last one written writes nothing; one
+// that finds a target opened writes again.
+func TestTheSurfaceWritesWhatItSawOnlyWhenItChanges(t *testing.T) {
+	root := t.TempDir()
+	m, rt := seenWorld(t, root)
+	m = seenSurvey(seenSurvey(m))
+	s, ok := seenOnDisk(t, root)
+	if !ok || len(s.Projects) != 1 || s.Projects[0].Name != "project-01" {
+		t.Fatalf("seen = %+v, %v, want project-01's home", s, ok)
+	}
+
+	forget(t, root)
+	m = seenSurvey(m)
+	if _, ok := seenOnDisk(t, root); ok {
+		t.Error("the same survey wrote again, want nothing written")
+	}
+
+	rt.Add("session:project-00", "kitty")
+	seenSurvey(m)
+	if s, ok := seenOnDisk(t, root); !ok || len(s.Projects) != 2 {
+		t.Errorf("seen = %+v, %v, want both projects once project-00 opened", s, ok)
+	}
+}
+
+// Nothing open is never written, and neither is a survey in which a host
+// here could not list.
+func TestTheSurfaceWritesNothingEmptyOrWhileAHostCannotList(t *testing.T) {
+	root := t.TempDir()
+	m, rt := seenWorld(t, root)
+	rt.Remove(revier.TargetRef{Host: "rt", ID: "2"})
+	m = seenSurvey(seenSurvey(m))
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v with nothing open, want nothing written", s)
+	}
+
+	rt.Add("session:project-01", "kitty")
+	m = seenSurvey(m)
+	forget(t, root)
+	rt.Add("session:project-00", "kitty")
+	rt.SetInstancesErr(errors.New("went away"))
+	seenSurvey(m)
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v while rt cannot list, want nothing written", s)
+	}
+}
+
+// Nothing is written before the check for an end with no shutdown has run,
+// which waits for a survey in which every host here listed, and nothing
+// while a walk runs.
+func TestTheSurfaceWritesNothingBeforeItsRecoveryCheckOrDuringAWalk(t *testing.T) {
+	root := t.TempDir()
+	m, rt := seenWorld(t, root)
+	rt.SetInstancesErr(errors.New("went away"))
+	m = seenSurvey(seenSurvey(m))
+	rt.SetInstancesErr(nil)
+	m = seenSurvey(m)
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v on the survey the check ran on, want nothing written yet", s)
+	}
+	m = seenSurvey(m)
+	if _, ok := seenOnDisk(t, root); !ok {
+		t.Fatal("nothing written once the check ran, want what the survey saw")
+	}
+
+	forget(t, root)
+	m, _ = press(m, "alt+q")
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	m, _ = press(m, "enter")
+	rt.Add("session:project-00", "kitty")
+	seenSurvey(m)
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v while the shutdown runs, want nothing written", s)
+	}
+}
+
+// A survey that holds less than the last one written waits for the next
+// survey to agree: a terminal killed before the surface lists as closed.
+func TestAShrinkIsWrittenOnlyWhenTheNextSurveyAgrees(t *testing.T) {
+	root := t.TempDir()
+	m, rt := seenWorld(t, root)
+	zero := rt.Add("session:project-00", "kitty")
+	m = seenSurvey(seenSurvey(m))
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 2 {
+		t.Fatalf("seen = %+v, want both projects", s)
+	}
+
+	rt.Remove(zero)
+	m = seenSurvey(m)
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 2 {
+		t.Errorf("seen = %+v after one survey without project-00, want both still", s)
+	}
+	seenSurvey(m)
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 1 {
+		t.Errorf("seen = %+v after two, want project-01 alone", s)
+	}
+}

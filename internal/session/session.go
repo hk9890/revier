@@ -165,17 +165,24 @@ func Save(stateRoot string, s Session) (Session, string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	base := NewID(s.At)
-	id, path := base, filepath.Join(dir, base+".toml")
-	for n := 2; exists(path); n++ {
-		id = fmt.Sprintf("%s-%d", base, n)
-		path = filepath.Join(dir, id+".toml")
-	}
+	id, path := free(dir, s.At)
 	s.ID = id
 	if err := write(path, s); err != nil {
 		return Session{}, "", err
 	}
 	return s, path, nil
+}
+
+// free is the id of a session saved at at that no file in dir has yet, and
+// its file.
+func free(dir string, at time.Time) (string, string) {
+	base := NewID(at)
+	id, path := base, filepath.Join(dir, base+".toml")
+	for n := 2; exists(path); n++ {
+		id = fmt.Sprintf("%s-%d", base, n)
+		path = filepath.Join(dir, id+".toml")
+	}
+	return id, path
 }
 
 func write(path string, s Session) error {
@@ -194,30 +201,119 @@ func write(path string, s Session) error {
 // Rename moves what every stored session records under a project to its new
 // name, in place: a project renamed on the surface (decisions.md D80) is
 // still the one a session saved before the rename opens again. A session
-// that does not name the project is left as it is.
+// that does not name the project is left as it is. What a surface last saw
+// is renamed too, so a rename made while no surface runs is not lost when
+// that file becomes a saved session.
 func Rename(stateRoot string, from, to revier.ProjectName) error {
 	all, err := List(stateRoot)
 	if err != nil {
 		return err
 	}
 	for _, s := range all {
-		changed := false
-		if s.Current == from {
-			s.Current, changed = to, true
-		}
-		for i := range s.Projects {
-			if s.Projects[i].Name == from {
-				s.Projects[i].Name, changed = to, true
+		if renamed(&s, from, to) {
+			if err := write(filepath.Join(Dir(stateRoot), s.ID+".toml"), s); err != nil {
+				return err
 			}
 		}
-		if !changed {
-			continue
-		}
-		if err := write(filepath.Join(Dir(stateRoot), s.ID+".toml"), s); err != nil {
-			return err
-		}
+	}
+	seen, err := LoadSeen(stateRoot)
+	switch {
+	case errors.Is(err, ErrNoSession):
+		return nil
+	case err != nil:
+		return err
+	}
+	if renamed(&seen, from, to) {
+		return write(SeenPath(stateRoot), seen)
 	}
 	return nil
+}
+
+// renamed moves what s records under from to to, and reports whether s named
+// from at all.
+func renamed(s *Session, from, to revier.ProjectName) bool {
+	changed := false
+	if s.Current == from {
+		s.Current, changed = to, true
+	}
+	for i := range s.Projects {
+		if s.Projects[i].Name == from {
+			s.Projects[i].Name, changed = to, true
+		}
+	}
+	return changed
+}
+
+// SeenPath is the file that holds what a running surface last saw. It is
+// beside the sessions directory and not in it, so List and a plain restore
+// never take it for a save: it becomes one only after an end with no
+// shutdown, by PromoteSeen (decisions.md D150).
+func SeenPath(stateRoot string) string { return filepath.Join(stateRoot, "seen.toml") }
+
+// SaveSeen writes s as what the surface last saw, over the file it wrote
+// before, whole or not at all. It carries no id, since it is no stored
+// session, and the reason it is saved under when it becomes one.
+func SaveSeen(stateRoot string, s Session) error {
+	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
+		return fmt.Errorf("create state directory: %w", err)
+	}
+	s.ID, s.Reason = "", ReasonLastSeen
+	return write(SeenPath(stateRoot), s)
+}
+
+// LoadSeen reads what a surface last saw, or ErrNoSession when no surface
+// wrote it or it was taken since.
+func LoadSeen(stateRoot string) (Session, error) {
+	var s Session
+	if _, err := toml.DecodeFile(SeenPath(stateRoot), &s); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Session{}, ErrNoSession
+		}
+		return Session{}, fmt.Errorf("read %s: %w", SeenPath(stateRoot), err)
+	}
+	return s, nil
+}
+
+// PromoteSeen moves what a surface last saw into the stored sessions, as a
+// session of its own moment, and returns it as stored together with the file
+// it is now. A move is one step, so of two surfaces that start at once one
+// takes the file and the other gets ErrNoSession: what it would offer is
+// offered already.
+func PromoteSeen(stateRoot string) (Session, string, error) {
+	s, err := LoadSeen(stateRoot)
+	if err != nil {
+		return Session{}, "", err
+	}
+	dir := Dir(stateRoot)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Session{}, "", fmt.Errorf("create session directory: %w", err)
+	}
+	id, path := free(dir, s.At)
+	if err := os.Rename(SeenPath(stateRoot), path); err != nil {
+		return Session{}, "", taken(err)
+	}
+	s.ID = id
+	return s, path, nil
+}
+
+// DropSeen removes what a surface last saw, once a stored session holds the
+// same: the file is taken as PromoteSeen takes it, so it is offered once,
+// and the one that finds it gone gets ErrNoSession.
+func DropSeen(stateRoot string) error {
+	return taken(os.Remove(SeenPath(stateRoot)))
+}
+
+// taken is the error of a move or a removal of what was last seen: none, or
+// ErrNoSession when another process took the file first.
+func taken(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, os.ErrNotExist):
+		return ErrNoSession
+	default:
+		return fmt.Errorf("take what was last seen: %w", err)
+	}
 }
 
 // Load reads one session. An empty ref is what a restore after a reboot

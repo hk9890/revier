@@ -109,3 +109,33 @@ func TestSessionListNamesWhatARestoreOpens(t *testing.T) {
 		t.Errorf("last line = %q, want it to name %s", last, shut)
 	}
 }
+
+// After an end with no shutdown, a plain restore saves what the TUI last saw
+// and opens it, over an older save that holds less; its dry run says so and
+// saves nothing (decisions.md D150).
+func TestAPlainRestoreAfterAnUncleanEndOpensWhatWasLastSeen(t *testing.T) {
+	root := t.TempDir()
+	saveAt(t, root, 22, session.ReasonShutdown, "home")
+	seen := session.Session{At: time.Date(2026, 10, 16, 23, 0, 0, 0, time.UTC), Projects: []session.Project{{Name: "demo", Targets: []session.Target{{Name: "home"}, {Name: "diff"}}}}}
+	if err := session.SaveSeen(root, seen); err != nil {
+		t.Fatal(err)
+	}
+	a := restoreApp(t, root)
+	rt := a.core.Runtime.(*hosttest.FakeRuntime)
+
+	out := output(t, a, func() error { return cmdSessionRestore(context.Background(), a, []string{"--dry-run"}) })
+	if !strings.Contains(out, "revier ended without a shutdown") || !strings.Contains(out, "diff") {
+		t.Errorf("dry run printed %q, want what was last seen, diff with it", out)
+	}
+	if all, _ := session.List(root); len(all) != 1 {
+		t.Errorf("sessions = %d after the dry run, want the one save", len(all))
+	}
+
+	out = output(t, a, func() error { return cmdSessionRestore(context.Background(), a, nil) })
+	if !strings.Contains(out, "2026-10-16T23-00-00: opened 2") {
+		t.Errorf("restore printed %q, want what was last seen opened", out)
+	}
+	if len(rt.Opened) != 2 {
+		t.Errorf("opened = %+v, want home and diff", rt.Opened)
+	}
+}

@@ -306,3 +306,62 @@ func TestARaiseDropsADeleteAskedBeforeTheHide(t *testing.T) {
 		t.Errorf("subtitle = %q, want the start dialog closed by the first key", sub)
 	}
 }
+
+// uncleanEnd writes what a surface last saw before an end with no shutdown:
+// project-00's home, which is not open now.
+func uncleanEnd(t *testing.T, root string) {
+	t.Helper()
+	if err := session.SaveSeen(root, session.Session{At: time.Date(2026, 9, 15, 18, 20, 0, 0, time.Local), Projects: []session.Project{
+		{Name: "project-00", Targets: []session.Target{{Name: "home"}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// After an end with no shutdown that lost something, the first survey opens
+// the start dialog on what was last seen, saved as a session. No record keeps
+// it up, so the next refresh leaves it, and Restore opens what it holds.
+func TestTheStartDialogOffersWhatWasLastSeenAfterAnUncleanEnd(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, rt := seenWorld(t, root)
+	m = seenSurvey(seenSurvey(m))
+
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier ended without a shutdown; last changed 2026-09-15 18:20.") {
+		t.Fatalf("subtitle = %q, want the dialog after an end with no shutdown", sub)
+	}
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 || all[0].Reason != session.ReasonLastSeen {
+		t.Fatalf("sessions = %+v, %v, want what was last seen saved", all, err)
+	}
+	if p := pane(m); !strings.Contains(p, all[0].ID) {
+		t.Errorf("pane = %q, want the session %s offered", p, all[0].ID)
+	}
+
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+	if !opened(rt, "session:project-00") {
+		t.Error("the restore did not open project-00's home")
+	}
+}
+
+// After a full shutdown its own dialog comes up as before, and what was last
+// seen is not saved as a session.
+func TestAFullShutdownStillOpensItsOwnDialog(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := seenWorld(t, root)
+	m = seenSurvey(m)
+
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Errorf("subtitle = %q, want the dialog of the full shutdown", sub)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %+v, want no last-seen save", all)
+	}
+}

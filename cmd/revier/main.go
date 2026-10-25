@@ -100,8 +100,9 @@ usage:
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]
                                 open what a saved session recorded; without an
-                                argument, the newest one saved by hand or by a
-                                full shutdown
+                                argument, the newest one saved by hand, by a
+                                full shutdown, or from what the TUI last saw
+                                before an end with no shutdown
   revier session list [--json]  the saved sessions, newest first
   revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [--dry-run]
                                 save the session when it changed, then close every

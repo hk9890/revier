@@ -17,14 +17,34 @@ import (
 // The start dialog: the first screen after a full shutdown, while the state
 // records one (decisions.md D141). It offers the session the shutdown saved,
 // the sessions screen, or the surface as it is. It is a screen like the
-// others, not a second surface.
+// others, not a second surface. It is also the first screen after an end with
+// no shutdown that lost something, offering what the surface last saw
+// (decisions.md D150).
 
 // resumeScreen is the start dialog: when revier was shut down, and the
-// session to offer, which is zero when none is saved.
+// session to offer, which is zero when none is saved. unclean is the dialog
+// after an end with no shutdown, and at is then when what was last seen last
+// changed.
 type resumeScreen struct {
 	at      time.Time
 	session session.Session
 	row     int
+	unclean bool
+}
+
+// openUnclean puts the dialog up over the surface for an end with no
+// shutdown, offering s.
+func (m *Model) openUnclean(s session.Session) {
+	m.resume = resumeScreen{at: s.At, session: s, unclean: true}
+	m.dialog = dialogResume
+}
+
+// said is what a choice's log line adds after an end with no shutdown.
+func (r resumeScreen) said() []any {
+	if r.unclean {
+		return []any{"unclean", true}
+	}
+	return nil
 }
 
 // resumeRow is one choice of the dialog.
@@ -85,7 +105,7 @@ func (m Model) resumeKey(msg keyPress) (tea.Model, tea.Cmd) {
 // screen, which shows the walk as it goes. The restore ends the shutdown on
 // record as it starts.
 func (m Model) resumeRestore() (tea.Model, tea.Cmd) {
-	slog.Info("start dialog: restore", "id", m.resume.session.ID)
+	slog.Info("start dialog: restore", append([]any{"id", m.resume.session.ID}, m.resume.said()...)...)
 	m.dialog = dialogSessions
 	if m.err = m.sessions.open(m.stateRoot, *m.theme, m.resume.session.ID); m.err != nil {
 		return m, nil
@@ -98,22 +118,23 @@ func (m Model) resumeRestore() (tea.Model, tea.Cmd) {
 // resumePick is the sessions screen, with the cursor on the session the
 // dialog offered. The shutdown stays on record until something opens.
 func (m Model) resumePick() (tea.Model, tea.Cmd) {
-	slog.Info("start dialog: pick another session")
+	slog.Info("start dialog: pick another session", m.resume.said()...)
 	m.dialog = dialogSessions
 	m.err = m.sessions.open(m.stateRoot, *m.theme, m.resume.session.ID)
 	return m, nil
 }
 
-// startFresh is the surface as it is. It ends the shutdown on record and
-// deletes no session.
+// startFresh is the surface as it is. It ends the shutdown on record, when
+// one is, and deletes no session.
 func (m Model) startFresh() (tea.Model, tea.Cmd) {
-	slog.Info("start dialog: start fresh")
+	slog.Info("start dialog: start fresh", m.resume.said()...)
 	app.ClearShutDown(m.core)
 	m.dialog = dialogNone
 	return m, nil
 }
 
-// resumeTitle is the line over the rule: when revier was shut down. What the
+// resumeTitle is the line over the rule: when revier was shut down, or when
+// what was last seen of an end with no shutdown last changed. What the
 // session holds is the pane's, which wraps; this line is one line in the
 // list's column.
 func (m Model) resumeTitle() string {
@@ -122,6 +143,9 @@ func (m Model) resumeTitle() string {
 	when := at.Format("15:04")
 	if now := m.now().Local(); at.YearDay() != now.YearDay() || at.Year() != now.Year() {
 		when = at.Format("2006-01-02 15:04")
+	}
+	if r.unclean {
+		return "revier ended without a shutdown; last changed " + when + "."
 	}
 	return "revier was shut down at " + when + "."
 }
@@ -144,9 +168,16 @@ func (m Model) resumeDetail() string {
 	say := func(style lipgloss.Style, text string) {
 		b.WriteString(hang("", text, w, style) + "\n")
 	}
-	b.WriteString(th.Header.Render("Shut down") + "\n")
+	if m.resume.unclean {
+		b.WriteString(th.Header.Render("Ended") + "\n")
+	} else {
+		b.WriteString(th.Header.Render("Shut down") + "\n")
+	}
 	if s.ID != "" {
 		say(th.Path, "session "+s.ID+": "+sessionCounts(s))
+		if m.resume.unclean {
+			say(th.Meta, "\nIt holds what revier last saw open, and some of that is not open now.")
+		}
 		say(th.Meta, "\nRestore opens what it recorded, and shows each step as it goes.")
 	} else {
 		say(th.Path, "No session was saved.")
