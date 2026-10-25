@@ -73,8 +73,8 @@ type Config struct {
 	// Load leaves out (decisions.md D131). `revier doctor` says how many.
 	SelfLinks []string `toml:"-"`
 
-	statuses []core.Status // Status without the tables a rule refused
-	termKeys []TermKey     // the terminal keys no rule refused
+	statuses []core.Status  // Status without the tables a rule refused
+	termKeys []core.TermKey // the terminal keys no rule refused
 }
 
 // UI is how the TUI looks. Both names are resolved at load: a typo is one of

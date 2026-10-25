@@ -3,7 +3,7 @@
 `revier` with no command opens the TUI. Every other command does one thing and
 exits. `revier help` lists the commands and their flags. `revier <command>
 --help` gives the usage of one command. `revier agent help`, `shell help`,
-`session help`, `keys help`, `each help` and `events help` give each family
+`session help`, `keys help`, `term help`, `each help` and `events help` give each family
 in full.
 
 - `-p <name>` names the project. Without it, revier finds the project as
@@ -35,6 +35,7 @@ in full.
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
+| `revier term status` / `install` / `uninstall` | Show, write or remove the terminal keys in your terminal's configuration. See [kitty](integrations/kitty.md#add-tabs-from-a-kitty-key). |
 | `revier status` | The project revier finds here (directory, focused window, last project), and the hosts it uses. |
 | `revier doctor` | Every configuration problem, and its fix. |
 | `revier assist` | Start Claude Code, briefed on your revier configuration. See [Agents](agents.md#let-an-agent-configure-revier). |
@@ -48,8 +49,8 @@ host. You do not run them by hand.
 
 ## Output
 
-Commands print tables for a person. `revier list`, `revier session list` and
-the `revier keys` commands take `--json` for a script. `revier events` always
+Commands print tables for a person. `revier list`, `revier session list`,
+the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
 prints JSON. Warnings and errors go to stderr, so stdout stays clean.
 
 The TARGETS column of `revier list` marks each target: `*` open, `x` no host
@@ -64,7 +65,7 @@ doctor` says why), `?` its host did not answer.
 | `1` | Failure. `revier doctor` also exits `1` when a file has a problem. |
 | `2` | `revier agent wait` timed out. |
 | `3` | No project found: not from the directory, the focused window or the last project. |
-| `4` | `revier keys install` or `uninstall`: some key is not as asked. |
+| `4` | `revier keys install` or `uninstall`, or `revier term install` or `uninstall`: some key is not as asked. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |
 | other | `revier run` passes on the action's own exit status. |

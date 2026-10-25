@@ -94,6 +94,11 @@ type Core struct {
 	// provides no instances and takes no part in run-or-raise, and a machine
 	// with no desktop leaves it nil.
 	KeyBinder revier.KeyBinder
+
+	// TermKeys reads the keys the terminal holds for revier: the second key
+	// store, beside the desktop's (decisions.md D147). Nil leaves `revier
+	// term` with no terminal.
+	TermKeys revier.TermKeys
 }
 
 // WithRuntime is the same core over another runtime host. It is a new core
@@ -135,6 +140,7 @@ func (c *Core) clone() *Core {
 		listedWindows: c.listedWindows,
 		Ledger:        c.Ledger,
 		KeyBinder:     c.KeyBinder,
+		TermKeys:      c.TermKeys,
 	}
 }
 

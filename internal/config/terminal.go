@@ -22,19 +22,9 @@ const (
 	DefaultAgentKey = "ctrl+shift+z"
 )
 
-// TermKey is one terminal key config.toml declares, its chord parsed: the
-// shell's, the default agent's, or a named agent's.
-type TermKey struct {
-	Chord core.Chord
-	// Shell is the key that opens a shell. Agent names the named agent the
-	// key opens; empty, with Shell false, it is the default agent.
-	Shell bool
-	Agent string
-}
-
 // TermKeys is the terminal keys config.toml declares and no rule refused:
 // the shell's, the default agent's, then each named agent's, in file order.
-func (c *Config) TermKeys() []TermKey { return c.termKeys }
+func (c *Config) TermKeys() []core.TermKey { return c.termKeys }
 
 // Outside is what a terminal key does outside a workspace: core.OutsideTab
 // or core.OutsideNone.
@@ -59,7 +49,7 @@ func (c *Config) validateTerminal(refused []error) []error {
 		c.Terminal.Outside = ""
 	}
 	held := map[core.Chord]string{}
-	take := func(what, raw string, k TermKey) {
+	take := func(what, raw string, k core.TermKey) {
 		if raw == "" {
 			return
 		}
@@ -82,15 +72,15 @@ func (c *Config) validateTerminal(refused []error) []error {
 		}
 		return *v
 	}
-	take("terminal.shell_key", orDefault(c.Terminal.ShellKey, DefaultShellKey), TermKey{Shell: true})
-	take("terminal.agent_key", orDefault(c.Terminal.AgentKey, DefaultAgentKey), TermKey{})
+	take("terminal.shell_key", orDefault(c.Terminal.ShellKey, DefaultShellKey), core.TermKey{Shell: true})
+	take("terminal.agent_key", orDefault(c.Terminal.AgentKey, DefaultAgentKey), core.TermKey{})
 	for i, t := range c.Agents {
 		if refused[i] != nil {
 			continue
 		}
 		name, _ := t["name"].(string)
 		key, _ := t["key"].(string)
-		take(fmt.Sprintf("agent %q key", name), key, TermKey{Agent: name})
+		take(fmt.Sprintf("agent %q key", name), key, core.TermKey{Agent: name})
 	}
 	return errs
 }

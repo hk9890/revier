@@ -31,19 +31,37 @@ your other kitty windows stay out of its reach.
 
 ## Add tabs from a kitty key
 
-These maps add a tab to the workspace you are in. `--copy-env` tells revier
-which kitty the key came from.
+kitty keys add a tab to the workspace you are in: ctrl+shift+z an agent tab,
+ctrl+shift+t a shell tab, and the `key` of each named agent a tab of that
+agent. [`[terminal]`](../configuration.md#terminal) sets them. To write them
+into kitty's configuration:
 
-```
-map ctrl+shift+z launch --type=background --copy-env --cwd=current sh -lc 'revier agent new --panel "$1" --dir . || kitten @ launch --type=tab --cwd=current' sh @active-kitty-window-id
-map ctrl+shift+t launch --type=background --copy-env --cwd=current sh -lc 'revier shell new --panel "$1" --dir . || kitten @ launch --type=tab --cwd=current' sh @active-kitty-window-id
+```bash
+revier term install --dry-run   # see what would change
+revier term install
 ```
 
-The first adds an agent tab, the second a shell tab. In a window that is no
-project's workspace, both open a plain shell tab beside it, or nothing if you
-set `outside = "none"` in [`[terminal]`](../configuration.md#terminal). The
-`kitten @ launch` after `||` opens kitty's own new tab only when revier itself
-fails.
+This writes `revier.conf` in kitty's configuration directory and adds
+`include revier.conf` at the top of `kitty.conf`. kitty reads the change by
+itself. If `kitty.conf` did not exist, restart kitty. Run `revier term
+install` again after you change a terminal key in `config.toml`. `revier term
+status` shows each key, and `revier term uninstall` removes both again.
+
+- revier writes through links, so a `kitty.conf` in a dotfiles repository
+  stays a link.
+- A map of your own below the include wins: for example a
+  `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
+  tmux. `revier term status` names each such map by its line.
+- A terminal key on the same chord as `trigger_key` or a target's `key` is
+  left out: the desktop takes that press first.
+- In a window that is no project's workspace, a key opens a plain shell tab
+  beside it, or nothing if you set `outside = "none"`. When revier itself
+  fails, kitty's own new tab opens.
+
+**You wrote these maps by hand before.** Delete your own `map ctrl+shift+z`
+and `map ctrl+shift+t` lines that run `revier agent new` or `revier shell new`
+from `kitty.conf`: they come after the include and win over revier's. `revier
+term status` names them as `shadowed by kitty.conf:<line>`.
 
 ## What does not work
 

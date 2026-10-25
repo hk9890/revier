@@ -174,6 +174,15 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 	return b
 }
 
+// termKeys is the terminal whose keys revier writes, and termKeyWriter the
+// same terminal behind the type that writes. kitty is the one there is, and
+// its configuration directory is there to read on any machine, so nothing is
+// probed. As with the desktop's keys, `revier term status` is given only the
+// reader.
+func termKeys() revier.TermKeys { return kitty.TermKeys{} }
+
+func termKeyWriter() revier.TermKeyWriter { return kitty.TermKeyWriter{} }
+
 // sshRemote is the one remote adapter: the revier on a host, reached over
 // ssh. A host is not probed: whether it answers is learned when it is asked,
 // and reported on the projects that live there rather than refusing to start.

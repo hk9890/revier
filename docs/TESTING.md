@@ -72,6 +72,11 @@ that did not focus after `Open` passed L2 and failed L4.
     (`config.Root`, `state.Root`, `sshconfig.Path`).
   - `testenv.Run` does not set the variable of another tool. Set it with
     `t.Setenv` in each test that reaches that tool's path.
+  - The one exception: `testenv.Run` sets `KITTY_CONFIG_DIRECTORY` too,
+    because `revier term` writes kitty's configuration and the user's kitty
+    directory can be a link into a dotfiles repository. Still set it with
+    `t.Setenv` in each test that reads or writes it; give a package whose
+    code reaches `kitty.ConfigDir` the `TestMain` above.
 - Call `testenv.NoTools(t)` in a test that must start no tool, such as git or
   mise, rather than setting PATH inline.
 - In `internal/tui`, feed a command that a key press or an `Update` returned

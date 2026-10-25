@@ -113,7 +113,7 @@ change is why a binding exists.
 A shortcut store is not a `Host`, and on GNOME it is not the same tool. The
 reader cannot write.
 
-### D27 — revier adds keys, and takes one only with `--force`
+### D27 — revier adds desktop keys, and takes one only with `--force`
 
 Includes the corrections from the first desktop runs. `--force` takes the one
 key revier needs, and leaves the other keys of a desktop default. revier keeps
@@ -750,6 +750,17 @@ directory is recorded too, since an agent resumed from the repository root
 edits `main`. Each agent records the named agent its tab's mark names, and comes
 back as that agent; a name the project no longer declares is dropped and said,
 since another program in its place is not that agent. A link's host resolves it.
+
+### D147 — the terminal's keys are a port of their own, in a file revier owns whole
+
+Extends D30: the include in the terminal's main configuration is a second
+write outside revier's own files. revier writes its key file whole and one
+marked include at the top of that configuration, so the user's later maps win;
+both writes go through links, since that file often lives in a dotfiles
+repository. A key declared in config is taken: D27's `--force` is the desktop
+store's. A terminal key on a chord a desktop key of revier's holds is refused
+alone, since the desktop takes the press first (D110). The reader cannot
+write, as in D26.
 
 ### D148 — outside a workspace a terminal key does what config says, by default a plain tab
 

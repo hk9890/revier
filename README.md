@@ -134,6 +134,7 @@ revier new                     # write a project file for this directory
 revier open                    # open its workspace: an agent beside a shell
 revier keys install --dry-run  # see which desktop keys revier would claim
 revier keys install            # claim the ones nothing else holds
+revier term install            # the kitty keys that add an agent or a shell tab
 revier                         # every project, its agent state, its targets
 ```
 

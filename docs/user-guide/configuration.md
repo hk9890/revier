@@ -388,7 +388,8 @@ You cannot set a single colour. To turn colour off, set `NO_COLOR`
 
 The keys your terminal holds for revier, and what they do in a terminal window
 that is no project's workspace. Only in `config.toml`. `revier term install`
-writes the keys into the terminal's configuration.
+writes the keys into the terminal's configuration; run it again after you
+change one.
 
 ```toml
 [terminal]
@@ -407,6 +408,8 @@ outside   = "tab"
 - A named agent's key is its `key` in `[[agent]]`.
 - revier refuses a key that another terminal key already holds, or that it
   cannot read. The other keys still work.
+- `revier term install` leaves out a key on the same chord as `trigger_key`
+  or a target's `key`: the desktop takes that press first.
 
 ## `[hosts]`
 

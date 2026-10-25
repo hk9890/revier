@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -257,20 +256,10 @@ func valueEnd(lines []string, i, col int) (int, int) {
 // so a config.toml linked in from a dotfiles repository stays linked, and the
 // file keeps its permissions.
 func replaceFile(path string, data []byte) error {
-	if target, err := filepath.EvalSymlinks(path); err == nil {
-		path = target
-	}
-	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode().Perm()
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	real, err := fsutil.WriteThrough(path, data)
+	if err != nil {
 		return err
 	}
-	if err := fsutil.WriteFile(path, data, mode); err != nil {
-		return err
-	}
-	slog.Info("config written", "path", path)
+	slog.Info("config written", "path", real)
 	return nil
 }

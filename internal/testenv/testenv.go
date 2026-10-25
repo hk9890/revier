@@ -1,6 +1,6 @@
 // Package testenv keeps a test binary off the user's own revier files: the
-// configuration, the state, and the ssh configuration a link is checked
-// against. A package whose code reaches any of them calls Run from its
+// configuration, the state, the ssh configuration a link is checked
+// against, and kitty's configuration, which `revier term` writes. A package whose code reaches any of them calls Run from its
 // TestMain; see docs/TESTING.md. NoTools keeps one test off the tools on the
 // PATH.
 package testenv
@@ -19,9 +19,12 @@ import (
 // window. The key binder and key writer do not read it.
 const noHosts = "[hosts]\nruntime = [\"none\"]\nwindow = [\"none\"]\n"
 
-// Run runs the tests with REVIER_CONFIG_HOME, REVIER_STATE_HOME and
-// REVIER_SSH_CONFIG pointing into one scratch directory, and returns the exit
-// code for os.Exit. A test sets its own with t.Setenv, which wins. One that
+// Run runs the tests with REVIER_CONFIG_HOME, REVIER_STATE_HOME,
+// REVIER_SSH_CONFIG and KITTY_CONFIG_DIRECTORY pointing into one scratch
+// directory, and returns the exit code for os.Exit. kitty's variable is the
+// one of another tool set here: the user's kitty directory is often a link
+// into a dotfiles repository, and a test that wrote through it would change
+// a tracked file. A test sets its own with t.Setenv, which wins. One that
 // forgets writes into the scratch directory, and Run fails the binary and
 // names what was written.
 func Run(m *testing.M) int {
@@ -37,10 +40,11 @@ func Run(m *testing.M) int {
 	_ = os.Setenv("REVIER_CONFIG_HOME", config)
 	_ = os.Setenv("REVIER_STATE_HOME", filepath.Join(dir, "state"))
 	_ = os.Setenv("REVIER_SSH_CONFIG", filepath.Join(dir, "ssh_config"))
+	_ = os.Setenv("KITTY_CONFIG_DIRECTORY", filepath.Join(dir, "kitty"))
 
 	code := m.Run()
 	if written := writtenSince(dir, config); len(written) > 0 {
-		fmt.Fprintf(os.Stderr, "FAIL: a test wrote outside its own roots; give it a t.Setenv of REVIER_CONFIG_HOME, REVIER_STATE_HOME or REVIER_SSH_CONFIG:\n\t%s\n", strings.Join(written, "\n\t"))
+		fmt.Fprintf(os.Stderr, "FAIL: a test wrote outside its own roots; give it a t.Setenv of REVIER_CONFIG_HOME, REVIER_STATE_HOME, REVIER_SSH_CONFIG or KITTY_CONFIG_DIRECTORY:\n\t%s\n", strings.Join(written, "\n\t"))
 		return 1
 	}
 	return code

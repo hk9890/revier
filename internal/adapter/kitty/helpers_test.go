@@ -1,10 +1,20 @@
 // The recorded call, the process tree and the host the tests of this package
-// share.
+// share, and the scratch kitty directory every one of them runs in.
 package kitty_test
 
 import (
+	"os"
+	"testing"
+
 	"github.com/hk9890/revier/internal/adapter/kitty"
+	"github.com/hk9890/revier/internal/testenv"
 )
+
+// TestMain keeps every test off the user's own kitty configuration
+// (testenv.Run sets KITTY_CONFIG_DIRECTORY).
+func TestMain(m *testing.M) {
+	os.Exit(testenv.Run(m))
+}
 
 // call is one recorded kitten invocation.
 type call struct {

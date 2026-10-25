@@ -67,6 +67,12 @@ usage:
                                 else holds; -n prints the plan and changes nothing
   revier keys uninstall [-n] [--json]
                                 release the chords revier holds
+  revier term status [--json]   the terminal keys revier wants, and what the
+                                terminal's configuration holds of them
+  revier term install [-n] [--json]
+                                write them into the terminal's configuration
+  revier term uninstall [-n] [--json]
+                                remove what revier wrote there
   revier agent wait <agent> --until <status> [--timeout s]
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
@@ -340,6 +346,8 @@ func run(out io.Writer, args []string) error {
 		return cmdSession(ctx, a, args)
 	case "keys":
 		return cmdKeys(ctx, a, args)
+	case "term":
+		return cmdTerm(ctx, a, args)
 	case "shutdown":
 		return cmdShutdown(ctx, a, args)
 	default:
@@ -355,6 +363,7 @@ var familyUsage = map[string]string{
 	"shell":   shellUsage,
 	"session": sessionUsage,
 	"keys":    keysUsage,
+	"term":    termUsage,
 	"each":    eachUsage,
 	"events":  eventsUsage,
 }
@@ -390,12 +399,12 @@ func commandHelp(cmd string) string {
 // anywhere before `--`, which is what the flag parser reads it as. A first
 // argument of help counts only where nothing names a project, a target or an
 // action: in a family, and in link, whose first argument is a host. Given
-// nothing, session and keys answer with their usage too, before the app their
-// dispatch builds; agent and shell answer it themselves.
+// nothing, session, keys and term answer with their usage too, before the app
+// their dispatch builds; agent and shell answer it themselves.
 func asksHelp(cmd string, args []string) bool {
 	_, family := familyUsage[cmd]
 	if len(args) == 0 {
-		return cmd == "session" || cmd == "keys"
+		return cmd == "session" || cmd == "keys" || cmd == "term"
 	}
 	if args[0] == "help" && (family || cmd == "link") {
 		return true
