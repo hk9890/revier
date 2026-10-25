@@ -68,7 +68,8 @@ territory.
   See [Shut everything down](docs/user-guide/projects.md#shut-everything-down).
 - **Restore a session.** `revier session restore` opens the saved projects
   and targets again. Each Claude Code agent resumes its conversation. After a
-  full shutdown, the next TUI start offers the restore.
+  full shutdown, or when revier ended without one, the next TUI start offers
+  the restore.
   See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
 
 ![Alt+S and Alt+Q show the shutdown plan and close every project; the next start offers the restore](.github/assets/restore.webp)

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
@@ -142,23 +143,179 @@ type RestoreStep struct {
 // otherwise found after the reboot, which is the worst moment. None of it
 // fails the save.
 func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionGaps) {
-	byRef := make(map[string]revier.Instance, len(r.Instances))
-	for _, inst := range r.Instances {
-		byRef[key(inst.Ref)] = inst
-	}
-
-	s := session.Session{Current: c.state().Current}
-	var gaps SessionGaps
-	// One instance can back two targets. Its agents are recorded once, under
-	// the first, or a restore would resume each of them twice.
-	recorded := map[string]bool{}
+	current := c.state().Current
 	// The hosts have HostWait and not the whole of the save's bound: the
 	// agents on this machine are asked after them, on what is left of it
 	// (decisions.md D115).
 	asking, stop := context.WithTimeout(ctx, HostWait)
 	there, failed := c.conversationsThere(asking, r.Views)
 	stop()
-	gaps.Failed = failed
+	s, gaps := c.sessionOf(r, there, func(agents []agentPanel) ([]revier.Conversation, []error) {
+		return c.conversations(ctx, agents)
+	})
+	s.Current = current
+	gaps.Failed = append(failed, gaps.Failed...)
+	return s, gaps
+}
+
+// Seen is what a surface's survey saw open, as the session a save would
+// record: local is its last survey of this machine, and answers what the
+// linked hosts said last. It asks no probe and no host, since a surface
+// builds it on every refresh: each agent's conversation is the one its
+// survey read. A local agent's directory is the project's when the survey
+// left it out for being the project's own, as a save names it.
+//
+// It records nothing while a host here could not list, since what that host
+// holds would be missing (decisions.md D89). A held link whose host gave no
+// answer keeps its entry of prev, what was last seen of it; with none it is
+// recorded as a save records it while its host does not answer, so a host
+// down for a whole run costs only its own agents (D150).
+func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (session.Session, bool) {
+	if len(local.Failed) > 0 {
+		return session.Session{}, false
+	}
+	r := c.Lay(local, answers)
+	tagged := make(map[string]revier.PanelID, len(r.tags))
+	for tag, at := range r.tags {
+		tagged[key(at.ref)+"\x00"+string(at.panel.ID)] = tag
+	}
+	there := map[revier.ProjectName]map[revier.PanelID]session.Agent{}
+	kept := map[revier.ProjectName]session.Project{}
+	conversations := map[string]revier.Conversation{}
+	for _, v := range r.Views {
+		if v.Project.Remote == nil {
+			for _, a := range v.Agents {
+				held := revier.Conversation{ID: a.State.Session, Dir: a.State.Dir}
+				if held.ID != "" && held.Dir == "" {
+					held.Dir = v.Project.Path
+				}
+				conversations[key(a.Ref)+"\x00"+string(a.Panel)] = held
+			}
+			continue
+		}
+		if !v.Held() {
+			continue
+		}
+		if a, ok := answers.of(v.Project); !ok || a.err != nil || a.view.Unreachable != "" {
+			if p, ok := projectOf(prev, v.Project.Name); ok {
+				kept[v.Project.Name] = p
+			}
+			continue
+		}
+		agents := map[revier.PanelID]session.Agent{}
+		for _, a := range v.Agents {
+			if tag, ok := tagged[key(a.Ref)+"\x00"+string(a.Panel)]; ok {
+				agents[tag] = session.Agent{Harness: a.State.Harness, Session: a.State.Session, Dir: a.State.Dir}
+			}
+		}
+		there[v.Project.Name] = agents
+	}
+	s, _ := c.sessionOf(r, there, func(agents []agentPanel) ([]revier.Conversation, []error) {
+		out := make([]revier.Conversation, len(agents))
+		for i, a := range agents {
+			out[i] = conversations[key(a.ref)+"\x00"+string(a.panel.ID)]
+		}
+		return out, nil
+	})
+	if r.before != nil {
+		s.Current = r.before.Current
+	}
+	for i, p := range s.Projects {
+		if last, ok := kept[p.Name]; ok {
+			s.Projects[i] = last
+			delete(kept, p.Name)
+		}
+	}
+	for _, v := range r.Views {
+		if last, ok := kept[v.Project.Name]; ok {
+			s.Projects = append(s.Projects, last)
+		}
+	}
+	return s, true
+}
+
+// KeepSeen is what a surface writes as what it last saw, from its survey of
+// this machine and the answers of its linked hosts, given last, what it wrote
+// last, and held, a smaller survey kept back. It keeps nothing when Seen
+// records nothing, nothing is open, or nothing changed. A survey that holds
+// less than last is kept only when the next survey of this machine agrees: a
+// terminal killed before the surface lists as closed, not as failed, for the
+// moment before the surface goes too (decisions.md D150). surveyed is false
+// for the answers of a linked host, which are laid over the same listing and
+// so are no second look at it. hold is the survey to keep back for the next.
+func (c *Core) KeepSeen(local Report, answers RemoteAnswers, last, held session.Session, surveyed bool) (keep session.Session, ok bool, hold session.Session) {
+	s, ok := c.Seen(local, answers, last)
+	if !ok || len(s.Projects) == 0 || s.SameAs(last) {
+		return session.Session{}, false, session.Session{}
+	}
+	if lacks(s, last) && (!surveyed || !s.SameAs(held)) {
+		if surveyed {
+			return session.Session{}, false, s
+		}
+		return session.Session{}, false, held
+	}
+	return s, true, session.Session{}
+}
+
+// lacks reports a target that was holds and s does not.
+func lacks(s, was session.Session) bool {
+	type at struct {
+		project revier.ProjectName
+		target  revier.TargetName
+	}
+	has := map[at]bool{}
+	for _, p := range s.Projects {
+		for _, t := range p.Targets {
+			has[at{p.Name, t.Name}] = true
+		}
+	}
+	for _, p := range was.Projects {
+		for _, t := range p.Targets {
+			if !has[at{p.Name, t.Name}] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func projectOf(s session.Session, name revier.ProjectName) (session.Project, bool) {
+	for _, p := range s.Projects {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return session.Project{}, false
+}
+
+// Lost reports whether what a surface last saw holds a target that is not
+// open now, so that its end lost something: r is a survey in which every
+// host here listed, since a host that could not list hides what it holds.
+func (c *Core) Lost(seen session.Session, r Report) bool {
+	if len(r.Failed) > 0 {
+		return false
+	}
+	return slices.ContainsFunc(c.RestorePlan(seen, r), func(step RestoreStep) bool { return step.Action == RestoreLaunch })
+}
+
+// sessionOf is the walk a save and a snapshot share, so the two cannot
+// disagree on the order of the agents, on tabs, on attachments or on the
+// named agents. there is each link's agents by the tag of the panel here
+// that shows it, and name is the conversation of each agent panel here, in
+// order, with why a probe could not say.
+func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.PanelID]session.Agent,
+	name func([]agentPanel) ([]revier.Conversation, []error),
+) (session.Session, SessionGaps) {
+	byRef := make(map[string]revier.Instance, len(r.Instances))
+	for _, inst := range r.Instances {
+		byRef[key(inst.Ref)] = inst
+	}
+
+	var s session.Session
+	var gaps SessionGaps
+	// One instance can back two targets. Its agents are recorded once, under
+	// the first, or a restore would resume each of them twice.
+	recorded := map[string]bool{}
 	var agents []agentPanel
 	for _, v := range r.Views {
 		var targets, tabs []session.Target
@@ -235,7 +392,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 				if probe, ok := c.agentProbe(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
-						panel: panel, probe: probe, harness: harnessIn(v, inst, panel, probe),
+						ref: inst.Ref, panel: panel, probe: probe, harness: harnessIn(v, inst, panel, probe),
 					})
 				}
 			}
@@ -246,8 +403,8 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 		}
 	}
 
-	named, failed := c.conversations(ctx, agents)
-	gaps.Failed = append(gaps.Failed, failed...)
+	named, failed := name(agents)
+	gaps.Failed = failed
 	for i, a := range agents {
 		if named[i].ID == "" {
 			gaps.Unnamed++
@@ -290,6 +447,7 @@ type SessionGaps struct {
 // recorded that it belongs to.
 type agentPanel struct {
 	project, target int
+	ref             revier.TargetRef
 	panel           revier.Panel
 	probe           revier.AgentProbe
 	harness         string

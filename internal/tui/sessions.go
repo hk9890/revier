@@ -107,17 +107,13 @@ func sessionCounts(s session.Session) string {
 		" · " + core.Count(s.Agents(), "agent")
 }
 
-// sessionOutcome is what the last save or restore on the screen came to, for
-// the pane of the session it was about.
+// sessionOutcome is what the last save on the screen came to, for the pane
+// of the session it saved. What a restore came to is the footer's: the
+// restore ends on the project list.
 type sessionOutcome struct {
-	id       string
-	saved    bool
-	notes    []string // what the save could not record
-	restored core.Restored
-	back     error
-	// notReached is how many targets a restore stopped by ctrl+c left
-	// before it reached them; restored holds the targets it walked.
-	notReached int
+	id    string
+	saved bool
+	notes []string // what the save could not record
 }
 
 // savedMsg is a save's answer.
@@ -130,6 +126,7 @@ type savedMsg struct {
 // restoredMsg is a restore's answer.
 type restoredMsg struct {
 	id         string
+	current    revier.ProjectName // the project the session was left on
 	restored   core.Restored
 	notReached int
 	back       error
@@ -157,7 +154,7 @@ type sessionsScreen struct {
 	saving    bool            // whether a save is out
 	restoring string          // the session a restore is walking, while it is
 	walk      walk            // what that restore has reported, and its cancel
-	outcome   sessionOutcome  // what the last save or restore came to
+	outcome   sessionOutcome  // what the last save came to
 }
 
 func newSessionsScreen(th theme.Theme) sessionsScreen {
@@ -208,17 +205,22 @@ func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// restored takes a restore's answer, and then raises the surface: each
-// window the restore opened came up over it, so it comes back once, at the
-// end, for the result not to be hidden. The raise follows the result rather
-// than coming before it, so a slow host holds neither the result nor the
-// input.
+// restored takes a restore's answer, and ends on the project list whatever
+// it came to, with the cursor on the project the session was left on and
+// what did not open in the footer. Then it raises the surface: each window
+// the restore opened came up over it, so it comes back once, at the end. The
+// raise follows the result rather than coming before it, so a slow host
+// holds neither the result nor the input.
 func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.restored(msg); err != nil {
 		m.err = err
 	}
+	m.dialog = dialogNone
 	if msg.err != nil {
 		return m, nil
+	}
+	if msg.current != "" {
+		m.selectName(msg.current)
 	}
 	return m, raiseSelf(m.core)
 }
@@ -235,8 +237,8 @@ func raiseSelf(c *core.Core) tea.Cmd {
 }
 
 // open is a new visit, with the cursor on the session of that id, or on the
-// newest. What the last save or restore came to is about the visit before,
-// and the plan is what a new visit is for.
+// one a plain restore opens. What the last save came to is about the visit
+// before, and the plan is what a new visit is for.
 func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 	sc.naming = false
 	sc.outcome = sessionOutcome{}
@@ -244,9 +246,14 @@ func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 }
 
 // load reads the saved sessions under root into the screen's rows, with the
-// cursor on the session of that id, or on the newest.
+// cursor on the session of that id, or on the one a plain restore opens, so
+// Enter there is `revier session restore` (decisions.md D149). With none of
+// the whole set it is on the newest.
 func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
 	all, err := session.List(root)
+	if s, ok := session.Newest(all); id == "" && ok {
+		id = s.ID
+	}
 	items := make([]list.Item, 0, len(all))
 	at := 0
 	for i, s := range all {
@@ -403,14 +410,13 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 		}
 		// No deadline over the whole walk: each step bounds its own.
 		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) { progress <- p }})
-		return restoredMsg{id: s.ID, restored: out, notReached: len(c.RestorePlan(s, report)) - len(out), back: back}
+		return restoredMsg{id: s.ID, current: s.Current, restored: out, notReached: len(c.RestorePlan(s, report)) - len(out), back: back}
 	}
 	return tea.Batch(restoring, waitLedger(written), waitProgress(progress)), nil
 }
 
-// restored takes a restore's answer. What each target came to is the pane's;
-// a target that did not open, or a failure to return to the saved project, is
-// the footer's too.
+// restored takes a restore's answer: a cancel, a target that did not open,
+// or a failure to return to the saved project is the footer's.
 func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	sc.restoring = ""
 	switch {
@@ -419,12 +425,11 @@ func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	case msg.err != nil:
 		return msg.err
 	}
-	sc.outcome = sessionOutcome{id: msg.id, restored: msg.restored, back: msg.back, notReached: msg.notReached}
 	if msg.notReached > 0 {
 		return fmt.Errorf("the restore of %s was cancelled: %s not reached", msg.id, core.Count(msg.notReached, "target"))
 	}
 	if _, _, failed := msg.restored.Counts(); failed > 0 {
-		return fmt.Errorf("%s: %s did not open", msg.id, core.Count(failed, "target"))
+		return fmt.Errorf("the restore of %s: %s did not open", msg.id, core.Count(failed, "target"))
 	}
 	return msg.back
 }
@@ -496,7 +501,7 @@ func (sc *sessionsScreen) nameScreen(sf surface) string {
 
 // detail is the pane on the screen: what the session under the cursor
 // holds, what the save that wrote it could not record, and what restoring it
-// would do here now, or what the restore of it came to.
+// would do here now, or the restore of it that runs.
 func (sc *sessionsScreen) detail(sf surface) string {
 	it, ok := sc.list.SelectedItem().(sessionItem)
 	if !ok {
@@ -541,24 +546,6 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		b.WriteString(heading(th, "Restoring", w))
 		restoreSteps(sf, &b, sc.walk.restored, w, false)
 		say(th.Meta, "\n"+sc.walk.line())
-	case out.id == s.ID && (out.restored != nil || out.notReached > 0 || out.back != nil):
-		b.WriteString(heading(th, "Restored", w))
-		restoreSteps(sf, &b, out.restored, w, true)
-		opened, pending, failed := out.restored.Counts()
-		summary := fmt.Sprintf("opened %d", opened)
-		if pending > 0 {
-			summary += fmt.Sprintf(", %d not up yet", pending)
-		}
-		if failed > 0 {
-			summary += fmt.Sprintf(", %d failed", failed)
-		}
-		say(th.NameDim, "\n"+summary)
-		if out.notReached > 0 {
-			say(th.Attention, "cancelled: "+core.Count(out.notReached, "target")+" not reached")
-		}
-		if out.back != nil {
-			say(th.Attention, out.back.Error())
-		}
 	case !sf.surveyed:
 		b.WriteString(heading(th, "Restore plan", w))
 		say(th.Meta, "surveying")

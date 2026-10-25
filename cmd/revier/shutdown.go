@@ -117,15 +117,23 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	for _, s := range plan {
 		pw, nw = max(pw, len(s.Project)), max(nw, len(s.Name()))
 	}
-	var said []string // what each step's line said, in the order it closed
+	var said []string      // what each step's line said, in the order it closed
+	var walked core.Closed // the steps closed, before the wait says which went
 	opts.Progress = func(p core.Progress) {
-		if p.Phase != core.PhaseClose {
+		switch {
+		case p.Phase == core.PhaseWait:
+			// The wait is for each step asked to close that did not fail.
+			if asked, _, _ := walked.Counts(); asked > 0 {
+				_, _ = fmt.Fprintf(a.out, "waiting for %d to close\n", asked)
+			}
 			return
-		}
-		if !p.Done {
+		case p.Phase != core.PhaseClose:
+			return
+		case !p.Done:
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  ", pw, p.Closed.Project, nw, p.Label)
 			return
 		}
+		walked = append(walked, p.Closed)
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
@@ -135,7 +143,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	var record *usecase.ShutdownRecord
 	var abandon func()
 	if only == "" && scope == core.ShutdownAll {
-		record = usecase.NewShutdownRecord(a.core)
+		record = usecase.NewShutdownRecord(a.core, a.stateRoot)
 		abandon = record.Abandon
 	}
 	walk, stop := interruptible(ctx, abandon)
@@ -167,11 +175,15 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
 	// A cancel that came after the last step was walked stopped nothing.
-	if left := len(plan) - len(closed); cancelled && left > 0 {
+	left := len(plan) - len(closed)
+	if cancelled && left > 0 {
 		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(left, "step"))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
+	}
+	if open == 0 && (!cancelled || left == 0) {
+		_, _ = fmt.Fprintln(a.out, "shutdown complete; safe to leave")
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -40,6 +41,24 @@ func benchmarkSurvey(b *testing.B, n int) {
 	for i := 0; i < b.N; i++ {
 		if _, err := c.Survey(ctx, projects); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// Seen is what a surface adds to each refresh it shows: what it saw, built
+// from the survey, with an agent in every workspace.
+func BenchmarkSeen90(b *testing.B) {
+	c := benchCore(90)
+	c.Probes = []revier.AgentProbe{hosttest.NewResumableProbe("claude", "Working")}
+	r, err := c.Survey(context.Background(), core.Prepare(benchProjects(90)))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, ok := c.Seen(r, core.RemoteAnswers{}, session.Session{}); !ok {
+			b.Fatal("Seen took nothing")
 		}
 	}
 }

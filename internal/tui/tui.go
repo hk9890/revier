@@ -49,6 +49,7 @@ import (
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -183,6 +184,11 @@ type Model struct {
 	rounds    map[string]time.Time             // when each linked host was last asked; one not in it is asked at the next survey
 	failed    map[string]int                   // the rounds in a row each linked host gave no answer to
 	onTop     bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
+	seen      session.Session                  // what the surface last wrote as what it saw (seen.go)
+	shrink    session.Session                  // a survey that holds less than seen, written when the next survey agrees
+	checking  bool                             // the check for an end with no shutdown is out
+	recovered bool                             // that check has answered, so what the surface sees is written
+	onRecord  bool                             // a full shutdown is on record, from state: what is seen is not written
 	input     textinput.Model                  // the filter query, with its own cursor
 	over      hovered                          // what the pointer is on
 	cell      *pointerCell                     // where the pointer last was, nil before it moved
@@ -202,6 +208,7 @@ type Model struct {
 	press     *press                           // where the left button went down, while it is down
 	sel       selection                        // the box a drag is selecting
 	copied    int                              // the characters the last selection copied, shown until the next press
+	closeDone string                           // what the last close del asked for closed, shown until the next press
 	// tdeclared is every chord a target of any project declares as itself.
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.
@@ -792,6 +799,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case surveyMsg:
 		m.surveying = false
 		m.surveyErr = msg.err
+		var seen tea.Cmd
 		if msg.err == nil {
 			// A host that could not list degraded the survey rather than
 			// failing it: the view stands, and the footer says which host.
@@ -802,6 +810,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.keep(m.core.Settle(msg.report, m.projects, time.Now()))
 			m.local, m.surveyed = msg.report, true
 			m.show()
+			seen = m.observe(nil)
 		}
 		// Hidden, nobody reads the answer, and the chain ends here, and with
 		// it the rounds of the linked hosts that a survey starts: a round
@@ -811,11 +820,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.hidden {
 			if !m.claiming() {
 				m.idle = true
-				return m, nil
+				return m, seen
 			}
-			return m, m.nextTick()
+			return m, tea.Batch(seen, m.nextTick())
 		}
-		var cmds []tea.Cmd
+		cmds := []tea.Cmd{seen}
 		now := m.now()
 		for _, host := range m.linkedHosts() {
 			if !slices.Contains(m.polling, host) && m.due(host, now) {
@@ -850,7 +859,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.show()
-		return m, m.startSpin()
+		return m, tea.Batch(m.observe(&msg.answers), m.startSpin())
+	case recoveredMsg:
+		m.takeRecovered(msg)
+		return m, nil
 	case spinMsg:
 		// The spinner stops when nothing works, so an idle surface does not
 		// redraw, and while hidden or without the focus, where nobody watches
@@ -1070,7 +1082,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // keyIn is a press or a paste, which a drag in progress holds back.
 func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
-	m.copied = 0
+	m.copied, m.closeDone = 0, ""
 	if m.walking() {
 		return m.lockedKey(msg)
 	}
@@ -1096,10 +1108,13 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // is not offered again, so a user who went on to pick a session and came
 // back is not asked twice. A dialog up for an older shutdown is put up again
 // for the newer one, so it never offers a session no shutdown on record saved.
+// The dialog after an end with no shutdown has no record to go with, so only
+// a choice takes it down (D150).
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
+	m.onRecord = st.ShutDown != nil
 	switch sd := st.ShutDown; {
-	case m.dialog == dialogResume && sd == nil:
+	case m.dialog == dialogResume && !m.resume.unclean && sd == nil:
 		m.dialog = dialogNone
 	case sd != nil && !sd.At.Equal(m.resume.at) && (m.plain() || m.dialog == dialogResume):
 		m.openResume(*sd)

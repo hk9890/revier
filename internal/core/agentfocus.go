@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -37,12 +38,17 @@ func (c *Core) goAgent(ctx context.Context, p Project, a revier.AgentView) (res 
 // ErrAgentGone.
 //
 // An agent that was reached is one EventGoAgent of the project, recorded here
-// and nowhere else, so every way to an agent records it.
+// and nowhere else, so every way to an agent records it; the state record has
+// the focus failed or not.
 func (c *Core) FocusAgent(ctx context.Context, project revier.ProjectName, a revier.AgentView) error {
 	err := c.focusAgent(ctx, a.Ref, a.Panel)
 	if err == nil {
 		c.record(revier.Event{Kind: revier.EventGoAgent, Project: project, Agent: a.State.Harness, Session: a.State.Session})
 	}
+	c.note(record.Line{
+		Kind: record.KindGoAgent, Project: project, Host: a.Ref.Host, Ref: a.Ref.ID, Panel: a.Panel,
+		Harness: a.State.Harness, Session: a.State.Session,
+	}.Failed(err))
 	return err
 }
 

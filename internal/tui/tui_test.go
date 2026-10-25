@@ -1223,7 +1223,7 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	}
 	// The survey that was running answers: the chain ends there.
 	next, cmd := m.Update(m.Survey()())
-	if cmd != nil {
+	if schedules(next.(tui.Model), cmd) {
 		t.Error("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)
@@ -1279,7 +1279,7 @@ func TestAFocusReportWithAMouseReportBehindItIsTheRaise(t *testing.T) {
 	m = run(m, hide)
 	// The survey that was running answers: the chain ends there.
 	next, cmd := m.Update(m.Survey()())
-	if cmd != nil {
+	if schedules(next.(tui.Model), cmd) {
 		t.Fatal("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)

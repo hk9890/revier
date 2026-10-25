@@ -191,9 +191,31 @@ func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 	t.Errorf("no %q row for the agent:\n%s", want, body)
 }
 
+// The sessions screen starts on the session a plain restore opens, not on a
+// close saved after it, so Enter there is `revier session restore`
+// (decisions.md D149).
+func TestTheSessionsScreenStartsOnWhatARestoreOpens(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	shut := saved(t, root, "", 10, homeOf("project-00"), homeOf("project-01"))
+	if _, _, err := session.Save(root, session.Session{Reason: session.ReasonProjectClosed, At: shut.At.Add(time.Minute), Projects: []session.Project{homeOf("project-01")}}); err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	if holds := pane(m); !strings.Contains(holds, "2 projects") {
+		t.Errorf("pane = %q, want the counts of the save of both projects", holds)
+	}
+	m, _ = press(m, "enter")
+	if foot := footer(m); !strings.Contains(foot, "restoring "+shut.ID) {
+		t.Errorf("footer = %q, want %s restoring", foot, shut.ID)
+	}
+}
+
 // Enter restores the session: the target that is down opens, the one that is
-// up is left, the landing is written to state, and the pane says what came of
-// each.
+// up is left, the landing is written to state, and the restore ends on the
+// project list.
 func TestEnterRestoresTheSession(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -222,11 +244,8 @@ func TestEnterRestoresTheSession(t *testing.T) {
 	if len(rt.Opened) != 1 || rt.Opened[0].Name != "session:project-00" {
 		t.Errorf("Opened = %+v, want project-00's workspace alone", rt.Opened)
 	}
-	body := pane(m)
-	for _, want := range []string{"Restored", "opened", "kept", "opened 1"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("pane lacks %q:\n%s", want, body)
-		}
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
 	}
 	st, err := state.Load(root)
 	if err != nil {
@@ -256,13 +275,13 @@ func TestARestoreRaisesTheSurfaceOnceItEnds(t *testing.T) {
 	if len(rt.Focuses) < 2 || rt.Focuses[len(rt.Focuses)-1] != self || slices.Index(rt.Focuses, self) != len(rt.Focuses)-1 {
 		t.Errorf("Focuses = %v, want the restore's, then the surface's terminal %v once", rt.Focuses, self)
 	}
-	if body := pane(m); !strings.Contains(body, "Restored") {
-		t.Errorf("pane = %q, want the result", body)
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
 	}
 }
 
-// The result of a restore and the input come back before the surface is
-// raised: a slow raise holds neither.
+// The project list and the input come back before the surface is raised: a
+// slow raise holds neither.
 func TestARestoreShowsItsResultBeforeItRaisesTheSurface(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	self := rt.Add("revier", "kitty", revier.Panel{ID: "9", Kind: revier.PanelShell})
@@ -282,11 +301,11 @@ func TestARestoreShowsItsResultBeforeItRaisesTheSurface(t *testing.T) {
 		t.Fatalf("Focuses = %v when the restore answered, want the surface not raised yet", rt.Focuses)
 	}
 	m, raise := update(m, answer)
-	if body := pane(m); !strings.Contains(body, "Restored") {
-		t.Errorf("pane = %q before the raise, want the result", body)
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q before the raise, want the project list", bar)
 	}
-	if back, _ := press(m, "esc"); !strings.Contains(barLine(back), "sessions alt+s") {
-		t.Errorf("bar = %q after esc before the raise, want the input back and the surface", barLine(back))
+	if again, _ := press(m, "alt+s"); !strings.Contains(barLine(again), "Sessions") {
+		t.Errorf("bar = %q after alt+s before the raise, want the input back and the sessions screen", barLine(again))
 	}
 	if raise == nil {
 		t.Fatal("the restore's answer returned no command, want the raise")

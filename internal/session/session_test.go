@@ -127,7 +127,9 @@ func TestSavedFileIsReadableTOML(t *testing.T) {
 	}
 }
 
-// An empty ref means the newest, which is what a restore after a reboot is.
+// An empty ref means the newest save of the whole set, which is what a
+// restore after a reboot is. Every save here was made by hand, so it is the
+// newest of all.
 func TestLoadWithoutRefTakesTheNewest(t *testing.T) {
 	root := t.TempDir()
 	mustSave(t, root, sample(11, "older"))
@@ -140,6 +142,111 @@ func TestLoadWithoutRefTakesTheNewest(t *testing.T) {
 	}
 	if got.Name != "newer" {
 		t.Errorf("Load(\"\") = %q, want the newest", got.Name)
+	}
+}
+
+// A save stands for the whole set when a full shutdown, a hand, or what a
+// surface last saw made it, or when it predates the reason. A close of one
+// project, or a reason this build does not know, does not.
+func TestReasonWhole(t *testing.T) {
+	for _, r := range []session.Reason{session.ReasonShutdown, session.ReasonSaved, session.ReasonLastSeen, ""} {
+		if !r.Whole() {
+			t.Errorf("Reason(%q).Whole() = false, want true", r)
+		}
+	}
+	for _, r := range []session.Reason{session.ReasonProjectClosed, "snapshot"} {
+		if r.Whole() {
+			t.Errorf("Reason(%q).Whole() = true, want false", r)
+		}
+	}
+}
+
+// The 2026-10-16 replay: a full shutdown, then one project opened again and
+// closed. The close saved the one project as the newest; a plain restore
+// still opens the full shutdown's, and the close's opens by its id.
+func TestLoadWithoutRefSkipsAProjectClose(t *testing.T) {
+	root := t.TempDir()
+	shut := sample(11, "")
+	shut.Reason = session.ReasonShutdown
+	shut.Projects = append(shut.Projects, session.Project{Name: "setup", Targets: []session.Target{{Name: "home"}}})
+	mustSave(t, root, shut)
+	closed := sample(12, "")
+	closed.Reason = session.ReasonProjectClosed
+	mustSave(t, root, closed)
+
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.At.Equal(at(11)) || len(got.Projects) != 2 {
+		t.Errorf("Load(\"\") = %s with %d projects, want the shutdown of the 11th", got.ID, len(got.Projects))
+	}
+	byID, err := session.Load(root, session.NewID(at(12)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byID.Reason != session.ReasonProjectClosed {
+		t.Errorf("Load(id) = %+v, want the close of the 12th", byID)
+	}
+}
+
+// The 2026-10-11 replay: a save, then a run of closes, each holding one
+// project fewer. A plain restore opens the save before the run.
+func TestLoadWithoutRefTakesTheNewestOfARunOfCloses(t *testing.T) {
+	root := t.TempDir()
+	whole := sample(10, "whole")
+	whole.Projects = append(whole.Projects,
+		session.Project{Name: "pi", Targets: []session.Target{{Name: "home"}}},
+		session.Project{Name: "bluebox", Targets: []session.Target{{Name: "home"}}},
+		session.Project{Name: "chromectl", Targets: []session.Target{{Name: "home"}}})
+	mustSave(t, root, whole)
+	for day := 11; day <= 13; day++ {
+		closed := whole
+		closed.Name, closed.Reason, closed.At = "", session.ReasonProjectClosed, at(day)
+		closed.Projects = whole.Projects[:len(whole.Projects)-(day-10)]
+		mustSave(t, root, closed)
+	}
+
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "whole" {
+		t.Errorf("Load(\"\") = %s (%q), want the save before the closes", got.ID, got.Name)
+	}
+}
+
+// Every file on disk before the reason existed has none. It still stands
+// for the whole set, so a store of them restores as it did.
+func TestAFileWithNoReasonStandsForTheWholeSet(t *testing.T) {
+	root := t.TempDir()
+	shut := sample(11, "")
+	shut.Reason = session.ReasonShutdown
+	mustSave(t, root, shut)
+	old := sample(12, "old")
+	old.Reason = ""
+	mustSave(t, root, old)
+
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "old" {
+		t.Errorf("Load(\"\") = %s (%q), want the newer file with no reason", got.ID, got.Name)
+	}
+}
+
+// With only closes saved, a plain restore has nothing of the whole set to
+// open, and says so; a caller that only tells an empty store still does.
+func TestLoadWithoutRefWhenOnlyClosesWereSaved(t *testing.T) {
+	root := t.TempDir()
+	closed := sample(12, "")
+	closed.Reason = session.ReasonProjectClosed
+	mustSave(t, root, closed)
+
+	_, err := session.Load(root, "")
+	if !errors.Is(err, session.ErrNoWholeSession) || !errors.Is(err, session.ErrNoSession) {
+		t.Errorf("err = %v, want ErrNoWholeSession, which is ErrNoSession", err)
 	}
 }
 
@@ -189,8 +296,8 @@ func TestSaveInTheSameSecondKeepsBoth(t *testing.T) {
 // A store that was never written to is a normal outcome, not a failure: the
 // first restore on a machine that never saved.
 func TestLoadFromEmptyStore(t *testing.T) {
-	if _, err := session.Load(t.TempDir(), ""); !errors.Is(err, session.ErrNoSession) {
-		t.Errorf("err = %v, want ErrNoSession", err)
+	if _, err := session.Load(t.TempDir(), ""); !errors.Is(err, session.ErrNoSession) || errors.Is(err, session.ErrNoWholeSession) {
+		t.Errorf("err = %v, want ErrNoSession and not ErrNoWholeSession", err)
 	}
 	root := t.TempDir()
 	mustSave(t, root, sample(12, ""))

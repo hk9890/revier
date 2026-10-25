@@ -12,13 +12,14 @@ A findability map: where things live, and how to search for them.
 | `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `herdr` (runtime; `kitty` also the terminal keys, `herdr` also a probe), `gnome` (window and key binder), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher in `assist.go`), `opencode` and `execprobe` (probes), `ssh` (remote). |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
-| `internal/ledger/` | The state file and the event file as the core reads and writes them: the one caller of the state lock. |
-| `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root. |
+| `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
+| `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
 | `internal/fsutil/` | The atomic file write every store uses, and the write through a link that config.toml and the terminal's configuration use. |
 | `internal/logging/` | The daily log file every process appends to, and the helpers that time an operation. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
+| `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
 | `internal/hosttest/` | The fake host, probe, key binder, terminal keys and remote that layer L2 runs against. |

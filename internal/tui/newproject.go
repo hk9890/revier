@@ -380,7 +380,7 @@ func (s *createScreen) write(sf surface, dir, gitURL string) (core.Project, erro
 	if err != nil {
 		return core.Project{}, err
 	}
-	p, err := app.CreateProject(root, sf.projects, name, dir, gitURL, io.Discard)
+	p, err := app.CreateProject(root, sf.core.Ledger, sf.projects, name, dir, gitURL, io.Discard)
 	if err != nil {
 		return core.Project{}, err
 	}

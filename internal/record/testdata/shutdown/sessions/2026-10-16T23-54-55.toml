@@ -1,0 +1,181 @@
+id = "2026-10-16T23-54-55"
+reason = "shutdown"
+at = 2026-10-16T23:54:55+02:00
+current = "p01"
+
+[[project]]
+name = "p01"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c011"
+dir = "/home/hans/dev/p01"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c012"
+dir = "/home/hans/dev/p01"
+
+[[project]]
+name = "p02"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c021"
+dir = "/home/hans/dev/p02"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c022"
+dir = "/home/hans/dev/p02"
+
+[[project]]
+name = "p03"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c031"
+dir = "/home/hans/dev/p03"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c032"
+dir = "/home/hans/dev/p03"
+
+[[project]]
+name = "p04"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c041"
+dir = "/home/hans/dev/p04"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c042"
+dir = "/home/hans/dev/p04"
+
+[[project]]
+name = "p05"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c051"
+dir = "/home/hans/dev/p05"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c052"
+dir = "/home/hans/dev/p05"
+
+[[project]]
+name = "p06"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c061"
+dir = "/home/hans/dev/p06"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c062"
+dir = "/home/hans/dev/p06"
+
+[[project]]
+name = "p07"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c071"
+dir = "/home/hans/dev/p07"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c072"
+dir = "/home/hans/dev/p07"
+
+[[project]]
+name = "p08"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c081"
+dir = "/home/hans/dev/p08"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c082"
+dir = "/home/hans/dev/p08"
+
+[[project]]
+name = "p09"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c091"
+dir = "/home/hans/dev/p09"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c092"
+dir = "/home/hans/dev/p09"
+
+[[project]]
+name = "p10"
+
+[[project.target]]
+name = "workspace"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c101"
+dir = "/home/hans/dev/p10"
+
+[[project.target.agent]]
+harness = "claude"
+session = "c102"
+dir = "/home/hans/dev/p10"
+
+[[project]]
+name = "far"
+
+[[project.target]]
+name = "home"
+
+[[project.target.agent]]
+harness = "claude"
+session = "d1"
+dir = "/srv/far"
+
+[[project]]
+name = "lab"
+
+[[project.target]]
+name = "home"

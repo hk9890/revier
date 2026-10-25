@@ -3,7 +3,7 @@
 `revier` with no command opens the TUI. Every other command does one thing and
 exits. `revier help` lists the commands and their flags. `revier <command>
 --help` gives the usage of one command. `revier agent help`, `shell help`,
-`session help`, `keys help`, `term help`, `each help` and `events help` give each family
+`session help`, `keys help`, `term help`, `each help`, `events help` and `state help` give each family
 in full.
 
 - `-p <name>` names the project. Without it, revier finds the project as
@@ -32,7 +32,7 @@ in full.
 | `revier agent read` | Print an agent's last reply, or its screen. |
 | `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
 | `revier agent focus` | Go to an agent's tab. |
-| `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. |
+| `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
 | `revier term status` / `install` / `uninstall` | Show, write or remove the terminal keys in your terminal's configuration. See [kitty](integrations/kitty.md#add-tabs-from-a-kitty-key). |
@@ -40,6 +40,7 @@ in full.
 | `revier doctor` | Every configuration problem, and its fix. |
 | `revier assist` | Start Claude Code, briefed on your revier configuration. See [Agents](agents.md#let-an-agent-configure-revier). |
 | `revier events` | Each time you used a project, as JSON lines. |
+| `revier state` | What revier had open at a moment, per machine, and why a saved session differs from what was open when it was saved. |
 | `revier version` | The installed version. |
 
 `revier agent exec` and `revier shell exec` are what a link's panels run on the
@@ -50,7 +51,7 @@ host. You do not run them by hand.
 ## Output
 
 Commands print tables for a person. `revier list`, `revier session list`,
-the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
+`revier state`, the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
 prints JSON. Warnings and errors go to stderr, so stdout stays clean.
 
 The TARGETS column of `revier list` marks each target: `*` open, `x` no host
@@ -75,7 +76,7 @@ doctor` says why), `?` its host did not answer.
 | Variable | Does |
 |---|---|
 | `REVIER_CONFIG_HOME` | The configuration directory; see [Files](configuration.md#files). |
-| `REVIER_STATE_HOME` | The state directory: logs, events, sessions. Default `$XDG_STATE_HOME/revier`, else `~/.local/state/revier`. |
+| `REVIER_STATE_HOME` | The state directory: logs, events, sessions, the state record. Default `$XDG_STATE_HOME/revier`, else `~/.local/state/revier`. |
 | `REVIER_SSH_CONFIG` | The file revier reads ssh hosts from, in place of `~/.ssh/config`. |
 | `NO_COLOR` | A value that is not empty turns colour off in the TUI. |
 | `CLAUDE_CONFIG_DIR` | Where revier reads Claude Code's files. Default `~/.claude`. |

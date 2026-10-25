@@ -37,6 +37,12 @@ import (
 // name that names nothing is a typo, and is one.
 var ErrNoSession = errors.New("no stored session")
 
+// ErrNoWholeSession is returned for the newest session when sessions are
+// stored but none stands for the whole set: each was saved as a project
+// closed. It wraps ErrNoSession, so a caller that only tells an empty store
+// from a failure still does (decisions.md D149).
+var ErrNoWholeSession = fmt.Errorf("%w of every open project", ErrNoSession)
+
 // Session is one recorded set of open projects.
 type Session struct {
 	// ID is the moment it was saved, and the name of its file. A timestamp
@@ -71,10 +77,28 @@ const (
 	// ReasonShutdown is the save a full shutdown makes before it closes.
 	ReasonShutdown Reason = "shutdown"
 	// ReasonProjectClosed is the save made before one project is closed.
+	// It is not what a plain restore opens: a run of closes leaves the
+	// smallest set as the newest save (decisions.md D149).
 	ReasonProjectClosed Reason = "project-closed"
 	// ReasonSaved is a save asked for by hand.
 	ReasonSaved Reason = "saved"
+	// ReasonLastSeen is what a surface last saw, saved when it ended without
+	// a shutdown.
+	ReasonLastSeen Reason = "last-seen"
 )
+
+// Whole reports whether a save of this reason stands for the whole set that
+// was open, so that a plain restore may open it (decisions.md D149). A file
+// with no reason predates the field and cannot be told apart, so it counts;
+// a reason this build does not know does not.
+func (r Reason) Whole() bool {
+	switch r {
+	case ReasonShutdown, ReasonSaved, ReasonLastSeen, "":
+		return true
+	default:
+		return false
+	}
+}
 
 // Text is the reason as a list shows it. A file with no reason, or one
 // this build does not know, reads "unknown" rather than a guess.
@@ -86,6 +110,8 @@ func (r Reason) Text() string {
 		return "project closed"
 	case ReasonSaved:
 		return "saved by hand"
+	case ReasonLastSeen:
+		return "last seen"
 	default:
 		return "unknown"
 	}
@@ -139,17 +165,24 @@ func Save(stateRoot string, s Session) (Session, string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	base := NewID(s.At)
-	id, path := base, filepath.Join(dir, base+".toml")
-	for n := 2; exists(path); n++ {
-		id = fmt.Sprintf("%s-%d", base, n)
-		path = filepath.Join(dir, id+".toml")
-	}
+	id, path := free(dir, s.At)
 	s.ID = id
 	if err := write(path, s); err != nil {
 		return Session{}, "", err
 	}
 	return s, path, nil
+}
+
+// free is the id of a session saved at at that no file in dir has yet, and
+// its file.
+func free(dir string, at time.Time) (string, string) {
+	base := NewID(at)
+	id, path := base, filepath.Join(dir, base+".toml")
+	for n := 2; exists(path); n++ {
+		id = fmt.Sprintf("%s-%d", base, n)
+		path = filepath.Join(dir, id+".toml")
+	}
+	return id, path
 }
 
 func write(path string, s Session) error {
@@ -168,35 +201,125 @@ func write(path string, s Session) error {
 // Rename moves what every stored session records under a project to its new
 // name, in place: a project renamed on the surface (decisions.md D80) is
 // still the one a session saved before the rename opens again. A session
-// that does not name the project is left as it is.
+// that does not name the project is left as it is. What a surface last saw
+// is renamed too, so a rename made while no surface runs is not lost when
+// that file becomes a saved session.
 func Rename(stateRoot string, from, to revier.ProjectName) error {
 	all, err := List(stateRoot)
 	if err != nil {
 		return err
 	}
 	for _, s := range all {
-		changed := false
-		if s.Current == from {
-			s.Current, changed = to, true
-		}
-		for i := range s.Projects {
-			if s.Projects[i].Name == from {
-				s.Projects[i].Name, changed = to, true
+		if renamed(&s, from, to) {
+			if err := write(filepath.Join(Dir(stateRoot), s.ID+".toml"), s); err != nil {
+				return err
 			}
 		}
-		if !changed {
-			continue
-		}
-		if err := write(filepath.Join(Dir(stateRoot), s.ID+".toml"), s); err != nil {
-			return err
-		}
+	}
+	seen, err := LoadSeen(stateRoot)
+	switch {
+	case errors.Is(err, ErrNoSession):
+		return nil
+	case err != nil:
+		return err
+	}
+	if renamed(&seen, from, to) {
+		return write(SeenPath(stateRoot), seen)
 	}
 	return nil
 }
 
-// Load reads one session. An empty ref is the newest stored session, which is
-// what a restore after a reboot means. Otherwise ref is an id, and failing
-// that a name, whose newest holder is taken.
+// renamed moves what s records under from to to, and reports whether s named
+// from at all.
+func renamed(s *Session, from, to revier.ProjectName) bool {
+	changed := false
+	if s.Current == from {
+		s.Current, changed = to, true
+	}
+	for i := range s.Projects {
+		if s.Projects[i].Name == from {
+			s.Projects[i].Name, changed = to, true
+		}
+	}
+	return changed
+}
+
+// SeenPath is the file that holds what a running surface last saw. It is
+// beside the sessions directory and not in it, so List and a plain restore
+// never take it for a save: it becomes one only after an end with no
+// shutdown, by PromoteSeen (decisions.md D150).
+func SeenPath(stateRoot string) string { return filepath.Join(stateRoot, "seen.toml") }
+
+// SaveSeen writes s as what the surface last saw, over the file it wrote
+// before, whole or not at all. It carries no id, since it is no stored
+// session, and the reason it is saved under when it becomes one.
+func SaveSeen(stateRoot string, s Session) error {
+	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
+		return fmt.Errorf("create state directory: %w", err)
+	}
+	s.ID, s.Reason = "", ReasonLastSeen
+	return write(SeenPath(stateRoot), s)
+}
+
+// LoadSeen reads what a surface last saw, or ErrNoSession when no surface
+// wrote it or it was taken since.
+func LoadSeen(stateRoot string) (Session, error) {
+	var s Session
+	if _, err := toml.DecodeFile(SeenPath(stateRoot), &s); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Session{}, ErrNoSession
+		}
+		return Session{}, fmt.Errorf("read %s: %w", SeenPath(stateRoot), err)
+	}
+	return s, nil
+}
+
+// PromoteSeen moves what a surface last saw into the stored sessions, as a
+// session of its own moment, and returns it as stored together with the file
+// it is now. A move is one step, so of two surfaces that start at once one
+// takes the file and the other gets ErrNoSession: what it would offer is
+// offered already.
+func PromoteSeen(stateRoot string) (Session, string, error) {
+	s, err := LoadSeen(stateRoot)
+	if err != nil {
+		return Session{}, "", err
+	}
+	dir := Dir(stateRoot)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Session{}, "", fmt.Errorf("create session directory: %w", err)
+	}
+	id, path := free(dir, s.At)
+	if err := os.Rename(SeenPath(stateRoot), path); err != nil {
+		return Session{}, "", taken(err)
+	}
+	s.ID = id
+	return s, path, nil
+}
+
+// DropSeen removes what a surface last saw, once a stored session holds the
+// same: the file is taken as PromoteSeen takes it, so it is offered once,
+// and the one that finds it gone gets ErrNoSession.
+func DropSeen(stateRoot string) error {
+	return taken(os.Remove(SeenPath(stateRoot)))
+}
+
+// taken is the error of a move or a removal of what was last seen: none, or
+// ErrNoSession when another process took the file first.
+func taken(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, os.ErrNotExist):
+		return ErrNoSession
+	default:
+		return fmt.Errorf("take what was last seen: %w", err)
+	}
+}
+
+// Load reads one session. An empty ref is what a restore after a reboot
+// means: the session Newest picks, or ErrNoWholeSession when none stands for
+// the whole set (decisions.md D149). Otherwise ref is an id, and failing that
+// a name, whose newest holder is taken, whatever its reason.
 func Load(stateRoot, ref string) (Session, error) {
 	all, err := List(stateRoot)
 	if err != nil {
@@ -206,7 +329,11 @@ func Load(stateRoot, ref string) (Session, error) {
 		return Session{}, ErrNoSession
 	}
 	if ref == "" {
-		return all[0], nil
+		s, ok := Newest(all)
+		if !ok {
+			return Session{}, ErrNoWholeSession
+		}
+		return s, nil
 	}
 	for _, s := range all {
 		if s.ID == ref {
@@ -220,6 +347,17 @@ func Load(stateRoot, ref string) (Session, error) {
 		}
 	}
 	return Session{}, fmt.Errorf("%w named %q", ErrNoSession, ref)
+}
+
+// Newest is the first session of a newest-first list whose reason stands for
+// the whole set: the one a plain restore opens (decisions.md D149).
+func Newest(all []Session) (Session, bool) {
+	for _, s := range all {
+		if s.Reason.Whole() {
+			return s, true
+		}
+	}
+	return Session{}, false
 }
 
 // List reads every stored session, newest first. A file that does not parse is

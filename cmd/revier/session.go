@@ -95,15 +95,45 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	if len(pos) > 0 {
 		ref = pos[0]
 	}
-	s, err := session.Load(a.stateRoot, ref)
-	if ref == "" && errors.Is(err, session.ErrNoSession) {
-		_, _ = fmt.Fprintln(a.out, "no saved session. write one with revier session save")
-		return nil
+	// A session asked for by id or name is found without a survey, so one
+	// that names nothing fails before any host is asked.
+	var s session.Session
+	if ref != "" {
+		if s, err = session.Load(a.stateRoot, ref); err != nil {
+			return err
+		}
+	}
+	report, err := a.core.Survey(ctx, a.projects)
+	if err != nil {
+		return err
+	}
+	// After an end with no shutdown, what a surface last saw is saved first,
+	// so a plain restore opens it when it is the newest save (decisions.md
+	// D150). A dry run saves nothing and previews the snapshot itself.
+	unclean := false
+	switch {
+	case ref == "" && *dry:
+		s, unclean, err = usecase.Unclean(a.core, a.stateRoot, report)
+	case ref == "":
+		_, _, err = usecase.Recover(a.core, a.stateRoot, report)
 	}
 	if err != nil {
 		return err
 	}
-	report, err := a.core.Survey(ctx, a.projects)
+	switch {
+	case unclean:
+		_, _ = fmt.Fprintf(a.out, "revier ended without a shutdown; a restore saves what it last saw, at %s, and opens it\n", s.At.Local().Format("2006-01-02 15:04"))
+	case ref == "":
+		s, err = session.Load(a.stateRoot, "")
+	}
+	if ref == "" && errors.Is(err, session.ErrNoWholeSession) {
+		_, _ = fmt.Fprintln(a.out, "no saved session holds every open project; each was saved as a project closed. revier session list shows them, and revier session restore <id> opens one")
+		return nil
+	}
+	if ref == "" && errors.Is(err, session.ErrNoSession) {
+		_, _ = fmt.Fprintln(a.out, "no saved session. write one with revier session save")
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -191,5 +221,13 @@ func cmdSessionList(a *app, args []string) error {
 	for _, s := range all {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\n", s.ID, s.Reason.Text(), s.Name, len(s.Projects), s.Targets(), s.Agents())
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	// The newest row is not always what a plain restore opens: a project
+	// closed saves too (decisions.md D149).
+	if s, ok := session.Newest(all); ok {
+		_, _ = fmt.Fprintf(a.out, "revier session restore opens %s\n", s.ID)
+	}
+	return nil
 }

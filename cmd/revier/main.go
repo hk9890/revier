@@ -23,6 +23,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/state"
 )
 
@@ -99,8 +100,10 @@ usage:
   revier session save [--name label]
                                 record the projects that are open now
   revier session restore [id|name] [--dry-run]
-                                open what a saved session recorded; the newest
-                                without an argument
+                                open what a saved session recorded; without an
+                                argument, the newest one saved by hand, by a
+                                full shutdown, or from what the TUI last saw
+                                before an end with no shutdown
   revier session list [--json]  the saved sessions, newest first
   revier shutdown [project] [--agents | --targets] [--force] [--no-session-save] [--dry-run]
                                 save the session when it changed, then close every
@@ -119,6 +122,11 @@ usage:
                                 days (7), one JSON line per event, with what
                                 the revier on every linked host recorded;
                                 --local asks no host
+  revier state [--at time | --session id] [--json]
+                                what revier managed at a moment: projects,
+                                targets, windows and agents per host, from
+                                this machine's state record; --session
+                                compares a saved session with it
   revier version
 
 flags:
@@ -202,6 +210,7 @@ func openLog(args []string) {
 	root, err := state.Root()
 	if err == nil {
 		events.Setup(root)
+		record.Setup(root, cmd)
 		err = logging.Setup(root, cmd, level)
 	}
 	if err != nil {
@@ -293,6 +302,9 @@ func run(out io.Writer, args []string) error {
 		// No app, for the reason each has none: the file and the hosts the
 		// project files name are all it reads.
 		return cmdEvents(out, args)
+	case "state":
+		// No app: the state record is all it reads, and it asks no host.
+		return cmdState(out, args)
 	case "each":
 		// No app: a run in every project needs the project list and the state
 		// root, and no host. Probing the desktop would be work, and a way to
@@ -366,6 +378,7 @@ var familyUsage = map[string]string{
 	"term":    termUsage,
 	"each":    eachUsage,
 	"events":  eventsUsage,
+	"state":   stateUsage,
 }
 
 // commandHelp is what `revier <cmd> --help` prints: the family's own usage,

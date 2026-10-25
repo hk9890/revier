@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -81,14 +82,18 @@ func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait tim
 // of those reports, which lags the walk.
 type ShutdownRecord struct {
 	c       *core.Core
+	root    string // the state root, whose record of what was last seen the shutdown ends
 	mu      sync.Mutex
 	at      time.Time // when this shutdown wrote its record, which the state may not hold; zero when it holds none
 	steps   int
 	reached int
 }
 
-// NewShutdownRecord is the record of a full shutdown about to run.
-func NewShutdownRecord(c *core.Core) *ShutdownRecord { return &ShutdownRecord{c: c} }
+// NewShutdownRecord is the record of a full shutdown about to run, under the
+// state root stateRoot.
+func NewShutdownRecord(c *core.Core, stateRoot string) *ShutdownRecord {
+	return &ShutdownRecord{c: c, root: stateRoot}
+}
 
 // Abandon is the end of a cancelled shutdown whose surface quits before the
 // walk returns, on the second ctrl+c: the record is taken back as the walk
@@ -126,9 +131,13 @@ func (r *ShutdownRecord) reach() {
 
 // write records the shutdown unless ctx was cancelled. The cancel is read
 // under the state's lock, so a surface that takes the record back after its
-// cancel is never followed by this write.
+// cancel is never followed by this write. A recorded shutdown removes what a
+// surface last saw: the end is a clean one, and a file left from before it
+// would read as an end with no shutdown once the record ends (decisions.md
+// D150).
 func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 	at := time.Now().Round(0)
+	recorded := false
 	r.c.Ledger.Update(func(st *state.State) bool {
 		if ctx.Err() != nil {
 			return false
@@ -136,9 +145,15 @@ func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		st.MarkShutDown(at, sessionID)
-		r.at = at
+		r.at, recorded = at, true
 		return true
 	})
+	if !recorded {
+		return
+	}
+	if err := session.DropSeen(r.root); err != nil && !errors.Is(err, session.ErrNoSession) {
+		slog.Warn("session seen", "err", err, "path", session.SeenPath(r.root))
+	}
 }
 
 // takeBack ends the record this shutdown wrote when its walk left a step not

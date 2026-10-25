@@ -11,6 +11,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -48,6 +49,26 @@ func TestRestoreOpensOnlyWhatIsNotUp(t *testing.T) {
 	again, _, _ := restoreOf(t, c, s)
 	if opened, _, _ := again.Counts(); opened != 0 || len(rt.Opened) != 1 {
 		t.Errorf("a second restore opened %d, Opened = %d, want nothing more", opened, len(rt.Opened))
+	}
+}
+
+// The state record has each launch of a restore with what came of its
+// agents, then the session restored with what it holds and its counts.
+func TestARestoreRecordsEachStepAndItsAgents(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: []revier.AgentProbe{resumable()}}
+	s := session.Session{ID: "2026-10-16T23-54-55", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
+		{Name: "home", Agents: []session.Agent{{Harness: "claude", Session: "abc-123"}}}, {Name: "notes"},
+	}}}}
+
+	_, l, _ := restoreOf(t, c, s)
+	steps := l.noted(record.KindRestoreStep)
+	want := []record.Outcome{{Harness: "claude", Session: "abc-123", Outcome: "resumed"}}
+	if len(steps) != 2 || steps[0].Target != "home" || steps[0].Ref == "" || !slices.Equal(steps[0].Agents, want) || steps[1].Target != "notes" {
+		t.Errorf("restore steps = %+v, want home with its agent resumed, then notes", steps)
+	}
+	restored := l.noted(record.KindSessionRestored)
+	if len(restored) != 1 || restored[0].Saved != s.ID || restored[0].Counts["opened"] != 2 || len(restored[0].Projects) != 1 {
+		t.Errorf("session restored = %+v, want %s with its project and 2 opened", restored, s.ID)
 	}
 }
 

@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -85,9 +86,9 @@ func TestNoStartDialogWithoutAShutdown(t *testing.T) {
 
 // Restore takes the shutdown off the record as it starts, so a restore that
 // never ends does not bring the dialog back, and the sessions screen shows
-// the walk. It opens what the session recorded.
+// the walk. It opens what the session recorded and ends on the project list.
 func TestRestoreOnTheStartDialogClearsTheShutdownAndRestores(t *testing.T) {
-	m, rt, root, s := shutDownWorld(t)
+	m, rt, root, _ := shutDownWorld(t)
 	m, cmd := press(m, "enter")
 	if sd := shutDownOnRecord(t, root); sd != nil {
 		t.Errorf("shutdown on record = %+v once the restore started, want none", sd)
@@ -99,11 +100,63 @@ func TestRestoreOnTheStartDialogClearsTheShutdownAndRestores(t *testing.T) {
 		t.Errorf("pane = %q, want the walk shown", p)
 	}
 	m = run(m, cmd)
-	if p := pane(m); !strings.Contains(p, "Restored") || !strings.Contains(p, s.ID) {
-		t.Errorf("pane = %q, want what the restore of %s came to", p, s.ID)
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
 	}
 	if !opened(rt, "session:project-00") {
 		t.Error("the restore did not open project-00's home")
+	}
+}
+
+// A restore from the start dialog ends on the project list, with the cursor
+// on the project the session was left on, and then raises the surface's own
+// terminal over the windows it opened.
+func TestARestoreFromTheStartDialogEndsOnTheListAndRaisesTheSurface(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	self := rt.Add("revier", "kitty", revier.Panel{ID: "9", Kind: revier.PanelShell})
+	c.Self = func(p revier.Panel) bool { return p.ID == "9" }
+	root := t.TempDir()
+	s, _, err := session.Save(root, session.Session{
+		Current: "project-01", At: time.Date(2026, 9, 15, 18, 10, 0, 0, time.Local),
+		Projects: []session.Project{homeOf("project-00"), homeOf("project-01")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), s.ID)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+
+	m, cmd := press(m, "enter")
+	m, raise := deliver(m, cmd)
+	runAll(raise)
+
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
+	}
+	wantSelected(t, m, "project-01", "the project the session was left on")
+	if len(rt.Focuses) == 0 || rt.Focuses[len(rt.Focuses)-1] != self {
+		t.Errorf("Focuses = %v, want the surface's terminal %v raised last", rt.Focuses, self)
+	}
+}
+
+// A restore whose targets do not open still ends on the project list, and
+// the footer says how many did not open.
+func TestARestoreWithTargetsThatFailEndsOnTheListAndSaysSo(t *testing.T) {
+	m, rt, _, s := shutDownWorld(t)
+	rt.OpenErr = errors.New("kitty refused")
+
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
+	}
+	if foot := footer(m); !strings.Contains(foot, "the restore of "+s.ID+": 1 target did not open") {
+		t.Errorf("footer = %q, want the target that did not open said", foot)
 	}
 }
 
@@ -304,5 +357,72 @@ func TestARaiseDropsADeleteAskedBeforeTheHide(t *testing.T) {
 	m, _ = press(m, "esc")
 	if sub := lines(m)[2]; strings.Contains(sub, "revier was shut down") {
 		t.Errorf("subtitle = %q, want the start dialog closed by the first key", sub)
+	}
+}
+
+// uncleanEnd writes what a surface last saw before an end with no shutdown:
+// project-00's home, which is not open now.
+func uncleanEnd(t *testing.T, root string) {
+	t.Helper()
+	if err := session.SaveSeen(root, session.Session{At: time.Date(2026, 9, 15, 18, 20, 0, 0, time.Local), Projects: []session.Project{
+		{Name: "project-00", Targets: []session.Target{{Name: "home"}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// After an end with no shutdown that lost something, the first survey opens
+// the start dialog on what was last seen, saved as a session. No record keeps
+// it up, so the next refresh leaves it, and Restore opens what it holds.
+func TestTheStartDialogOffersWhatWasLastSeenAfterAnUncleanEnd(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, rt := seenWorld(t, root)
+	m = seenSurvey(seenSurvey(m))
+
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier ended without a shutdown; last changed 2026-09-15 18:20.") {
+		t.Fatalf("subtitle = %q, want the dialog after an end with no shutdown", sub)
+	}
+	all, err := session.List(root)
+	if err != nil || len(all) != 1 || all[0].Reason != session.ReasonLastSeen {
+		t.Fatalf("sessions = %+v, %v, want what was last seen saved", all, err)
+	}
+	if p := pane(m); !strings.Contains(p, all[0].ID) {
+		t.Errorf("pane = %q, want the session %s offered", p, all[0].ID)
+	}
+
+	m, cmd := press(m, "enter")
+	run(m, cmd)
+	if !opened(rt, "session:project-00") {
+		t.Error("the restore did not open project-00's home")
+	}
+}
+
+// After a full shutdown its own dialog comes up as before, and what was last
+// seen is not saved as a session.
+func TestAFullShutdownStillOpensItsOwnDialog(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := seenWorld(t, root)
+	m = seenSurvey(m)
+
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Errorf("subtitle = %q, want the dialog of the full shutdown", sub)
+	}
+	if all, _ := session.List(root); len(all) != 0 {
+		t.Errorf("sessions = %+v, want no last-seen save", all)
+	}
+
+	// While the shutdown is on record, what the surface sees is not written:
+	// it would be left behind as what an end with no shutdown lost.
+	forget(t, root)
+	seenSurvey(seenSurvey(m))
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v while a full shutdown is on record, want nothing written", s)
 	}
 }

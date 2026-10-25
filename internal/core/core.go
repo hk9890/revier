@@ -1213,6 +1213,10 @@ type Report struct {
 	// tags is where the runtime here shows each panel a linked host can name:
 	// what places a host's agents, whenever its answer is laid over.
 	tags map[revier.PanelID]shown
+	// asked is each linked host an answer laid over the report came from,
+	// with why it gave no answer, or "" when it answered: what a record of
+	// the survey says of each host (decisions.md D151).
+	asked map[string]string
 	// before is the state the survey started from: what Settle may judge. A
 	// ref written since is to a window the listing may have missed.
 	before *state.State
@@ -1326,6 +1330,7 @@ func (c *Core) Lay(r Report, answers RemoteAnswers) Report {
 		views[i].Agents = slices.Clip(views[i].Agents)
 	}
 	r.Views = views
+	r.asked = maps.Clone(r.asked)
 	c.lay(&r, answers)
 	return r
 }
@@ -1337,6 +1342,13 @@ func (c *Core) lay(r *Report, answers RemoteAnswers) {
 		a, ok := answers.of(v.Project)
 		if !ok {
 			continue
+		}
+		if r.asked == nil {
+			r.asked = map[string]string{}
+		}
+		r.asked[a.link.Host] = ""
+		if a.unreached {
+			r.asked[a.link.Host] = a.err.Error()
 		}
 		at := len(v.Agents)
 		c.localise(r.tags, merge(v, a))

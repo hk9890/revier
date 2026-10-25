@@ -343,7 +343,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s.walk = w
 	s.record = nil
 	if full {
-		s.record = app.NewShutdownRecord(c)
+		s.record = app.NewShutdownRecord(c, root)
 	}
 	record := s.record
 	closing := func() tea.Msg {
@@ -493,7 +493,10 @@ func (s shutdown) unreached() []core.CloseStep {
 // shutdownTitle is the question the step asks, on the line over the rule.
 func (m Model) shutdownTitle() string {
 	s := m.shut
-	if s.one {
+	switch {
+	case s.running:
+		return "Shutting down: wait until it ends"
+	case s.one:
 		return m.closeTitle()
 	}
 	switch s.step {
@@ -555,8 +558,11 @@ func (m Model) shutdownScreen() string {
 		if s.walk.cancelled {
 			open += len(s.unreached())
 		}
-		done := say(th.Running, fmt.Sprintf("closed %d, %d still open", n, open)) + "\n" +
-			say(th.Meta, s.saved)
+		result := fmt.Sprintf("closed %d, %d still open", n, open)
+		if open == 0 && failed == 0 {
+			result = fmt.Sprintf("Shutdown complete: closed %d. It is safe to leave.", n)
+		}
+		done := say(th.Running, result) + "\n" + say(th.Meta, s.saved)
 		// What did not close, and what a cancel left, are said on the
 		// result's own rows, so the footer keeps the result's keys.
 		if failed > 0 {
@@ -587,13 +593,18 @@ func (m Model) shutdownDetail() string {
 	th, s := m.spun(), m.shut
 	w := m.paneCols() - paneChrome
 	var b strings.Builder
-	closedRows := func(closed core.Closed) revier.ProjectName {
+	// Until the wait after the closes has confirmed them, a step the walk
+	// asked to close is waited for, not closed.
+	closedRows := func(closed core.Closed, confirmed bool) revier.ProjectName {
 		var project revier.ProjectName
 		for _, r := range closed {
 			project = m.shutProjectLine(&b, project, r.Project, w)
 			op, rest := startOp(th, "closed"), ""
-			if r.Err != nil || r.Open || r.Action.Leaves() {
+			switch {
+			case r.Err != nil || r.Open || r.Action.Leaves():
 				op, rest = skipOp(th, "open"), r.Note()
+			case !confirmed:
+				op = keepOp(th, "waiting")
 			}
 			b.WriteString(planRow(th, op, th.ProjectName.Render(r.Name()), "", rest, th.PathMissing, w) + "\n")
 		}
@@ -604,19 +615,23 @@ func (m Model) shutdownDetail() string {
 		// The steps done, then the one that runs: a host that hangs on a
 		// close is the step left on the screen.
 		b.WriteString(th.Header.Render("Closing") + "\n")
-		project := closedRows(s.walk.closed)
+		project := closedRows(s.walk.closed, false)
 		left := len(s.plan) - len(s.walk.closed)
-		if p := s.walk.last; p.Phase == core.PhaseClose && !p.Done {
+		p := s.walk.last
+		if p.Phase == core.PhaseClose && !p.Done {
 			m.shutProjectLine(&b, project, p.Closed.Project, w)
 			b.WriteString(planRow(th, keepOp(th, "closing"), th.ProjectName.Render(p.Label), "", "", th.Path, w) + "\n")
 			left--
 		}
-		if left > 0 {
+		switch {
+		case p.Phase == core.PhaseWait:
+			b.WriteString(hang("", "\n"+s.walk.waiting(), w, th.Meta) + "\n")
+		case left > 0:
 			b.WriteString(hang("", "\n"+core.Count(left, "step")+" to go", w, th.Meta) + "\n")
 		}
 	case s.step == shutDone:
 		b.WriteString(th.Header.Render("Closed") + "\n")
-		project := closedRows(s.closed)
+		project := closedRows(s.closed, true)
 		if !s.walk.cancelled {
 			break
 		}

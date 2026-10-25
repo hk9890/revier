@@ -35,6 +35,9 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 
 	m, cmd = press(m, "enter")
+	if sub := lines(m)[2]; !strings.Contains(sub, "Shutting down: wait until it ends") {
+		t.Errorf("subtitle = %q while the close runs, want it said to wait", sub)
+	}
 	m = run(m, cmd)
 	if len(rt.Closed) != 1 {
 		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
@@ -50,7 +53,43 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 }
 
+// The 2026-10-16 replay: a full shutdown of two projects, one opened again,
+// and del on it. The del saves the one project as the newest session, and a
+// plain restore still opens the full shutdown's (decisions.md D149).
+func TestADelAfterAFullShutdownLeavesItTheRestore(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	rt.Add("session:project-00", "kitty")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	m, cmd := press(m, "enter")
+	_, _ = deliver(m, cmd)
+	shut, err := session.Load(root, "")
+	if err != nil || shut.Reason != session.ReasonShutdown || len(shut.Projects) != 2 {
+		t.Fatalf("after the full shutdown, Load(\"\") = %+v, %v; want its save of two projects", shut, err)
+	}
+
+	rt.Add("session:project-01", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
+	m = resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "esc")
+	m, cmd = press(m, "delete")
+	m = run(m, cmd)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close project-01?") {
+		t.Fatalf("subtitle = %q, want the confirm", sub)
+	}
+	m, cmd = press(m, "enter")
+	_ = run(m, cmd)
+
+	all, _ := session.List(root)
+	if len(all) != 2 || all[0].Reason != session.ReasonProjectClosed {
+		t.Fatalf("sessions = %+v, want the del's save newest, saved by a project close", all)
+	}
+	if got, err := session.Load(root, ""); err != nil || got.ID != shut.ID {
+		t.Errorf("Load(\"\") = %s, %v; want the full shutdown's %s", got.ID, err, shut.ID)
+	}
+}
+
 // del on a target that holds no agent closes it at once, and nothing else.
+// The footer says the close is complete until the next press.
 func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	editor := wm.Add("editor", "code-project-01")
@@ -73,6 +112,12 @@ func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	}
 	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface as it was", bar)
+	}
+	if foot := footer(m); !strings.Contains(foot, "editor of project-01: the close is complete") {
+		t.Errorf("footer = %q, want the close said complete", foot)
+	}
+	if m, _ = press(m, "down"); strings.Contains(footer(m), "the close is complete") {
+		t.Errorf("footer = %q after a press, want the keys back", footer(m))
 	}
 }
 

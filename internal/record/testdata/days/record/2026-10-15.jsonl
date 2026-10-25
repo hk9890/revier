@@ -1,0 +1,2 @@
+{"time":"2026-10-15T08:00:00+02:00","kind":"project created","by":"did","pid":5151,"cmd":"go","project":"b"}
+{"time":"2026-10-15T09:00:00+02:00","kind":"snapshot","by":"saw","pid":4242,"cmd":"tui","seen":{"projects":["a","b"]}}

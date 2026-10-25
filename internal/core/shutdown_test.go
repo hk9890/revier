@@ -12,6 +12,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -182,6 +183,39 @@ func TestShutdownGoesOnPastAFailedClose(t *testing.T) {
 	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll), 0, reading(projects))
 	if closed, _, failed := out.Counts(); failed != 2 || closed != 1 {
 		t.Errorf("counts = %d closed, %d failed; want the editor closed past two failures", closed, failed)
+	}
+}
+
+// The state record has each close, failed or not, then the shutdown with
+// what it came to; a refused shutdown has its refusal alone.
+func TestAShutdownRecordsEachClose(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	l := &ledger{}
+	c.Ledger = l
+	rt.CloseErr = errors.New("socket gone")
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	if _, err := c.Shutdown(context.Background(), plan, 0, reading(projects)); err != nil {
+		t.Fatal(err)
+	}
+	closes := l.noted(record.KindClose)
+	failed := slices.DeleteFunc(slices.Clone(closes), func(n record.Line) bool { return !strings.Contains(n.Err, "socket gone") })
+	if len(closes) != len(plan) || len(failed) != 2 {
+		t.Errorf("close lines = %+v, want one per step of %d, the two on rt with the error", closes, len(plan))
+	}
+	ended := l.noted(record.KindShutdown)
+	if len(ended) != 1 || ended[0].Counts["closed"] != 1 || ended[0].Counts["failed"] != 2 {
+		t.Errorf("shutdown lines = %+v, want one: 1 closed, 2 failed", ended)
+	}
+
+	busy, _, _, projects := openDesktop(t, revier.StatusRunning)
+	refused := &ledger{}
+	busy.Ledger = refused
+	plan = busy.ShutdownPlan(survey(t, busy, projects, nil), "", core.ShutdownAll)
+	if _, err := busy.Shutdown(context.Background(), plan, 0, reading(projects)); err == nil {
+		t.Fatal("a shutdown over a busy agent went ahead")
+	}
+	if got := refused.noted(); len(got) != 1 || got[0].Kind != record.KindShutdownRefused || got[0].Counts["busy"] != 1 {
+		t.Errorf("lines = %+v, want the refusal alone, with one busy", got)
 	}
 }
 
@@ -509,9 +543,12 @@ func TestShutdownClosesWhenTheRecheckFindsNoBusyAgent(t *testing.T) {
 }
 
 // A step whose agents the recheck could not read closes nothing and says why:
-// a degraded survey reports no agent, and no agent read is not idle.
+// a degraded survey reports no agent, and no agent read is not idle. The
+// state record has no close of a step that was never asked to close.
 func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	l := &ledger{}
+	c.Ledger = l
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
 	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{})
@@ -526,6 +563,9 @@ func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
 	}
 	if note := out[0].Note(); !strings.Contains(note, "no longer surveyed") {
 		t.Errorf("note = %q, want the reason the step was left", note)
+	}
+	if closes := l.noted(record.KindClose); len(closes) != 0 {
+		t.Errorf("close lines = %+v, want none for steps left open", closes)
 	}
 }
 

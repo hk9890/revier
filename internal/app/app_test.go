@@ -6,9 +6,11 @@ package app_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +31,7 @@ func created(t *testing.T, name revier.ProjectName) (root string, p core.Project
 	t.Helper()
 	testenv.NoTools(t)
 	root = t.TempDir()
-	p, err := app.CreateProject(root, nil, name, t.TempDir(), "", io.Discard)
+	p, err := app.CreateProject(root, &ledger{}, nil, name, t.TempDir(), "", io.Discard)
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestCreateProjectNamesTheProjectAfterItsDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := app.CreateProject(root, nil, "", dir, "", io.Discard)
+	p, err := app.CreateProject(root, &ledger{}, nil, "", dir, "", io.Discard)
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -61,14 +63,14 @@ func TestCreateProjectRecordsTheRepositoryOnlyOfAMissingDirectory(t *testing.T) 
 	testenv.NoTools(t)
 	root := t.TempDir()
 
-	missing, err := app.CreateProject(root, nil, "", filepath.Join(t.TempDir(), "demo"), url, io.Discard)
+	missing, err := app.CreateProject(root, &ledger{}, nil, "", filepath.Join(t.TempDir(), "demo"), url, io.Discard)
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	if missing.GitURL != url {
 		t.Errorf("git_url = %q, want the repository given for a directory that is not there", missing.GitURL)
 	}
-	there, err := app.CreateProject(root, []core.Project{missing}, "there", t.TempDir(), url, io.Discard)
+	there, err := app.CreateProject(root, &ledger{}, []core.Project{missing}, "there", t.TempDir(), url, io.Discard)
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -80,7 +82,7 @@ func TestCreateProjectRecordsTheRepositoryOnlyOfAMissingDirectory(t *testing.T) 
 func TestCreateProjectRefusesWhatCanCreateRefuses(t *testing.T) {
 	root, p := created(t, "demo")
 
-	_, err := app.CreateProject(root, []core.Project{p}, "other", p.Path, "", io.Discard)
+	_, err := app.CreateProject(root, &ledger{}, []core.Project{p}, "other", p.Path, "", io.Discard)
 	if err == nil || !strings.Contains(err.Error(), `already project "demo"`) {
 		t.Errorf("err = %v, want the directory refused as demo's", err)
 	}
@@ -93,19 +95,60 @@ func TestLinkProjectTakesTheProjectsNameWhenNoneIsGiven(t *testing.T) {
 	root := t.TempDir()
 	on := revier.Project{Name: "far", Path: "/srv/far"}
 
-	p, err := app.LinkProject(root, "", "buildbox", on)
+	p, err := app.LinkProject(root, &ledger{}, "", "buildbox", on)
 	if err != nil {
 		t.Fatalf("LinkProject: %v", err)
 	}
 	if p.Name != "far" || p.Remote == nil || p.Remote.Host != "buildbox" {
 		t.Errorf("link = %+v, want far on buildbox", p.Project)
 	}
-	if _, err := app.LinkProject(root, "far", "buildbox", on); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if _, err := app.LinkProject(root, &ledger{}, "far", "buildbox", on); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("err = %v, want the taken name refused", err)
 	}
-	named, err := app.LinkProject(root, "build", "buildbox", on)
+	named, err := app.LinkProject(root, &ledger{}, "build", "buildbox", on)
 	if err != nil || named.Name != "build" {
 		t.Errorf("LinkProject = %q, %v; want a second link under the name given", named.Name, err)
+	}
+}
+
+// The state record has each create, link, rename and delete, a refused one
+// with why.
+func TestCreateLinkRenameDeleteAreRecorded(t *testing.T) {
+	testenv.NoTools(t)
+	root := t.TempDir()
+	l := &ledger{}
+	dir := t.TempDir()
+	p, err := app.CreateProject(root, l, nil, "demo", dir, "", io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreateProject(root, l, []core.Project{p}, "other", dir, "", io.Discard); err == nil {
+		t.Fatal("a second project for one directory was not refused")
+	}
+	if _, err := app.LinkProject(root, l, "far", "buildbox", revier.Project{Name: "far", Path: "/srv/far"}); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := app.RenameProject(root, t.TempDir(), l, "demo", "dm", config.Inherited{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.DeleteProject(l, renamed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(renamed.File); !os.IsNotExist(err) {
+		t.Errorf("project file: %v, want it removed", err)
+	}
+
+	var got []string
+	for _, n := range l.notes {
+		got = append(got, strings.TrimSpace(fmt.Sprintf("%s %s %s %s", n.Kind, n.Project, n.From, n.Machine)))
+	}
+	want := []string{"project created demo", "project created other", "project linked far  buildbox", "project renamed dm demo", "project deleted dm"}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q, want %q", got, want)
+	}
+	if l.notes[0].Err != "" || !strings.Contains(l.notes[1].Err, `already project "demo"`) {
+		t.Errorf("errors = %q, %q; want the refused create's alone", l.notes[0].Err, l.notes[1].Err)
 	}
 }
 

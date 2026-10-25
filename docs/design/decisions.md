@@ -770,3 +770,45 @@ so the core opens a plain tab of the runtime's own shell beside the window, or
 nothing where config says so, through `PanelOpener` (D145: no second
 capability). Only that case is decided: every other failure is returned, and
 the key's own fallback to the terminal's new tab is for revier failing.
+
+### D149 — a plain restore opens the newest save of the whole set, never a project close's save
+
+Extends D78 and D141. A close of one project saves before it closes, so a run
+of closes left the smallest set as the newest save, and a plain restore opened
+it. A plain restore, the sessions screen's first cursor, the start dialog's
+fallback and the save a shutdown compares with take the newest save of the
+whole set: by hand, by a full shutdown, from what a surface last saw (D150), or
+from before saves had a reason. A project close's save, or one of an unknown
+reason, is still listed and opened by id. Rejected: guessing a run of closes
+from sets that shrink, and falling back to a close's save.
+
+### D150 — what a surface last saw is kept, and an end with no shutdown offers it
+
+Extends D78 and D141. Two OOM kills of kitty left the newest save 38 h old. A
+running surface keeps what its survey saw apart from the saves, asking no probe
+or host, when what is open changes; never while a host here cannot list, nor
+while a full shutdown is on record, which ends the file. A shrink waits for the
+next survey, since a killed kitty lists as closed; an unanswered link keeps
+what was last seen (D89). An end with no shutdown that lost a target, and no
+newer save, is saved as `last-seen` and offered once. Rejected: a save on
+SIGHUP, which a SIGKILL never sends, and a replay of the record (D151).
+
+### D151 — the state record is a file of its own: what revier did, and what a surface saw
+
+Extends D112 and D121. The event file stays the usage record: a failure or a
+closed window is no use of a project. An operation records what it did, failed
+or not, through the ledger (D120). Only a surface records what it saw, as the
+difference between two of its surveys, since `revier list` runs on every
+refresh of each surface linked to its host (D130). The first sight of a scope,
+of a day, and each save are whole snapshots a replay starts at. A host that did
+not list, or six minutes with no survey, is unknown, never empty (D89). Never
+pruned. Rejected: merging a linked host's record, which shows its agents twice.
+
+### D152 — every restore in the TUI ends on the project list, with the surface raised
+
+Extends D140 and D141. A restore stayed on the sessions screen, so the surface
+it raised over the windows it opened showed a result pane, not the projects.
+Every restore in the TUI, from the sessions screen or the start dialog, failed
+or cancelled too, now ends on the project list with the cursor on the project
+the session was left on, and raises the surface once. What did not open is the
+footer's alone: the result pane is gone, since nothing would show it.

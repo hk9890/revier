@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -91,6 +92,7 @@ type ledger struct {
 	mu     sync.Mutex
 	st     state.State
 	writes []string
+	notes  []record.Line
 }
 
 func (l *ledger) State() *state.State {
@@ -119,6 +121,31 @@ func (l *ledger) Update(apply func(*state.State) bool) *state.State {
 }
 
 func (l *ledger) Record(e revier.Event) { events.Record(e) }
+
+func (l *ledger) Note(n record.Line) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n.Time.IsZero() {
+		n.Time = time.Now()
+	}
+	if n.By == "" {
+		n.By = record.ByDid
+	}
+	l.notes = append(l.notes, n)
+}
+
+// noted is every line noted so far, of the kinds given or of every kind.
+func (l *ledger) noted(kinds ...string) []record.Line {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []record.Line
+	for _, n := range l.notes {
+		if len(kinds) == 0 || slices.Contains(kinds, n.Kind) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
 
 func (l *ledger) copy() *state.State {
 	b, err := json.Marshal(l.st)

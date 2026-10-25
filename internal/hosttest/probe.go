@@ -98,6 +98,17 @@ func NewResumableProbe(harness, marker string) *FakeResumableProbe {
 	}
 }
 
+// Inspect reports the panel's conversation and directory beside the fixed
+// state, as the real probe reads both from the listing Sessions matches.
+func (p *FakeResumableProbe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentState, error) {
+	state, err := p.FakeProbe.Inspect(ctx, panel)
+	if err != nil {
+		return state, err
+	}
+	state.Session, state.Dir = revier.SessionID(panel.Vars["session"]), panel.Vars["dir"]
+	return state, nil
+}
+
 func (p *FakeResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
 	p.Calls++
 	if p.SessionErr != nil {

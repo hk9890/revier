@@ -2,6 +2,7 @@
 package tui_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -370,6 +371,17 @@ func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 		outs = append(outs, out)
 	})
 	return m, tea.Batch(outs...)
+}
+
+// schedules reports whether a command the model returned, run, has the model
+// ask for more, such as the next survey. The state record a survey writes
+// asks for nothing.
+func schedules(m tui.Model, cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, next := deliver(m, cmd)
+	return next != nil
 }
 
 // recorder keeps what a bubbletea program's input reader hands to Update, and
@@ -813,4 +825,38 @@ func shutDownOnRecord(t *testing.T, root string) *state.ShutDown {
 		t.Fatal(err)
 	}
 	return st.ShutDown
+}
+
+// seenWorld is world(t, 2) on a surface over root that refreshes at once, so
+// a test runs what each survey answers with: the check for an end with no
+// shutdown, and the write of what it saw. project-01's workspace holds no
+// agent, so no mirror's tick holds a test up for its second.
+func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
+	t.Helper()
+	rt, _, c, projects := world(t, 2)
+	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
+	rt.Add("session:project-01", "kitty")
+	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	return resize(m, 150, 30), rt
+}
+
+// seenSurvey is one survey with every command it answers with run and fed
+// back.
+func seenSurvey(m tui.Model) tui.Model {
+	m, cmd := deliver(m, m.Survey())
+	return run(m, cmd)
+}
+
+// seenOnDisk is what the surface last wrote under root, and whether it wrote
+// anything.
+func seenOnDisk(t *testing.T, root string) (session.Session, bool) {
+	t.Helper()
+	s, err := session.LoadSeen(root)
+	if errors.Is(err, session.ErrNoSession) {
+		return session.Session{}, false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, true
 }
