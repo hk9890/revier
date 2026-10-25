@@ -95,6 +95,7 @@ type Line struct {
 	Project  revier.ProjectName `json:"project,omitempty"`
 	Target   revier.TargetName  `json:"target,omitempty"`
 	Attached bool               `json:"attached,omitempty"`
+	Tab      bool               `json:"tab,omitempty"`
 	Panel    revier.PanelID     `json:"panel,omitempty"`
 	Harness  string             `json:"harness,omitempty"`
 	Session  revier.SessionID   `json:"session,omitempty"`
@@ -162,13 +163,15 @@ type Instance struct {
 }
 
 // Target is a target open on an instance, or an instance attached to a
-// project by hand, which has no target name.
+// project by hand, which has no target name. Tab is a tab target that comes
+// back with the instance that holds it, so a save records no step for it.
 type Target struct {
 	Project  revier.ProjectName `json:"project,omitempty"`
 	Target   revier.TargetName  `json:"target,omitempty"`
 	Host     string             `json:"host"`
 	Ref      string             `json:"ref"`
 	Attached bool               `json:"attached,omitempty"`
+	Tab      bool               `json:"tab,omitempty"`
 }
 
 // Agent is an agent in a panel of an instance. Agent is the named agent the

@@ -187,7 +187,7 @@ func instanceLine(kind string, i Instance) Line {
 }
 
 func targetLine(kind string, t Target) Line {
-	return Line{Kind: kind, Project: t.Project, Target: t.Target, Host: t.Host, Ref: t.Ref, Attached: t.Attached}
+	return Line{Kind: kind, Project: t.Project, Target: t.Target, Host: t.Host, Ref: t.Ref, Attached: t.Attached, Tab: t.Tab}
 }
 
 func agentLine(kind string, a Agent) Line {

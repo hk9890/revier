@@ -123,8 +123,9 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		switch {
 		case p.Phase == core.PhaseWait:
 			// The wait is for each step asked to close that did not fail.
-			asked, _, _ := walked.Counts()
-			_, _ = fmt.Fprintf(a.out, "waiting for %d to close\n", asked)
+			if asked, _, _ := walked.Counts(); asked > 0 {
+				_, _ = fmt.Fprintf(a.out, "waiting for %d to close\n", asked)
+			}
 			return
 		case p.Phase != core.PhaseClose:
 			return

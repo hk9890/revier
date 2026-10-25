@@ -148,7 +148,7 @@ func apply(s *Seen, l Line) {
 			s.Instances = append(s.Instances, i)
 		}
 	case KindTargetOpened, KindTargetClosed:
-		t := Target{Project: l.Project, Target: l.Target, Host: l.Host, Ref: l.Ref, Attached: l.Attached}
+		t := Target{Project: l.Project, Target: l.Target, Host: l.Host, Ref: l.Ref, Attached: l.Attached, Tab: l.Tab}
 		s.Targets = slices.DeleteFunc(s.Targets, func(o Target) bool { return o == t })
 		if l.Kind == KindTargetOpened {
 			s.Targets = append(s.Targets, t)
@@ -266,6 +266,9 @@ const (
 	// AttachedByHand is an instance attached by hand, which a save leaves
 	// out: it has no target name to come back as.
 	AttachedByHand = "attached"
+	// InItsInstance is a tab that comes back with the instance that holds
+	// it, which a save records as no target of its own.
+	InItsInstance = "a tab of its instance"
 	// NoConversation is an agent the save recorded with no conversation, or
 	// by its harness alone, as the agent of a tab that runs a launch is
 	// (decisions.md D68).
@@ -343,6 +346,8 @@ func (c *comparison) differences(s session.Session) []Difference {
 			switch {
 			case t.Attached:
 				c.add(m.Machine, &t, nil, "state", AttachedByHand)
+			case t.Tab && !targets[t.Project][t.Target]:
+				c.add(m.Machine, &t, nil, "state", InItsInstance)
 			case targets[t.Project][t.Target]:
 				if open[t.Project] == nil {
 					open[t.Project] = map[revier.TargetName]bool{}

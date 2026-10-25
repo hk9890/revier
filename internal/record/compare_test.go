@@ -62,6 +62,21 @@ func TestAnAttachmentAndAnUnnamedAgentAreExplained(t *testing.T) {
 	}
 }
 
+func TestATabThatComesBackWithItsInstanceIsExplained(t *testing.T) {
+	seen := desktop()
+	seen.Targets = append(seen.Targets, record.Target{Project: "revier", Target: "agent", Host: "kitty", Ref: "3", Tab: true})
+	s := session.Session{ID: "2026-10-16T09-00-00", At: at("2026-10-16", "09:00:00"), Projects: []session.Project{
+		{Name: "revier", Targets: []session.Target{{Name: "workspace", Agents: []session.Agent{{Harness: "claude", Session: "s1"}}}}},
+		{Name: "taskmgr", Targets: []session.Target{{Name: "browser"}}},
+	}}
+
+	_, diffs := record.Compare(saveOf(seen, s), s)
+
+	if len(diffs) != 1 || diffs[0].Why != record.InItsInstance || diffs[0].Target == nil || diffs[0].Target.Target != "agent" {
+		t.Errorf("differences = %+v, want the tab alone, as a tab of its instance", diffs)
+	}
+}
+
 func TestAConversationTheSaveLeftOutIsExplained(t *testing.T) {
 	s := session.Session{ID: "2026-10-16T09-00-00", At: at("2026-10-16", "09:00:00"), Projects: []session.Project{
 		{Name: "revier", Targets: []session.Target{{Name: "workspace", Agents: []session.Agent{{Harness: "claude"}}}}},

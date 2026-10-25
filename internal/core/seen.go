@@ -44,7 +44,11 @@ func (c *Core) SeenHere(r Report, attached map[revier.ProjectName][]revier.Targe
 			if tv.Ref.IsZero() || tv.Unknown != "" {
 				continue
 			}
-			add(record.Target{Project: v.Project.Name, Target: tv.Name, Host: tv.Ref.Host, Ref: tv.Ref.ID, Attached: tv.Attached})
+			t, _ := v.Project.Target(tv.Name)
+			add(record.Target{
+				Project: v.Project.Name, Target: tv.Name, Host: tv.Ref.Host, Ref: tv.Ref.ID, Attached: tv.Attached,
+				Tab: tabTarget(t) && (panelTab(v.Project, t) || listedTab(v.Project, t)),
+			})
 		}
 		for _, ref := range attached[v.Project.Name] {
 			if _, ok := listed[key(ref)]; ok {

@@ -36,7 +36,7 @@ func TestAShutdownWithAStepThatFailedIsNotComplete(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "did not close") {
 		t.Errorf("err = %v, want the steps that did not close", err)
 	}
-	if strings.Contains(out, "complete") {
-		t.Errorf("output = %q, want no complete said", out)
+	if strings.Contains(out, "complete") || strings.Contains(out, "waiting for") {
+		t.Errorf("output = %q, want no complete said, and no wait for nothing", out)
 	}
 }
