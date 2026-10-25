@@ -8,6 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -25,7 +27,7 @@ func TestTheLinkScreenWalksItsStepsWithNoRootModel(t *testing.T) {
 	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
 
 	th := theme.Default()
-	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60, pane: 40, page: 5}
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), core: &core.Core{Ledger: ledger.File{Root: t.TempDir()}}, list: 60, pane: 40, page: 5}
 	enter, esc := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter}), pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})
 	s := newLinkScreen(th)
 	if err := s.open(); err != nil {

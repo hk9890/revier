@@ -1,14 +1,17 @@
-// Package ledger is the state file and the event file as the core reads and
-// writes them: the one implementation of core.Ledger outside a test
-// (decisions.md D120).
+// Package ledger is the state file, the event file and the state record as
+// the core reads and writes them: the one implementation of core.Ledger
+// outside a test (decisions.md D120).
 package ledger
 
 import (
 	"log/slog"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -75,8 +78,9 @@ func (f File) State() *state.State {
 func (f File) Update(apply func(*state.State) bool) *state.State {
 	changed := false
 	var before *state.ShutDown
+	var was *state.State
 	st, err := state.Update(f.Root, func(st *state.State) bool {
-		before = st.ShutDown
+		before, was = st.ShutDown, st.Clone()
 		changed = apply(st)
 		return changed
 	})
@@ -92,6 +96,7 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 	if changed && err == nil {
 		f.keep(st)
 		logShutDown(before, st.ShutDown)
+		record.Write(changes(was, st)...)
 	}
 	if f.Written != nil {
 		// A write still waiting to be read already stands for this one: the
@@ -116,5 +121,70 @@ func logShutDown(before, after *state.ShutDown) {
 	}
 }
 
+// changes is what a write did, as lines of the state record (decisions.md
+// D151): the project it selected, each target it bound or unbound, and each
+// instance it attached or detached. Every write goes through here, so one
+// place covers a landing, a claim, an attachment, a rename and a prune, in
+// every process that writes the state.
+func changes(was, is *state.State) []record.Line {
+	var out []record.Line
+	if is.Current != was.Current {
+		out = append(out, record.Line{Kind: record.KindProjectSelected, Project: is.Current, From: string(was.Current)})
+	}
+	for _, p := range sortedKeys(was.Bound, is.Bound) {
+		for _, t := range sortedKeys(was.Bound[p], is.Bound[p]) {
+			from, bound := was.Bound[p][t]
+			to, binds := is.Bound[p][t]
+			moved := !sameRef(from, to)
+			if bound && (!binds || moved) {
+				out = append(out, record.Line{Kind: record.KindUnbound, Project: p, Target: t, Host: from.Host, Ref: from.ID})
+			}
+			if binds && (!bound || moved) {
+				out = append(out, record.Line{Kind: record.KindBound, Project: p, Target: t, Host: to.Host, Ref: to.ID})
+			}
+		}
+	}
+	for _, p := range sortedKeys(was.Attached, is.Attached) {
+		for _, ref := range was.Attached[p] {
+			if !slices.ContainsFunc(is.Attached[p], func(o revier.TargetRef) bool { return sameRef(o, ref) }) {
+				out = append(out, record.Line{Kind: record.KindDetached, Project: p, Host: ref.Host, Ref: ref.ID})
+			}
+		}
+		for _, ref := range is.Attached[p] {
+			if !slices.ContainsFunc(was.Attached[p], func(o revier.TargetRef) bool { return sameRef(o, ref) }) {
+				out = append(out, record.Line{Kind: record.KindAttached, Project: p, Host: ref.Host, Ref: ref.ID})
+			}
+		}
+	}
+	for i := range out {
+		out[i].By = record.ByDid
+	}
+	return out
+}
+
+// sameRef reports two refs to one instance: a title it had then is no other
+// instance.
+func sameRef(a, b revier.TargetRef) bool { return a.Host == b.Host && a.ID == b.ID }
+
+func sortedKeys[K ~string, V any](a, b map[K]V) []K {
+	keys := slices.Collect(maps.Keys(a))
+	for k := range b {
+		if _, ok := a[k]; !ok {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
 // Record appends one event to the file events.Setup named.
 func (File) Record(e revier.Event) { events.Record(e) }
+
+// Note appends one line to the state record record.Setup named, as one an
+// operation did when it says nothing else.
+func (File) Note(l record.Line) {
+	if l.By == "" {
+		l.By = record.ByDid
+	}
+	record.Write(l)
+}

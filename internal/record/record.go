@@ -115,6 +115,15 @@ type Line struct {
 	Seen     *Seen             `json:"seen,omitempty"`
 }
 
+// Failed is the line with why its operation failed, or the line as it is
+// when err is nil.
+func (l Line) Failed(err error) Line {
+	if err != nil {
+		l.Err = err.Error()
+	}
+	return l
+}
+
 // Outcome is what a restore step did with one agent.
 type Outcome struct {
 	Harness string           `json:"harness,omitempty"`

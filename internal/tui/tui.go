@@ -808,7 +808,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.keep(m.core.Settle(msg.report, m.projects, time.Now()))
 			m.local, m.surveyed = msg.report, true
 			m.show()
-			seen = m.observe()
+			seen = m.observe(nil)
 		}
 		// Hidden, nobody reads the answer, and the chain ends here, and with
 		// it the rounds of the linked hosts that a survey starts: a round
@@ -857,7 +857,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.show()
-		return m, tea.Batch(m.observe(), m.startSpin())
+		return m, tea.Batch(m.observe(&msg.answers), m.startSpin())
 	case recoveredMsg:
 		m.takeRecovered(msg)
 		return m, nil

@@ -1,13 +1,16 @@
 package ledger_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -167,6 +170,60 @@ func TestFileHandsBackTheStateReadLastWhenTheFileCannotBeRead(t *testing.T) {
 	}
 	if st := (ledger.File{Root: other}).State(); st == nil || st.Current != "" || len(st.Bound) != 0 {
 		t.Errorf("state = %+v, want an empty one", st)
+	}
+}
+
+// A write records in the state record what it changed: a landing selects
+// the project and binds the target, a prune unbinds it, an attachment is
+// attached, and a write that changes nothing writes nothing.
+func TestAWriteRecordsWhatItChanged(t *testing.T) {
+	root := t.TempDir()
+	record.Setup(root, "go")
+	t.Cleanup(func() { record.Setup("", "") })
+	l := ledger.File{Root: root}
+	ref := revier.TargetRef{Host: "rt", ID: "1", Title: "work"}
+
+	l.Update(func(st *state.State) bool {
+		st.Landed("work", "home", ref)
+		return true
+	})
+	l.Update(func(st *state.State) bool {
+		st.Attach("work", revier.TargetRef{Host: "wm", ID: "0x2"})
+		return true
+	})
+	l.Update(func(st *state.State) bool {
+		retitled := ref
+		retitled.Title = "work - edited"
+		st.Bind("work", "home", retitled)
+		return true
+	})
+	l.Update(func(st *state.State) bool {
+		return st.Prune([]string{"rt"}, nil, st.Clone())
+	})
+	l.Update(func(st *state.State) bool {
+		st.Current = "other"
+		return false
+	})
+
+	lines, err := record.Read(root, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, n := range lines {
+		if n.By != record.ByDid {
+			t.Errorf("line %+v is not one an operation did", n)
+		}
+		got = append(got, fmt.Sprintf("%s %s:%s %s %s", n.Kind, n.Project, n.Target, n.Host, n.Ref))
+	}
+	want := []string{
+		"project selected work:  ",
+		"bound work:home rt 1",
+		"attached work: wm 0x2",
+		"unbound work:home rt 1",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %q, want %q", got, want)
 	}
 }
 

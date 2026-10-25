@@ -289,12 +289,13 @@ type Difference struct {
 // Compare replays the lines at the save of s, its own snapshot lines
 // included, and returns that state with each difference from s and why it
 // is one. The save's time is its last line, `session saved` or a snapshot,
-// else s.At for a save that wrote none.
+// else s.At for a save that wrote none. A save of what a surface last saw is
+// of s.At, when the surface wrote it, and not of the start that kept it.
 func Compare(lines []Line, s session.Session) (State, []Difference) {
 	at := s.At
 	asked := map[string]Seen{}
 	for _, l := range lines {
-		if l.Saved == "" || l.Saved != s.ID || (l.Kind != KindSnapshot && l.Kind != KindSessionSaved) {
+		if l.Saved == "" || l.Saved != s.ID || (l.Kind != KindSnapshot && l.Kind != KindSessionSaved) || l.Reason == session.ReasonLastSeen {
 			continue
 		}
 		at = l.Time

@@ -20,7 +20,7 @@ func TestLinkProjectRefusesThisMachine(t *testing.T) {
 	}
 	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
 	root := t.TempDir()
-	_, err = app.LinkProject(root, "", machine, revier.Project{Name: "far", Path: "/srv/far"})
+	_, err = app.LinkProject(root, &ledger{}, "", machine, revier.Project{Name: "far", Path: "/srv/far"})
 	if err == nil || !strings.Contains(err.Error(), "is this machine") {
 		t.Errorf("err = %v, want this machine refused", err)
 	}

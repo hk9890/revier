@@ -6,7 +6,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/app"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -24,16 +26,39 @@ type recoveredMsg struct {
 	err   error
 }
 
-// observe is what the surface does with each survey it shows. The first one
-// in which every host here listed checks whether revier ended without a
-// shutdown, before anything is written over what was last seen. After that it
-// keeps what the survey saw, unless a walk runs, nothing is open, or nothing
-// changed. A survey that holds less than the last one written is written
-// only when the next survey agrees: a terminal killed before the surface
-// lists as closed, not as failed, for the moment before the surface goes too.
-//
-// The file is written by the command it returns, never in Update.
-func (m *Model) observe() tea.Cmd {
+// observe is what the surface does with each survey it shows: the survey of
+// this machine, or answered, the answers of the linked hosts a round asked.
+// It records what the survey saw in the state record (decisions.md D151),
+// and keeps it as what the surface last saw (keepSeen). Both are written by
+// the command it returns, never in Update.
+func (m *Model) observe(answered *core.RemoteAnswers) tea.Cmd {
+	return tea.Batch(m.recordSaw(answered), m.keepSeen())
+}
+
+// recordSaw is the state record's lines of a survey: what changed since the
+// surface's last survey of each scope it saw, which the record works out.
+func (m Model) recordSaw(answered *core.RemoteAnswers) tea.Cmd {
+	var saw []record.Seen
+	if answered == nil {
+		saw = []record.Seen{m.core.SeenHere(m.local, m.attached)}
+	} else {
+		saw = m.core.SeenThere(m.core.Lay(m.local, *answered))
+	}
+	return func() tea.Msg {
+		record.Saw(saw...)
+		return nil
+	}
+}
+
+// keepSeen keeps what the survey saw as what the surface last saw. The first
+// survey in which every host here listed checks whether revier ended without
+// a shutdown, before anything is written over what was last seen. After that
+// it keeps what the survey saw, unless a walk runs, nothing is open, or
+// nothing changed. A survey that holds less than the last one written is
+// written only when the next survey agrees: a terminal killed before the
+// surface lists as closed, not as failed, for the moment before the surface
+// goes too.
+func (m *Model) keepSeen() tea.Cmd {
 	if !m.recovered {
 		if m.checking || len(m.local.Failed) > 0 {
 			return nil

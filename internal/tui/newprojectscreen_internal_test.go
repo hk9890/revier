@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/internal/theme"
 )
@@ -25,7 +27,7 @@ func TestTheNewProjectScreenWritesAProjectWithNoRootModel(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "widget")
 
 	th := theme.Default()
-	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60}
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), core: &core.Core{Ledger: ledger.File{Root: t.TempDir()}}, list: 60}
 	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	s := newCreateScreen(th)
 	s.open()
@@ -65,7 +67,7 @@ func TestAFolderThatAppearsAfterTheCloneQuestionKeepsTheURLInSight(t *testing.T)
 	const url = "https://example.com/owner/widget.git"
 
 	th := theme.Default()
-	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60}
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), core: &core.Core{Ledger: ledger.File{Root: t.TempDir()}}, list: 60}
 	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	s := newCreateScreen(th)
 	s.open()

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -130,6 +131,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		if res.Action == RestoreLaunch {
 			res = c.restoreLaunch(walking, p, step, false)
 			logAgents(res)
+			c.note(stepLine(res))
 		}
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Done: true, Restored: res})
@@ -159,7 +161,25 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 	}
 	opened, pending, failed := out.Counts()
 	slog.Info("session restored", "id", s.ID, "opened", opened, "pending", pending, "failed", failed)
+	c.note(record.Line{
+		Kind: record.KindSessionRestored, Saved: s.ID, Reason: s.Reason, Projects: s.Projects,
+		Counts: map[string]int{"opened": opened, "pending": pending, "failed": failed, "cancelled": len(plan) - len(out)},
+	}.Failed(back))
 	return out, back
+}
+
+// stepLine is the state record's line of one launch of a restore: where it
+// landed, and what came of each agent it recorded.
+func stepLine(r RestoreResult) record.Line {
+	l := record.Line{Kind: record.KindRestoreStep, Project: r.Project, Target: r.Target, Host: r.Ref.Host, Ref: r.Ref.ID}.Failed(r.Err)
+	for i, a := range r.Resumes {
+		outcome := "none"
+		if i < len(r.Agents) {
+			outcome = r.Agents[i].String()
+		}
+		l.Agents = append(l.Agents, record.Outcome{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Agent, Outcome: outcome})
+	}
+	return l
 }
 
 // ErrHomeCancelled is the back of a restore cancelled before it returned
@@ -212,13 +232,19 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, r
 func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume) (revier.TargetRef, Result, error) {
 	pressed := time.Now()
 	ref, res, err := c.activateWaiting(ctx, p, name, resumes, true)
+	landed := res.Target
+	if res.Tab != "" {
+		landed = res.Tab
+	}
 	if err == nil && !res.ComingUp {
-		landed := res.Target
-		if res.Tab != "" {
-			landed = res.Tab
-		}
 		c.record(revier.Event{Time: pressed, Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
 	}
+	// The state record has the press failed or not, of the target it named
+	// when it failed before it found one (decisions.md D151).
+	if landed == "" {
+		landed = name
+	}
+	c.note(record.Line{Time: pressed, Kind: record.KindGo, Project: p.Name, Target: landed, Host: ref.Host, Ref: ref.ID, Launched: res.Launched}.Failed(err))
 	return ref, res, err
 }
 

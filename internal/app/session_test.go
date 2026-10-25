@@ -10,6 +10,7 @@ import (
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -71,6 +72,32 @@ func TestSaveSessionRefusesAnEmptySave(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("path %s: %v, want the file written", path, err)
+	}
+}
+
+// The state record has a save with what it holds and what it could not
+// record, and the survey it was made from as snapshots of the save.
+func TestASaveRecordsItsSessionAndItsSurvey(t *testing.T) {
+	c, _, report, _ := desktop(t)
+	stored, _, _, err := app.SaveSession(context.Background(), c, t.TempDir(), report, "before", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := c.Ledger.(*ledger).notes
+	if len(notes) != 2 {
+		t.Fatalf("lines = %+v, want the save and one snapshot", notes)
+	}
+	saved, snapshot := notes[0], notes[1]
+	if saved.Kind != record.KindSessionSaved || saved.Saved != stored.ID || saved.Reason != session.ReasonSaved ||
+		saved.Counts["targets"] != 2 || saved.Counts["conversations"] != 1 || saved.Counts["unnamed"] != 0 {
+		t.Errorf("save line = %+v, want %s with its reason, two targets and one conversation", saved, stored.ID)
+	}
+	if len(saved.Projects) != 1 || saved.Projects[0].Name != "demo" || len(saved.Projects[0].Targets) != 2 {
+		t.Errorf("projects = %+v, want demo with both targets", saved.Projects)
+	}
+	if snapshot.Kind != record.KindSnapshot || snapshot.By != record.BySaw || snapshot.Saved != stored.ID ||
+		snapshot.Seen == nil || len(snapshot.Seen.Targets) != 2 || len(snapshot.Seen.Agents) != 1 {
+		t.Errorf("snapshot = %+v, want what the survey saw, of the save", snapshot)
 	}
 }
 

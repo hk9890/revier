@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"slices"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -272,10 +272,9 @@ func (m *Model) removeProject(name revier.ProjectName) error {
 	if !ok || p.File == "" {
 		return nil
 	}
-	if err := os.Remove(p.File); err != nil {
+	if err := app.DeleteProject(m.core.Ledger, p); err != nil {
 		return err
 	}
-	slog.Info("project deleted", "project", name, "path", p.File)
 	// A file of the built-in's name gives its place back.
 	m.projects = without(m.projects, name)
 	if m.assistant.Name != "" {

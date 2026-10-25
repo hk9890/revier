@@ -372,6 +372,17 @@ func deliver(m tui.Model, cmd tea.Cmd) (tui.Model, tea.Cmd) {
 	return m, tea.Batch(outs...)
 }
 
+// schedules reports whether a command the model returned, run, has the model
+// ask for more, such as the next survey. The state record a survey writes
+// asks for nothing.
+func schedules(m tui.Model, cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, next := deliver(m, cmd)
+	return next != nil
+}
+
 // recorder keeps what a bubbletea program's input reader hands to Update, and
 // quits on the mouse report that ends the input. What the program says of its
 // output and its environment is no input, and is dropped.

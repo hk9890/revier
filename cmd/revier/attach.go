@@ -5,10 +5,16 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-func cmdAttach(ctx context.Context, a *app, args []string) error {
+// cmdAttach attaches the focused window to a project. The state record has
+// the attach, failed or not: what it changed is in the state's own lines, and
+// a failure is in no other (decisions.md D151).
+func cmdAttach(ctx context.Context, a *app, args []string) (err error) {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	project := projectFlag(fs)
 	pos, err := parseArgs(fs, args)
@@ -18,15 +24,18 @@ func cmdAttach(ctx context.Context, a *app, args []string) error {
 	if len(pos) > 0 {
 		return fmt.Errorf("usage: revier attach [-p project]")
 	}
+	var p core.Project
+	var ref revier.TargetRef
+	defer func() {
+		a.core.Ledger.Note(record.Line{Kind: record.KindAttach, Project: p.Name, Host: ref.Host, Ref: ref.ID}.Failed(err))
+	}()
 	if a.core.Window == nil {
 		return fmt.Errorf("attach needs a window host; none is available here")
 	}
-	p, err := a.resolveProject(ctx, *project)
-	if err != nil {
+	if p, err = a.resolveProject(ctx, *project); err != nil {
 		return err
 	}
-	ref, err := a.core.Window.Focused(ctx)
-	if err != nil {
+	if ref, err = a.core.Window.Focused(ctx); err != nil {
 		return err
 	}
 	if ref.IsZero() {

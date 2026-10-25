@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -26,6 +27,10 @@ type Ledger interface {
 	Update(apply func(*state.State) bool) *state.State
 	// Record appends one event.
 	Record(e revier.Event)
+	// Note appends one line to the state record: what an operation did,
+	// failed or not, or what a save saw. A line with no By is one an
+	// operation did (decisions.md D151).
+	Note(l record.Line)
 }
 
 // state is the state an operation starts from. Each operation reads it once,
@@ -51,6 +56,12 @@ func (c *Core) update(apply func(*state.State)) {
 func (c *Core) record(e revier.Event) {
 	if c.Ledger != nil {
 		c.Ledger.Record(e)
+	}
+}
+
+func (c *Core) note(l record.Line) {
+	if c.Ledger != nil {
+		c.Ledger.Note(l)
 	}
 }
 

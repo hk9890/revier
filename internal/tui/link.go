@@ -493,7 +493,7 @@ func (s *linkScreen) write(sf surface) linkResult {
 		res.err = err
 		return res
 	}
-	p, err := app.LinkProject(root, s.nameValue(), s.host, it.view.Project)
+	p, err := app.LinkProject(root, sf.core.Ledger, s.nameValue(), s.host, it.view.Project)
 	if err != nil {
 		res.err = err
 		return res

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 )
 
@@ -29,7 +30,7 @@ func SaveSession(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 		return session.Session{}, "", gaps, ErrNothingOpen
 	}
 	s.At, s.Name, s.Reason = at, name, session.ReasonSaved
-	stored, path, err := store(stateRoot, s, gaps)
+	stored, path, err := store(c, stateRoot, r, s, gaps)
 	return stored, path, gaps, err
 }
 
@@ -57,7 +58,7 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 		return session.Session{}, false, gaps, err
 	}
 	s.At, s.Reason = at, reason
-	stored, _, err = store(stateRoot, s, gaps)
+	stored, _, err = store(c, stateRoot, r, s, gaps)
 	if err != nil {
 		return session.Session{}, false, gaps, err
 	}
@@ -65,14 +66,34 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 }
 
 // store writes s and logs what it holds and what it lacks, and by its reason
-// which save wrote the file.
-func store(stateRoot string, s session.Session, gaps core.SessionGaps) (session.Session, string, error) {
+// which save wrote the file. The state record has the save, failed or not,
+// and what the survey r it was made from saw, so a replay at the save can say
+// what it left out and why (decisions.md D151).
+func store(c *core.Core, stateRoot string, r core.Report, s session.Session, gaps core.SessionGaps) (session.Session, string, error) {
 	stored, path, err := session.Save(stateRoot, s)
 	if err != nil {
-		return session.Session{}, "", fmt.Errorf("save the session: %w", err)
+		err = fmt.Errorf("save the session: %w", err)
+		c.Ledger.Note(record.Line{Kind: record.KindSessionSaved, Reason: s.Reason}.Failed(err))
+		return session.Session{}, "", err
 	}
 	logSaved(stored, path, gaps)
+	noteSaved(c, stored, gaps)
+	for _, seen := range append([]record.Seen{c.SeenHere(r, c.Ledger.State().Attached)}, c.SeenThere(r)...) {
+		c.Ledger.Note(record.Line{Kind: record.KindSnapshot, By: record.BySaw, Machine: seen.Machine, Saved: stored.ID, Seen: &seen})
+	}
 	return stored, path, nil
+}
+
+// noteSaved is the state record's line of a session saved: what it holds,
+// and what it could not record.
+func noteSaved(c *core.Core, stored session.Session, gaps core.SessionGaps) {
+	c.Ledger.Note(record.Line{
+		Kind: record.KindSessionSaved, Saved: stored.ID, Reason: stored.Reason, Projects: stored.Projects,
+		Counts: map[string]int{
+			"projects": len(stored.Projects), "targets": stored.Targets(), "conversations": stored.Conversations(),
+			"unnamed": gaps.Unnamed, "in_tab": len(gaps.InTab), "attached": gaps.Attached,
+		},
+	})
 }
 
 func logSaved(stored session.Session, path string, gaps core.SessionGaps) {
@@ -139,6 +160,7 @@ func Recover(c *core.Core, stateRoot string, r core.Report) (session.Session, bo
 		var path string
 		if offer, path, err = session.PromoteSeen(stateRoot); err == nil {
 			logSaved(offer, path, core.SessionGaps{})
+			noteSaved(c, offer, core.SessionGaps{})
 		}
 	}
 	if errors.Is(err, session.ErrNoSession) {

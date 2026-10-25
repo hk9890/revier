@@ -9,6 +9,8 @@ import (
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -37,18 +39,22 @@ func cmdNew(out io.Writer, args []string) error {
 	if len(pos) > 0 {
 		name = pos[0]
 	}
-	_, err = createProject(out, root, projects, revier.ProjectName(name))
+	stateRoot, err := state.Root()
+	if err != nil {
+		return err
+	}
+	_, err = createProject(out, root, ledger.File{Root: stateRoot}, projects, revier.ProjectName(name))
 	return err
 }
 
 // createProject writes the project for the working directory, as
 // internal/app's CreateProject writes it. An empty name is the directory's own.
-func createProject(out io.Writer, root string, projects []core.Project, name revier.ProjectName) (core.Project, error) {
+func createProject(out io.Writer, root string, l core.Ledger, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return core.Project{}, err
 	}
-	p, err := usecase.CreateProject(root, projects, name, dir, "", os.Stderr)
+	p, err := usecase.CreateProject(root, l, projects, name, dir, "", os.Stderr)
 	if err != nil {
 		return core.Project{}, err
 	}

@@ -34,7 +34,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	// `os open` does. Without a name there is nothing to call it, and the
 	// usual resolution applies.
 	if _, known := a.project(revier.ProjectName(name)); name != "" && !known {
-		p, err := createProject(a.out, a.cfgRoot, a.projects, revier.ProjectName(name))
+		p, err := createProject(a.out, a.cfgRoot, a.core.Ledger, a.projects, revier.ProjectName(name))
 		if err != nil {
 			return err
 		}

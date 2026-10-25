@@ -111,7 +111,7 @@ func (a *app) link(ctx context.Context, host string, project, name revier.Projec
 	if !found {
 		return core.Project{}, fmt.Errorf("%s has no project named %q; `revier link %s` lists what it has", host, project, host)
 	}
-	p, err := usecase.LinkProject(a.cfgRoot, name, host, on)
+	p, err := usecase.LinkProject(a.cfgRoot, a.core.Ledger, name, host, on)
 	if err != nil {
 		return core.Project{}, err
 	}

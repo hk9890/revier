@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -555,6 +556,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
+		c.note(record.Line{Kind: record.KindShutdownRefused, Counts: map[string]int{"steps": len(plan), "busy": len(busy)}})
 		return nil, &BusyRefusal{Plan: plan}
 	}
 	plan = CloseLast(plan, r.Instances, c.Self)
@@ -604,6 +606,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
 			"unread", s.Unread, "err", res.Err)
+		c.note(record.Line{
+			Kind: record.KindClose, Project: s.Project, Target: s.Target, Host: s.Ref.Host, Ref: s.Ref.ID, Panel: s.Panel,
+		}.Failed(res.Err))
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
@@ -615,6 +620,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	c.awaitClosed(closing, out, wait)
 	closed, open, failed := out.Counts()
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
+	c.note(record.Line{Kind: record.KindShutdown, Counts: map[string]int{"closed": closed, "open": open, "failed": failed}})
 	return out, nil
 }
 

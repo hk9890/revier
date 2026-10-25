@@ -15,6 +15,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -30,10 +31,13 @@ import (
 // clones: a file that could not be written leaves nothing trusted. What the
 // trust has to say goes to warn. A directory that is not there records
 // gitURL, the repository the caller clones into it, or nothing.
-func CreateProject(cfgRoot string, projects []core.Project, name revier.ProjectName, dir, gitURL string, warn io.Writer) (core.Project, error) {
+//
+// The state record has the create, refused or not (decisions.md D151).
+func CreateProject(cfgRoot string, ledger core.Ledger, projects []core.Project, name revier.ProjectName, dir, gitURL string, warn io.Writer) (p core.Project, err error) {
 	if name == "" {
 		name = config.NameFor(dir)
 	}
+	defer func() { ledger.Note(record.Line{Kind: record.KindProjectCreated, Project: name, Dir: dir}.Failed(err)) }()
 	if err := config.CanCreate(projects, name, dir); err != nil {
 		return core.Project{}, err
 	}
@@ -42,7 +46,7 @@ func CreateProject(cfgRoot string, projects []core.Project, name revier.ProjectN
 	if there {
 		gitURL = checkout.Origin(dir)
 	}
-	p, err := config.Create(cfgRoot, name, dir, gitURL)
+	p, err = config.Create(cfgRoot, name, dir, gitURL)
 	if err != nil {
 		return core.Project{}, err
 	}
@@ -56,12 +60,16 @@ func CreateProject(cfgRoot string, projects []core.Project, name revier.ProjectN
 // or under the project's own name when name is empty. A name whose file is
 // there is refused, so no project is overwritten, and so is a host that is
 // this machine, since revier leaves such a link out (decisions.md D131).
-func LinkProject(cfgRoot string, name revier.ProjectName, host string, on revier.Project) (core.Project, error) {
-	if err := config.ThisMachine().RefuseLink(host); err != nil {
-		return core.Project{}, err
-	}
+// The state record has the link, refused or not.
+func LinkProject(cfgRoot string, ledger core.Ledger, name revier.ProjectName, host string, on revier.Project) (p core.Project, err error) {
 	if name == "" {
 		name = on.Name
+	}
+	defer func() {
+		ledger.Note(record.Line{Kind: record.KindProjectLinked, Project: name, Machine: host}.Failed(err))
+	}()
+	if err := config.ThisMachine().RefuseLink(host); err != nil {
+		return core.Project{}, err
 	}
 	return config.CreateLink(cfgRoot, name, host, on)
 }
@@ -71,9 +79,11 @@ func LinkProject(cfgRoot string, name revier.ProjectName, host string, on revier
 // (decisions.md D80). The file is first, and a file that cannot be moved
 // changes nothing. The saved sessions are last and cannot fail the rename:
 // one that keeps the old name no longer opens the project, which the log
-// says, and the project itself is renamed.
+// says, and the project itself is renamed. The state record has the rename,
+// failed or not.
 func RenameProject(cfgRoot, stateRoot string, ledger core.Ledger, from, to revier.ProjectName, inh config.Inherited) (core.Project, error) {
 	p, err := config.Rename(cfgRoot, from, to, inh)
+	ledger.Note(record.Line{Kind: record.KindProjectRenamed, Project: to, From: string(from)}.Failed(err))
 	if err != nil {
 		return core.Project{}, err
 	}
@@ -87,6 +97,17 @@ func RenameProject(cfgRoot, stateRoot string, ledger core.Ledger, from, to revie
 	return p, nil
 }
 
+// DeleteProject removes the project's file. The state record has the delete,
+// failed or not.
+func DeleteProject(ledger core.Ledger, p core.Project) error {
+	err := os.Remove(p.File)
+	ledger.Note(record.Line{Kind: record.KindProjectDeleted, Project: p.Name, Dir: p.File}.Failed(err))
+	if err == nil {
+		slog.Info("project deleted", "project", p.Name, "path", p.File)
+	}
+	return err
+}
+
 // Action is one run of an action a surface is about to make: the command, and
 // what to tell revier once it has ended.
 type Action struct {
@@ -94,6 +115,7 @@ type Action struct {
 	Dir  string
 
 	project revier.ProjectName
+	machine string
 	here    bool
 	name    string
 	start   time.Time
@@ -115,6 +137,9 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 		return Action{}, err
 	}
 	a := Action{Argv: argv, Dir: dir, project: p.Name, here: p.Remote == nil, name: name, start: time.Now(), ledger: c.Ledger}
+	if p.Remote != nil {
+		a.machine = p.Remote.Host
+	}
 	if a.here {
 		a.ledger.Update(func(st *state.State) bool {
 			st.Launched(a.project, "", a.start)
@@ -128,10 +153,12 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 // stamped with its start as the launch is: an action runs as long as it runs,
 // and it was asked for when it began. A link's action is the event of the
 // revier that ran it on its host, which `revier events` prints with that
-// host, so it is no second one here.
+// host, so it is no second one here. The state record has every action,
+// failed or not, a link's too.
 func (a Action) Done(err error) {
 	logging.Op("action", a.start, err, "project", a.project, "action", a.name, "argv", a.Argv)
 	if err == nil && a.here {
 		a.ledger.Record(revier.Event{Time: a.start, Kind: revier.EventAction, Project: a.project, Action: a.name})
 	}
+	a.ledger.Note(record.Line{Kind: record.KindAction, Project: a.project, Machine: a.machine, Action: a.name}.Failed(err))
 }
