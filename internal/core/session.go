@@ -46,11 +46,13 @@ func (a RestoreAction) String() string { return restoreNames[a] }
 
 // Resume is one recorded agent of a target: the harness its probe named, the
 // probe's own word for its conversation, and the directory it worked in.
-// Either of the last two may be empty.
+// Either of the last two may be empty. Agent is the named agent it runs, and
+// empty for the project's default agent.
 type Resume struct {
 	Harness string
 	Session revier.SessionID
 	Dir     string
+	Agent   string
 }
 
 // AgentOutcome is what restoring one recorded agent comes to. The zero value
@@ -449,7 +451,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if err != nil {
 		return nil
 	}
-	_, added := c.agentTabs(host, layout, extra, link)
+	_, added := c.agentTabs(host, p, layout, extra)
 	return append(outcomes, added...)
 }
 

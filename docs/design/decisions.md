@@ -208,15 +208,6 @@ tab. The tab is the first panel that carries the mark, and a second press on
 its key goes home from any panel of it. `PanelOpener` is optional, and a
 runtime without it refuses; it does not open a window the user did not choose.
 
-### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore
-
-`revier agent new` and a restore open the same tab: a copy of the first
-declared agent panel and a split of the first declared shell panel. One builder
-keeps the key and the restore from drifting apart. `OpenTab` takes a panel
-group, so no second capability exists. The key finds its workspace through the
-runtime's optional `PanelFinder`, because a kitty window id is unique only in
-one kitty process.
-
 ### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
 
 Recorded under the workspace, it was restored twice. The argv of a launch is
@@ -746,3 +737,14 @@ revier takes them as they are: such a program can already do worse than show
 an agent that is not there, and a shutdown it holds back gives way to
 `--force`. A host keeps a tool's own report (D143), such as herdr's agent
 detection, apart from what any client can set, where the tool keeps them apart.
+
+### D145 — a project has named agents beside its default one, and an agent tab is a launcher
+
+Replaces D65. Extends D59: an agent has the identity a panel lacks, so it is
+inherited and merged by name. The default agent is the layout's first agent
+panel, and a probe still says what an agent is (D119). A key and a restore open
+one tab, from one builder: that panel, running the named agent if one is named,
+and the first shell panel, marked with the name, so a project's address still
+means the default agent. `OpenTab` takes a panel group; the key finds its
+workspace through `PanelFinder`, since a kitty window id is one process's. A
+target is run-or-raise; an agent or shell tab is a launcher, one more per press.

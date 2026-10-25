@@ -68,7 +68,7 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 	ctx := context.Background()
 
-	if err := a.newAgent(ctx, "far", "", "", "abc-123"); err != nil {
+	if err := a.newAgent(ctx, "far", "", "", core.Resume{Session: "abc-123"}); err != nil {
 		t.Fatalf("agent new -p far: %v", err)
 	}
 	if err := a.newShell(ctx, "", "%7", "/srv/only-on-the-host"); err != nil {

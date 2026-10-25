@@ -41,7 +41,9 @@ One JSON line per event, oldest first:
             back; for a new tab, the workspace it opened in
   launched  true when a go started its target instead of raising it
   action    the action that ran
-  agent     the harness of the agent a go agent or an agent session is of
+  agent     the harness of the agent a go agent or an agent session is of;
+            for an agent new, the named agent the tab runs, absent for the
+            default agent
   session   the conversation an agent holds, as its harness names it
   dir       the directory the agent works in, or a tab started in
 

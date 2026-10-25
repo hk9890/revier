@@ -146,7 +146,7 @@ type PanelOpener interface {
 	// and r.Launch in r.Dir. vars are set on every panel of the tab, so the
 	// tab is found while any of them is open. An OpenTab that fails closes what it opened, so no half-built tab runs an agent the
 	// core names as not added. It is a tab target's tab (decisions.md D64),
-	// the agent tab of `revier agent new` and a restore (D65), and each tab
+	// the agent tab of `revier agent new` and a restore (D145), and each tab
 	// after the first of a target that lists its tabs (D126).
 	//
 	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
@@ -167,7 +167,7 @@ type PanelOpener interface {
 // does. It exists because a panel id can be one runtime process's: a kitty
 // window id is, and the id a kitty key passes means a window of the kitty the
 // key was pressed in, which only the runtime can tell from the environment it
-// started the command with (decisions.md D65). It is handed the listing rather
+// started the command with (decisions.md D145). It is handed the listing rather
 // than taking its own, so a key press lists the runtime once. A runtime whose
 // ids are unique needs no finder.
 type PanelFinder interface {

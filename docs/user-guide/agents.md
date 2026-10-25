@@ -29,10 +29,11 @@ revier agent send-keys shop esc                # interrupt, or answer a dialog
 ```
 
 The first argument is the agent's address: `shop` names the project's only
-agent, and `shop:agent` the agent in the target `agent`. A tab that
-`agent new` added has no target name: its address is `<project>:<number>`,
-and `agent new --no-focus` prints it. When an address names more than one
-agent, the error lists an address for each.
+agent, and `shop:agent` the agent in the target `agent`. Beside named agents,
+`shop` names the project's default agent, the one that runs no named agent.
+A tab that `agent new` added has no target name: its address is
+`<project>:<number>`, and `agent new --no-focus` prints it. When an address
+names more than one agent, the error lists an address for each.
 
 - `prompt` types one line and submits it. It refuses an agent in `attention`
   or `unknown`, because the Enter would answer a dialog. Use `send-keys` for
@@ -59,10 +60,15 @@ panels of the project's agent tab. It goes to the new tab, unless you give
 
 ```bash
 revier agent new -p shop                # in the workspace of shop
+revier agent new dtop -p shop           # the named agent dtop
 revier agent new --dir ~/dev/shop-wt    # start the agent in a worktree
 revier agent new -p shop --no-focus     # stay here; print the address, e.g. shop:7
 revier shell new -p shop
 ```
+
+Without a name, the tab runs the project's default agent: the first agent
+panel of its layout. With a name, the tab's agent panel runs that
+[named agent](configuration.md#named-agents), and the tab keeps the shell.
 
 Without `-p`, the project is the one `--dir` is in, else the one revier
 finds as for every command ([Concepts](concepts.md#project)). The workspace

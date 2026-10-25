@@ -706,7 +706,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
-		added, err := c.addAgents(ctx, host, layout, ref, extra, p.Remote != nil)
+		added, err := c.addAgents(ctx, host, p, layout, ref, extra)
 		res.Agents, res.AgentErr = append(agents, added...), err
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by

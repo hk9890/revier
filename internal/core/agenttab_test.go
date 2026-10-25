@@ -6,6 +6,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -41,6 +42,68 @@ func TestNewAgentOpensAnAgentTabInTheOpenWorkspace(t *testing.T) {
 	}
 	if len(rt.Opened) != 0 {
 		t.Errorf("Opened = %+v, want nothing opened: the tab goes into the open workspace", rt.Opened)
+	}
+}
+
+// A named agent's tab is the layout's agent panel running that agent, titled
+// with its name, beside the layout's shell; every panel carries the agent's
+// mark, and the event names it.
+func TestNewAgentWithANameOpensThatAgentsTab(t *testing.T) {
+	recorded := recording(t)
+	c, rt, p, _ := openWorkspace(t)
+	c.Ledger = &ledger{}
+	p.Agents = []core.NamedAgent{{Name: "review", Command: []string{"claude", "--agent", "review"}}, {Name: "dtop", Command: []string{"dtop"}}}
+
+	outcome, err := newAgent(t, c, p, "home", core.Resume{Agent: "dtop"})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if outcome != core.AgentEmpty {
+		t.Errorf("outcome = %v, want empty", outcome)
+	}
+	if len(rt.Tabs) != 1 || !maps.Equal(rt.Tabs[0].Vars, map[string]string{core.PanelAgentVar: "dtop"}) {
+		t.Fatalf("Tabs = %+v, want one tab marked revier_agent=dtop", rt.Tabs)
+	}
+	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "dtop", Command: []string{"dtop"}, Dir: "/home/user/dev/github/revier"},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: "/home/user/dev/github/revier"},
+	})
+	want := []revier.Event{{Kind: revier.EventAgentNew, Project: "revier", Target: "home", Agent: "dtop"}}
+	if got := recorded(); !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
+}
+
+// A named agent a resumable probe claims resumes through that probe, as the
+// default agent does.
+func TestNewAgentResumesANamedAgentItsProbeClaims(t *testing.T) {
+	c, rt, p, _ := openWorkspace(t)
+	p.Agents = []core.NamedAgent{{Name: "review", Command: []string{"claude", "--agent", "review"}}}
+
+	outcome, err := newAgent(t, c, p, "home", core.Resume{Agent: "review", Session: "abc-123"})
+	if err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if outcome != core.AgentResumed {
+		t.Errorf("outcome = %v, want resumed", outcome)
+	}
+	if got := rt.Tabs[0].Real.Panels[0].Command; !slices.Equal(got, []string{"claude", "--agent", "review", "--resume", "abc-123"}) {
+		t.Errorf("agent command = %q, want the named agent's on the conversation", got)
+	}
+}
+
+// A name the project does not declare opens nothing, and the refusal names the
+// agents it does declare.
+func TestNewAgentRefusesAnUnknownName(t *testing.T) {
+	c, rt, p, _ := openWorkspace(t)
+	p.Agents = []core.NamedAgent{{Name: "review", Command: []string{"review"}}, {Name: "dtop", Command: []string{"dtop"}}}
+
+	outcome, err := newAgent(t, c, p, "home", core.Resume{Agent: "nope"})
+	if !errors.Is(err, core.ErrUnknownAgent) || !strings.Contains(err.Error(), "review, dtop") || outcome != core.AgentNotAdded {
+		t.Errorf("NewAgent = %v, %v; want ErrUnknownAgent naming review, dtop, and not added", outcome, err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Errorf("Tabs = %+v, want nothing opened", rt.Tabs)
 	}
 }
 

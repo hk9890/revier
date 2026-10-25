@@ -78,9 +78,10 @@ usage:
                                 type keys into an agent, whatever it is doing
   revier agent focus <agent> [--ref instance]
                                 go to an agent's tab and raise its window
-  revier agent new [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
+  revier agent new [name] [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open
-                                workspace; for a link, the tab's agent runs
+                                workspace: the default agent, or the named
+                                agent name; for a link, the tab's agent runs
                                 on the host and --dir is dropped; --no-focus
                                 leaves the focus and prints the agent's address
   revier shell new [-p name | --panel id] [--dir path]

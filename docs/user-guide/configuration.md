@@ -285,7 +285,9 @@ command = ["dtop", "{{.Path}}"]
 key     = "ctrl+shift+d"
 ```
 
-A panel names one with `agent` in place of `command`:
+`revier agent new dtop` opens a tab that runs it
+([Agents](agents.md#open-more-agent-and-shell-tabs)). A panel names one with
+`agent` in place of `command`:
 
 ```toml
     [[target.runtime.panels]]

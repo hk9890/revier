@@ -10,7 +10,8 @@ the format is the user guide's [configuration reference](../user-guide/configura
 The format is built to keep three things true:
 
 - Every target is a run-or-raise binding, never a launcher: revier starts a
-  program only when it finds nothing to raise.
+  program only when it finds nothing to raise. Agent and shell tabs are
+  launchers, and they are not targets (D145).
 - Every command is an argument list, never a shell string, so there is no
   quoting to get wrong and no shell to inject into.
 - Anything one person needs — an editor, a ticket viewer, a browser, a
