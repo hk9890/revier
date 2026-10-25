@@ -148,6 +148,7 @@ type window struct {
 	Title      string            `json:"title"`
 	IsActive   bool              `json:"is_active"`
 	UserVars   map[string]string `json:"user_vars"`
+	CWD        string            `json:"cwd"`
 	Foreground []process         `json:"foreground_processes"`
 }
 
@@ -485,6 +486,7 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 		Vars:    w.UserVars,
 		PID:     pid,
 		Command: cmd,
+		Dir:     w.CWD,
 	}
 }
 

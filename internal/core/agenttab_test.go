@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -395,11 +396,45 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 func tabAtPanel(t *testing.T, c *core.Core, projects []core.Project, panel revier.PanelID, dir string, outside core.Outside) (core.Workspace, error) {
 	t.Helper()
 	var got core.Workspace
-	err := c.TabAtPanel(context.Background(), projects, panel, dir, outside, func(w core.Workspace) error {
+	err := c.TabAtPanel(context.Background(), projects, panel, dir, outside, func(w core.Workspace, _ string) error {
 		got = w
 		return nil
 	})
 	return got, err
+}
+
+// The tab starts in the directory given, else in the panel's own directory
+// while it is one: a worktree removed under the panel's shell leaves the tab
+// where in starts it. Outside a workspace the plain tab starts there too.
+func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
+	here, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
+	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: here}, {ID: "2", Dir: gone}}, nil)
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: here})
+
+	for _, tc := range []struct {
+		panel     revier.PanelID
+		dir, want string
+	}{
+		{"1", "", here},
+		{"1", given, given},
+		{"2", "", ""},
+	} {
+		got := "unset"
+		err := c.TabAtPanel(context.Background(), projects, tc.panel, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
+			got = dir
+			return nil
+		})
+		if err != nil || got != tc.want {
+			t.Errorf("panel %s, dir %q: in got %q, %v, want %q", tc.panel, tc.dir, got, err, tc.want)
+		}
+	}
+
+	if _, err := tabAtPanel(t, c, projects, "9", "", core.OutsideTab); err != nil {
+		t.Fatalf("TabAtPanel outside: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Dir != here || rt.Tabs[0].Real.Panels[0].Dir != here {
+		t.Errorf("tabs = %+v, want one plain tab in %s", rt.Tabs, here)
+	}
 }
 
 // A key pressed in a workspace opens its tab there, through in, and nothing

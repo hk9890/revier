@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/hk9890/revier/internal/record"
@@ -376,18 +377,24 @@ const (
 )
 
 // TabAtPanel opens the tab a terminal key pressed in a panel asks for: in the
-// open workspace PanelOwner finds, through in. Where the runtime holds the
-// panel but no project's open workspace does, the key is not refused: it does
-// what outside says, a plain tab of the runtime's own shell beside the panel,
-// started in dir where dir is given, or nothing. Every other failure is
-// returned, so the key's own fallback runs (decisions.md D148).
-func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace) error) error {
+// open workspace PanelOwner finds, through in, with the directory the tab
+// starts in. Where the runtime holds the panel but no project's open
+// workspace does, the key is not refused: it does what outside says, a plain
+// tab of the runtime's own shell beside the panel, or nothing. Every other
+// failure is returned, so the key's own fallback runs (decisions.md D148).
+//
+// The tab starts in dir, else in the panel's own directory where it still
+// is one, else where in or the runtime starts it (decisions.md D153).
+func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace, string) error) error {
 	w, err := c.PanelOwner(ctx, projects, panel)
+	if dir == "" {
+		dir = panelDir(w, panel)
+	}
 	if !errors.Is(err, ErrNoWorkspace) {
 		if err != nil {
 			return err
 		}
-		return in(w)
+		return in(w, dir)
 	}
 	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside), "dir", dir)
 	if outside == OutsideNone {
@@ -406,6 +413,28 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 		return fmt.Errorf("%s: focus the plain tab: %w", c.Runtime.Name(), err)
 	}
 	return nil
+}
+
+// panelDir is the directory of the panel in w's instance, or "" where the
+// runtime reports none or it is no directory now: a worktree removed under
+// the panel's shell.
+func panelDir(w Workspace, panel revier.PanelID) string {
+	for _, insts := range w.snap {
+		for _, inst := range insts {
+			if key(inst.Ref) != key(w.Ref) {
+				continue
+			}
+			for _, p := range inst.Panels {
+				if p.ID != panel || p.Dir == "" {
+					continue
+				}
+				if info, err := os.Stat(p.Dir); err == nil && info.IsDir() {
+					return p.Dir
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // holdsPanel reports whether one of the instance's panels has the id.

@@ -812,3 +812,13 @@ Every restore in the TUI, from the sessions screen or the start dialog, failed
 or cancelled too, now ends on the project list with the cursor on the project
 the session was left on, and raises the surface once. What did not open is the
 footer's alone: the result pane is gone, since nothing would show it.
+
+### D153 — a terminal key's tab starts in the panel's directory, which revier reads
+
+Extends D148. The key gave revier the panel's directory by starting its `sh`
+there, and kitty cannot start a process in a directory that was removed, so a
+key in a panel of a removed worktree did nothing, not even its fallback. The
+key now passes the panel alone; revier reads the panel's directory from the
+runtime and starts the tab there while it is a directory, else where the
+project's tab starts. Rejected: dropping the directory, which opened every
+tab from a worktree's panel in the project's directory.
