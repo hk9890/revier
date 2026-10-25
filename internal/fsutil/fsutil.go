@@ -53,18 +53,16 @@ func WriteThrough(path string, data []byte) (string, error) {
 
 // Resolve is the file path names, every link on the way followed: the file
 // itself when it is there, else the file of that name in its directory,
-// which is made when it is missing. A link that points at nothing is an
-// error, because writing beside it would replace the link with a file.
+// which is made when it is missing. A link that points at nothing, path or a
+// directory above it, is an error, because writing beside it would replace
+// the link with a file.
 func Resolve(path string) (string, error) {
-	_, err := os.Lstat(path)
-	switch {
-	case err == nil:
-		real, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return "", fmt.Errorf("%s is a link to nothing: %w", path, err)
-		}
-		return real, nil
-	case !errors.Is(err, fs.ErrNotExist):
+	if err := RefuseDangling(path); err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(path); err == nil {
+		return filepath.EvalSymlinks(path)
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return "", err
 	}
 	dir := filepath.Dir(path)
@@ -76,4 +74,38 @@ func Resolve(path string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(real, filepath.Base(path)), nil
+}
+
+// RefuseDangling is an error naming the link on the way to path that points
+// at nothing, nil when there is none.
+func RefuseDangling(path string) error {
+	link, err := DanglingLink(path)
+	if err == nil && link != "" {
+		err = fmt.Errorf("%s is a link to nothing", link)
+	}
+	return err
+}
+
+// DanglingLink is the link on the way to path that points at nothing: path
+// itself, or the nearest directory above it that is there. It is empty when
+// there is none, a path that is not there yet included.
+func DanglingLink(path string) (string, error) {
+	for p := path; ; p = filepath.Dir(p) {
+		_, err := os.Lstat(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			if filepath.Dir(p) == p {
+				return "", nil
+			}
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := filepath.EvalSymlinks(p); errors.Is(err, fs.ErrNotExist) {
+			return p, nil
+		} else if err != nil {
+			return "", err
+		}
+		return "", nil
+	}
 }

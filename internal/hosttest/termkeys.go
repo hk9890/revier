@@ -31,8 +31,11 @@ func (f *FakeTermKeys) Read(context.Context) (revier.TermKeyState, error) {
 // and the main configuration's own lines move down below it.
 type FakeTermWriter struct {
 	*FakeTermKeys
-	// WriteErr makes Write and Remove fail.
+	// WriteErr makes Write and Remove fail before they change anything.
 	WriteErr error
+	// IncludeErr makes Write fail after it wrote the key file, before the
+	// include: a run that failed half way.
+	IncludeErr error
 	// Calls records every change, in order: "write" or "remove".
 	Calls []string
 }
@@ -49,6 +52,9 @@ func (f *FakeTermWriter) Write(_ context.Context, bindings []revier.TermBinding)
 	}
 	f.State.FileExists = true
 	f.State.Bindings = slices.Clone(bindings)
+	if f.IncludeErr != nil {
+		return f.IncludeErr
+	}
 	if f.State.Include == 0 {
 		f.State.ConfigExists = true
 		f.State.Include, f.State.IncludeOwned = 2, true

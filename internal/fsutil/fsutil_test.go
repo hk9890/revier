@@ -80,3 +80,24 @@ func TestWriteThroughMakesANewFile(t *testing.T) {
 		t.Errorf("stat = %v, %v; want a 0644 file", info, err)
 	}
 }
+
+// A directory on the way that is a link to nothing is named, as a file that
+// is one is; no directory is made in its place.
+func TestWriteThroughRefusesADanglingDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "kitty")
+	if err := os.Symlink(filepath.Join(root, "gone"), dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "revier.conf")
+	if link, err := fsutil.DanglingLink(path); err != nil || link != dir {
+		t.Errorf("DanglingLink = %q, %v; want %q", link, err, dir)
+	}
+	_, err := fsutil.WriteThrough(path, []byte("x"))
+	if err == nil || err.Error() != dir+" is a link to nothing" {
+		t.Errorf("err = %v, want %s is a link to nothing", err, dir)
+	}
+	if link, err := fsutil.DanglingLink(filepath.Join(root, "new", "file")); err != nil || link != "" {
+		t.Errorf("DanglingLink of a new path = %q, %v; want none", link, err)
+	}
+}

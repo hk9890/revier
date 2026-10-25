@@ -45,10 +45,14 @@ This writes `revier.conf` in kitty's configuration directory and adds
 `include revier.conf` at the top of `kitty.conf`. kitty reads the change by
 itself. If `kitty.conf` did not exist, restart kitty. Run `revier term
 install` again after you change a terminal key in `config.toml`. `revier term
-status` shows each key, and `revier term uninstall` removes both again.
+status` shows each key, and `revier term uninstall` removes both again. If
+nothing else is left in `kitty.conf`, uninstall removes the file too, or
+leaves it empty when `kitty.conf` itself is a link.
 
 - revier writes through links, so a `kitty.conf` in a dotfiles repository
-  stays a link.
+  stays a link. If `kitty.conf`, `revier.conf` or the kitty directory is a
+  link to nothing, install and uninstall change nothing until you fix the
+  link.
 - A map of your own below the include wins: for example a
   `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
   tmux. `revier term status` names each such map by its line.

@@ -236,15 +236,64 @@ func TestUninstallOfNothingWritesNothing(t *testing.T) {
 	}
 }
 
-// A failed write is the plan's error, and the report is not read again.
+// A failed write is the plan's error, and neither step reads as done.
 func TestAFailedWriteIsReported(t *testing.T) {
 	w := hosttest.NewTermWriter(revier.TermKeyState{})
 	w.WriteErr = errors.New("read-only file system")
 	c := &core.Core{TermKeys: w}
 	plan, _ := c.PlanInstallTermKeys(context.Background(), termKeys, nil, "alt+space")
 	plan = c.ApplyTermKeys(context.Background(), plan)
-	if plan.Done || plan.Err != "read-only file system" {
-		t.Errorf("done %v, err %q", plan.Done, plan.Err)
+	if plan.Done || plan.FileDone || plan.IncludeDone || plan.Err != "read-only file system" {
+		t.Errorf("done %v, file done %v, include done %v, err %q", plan.Done, plan.FileDone, plan.IncludeDone, plan.Err)
+	}
+}
+
+// A write that fails half way reads the terminal again, so the step that
+// ran is done and the one that did not is not.
+func TestAWriteThatFailsHalfWaySaysWhichStepRan(t *testing.T) {
+	w := hosttest.NewTermWriter(revier.TermKeyState{ConfigExists: true})
+	w.IncludeErr = errors.New("permission denied")
+	c := &core.Core{TermKeys: w}
+	plan, _ := c.PlanInstallTermKeys(context.Background(), termKeys, nil, "alt+space")
+	plan = c.ApplyTermKeys(context.Background(), plan)
+	if plan.Done || !plan.FileDone || plan.IncludeDone || plan.Err != "permission denied" {
+		t.Errorf("done %v, file done %v, include done %v, err %q; want the key file alone done",
+			plan.Done, plan.FileDone, plan.IncludeDone, plan.Err)
+	}
+}
+
+// A link to nothing on the way to either file refuses the whole install and
+// uninstall: the plan names it, and nothing is written, the other file
+// included.
+func TestALinkToNothingRefusesTheRunAndWritesNeitherFile(t *testing.T) {
+	for _, tc := range []struct {
+		state revier.TermKeyState
+		want  string
+	}{
+		{revier.TermKeyState{ConfigDangling: "/k/kitty.conf"}, "/k/kitty.conf is a link to nothing"},
+		{revier.TermKeyState{FileDangling: "/k/revier.conf", ConfigExists: true}, "/k/revier.conf is a link to nothing"},
+		{revier.TermKeyState{FileDangling: "/k", ConfigDangling: "/k"}, "/k is a link to nothing"},
+	} {
+		state := tc.state
+		w := hosttest.NewTermWriter(state)
+		c := &core.Core{TermKeys: w}
+		for _, planFor := range []func(context.Context, []core.TermKey, []core.Project, core.Chord) (core.TermPlan, error){
+			c.PlanInstallTermKeys, c.PlanUninstallTermKeys,
+		} {
+			plan, err := planFor(context.Background(), termKeys, nil, "alt+space")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.Refused != tc.want {
+				t.Errorf("%+v: refused %q, want %q", state, plan.Refused, tc.want)
+			}
+			if plan = c.ApplyTermKeys(context.Background(), plan); plan.Done || plan.Err != plan.Refused {
+				t.Errorf("%+v: done %v, err %q; want the refusal", state, plan.Done, plan.Err)
+			}
+		}
+		if len(w.Calls) != 0 {
+			t.Errorf("%+v: calls = %v, want none", state, w.Calls)
+		}
 	}
 }
 

@@ -72,6 +72,12 @@ func (TermKeys) Read(context.Context) (revier.TermKeyState, error) {
 		File:   filepath.Join(dir, revierConf),
 		Config: filepath.Join(dir, kittyConf),
 	}
+	if state.FileDangling, err = fsutil.DanglingLink(state.File); err != nil {
+		return state, err
+	}
+	if state.ConfigDangling, err = fsutil.DanglingLink(state.Config); err != nil {
+		return state, err
+	}
 	own, err := readFile(state.File)
 	if err != nil {
 		return state, err
@@ -98,7 +104,7 @@ type TermKeyWriter struct{ TermKeys }
 // last word. A file that already holds what would be written is not written.
 // kitty reloads a changed kitty.conf by itself.
 func (TermKeyWriter) Write(_ context.Context, bindings []revier.TermBinding) error {
-	dir, err := ConfigDir()
+	dir, err := checkedConfigDir()
 	if err != nil {
 		return err
 	}
@@ -126,9 +132,11 @@ func (TermKeyWriter) Write(_ context.Context, bindings []revier.TermBinding) err
 }
 
 // Remove deletes revier.conf, through a link to the file it points at, and
-// the include revier wrote. An include the user wrote stays.
+// the include revier wrote, and kitty.conf when nothing else is in it: an
+// install that created it leaves no empty file behind. An include the user
+// wrote stays.
 func (TermKeyWriter) Remove(context.Context) error {
-	dir, err := ConfigDir()
+	dir, err := checkedConfigDir()
 	if err != nil {
 		return err
 	}
@@ -157,8 +165,39 @@ func (TermKeyWriter) Remove(context.Context) error {
 		return nil
 	}
 	// The include is line at; revier's marker is the line above it.
-	kept := append(all[:at-2:at-2], all[at:]...)
-	return writeThrough(conf, strings.Join(kept, ""))
+	kept := strings.Join(append(all[:at-2:at-2], all[at:]...), "")
+	// A kitty.conf that is itself a link stays, emptied: removing the file
+	// it points at would leave the link pointing at nothing.
+	if info, err := os.Lstat(conf); err != nil {
+		return err
+	} else if kept != "" || info.Mode()&os.ModeSymlink != 0 {
+		return writeThrough(conf, kept)
+	}
+	real, err := fsutil.Resolve(conf)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(real); err != nil {
+		return err
+	}
+	slog.Info("kitty config removed", "path", real)
+	return nil
+}
+
+// checkedConfigDir is ConfigDir, once neither revier.conf nor kitty.conf
+// is behind a link to nothing: the check runs before the first write, so a
+// refused run writes neither file.
+func checkedConfigDir() (string, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	for _, name := range []string{revierConf, kittyConf} {
+		if err := fsutil.RefuseDangling(filepath.Join(dir, name)); err != nil {
+			return "", err
+		}
+	}
+	return dir, nil
 }
 
 // readFile is the file's content through links, nil when it is not there.

@@ -126,6 +126,11 @@ type TermReport struct {
 	// Config is the terminal's main configuration.
 	Config       string `json:"config"`
 	ConfigExists bool   `json:"config_exists"`
+	// FileDangling and ConfigDangling name the link on the way to File and
+	// to Config that points at nothing, when there is one: no install or
+	// uninstall runs while either is set.
+	FileDangling   string `json:"file_dangling,omitempty"`
+	ConfigDangling string `json:"config_dangling,omitempty"`
 	// Include is where Config includes File, IncludeLine the line, and
 	// IncludeOwned whether the line is revier's or the user's.
 	Include      TermInclude `json:"include"`
@@ -184,13 +189,15 @@ func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermRow
 // and the rows wantedTermRows made.
 func termReport(name string, state revier.TermKeyState, wanted []TermRow) TermReport {
 	report := TermReport{
-		Terminal:     name,
-		File:         state.File,
-		Config:       state.Config,
-		ConfigExists: state.ConfigExists,
-		Include:      TermIncludeAbsent,
-		IncludeLine:  state.Include,
-		IncludeOwned: state.IncludeOwned,
+		Terminal:       name,
+		File:           state.File,
+		Config:         state.Config,
+		ConfigExists:   state.ConfigExists,
+		FileDangling:   state.FileDangling,
+		ConfigDangling: state.ConfigDangling,
+		Include:        TermIncludeAbsent,
+		IncludeLine:    state.Include,
+		IncludeOwned:   state.IncludeOwned,
 	}
 
 	held := map[Chord][]string{}
@@ -280,7 +287,8 @@ const (
 	TermKept TermAction = "kept"
 )
 
-func (a TermAction) writes() bool { return a != TermOK && a != TermAbsent && a != TermKept }
+// Writes reports whether the action changes the file.
+func (a TermAction) Writes() bool { return a != TermOK && a != TermAbsent && a != TermKept }
 
 // TermPlan is what a run of `revier term install` or `uninstall` does, before
 // it does it. The same value is what the command prints afterwards, with
@@ -291,15 +299,41 @@ type TermPlan struct {
 	// in the main configuration.
 	File    TermAction `json:"file"`
 	Include TermAction `json:"include"`
-	Done    bool       `json:"done,omitempty"`
-	Err     string     `json:"error,omitempty"`
+	// Refused is why the plan writes nothing at all: a link to nothing on
+	// the way to one of the files. Writing the other one alone would leave
+	// half an install.
+	Refused string `json:"refused,omitempty"`
+	// FileDone and IncludeDone say which of the two actions ran, and Done
+	// that the whole plan did. A failed run can have done one of them.
+	FileDone    bool   `json:"file_done,omitempty"`
+	IncludeDone bool   `json:"include_done,omitempty"`
+	Done        bool   `json:"done,omitempty"`
+	Err         string `json:"error,omitempty"`
 
 	wanted    []TermRow
 	uninstall bool
 }
 
 // Writes reports whether the plan changes a file.
-func (p TermPlan) Writes() bool { return p.File.writes() || p.Include.writes() }
+func (p TermPlan) Writes() bool { return p.File.Writes() || p.Include.Writes() }
+
+// refusal is why no install or uninstall runs: every link to nothing on the
+// way to the two files. Empty when there is none.
+func refusal(r TermReport) string {
+	var links []string
+	for _, l := range []string{r.FileDangling, r.ConfigDangling} {
+		if l != "" && !slices.Contains(links, l) {
+			links = append(links, l)
+		}
+	}
+	switch len(links) {
+	case 0:
+		return ""
+	case 1:
+		return links[0] + " is a link to nothing"
+	}
+	return strings.Join(links, " and ") + " are links to nothing"
+}
 
 // PlanInstallTermKeys works out what writing the terminal keys would do, and
 // changes nothing. A key the desktop takes is left out of the file; the rest
@@ -309,7 +343,7 @@ func (c *Core) PlanInstallTermKeys(ctx context.Context, keys []TermKey, projects
 	if err != nil {
 		return TermPlan{}, err
 	}
-	plan := TermPlan{Report: report, wanted: wanted}
+	plan := TermPlan{Report: report, wanted: wanted, Refused: refusal(report)}
 	switch report.FileState {
 	case TermFileCurrent:
 		plan.File = TermOK
@@ -336,7 +370,7 @@ func (c *Core) PlanUninstallTermKeys(ctx context.Context, keys []TermKey, projec
 	if err != nil {
 		return TermPlan{}, err
 	}
-	plan := TermPlan{Report: report, wanted: wanted, uninstall: true, File: TermAbsent, Include: TermAbsent}
+	plan := TermPlan{Report: report, wanted: wanted, uninstall: true, File: TermAbsent, Include: TermAbsent, Refused: refusal(report)}
 	if report.FileState != TermFileAbsent {
 		plan.File = TermRemove
 	}
@@ -364,8 +398,13 @@ func (c *Core) termState(ctx context.Context, keys []TermKey, projects []Project
 
 // ApplyTermKeys carries out a plan and returns it marked, its report read
 // again: what the files hold now, and the shadowing maps at the lines they
-// are on now. A plan that writes nothing is returned as it is.
+// are on now. A refused plan fails with its refusal and writes nothing; a
+// plan that writes nothing is returned as it is.
 func (c *Core) ApplyTermKeys(ctx context.Context, plan TermPlan) TermPlan {
+	if plan.Refused != "" {
+		plan.Err = plan.Refused
+		return plan
+	}
 	if !plan.Writes() {
 		return plan
 	}
@@ -382,11 +421,25 @@ func (c *Core) ApplyTermKeys(ctx context.Context, plan TermPlan) TermPlan {
 	}
 	if err != nil {
 		plan.Err = err.Error()
+	}
+	state, readErr := w.Read(ctx)
+	if readErr == nil {
+		plan.Report = termReport(w.Name(), state, plan.wanted)
+	}
+	if err == nil {
+		plan.Done, plan.FileDone, plan.IncludeDone = true, plan.File.Writes(), plan.Include.Writes()
 		return plan
 	}
-	plan.Done = true
-	if state, err := w.Read(ctx); err == nil {
-		plan.Report = termReport(w.Name(), state, plan.wanted)
+	if readErr != nil {
+		return plan
+	}
+	// The run failed part way: the files read again say which step ran.
+	if plan.uninstall {
+		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermFileAbsent
+		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include == TermIncludeAbsent
+	} else {
+		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermFileCurrent
+		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include != TermIncludeAbsent
 	}
 	return plan
 }

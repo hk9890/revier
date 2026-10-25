@@ -38,6 +38,12 @@ type TermKeyState struct {
 	// whether it is there.
 	Config       string
 	ConfigExists bool
+	// FileDangling and ConfigDangling name the link on the way to File and
+	// to Config that points at nothing: the file itself, or a directory
+	// above it. Empty when there is none. Write and Remove refuse to run
+	// while either is set, so a refused run writes neither file.
+	FileDangling   string
+	ConfigDangling string
 	// Include is the line of Config that includes File, from 1; 0 when no
 	// line does. IncludeOwned says whether it is the include revier wrote
 	// and removes, or one the user wrote.
@@ -65,9 +71,12 @@ type TermKeyWriter interface {
 	TermKeys
 	// Write makes File hold exactly the bindings, and makes Config include
 	// File when no line of it does. A file that already holds what Write
-	// would write is not written.
+	// would write is not written. A link to nothing on the way to either
+	// file is an error before anything is written.
 	Write(ctx context.Context, bindings []TermBinding) error
-	// Remove deletes File and the include revier wrote. An include the user
-	// wrote stays.
+	// Remove deletes File and the include revier wrote, and Config when
+	// nothing else is left in it. An include the user wrote stays. A link
+	// to nothing on the way to either file is an error before anything is
+	// changed.
 	Remove(ctx context.Context) error
 }

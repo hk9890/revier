@@ -785,7 +785,12 @@ func TestRestoreDropsANamedAgentItsProjectNoLongerDeclares(t *testing.T) {
 	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Panels[0].Title != "dtop" {
 		t.Errorf("tabs = %+v, want dtop's tab alone", rt.Tabs)
 	}
-	if note := core.AgentsNote("opened", res.Agents, nil); !strings.Contains(note, "1 agent not restored: its project no longer declares the named agent it ran") {
+	if note := core.AgentsNote("opened", res.Agents, resumes, nil); !strings.Contains(note, `1 agent not restored: the project no longer declares the named agent "review"`) {
 		t.Errorf("note = %q, want the agent with no declaration named", note)
+	}
+	two := []core.Resume{{Agent: "review"}, {Agent: "old"}, {Agent: "review"}}
+	unknown := []core.AgentOutcome{core.AgentUnknown, core.AgentUnknown, core.AgentUnknown}
+	if note, want := core.AgentsNote("opened", unknown, two, nil), `opened, 3 agents not restored: the project no longer declares the named agents "review", "old"`; note != want {
+		t.Errorf("note = %q, want %q", note, want)
 	}
 }

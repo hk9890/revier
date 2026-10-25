@@ -297,7 +297,7 @@ key     = "ctrl+shift+d"
 
 | Key | Type | Meaning |
 |---|---|---|
-| `name` | string | The agent's name. Required, and unique. |
+| `name` | string | The agent's name. Required, and unique. Use letters, digits, `-`, `_` and `.`, and do not start it with `-`: the name is one word of the `revier agent new <name>` command that its terminal key runs. revier refuses the agent for another name. |
 | `command` | list of strings | What the agent runs. Required. [Templates](#templates) work as in a panel's `command`. |
 | `key` | string | The terminal key that opens this agent, in the [key](#keys) form. Only in `config.toml`. See [`[terminal]`](#terminal). |
 

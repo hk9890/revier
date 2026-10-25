@@ -207,6 +207,41 @@ name = "idle"
 	}
 }
 
+// A name that is not one word of a command line, or that reads as a flag,
+// is refused: a terminal key passes it to `revier agent new` in a sh -c
+// string.
+func TestAnAgentNameMustBeOneWordThatIsNoFlag(t *testing.T) {
+	cfg, p := loadOne(t, `
+[[agent]]
+name = "-p"
+command = ["x"]
+
+[[agent]]
+name = "two words"
+command = ["x"]
+
+[[agent]]
+name = "it's"
+command = ["x"]
+
+[[agent]]
+name = "dtop-2_b.v"
+command = ["dtop"]
+`, "path = \"/tmp/demo\"\n")
+	var got []string
+	for _, err := range cfg.Problems {
+		got = append(got, err.Error())
+	}
+	rule := ": a name is letters, digits, '-', '_' and '.', and does not start with '-'"
+	want := []string{`agent "-p"` + rule, `agent "two words"` + rule, `agent "it's"` + rule}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Problems = %q, want %q", got, want)
+	}
+	if len(p.Agents) != 1 || p.Agents[0].Name != "dtop-2_b.v" {
+		t.Errorf("Agents = %+v, want dtop-2_b.v alone", p.Agents)
+	}
+}
+
 // A project file's own table with no command, a name given twice, or a
 // command that does not render is refused by name, and the project keeps
 // the rest.

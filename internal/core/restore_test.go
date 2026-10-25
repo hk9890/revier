@@ -158,7 +158,7 @@ func TestRestorePreviewOpensNothing(t *testing.T) {
 // for a dropped agent - no agent panel declared - would send the reader to look
 // for a declaration a tab cannot have.
 func TestAgentsNoteNamesAnAgentInATabTarget(t *testing.T) {
-	note := core.AgentsNote("open", []core.AgentOutcome{core.AgentInTab}, errors.New("unused"))
+	note := core.AgentsNote("open", []core.AgentOutcome{core.AgentInTab}, nil, errors.New("unused"))
 	if want := "open, 1 agent not resumed: it ran in a tab target"; note != want {
 		t.Errorf("note = %q, want %q", note, want)
 	}
@@ -170,7 +170,7 @@ func TestAgentsNoteNamesAnAgentInATabTarget(t *testing.T) {
 // A conversation that was recorded and cannot be resumed here is named. Said
 // nothing, it reads as an agent that never had one.
 func TestAgentsNoteNamesAnUnresumableConversation(t *testing.T) {
-	note := core.AgentsNote("opened", []core.AgentOutcome{core.AgentResumed, core.AgentUnresumable, core.AgentEmpty}, nil)
+	note := core.AgentsNote("opened", []core.AgentOutcome{core.AgentResumed, core.AgentUnresumable, core.AgentEmpty}, nil, nil)
 	if want := "opened, 1 agent resumed, 1 agent empty: no probe here resumes its harness in its panel"; note != want {
 		t.Errorf("note = %q, want %q", note, want)
 	}

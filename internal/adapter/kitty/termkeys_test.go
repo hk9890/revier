@@ -275,20 +275,54 @@ func TestAKittyConfLinkChainIsWrittenThroughAndKeepsItsMode(t *testing.T) {
 	}
 }
 
-// A link that points at nothing is refused, and stays as it was: writing
-// beside it would replace it with a file.
+// A link that points at nothing is refused before anything is written, and
+// stays as it was: writing beside it would replace it with a file. Read
+// names it, and neither Write nor Remove touches the other file.
 func TestADanglingLinkIsRefused(t *testing.T) {
 	for _, name := range []string{"kitty.conf", "revier.conf"} {
 		t.Run(name, func(t *testing.T) {
 			dir := kittyDir(t)
-			link(t, filepath.Join(t.TempDir(), "gone"), filepath.Join(dir, name))
-			if err := (kitty.TermKeyWriter{}).Write(context.Background(), bindings); err == nil {
-				t.Fatal("Write succeeded through a dangling link")
+			path := filepath.Join(dir, name)
+			link(t, filepath.Join(t.TempDir(), "gone"), path)
+			s := state(t)
+			if got := map[string]string{"kitty.conf": s.ConfigDangling, "revier.conf": s.FileDangling}[name]; got != path {
+				t.Errorf("Read names %q as a link to nothing, want %q", got, path)
 			}
-			if !isLink(t, filepath.Join(dir, name)) {
+			for op, run := range map[string]func(context.Context) error{
+				"Write":  func(ctx context.Context) error { return (kitty.TermKeyWriter{}).Write(ctx, bindings) },
+				"Remove": (kitty.TermKeyWriter{}).Remove,
+			} {
+				err := run(context.Background())
+				if err == nil || err.Error() != path+" is a link to nothing" {
+					t.Errorf("%s: err = %v, want %s is a link to nothing", op, err, path)
+				}
+			}
+			if !isLink(t, path) {
 				t.Errorf("%s was replaced", name)
 			}
+			if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+				t.Errorf("the directory holds %d entries, want the link alone: a refused run wrote", len(entries))
+			}
 		})
+	}
+}
+
+// A kitty directory that is itself a link to nothing is named as one, for
+// both files, and nothing is made in its place.
+func TestADanglingConfigDirectoryIsRefused(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "kitty")
+	link(t, filepath.Join(root, "gone"), dir)
+	t.Setenv("KITTY_CONFIG_DIRECTORY", dir)
+	if s := state(t); s.FileDangling != dir || s.ConfigDangling != dir {
+		t.Errorf("Read: file %q, config %q; want both %q", s.FileDangling, s.ConfigDangling, dir)
+	}
+	err := (kitty.TermKeyWriter{}).Write(context.Background(), bindings)
+	if err == nil || err.Error() != dir+" is a link to nothing" {
+		t.Errorf("err = %v, want %s is a link to nothing", err, dir)
+	}
+	if !isLink(t, dir) {
+		t.Error("the directory link was replaced")
 	}
 }
 
@@ -382,6 +416,37 @@ func TestUninstallRemovesOnlyTheMarkedPair(t *testing.T) {
 		t.Errorf("revier.conf is still there: %v", err)
 	}
 	uninstall(t) // nothing left: no error
+}
+
+// A kitty.conf that install created holds revier's pair alone, so uninstall
+// removes it, through the folded directory link it is behind. A kitty.conf
+// that is itself a link is emptied instead: removing the file would leave a
+// link to nothing.
+func TestUninstallRemovesAKittyConfItLeavesEmpty(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "dotfiles")
+	write(t, filepath.Join(real, "keep"), "", 0o644)
+	dir := filepath.Join(root, "kitty")
+	link(t, real, dir)
+	t.Setenv("KITTY_CONFIG_DIRECTORY", dir)
+	install(t)
+	uninstall(t)
+	if _, err := os.Stat(filepath.Join(real, "kitty.conf")); !os.IsNotExist(err) {
+		t.Errorf("the empty kitty.conf is still there: %v", err)
+	}
+	if !isLink(t, dir) {
+		t.Error("the directory link was replaced")
+	}
+
+	linked := kittyDir(t)
+	file := filepath.Join(t.TempDir(), "kitty.conf")
+	write(t, file, "", 0o644)
+	link(t, file, filepath.Join(linked, "kitty.conf"))
+	install(t)
+	uninstall(t)
+	if got := read(t, filepath.Join(linked, "kitty.conf")); got != "" || !isLink(t, filepath.Join(linked, "kitty.conf")) {
+		t.Errorf("kitty.conf link: content %q, want an empty file behind the link", got)
+	}
 }
 
 // The user's own layout: a theme include at the top, unconditional maps of

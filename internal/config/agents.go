@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 
 	"github.com/BurntSushi/toml"
@@ -52,9 +53,13 @@ type agentTable struct {
 	Key     string   `toml:"key"`
 }
 
+// agentName is a name a terminal key passes as one word of a command line,
+// `revier agent new <name>`, that does not read as a flag.
+var agentName = regexp.MustCompile(`^[A-Za-z0-9_.][A-Za-z0-9_.-]*$`)
+
 // validateAgents checks [[agent]] tables, one error per table, parallel to
 // tables and nil where the table is sound: a table with no name, a name
-// given twice, or a value of the wrong type is refused whole, and so is one
+// that is not one word of a command line, a name given twice, or a value of the wrong type is refused whole, and so is one
 // of config.toml's with no command, since no project could run it.
 // inProject is a project file's tables, which may leave the command to
 // config.toml's table of their name, and hold no key: the terminal's key
@@ -68,6 +73,11 @@ func validateAgents(tables []map[string]any, inProject bool) (refused, keyErrs [
 		name, _ := raw["name"].(string)
 		if name == "" {
 			refused[i] = fmt.Errorf("agent %d: has no name", i+1)
+			continue
+		}
+		if !agentName.MatchString(name) {
+			refused[i] = fmt.Errorf("agent %q: a name is letters, digits, '-', '_' and '.', and does not start with '-'", name)
+			seen[name] = true
 			continue
 		}
 		var a agentTable
