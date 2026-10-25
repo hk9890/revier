@@ -32,7 +32,7 @@ in full.
 | `revier agent read` | Print an agent's last reply, or its screen. |
 | `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
 | `revier agent focus` | Go to an agent's tab. |
-| `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. A plain `restore` opens the newest session of every open project, never one a project close saved. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
+| `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
 | `revier term status` / `install` / `uninstall` | Show, write or remove the terminal keys in your terminal's configuration. See [kitty](integrations/kitty.md#add-tabs-from-a-kitty-key). |

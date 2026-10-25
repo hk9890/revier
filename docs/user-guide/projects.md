@@ -108,7 +108,7 @@ Save one before a restart, and restore it after:
 ```bash
 revier session save --name work   # the name is optional
 revier session list
-revier session restore            # the newest session of every open project
+revier session restore            # the newest session that holds every open project
 revier session restore work --dry-run
 ```
 

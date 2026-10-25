@@ -773,14 +773,14 @@ the key's own fallback to the terminal's new tab is for revier failing.
 
 ### D149 — a plain restore opens the newest save of the whole set, never a project close's save
 
-Extends D78 and D141. A close of one project saves before it closes, so one
-close, or a run of them, left the smallest set as the newest save, and a plain
-restore opened it. A plain restore, the sessions screen's first cursor and the
-start dialog's fallback now take the newest save of the whole set: by hand, by
-a full shutdown, from what a surface last saw (D150), or from before saves had
-a reason. A project close's save, or one of a reason this build does not know,
-is still listed and opened by id. Rejected: guessing a run of closes from sets
-that shrink, and falling back to a close's save when no whole one exists.
+Extends D78 and D141. A close of one project saves before it closes, so a run
+of closes left the smallest set as the newest save, and a plain restore opened
+it. A plain restore, the sessions screen's first cursor, the start dialog's
+fallback and the save a shutdown compares with take the newest save of the
+whole set: by hand, by a full shutdown, from what a surface last saw (D150), or
+from before saves had a reason. A project close's save, or one of an unknown
+reason, is still listed and opened by id. Rejected: guessing a run of closes
+from sets that shrink, and falling back to a close's save.
 
 ### D150 — what a surface last saw is kept, and an end with no shutdown offers it
 
