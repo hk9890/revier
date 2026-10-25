@@ -182,6 +182,26 @@ every = "10s"
 	}
 }
 
+// A refused [[agent]] table, or a key in a project file, is reported under
+// the file that writes it.
+func TestDoctorReportsAgentProblemsUnderTheirFile(t *testing.T) {
+	doctorRoot(t, map[string]string{"agents.toml": sound + `
+[[agent]]
+name = "dtop"
+command = ["dtop"]
+key = "ctrl+shift+d"
+`})
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 1}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 1 file", err)
+	}
+	for _, want := range []string{"agents.toml", `agent "dtop"`, "config.toml alone"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report should contain %q:\n%s", want, out.String())
+		}
+	}
+}
+
 // A link declares its realization under [target.remote], so a link target
 // with none is never told to add the local table a line above told it to
 // move, and a local target keeps the local advice.

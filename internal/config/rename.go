@@ -19,7 +19,7 @@ import (
 // existing file is never overwritten, and the old file is removed only once
 // the new one loads no worse than it did: what was wrong with the file before
 // is not the rename's to refuse.
-func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (core.Project, error) {
+func Rename(root string, from, to revier.ProjectName, inh Inherited) (core.Project, error) {
 	old := ProjectFile(root, from)
 	if info, err := os.Lstat(old); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		// Moved here, the file would leave the repository it is linked in
@@ -42,8 +42,8 @@ func Rename(root string, from, to revier.ProjectName, shared []map[string]any) (
 	if declared.Remote != nil && declared.Remote.Project == "" {
 		text = setKey(text, "remote", "project", quote(string(from)))
 	}
-	before := loadProject(old, data, shared)
-	p, err := writeUnless(root, to, text, shared, func(p core.Project) []error { return newProblems(before, p) })
+	before := loadProject(old, data, inh)
+	p, err := writeUnless(root, to, text, inh, func(p core.Project) []error { return newProblems(before, p) })
 	if err != nil {
 		return core.Project{}, err
 	}

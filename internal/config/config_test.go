@@ -16,7 +16,7 @@ import (
 
 func TestLoadProject(t *testing.T) {
 	dir := t.TempDir()
-	p := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
+	p := config.LoadProject(write(t, dir, "revier.toml", valid), config.Inherited{})
 	if p.Name != "revier" || p.Path == "" {
 		t.Fatalf("project = %+v", p)
 	}
@@ -51,7 +51,7 @@ func TestLoadProjectRefusesNameKey(t *testing.T) {
 		"launch": []any{"x"}, "match": map[string]any{"class": "^x$"},
 	}}}
 	for _, s := range [][]map[string]any{nil, shared} {
-		err := config.LoadProject(path, s).Invalid
+		err := config.LoadProject(path, config.Inherited{Targets: s}).Invalid
 		if err == nil || !strings.Contains(err.Error(), "file name is the project's name") {
 			t.Errorf("shared %v: err = %v, want the name key refused", s, err)
 		}
@@ -358,7 +358,7 @@ name = "tickets"
 `
 
 func TestLoadProjectReadsTheTabsOfATarget(t *testing.T) {
-	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", container), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", container), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Fatalf("Problems = %v, want none", probs)
 	}
@@ -375,7 +375,7 @@ func TestLoadProjectReadsTheTabsOfATarget(t *testing.T) {
 // tabs it names stay usable at their own keys (decisions.md D85).
 func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
 	body := strings.Replace(container, `active = "agent"`, `active = "editor"`, 1)
-	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), config.Inherited{})
 	if p.Invalid != nil {
 		t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 	}
@@ -411,7 +411,7 @@ name = "editor"
   launch = ["idea"]
   match = { class = "^jetbrains-idea" }
 `
-	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), config.Inherited{})
 	if p.Invalid != nil {
 		t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 	}
@@ -449,7 +449,7 @@ func TestLoadProjectRefusesOnlyTheBrokenTarget(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := write(t, dir, "broken.toml", body)
-			p := config.LoadProject(path, nil)
+			p := config.LoadProject(path, config.Inherited{})
 			if p.Invalid != nil {
 				t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
 			}
@@ -477,7 +477,7 @@ func TestLoadProjectRefusesOnlyTheBrokenTarget(t *testing.T) {
 func TestLoadProjectKeepsAnUnparseableFile(t *testing.T) {
 	dir := t.TempDir()
 	path := write(t, dir, "broken.toml", "path = \"/p\"\nthis is not toml\n")
-	p := config.LoadProject(path, nil)
+	p := config.LoadProject(path, config.Inherited{})
 	if p.Invalid == nil {
 		t.Fatal("Invalid = nil, want the parse failure")
 	}
@@ -495,7 +495,7 @@ func TestLoadProjectKeepsAnUnparseableFile(t *testing.T) {
 // Projects leave Load prepared: templates rendered, so a host never sees one.
 func TestLoadProjectRendersTemplates(t *testing.T) {
 	dir := t.TempDir()
-	p := config.LoadProject(write(t, dir, "revier.toml", valid), nil)
+	p := config.LoadProject(write(t, dir, "revier.toml", valid), config.Inherited{})
 	home, _ := p.Home()
 	if home.Runtime.Match.Title != "^session:revier$" {
 		t.Errorf("match title = %q, want it rendered", home.Runtime.Match.Title)
@@ -568,7 +568,7 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 	}
 	dir := t.TempDir()
 	body := strings.Replace(valid, `path = "/home/user/dev/github/revier"`, `path = "~/dev/github/revier"`, 1)
-	p := config.LoadProject(write(t, dir, "revier.toml", body), nil)
+	p := config.LoadProject(write(t, dir, "revier.toml", body), config.Inherited{})
 	if want := filepath.Join(home, "dev/github/revier"); p.Path != want {
 		t.Errorf("path = %q, want %q", p.Path, want)
 	}

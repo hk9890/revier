@@ -156,7 +156,7 @@ run = ["again"]
 // An edit above it moves that line and breaks nothing new, so it is written.
 func TestProjectEditAboveABrokenStatusIsWritten(t *testing.T) {
 	file, shared := projectRoot(t, overriding+"\n[[status]]\nat = \"project\"\nrun = [\"x\"]\nevery = 10\n")
-	if _, err := config.SetProjectValue(file, "git_url", "git@github.com:me/demo.git", shared); err != nil {
+	if _, err := config.SetProjectValue(file, "git_url", "git@github.com:me/demo.git", config.Inherited{Targets: shared}); err != nil {
 		t.Errorf("SetProjectValue over a broken status table: %v", err)
 	}
 }

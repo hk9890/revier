@@ -72,8 +72,8 @@ func LinkProject(cfgRoot string, name revier.ProjectName, host string, on revier
 // changes nothing. The saved sessions are last and cannot fail the rename:
 // one that keeps the old name no longer opens the project, which the log
 // says, and the project itself is renamed.
-func RenameProject(cfgRoot, stateRoot string, ledger core.Ledger, from, to revier.ProjectName, shared []map[string]any) (core.Project, error) {
-	p, err := config.Rename(cfgRoot, from, to, shared)
+func RenameProject(cfgRoot, stateRoot string, ledger core.Ledger, from, to revier.ProjectName, inh config.Inherited) (core.Project, error) {
+	p, err := config.Rename(cfgRoot, from, to, inh)
 	if err != nil {
 		return core.Project{}, err
 	}

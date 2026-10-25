@@ -114,7 +114,7 @@ func decodeProject(data []byte, shared []map[string]any) (revier.Project, map[re
 		name, _ := t["name"].(string)
 		declared[name] = true
 	}
-	raw["target"] = partsFor(mergeTargets(shared, ownTargets), declared, isLink)
+	raw["target"] = partsFor(mergeByName(shared, ownTargets), declared, isLink)
 	var merged revier.Project
 	if err := recode(raw, &merged); err != nil {
 		if p, ownErr := own(); ownErr != nil {
@@ -201,10 +201,10 @@ func validateParts(targets []map[string]any, isLink bool) map[revier.TargetName]
 	return out
 }
 
-// mergeTargets is the shared targets, each merged with the project's own of
-// the same name, then the project's targets the shared ones do not name, in
-// the project's order.
-func mergeTargets(shared, own []map[string]any) []map[string]any {
+// mergeByName is the shared tables, each merged with the project's own of
+// the same name, then the project's tables the shared ones do not name, in
+// the project's order: the targets, and the named agents.
+func mergeByName(shared, own []map[string]any) []map[string]any {
 	out := make([]map[string]any, 0, len(shared)+len(own))
 	at := map[string]int{}
 	for _, t := range shared {
@@ -268,12 +268,11 @@ func recode(tables any, into any) error {
 	return err
 }
 
-// sharedTargets is the shared targets a project gets from the config.toml
-// under root.
-func sharedTargets(root string) ([]map[string]any, error) {
+// inherited is what a project gets from the config.toml under root.
+func inherited(root string) (Inherited, error) {
 	cfg, err := Read(root)
 	if err != nil {
-		return nil, err
+		return Inherited{}, err
 	}
-	return cfg.Shared(), nil
+	return cfg.Inherited(), nil
 }

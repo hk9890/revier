@@ -81,7 +81,7 @@ func TestNewWritesAProjectForTheDirectory(t *testing.T) {
 	if !strings.Contains(out, file) {
 		t.Errorf("new printed %q, want the file it wrote", out)
 	}
-	p := config.LoadProject(file, nil)
+	p := config.LoadProject(file, config.Inherited{})
 	if p.Path != dir || p.GitURL == "" {
 		t.Errorf("project = %+v, want the directory and its origin", p.Project)
 	}

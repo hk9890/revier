@@ -599,7 +599,7 @@ func newTargets(sf surface, name revier.ProjectName) string {
 		names[i] = string(t.Name)
 	}
 	with := "the shared targets"
-	if !config.SharedHome(sf.usable) {
+	if !config.SharedHome(sf.usable.Targets) {
 		with = "its own home and shared targets"
 	}
 	return fmt.Sprintf("%q with %s: %s", name, with, strings.Join(names, ", "))

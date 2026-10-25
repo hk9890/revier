@@ -89,14 +89,14 @@ func CanCreate(projects []core.Project, name revier.ProjectName, dir string) err
 // home, the file writes the template's home target and its agent tab alone,
 // since a project with no home is refused at load.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
-	shared, err := sharedTargets(root)
+	inh, err := inherited(root)
 	if err != nil {
 		return core.Project{}, err
 	}
-	if err := agentTabFree(shared); err != nil {
+	if err := agentTabFree(inh.Targets); err != nil {
 		return core.Project{}, err
 	}
-	return write(root, name, projectTOML(name, dir, gitURL, shared), shared)
+	return write(root, name, projectTOML(name, dir, gitURL, inh.Targets), inh)
 }
 
 // agentTabFree refuses a new project whose agent tab would merge with a
@@ -154,18 +154,18 @@ func CreateLink(root string, name revier.ProjectName, host string, on revier.Pro
 	// D82), so it is loaded back with them: the project handed to the caller
 	// is the one the next start reads, and a shared target that would refuse
 	// the link is caught here rather than after the file is written.
-	shared, err := sharedTargets(root)
+	inh, err := inherited(root)
 	if err != nil {
 		return core.Project{}, err
 	}
-	return write(root, name, linkTOML(name, host, on), shared)
+	return write(root, name, linkTOML(name, host, on), inh)
 }
 
 // write puts body under the project's file name and loads it back. An
 // existing file is never overwritten, and a file that does not load whole is
 // removed again, so the directory holds a project revier accepts or nothing.
-func write(root string, name revier.ProjectName, body string, shared []map[string]any) (core.Project, error) {
-	return writeUnless(root, name, body, shared, Problems)
+func write(root string, name revier.ProjectName, body string, inh Inherited) (core.Project, error) {
+	return writeUnless(root, name, body, inh, Problems)
 }
 
 // writeUnless is write with what the loaded project may not carry: the
@@ -174,7 +174,7 @@ func write(root string, name revier.ProjectName, body string, shared []map[strin
 // The name is asked before the file is written. The load back refuses a name
 // with a colon too, but a rename is refused only for what it breaks, and a
 // project already refused as a whole would carry the colon across.
-func writeUnless(root string, name revier.ProjectName, body string, shared []map[string]any, refuse func(core.Project) []error) (core.Project, error) {
+func writeUnless(root string, name revier.ProjectName, body string, inh Inherited, refuse func(core.Project) []error) (core.Project, error) {
 	if err := ValidateName(name); err != nil {
 		return core.Project{}, err
 	}
@@ -203,7 +203,7 @@ func writeUnless(root string, name revier.ProjectName, body string, shared []map
 	// A file revier itself has just written is expected to load as it was
 	// meant to, so a problem in it is revier's mistake, not the user's, and
 	// the file goes again rather than becoming a project that cannot run.
-	p := LoadProject(path, shared)
+	p := LoadProject(path, inh)
 	if probs := refuse(p); len(probs) > 0 {
 		_ = os.Remove(path)
 		return core.Project{}, errors.Join(probs...)

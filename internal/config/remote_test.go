@@ -13,7 +13,7 @@ import (
 )
 
 func TestALinkDerivesItsHomeItsAgentTabAndItsNameOnTheHost(t *testing.T) {
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link), config.Inherited{})
 	if p.Remote == nil || p.Remote.Host != "buildbox" || p.Remote.Project != "far" {
 		t.Fatalf("remote = %+v, want buildbox and the link's own name there", p.Remote)
 	}
@@ -55,7 +55,7 @@ func TestALinkDerivesItsHomeItsAgentTabAndItsNameOnTheHost(t *testing.T) {
 // host is asked by its name, the list shows this one.
 func TestALinkMayNameTheProjectDifferentlyOnTheHost(t *testing.T) {
 	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"far\"", 1)
-	p := config.LoadProject(write(t, t.TempDir(), "build.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "build.toml", body), config.Inherited{})
 	if p.Name != "build" || p.Remote.Project != "far" {
 		t.Errorf("name %q, on the host %q; want build here and far there", p.Name, p.Remote.Project)
 	}
@@ -74,7 +74,7 @@ key = "ctrl-o"
   launch = ["code", "--remote", "ssh-remote+buildbox", "{{.Path}}"]
   match = { title = "far \\[SSH: buildbox\\]" }
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if p.Path != "~/dev/far" {
 		t.Errorf("path = %q, want the host's, kept as written", p.Path)
 	}
@@ -98,7 +98,7 @@ home = true
   launch = ["ssh", "buildbox"]
   match = { title = "^far$" }
 `
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", own), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", own), config.Inherited{})
 	if home, _ := p.Home(); home.Name != "shell" || len(p.Targets) != 1 {
 		t.Errorf("targets = %+v, want the declared home alone", p.Targets)
 	}
@@ -121,7 +121,7 @@ home = true
   [target.remote.runtime]
   place = "right top 75% 100%"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	home, ok := p.Home()
 	if !ok || home.Runtime == nil {
 		t.Fatalf("home = %+v, want the derived home under the declared target", home)
@@ -139,7 +139,7 @@ home = true
 		t.Errorf("Problems = %v, want none", probs)
 	}
 
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", strings.Replace(body, `name = "home"`, `name = "work"`, 1)), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", strings.Replace(body, `name = "home"`, `name = "work"`, 1)), config.Inherited{})
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"work", "agent"}) || target(t, p, "agent").Runtime.Inside != "work" {
 		t.Errorf("targets = %+v, want the tab inside the home as the link named it", p.Targets)
 	}
@@ -159,7 +159,7 @@ key = "ctrl-a"
   [target.remote.runtime]
   inside = "home"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Fatalf("Problems = %v, want none", probs)
 	}
@@ -170,7 +170,7 @@ key = "ctrl-a"
 		t.Errorf("agent = %+v, want the declared key and the derived panels", tab)
 	}
 
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Fatalf("Problems = %v, want none", probs)
 	}
@@ -192,7 +192,7 @@ name = "agent"
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) || target(t, p, "agent").Runtime != nil {
 		t.Fatalf("targets = %+v, want the declared window target alone under the name", p.Targets)
 	}
@@ -219,7 +219,7 @@ home = true
   [target.remote.runtime]
   place = "right top 75% 100%"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home"}) {
 		t.Fatalf("targets = %v, want no derived tab", got)
 	}
@@ -318,7 +318,7 @@ name = "pages"
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	p := config.LoadProject(write(t, t.TempDir(), "near.toml", remoteOnLocal), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "near.toml", remoteOnLocal), config.Inherited{})
 	if err := refusalOf(p, "pages"); err == nil || !strings.Contains(err.Error(), "[target.remote]") {
 		t.Errorf("err = %v, want [target.remote] refused on a local project", err)
 	}
@@ -335,7 +335,7 @@ name = "pages"
   launch = ["code"]
   match = { class = "^Code$" }
 `
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", localOnLink), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", localOnLink), config.Inherited{})
 	if err := refusalOf(p, "pages"); err == nil || !strings.Contains(err.Error(), "[target.remote.window]") {
 		t.Errorf("err = %v, want a link's realization asked for under [target.remote.window]", err)
 	}
@@ -406,7 +406,7 @@ home = true
   launch = ["code", "--remote", "ssh-remote+buildbox"]
   match = { class = "^Code$" }
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if home, _ := p.Home(); home.Runtime != nil {
 		t.Errorf("home runtime = %+v, want the declared window alone", home.Runtime)
 	}
@@ -428,7 +428,7 @@ home = true
     kind = "shell"
     title = "shell"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	want := `target "home" runtime realization declares panels; only a tab has them, and a link opens with the tab "agent", so move them into a target named "agent" with inside = "home"`
 	if err := refusalOf(p, "home"); err == nil || err.Error() != want {
 		t.Errorf("home refused = %v\nwant %s", err, want)
@@ -450,7 +450,7 @@ name = "agent"
     kind = "shell"
     title = "shell"
 `
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Errorf("Problems = %v, want none after the move", probs)
 	}
@@ -584,7 +584,7 @@ name = "logs"
     kind = "tool"
     command = ["tail"]
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+panel), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+panel), config.Inherited{})
 	want := `target "logs" runtime realization declares panels; only a tab has them, and on a link only the home has tabs, so move them into a target with inside = "home"`
 	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
 		t.Errorf("logs refused = %v\nwant %s", err, want)
@@ -592,7 +592,7 @@ name = "logs"
 
 	// A list of tabs it declares is dropped, and the refusal does not tell
 	// the user to write one.
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+"  tabs = [\"tail\"]\n"), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", link+logs+"  tabs = [\"tail\"]\n"), config.Inherited{})
 	want = `target "logs" runtime realization has no launch argv, and on a link only the home has tabs`
 	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
 		t.Errorf("logs refused = %v\nwant %s", err, want)
@@ -604,7 +604,7 @@ name = "logs"
   [target.remote.runtime]
   inside = "home"
 ` + panel
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Errorf("Problems = %v, want none after the move", probs)
 	}
@@ -630,7 +630,7 @@ name = "logs"
     kind = "tool"
     command = ["tail"]
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	want := `target "logs" runtime realization declares panels; only a tab has them, and the home of this link has no runtime realization to open a tab in`
 	if err := refusalOf(p, "logs"); err == nil || err.Error() != want {
 		t.Errorf("logs refused = %v\nwant %s", err, want)
@@ -664,7 +664,7 @@ name = "logs"
 `
 	const why = ` runtime realization declares panels; only a tab has them, and the home of this link also has a window realization, so no tab opens in it`
 	for name, body := range map[revier.TargetName]string{"home": link + home + panel, "logs": link + home + logs + panel} {
-		p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+		p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 		want := `target "` + string(name) + `"` + why
 		if err := refusalOf(p, name); err == nil || err.Error() != want {
 			t.Errorf("%s refused = %v\nwant %s", name, err, want)
@@ -684,7 +684,7 @@ home = true
   [target.remote.runtime]
   place = "right top 75% 100%"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	want := `target "agent" is the home of a link, and "agent" is the name of the tab a link opens with; give the home another name`
 	if err := refusalOf(p, "agent"); err == nil || err.Error() != want {
 		t.Errorf("agent refused = %v\nwant %s", err, want)
@@ -693,7 +693,7 @@ home = true
 		t.Errorf("targets = %v, want no tab derived", got)
 	}
 
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+"  launch = [\"ssh\", \"buildbox\"]\n"), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Errorf("Problems = %v, want a home that launches whole under any name", probs)
 	}
@@ -701,7 +701,7 @@ home = true
 	const panel = `    [[target.remote.runtime.panels]]
     kind = "shell"
 `
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+panel), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", body+panel), config.Inherited{})
 	want = `target "agent" runtime realization declares panels; only a tab has them, and a link opens with the tab "agent", so give the home another name, and move them into a target named "agent" inside it`
 	if err := refusalOf(p, "agent"); err == nil || err.Error() != want {
 		t.Errorf("agent refused = %v\nwant %s", err, want)
@@ -712,7 +712,7 @@ name = "agent"
   [target.remote.runtime]
   inside = "work"
 ` + panel
-	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), nil)
+	p = config.LoadProject(write(t, t.TempDir(), "far.toml", moved), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Errorf("Problems = %v, want none after the name and the move", probs)
 	}
@@ -733,7 +733,7 @@ name = "logs"
 `
 	root := projectsRoot(t, "", map[string]string{"far.toml": body})
 	file := config.ProjectFile(root, "far")
-	p, err := config.ReadProject(file, nil)
+	p, err := config.ReadProject(file, config.Inherited{})
 	if err != nil {
 		t.Fatalf("ReadProject: %v", err)
 	}
@@ -750,7 +750,7 @@ name = "logs"
 		r := *edited.Runtime
 		c.change(&r)
 		edited.Runtime = &r
-		if _, err := config.SaveProjectTarget(file, edited.Name, config.TargetEdit{Target: edited}, nil); err == nil || !strings.Contains(err.Error(), want) {
+		if _, err := config.SaveProjectTarget(file, edited.Name, config.TargetEdit{Target: edited}, config.Inherited{}); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v, want %s", edited.Name, err, want)
 		}
 	}
@@ -770,7 +770,7 @@ home = true
   tabs = ["tickets"]
   active = "tickets"
 `
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if probs := config.Problems(p); len(probs) > 0 {
 		t.Fatalf("Problems = %v, want none", probs)
 	}
@@ -801,14 +801,14 @@ name = "tickets"
 `
 	root := projectsRoot(t, cfg, map[string]string{"far.toml": link})
 	file, shared := config.ProjectFile(root, "far"), sharedOf(t, root)
-	p, err := config.ReadProject(file, shared)
+	p, err := config.ReadProject(file, config.Inherited{Targets: shared})
 	if err != nil {
 		t.Fatalf("ReadProject: %v", err)
 	}
 	home := p.Targets[0].Target
 	home.Key = "ctrl-h"
 
-	loaded, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, shared)
+	loaded, err := config.SaveProjectTarget(file, "home", config.TargetEdit{Target: home}, config.Inherited{Targets: shared})
 	if err != nil {
 		t.Fatalf("SaveProjectTarget: %v", err)
 	}
@@ -825,7 +825,7 @@ name = "tickets"
 // internal/checkout refuses to clone here (decisions.md D83).
 func TestALinkKeepsTheHostsGitURL(t *testing.T) {
 	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:example/far.git\"\n" + link
-	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), nil)
+	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
 	if p.GitURL != "git@github.com:example/far.git" {
 		t.Errorf("git_url = %q, want the host's", p.GitURL)
 	}
@@ -882,5 +882,5 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 // returned as its error before a project file's mistake stopped costing the
 // project, or the set, more than the part that is wrong (decisions.md D85).
 func loadErr(path string, shared []map[string]any) error {
-	return errors.Join(config.Problems(config.LoadProject(path, shared))...)
+	return errors.Join(config.Problems(config.LoadProject(path, config.Inherited{Targets: shared}))...)
 }

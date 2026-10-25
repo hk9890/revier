@@ -106,6 +106,37 @@ func TestTheConfigScreenEditsPanels(t *testing.T) {
 	}
 }
 
+// A panel names an agent in the place of its command, and the screen shows
+// the name.
+func TestTheConfigScreenNamesAPanelsAgent(t *testing.T) {
+	const agent = "[[agent]]\nname = \"claude\"\ncommand = [\"claude\"]\n"
+	m, file, _ := projectSurfaceOver(t, agent+sharedTargets, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	root := filepath.Dir(filepath.Dir(file))
+	m, _ = press(onTargetRow(m, 2), "enter")
+	m = downs(m, 11) // the agent panel
+	m, _ = press(m, "enter")
+	m, _ = press(m, "tab")
+	m, _ = press(m, "tab") // its command
+	m = clearField(m)
+	m, _ = press(m, "tab")
+	m = typeInto(m, "claude")
+	m, _ = press(m, "enter")
+	if !strings.Contains(screen(m), "agent claude") {
+		t.Errorf("target form does not show the panel's agent:\n%s", screen(m))
+	}
+	m, _ = press(m, "up") // active
+	_, _ = press(m, "enter")
+
+	want := agent + strings.Replace(sharedTargets, `    title = "Claude Code"
+    command = ["claude"]
+`, `    title = "Claude Code"
+    agent = "claude"
+`, 1)
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // A new target is written at the end and listed.
 func TestTheConfigScreenAddsASharedTarget(t *testing.T) {
 	m, root := targetsSurface(t)

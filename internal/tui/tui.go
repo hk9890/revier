@@ -115,7 +115,8 @@ type Model struct {
 	stateRoot string
 	actions   []config.Action
 	shared    []map[string]any // every [[target]] of config.toml, refused ones included, as the config screen edits them
-	usable    []map[string]any // shared without the ones config.toml's rules refuse, as a project file gets them
+	named     []map[string]any // every [[agent]] of config.toml, which no screen edits
+	usable    config.Inherited // shared and agents without the ones config.toml's rules refuse, as a project file gets them
 	refresh   time.Duration
 	status    statuses
 	now       func() time.Time     // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
@@ -250,7 +251,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	// The files go in through the one function that reads them, so what is
 	// derived from them is derived once and the first frame holds the same
 	// thing a reload leaves behind.
-	m.setFiles(cfg.Targets, projects)
+	m.setFiles(cfg.Targets, cfg.Agents, projects)
 	// Init starts the statuses' beat on a copy of the model, so the beat is
 	// marked out here, where the mark is kept.
 	m.status.beating = m.anyStatus()
@@ -278,7 +279,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 // and a read with a file of its name in its place leaves it out.
 func (m Model) WithAssistant(p core.Project) Model {
 	m.assistant = p
-	m.setFiles(m.shared, m.projects)
+	m.setFiles(m.shared, m.named, m.projects)
 	m.reloadViews()
 	return m
 }
@@ -332,6 +333,7 @@ type hiddenMsg struct {
 // the assistant, what it wrote.
 type reloadedMsg struct {
 	shared   []map[string]any
+	agents   []map[string]any
 	actions  []config.Action
 	statuses []core.Status
 	projects []core.Project
@@ -353,7 +355,7 @@ func readFiles() reloadedMsg {
 		if err != nil {
 			return err
 		}
-		msg.shared, msg.actions, msg.statuses, msg.projects = cfg.Targets, cfg.Actions, cfg.Statuses(), projects
+		msg.shared, msg.agents, msg.actions, msg.statuses, msg.projects = cfg.Targets, cfg.Agents, cfg.Actions, cfg.Statuses(), projects
 		msg.problems = cfg.Problems
 		return nil
 	})
@@ -361,15 +363,16 @@ func readFiles() reloadedMsg {
 }
 
 // setFiles takes the project files as read again: the shared targets for the
-// config screen, and every project loaded with them, for the surface.
+// config screen, the named agents, and every project loaded with them, for
+// the surface.
 //
 // The two shared lists are both derived here, once. The config screen edits
 // config.toml as it is and needs every entry; a project file gets only the
 // entries config.toml's rules do not refuse, and deriving those costs a TOML
 // round trip per target, which is not a thing to do while drawing a frame.
-func (m *Model) setFiles(shared []map[string]any, projects []core.Project) {
-	m.shared = shared
-	m.usable = config.Usable(shared)
+func (m *Model) setFiles(shared, agents []map[string]any, projects []core.Project) {
+	m.shared, m.named = shared, agents
+	m.usable = config.Inherited{Targets: config.Usable(shared), Agents: config.UsableAgents(agents)}
 	m.targets = config.ListTargets(shared)
 	m.projects = projects
 	// The files do not hold the assistant, so it is added to every read of
@@ -950,7 +953,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		statuses := m.status.config
 		switch {
 		case msg.err == nil:
-			m.setFiles(msg.shared, msg.projects)
+			m.setFiles(msg.shared, msg.agents, msg.projects)
 			m.setActions(msg.actions)
 			// The config screen's rows are the files read again, so its
 			// problems are too.

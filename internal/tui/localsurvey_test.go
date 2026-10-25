@@ -341,7 +341,7 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	projects, err := config.LoadProjects(dir, nil)
+	projects, err := config.LoadProjects(dir, config.Inherited{})
 	if err != nil {
 		t.Fatal(err)
 	}
