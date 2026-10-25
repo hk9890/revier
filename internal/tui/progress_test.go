@@ -255,7 +255,8 @@ func TestASecondCtrlCAfterEveryStepKeepsTheRecord(t *testing.T) {
 
 // A restore shows each target as it walks it and keeps its screen: no key or
 // click leaves it while it runs. ctrl+c cancels it before the next target,
-// and the pane says what opened and that the rest was not.
+// and it ends on the project list with the footer saying the rest was not
+// reached.
 func TestARestoreShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -296,11 +297,8 @@ func TestARestoreShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	if len(wm.Opened) != 0 {
 		t.Errorf("window host opened %+v, want the editor not reached after the cancel", wm.Opened)
 	}
-	p := pane(m)
-	for _, want := range []string{"Restored", "opened 1", "cancelled"} {
-		if !strings.Contains(p, want) {
-			t.Errorf("pane lacks %q:\n%s", want, p)
-		}
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Errorf("bar = %q, want the project list once the restore ended", bar)
 	}
 	if foot := footer(m); !strings.Contains(foot, "cancelled: 1 target not reached") {
 		t.Errorf("footer = %q, want the cancel said", foot)
@@ -332,12 +330,11 @@ func TestARestoreCancelledOnItsLastTargetCancelsTheReturnHomeAlone(t *testing.T)
 	close(editor.release)
 	m, _ = update(m, <-answer)
 
-	p := pane(m)
-	if !strings.Contains(p, "opened 2") || !strings.Contains(p, "return home cancelled") || strings.Contains(p, "not reached") {
-		t.Errorf("pane = %q, want both targets opened and the return home cancelled", p)
+	if foot := footer(m); !strings.Contains(foot, "return home cancelled") || strings.Contains(foot, "not reached") {
+		t.Errorf("footer = %q, want the return home cancelled and no target left", foot)
 	}
-	if foot := footer(m); !strings.Contains(foot, "return home cancelled") {
-		t.Errorf("footer = %q, want the return home cancelled", foot)
+	if len(wm.Opened) != 1 {
+		t.Errorf("window host opened %+v, want the editor", wm.Opened)
 	}
 }
 
@@ -366,6 +363,39 @@ func TestACancelledShutdownCountsTheStepsNotReachedAsOpen(t *testing.T) {
 	}
 	if foot := footer(m); !strings.Contains(foot, "esc") || !strings.Contains(foot, "back") {
 		t.Errorf("footer = %q, want the result screen's keys", foot)
+	}
+}
+
+// While a shutdown waits for what it closed to go, the title says to wait
+// until it ends, the walk says how many it waits for, and the pane marks no
+// step closed before the wait has found it gone. The result then says the
+// shutdown is complete and safe to leave.
+func TestAShutdownWaitingForWhatItClosedSaysSo(t *testing.T) {
+	_, wm, c, projects := world(t, 2)
+	wm.Add("editor", "code-project-00")
+	m := fullShutdownPlanned(t, c, projects, stateWith(t, nil))
+
+	m, cmd := press(m, "enter")
+	answer, wait := walkInBackground(t, cmd)
+	// The recheck, the save, two steps before and after, and the wait.
+	m, _ = readReports(t, m, wait, 7)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Shutting down: wait until it ends") {
+		t.Errorf("subtitle = %q, want it said to wait until the shutdown ends", sub)
+	}
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "waiting for 2 to close") {
+		t.Errorf("rows = %q, want the wait for both steps said", body)
+	}
+	p := pane(m)
+	if !strings.Contains(p, "waiting for 2 to close") || strings.Contains(p, "to go") {
+		t.Errorf("pane = %q, want the wait said and no step to go", p)
+	}
+	if strings.Contains(p, "closed") || !strings.Contains(p, "waiting") {
+		t.Errorf("pane = %q, want both steps waited for and neither closed yet", p)
+	}
+
+	m, _ = update(m, <-answer)
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shutdown complete: closed 2. It is safe to leave.") {
+		t.Errorf("rows = %q, want the shutdown said complete", body)
 	}
 }
 

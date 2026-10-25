@@ -44,7 +44,7 @@ func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 
 	m, cmd = press(m, "enter")
 	m = run(m, cmd)
-	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") || !strings.Contains(body, "saved as session") ||
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shutdown complete: closed 1. It is safe to leave.") || !strings.Contains(body, "saved as session") ||
 		!strings.Contains(body, "revier quits") {
 		t.Errorf("rows = %q, want the result, the save and the quit", body)
 	}
@@ -226,7 +226,7 @@ func TestAProjectShutdownStartsNoSecondSurveyAndStaysUp(t *testing.T) {
 	if after != nil {
 		t.Error("the shutdown's answer returned a command, want none: the timer's survey shows the result")
 	}
-	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") || strings.Contains(body, "revier quits") {
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shutdown complete: closed 1. It is safe to leave.") || strings.Contains(body, "revier quits") {
 		t.Errorf("rows = %q, want the result and no quit", body)
 	}
 	if sd := shutDownOnRecord(t, root); sd != nil {
@@ -378,7 +378,7 @@ func TestConfirmWithUnchangedAgentsCloses(t *testing.T) {
 
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
-	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") {
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shutdown complete: closed 1. It is safe to leave.") {
 		t.Errorf("rows = %q, want the plan closed", body)
 	}
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {
@@ -398,7 +398,7 @@ func TestForcedConfirmClosesAnAgentStillBusy(t *testing.T) {
 	probeOf(c).State = revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "editing"}
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
-	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "closed 1, 0 still open") {
+	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "Shutdown complete: closed 1. It is safe to leave.") {
 		t.Errorf("rows = %q, want the plan closed", body)
 	}
 	if left, _ := rt.Instances(t.Context()); len(left) != 0 {

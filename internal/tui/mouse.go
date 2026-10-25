@@ -72,7 +72,7 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	// A press or a turn of the wheel is the user's: the agent list's cursor
 	// is theirs from here (switchList).
-	m.copied, m.agents.top = 0, false
+	m.copied, m.closeDone, m.agents.top = 0, "", false
 	if mouse.Button == tea.MouseLeft {
 		m.press = &press{at: *m.cell, over: m.over}
 	}

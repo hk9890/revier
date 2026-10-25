@@ -35,6 +35,9 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 
 	m, cmd = press(m, "enter")
+	if sub := lines(m)[2]; !strings.Contains(sub, "Shutting down: wait until it ends") {
+		t.Errorf("subtitle = %q while the close runs, want it said to wait", sub)
+	}
 	m = run(m, cmd)
 	if len(rt.Closed) != 1 {
 		t.Errorf("runtime closed %v, want the workspace", rt.Closed)
@@ -86,6 +89,7 @@ func TestADelAfterAFullShutdownLeavesItTheRestore(t *testing.T) {
 }
 
 // del on a target that holds no agent closes it at once, and nothing else.
+// The footer says the close is complete until the next press.
 func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	editor := wm.Add("editor", "code-project-01")
@@ -108,6 +112,12 @@ func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	}
 	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface as it was", bar)
+	}
+	if foot := footer(m); !strings.Contains(foot, "editor of project-01: the close is complete") {
+		t.Errorf("footer = %q, want the close said complete", foot)
+	}
+	if m, _ = press(m, "down"); strings.Contains(footer(m), "the close is complete") {
+		t.Errorf("footer = %q after a press, want the keys back", footer(m))
 	}
 }
 

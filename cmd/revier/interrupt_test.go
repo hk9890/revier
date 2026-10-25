@@ -103,8 +103,8 @@ func TestACtrlCStopsTheShutdownAfterTheStepThatRuns(t *testing.T) {
 	if len(rt.Closed) != 1 {
 		t.Errorf("closed %v, want the step that ran alone", rt.Closed)
 	}
-	if !strings.Contains(out, "cancelled: 1 step not reached") {
-		t.Errorf("output = %q, want the step not reached", out)
+	if !strings.Contains(out, "cancelled: 1 step not reached") || strings.Contains(out, "complete") {
+		t.Errorf("output = %q, want the step not reached and no complete said", out)
 	}
 	if sd := a.core.Ledger.State().ShutDown; sd != nil {
 		t.Errorf("shutdown on record = %+v after a cancel, want none", sd)
@@ -126,8 +126,8 @@ func TestACtrlCDuringTheLastCloseLeavesTheShutdownOnRecord(t *testing.T) {
 	if len(rt.Closed) != 2 {
 		t.Errorf("closed %v, want both steps", rt.Closed)
 	}
-	if strings.Contains(out, "cancelled") {
-		t.Errorf("output = %q, want no step said to be left", out)
+	if strings.Contains(out, "cancelled") || !strings.Contains(out, "shutdown complete; safe to leave") {
+		t.Errorf("output = %q, want no step said to be left and the shutdown complete", out)
 	}
 	if a.core.Ledger.State().ShutDown == nil {
 		t.Error("a shutdown that closed every step was taken off the record")

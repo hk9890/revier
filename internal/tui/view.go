@@ -473,6 +473,9 @@ func (m Model) footer() string {
 	if m.sessions.saving {
 		return m.sessions.progressLine(*m.theme)
 	}
+	if m.closeDone != "" {
+		return m.theme.NameDim.Render(" " + m.closeDone)
+	}
 	if m.copied > 0 {
 		unit := "characters"
 		if m.copied == 1 {

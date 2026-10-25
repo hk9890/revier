@@ -207,6 +207,7 @@ type Model struct {
 	press     *press                           // where the left button went down, while it is down
 	sel       selection                        // the box a drag is selecting
 	copied    int                              // the characters the last selection copied, shown until the next press
+	closeDone string                           // what the last close del asked for closed, shown until the next press
 	// tdeclared is every chord a target of any project declares as itself.
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.
@@ -1080,7 +1081,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // keyIn is a press or a paste, which a drag in progress holds back.
 func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
-	m.copied = 0
+	m.copied, m.closeDone = 0, ""
 	if m.walking() {
 		return m.lockedKey(msg)
 	}

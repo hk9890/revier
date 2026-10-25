@@ -193,6 +193,9 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	if err != nil && one.drop {
 		err = fmt.Errorf("%w; nothing deleted", err)
 	}
+	if err == nil {
+		m.closeDone = one.title() + ": the close is complete"
+	}
 	m.err = err
 	return m, nil
 }
@@ -200,12 +203,15 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 // closeTitle is the question the confirm step asks for a close del or
 // alt+del asked for.
 func (m Model) closeTitle() string {
-	s := m.shut
-	what := string(s.project)
+	return m.closeVerb() + " " + m.shut.title() + "?"
+}
+
+// title names what a close del or alt+del asked for closes.
+func (s shutdown) title() string {
 	if s.pick != (core.CloseRow{}) {
-		what = s.label + " of " + what
+		return s.label + " of " + string(s.project)
 	}
-	return m.closeVerb() + " " + what + "?"
+	return string(s.project)
 }
 
 // closeVerb is what the confirm step's first row does.
