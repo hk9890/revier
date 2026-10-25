@@ -114,7 +114,7 @@ bindings are gone, project files and the saved session stay.
 ./bin/revier session list                        # id, reason, label, counts
 tmux kill-server                                 # the private server only
 ./bin/revier session restore --dry-run           # what it would open
-./bin/revier session restore                     # the newest, opened in file order
+./bin/revier session restore                     # the newest whole save, in file order
 agentpane                                        # the restore started a new agent pane
 ```
 

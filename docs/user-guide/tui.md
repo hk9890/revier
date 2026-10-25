@@ -83,12 +83,21 @@ open to show what was done and what was not reached. A restore stopped after
 its last target says `return home cancelled`. When a step hangs, press ctrl+c
 again to quit: the command the step waits for ends too.
 
-revier does not bring a window target a restore opens, such as an editor, to
-the front, but the desktop brings most of them up over the TUI. A terminal a
-restore opens is focused, so its tabs come up as saved. When the restore ends,
-done, failed or cancelled, the TUI brings its own window back to the front
-once, so you see the result. A TUI in a terminal that revier does not list
-stays where it is.
+While a shutdown or a close runs, its title says to wait until it ends. After
+the last step it waits for what it closed to go: each such step shows
+`waiting` until then. A shutdown in which nothing failed, stayed open or was
+cancelled ends on `Shutdown complete`, and you can leave. A close with del
+says in the footer when it is complete.
+
+A restore ends on the project list, with the cursor on the project the
+session was left on. The footer names what did not open, or how many targets
+a cancel did not reach. revier does not bring a window target a restore
+opens, such as an editor, to the front, but the desktop brings most of them
+up over the TUI. A terminal a restore opens is focused, so its tabs come up
+as saved. When the restore ends, failed or cancelled too, the TUI brings its
+own window back to the front once. A restore that stopped before its first
+step opened nothing, and raises nothing. A TUI in a terminal that revier does
+not list stays where it is.
 
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.
@@ -140,7 +149,7 @@ Each screen takes the place of the list. Esc goes back one step.
 | alt+n | new | Add a project. Type a path, a name, or a git URL to clone. |
 | alt+r | remote | Link a project on another machine: pick a host, a project, a name. See [links.md](links.md). |
 | alt+e | project | Edit the project's name, path, git URL and targets. Each change is written at once. |
-| alt+s | sessions | Restore a saved session with Enter, save the open projects with alt+s, or shut down with alt+q. Its top line has the save and shutdown buttons. See [projects.md](projects.md#save-and-restore-sessions). |
+| alt+s | sessions | Restore a saved session with Enter, save the open projects with alt+s, or shut down with alt+q. The cursor starts on the session `revier session restore` opens. Its top line has the save and shutdown buttons. See [projects.md](projects.md#save-and-restore-sessions). |
 | alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. It belongs to the sessions screen; alt+q opens it from the project list too, and Esc goes back to where you opened it. |
 | alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |
 | alt+a | assist | Raise `revier-config-assistant`: Claude Code beside the TUI, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
@@ -165,7 +174,7 @@ dialog at its next refresh, once you are back on the project list with no
 query.
 
 - **Restore this session** restores the session the shutdown saved. The
-  sessions screen shows each step.
+  sessions screen shows each step, then the project list opens.
 - **Pick another session** opens the sessions screen.
 - **Start fresh**, or Esc, opens the project list. It deletes no session.
 
@@ -173,3 +182,14 @@ Anything you open before that, with a desktop key, `revier go`,
 `revier open` or `revier run`, ends the shutdown, and the dialog does not
 show. `revier session restore` ends it as it starts, also when it opens
 nothing.
+
+## After an end without a shutdown
+
+When revier ended without a shutdown, for example because its terminal was
+killed, the next start of the TUI, or of the popup, saves what it last saw
+open as a `last seen` session, if something of it is not open now. It then
+opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
+The pane shows what that session holds. The choices are those of the dialog
+after a full shutdown. The dialog stays until you choose, and shows once: a
+later start does not offer the session again. See
+[Save and restore sessions](projects.md#save-and-restore-sessions).

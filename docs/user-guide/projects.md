@@ -108,15 +108,35 @@ Save one before a restart, and restore it after:
 ```bash
 revier session save --name work   # the name is optional
 revier session list
-revier session restore            # the newest session
+revier session restore            # the newest session of every open project
 revier session restore work --dry-run
 ```
 
 A shutdown, and closing a whole project in the TUI, save a session for you.
 `revier session list` shows why each session was saved in its REASON column:
-`shutdown`, `project closed` or `saved by hand`. The TUI sessions screen
-shows it in place of a missing name. A session saved by a revier older than
-this label reads `unknown`.
+`shutdown`, `project closed`, `saved by hand` or `last seen`. The TUI
+sessions screen shows it in place of a missing name. A session saved by a
+revier older than this label reads `unknown`.
+
+`revier session restore` with no argument opens the newest session that
+holds every open project: one saved by hand, by a full shutdown, or as
+`last seen`. A `project closed` session holds only what was open before that
+one close, so a plain restore skips it; restore it by id. The last line of
+`revier session list` names the session a plain restore opens:
+
+```
+revier session restore opens 2026-10-16T23-54-55
+```
+
+While the TUI runs, or the popup shows, it keeps what it last saw open. When
+revier ended without a shutdown, for example because the terminal was
+killed, and something it saw is not open now, the next start saves that as a
+`last seen` session and offers it; see
+[After an end without a shutdown](tui.md#after-an-end-without-a-shutdown).
+A plain `revier session restore` does the same, and with `--dry-run` it
+shows that session and saves nothing. A session saved after what the TUI
+last saw wins, and nothing is offered.
+
 A session records names, not windows. A restore reads the project files as
 they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
@@ -149,7 +169,9 @@ you open first ends that offer.
 
 A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line
-on the screen.
+on the screen. A shutdown then waits for what it closed to go, and says
+`waiting for 3 to close`. When nothing failed, stayed open or was left by a
+cancel, its last line is `shutdown complete; safe to leave`.
 
 To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
 the rest is not reached, and revier prints how many steps it left. A full
@@ -175,3 +197,15 @@ revier events --days 7 | jq -r .project | sort | uniq -c | sort -rn
 
 `revier events` prints one JSON line each time you used a project: a target
 opened or raised, an agent or shell tab added, an action run.
+
+To see what was open at a moment, for example what a restore should have
+brought back:
+
+```bash
+revier state --at "2026-10-16 23:50"
+revier state --session 2026-10-16T23-54-55   # why that save differs from what was open
+```
+
+`revier state` reads only this machine's record, asks no host, and marks what
+it cannot know then, such as a host that did not answer, as unknown. Only a
+running TUI or a shown popup records what was open.
