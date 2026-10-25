@@ -46,6 +46,8 @@ Each difference --session names has one of these reasons:
   unreachable at the save  a host that did not list, or did not answer
   attached                 an instance attached by hand: a session has no
                            way to bring one back
+  a tab of its instance    a tab that opens with the window that holds it,
+                           so a session records no step for it
   no conversation          an agent saved with no conversation, or the
                            agent of a tab, which a restore never resumes
   host unknown             a host whose state the record does not know then
