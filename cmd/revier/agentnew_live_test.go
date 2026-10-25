@@ -1,7 +1,7 @@
 //go:build live
 
 // Layer L4 for `revier agent new` against a real tmux server. An agent tab is
-// a tab (decisions.md D65), and on tmux a tab is a window of the workspace's
+// a tab (decisions.md D145), and on tmux a tab is a window of the workspace's
 // session.
 package main
 

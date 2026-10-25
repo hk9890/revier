@@ -629,7 +629,7 @@ func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[str
 			t.Fatal(err)
 		}
 	}
-	projects, err := config.LoadProjects(dir, nil)
+	projects, err := config.LoadProjects(dir, config.Inherited{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,7 +721,7 @@ func remoteOnDisk(t *testing.T, name string) []core.Project {
 	if err := os.WriteFile(filepath.Join(dir, name+".toml"), []byte(remoteFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := config.LoadProjects(dir, nil)
+	projects, err := config.LoadProjects(dir, config.Inherited{})
 	if err != nil {
 		t.Fatal(err)
 	}

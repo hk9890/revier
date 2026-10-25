@@ -40,6 +40,36 @@ func TestAgentRefusesAnAmbiguousProject(t *testing.T) {
 	}
 }
 
+// Beside named agents, the project's address names its default agent: the
+// one panel that carries no named agent's mark.
+func TestAgentIsTheDefaultAgentAmongNamedOnes(t *testing.T) {
+	named := agentPanel("1", "idle")
+	named.Vars = map[string]string{core.PanelAgentVar: "dtop"}
+	c, _ := agentCore(named, agentPanel("2", "busy"))
+
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
+	if err != nil || a.Panel.ID != "2" {
+		t.Fatalf("Agent = %+v, %v; want panel 2, the default agent", a, err)
+	}
+}
+
+// Two agents with no mark, or none without one, are still ambiguous.
+func TestAgentRefusesTwoDefaultAgentsAndOnlyNamedOnes(t *testing.T) {
+	mark := func(p revier.Panel, name string) revier.Panel {
+		p.Vars = map[string]string{core.PanelAgentVar: name}
+		return p
+	}
+	for what, panels := range map[string][]revier.Panel{
+		"two default":     {agentPanel("1", "idle"), agentPanel("2", "busy"), mark(agentPanel("3", "idle"), "dtop")},
+		"only named ones": {mark(agentPanel("1", "idle"), "dtop"), mark(agentPanel("2", "busy"), "review")},
+	} {
+		c, _ := agentCore(panels...)
+		if _, err := c.Agent(context.Background(), prepared(t, project()), ""); !errors.Is(err, core.ErrAmbiguous) {
+			t.Errorf("%s: err = %v, want ErrAmbiguous", what, err)
+		}
+	}
+}
+
 // A target name narrows the address to that target's instance.
 func TestAgentByTargetName(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))

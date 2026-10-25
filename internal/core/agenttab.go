@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -12,7 +14,7 @@ import (
 // the declared agent panel and the declared shell panel, opened as a tab of
 // the instance. `revier agent new` opens one, and a restore opens one for
 // every agent past the declared layout, through the same functions, so an
-// agent opened by hand comes back the way it was opened (decisions.md D65).
+// agent opened by hand comes back the way it was opened (decisions.md D145).
 
 var (
 	// ErrNotOpen means the target has no instance to open an agent tab in.
@@ -24,20 +26,53 @@ var (
 	// ErrNoTabsToOpen means the runtime cannot open a tab to add an agent or a
 	// shell in.
 	ErrNoTabsToOpen = errors.New("runtime has no tabs to open an agent or a shell in")
+
+	// ErrUnknownAgent means the project has no named agent of that name.
+	ErrUnknownAgent = errors.New("no agent named")
+
+	// ErrNoWorkspace means the runtime holds the panel, but no project's
+	// open workspace does: a terminal window opened by hand.
+	ErrNoWorkspace = errors.New("its window is no project's open workspace")
 )
+
+// PanelAgentVar is the panel variable that names the named agent an agent tab
+// runs. Every panel of the tab carries it, as OpenTab sets a tab's vars on
+// each; a tab holds one agent, so the tab's mark is its agent's. The default
+// agent's tab carries none (decisions.md D145).
+const PanelAgentVar = "revier_agent"
 
 // agentTab is the tab an agent opens in: a copy of the first panel the
 // workspace's layout declares as an agent, started as startAgent says, and a
 // copy of the first declared shell panel beside it, in the same directory. A
-// layout with no agent panel has no tab to give, and the agent is dropped.
-func (c *Core) agentTab(layout []revier.PanelSpec, r Resume, link bool) (revier.Realization, AgentOutcome) {
+// named agent's tab is that copy with the named agent's command, and its name
+// as the title; a link's named agent is the host's, which the remote's panel
+// command names to it. A layout with no agent panel has no tab to give, and
+// the agent is dropped. A name the project does not declare has none either:
+// another program in its place is not that agent (decisions.md D146).
+func (c *Core) agentTab(p Project, layout []revier.PanelSpec, r Resume) (revier.Realization, AgentOutcome) {
 	agent, ok := declared(layout, revier.PanelAgent)
 	if !ok {
 		return revier.Realization{}, AgentDropped
 	}
+	if r.Agent != "" {
+		switch named, ok := p.namedAgent(r.Agent); {
+		case p.Remote != nil:
+			remote, err := c.remote(p.Remote.Host)
+			if err != nil {
+				return revier.Realization{}, AgentDropped
+			}
+			agent.Command = remote.PanelCommand(p.Remote.Project, revier.PanelAgent, r.Agent)
+		case !ok:
+			return revier.Realization{}, AgentUnknown
+		default:
+			agent.Command = named.Command
+		}
+		agent.Title = r.Agent
+	}
 	if r.Harness == "" {
 		r.Harness = c.harnessOf(agent)
 	}
+	link := p.Remote != nil
 	outcome := c.startAgent(&agent, r, link)
 	tab := revier.Realization{Dir: agent.Dir, Panels: []revier.PanelSpec{agent}}
 	if shell, ok := declared(layout, revier.PanelShell); ok {
@@ -50,6 +85,38 @@ func (c *Core) agentTab(layout []revier.PanelSpec, r Resume, link bool) (revier.
 		tab.Panels = append(tab.Panels, shell)
 	}
 	return tab, outcome
+}
+
+// agentVars are the vars of an agent tab: a named agent's mark, and none for
+// the default agent.
+func agentVars(r Resume) map[string]string {
+	if r.Agent == "" {
+		return nil
+	}
+	return map[string]string{PanelAgentVar: r.Agent}
+}
+
+// namedAgent is the project's named agent of that name.
+func (p Project) namedAgent(name string) (NamedAgent, bool) {
+	for _, a := range p.Agents {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return NamedAgent{}, false
+}
+
+// unknownAgent refuses a name the project does not declare, and names the
+// ones it does.
+func (p Project) unknownAgent(name string) error {
+	if len(p.Agents) == 0 {
+		return fmt.Errorf("%s: %w %q: the project declares no named agent", p.Name, ErrUnknownAgent, name)
+	}
+	known := make([]string, len(p.Agents))
+	for i, a := range p.Agents {
+		known[i] = a.Name
+	}
+	return fmt.Errorf("%s: %w %q: its agents are %s", p.Name, ErrUnknownAgent, name, strings.Join(known, ", "))
 }
 
 // harnessOf is the probe that claims what a declared agent panel runs: the
@@ -78,7 +145,7 @@ func declared(layout []revier.PanelSpec, kind revier.PanelKind) (revier.PanelSpe
 // workspace's layout declares no agent panel, or the runtime cannot open tabs.
 // A launch opens the tabs and a dry run reports the outcomes, so the two
 // cannot disagree.
-func (c *Core) agentTabs(host revier.Host, layout []revier.PanelSpec, resumes []Resume, link bool) ([]revier.Realization, []AgentOutcome) {
+func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec, resumes []Resume) ([]revier.Realization, []AgentOutcome) {
 	tabs := make([]revier.Realization, len(resumes))
 	outcomes := make([]AgentOutcome, len(resumes))
 	_, opens := host.(revier.PanelOpener)
@@ -87,7 +154,7 @@ func (c *Core) agentTabs(host revier.Host, layout []revier.PanelSpec, resumes []
 			outcomes[n] = AgentDropped
 			continue
 		}
-		tabs[n], outcomes[n] = c.agentTab(layout, r, link)
+		tabs[n], outcomes[n] = c.agentTab(p, layout, r)
 	}
 	return tabs, outcomes
 }
@@ -99,8 +166,8 @@ func (c *Core) agentTabs(host revier.Host, layout []revier.PanelSpec, resumes []
 // the error is returned beside the outcomes: the workspace is open, so it is
 // not the launch's failure. A failed OpenTab leaves no tab behind, so the
 // agent it names is not running anywhere.
-func (c *Core) addAgents(ctx context.Context, host revier.Host, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume, link bool) ([]AgentOutcome, error) {
-	tabs, outcomes := c.agentTabs(host, layout, resumes, link)
+func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
+	tabs, outcomes := c.agentTabs(host, p, layout, resumes)
 	opener, ok := host.(revier.PanelOpener)
 	if !ok {
 		return outcomes, nil
@@ -119,7 +186,7 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, layout []revier.
 			}
 			current, opened = cur, true
 		}
-		if _, err := opener.OpenTab(ctx, ref, tab, nil); err != nil {
+		if _, err := opener.OpenTab(ctx, ref, tab, agentVars(resumes[n])); err != nil {
 			outcomes, failed = notAdded(outcomes, n), fmt.Errorf("%s: agent tab: %w", host.Name(), err)
 			break
 		}
@@ -136,7 +203,7 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, layout []revier.
 // tab, as not added.
 func notAdded(outcomes []AgentOutcome, n int) []AgentOutcome {
 	for i := n; i < len(outcomes); i++ {
-		if outcomes[i] != AgentDropped {
+		if outcomes[i] != AgentDropped && outcomes[i] != AgentUnknown {
 			outcomes[i] = AgentNotAdded
 		}
 	}
@@ -231,6 +298,10 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // One instance can back two targets. The target is the first of them that
 // declares an agent panel, because only that one has an agent tab to give; a
 // shell tab opened through it takes that target's shell panel too.
+//
+// An instance that holds the panel but backs no project's target is
+// ErrNoWorkspace, and the Workspace that comes with it holds only that
+// instance: where TabAtPanel opens a tab outside a workspace.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
 	if c.Runtime == nil {
@@ -287,9 +358,53 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if owner.Ref.IsZero() {
-		return Workspace{}, fmt.Errorf("panel %s: its window is no project's open workspace", panel)
+		return Workspace{Ref: ref, snap: snap}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 	}
 	return owner, nil
+}
+
+// Outside is what a terminal key does in a panel that no project's open
+// workspace holds (decisions.md D148).
+type Outside string
+
+const (
+	// OutsideTab opens a plain tab beside the panel: the runtime's own shell.
+	OutsideTab Outside = "tab"
+	// OutsideNone does nothing.
+	OutsideNone Outside = "none"
+)
+
+// TabAtPanel opens the tab a terminal key pressed in a panel asks for: in the
+// open workspace PanelOwner finds, through in. Where the runtime holds the
+// panel but no project's open workspace does, the key is not refused: it does
+// what outside says, a plain tab of the runtime's own shell beside the panel,
+// started in dir where dir is given, or nothing. Every other failure is
+// returned, so the key's own fallback runs (decisions.md D148).
+func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace) error) error {
+	w, err := c.PanelOwner(ctx, projects, panel)
+	if !errors.Is(err, ErrNoWorkspace) {
+		if err != nil {
+			return err
+		}
+		return in(w)
+	}
+	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside), "dir", dir)
+	if outside == OutsideNone {
+		return nil
+	}
+	opener, ok := c.Runtime.(revier.PanelOpener)
+	if !ok {
+		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
+	}
+	shell := revier.PanelSpec{Kind: revier.PanelShell, Dir: dir}
+	opened, err := opener.OpenTab(ctx, w.Ref, revier.Realization{Dir: dir, Panels: []revier.PanelSpec{shell}}, nil)
+	if err != nil {
+		return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), err)
+	}
+	if err := opener.FocusPanel(ctx, w.Ref, opened); err != nil {
+		return fmt.Errorf("%s: focus the plain tab: %w", c.Runtime.Name(), err)
+	}
+	return nil
 }
 
 // holdsPanel reports whether one of the instance's panels has the id.
@@ -331,7 +446,7 @@ func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.Pane
 func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
 	panel, outcome, err := c.openAgent(ctx, w, r, focus)
 	if err == nil {
-		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Dir: r.Dir}
+		e := revier.Event{Kind: revier.EventAgentNew, Project: w.Project.Name, Target: w.Target, Agent: r.Agent, Dir: r.Dir}
 		if outcome == AgentResumed {
 			e.Session = r.Session
 		}
@@ -341,15 +456,20 @@ func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) 
 }
 
 func (c *Core) openAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
+	// A link's host resolves the name, so only a local project refuses it
+	// here.
+	if _, ok := w.Project.namedAgent(r.Agent); r.Agent != "" && !ok && w.Project.Remote == nil {
+		return "", AgentNotAdded, w.Project.unknownAgent(r.Agent)
+	}
 	t, err := c.tabRuntime(w)
 	if err != nil {
 		return "", AgentNotAdded, err
 	}
-	tab, outcome := c.agentTab(t.layout, r, w.Project.Remote != nil)
+	tab, outcome := c.agentTab(w.Project, t.layout, r)
 	if outcome == AgentDropped {
 		return "", AgentNotAdded, fmt.Errorf("%s:%s: %w", w.Project.Name, w.Target, ErrNoAgent)
 	}
-	panel, err := c.openTab(ctx, w, t, tab, "agent tab", focus)
+	panel, err := c.openTab(ctx, w, t, tab, agentVars(r), "agent tab", focus)
 	if panel == "" {
 		return "", AgentNotAdded, err
 	}
@@ -372,7 +492,7 @@ func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
 	if dir != "" {
 		shell.Dir = dir
 	}
-	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, "shell tab", true)
+	_, err = c.openTab(ctx, w, t, revier.Realization{Dir: shell.Dir, Panels: []revier.PanelSpec{shell}}, nil, "shell tab", true)
 	if err == nil {
 		c.record(revier.Event{Kind: revier.EventShellNew, Project: w.Project.Name, Target: w.Target, Dir: dir})
 	}
@@ -409,12 +529,13 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 	return tabRuntime{host: host, opener: opener, real: real, layout: layout}, nil
 }
 
-// openTab opens the tab in the workspace and returns its first panel, which
+// openTab opens the tab, with vars on its panels, in the workspace and
+// returns its first panel, which
 // is empty while no tab is running, so an error after the tab opened is told
 // from one before. With focus it refuses an OS window it cannot raise, then
 // focuses the panel and raises the OS window; without, the focus stays where
 // OpenTab left it.
-func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, what string, focus bool) (revier.PanelID, error) {
+func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, vars map[string]string, what string, focus bool) (revier.PanelID, error) {
 	host, opener := t.host, t.opener
 	var osw revier.TargetRef
 	if focus {
@@ -424,7 +545,7 @@ func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revie
 			return "", err
 		}
 	}
-	panel, err := opener.OpenTab(ctx, w.Ref, tab, nil)
+	panel, err := opener.OpenTab(ctx, w.Ref, tab, vars)
 	if err != nil {
 		return "", fmt.Errorf("%s: %s: %w", host.Name(), what, err)
 	}

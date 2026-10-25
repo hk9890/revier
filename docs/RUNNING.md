@@ -344,3 +344,24 @@ the user's step, under [When a screen is unavoidable](#when-a-screen-is-unavoida
 `revier keys install` and `revier keys uninstall` rewrite the user's desktop
 configuration, so they are the user's step and never a verification step. Their
 `--dry-run` reads and prints only, and is safe to run.
+
+## Verify the terminal keys without the user's kitty
+
+`revier term install` and `revier term uninstall` rewrite the user's kitty
+configuration, often a link into a dotfiles repository, so against the user's
+own they are the user's step. `revier term status` and `--dry-run` read and
+print only, and are safe to run.
+
+Run them on a scratch kitty directory, with `$S` from the scratch
+configuration recipe:
+
+```bash
+export KITTY_CONFIG_DIRECTORY=$S/kitty; mkdir -p "$KITTY_CONFIG_DIRECTORY"
+printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
+./bin/revier term install       # writes $S/kitty/revier.conf and the include
+./bin/revier term status        # each key written; ctrl+shift+t shadowed by kitty.conf:3
+./bin/revier term uninstall     # kitty.conf as it was
+```
+
+To try a generated map, hand the user its `sh -c` line from
+`$S/kitty/revier.conf`, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).

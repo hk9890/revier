@@ -58,9 +58,11 @@ it there.
 
 The `revier agent` commands work as they do for a local project; see
 [Agents](agents.md). `revier agent new -p far` adds a tab whose agent runs on
-the host. An agent ends when its tab closes or its ssh connection drops. `revier session
-save` records each agent's conversation, and `revier session restore` starts it
-again on the host.
+the host. `revier agent new dtop -p far` adds a tab of the named agent dtop,
+which the host's configuration declares. An agent ends when its tab closes or
+its ssh connection drops. `revier session save` records each agent's
+conversation and named agent, and `revier session restore` starts it again on
+the host.
 
 A host that does not answer shows the link as `unreachable`. The other rows do
 not wait for it.

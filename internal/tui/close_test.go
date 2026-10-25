@@ -254,7 +254,7 @@ name = "notes"
 	if err := os.WriteFile(file, []byte(strings.ReplaceAll(body, "%GIT%", "")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := config.LoadProjects(dir, nil)
+	projects, err := config.LoadProjects(dir, config.Inherited{})
 	if err != nil {
 		t.Fatal(err)
 	}

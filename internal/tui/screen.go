@@ -28,7 +28,7 @@ type surface struct {
 	shared    []map[string]any                 // every [[target]] of config.toml, as the config screen edits them
 	tkeys     map[core.Chord]revier.TargetName // press to target name, over every project
 	targets   []revier.Target                  // the shared targets, as config.toml holds them
-	usable    []map[string]any                 // the shared targets a project file gets
+	usable    config.Inherited                 // what config.toml gives a project file
 	err       error                            // what the footer shows now, for a press that leaves it
 	errands   int                              // Model.errands, which a go carries to its answer
 	list      int                              // the columns the list has

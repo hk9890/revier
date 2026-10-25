@@ -164,12 +164,12 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	// breakage it did. The projects are the ones Load gives, without the
 	// links to this machine (decisions.md D131).
 	dir := filepath.Join(root, "projects")
-	before, err := LoadProjects(dir, cfg.Shared())
+	before, err := LoadProjects(dir, cfg.Inherited())
 	if err != nil {
 		return TargetsWritten{}, err
 	}
 	before, _ = elsewhere(before)
-	projects, err := LoadProjects(dir, next.Shared())
+	projects, err := LoadProjects(dir, next.Inherited())
 	if err != nil {
 		return TargetsWritten{}, err
 	}
@@ -427,6 +427,7 @@ func putPanels(lines []string, i int, base string, old, panels []revier.PanelSpe
 			{"kind", string(was.Kind), string(p.Kind)},
 			{"title", was.Title, p.Title},
 			{"command", was.Command, p.Command},
+			{"agent", was.Agent, p.Agent},
 		} {
 			if reflect.DeepEqual(kv.old, kv.new) || isEmpty(kv.old) && isEmpty(kv.new) {
 				continue
@@ -454,7 +455,7 @@ func putPanels(lines []string, i int, base string, old, panels []revier.PanelSpe
 		for _, kv := range []struct {
 			key   string
 			value any
-		}{{"kind", string(p.Kind)}, {"title", p.Title}, {"command", p.Command}} {
+		}{{"kind", string(p.Kind)}, {"title", p.Title}, {"command", p.Command}, {"agent", p.Agent}} {
 			if isEmpty(kv.value) {
 				continue
 			}

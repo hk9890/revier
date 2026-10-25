@@ -50,6 +50,10 @@ bind-key A run-shell -b 'revier agent new --panel "#{pane_id}" --dir "#{pane_cur
 bind-key S run-shell -b 'revier shell new --panel "#{pane_id}" --dir "#{pane_current_path}"'
 ```
 
+In a session that is no project's workspace, both keys open a plain shell
+window there, or nothing if you set
+[`outside`](../configuration.md#terminal) to `none`.
+
 ## What does not work
 
 - revier does not raise the desktop window that shows a tmux client.

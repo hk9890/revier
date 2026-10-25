@@ -148,6 +148,7 @@ const (
 	pfKind = iota
 	pfTitle
 	pfCommand
+	pfAgent
 	panelFields
 )
 
@@ -159,6 +160,7 @@ type panelForm struct {
 	kind    revier.PanelKind
 	title   textinput.Model
 	command textinput.Model
+	agent   textinput.Model
 }
 
 var panelKinds = []string{string(revier.PanelAgent), string(revier.PanelShell), string(revier.PanelTool)}
@@ -431,12 +433,14 @@ func (f targetForm) realization(old *revier.Realization, first int, more bool, p
 // openPanel opens the form for panel i of the target form, or for a new
 // panel when i is past the last.
 func (f *targetForm) openPanel(th theme.Theme, i int) {
-	p := panelForm{open: true, index: i, kind: revier.PanelShell, title: formInput(th, "shell"), command: formInput(th, "empty for a shell")}
+	p := panelForm{open: true, index: i, kind: revier.PanelShell, title: formInput(th, "shell"), command: formInput(th, "empty for a shell"),
+		agent: formInput(th, "a named agent, in place of the command")}
 	if i < len(f.panels) {
 		spec := f.panels[i].spec
 		p.kind = spec.Kind
 		p.title.SetValue(spec.Title)
 		p.command.SetValue(joinCommand(spec.Command))
+		p.agent.SetValue(spec.Agent)
 	}
 	f.panel = p
 }
@@ -459,12 +463,15 @@ func (f *targetForm) panelKey(sf surface, msg keyPress) (formResult, tea.Cmd) {
 		}
 		p.title.Blur()
 		p.command.Blur()
+		p.agent.Blur()
 		p.field = (p.field + step + panelFields) % panelFields
 		switch p.field {
 		case pfTitle:
 			return res, p.title.Focus()
 		case pfCommand:
 			return res, p.command.Focus()
+		case pfAgent:
+			return res, p.agent.Focus()
 		}
 		return res, nil
 	case key.Matches(msg, sf.keys.Enter):
@@ -472,7 +479,7 @@ func (f *targetForm) panelKey(sf surface, msg keyPress) (formResult, tea.Cmd) {
 		if err != nil {
 			return formResult{err: err}, nil
 		}
-		spec := revier.PanelSpec{Kind: p.kind, Title: strings.TrimSpace(p.title.Value()), Command: command}
+		spec := revier.PanelSpec{Kind: p.kind, Title: strings.TrimSpace(p.title.Value()), Command: command, Agent: strings.TrimSpace(p.agent.Value())}
 		panels := slices.Clone(f.panels)
 		if p.index < len(panels) {
 			panels[p.index].spec = spec
@@ -494,6 +501,10 @@ func (f *targetForm) panelKey(sf surface, msg keyPress) (formResult, tea.Cmd) {
 	case p.field == pfCommand:
 		var cmd tea.Cmd
 		p.command, cmd = p.command.Update(msg.input())
+		return res, cmd
+	case p.field == pfAgent:
+		var cmd tea.Cmd
+		p.agent, cmd = p.agent.Update(msg.input())
 		return res, cmd
 	}
 	return res, nil
@@ -567,6 +578,9 @@ func (f targetForm) lines(th theme.Theme, w int) ([]string, int) {
 		case rowPanel:
 			p := f.panels[row.field].spec
 			value = style(th.ProjectName).Render(pad(string(p.Kind), 6) + " " + p.Title)
+			if p.Agent != "" {
+				value += style(th.Path).Render("  agent " + p.Agent)
+			}
 			if len(p.Command) > 0 {
 				value += style(th.Path).Render("  " + joinCommand(p.Command))
 			}
@@ -609,7 +623,7 @@ func (f targetForm) note(row formRow) string {
 			panels[j] = p.spec
 		}
 		same = slices.EqualFunc(panels, f.shared.panels, func(a, b revier.PanelSpec) bool {
-			return a.Kind == b.Kind && a.Title == b.Title && slices.Equal(a.Command, b.Command)
+			return a.Kind == b.Kind && a.Title == b.Title && slices.Equal(a.Command, b.Command) && a.Agent == b.Agent
 		})
 		value = fmt.Sprintf("%d panels", len(f.shared.panels))
 	default:
@@ -628,8 +642,8 @@ func (f targetForm) note(row formRow) string {
 
 // lines is the panel form, and the line the cursor is on.
 func (p panelForm) lines(th theme.Theme, w int) ([]string, int) {
-	values := []string{th.ProjectName.Render("‹ " + string(p.kind) + " ›"), inputView(p.title), inputView(p.command)}
-	labels := []string{"kind", "title", "command"}
+	values := []string{th.ProjectName.Render("‹ " + string(p.kind) + " ›"), inputView(p.title), inputView(p.command), inputView(p.agent)}
+	labels := []string{"kind", "title", "command", "agent"}
 	out := make([]string, panelFields)
 	for j := range out {
 		out[j] = clipTo("    "+cursor(th, j == p.field)+th.Meta.Render(pad(labels[j], configLabelWidth))+values[j], w)

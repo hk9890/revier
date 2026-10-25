@@ -188,7 +188,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	}})
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
 
-	if err := a.newAgent(context.Background(), "demo", "", "", "abc-123"); err != nil {
+	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Session: "abc-123"}); err != nil {
 		t.Fatalf("agent new: %v", err)
 	}
 
@@ -198,5 +198,33 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Kind != revier.EventAgentNew || got[0].Target != "home" || got[0].Session != "" {
 		t.Errorf("events = %+v, want one agent new in home with no conversation", got)
+	}
+}
+
+// A named agent's tab is an event that names the agent, and revier events
+// prints the name.
+func TestANamedAgentTabIsAnEventThatNamesTheAgent(t *testing.T) {
+	root := t.TempDir()
+	recordingTo(t, root)
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
+	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Match: revier.Match{Title: "^home$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
+	}})
+	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop"}}}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
+
+	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Agent: "dtop"}); err != nil {
+		t.Fatalf("agent new dtop: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := writeEvents(context.Background(), &out, root, 1, nil, nil); err != nil {
+		t.Fatalf("writeEvents: %v", err)
+	}
+	if !strings.Contains(out.String(), `"event":"agent new"`) || !strings.Contains(out.String(), `"agent":"dtop"`) {
+		t.Errorf("printed %q, want an agent new naming dtop", out.String())
 	}
 }

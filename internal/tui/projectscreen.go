@@ -130,7 +130,7 @@ func (m Model) renameRefusal(name revier.ProjectName) error {
 }
 
 // open reads the project's file for a new visit.
-func (ps *projectScreen) open(p core.Project, usable []map[string]any) error {
+func (ps *projectScreen) open(p core.Project, usable config.Inherited) error {
 	text, err := config.ReadProject(p.File, usable)
 	if err != nil {
 		return err

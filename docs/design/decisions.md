@@ -113,7 +113,7 @@ change is why a binding exists.
 A shortcut store is not a `Host`, and on GNOME it is not the same tool. The
 reader cannot write.
 
-### D27 — revier adds keys, and takes one only with `--force`
+### D27 — revier adds desktop keys, and takes one only with `--force`
 
 Includes the corrections from the first desktop runs. `--force` takes the one
 key revier needs, and leaves the other keys of a desktop default. revier keeps
@@ -184,14 +184,6 @@ Eighty-nine files repeated three targets. Tables merge key by key; any other
 value, a list included, replaces the shared one, because a panel has no identity
 to merge on.
 
-### D62 — a restore brings back every agent, in order, in the directory it worked in
-
-Replaces restoring an agent by its declared panel position. Most agents are
-opened by hand in tabs, and the position also counted other tools' tabs. The
-resume is the probe's (`Resumable`), built from the project as it reads at
-restore. An agent resumed from the repository root instead of its worktree edits
-`main`, so the directory is recorded too.
-
 ### D63 — a named window does not hide its unnamed sibling, and a window that cannot be raised is not focused
 
 Pairing by elimination keeps D22's refusal for real ambiguity. A focus with no
@@ -207,15 +199,6 @@ and a mark on that panel alone ended with the agent, so the key opened a second
 tab. The tab is the first panel that carries the mark, and a second press on
 its key goes home from any panel of it. `PanelOpener` is optional, and a
 runtime without it refuses; it does not open a window the user did not choose.
-
-### D65 — an agent opened beside a workspace is a tab, opened by one function for a key and for a restore
-
-`revier agent new` and a restore open the same tab: a copy of the first
-declared agent panel and a split of the first declared shell panel. One builder
-keeps the key and the restore from drifting apart. `OpenTab` takes a panel
-group, so no second capability exists. The key finds its workspace through the
-runtime's optional `PanelFinder`, because a kitty window id is unique only in
-one kitty process.
 
 ### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
 
@@ -746,3 +729,44 @@ revier takes them as they are: such a program can already do worse than show
 an agent that is not there, and a shutdown it holds back gives way to
 `--force`. A host keeps a tool's own report (D143), such as herdr's agent
 detection, apart from what any client can set, where the tool keeps them apart.
+
+### D145 — a project has named agents beside its default one, and an agent tab is a launcher
+
+Replaces D65. Extends D59: an agent has the identity a panel lacks, so it is
+inherited and merged by name. The default agent is the layout's first agent
+panel, and a probe still says what an agent is (D119). A key and a restore open
+one tab, from one builder: that panel, running the named agent if one is named,
+and the first shell panel, marked with the name, so a project's address still
+means the default agent. `OpenTab` takes a panel group; the key finds its
+workspace through `PanelFinder`, since a kitty window id is one process's. A
+target is run-or-raise; an agent or shell tab is a launcher, one more per press.
+
+### D146 — a restore brings back every agent, in order, in its directory, as the agent it ran
+
+Replaces D62. The recorded agents fill the layout's agent panels in order, and
+the rest open as agent tabs: most agents are opened by hand. The resume is the
+probe's (`Resumable`), built from the project as it reads at restore; the
+directory is recorded too, since an agent resumed from the repository root
+edits `main`. Each agent records the named agent its tab's mark names, and comes
+back as that agent; a name the project no longer declares is dropped and said,
+since another program in its place is not that agent. A link's host resolves it.
+
+### D147 — the terminal's keys are a port of their own, in a file revier owns whole
+
+Extends D30: the include in the terminal's main configuration is a second
+write outside revier's own files. revier writes its key file whole and one
+marked include at the top of that configuration, so the user's later maps win;
+both writes go through links, since that file often lives in a dotfiles
+repository. A key declared in config is taken: D27's `--force` is the desktop
+store's. A terminal key on a chord a desktop key of revier's holds is refused
+alone, since the desktop takes the press first (D110). The reader cannot
+write, as in D26.
+
+### D148 — outside a workspace a terminal key does what config says, by default a plain tab
+
+A terminal key is pressed in any window of the terminal, and most of those are
+no project's. Refusing there made the user's terminal lose its own new-tab key,
+so the core opens a plain tab of the runtime's own shell beside the window, or
+nothing where config says so, through `PanelOpener` (D145: no second
+capability). Only that case is decided: every other failure is returned, and
+the key's own fallback to the terminal's new tab is for revier failing.

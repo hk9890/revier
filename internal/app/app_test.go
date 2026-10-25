@@ -121,7 +121,7 @@ func TestRenameProjectMovesTheNameInAllThreeStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", nil)
+	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", config.Inherited{})
 	if err != nil {
 		t.Fatalf("RenameProject: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestRenameProjectIsDoneWhenTheSessionStoreFails(t *testing.T) {
 	}
 	l := &ledger{st: state.State{Current: "revier"}}
 
-	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", nil)
+	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", config.Inherited{})
 	if err != nil {
 		t.Fatalf("RenameProject: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestRenameProjectChangesNothingWhenTheFileIsRefused(t *testing.T) {
 	root, _ := created(t, "revier")
 	l := &ledger{st: state.State{Current: "revier"}}
 
-	if _, err := app.RenameProject(root, t.TempDir(), l, "revier", "a b", nil); err == nil {
+	if _, err := app.RenameProject(root, t.TempDir(), l, "revier", "a b", config.Inherited{}); err == nil {
 		t.Fatal("a name with a space was not refused")
 	}
 	if l.st.Current != "revier" {

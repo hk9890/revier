@@ -122,7 +122,10 @@ they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
 the directory it worked in, or fresh in that directory when it had no
 conversation yet; see [Agents](agents.md#resume-an-agent). Other
-agents start fresh in the project directory. An attached window is not saved.
+agents start fresh in the project directory. A
+[named agent](configuration.md#named-agents) comes back as that agent; when
+its project no longer declares it, the restore skips it and says so. An
+attached window is not saved.
 In the TUI, alt+s opens the sessions screen.
 
 ## Shut everything down

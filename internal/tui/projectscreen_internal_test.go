@@ -26,7 +26,7 @@ func TestTheProjectScreenWritesAFieldWithNoRootModel(t *testing.T) {
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), projects: []core.Project{p}, list: 80}
 	enter, down := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter}), pressedKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	ps := newProjectScreen(th)
-	if err := ps.open(p, nil); err != nil {
+	if err := ps.open(p, config.Inherited{}); err != nil {
 		t.Fatal(err)
 	}
 

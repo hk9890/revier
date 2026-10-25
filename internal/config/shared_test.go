@@ -155,8 +155,8 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 		if len(cfg.Problems) != 1 || !strings.Contains(cfg.Problems[0].Error(), want) {
 			t.Errorf("Load(%q) problems = %v, want one saying %q", body, cfg.Problems, want)
 		}
-		if len(cfg.Shared()) != len(cfg.Targets)-1 {
-			t.Errorf("Load(%q): %d of %d targets shared, want one refused", body, len(cfg.Shared()), len(cfg.Targets))
+		if len(cfg.Inherited().Targets) != len(cfg.Targets)-1 {
+			t.Errorf("Load(%q): %d of %d targets shared, want one refused", body, len(cfg.Inherited().Targets), len(cfg.Targets))
 		}
 		if len(projects) != 1 || projects[0].Invalid != nil || len(projects[0].Targets) != 3 {
 			t.Errorf("Load(%q) projects = %+v, want the project whole with the three sound shared targets", body, projects)

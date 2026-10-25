@@ -21,7 +21,7 @@ func TestGitURLLoads(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		body := strings.Replace(valid, "[vars]", "git_url = \""+u+"\"\n\n[vars]", 1)
-		p := config.LoadProject(write(t, dir, "revier.toml", body), nil)
+		p := config.LoadProject(write(t, dir, "revier.toml", body), config.Inherited{})
 		if p.GitURL != u {
 			t.Errorf("git_url = %q, want %q", p.GitURL, u)
 		}

@@ -50,7 +50,8 @@ type ProjectText struct {
 }
 
 // ReadProject is the project in file, with the shared targets it has.
-func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
+func ReadProject(file string, inh Inherited) (ProjectText, error) {
+	shared := inh.Targets
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return ProjectText{}, err
@@ -108,8 +109,8 @@ func ReadProject(file string, shared []map[string]any) (ProjectText, error) {
 
 // SetProjectValue writes one top-level value of a project file: path or
 // git_url. An empty value removes the key.
-func SetProjectValue(file, key, value string, shared []map[string]any) (core.Project, error) {
-	return editProject(file, shared, func(lines []string, _ projectFile) ([]string, error) {
+func SetProjectValue(file, key, value string, inh Inherited) (core.Project, error) {
+	return editProject(file, inh, func(lines []string, _ projectFile) ([]string, error) {
 		top := tables(lines)[0]
 		if value == "" {
 			return deleteKey(lines, top, key), nil
@@ -122,10 +123,10 @@ func SetProjectValue(file, key, value string, shared []map[string]any) (core.Pro
 // name the target had, empty for a new one. A target config.toml has is
 // written as the values that differ from it, and an override left with
 // none is removed.
-func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared []map[string]any) (core.Project, error) {
+func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, inh Inherited) (core.Project, error) {
 	t := e.Target
-	return editProject(file, shared, func(lines []string, f projectFile) ([]string, error) {
-		sharedTargets, err := targetsFor(shared, f.link)
+	return editProject(file, inh, func(lines []string, f projectFile) ([]string, error) {
+		sharedTargets, err := targetsFor(inh.Targets, f.link)
 		if err != nil {
 			return nil, err
 		}
@@ -201,14 +202,14 @@ func SaveProjectTarget(file string, was revier.TargetName, e TargetEdit, shared 
 // RemoveProjectTarget deletes the project file's own entry for a target: a
 // target of its own goes, and an override leaves the shared target as it is
 // in config.toml.
-func RemoveProjectTarget(file string, name revier.TargetName, shared []map[string]any) (core.Project, error) {
-	return editProject(file, shared, removeTarget(name), nil)
+func RemoveProjectTarget(file string, name revier.TargetName, inh Inherited) (core.Project, error) {
+	return editProject(file, inh, removeTarget(name), nil)
 }
 
 // CanRemoveProjectTarget is why RemoveProjectTarget would refuse, with
 // nothing written: the home target, or one a tab is inside, cannot go.
-func CanRemoveProjectTarget(file string, name revier.TargetName, shared []map[string]any) error {
-	_, _, err := editedProject(file, shared, removeTarget(name), nil)
+func CanRemoveProjectTarget(file string, name revier.TargetName, inh Inherited) error {
+	_, _, err := editedProject(file, inh, removeTarget(name), nil)
 	return err
 }
 
@@ -254,8 +255,8 @@ func (f projectFile) rawOf(i int) map[string]any {
 // editProject runs one change to a project file, and writes it only if the
 // result loads no worse than the file did, and check, when given, accepts the
 // project it decodes to and the one it prepares to.
-func editProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, error) {
-	p, text, err := editedProject(file, shared, change, check)
+func editProject(file string, inh Inherited, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, error) {
+	p, text, err := editedProject(file, inh, change, check)
 	if err != nil {
 		return core.Project{}, err
 	}
@@ -264,7 +265,7 @@ func editProject(file string, shared []map[string]any, change func([]string, pro
 
 // editedProject is editProject's change and its checks, with nothing
 // written: the project and the file's text after it.
-func editedProject(file string, shared []map[string]any, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, []byte, error) {
+func editedProject(file string, inh Inherited, change func([]string, projectFile) ([]string, error), check func(revier.Project, core.Project) error) (core.Project, []byte, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return core.Project{}, nil, err
@@ -291,12 +292,12 @@ func editedProject(file string, shared []map[string]any, change func([]string, p
 	// user wrote by hand is loaded as it is and reports what is wrong with
 	// it. What was wrong before the edit is not this edit's to refuse: a file
 	// with two broken targets is repaired one at a time.
-	p := loadProject(file, text, shared)
-	if probs := newProblems(loadProject(file, data, shared), p); len(probs) > 0 {
+	p := loadProject(file, text, inh)
+	if probs := newProblems(loadProject(file, data, inh), p); len(probs) > 0 {
 		return core.Project{}, nil, fmt.Errorf("not written: %w", errors.Join(probs...))
 	}
 	if check != nil {
-		decoded, _, err := decodeProject(text, shared)
+		decoded, _, err := decodeProject(text, inh.Targets)
 		if err == nil {
 			if decoded.Remote != nil {
 				// As loading a link drops them, so the edit is checked

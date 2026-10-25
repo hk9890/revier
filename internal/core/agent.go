@@ -123,7 +123,9 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 
 // Agent finds the agent panel addr names in a project: with addr empty, the
 // project's only agent; with a target name, the only agent in that target's
-// instance; otherwise the panel with that id.
+// instance; otherwise the panel with that id. Where several agents run there,
+// the only one that is no named agent's is the default agent, and the one
+// meant (decisions.md D145).
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
 	bound := c.state().Bound[p.Name]
 	// Agents are panels, and only the runtime and the served processes
@@ -165,6 +167,9 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 	case 1:
 		return found[0], nil
 	}
+	if def, ok := defaultAgent(found); ok {
+		return def, nil
+	}
 	// A panel id is one process's - a kitty window id is - so two windows can
 	// each hold a panel 1. Such an agent is named by its target instead.
 	addrs := make([]string, len(found))
@@ -175,6 +180,20 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 		}
 	}
 	return Agent{}, fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
+}
+
+// defaultAgent is the only agent of found that carries no named agent's mark.
+func defaultAgent(found []Agent) (Agent, bool) {
+	var def []Agent
+	for _, a := range found {
+		if a.Panel.Vars[PanelAgentVar] == "" {
+			def = append(def, a)
+		}
+	}
+	if len(def) != 1 {
+		return Agent{}, false
+	}
+	return def[0], true
 }
 
 // panel finds an agent by panel id among a project's running instances. An

@@ -217,6 +217,7 @@ file).
 | `kind` | `"agent"`, `"shell"` or `"tool"` | A coding agent, a shell, or another program. Default: `"tool"`. revier refuses the target for another value. |
 | `title` | string | The panel's title. |
 | `command` | list of strings | What the panel runs. Default: your shell. |
+| `agent` | string | A [named agent](#named-agents): the panel runs its `command`, and its name is the default `title`. Only with `kind = "agent"` and no `command`. revier refuses the target for a name the project has no agent of. |
 
 The first agent and shell panels in the home's `tabs` are the workspace's
 agent and shell: `revier agent new` and `revier shell new` copy them. A
@@ -266,6 +267,51 @@ name = "editor"
   target with no part for a kind of project does not reach it.
 - A shared `home` gives every project its home. Override it by name; a second
   target with `home = true` is refused.
+
+## Named agents
+
+An `[[agent]]` names a program an agent panel runs. Declare it in
+`config.toml`, and every local project has it:
+
+```toml
+# config.toml
+[[agent]]
+name    = "claude"
+command = ["claude"]
+
+[[agent]]
+name    = "dtop"
+command = ["dtop", "{{.Path}}"]
+key     = "ctrl+shift+d"
+```
+
+`revier agent new dtop` opens a tab that runs it
+([Agents](agents.md#open-more-agent-and-shell-tabs)). A panel names one with
+`agent` in place of `command`:
+
+```toml
+    [[target.runtime.panels]]
+    kind  = "agent"
+    agent = "claude"
+```
+
+| Key | Type | Meaning |
+|---|---|---|
+| `name` | string | The agent's name. Required, and unique. Use letters, digits, `-`, `_` and `.`, and do not start it with `-`: the name is one word of the `revier agent new <name>` command that its terminal key runs. revier refuses the agent for another name. |
+| `command` | list of strings | What the agent runs. Required. [Templates](#templates) work as in a panel's `command`. |
+| `key` | string | The terminal key that opens this agent, in the [key](#keys) form. Only in `config.toml`. See [`[terminal]`](#terminal). |
+
+A project file can declare `[[agent]]` too:
+
+- The same name as one in `config.toml` changes that agent key by key: write
+  only the `command` to give this project another one.
+- A new name is an agent of this project alone.
+- A project cannot remove an agent `config.toml` declares.
+- A `key` in a project file is refused: the terminal's keys are one file per
+  machine. The agent keeps its command.
+
+A link has no named agents of its own: its host runs them, and the host's
+configuration names them.
 
 ## Actions
 
@@ -337,6 +383,33 @@ Only in `config.toml`.
 
 You cannot set a single colour. To turn colour off, set `NO_COLOR`
 ([Environment variables](cli.md#environment-variables)).
+
+## `[terminal]`
+
+The keys your terminal holds for revier, and what they do in a terminal window
+that is no project's workspace. Only in `config.toml`. `revier term install`
+writes the keys into the terminal's configuration; run it again after you
+change one.
+
+```toml
+[terminal]
+shell_key = "ctrl+shift+t"
+agent_key = "ctrl+shift+z"
+outside   = "tab"
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `shell_key` | `ctrl+shift+t` | Opens a shell tab in the workspace of the focused window, as `revier shell new` does. |
+| `agent_key` | `ctrl+shift+z` | Opens a tab with the workspace's agent, as `revier agent new` does. |
+| `outside` | `tab` | What a key does in a window of no workspace: `tab` opens a plain tab beside it, `none` does nothing. |
+
+- Write a key in the [key](#keys) form. An empty string turns that key off.
+- A named agent's key is its `key` in `[[agent]]`.
+- revier refuses a key that another terminal key already holds, or that it
+  cannot read. The other keys still work.
+- `revier term install` leaves out a key on the same chord as `trigger_key`
+  or a target's `key`: the desktop takes that press first.
 
 ## `[hosts]`
 

@@ -46,11 +46,13 @@ func (a RestoreAction) String() string { return restoreNames[a] }
 
 // Resume is one recorded agent of a target: the harness its probe named, the
 // probe's own word for its conversation, and the directory it worked in.
-// Either of the last two may be empty.
+// Either of the last two may be empty. Agent is the named agent it runs, and
+// empty for the project's default agent.
 type Resume struct {
 	Harness string
 	Session revier.SessionID
 	Dir     string
+	Agent   string
 }
 
 // AgentOutcome is what restoring one recorded agent comes to. The zero value
@@ -86,6 +88,10 @@ const (
 	// harness no longer keeps the conversation recorded: one it never filed,
 	// or pruned since the save.
 	AgentConversationGone
+	// AgentUnknown is not restored: it ran a named agent its project no
+	// longer declares, and another program in its place is not that agent
+	// (decisions.md D146).
+	AgentUnknown
 )
 
 var agentNames = map[AgentOutcome]string{
@@ -98,6 +104,7 @@ var agentNames = map[AgentOutcome]string{
 	AgentInTab:       "in tab",
 
 	AgentConversationGone: "conversation gone",
+	AgentUnknown:          "no such agent",
 }
 
 func (o AgentOutcome) String() string { return agentNames[o] }
@@ -116,10 +123,11 @@ type RestoreStep struct {
 
 // Session records what a survey found open, as the set that restoring opens
 // again. It records names: which project, which target, and for each agent the
-// conversation and directory its probe can name. Everything else - the host
+// conversation and directory its probe can name, and the named agent its
+// panel's mark says it runs (decisions.md D146). Everything else - the host
 // that won, the instance, the argv - is derived again at restore, because a
 // project file edited in between must win over this file. The current
-// project is the ledger's (decisions.md D120).
+// project is the ledger's (D120).
 //
 // Every agent a probe claims is recorded, in the order its runtime lists it,
 // with or without a conversation: the order is what a restore lays the agents
@@ -205,11 +213,13 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 			if v.Project.Remote != nil {
 				// A link's agents are its host's to name, each under the panel
 				// here that shows it, in the order the runtime lists the panels.
+				// Which named agent it runs is the panel's mark here.
 				for _, panel := range inst.Panels {
 					if a, ok := there[v.Project.Name][c.tagOf(panel)]; ok {
 						if a.Session == "" {
 							gaps.Unnamed++
 						}
+						a.Name = panel.Vars[PanelAgentVar]
 						targets[len(targets)-1].Agents = append(targets[len(targets)-1].Agents, a)
 					}
 				}
@@ -243,7 +253,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 			gaps.Unnamed++
 		}
 		t := &s.Projects[a.project].Targets[a.target]
-		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir})
+		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[PanelAgentVar]})
 	}
 	return s, gaps
 }
@@ -408,7 +418,7 @@ func targetView(v revier.ProjectView, name revier.TargetName) (revier.TargetView
 func resumesOf(t session.Target) []Resume {
 	var out []Resume
 	for _, a := range t.Agents {
-		out = append(out, Resume{Harness: a.Harness, Session: a.Session, Dir: a.Dir})
+		out = append(out, Resume{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Name})
 	}
 	return out
 }
@@ -449,12 +459,12 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if err != nil {
 		return nil
 	}
-	_, added := c.agentTabs(host, layout, extra, link)
+	_, added := c.agentTabs(host, p, layout, extra)
 	return append(outcomes, added...)
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each
-// comes to (decisions.md D62).
+// comes to (decisions.md D146).
 //
 // The first recorded agent goes to the first panel declared as an agent, the
 // second to the second, and so on. The agents past the declared ones are

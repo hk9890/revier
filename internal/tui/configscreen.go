@@ -117,7 +117,7 @@ func (m Model) configKey(msg keyPress) (tea.Model, tea.Cmd) {
 	case res.actions != nil:
 		m.setActions(*res.actions)
 	case res.targets != nil:
-		m.setFiles(res.targets.Shared, res.targets.Projects)
+		m.setFiles(res.targets.Shared, m.named, res.targets.Projects)
 	case res.closed:
 		m.dialog = dialogNone
 		// The screen took the pane's width; the list gets its own back.

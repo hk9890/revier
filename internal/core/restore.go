@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,14 +39,14 @@ func (r RestoreResult) Note() string {
 	case r.Action != RestoreLaunch:
 		return r.Action.String()
 	case r.dry:
-		return AgentsNote("would open", r.Agents, nil)
+		return AgentsNote("would open", r.Agents, r.Resumes, nil)
 	case r.Err != nil:
 		return r.Err.Error()
 	case r.Ref.IsZero():
 		// A window that has not shown yet is not a target that came back.
-		return AgentsNote("launched, not up yet", r.Agents, r.AgentErr)
+		return AgentsNote("launched, not up yet", r.Agents, r.Resumes, r.AgentErr)
 	}
-	return AgentsNote("opened", r.Agents, r.AgentErr)
+	return AgentsNote("opened", r.Agents, r.Resumes, r.AgentErr)
 }
 
 // Restored is every step of one restore, in the order it walked them.
@@ -265,7 +267,7 @@ func logAgents(r RestoreResult) {
 			outcome = r.Agents[i].String()
 		}
 		slog.Info("restore agent", "project", r.Project, "target", r.Target, "dry_run", r.dry,
-			"harness", a.Harness, "session", a.Session, "dir", a.Dir, "outcome", outcome)
+			"harness", a.Harness, "agent", a.Agent, "session", a.Session, "dir", a.Dir, "outcome", outcome)
 	}
 }
 
@@ -273,12 +275,18 @@ func logAgents(r RestoreResult) {
 // recorded: how many start on their conversation, how many start empty because
 // the directory they worked in is gone or their conversation cannot be resumed
 // here, and how many cannot be started at all, with tabErr for the ones whose
-// tab failed to open. An agent recorded with no conversation starts empty as
-// it always would, and is not worth a word.
-func AgentsNote(verb string, agents []AgentOutcome, tabErr error) string {
+// tab failed to open and the name of each named agent the project no longer
+// declares. resumes is what was recorded, parallel to agents. An agent
+// recorded with no conversation starts empty as it always would, and is not
+// worth a word.
+func AgentsNote(verb string, agents []AgentOutcome, resumes []Resume, tabErr error) string {
 	n := map[AgentOutcome]int{}
-	for _, o := range agents {
+	var unknown []string
+	for i, o := range agents {
 		n[o]++
+		if o == AgentUnknown && i < len(resumes) && !slices.Contains(unknown, strconv.Quote(resumes[i].Agent)) {
+			unknown = append(unknown, strconv.Quote(resumes[i].Agent))
+		}
 	}
 	note := verb
 	if n[AgentResumed] > 0 {
@@ -295,6 +303,13 @@ func AgentsNote(verb string, agents []AgentOutcome, tabErr error) string {
 	}
 	if n[AgentDropped] > 0 {
 		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", Count(n[AgentDropped], "agent"))
+	}
+	if n[AgentUnknown] > 0 {
+		named := "the named agent "
+		if len(unknown) > 1 {
+			named = "the named agents "
+		}
+		note += fmt.Sprintf(", %s not restored: the project no longer declares %s%s", Count(n[AgentUnknown], "agent"), named, strings.Join(unknown, ", "))
 	}
 	if n[AgentInTab] > 0 {
 		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", Count(n[AgentInTab], "agent"))

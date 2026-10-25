@@ -271,7 +271,7 @@ func TestARefusedSharedTargetDoesNotBlockAnotherEdit(t *testing.T) {
 // not among them.
 func TestAProjectReadsWithTheUsableSharedTargets(t *testing.T) {
 	root, shared := targetsRoot(t, refusedConfig)
-	if _, err := config.ReadProject(config.ProjectFile(root, "demo"), config.Usable(shared)); err != nil {
+	if _, err := config.ReadProject(config.ProjectFile(root, "demo"), config.Inherited{Targets: config.Usable(shared)}); err != nil {
 		t.Errorf("ReadProject = %v, want demo read without the refused web", err)
 	}
 }

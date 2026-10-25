@@ -68,7 +68,7 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 	ctx := context.Background()
 
-	if err := a.newAgent(ctx, "far", "", "", "abc-123"); err != nil {
+	if err := a.newAgent(ctx, "far", "", "", core.Resume{Session: "abc-123"}); err != nil {
 		t.Fatalf("agent new -p far: %v", err)
 	}
 	if err := a.newShell(ctx, "", "%7", "/srv/only-on-the-host"); err != nil {
@@ -78,10 +78,10 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 		t.Fatalf("tabs = %+v, want two in %v", rt.Tabs, pane)
 	}
 	agent, shell := rt.Tabs[0].Real.Panels[0], rt.Tabs[1].Real.Panels[0]
-	if want := append(remote.PanelCommand("far", revier.PanelAgent), "--resume", "abc-123"); agent.Kind != revier.PanelAgent || !slices.Equal(agent.Command, want) {
+	if want := append(remote.PanelCommand("far", revier.PanelAgent, ""), "--resume", "abc-123"); agent.Kind != revier.PanelAgent || !slices.Equal(agent.Command, want) {
 		t.Errorf("agent tab = %+v, want the agent panel running %q", agent, want)
 	}
-	if want := remote.PanelCommand("far", revier.PanelShell); shell.Kind != revier.PanelShell || shell.Dir != "" || !slices.Equal(shell.Command, want) {
+	if want := remote.PanelCommand("far", revier.PanelShell, ""); shell.Kind != revier.PanelShell || shell.Dir != "" || !slices.Equal(shell.Command, want) {
 		t.Errorf("shell tab = %+v, want the shell panel running %q with no directory here", shell, want)
 	}
 	if len(remote.Asked) != 0 {
@@ -110,6 +110,31 @@ func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 	}
 	if want := []string{dirs[0], dirs[0], demo.Path}; !slices.Equal(dirs, want) {
 		t.Errorf("tab dirs = %q, want %q", dirs, want)
+	}
+}
+
+// [terminal] outside reaches a key pressed in a window that is no project's
+// workspace: "none" opens nothing there and is no failure, so the key's
+// fallback does not run either; the default opens a plain tab.
+func TestTabAtAPanelOutsideAWorkspaceTakesTheConfiguredAction(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "3"})
+	none := &config.Config{Terminal: config.Terminal{Outside: core.OutsideNone}}
+	a := withState(t, &app{cfg: none, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+
+	if err := a.newAgent(ctx, "", "3", "", core.Resume{}); err != nil {
+		t.Fatalf("agent new --panel 3, outside none: %v", err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Fatalf("tabs = %+v, want none", rt.Tabs)
+	}
+	a.cfg = &config.Config{}
+	if err := a.newShell(ctx, "", "3", ""); err != nil {
+		t.Fatalf("shell new --panel 3, outside tab: %v", err)
+	}
+	if len(rt.Tabs) != 1 {
+		t.Errorf("tabs = %+v, want the plain tab", rt.Tabs)
 	}
 }
 

@@ -51,6 +51,12 @@ type Config struct {
 	// file writes is here, so the config screen edits the file as it is;
 	// Shared is the ones a project gets.
 	Targets []map[string]any `toml:"target"`
+	// Agents are the named agents, as TOML decoded them, so a project can
+	// override any one value of one (agents.go).
+	Agents []map[string]any `toml:"agent"`
+	// Terminal is the terminal's keys and what they do outside a workspace
+	// (terminal.go).
+	Terminal Terminal `toml:"terminal"`
 
 	// Problems is what config.toml declares that nothing can use, each with
 	// its reason: an action the TUI could never run, a shared target no
@@ -67,7 +73,8 @@ type Config struct {
 	// Load leaves out (decisions.md D131). `revier doctor` says how many.
 	SelfLinks []string `toml:"-"`
 
-	statuses []core.Status // Status without the tables a rule refused
+	statuses []core.Status  // Status without the tables a rule refused
+	termKeys []core.TermKey // the terminal keys no rule refused
 }
 
 // UI is how the TUI looks. Both names are resolved at load: a typo is one of
@@ -143,7 +150,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, err
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Shared())
+	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Inherited())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,12 +198,6 @@ func elsewhere(projects []core.Project) ([]core.Project, []string) {
 		out = append(out, p)
 	}
 	return out, self
-}
-
-// Shared is the shared targets every project gets: Targets without the ones
-// validateShared refused.
-func (c *Config) Shared() []map[string]any {
-	return Usable(c.Targets)
 }
 
 // Usable is the shared targets a project gets out of every [[target]]
@@ -286,6 +287,13 @@ func parse(data []byte) (*Config, error) {
 			cfg.Problems = append(cfg.Problems, err)
 		}
 	}
+	refused, _ := validateAgents(cfg.Agents, false)
+	for _, err := range refused {
+		if err != nil {
+			cfg.Problems = append(cfg.Problems, err)
+		}
+	}
+	cfg.Problems = append(cfg.Problems, cfg.validateTerminal(refused)...)
 	statuses, errs := validateStatuses(cfg.Status, false)
 	cfg.statuses = statuses
 	cfg.Problems = append(cfg.Problems, errs...)
@@ -356,7 +364,7 @@ func validateActions(actions []Action) []error {
 
 // LoadProjects reads every *.toml in dir, sorted by name so ordering is stable
 // across machines. shared are config.toml's shared targets.
-func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
+func LoadProjects(dir string, inh Inherited) ([]core.Project, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -375,7 +383,7 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 
 	projects := make([]core.Project, 0, len(names))
 	for _, name := range names {
-		projects = append(projects, LoadProject(filepath.Join(dir, name), shared))
+		projects = append(projects, LoadProject(filepath.Join(dir, name), inh))
 	}
 	return projects, nil
 }
@@ -389,13 +397,13 @@ func LoadProjects(dir string, shared []map[string]any) ([]core.Project, error) {
 // Nothing here returns an error, because there is no caller a project file's
 // own mistake should stop. The surface lists what loaded and says what did
 // not; `revier doctor` is where the reasons are read in full.
-func LoadProject(path string, shared []map[string]any) core.Project {
+func LoadProject(path string, inh Inherited) core.Project {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// The error names the file already.
 		return invalid(path, err)
 	}
-	return loadProject(path, data, shared)
+	return loadProject(path, data, inh)
 }
 
 // invalid is the project a file that could not be read or parsed still
@@ -409,8 +417,8 @@ func invalid(path string, err error) core.Project {
 
 // loadProject is LoadProject on the text the file at path has, or is about
 // to have.
-func loadProject(path string, data []byte, shared []map[string]any) core.Project {
-	p, parts, err := decodeProject(data, shared)
+func loadProject(path string, data []byte, inh Inherited) core.Project {
+	p, parts, err := decodeProject(data, inh.Targets)
 	if err != nil {
 		return invalid(path, fmt.Errorf("%s: %w", path, err))
 	}
@@ -432,19 +440,29 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 			}
 		}
 	}
+	agents, declared, agentRefused := agentsOf(data, inh.Agents, p.Remote != nil)
+	named := nameAgents(&p, agents, declared)
 	prepared := core.PrepareProject(p)
 	prepared.File = path
 	prepared.Status, prepared.StatusRefused = projectStatuses(data)
+	var unrendered []error
+	prepared.Agents, unrendered = renderAgents(p, agents)
+	prepared.AgentRefused = append(agentRefused, unrendered...)
 	if err := validateProject(p); err != nil {
 		prepared.Invalid = fmt.Errorf("%s: %w", path, err)
 	}
 	// A rule's refusal wins over a rendering failure of the same target: both
 	// name the same mistake, and the rule says which key to look for in the
 	// file, where the template only says that it rendered to nothing. A part
-	// of the other kind is a rule about the target too.
+	// of the other kind is a rule about the target too, and so is a panel
+	// that names no agent the project can run.
 	for i, err := range validateTargets(p) {
-		if part := parts[p.Targets[i].Name]; part != nil {
+		name := p.Targets[i].Name
+		if part := parts[name]; part != nil {
 			err = errors.Join(part, err)
+		}
+		if bad := named[name]; bad != nil {
+			err = errors.Join(err, bad)
 		}
 		if err != nil {
 			prepared.Refuse(i, err)
@@ -455,8 +473,9 @@ func loadProject(path string, data []byte, shared []map[string]any) core.Project
 
 // Problems is every reason a loaded project is not whole: the project-wide
 // refusal first, then one per refused target, then one per refused
-// [[status]] table. It is empty for a project that loaded entire, which is
-// what `revier new` asks before it keeps a file.
+// [[status]] table, then one per refused [[agent]] table or key. It is
+// empty for a project that loaded entire, which is what `revier new` asks
+// before it keeps a file.
 func Problems(p core.Project) []error {
 	var out []error
 	if p.Invalid != nil {
@@ -467,16 +486,17 @@ func Problems(p core.Project) []error {
 			out = append(out, err)
 		}
 	}
-	return append(out, p.StatusRefused...)
+	out = append(out, p.StatusRefused...)
+	return append(out, p.AgentRefused...)
 }
 
 // newProblems is what after is not whole for that before was: the reasons a
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
 // edit of the file, and the file could only be repaired by hand. A problem
-// is the project's, one target's by name, or one status place's: the opening
-// of its refusal, since a TOML error in the tables names a line, and an edit
-// above them moves it.
+// is the project's, one target's by name, or one status place's or named
+// agent's: the opening of its refusal, since a TOML error in the tables
+// names a line, and an edit above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}
 	if before.Invalid != nil {
@@ -500,10 +520,10 @@ func newProblems(before, after core.Project) []error {
 		what, _, _ := strings.Cut(err.Error(), ":")
 		return what
 	}
-	for _, err := range before.StatusRefused {
+	for _, err := range slices.Concat(before.StatusRefused, before.AgentRefused) {
 		had[place(err)] = true
 	}
-	for _, err := range after.StatusRefused {
+	for _, err := range slices.Concat(after.StatusRefused, after.AgentRefused) {
 		if !had[place(err)] {
 			out = append(out, err)
 		}

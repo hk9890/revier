@@ -42,7 +42,27 @@ func TestAReadCommandKeepsTheProfileOutOfItsStdoutInAShell(t *testing.T) {
 // through three shells with a name that needs quoting still one word, and
 // the pid in the tag is the shell's own. Trailing arguments pass through.
 func TestAPanelCommandTagsWhatItStartsWithItsOwnPid(t *testing.T) {
-	argv := ssh.PanelCommand("buildbox", "it's far", "agent")
+	line := onTheHost(t, ssh.PanelCommand("buildbox", "it's far", "agent", ""))
+	host, _ := os.Hostname()
+	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
+	if !want.Match(line) {
+		t.Errorf("on the host it runs %q, want %s", line, want)
+	}
+}
+
+// A named agent reaches the host as one word, also a name that needs quoting.
+func TestAPanelCommandCarriesTheNamedAgentAsOneWord(t *testing.T) {
+	line := onTheHost(t, ssh.PanelCommand("buildbox", "far", "agent", "it's dtop"))
+	want := regexp.MustCompile(`^-lc revier agent exec -p far --agent 'it'\\''s dtop' --tag \S+ --resume abc-123\n$`)
+	if !want.Match(line) {
+		t.Errorf("on the host it runs %q, want %s", line, want)
+	}
+}
+
+// onTheHost is the command line the user's login shell on the host is handed
+// by the panel's argv, with --resume abc-123 appended to that argv.
+func onTheHost(t *testing.T, argv []string) []byte {
+	t.Helper()
 	argv[2] = strings.Replace(argv[2], "exec ssh -t", "printf '%s\\n'", 1)
 	out, err := exec.Command(argv[0], append(argv[1:], "--resume", "abc-123")...).Output()
 	if err != nil {
@@ -56,11 +76,7 @@ func TestAPanelCommandTagsWhatItStartsWithItsOwnPid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, _ := os.Hostname()
-	want := regexp.MustCompile(`^-lc revier agent exec -p 'it'\\''s far' --tag ` + regexp.QuoteMeta(host) + `\.\d+ --resume abc-123\n$`)
-	if !want.Match(line) {
-		t.Errorf("on the host it runs %q, want %s", line, want)
-	}
+	return line
 }
 
 // ssh runs in a process group of its own, so the ctrl+c a terminal sends to

@@ -150,6 +150,9 @@ func Quote(s string) string {
 // shows it, and nothing has to be recorded. The shell that expands the pid is
 // replaced by the ssh, which keeps it.
 //
+// A named agent is passed as `--agent`, quoted for both shells, since the
+// name is the user's to choose.
+//
 // Arguments after the command go to `revier <kind> exec` as they are, which
 // is how a restore passes --resume. They cross two shells unquoted, so the
 // core passes only words that need no quoting.
@@ -159,14 +162,18 @@ func Quote(s string) string {
 // It goes over the shared master when one is up, so the panel shows as soon
 // as its terminal does. It is not in batch mode: a panel can answer a
 // prompt.
-func (r *Remote) PanelCommand(project revier.ProjectName, kind revier.PanelKind) []string {
-	return PanelCommand(r.host, project, string(kind))
+func (r *Remote) PanelCommand(project revier.ProjectName, kind revier.PanelKind, agent string) []string {
+	return PanelCommand(r.host, project, string(kind), agent)
 }
 
 // PanelCommand is Remote.PanelCommand for a host, the form the tests pin.
-func PanelCommand(host string, project revier.ProjectName, kind string) []string {
+func PanelCommand(host string, project revier.ProjectName, kind, agent string) []string {
 	const tag = "\x00"
-	there := "revier " + kind + " exec -p " + Quote(string(project)) + " --tag " + tag
+	there := "revier " + kind + " exec -p " + Quote(string(project))
+	if agent != "" {
+		there += " --agent " + Quote(agent)
+	}
+	there += " --tag " + tag
 	words := []string{"exec", "ssh", "-t"}
 	for _, f := range connection() {
 		words = append(words, Quote(f))

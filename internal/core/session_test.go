@@ -5,6 +5,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -700,5 +701,96 @@ func TestSessionRecordsTheAgentsOfASharedInstanceOnce(t *testing.T) {
 
 	if got := s.Conversations(); got != 1 {
 		t.Errorf("conversations = %d in %+v, want the one agent once", got, s.Projects)
+	}
+}
+
+// named is the agentProject with a named agent, dtop, declared.
+func named(t *testing.T) core.Project {
+	t.Helper()
+	p := prepared(t, agentProject())
+	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop"}}}
+	return p
+}
+
+// A save records the named agent each agent's panel is marked with, and no
+// name for the default agent, whose panel carries no mark.
+func TestSessionRecordsTheNamedAgentEachPanelRuns(t *testing.T) {
+	marked := agent("3", "", "")
+	marked.Vars[core.PanelAgentVar] = "dtop"
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"), marked)
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	report, err := c.Survey(context.Background(), []core.Project{named(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+
+	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: "/a"}, {Harness: "claude", Name: "dtop"}}
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
+		t.Errorf("agents = %+v, want %+v", got, want)
+	}
+	if plan := c.RestorePlan(s, report); len(plan) != 1 || plan[0].Resumes[1].Agent != "dtop" {
+		t.Errorf("plan = %+v, want the name carried to the restore", plan)
+	}
+}
+
+// A named agent past the layout comes back as its own tab, marked with its
+// name as agent new marks it; the default agent beside it gets the default
+// agent's tab with no mark.
+func TestRestoreOpensANamedAgentInItsOwnTab(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	res, err := pressResuming(context.Background(), c, named(t), "home", []core.Resume{
+		{Harness: "claude"}, {Harness: "dtop", Agent: "dtop"}, {Harness: "claude"},
+	})
+	if err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if len(rt.Tabs) != 2 {
+		t.Fatalf("tabs = %+v, want one per agent past the layout", rt.Tabs)
+	}
+	project := "/home/user/dev/github/revier"
+	samePanels(t, "named tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "dtop", Command: []string{"dtop"}, Dir: project},
+		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: project},
+	})
+	if want := map[string]string{core.PanelAgentVar: "dtop"}; !maps.Equal(rt.Tabs[0].Vars, want) {
+		t.Errorf("named tab vars = %v, want %v", rt.Tabs[0].Vars, want)
+	}
+	if rt.Tabs[1].Real.Panels[0].Title != "Claude Code" || len(rt.Tabs[1].Vars) != 0 {
+		t.Errorf("default tab = %+v, want the default agent, unmarked", rt.Tabs[1])
+	}
+	if want := []core.AgentOutcome{core.AgentEmpty, core.AgentEmpty, core.AgentEmpty}; !slices.Equal(res.Agents, want) {
+		t.Errorf("Agents = %v, want %v", res.Agents, want)
+	}
+}
+
+// A name the project no longer declares is not restored, and never as
+// another program: the default agent in its place is not the agent that ran.
+// The agents after it still come back, and the dry run says the same.
+func TestRestoreDropsANamedAgentItsProjectNoLongerDeclares(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	resumes := []core.Resume{{Harness: "claude"}, {Harness: "claude", Session: "abc-123", Agent: "review"}, {Harness: "dtop", Agent: "dtop"}}
+	want := []core.AgentOutcome{core.AgentEmpty, core.AgentUnknown, core.AgentEmpty}
+	if got := c.Resumes(named(t), "home", resumes); !slices.Equal(got, want) {
+		t.Errorf("Resumes = %v, want %v", got, want)
+	}
+
+	res, err := pressResuming(context.Background(), c, named(t), "home", resumes)
+	if err != nil || !slices.Equal(res.Agents, want) {
+		t.Fatalf("press = %+v, %v; want %v", res.Agents, err, want)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Panels[0].Title != "dtop" {
+		t.Errorf("tabs = %+v, want dtop's tab alone", rt.Tabs)
+	}
+	if note := core.AgentsNote("opened", res.Agents, resumes, nil); !strings.Contains(note, `1 agent not restored: the project no longer declares the named agent "review"`) {
+		t.Errorf("note = %q, want the agent with no declaration named", note)
+	}
+	two := []core.Resume{{Agent: "review"}, {Agent: "old"}, {Agent: "review"}}
+	unknown := []core.AgentOutcome{core.AgentUnknown, core.AgentUnknown, core.AgentUnknown}
+	if note, want := core.AgentsNote("opened", unknown, two, nil), `opened, 3 agents not restored: the project no longer declares the named agents "review", "old"`; note != want {
+		t.Errorf("note = %q, want %q", note, want)
 	}
 }

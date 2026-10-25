@@ -195,7 +195,7 @@ func TestOptionsNeverAskForAPassword(t *testing.T) {
 // the limit a unix socket path has.
 func TestEveryCallSharesOneConnection(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
-	for _, argv := range [][]string{ssh.Options(), ssh.New("buildbox").RunCommand("far", "pull"), ssh.PanelCommand("buildbox", "far", "agent")} {
+	for _, argv := range [][]string{ssh.Options(), ssh.New("buildbox").RunCommand("far", "pull"), ssh.PanelCommand("buildbox", "far", "agent", "")} {
 		line := strings.Join(argv, " ")
 		if !strings.Contains(line, "ControlMaster=auto") || !strings.Contains(line, "ControlPersist=") {
 			t.Errorf("%q: want a shared connection", line)
@@ -239,7 +239,7 @@ func TestNoRuntimeDirectoryMeansNoSharedConnection(t *testing.T) {
 // into the tag is the pid the runtime reports for the panel. What it runs on
 // the host is checked through real shells in ssh_live_test.go.
 func TestAPanelCommandIsAShellThatBecomesTheSSH(t *testing.T) {
-	argv := ssh.PanelCommand("buildbox", "it's far", "agent")
+	argv := ssh.PanelCommand("buildbox", "it's far", "agent", "")
 	if len(argv) != 4 || argv[0] != "sh" || argv[1] != "-c" || !strings.HasPrefix(argv[2], "exec ssh -t ") {
 		t.Fatalf("argv = %q, want sh -c 'exec ssh -t ...' sh", argv)
 	}

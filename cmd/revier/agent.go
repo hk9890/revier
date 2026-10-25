@@ -28,9 +28,9 @@ usage:
   revier agent prompt <agent> [--] <text>
   revier agent read <agent> [--screen [--lines <n>]]
   revier agent send-keys <agent> [--] <key>..
-  revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
+  revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
   revier agent focus <agent> [--ref <instance>]
-  revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]
+  revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
@@ -39,10 +39,13 @@ usage:
   --screen   print what the agent's panel shows, not what the agent said
   --lines    with --screen, the last <n> lines of the panel and its
              scrollback
+  <name>     one of the project's named agents, the [[agent]] tables of its
+             configuration; without it, the project's default agent
   <key>      esc, enter, tab, shift+tab, space, backspace, up, down, left,
              right, ctrl+c, or one character
   --panel    the open workspace that holds this panel; kitty's
              @active-kitty-window-id is the window a key was pressed in
+  --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project
   --no-focus leave the focus where it is, and print the new agent's address
@@ -50,11 +53,15 @@ usage:
              it: a panel id is unique only within one kitty process
 
 new opens a tab in an open workspace: the project's agent panel and its
-shell, the tab a restore adds for an agent opened beside the workspace.
+shell, the tab a restore adds for an agent opened beside the workspace. With
+<name> the tab's agent panel runs that named agent, and an address of the
+project alone still names the default agent among them.
 Without -p or --panel the project is the one --dir is in, else the one this
 directory resolves to. It goes to the new agent and raises its window; with
 --no-focus it does neither, and prints the address a script reaches the
 agent by, which names an agent once the harness in the tab has started.
+With --panel in a window that is no project's open workspace, it opens what
+[terminal] outside says: a plain shell tab beside the window, or nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
 
@@ -359,8 +366,12 @@ func cmdAgentNew(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) != 0 || (*project != "" && *panel != "") {
-		return errors.New("usage: revier agent new [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]")
+	if len(pos) > 1 || (*project != "" && *panel != "") {
+		return errors.New("usage: revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]")
+	}
+	r := core.Resume{Session: revier.SessionID(*resume)}
+	if len(pos) == 1 {
+		r.Agent = pos[0]
 	}
 	if *dir != "" {
 		if *dir, err = filepath.Abs(*dir); err != nil {
@@ -375,14 +386,14 @@ func cmdAgentNew(out io.Writer, args []string) error {
 		return err
 	}
 	if *noFocus {
-		return a.addAgent(ctx, *project, *panel, *dir, revier.SessionID(*resume))
+		return a.addAgent(ctx, *project, *panel, *dir, r)
 	}
-	return a.newAgent(ctx, *project, *panel, *dir, revier.SessionID(*resume))
+	return a.newAgent(ctx, *project, *panel, *dir, r)
 }
 
 // newAgent opens the agent tab where newTab puts it, and goes to it.
-func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
-	return a.agentTab(ctx, project, panel, dir, resume, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
+func (a *app) newAgent(ctx context.Context, project, panel, dir string, r core.Resume) error {
+	return a.agentTab(ctx, project, panel, dir, r, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
 		return a.core.NewAgent(ctx, w, r)
 	})
 }
@@ -390,8 +401,8 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, resume r
 // addAgent opens the agent tab where newTab puts it, leaves the focus where
 // it is, and prints the address the new agent answers to: the caller is a
 // script, which has nothing else to find it by (decisions.md D118).
-func (a *app) addAgent(ctx context.Context, project, panel, dir string, resume revier.SessionID) error {
-	return a.agentTab(ctx, project, panel, dir, resume, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
+func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.Resume) error {
+	return a.agentTab(ctx, project, panel, dir, r, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
 		added, outcome, err := a.core.AddAgent(ctx, w, r)
 		if added != "" {
 			_, _ = fmt.Fprintf(a.out, "%s:%s\n", w.Project.Name, added)
@@ -400,18 +411,19 @@ func (a *app) addAgent(ctx context.Context, project, panel, dir string, resume r
 	})
 }
 
-// agentTab opens an agent tab through open in the workspace newTab places it
-// in.
-func (a *app) agentTab(ctx context.Context, project, panel, dir string, resume revier.SessionID, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
+// agentTab opens an agent tab, started as r says, through open in the
+// workspace newTab places it in.
+func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.Resume, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
 	here := func(w core.Workspace, dir string) error {
 		start := time.Now()
-		outcome, err := open(w, core.Resume{Session: resume, Dir: dir})
-		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "session", resume, "dir", dir, "outcome", outcome.String())
+		r.Dir = dir
+		outcome, err := open(w, r)
+		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "agent", r.Agent, "session", r.Session, "dir", dir, "outcome", outcome.String())
 		if err != nil {
 			return err
 		}
-		if outcome != core.AgentResumed && resume != "" {
-			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", resume, outcome)
+		if outcome != core.AgentResumed && r.Session != "" {
+			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", r.Session, outcome)
 		}
 		return nil
 	}
@@ -421,23 +433,34 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, resume r
 // newTab opens a tab through here in the open workspace the core places it in.
 // The place is the owner of --panel; or the project -p names, else the one --dir
 // is in, else the one resolved as for any command, with the target after -p's
-// colon or the one pick chooses. --dir is a path on this machine, so a link,
-// whose tab starts on its host, drops it.
+// colon or the one pick chooses. A --panel that no project's workspace holds
+// gets what [terminal] outside says, and here is not called.
+func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
+	if panel != "" {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), dir, a.cfg.Outside(), func(w core.Workspace) error {
+			return a.tabHere(what, w, panel, dir, here)
+		})
+	}
+	place, err := a.tabPlace(ctx, project, dir, pick)
+	if err != nil {
+		return err
+	}
+	return a.tabHere(what, place, panel, dir, here)
+}
+
+// tabHere opens the tab through here in the workspace w. --dir is a path on
+// this machine, so a link, whose tab starts on its host, drops it.
 //
 // A --dir outside the project that holds --panel is dropped, and the tab opens
 // where the project's own tab would. That --dir is the kitty key's: kitty's
 // --cwd=current gives "/" for a panel whose shell sits in a deleted worktree.
-func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
-	place, err := a.tabPlace(ctx, project, panel, dir, pick)
-	if err != nil {
-		return err
-	}
-	if place.Project.Remote != nil {
+func (a *app) tabHere(what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
+	if w.Project.Remote != nil {
 		dir = ""
 	}
 	if panel != "" && dir != "" {
-		if p, ok := a.projectForPath(dir); !ok || p.Name != place.Project.Name {
-			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", place.Project.Name, "dir", dir)
+		if p, ok := a.projectForPath(dir); !ok || p.Name != w.Project.Name {
+			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
 			dir = ""
 		}
 	}
@@ -446,13 +469,10 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 			return fmt.Errorf("--dir %s: not a directory", dir)
 		}
 	}
-	return here(place, dir)
+	return here(w, dir)
 }
 
-func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
-	if panel != "" {
-		return a.core.PanelOwner(ctx, a.projects, revier.PanelID(panel))
-	}
+func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
 	name, sel, _ := strings.Cut(project, ":")
 	p, inDir := a.projectForPath(dir)
 	if name != "" || dir == "" || !inDir {
@@ -480,6 +500,7 @@ func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
 func cmdAgentExec(args []string) error {
 	fs := flag.NewFlagSet("agent exec", flag.ContinueOnError)
 	project := projectFlag(fs)
+	agent := fs.String("agent", "", "the named agent to run, else the project's default agent")
 	tag := fs.String("tag", "", "the name the terminal that shows the agent knows it by")
 	resume := fs.String("resume", "", "the conversation to start the agent on")
 	dir := fs.String("dir", "", "the directory the agent starts in")
@@ -488,7 +509,7 @@ func cmdAgentExec(args []string) error {
 		return err
 	}
 	if len(pos) != 0 || *project == "" {
-		return errors.New("usage: revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]")
+		return errors.New("usage: revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]")
 	}
 	return serve(*project, *tag, func(c *core.Core, p core.Project) (core.Served, error) {
 		// A checkout that is missing here is cloned by the agent's panel
@@ -497,7 +518,7 @@ func cmdAgentExec(args []string) error {
 		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
 			return core.Served{}, err
 		}
-		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir, Agent: *agent})
 		if err == nil && *resume != "" && s.Outcome != core.AgentResumed {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent starts empty\n", *resume, s.Outcome)
 		}

@@ -4,7 +4,7 @@
 
 Ports and adapters. The core holds the domain and the orchestration and knows
 nothing about kitty, GNOME, tmux, or Claude. Every tool-specific fact lives
-behind one of the four ports below.
+behind one of the five ports below.
 
 ```
                         ┌──────────────┐
@@ -15,13 +15,13 @@ behind one of the four ports below.
          config ───────▶│     core     │  match, run-or-raise, toggle-back
                         └──────┬───────┘
                                │
-         ┌──────────────┬──────┴───────┬──────────────┐
-         │              │              │              │
-   ┌─────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐
-   │   Host    │ │ AgentProbe │ │   Remote   │ │ KeyBinder  │
-   └─────┬─────┘ └──────┬─────┘ └──────┬─────┘ └──────┬─────┘
-         │              │              │              │
- Runtime │ Window       claude         ssh            gnome
+         ┌──────────────┬──────┴───────┬──────────────┬──────────────┐
+         │              │              │              │              │
+   ┌─────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐ ┌──────▼─────┐
+   │   Host    │ │ AgentProbe │ │   Remote   │ │ KeyBinder  │ │  TermKeys  │
+   └─────┬─────┘ └──────┬─────┘ └──────┬─────┘ └──────┬─────┘ └──────┬─────┘
+         │              │              │              │              │
+ Runtime │ Window       claude         ssh            gnome          kitty
  ────────┼───────       opencode
  kitty   │ gnome        aider*
  tmux    │ hyprland*
@@ -31,7 +31,7 @@ behind one of the four ports below.
   * not built
 ```
 
-## Four ports
+## Five ports
 
 | Port | Answers | Second implementation |
 |---|---|---|
@@ -39,6 +39,7 @@ behind one of the four ports below.
 | **AgentProbe** | What is this agent doing right now? | opencode, then any other harness |
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
 | **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a **Host** (D26). |
+| **TermKeys** | Which keys does the terminal's configuration hold for revier? | Another terminal's configuration. |
 
 **Host** is one interface because run-or-raise is one operation. A compositor
 provides instances as OS windows; a terminal provides them as panes and
@@ -69,6 +70,13 @@ panels that show a link's agents are this machine's runtime's (D84).
 
 **KeyBinder** reads and writes the desktop's shortcut store, which is not the
 window host's tool even on one desktop.
+
+**TermKeys** reads and writes the terminal's keys: a file revier owns whole,
+and one include of it in the terminal's own configuration (D147). It is not
+**KeyBinder**: that store is shared with other programs, and taking a key there
+displaces one of theirs; a terminal key opens a tab beside the window it was
+pressed in. It is not the runtime **Host** either: the runtime is the
+terminal's remote control, this is its configuration file.
 
 Three things that look like ports and are not:
 

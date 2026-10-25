@@ -717,6 +717,8 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 		return startOp(th, tense("start", "started")), "without its conversation: it ran in a tab"
 	case core.AgentDropped:
 		return skipOp(th, tense("skip", "skipped")), "no agent panel to start it in"
+	case core.AgentUnknown:
+		return skipOp(th, tense("skip", "skipped")), fmt.Sprintf("its project no longer declares the agent %q", r.Resumes[i].Agent)
 	case core.AgentNotAdded:
 		if r.AgentErr != nil {
 			return skipOp(th, tense("skip", "skipped")), "its tab did not open: " + r.AgentErr.Error()

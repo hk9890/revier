@@ -35,7 +35,21 @@ type Project struct {
 	Status        []Status
 	StatusRefused []error
 
+	// Agents are the named agents the project has: the [[agent]] tables of
+	// config.toml, merged by name with the project file's own, and the
+	// file's other ones after them. Each command is rendered, as a panel's
+	// is. AgentRefused is why each table a rule refused is left out.
+	Agents       []NamedAgent
+	AgentRefused []error
+
 	compiled []compiledTarget // parallel to Project.Targets
+}
+
+// NamedAgent is one [[agent]] table of a project: what a `kind = "agent"`
+// panel that names it runs.
+type NamedAgent struct {
+	Name    string
+	Command []string
 }
 
 type compiledTarget struct {

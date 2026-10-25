@@ -17,11 +17,17 @@ type PanelSpec struct {
 	Title   string    `toml:"title" json:"title,omitempty"`
 	Command []string  `toml:"command" json:"command,omitempty"`
 
+	// Agent names one of the project's named agents, the [[agent]] tables
+	// of its configuration. Loading gives the panel that agent's command,
+	// and its name as the title when the panel has none, so a host reads
+	// Command alone. On a link the name is the host's to resolve.
+	Agent string `toml:"agent" json:"agent,omitempty"`
+
 	// Dir is where this panel starts. No project file sets it: the core fills
 	// it with the realization's Dir when it renders the project, so a host
 	// starts a panel in its Dir and decides nothing. A restore sets another,
 	// for an agent that worked in a worktree of the project rather than in the
-	// project itself (decisions.md D62), and so does `revier agent new`.
+	// project itself (decisions.md D146), and so does `revier agent new`.
 	Dir string `toml:"-" json:"dir,omitempty"`
 }
 

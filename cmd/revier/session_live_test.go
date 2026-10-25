@@ -101,7 +101,7 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 // Every agent is recorded, with its conversation and directory, and every one
 // comes back on its conversation in the directory it worked in: the declared
 // agent in the workspace's layout, and each agent opened beside it in a tab of
-// its own, a window of the workspace's session (decisions.md D65).
+// its own, a window of the workspace's session (decisions.md D145).
 func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")

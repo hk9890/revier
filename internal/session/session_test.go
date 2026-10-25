@@ -24,7 +24,7 @@ func sample(day int, name string) session.Session {
 			Targets: []session.Target{
 				{Name: "home", Agents: []session.Agent{
 					{Harness: "claude", Session: "abc-123", Dir: "/home/user/dev/github/revier/.claude/worktrees/tui"},
-					{Harness: "claude"},
+					{Harness: "claude", Name: "review"},
 				}},
 				{Name: "editor"},
 			},
@@ -120,7 +120,7 @@ func TestSavedFileIsReadableTOML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/user/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`} {
+	for _, want := range []string{"[[project]]", "[[project.target]]", "[[project.target.agent]]", `dir = "/home/user/dev/github/revier/.claude/worktrees/tui"`, `name = "home"`, `name = "review"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("saved file has no %s:\n%s", want, b)
 		}
@@ -326,5 +326,26 @@ func TestAFileWithNoReasonReadsUnknown(t *testing.T) {
 	}
 	if got.Reason != "" || got.Reason.Text() != "unknown" || len(got.Projects) != 1 {
 		t.Errorf("old session = %+v, reason text %q; want it loaded with an unknown reason", got, got.Reason.Text())
+	}
+}
+
+// A file written before an agent recorded its name still loads, and each of
+// its agents reads as the default agent: the one every agent then was.
+func TestAnAgentOfAFileWithNoNameIsTheDefaultAgent(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := "id = \"2026-09-12T14-33-05\"\nat = 2026-09-12T14:33:05Z\n\n[[project]]\nname = \"revier\"\n\n[[project.target]]\nname = \"home\"\n\n[[project.target.agent]]\nharness = \"claude\"\nsession = \"abc-123\"\n"
+	if err := os.WriteFile(filepath.Join(session.Dir(root), "2026-09-12T14-33-05.toml"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []session.Agent{{Harness: "claude", Session: "abc-123"}}
+	if agents := got.Projects[0].Targets[0].Agents; !slices.Equal(agents, want) {
+		t.Errorf("agents = %+v, want %+v, no name", agents, want)
 	}
 }

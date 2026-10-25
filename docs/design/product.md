@@ -2,7 +2,7 @@
 
 ## The job
 
-You run several projects at once. Each one holds a coding agent, a shell, and
+You run several projects at once. Each one holds coding agents, a shell, and
 the things that belong with them — an editor, a diff viewer, a page. The agents
 work unattended for minutes at a time. The questions you ask all day are:
 
@@ -23,13 +23,18 @@ territory. revier is how you walk it.
 | **Target** | A named thing you reach with a key: the workspace, an editor, a diff viewer, a page |
 | **Home** | The project's workspace target — the terminal you live in and return to |
 | **Panel** | One pane inside a runtime target: an agent, a shell, a tool |
+| **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
-| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation and directory (D46, D62) |
+| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
 
-Every operation in revier is the same one: **run-or-raise a named target; a
-second press returns to the project's home.** Opening a project is
-run-or-raise on its home target. Pressing the editor key is run-or-raise on its
-editor target. There is no second mechanism.
+A target is reached one way: **run-or-raise it; a second press returns to the
+project's home.** Opening a project is run-or-raise on its home target.
+Pressing the editor key is run-or-raise on its editor target. There is no
+second mechanism for a target.
+
+An agent tab or a shell tab is not a target. It is a launcher: each press opens
+one more beside the open workspace, because another agent on the same project
+is what the press asks for (D145).
 
 ## A target is logical; its realization is not
 
@@ -155,10 +160,11 @@ Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
 revier is not a terminal multiplexer and does not replace one. It sits above
 whatever runtime you already use and gives it a project-shaped view.
 
-revier does not run your agent, wrap it, or proxy its output. It observes a
-panel and reports what it sees. The one agent it starts is its own config
-assistant, a project revier builds in, so that it gets run-or-raise, the
-survey and restore with no code of its own (D135).
+revier does not wrap your agent or proxy its output. It starts the program a
+panel declares, then observes the panel and reports what it sees. The one
+agent it brings itself is its own config assistant, a project revier builds
+in, so that it gets run-or-raise, the survey and restore with no code of its
+own (D135).
 
 ## What degrades, and how far
 

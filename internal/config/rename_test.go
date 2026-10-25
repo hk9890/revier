@@ -18,7 +18,7 @@ func renameRoot(t *testing.T, name, body string) string {
 
 func TestRenameMovesTheFileAndKeepsItsText(t *testing.T) {
 	root := renameRoot(t, "revier", "# kept\n"+valid)
-	p, err := config.Rename(root, "revier", "rv", nil)
+	p, err := config.Rename(root, "revier", "rv", config.Inherited{})
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestRenameMovesTheFileAndKeepsItsText(t *testing.T) {
 // another project there once renamed; the old name is written to keep it.
 func TestRenameKeepsTheProjectALinkReaches(t *testing.T) {
 	root := renameRoot(t, "far", link)
-	p, err := config.Rename(root, "far", "near", nil)
+	p, err := config.Rename(root, "far", "near", config.Inherited{})
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRenameKeepsTheProjectALinkReaches(t *testing.T) {
 func TestRenameLeavesALinkThatNamesTheHostsProject(t *testing.T) {
 	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"other\"", 1)
 	root := renameRoot(t, "far", body)
-	p, err := config.Rename(root, "far", "near", nil)
+	p, err := config.Rename(root, "far", "near", config.Inherited{})
 	if err != nil {
 		t.Fatalf("Rename: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestRenameLeavesALinkThatNamesTheHostsProject(t *testing.T) {
 func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
 	body := strings.NewReplacer("  name = \"home\"\n", "  name = \"session:{{.Name}}\"\n", "^session:{{.Name}}$", `^session:example\\.com$`).Replace(valid)
 	root := renameRoot(t, "example.com", body)
-	_, err := config.Rename(root, "example.com", "web", nil)
+	_, err := config.Rename(root, "example.com", "web", config.Inherited{})
 	if err == nil || !strings.Contains(err.Error(), "writes the name out") || !strings.Contains(err.Error(), "home") {
 		t.Errorf("err = %v, want the refusal naming the target", err)
 	}
@@ -81,7 +81,7 @@ func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
 // stays consistent with itself.
 func TestRenameReadsOnlyWhatMatchReads(t *testing.T) {
 	root := renameRoot(t, "claude", valid)
-	if _, err := config.Rename(root, "claude", "cl", nil); err != nil {
+	if _, err := config.Rename(root, "claude", "cl", config.Inherited{}); err != nil {
 		t.Errorf("Rename: %v, want a project named after its program renamed", err)
 	}
 
@@ -102,7 +102,7 @@ name = "agent"
     command = ["sh", "-c", "exec ssh buildbox revier agent exec -p 'far'", "sh"]
 `
 	root = renameRoot(t, "far", pane)
-	p, err := config.Rename(root, "far", "near", nil)
+	p, err := config.Rename(root, "far", "near", config.Inherited{})
 	if err != nil || p.Remote.Project != "far" {
 		t.Errorf("Rename = %+v, %v; want the link's written-out home kept, reaching far", p.Project, err)
 	}
@@ -114,7 +114,7 @@ name = "agent"
 func TestRenameToleratesWhatWasAlreadyBroken(t *testing.T) {
 	body := valid + "\n[[target]]\nname = \"docs\"\n  [target.window]\n  launch = [\"zeal\"]\n  match = { class = \"^zeal($\" }\n"
 	root := renameRoot(t, "revier", body)
-	p, err := config.Rename(root, "revier", "rv", nil)
+	p, err := config.Rename(root, "revier", "rv", config.Inherited{})
 	if err != nil {
 		t.Fatalf("Rename: %v, want the broken target carried over", err)
 	}
@@ -131,7 +131,7 @@ func TestRenameRefusesALinkedFile(t *testing.T) {
 	if err := os.Symlink(target, config.ProjectFile(root, "revier")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := config.Rename(root, "revier", "rv", nil)
+	_, err := config.Rename(root, "revier", "rv", config.Inherited{})
 	if err == nil || !strings.Contains(err.Error(), target) {
 		t.Errorf("err = %v, want the refusal naming %s", err, target)
 	}
@@ -147,7 +147,7 @@ func TestRenameRefusesATakenOrInvalidName(t *testing.T) {
 	root := renameRoot(t, "revier", valid)
 	write(t, filepath.Join(root, "projects"), "taken.toml", "# someone else\n")
 	for _, to := range []revier.ProjectName{"taken", "a/b", "has space", ""} {
-		if _, err := config.Rename(root, "revier", to, nil); err == nil {
+		if _, err := config.Rename(root, "revier", to, config.Inherited{}); err == nil {
 			t.Errorf("rename to %q: no error", to)
 		}
 	}
@@ -164,10 +164,10 @@ func TestRenameRefusesATakenOrInvalidName(t *testing.T) {
 // back alone would take the colon for nothing new and move the file.
 func TestRenameRefusesAColonForAProjectAlreadyRefused(t *testing.T) {
 	root := renameRoot(t, "revier", "path = \"/home/user/dev/github/revier\"\n")
-	if p := config.LoadProject(config.ProjectFile(root, "revier"), nil); p.Invalid == nil {
+	if p := config.LoadProject(config.ProjectFile(root, "revier"), config.Inherited{}); p.Invalid == nil {
 		t.Fatal("the project loads whole, want it refused for having no home")
 	}
-	if _, err := config.Rename(root, "revier", "a:b", nil); err == nil || !strings.Contains(err.Error(), `contains ":"`) {
+	if _, err := config.Rename(root, "revier", "a:b", config.Inherited{}); err == nil || !strings.Contains(err.Error(), `contains ":"`) {
 		t.Errorf("err = %v, want the colon refused", err)
 	}
 	if _, err := os.Stat(config.ProjectFile(root, "revier")); err != nil {

@@ -28,7 +28,9 @@ usage:
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless
 -p names one. For a project on another machine the tab is a shell there, and
---dir, a path on this machine, is dropped.
+--dir, a path on this machine, is dropped. With --panel in a window that is
+no project's open workspace, it opens what [terminal] outside says: a plain
+shell tab beside the window, or nothing.
 
 exec becomes the project's shell in this terminal. It is what the shell panel
 of a link runs on the project's machine over ssh.
