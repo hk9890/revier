@@ -48,7 +48,8 @@ usage:
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project;
-             with --panel, the default is that panel's directory
+             with --panel, the default is the directory kitty reports
+             for that panel
   --no-focus leave the focus where it is, and print the new agent's address
   --ref      the instance holding <project>:<panel>, as the survey reports
              it: a panel id is unique only within one kitty process

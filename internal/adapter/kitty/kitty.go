@@ -155,6 +155,7 @@ type window struct {
 type process struct {
 	PID     int      `json:"pid"`
 	Cmdline []string `json:"cmdline"`
+	CWD     string   `json:"cwd"`
 }
 
 // listing is one socket's answer to ls.
@@ -486,8 +487,20 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 		Vars:    w.UserVars,
 		PID:     pid,
 		Command: cmd,
-		Dir:     w.CWD,
+		Dir:     dirOf(w, pid),
 	}
+}
+
+// dirOf is the directory of the panel's process, as --cwd=current takes it
+// from the foreground: the window's own cwd is its first process's, which a
+// `kitten run-shell` wrapper keeps where the panel started.
+func dirOf(w window, pid int) string {
+	for _, p := range w.Foreground {
+		if p.PID == pid && p.CWD != "" {
+			return p.CWD
+		}
+	}
+	return w.CWD
 }
 
 // classify reads the foreground process group of a window whose own process

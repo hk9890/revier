@@ -403,9 +403,10 @@ func tabAtPanel(t *testing.T, c *core.Core, projects []core.Project, panel revie
 	return got, err
 }
 
-// The tab starts in the directory given, else in the panel's own directory
-// while it is one: a worktree removed under the panel's shell leaves the tab
-// where in starts it. Outside a workspace the plain tab starts there too.
+// The tab starts in the directory given, else in the panel's own directory,
+// each while it is one: a worktree removed under the panel's shell, given by
+// a tmux key or reported by kitty, leaves the tab where in starts it. Outside
+// a workspace the plain tab starts there too.
 func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 	here, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: here}, {ID: "2", Dir: gone}}, nil)
@@ -418,6 +419,8 @@ func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 		{"1", "", here},
 		{"1", given, given},
 		{"2", "", ""},
+		{"1", gone, here},
+		{"2", gone, ""},
 	} {
 		got := "unset"
 		err := c.TabAtPanel(context.Background(), projects, tc.panel, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
@@ -458,7 +461,8 @@ func TestTabAtPanelOutsideAWorkspaceOpensAPlainTab(t *testing.T) {
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 	loose := rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 
-	w, err := tabAtPanel(t, c, projects, "9", "/home/user/notes", core.OutsideTab)
+	notes := t.TempDir()
+	w, err := tabAtPanel(t, c, projects, "9", notes, core.OutsideTab)
 	if err != nil {
 		t.Fatalf("TabAtPanel: %v", err)
 	}
@@ -469,8 +473,8 @@ func TestTabAtPanelOutsideAWorkspaceOpensAPlainTab(t *testing.T) {
 		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, loose)
 	}
 	tab := rt.Tabs[0]
-	if len(tab.Real.Panels) != 1 || tab.Real.Panels[0].Kind != revier.PanelShell || len(tab.Real.Panels[0].Command) != 0 || tab.Real.Panels[0].Dir != "/home/user/notes" {
-		t.Errorf("tab = %+v, want one shell panel with no command in /home/user/notes", tab.Real.Panels)
+	if len(tab.Real.Panels) != 1 || tab.Real.Panels[0].Kind != revier.PanelShell || len(tab.Real.Panels[0].Command) != 0 || tab.Real.Panels[0].Dir != notes {
+		t.Errorf("tab = %+v, want one shell panel with no command in %s", tab.Real.Panels, notes)
 	}
 	if len(tab.Vars) != 0 {
 		t.Errorf("vars = %v, want none: the tab is no project's", tab.Vars)

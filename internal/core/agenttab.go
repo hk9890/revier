@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
+	"slices"
 	"strings"
 
 	"github.com/hk9890/revier/internal/record"
@@ -383,11 +383,13 @@ const (
 // tab of the runtime's own shell beside the panel, or nothing. Every other
 // failure is returned, so the key's own fallback runs (decisions.md D148).
 //
-// The tab starts in dir, else in the panel's own directory where it still
-// is one, else where in or the runtime starts it (decisions.md D153).
+// The tab starts in dir, else in the panel's own directory, else where in
+// or the runtime starts it; each only while it is a directory. A key passes
+// the directory its terminal names for the panel, which can be one removed
+// since (decisions.md D153).
 func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace, string) error) error {
 	w, err := c.PanelOwner(ctx, projects, panel)
-	if dir == "" {
+	if !dirExists(dir) {
 		dir = panelDir(w, panel)
 	}
 	if !errors.Is(err, ErrNoWorkspace) {
@@ -419,22 +421,12 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 // runtime reports none or it is no directory now: a worktree removed under
 // the panel's shell.
 func panelDir(w Workspace, panel revier.PanelID) string {
-	for _, insts := range w.snap {
-		for _, inst := range insts {
-			if key(inst.Ref) != key(w.Ref) {
-				continue
-			}
-			for _, p := range inst.Panels {
-				if p.ID != panel || p.Dir == "" {
-					continue
-				}
-				if info, err := os.Stat(p.Dir); err == nil && info.IsDir() {
-					return p.Dir
-				}
-			}
-		}
+	inst, _ := byRef(w.snap, w.Ref)
+	i := slices.IndexFunc(inst.Panels, func(p revier.Panel) bool { return p.ID == panel })
+	if i < 0 || !dirExists(inst.Panels[i].Dir) {
+		return ""
 	}
-	return ""
+	return inst.Panels[i].Dir
 }
 
 // holdsPanel reports whether one of the instance's panels has the id.
