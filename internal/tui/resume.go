@@ -34,8 +34,9 @@ type resumeRow struct {
 }
 
 // openResume puts the dialog up over the surface for the shutdown on record.
-// The session it names comes first; one deleted since gives way to the
-// newest. A shutdown that saved none offers none.
+// The session it names comes first, whatever its reason: it is what that
+// shutdown closed. One deleted since gives way to the newest save of the
+// whole set (decisions.md D149). A shutdown that saved none offers none.
 func (m *Model) openResume(sd state.ShutDown) {
 	var s session.Session
 	if sd.Session != "" {

@@ -235,7 +235,7 @@ func raiseSelf(c *core.Core) tea.Cmd {
 }
 
 // open is a new visit, with the cursor on the session of that id, or on the
-// newest. What the last save or restore came to is about the visit before,
+// one a plain restore opens. What the last save or restore came to is about the visit before,
 // and the plan is what a new visit is for.
 func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 	sc.naming = false
@@ -244,9 +244,14 @@ func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 }
 
 // load reads the saved sessions under root into the screen's rows, with the
-// cursor on the session of that id, or on the newest.
+// cursor on the session of that id, or on the one a plain restore opens, so
+// Enter there is `revier session restore` (decisions.md D149). With none of
+// the whole set it is on the newest.
 func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
 	all, err := session.List(root)
+	if s, ok := session.Newest(all); id == "" && ok {
+		id = s.ID
+	}
 	items := make([]list.Item, 0, len(all))
 	at := 0
 	for i, s := range all {

@@ -37,6 +37,12 @@ import (
 // name that names nothing is a typo, and is one.
 var ErrNoSession = errors.New("no stored session")
 
+// ErrNoWholeSession is returned for the newest session when sessions are
+// stored but none stands for the whole set: each was saved as a project
+// closed. It wraps ErrNoSession, so a caller that only tells an empty store
+// from a failure still does (decisions.md D149).
+var ErrNoWholeSession = fmt.Errorf("%w of every open project", ErrNoSession)
+
 // Session is one recorded set of open projects.
 type Session struct {
 	// ID is the moment it was saved, and the name of its file. A timestamp
@@ -71,10 +77,28 @@ const (
 	// ReasonShutdown is the save a full shutdown makes before it closes.
 	ReasonShutdown Reason = "shutdown"
 	// ReasonProjectClosed is the save made before one project is closed.
+	// It is not what a plain restore opens: a run of closes leaves the
+	// smallest set as the newest save (decisions.md D149).
 	ReasonProjectClosed Reason = "project-closed"
 	// ReasonSaved is a save asked for by hand.
 	ReasonSaved Reason = "saved"
+	// ReasonLastSeen is what a surface last saw, saved when it ended without
+	// a shutdown.
+	ReasonLastSeen Reason = "last-seen"
 )
+
+// Whole reports whether a save of this reason stands for the whole set that
+// was open, so that a plain restore may open it (decisions.md D149). A file
+// with no reason predates the field and cannot be told apart, so it counts;
+// a reason this build does not know does not.
+func (r Reason) Whole() bool {
+	switch r {
+	case ReasonShutdown, ReasonSaved, ReasonLastSeen, "":
+		return true
+	default:
+		return false
+	}
+}
 
 // Text is the reason as a list shows it. A file with no reason, or one
 // this build does not know, reads "unknown" rather than a guess.
@@ -86,6 +110,8 @@ func (r Reason) Text() string {
 		return "project closed"
 	case ReasonSaved:
 		return "saved by hand"
+	case ReasonLastSeen:
+		return "last seen"
 	default:
 		return "unknown"
 	}
@@ -194,9 +220,10 @@ func Rename(stateRoot string, from, to revier.ProjectName) error {
 	return nil
 }
 
-// Load reads one session. An empty ref is the newest stored session, which is
-// what a restore after a reboot means. Otherwise ref is an id, and failing
-// that a name, whose newest holder is taken.
+// Load reads one session. An empty ref is what a restore after a reboot
+// means: the session Newest picks, or ErrNoWholeSession when none stands for
+// the whole set (decisions.md D149). Otherwise ref is an id, and failing that
+// a name, whose newest holder is taken, whatever its reason.
 func Load(stateRoot, ref string) (Session, error) {
 	all, err := List(stateRoot)
 	if err != nil {
@@ -206,7 +233,11 @@ func Load(stateRoot, ref string) (Session, error) {
 		return Session{}, ErrNoSession
 	}
 	if ref == "" {
-		return all[0], nil
+		s, ok := Newest(all)
+		if !ok {
+			return Session{}, ErrNoWholeSession
+		}
+		return s, nil
 	}
 	for _, s := range all {
 		if s.ID == ref {
@@ -220,6 +251,17 @@ func Load(stateRoot, ref string) (Session, error) {
 		}
 	}
 	return Session{}, fmt.Errorf("%w named %q", ErrNoSession, ref)
+}
+
+// Newest is the first session of a newest-first list whose reason stands for
+// the whole set: the one a plain restore opens (decisions.md D149).
+func Newest(all []Session) (Session, bool) {
+	for _, s := range all {
+		if s.Reason.Whole() {
+			return s, true
+		}
+	}
+	return Session{}, false
 }
 
 // List reads every stored session, newest first. A file that does not parse is

@@ -96,6 +96,10 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		ref = pos[0]
 	}
 	s, err := session.Load(a.stateRoot, ref)
+	if ref == "" && errors.Is(err, session.ErrNoWholeSession) {
+		_, _ = fmt.Fprintln(a.out, "no saved session holds every open project; each was saved as a project closed. revier session list shows them, and revier session restore <id> opens one")
+		return nil
+	}
 	if ref == "" && errors.Is(err, session.ErrNoSession) {
 		_, _ = fmt.Fprintln(a.out, "no saved session. write one with revier session save")
 		return nil
@@ -191,5 +195,13 @@ func cmdSessionList(a *app, args []string) error {
 	for _, s := range all {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\n", s.ID, s.Reason.Text(), s.Name, len(s.Projects), s.Targets(), s.Agents())
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	// The newest row is not always what a plain restore opens: a project
+	// closed saves too (decisions.md D149).
+	if s, ok := session.Newest(all); ok {
+		_, _ = fmt.Fprintf(a.out, "revier session restore opens %s\n", s.ID)
+	}
+	return nil
 }

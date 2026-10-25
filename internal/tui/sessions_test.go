@@ -191,6 +191,28 @@ func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 	t.Errorf("no %q row for the agent:\n%s", want, body)
 }
 
+// The sessions screen starts on the session a plain restore opens, not on a
+// close saved after it, so Enter there is `revier session restore`
+// (decisions.md D149).
+func TestTheSessionsScreenStartsOnWhatARestoreOpens(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	shut := saved(t, root, "", 10, homeOf("project-00"), homeOf("project-01"))
+	if _, _, err := session.Save(root, session.Session{Reason: session.ReasonProjectClosed, At: shut.At.Add(time.Minute), Projects: []session.Project{homeOf("project-01")}}); err != nil {
+		t.Fatal(err)
+	}
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	if holds := pane(m); !strings.Contains(holds, "2 projects") {
+		t.Errorf("pane = %q, want the counts of the save of both projects", holds)
+	}
+	m, _ = press(m, "enter")
+	if foot := footer(m); !strings.Contains(foot, "restoring "+shut.ID) {
+		t.Errorf("footer = %q, want %s restoring", foot, shut.ID)
+	}
+}
+
 // Enter restores the session: the target that is down opens, the one that is
 // up is left, the landing is written to state, and the pane says what came of
 // each.

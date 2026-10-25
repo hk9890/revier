@@ -50,6 +50,41 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 }
 
+// The 2026-10-16 replay: a full shutdown of two projects, one opened again,
+// and del on it. The del saves the one project as the newest session, and a
+// plain restore still opens the full shutdown's (decisions.md D149).
+func TestADelAfterAFullShutdownLeavesItTheRestore(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	rt.Add("session:project-00", "kitty")
+	root := stateWith(t, nil)
+	m := fullShutdownPlanned(t, c, projects, root)
+	m, cmd := press(m, "enter")
+	_, _ = deliver(m, cmd)
+	shut, err := session.Load(root, "")
+	if err != nil || shut.Reason != session.ReasonShutdown || len(shut.Projects) != 2 {
+		t.Fatalf("after the full shutdown, Load(\"\") = %+v, %v; want its save of two projects", shut, err)
+	}
+
+	rt.Add("session:project-01", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
+	m = resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m, _ = press(m, "esc")
+	m, cmd = press(m, "delete")
+	m = run(m, cmd)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close project-01?") {
+		t.Fatalf("subtitle = %q, want the confirm", sub)
+	}
+	m, cmd = press(m, "enter")
+	_ = run(m, cmd)
+
+	all, _ := session.List(root)
+	if len(all) != 2 || all[0].Reason != session.ReasonProjectClosed {
+		t.Fatalf("sessions = %+v, want the del's save newest, saved by a project close", all)
+	}
+	if got, err := session.Load(root, ""); err != nil || got.ID != shut.ID {
+		t.Errorf("Load(\"\") = %s, %v; want the full shutdown's %s", got.ID, err, shut.ID)
+	}
+}
+
 // del on a target that holds no agent closes it at once, and nothing else.
 func TestDelClosesATargetWithoutAnAgentAtOnce(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)

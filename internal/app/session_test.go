@@ -105,6 +105,51 @@ func TestSaveChangedSavesOnlyWhatChanged(t *testing.T) {
 	}
 }
 
+// A full shutdown compares with the save a plain restore opens, not with the
+// newest: when a close saved the same set last, the shutdown still writes its
+// own, so the shutdown on record and a plain restore name one session.
+func TestSaveChangedComparesWithTheSaveARestoreOpens(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	root := t.TempDir()
+	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
+	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at); err != nil || !saved {
+		t.Fatalf("first shutdown = %v, %v; want a save", saved, err)
+	}
+	rt.Remove(report.Views[0].Targets[1].Ref)
+	closed := surveyed(t, c, projects)
+	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonProjectClosed, at.Add(time.Minute)); err != nil || !saved {
+		t.Fatalf("close = %v, %v; want a save", saved, err)
+	}
+
+	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonShutdown, at.Add(2*time.Minute))
+	if err != nil || !saved || shut.Reason != session.ReasonShutdown {
+		t.Fatalf("second shutdown = %+v, %v, %v; want a shutdown save", shut, saved, err)
+	}
+	if got, err := session.Load(root, ""); err != nil || got.ID != shut.ID {
+		t.Errorf("Load(\"\") = %s, %v; want the second shutdown %s", got.ID, err, shut.ID)
+	}
+}
+
+// A close whose set the save a plain restore opens already holds writes
+// nothing, though a newer close saved less, and it returns that save.
+func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
+	c, _, report, _ := desktop(t)
+	root := t.TempDir()
+	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
+	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at)
+	if err != nil || !saved {
+		t.Fatalf("shutdown = %v, %v; want a save", saved, err)
+	}
+	if _, _, err := session.Save(root, session.Session{Reason: session.ReasonProjectClosed, At: at.Add(time.Minute), Projects: []session.Project{{Name: "other", Targets: []session.Target{{Name: "home"}}}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonProjectClosed, at.Add(2*time.Minute))
+	if err != nil || saved || got.ID != shut.ID {
+		t.Errorf("close = %s, %v, %v; want the shutdown %s and nothing written", got.ID, saved, err, shut.ID)
+	}
+}
+
 // Nothing open is nothing to save, and no failure.
 func TestSaveChangedSavesNothingWhenNothingIsOpen(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
