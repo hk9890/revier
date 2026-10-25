@@ -23,7 +23,9 @@ usage:
 
   --panel    the open workspace that holds this panel; kitty's
              @active-kitty-window-id is the window a key was pressed in
-  --dir      start the shell here, not where the target's shell starts
+  --dir      start the shell here, not where the target's shell starts;
+             with --panel, the default is the directory kitty reports
+             for that panel
 
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless

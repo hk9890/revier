@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -89,9 +91,8 @@ func TestTabsOfARemoteProjectOpenHere(t *testing.T) {
 	}
 }
 
-// The kitty key passes the panel's directory as --dir, and kitty gives "/" for
-// a panel whose shell sits in a deleted worktree. A --dir outside the project
-// of --panel opens the tab where no --dir would; one inside it is kept.
+// A --dir outside the project of --panel opens the tab where no --dir would;
+// one inside it is kept.
 func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("home", "", revier.Panel{ID: "3", Kind: revier.PanelTool})
@@ -109,6 +110,38 @@ func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 		dirs = append(dirs, tab.Real.Dir)
 	}
 	if want := []string{dirs[0], dirs[0], demo.Path}; !slices.Equal(dirs, want) {
+		t.Errorf("tab dirs = %q, want %q", dirs, want)
+	}
+}
+
+// The kitty key passes no --dir: kitty cannot start the key's sh in a
+// directory that was removed. The tab starts in the panel's own directory: a
+// worktree of the project is kept, and one that was removed, or a directory
+// outside the project, opens the tab where the project's own tab would.
+func TestTabAtAPanelStartsInThePanelsDirectory(t *testing.T) {
+	demo := demoProject(t)
+	worktree := filepath.Join(demo.Path, "wt")
+	if err := os.Mkdir(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("home", "", revier.Panel{ID: "3", Dir: worktree}, revier.Panel{ID: "4", Dir: filepath.Join(demo.Path, "removed")}, revier.Panel{ID: "5", Dir: t.TempDir()})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+
+	if err := a.newShell(ctx, "demo", "", ""); err != nil {
+		t.Fatalf("shell new -p demo: %v", err)
+	}
+	for _, panel := range []string{"3", "4", "5"} {
+		if err := a.newShell(ctx, "", panel, ""); err != nil {
+			t.Fatalf("shell new --panel %s: %v", panel, err)
+		}
+	}
+	var dirs []string
+	for _, tab := range rt.Tabs {
+		dirs = append(dirs, tab.Real.Dir)
+	}
+	if want := []string{dirs[0], worktree, dirs[0], dirs[0]}; !slices.Equal(dirs, want) {
 		t.Errorf("tab dirs = %q, want %q", dirs, want)
 	}
 }

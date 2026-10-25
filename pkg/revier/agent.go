@@ -65,6 +65,11 @@ type Panel struct {
 	// Tab is the tab of the instance that holds the panel: a kitty tab id, a
 	// tmux window id. It is empty on a runtime that has no tabs.
 	Tab string `json:"tab,omitempty"`
+
+	// Dir is the panel's working directory, as the runtime reports it, and
+	// empty on a runtime that reports none. It can name a directory that was
+	// removed since.
+	Dir string `json:"dir,omitempty"`
 }
 
 // Runs reports whether the panel's foreground command is the program called

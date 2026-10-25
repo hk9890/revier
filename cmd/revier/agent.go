@@ -47,7 +47,9 @@ usage:
              @active-kitty-window-id is the window a key was pressed in
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
-  --dir      start the agent and its shell here, not in the project
+  --dir      start the agent and its shell here, not in the project;
+             with --panel, the default is the directory kitty reports
+             for that panel
   --no-focus leave the focus where it is, and print the new agent's address
   --ref      the instance holding <project>:<panel>, as the survey reports
              it: a panel id is unique only within one kitty process
@@ -434,10 +436,11 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 // The place is the owner of --panel; or the project -p names, else the one --dir
 // is in, else the one resolved as for any command, with the target after -p's
 // colon or the one pick chooses. A --panel that no project's workspace holds
-// gets what [terminal] outside says, and here is not called.
+// gets what [terminal] outside says, and here is not called. With --panel and
+// no --dir, the directory is the panel's own.
 func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
-		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), dir, a.cfg.Outside(), func(w core.Workspace) error {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
 			return a.tabHere(what, w, panel, dir, here)
 		})
 	}
@@ -451,16 +454,15 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 // tabHere opens the tab through here in the workspace w. --dir is a path on
 // this machine, so a link, whose tab starts on its host, drops it.
 //
-// A --dir outside the project that holds --panel is dropped, and the tab opens
-// where the project's own tab would. That --dir is the kitty key's: kitty's
-// --cwd=current gives "/" for a panel whose shell sits in a deleted worktree.
+// A directory outside the project that holds --panel is dropped, and the tab
+// opens where the project's own tab would: a panel's shell can sit anywhere.
 func (a *app) tabHere(what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
 	if w.Project.Remote != nil {
 		dir = ""
 	}
 	if panel != "" && dir != "" {
 		if p, ok := a.projectForPath(dir); !ok || p.Name != w.Project.Name {
-			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
+			slog.Warn(what, "err", "the directory is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
 			dir = ""
 		}
 	}

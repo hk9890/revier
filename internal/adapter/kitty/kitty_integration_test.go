@@ -99,6 +99,9 @@ func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
 	if len(ws.Panels) != 3 {
 		t.Fatalf("got %d panels, want 3 across both tabs", len(ws.Panels))
 	}
+	if ws.Panels[0].Dir != "/home/user/dev/revier" {
+		t.Errorf("panel dir = %q, want the window's cwd", ws.Panels[0].Dir)
+	}
 }
 
 // The identity a project matches on must survive the decode, or a workspace
