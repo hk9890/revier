@@ -87,7 +87,7 @@ usage:
   revier shell new [-p name | --panel id] [--dir path]
                                 add a shell tab to an open workspace; for a
                                 link, the tab's shell runs on the host
-  revier agent exec -p name [--tag tag] [--resume id] [--dir path]
+  revier agent exec -p name [--agent name] [--tag tag] [--resume id] [--dir path]
   revier shell exec -p name [--tag tag] [--dir path]
                                 what a link's panels run on its host
   revier session save [--name label]

@@ -40,19 +40,29 @@ const PanelAgentVar = "revier_agent"
 // workspace's layout declares as an agent, started as startAgent says, and a
 // copy of the first declared shell panel beside it, in the same directory. A
 // named agent's tab is that copy with the named agent's command, and its name
-// as the title. A layout with no agent panel has no tab to give, nor has a
-// name the project does not declare, and the agent is dropped.
+// as the title; a link's named agent is the host's, which the remote's panel
+// command names to it. A layout with no agent panel has no tab to give, and
+// the agent is dropped. A name the project does not declare has none either:
+// another program in its place is not that agent (decisions.md D146).
 func (c *Core) agentTab(p Project, layout []revier.PanelSpec, r Resume) (revier.Realization, AgentOutcome) {
 	agent, ok := declared(layout, revier.PanelAgent)
 	if !ok {
 		return revier.Realization{}, AgentDropped
 	}
 	if r.Agent != "" {
-		named, ok := p.namedAgent(r.Agent)
-		if !ok {
-			return revier.Realization{}, AgentDropped
+		switch named, ok := p.namedAgent(r.Agent); {
+		case p.Remote != nil:
+			remote, err := c.remote(p.Remote.Host)
+			if err != nil {
+				return revier.Realization{}, AgentDropped
+			}
+			agent.Command = remote.PanelCommand(p.Remote.Project, revier.PanelAgent, r.Agent)
+		case !ok:
+			return revier.Realization{}, AgentUnknown
+		default:
+			agent.Command = named.Command
 		}
-		agent.Title, agent.Command = named.Name, named.Command
+		agent.Title = r.Agent
 	}
 	if r.Harness == "" {
 		r.Harness = c.harnessOf(agent)
@@ -188,7 +198,7 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layou
 // tab, as not added.
 func notAdded(outcomes []AgentOutcome, n int) []AgentOutcome {
 	for i := n; i < len(outcomes); i++ {
-		if outcomes[i] != AgentDropped {
+		if outcomes[i] != AgentDropped && outcomes[i] != AgentUnknown {
 			outcomes[i] = AgentNotAdded
 		}
 	}
@@ -393,7 +403,9 @@ func (c *Core) newAgent(ctx context.Context, w Workspace, r Resume, focus bool) 
 }
 
 func (c *Core) openAgent(ctx context.Context, w Workspace, r Resume, focus bool) (revier.PanelID, AgentOutcome, error) {
-	if _, ok := w.Project.namedAgent(r.Agent); r.Agent != "" && !ok {
+	// A link's host resolves the name, so only a local project refuses it
+	// here.
+	if _, ok := w.Project.namedAgent(r.Agent); r.Agent != "" && !ok && w.Project.Remote == nil {
 		return "", AgentNotAdded, w.Project.unknownAgent(r.Agent)
 	}
 	t, err := c.tabRuntime(w)

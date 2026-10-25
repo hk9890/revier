@@ -30,7 +30,7 @@ usage:
   revier agent send-keys <agent> [--] <key>..
   revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
   revier agent focus <agent> [--ref <instance>]
-  revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]
+  revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>, for the project's only agent, or <project>:<target>
              or <project>:<panel> for one of several
@@ -45,6 +45,7 @@ usage:
              right, ctrl+c, or one character
   --panel    the open workspace that holds this panel; kitty's
              @active-kitty-window-id is the window a key was pressed in
+  --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project
   --no-focus leave the focus where it is, and print the new agent's address
@@ -489,6 +490,7 @@ func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
 func cmdAgentExec(args []string) error {
 	fs := flag.NewFlagSet("agent exec", flag.ContinueOnError)
 	project := projectFlag(fs)
+	agent := fs.String("agent", "", "the named agent to run, else the project's default agent")
 	tag := fs.String("tag", "", "the name the terminal that shows the agent knows it by")
 	resume := fs.String("resume", "", "the conversation to start the agent on")
 	dir := fs.String("dir", "", "the directory the agent starts in")
@@ -497,7 +499,7 @@ func cmdAgentExec(args []string) error {
 		return err
 	}
 	if len(pos) != 0 || *project == "" {
-		return errors.New("usage: revier agent exec -p <project> [--tag <tag>] [--resume <id>] [--dir <path>]")
+		return errors.New("usage: revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]")
 	}
 	return serve(*project, *tag, func(c *core.Core, p core.Project) (core.Served, error) {
 		// A checkout that is missing here is cloned by the agent's panel
@@ -506,7 +508,7 @@ func cmdAgentExec(args []string) error {
 		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
 			return core.Served{}, err
 		}
-		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir})
+		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir, Agent: *agent})
 		if err == nil && *resume != "" && s.Outcome != core.AgentResumed {
 			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent starts empty\n", *resume, s.Outcome)
 		}

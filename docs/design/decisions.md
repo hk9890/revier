@@ -184,14 +184,6 @@ Eighty-nine files repeated three targets. Tables merge key by key; any other
 value, a list included, replaces the shared one, because a panel has no identity
 to merge on.
 
-### D62 — a restore brings back every agent, in order, in the directory it worked in
-
-Replaces restoring an agent by its declared panel position. Most agents are
-opened by hand in tabs, and the position also counted other tools' tabs. The
-resume is the probe's (`Resumable`), built from the project as it reads at
-restore. An agent resumed from the repository root instead of its worktree edits
-`main`, so the directory is recorded too.
-
 ### D63 — a named window does not hide its unnamed sibling, and a window that cannot be raised is not focused
 
 Pairing by elimination keeps D22's refusal for real ambiguity. A focus with no
@@ -748,3 +740,13 @@ and the first shell panel, marked with the name, so a project's address still
 means the default agent. `OpenTab` takes a panel group; the key finds its
 workspace through `PanelFinder`, since a kitty window id is one process's. A
 target is run-or-raise; an agent or shell tab is a launcher, one more per press.
+
+### D146 — a restore brings back every agent, in order, in its directory, as the agent it ran
+
+Replaces D62. The recorded agents fill the layout's agent panels in order, and
+the rest open as agent tabs: most agents are opened by hand. The resume is the
+probe's (`Resumable`), built from the project as it reads at restore; the
+directory is recorded too, since an agent resumed from the repository root
+edits `main`. Each agent records the named agent its tab's mark names, and comes
+back as that agent; a name the project no longer declares is dropped and said,
+since another program in its place is not that agent. A link's host resolves it.

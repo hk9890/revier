@@ -265,7 +265,7 @@ func logAgents(r RestoreResult) {
 			outcome = r.Agents[i].String()
 		}
 		slog.Info("restore agent", "project", r.Project, "target", r.Target, "dry_run", r.dry,
-			"harness", a.Harness, "session", a.Session, "dir", a.Dir, "outcome", outcome)
+			"harness", a.Harness, "agent", a.Agent, "session", a.Session, "dir", a.Dir, "outcome", outcome)
 	}
 }
 
@@ -295,6 +295,9 @@ func AgentsNote(verb string, agents []AgentOutcome, tabErr error) string {
 	}
 	if n[AgentDropped] > 0 {
 		note += fmt.Sprintf(", %s not restored: no agent panel declared, or no tab can be opened here", Count(n[AgentDropped], "agent"))
+	}
+	if n[AgentUnknown] > 0 {
+		note += fmt.Sprintf(", %s not restored: its project no longer declares the named agent it ran", Count(n[AgentUnknown], "agent"))
 	}
 	if n[AgentInTab] > 0 {
 		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", Count(n[AgentInTab], "agent"))

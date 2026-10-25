@@ -38,10 +38,15 @@ type Run struct {
 	Action  string
 }
 
-// PanelCommand is a stand-in for the ssh: the host, the kind and the project,
-// so a test can read what the panel was built for and what was appended.
-func (f *FakeRemote) PanelCommand(project revier.ProjectName, kind revier.PanelKind) []string {
-	return []string{"ssh", f.name, "revier", string(kind), "exec", "-p", string(project)}
+// PanelCommand is a stand-in for the ssh: the host, the kind, the project and
+// the named agent, so a test can read what the panel was built for and what
+// was appended.
+func (f *FakeRemote) PanelCommand(project revier.ProjectName, kind revier.PanelKind, agent string) []string {
+	argv := []string{"ssh", f.name, "revier", string(kind), "exec", "-p", string(project)}
+	if agent != "" {
+		argv = append(argv, "--agent", agent)
+	}
+	return argv
 }
 
 func (f *FakeRemote) RunCommand(project revier.ProjectName, action string) []string {

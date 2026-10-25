@@ -27,7 +27,7 @@ type PanelSpec struct {
 	// it with the realization's Dir when it renders the project, so a host
 	// starts a panel in its Dir and decides nothing. A restore sets another,
 	// for an agent that worked in a worktree of the project rather than in the
-	// project itself (decisions.md D62), and so does `revier agent new`.
+	// project itself (decisions.md D146), and so does `revier agent new`.
 	Dir string `toml:"-" json:"dir,omitempty"`
 }
 

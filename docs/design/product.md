@@ -25,7 +25,7 @@ territory. revier is how you walk it.
 | **Panel** | One pane inside a runtime target: an agent, a shell, a tool |
 | **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
-| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation and directory (D46, D62) |
+| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
 
 A target is reached one way: **run-or-raise it; a second press returns to the
 project's home.** Opening a project is run-or-raise on its home target.

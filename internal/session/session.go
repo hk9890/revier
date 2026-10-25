@@ -105,17 +105,21 @@ type Target struct {
 	// Agents are the agents the target's instance held, in the order the
 	// runtime listed them. The order is their identity: a restore gives the
 	// first to the first agent panel the project declares, and so on, and
-	// opens the rest beside the layout (decisions.md D62).
+	// opens the rest beside the layout (decisions.md D146).
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
 // Agent is one agent: the harness its probe named, and what that probe could
 // say about its conversation. An agent with neither holds its place in the
-// order, so the agents after it keep theirs.
+// order, so the agents after it keep theirs. Name is the named agent it ran,
+// which a restore opens again and no other program in its place; it is empty
+// for the project's default agent, and in a file written before the field
+// existed (decisions.md D146).
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`
 	Dir     string           `toml:"dir,omitempty" json:"dir,omitempty"`
+	Name    string           `toml:"name,omitempty" json:"name,omitempty"`
 }
 
 // Dir is where sessions live under the state root.

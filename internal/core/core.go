@@ -297,7 +297,7 @@ func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realizatio
 	real.Panels = slices.Clone(real.Panels)
 	for i, spec := range real.Panels {
 		if len(spec.Command) == 0 && (spec.Kind == revier.PanelAgent || spec.Kind == revier.PanelShell) {
-			real.Panels[i].Command = remote.PanelCommand(p.Remote.Project, spec.Kind)
+			real.Panels[i].Command = remote.PanelCommand(p.Remote.Project, spec.Kind, "")
 		}
 	}
 	return real, nil

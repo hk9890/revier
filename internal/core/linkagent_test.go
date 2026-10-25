@@ -593,3 +593,70 @@ func TestShownKeepsTheAgentAPanelHereShows(t *testing.T) {
 		t.Errorf("shown agents = %+v, want the host's agent on panel 9 of %v", shown.Agents, pane)
 	}
 }
+
+// A link's named agent is the host's: the ssh of its tab names it to
+// `revier agent exec` there, which resolves it, so no name is refused here.
+// Its tab is marked with the name, as a local one is.
+func TestANamedAgentOfALinkIsAskedOfItsHost(t *testing.T) {
+	c, rt, _, _ := linked(t)
+	if _, err := newAgent(t, c, linkProject(t), "home", core.Resume{Agent: "dtop"}); err != nil {
+		t.Fatalf("NewAgent: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Vars[core.PanelAgentVar] != "dtop" {
+		t.Fatalf("tabs = %+v, want one tab marked dtop", rt.Tabs)
+	}
+	samePanels(t, "agent tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
+		{Kind: revier.PanelAgent, Title: "dtop", Command: sshArgv(revier.PanelAgent, "--agent", "dtop")},
+		{Kind: revier.PanelShell, Command: sshArgv(revier.PanelShell)},
+	})
+}
+
+// A save records a link's named agent by the mark of the panel here that
+// shows it, and a restore asks the host for that agent again.
+func TestARestoreOfALinkAsksTheHostForItsNamedAgent(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4250", revier.StatusIdle)}})
+	remote.Named = remote.Views
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("far", "",
+		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242},
+		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Vars: map[string]string{core.PanelAgentVar: "dtop"}})
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Session(context.Background(), report)
+	agents := s.Projects[0].Targets[0].Agents
+	if len(agents) != 2 || agents[0].Name != "" || agents[1].Name != "dtop" {
+		t.Fatalf("agents = %+v, want the default agent, then dtop", agents)
+	}
+
+	fresh := hosttest.NewRuntime("rt")
+	c.Runtime = fresh
+	if _, err := pressResuming(context.Background(), c, linkProject(t), "home", c.RestorePlan(s, core.Report{})[0].Resumes); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if len(fresh.Tabs) != 1 {
+		t.Fatalf("tabs = %+v, want dtop's tab", fresh.Tabs)
+	}
+	if got := fresh.Tabs[0].Real.Panels[0].Command; !slices.Equal(got, sshArgv(revier.PanelAgent, "--agent", "dtop")) {
+		t.Errorf("agent command = %q, want the host asked for dtop", got)
+	}
+}
+
+// `revier agent exec --agent` runs the named agent this machine declares for
+// the project, and refuses a name it does not declare.
+func TestServeRunsTheNamedAgent(t *testing.T) {
+	p := prepared(t, agentProject())
+	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop", "--watch"}}}
+	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
+
+	s, err := c.ServeAgent(p, core.Resume{Agent: "dtop"})
+	if err != nil || !slices.Equal(s.Argv, []string{"dtop", "--watch"}) {
+		t.Errorf("ServeAgent = %+v, %v; want dtop --watch", s, err)
+	}
+	if _, err := c.ServeAgent(p, core.Resume{Agent: "review"}); !errors.Is(err, core.ErrUnknownAgent) {
+		t.Errorf("ServeAgent err = %v, want ErrUnknownAgent", err)
+	}
+}

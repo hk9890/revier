@@ -84,10 +84,20 @@ func article(kind revier.PanelKind) string {
 // conversation arrives with no harness named - the panel's ssh carries the id
 // alone - so the harness is the panel's, as an agent tab takes it: a
 // conversation of one harness is never resumed into a panel that runs another.
+// A named agent is that panel running the named agent's command, as in an
+// agent tab: this machine's configuration declares it for the link, and a
+// name it does not declare starts nothing (decisions.md D146).
 func (c *Core) ServeAgent(p Project, r Resume) (Served, error) {
+	named, ok := p.namedAgent(r.Agent)
+	if r.Agent != "" && !ok {
+		return Served{}, p.unknownAgent(r.Agent)
+	}
 	real, spec, err := workspace(p, revier.PanelAgent)
 	if err != nil {
 		return Served{}, err
+	}
+	if r.Agent != "" {
+		spec.Command = named.Command
 	}
 	if r.Harness == "" {
 		r.Harness = c.harnessOf(spec)
