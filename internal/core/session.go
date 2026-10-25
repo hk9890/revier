@@ -167,8 +167,9 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 //
 // It records nothing while a host here could not list, since what that host
 // holds would be missing (decisions.md D89). A held link whose host gave no
-// answer keeps its entry of prev, what was last seen of it; with none it
-// records nothing either (D150).
+// answer keeps its entry of prev, what was last seen of it; with none it is
+// recorded as a save records it while its host does not answer, so a host
+// down for a whole run costs only its own agents (D150).
 func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (session.Session, bool) {
 	if len(local.Failed) > 0 {
 		return session.Session{}, false
@@ -196,11 +197,9 @@ func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (
 			continue
 		}
 		if a, ok := answers.of(v.Project); !ok || a.err != nil || a.view.Unreachable != "" {
-			p, ok := projectOf(prev, v.Project.Name)
-			if !ok {
-				return session.Session{}, false
+			if p, ok := projectOf(prev, v.Project.Name); ok {
+				kept[v.Project.Name] = p
 			}
-			kept[v.Project.Name] = p
 			continue
 		}
 		agents := map[revier.PanelID]session.Agent{}

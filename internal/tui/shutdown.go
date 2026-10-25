@@ -343,7 +343,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s.walk = w
 	s.record = nil
 	if full {
-		s.record = app.NewShutdownRecord(c)
+		s.record = app.NewShutdownRecord(c, root)
 	}
 	record := s.record
 	closing := func() tea.Msg {

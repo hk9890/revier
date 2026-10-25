@@ -40,7 +40,7 @@ func TestAFullShutdownIsRecordedBeforeTheFirstClose(t *testing.T) {
 	var atFirstClose []bool
 	rt.OnClose = func(revier.TargetRef) { atFirstClose = append(atFirstClose, shutDownOnRecord(c)) }
 
-	if _, err := app.Shutdown(context.Background(), c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c)); err != nil {
+	if _, err := app.Shutdown(context.Background(), c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c, root)); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
 	if len(atFirstClose) == 0 || !atFirstClose[0] {
@@ -55,13 +55,36 @@ func TestAFullShutdownIsRecordedBeforeTheFirstClose(t *testing.T) {
 	}
 }
 
+// A full shutdown on record removes what a surface last saw: it was a clean
+// end, and the file would read as an end with no shutdown once something
+// opened and ended the record. One that is not full leaves it.
+func TestAFullShutdownRemovesWhatWasLastSeen(t *testing.T) {
+	for _, full := range []bool{true, false} {
+		c, _, report, projects := desktop(t)
+		root := t.TempDir()
+		if err := session.SaveSeen(root, session.Session{Projects: []session.Project{{Name: "project-00"}}}); err != nil {
+			t.Fatal(err)
+		}
+		var record *app.ShutdownRecord
+		if full {
+			record = app.NewShutdownRecord(c, root)
+		}
+		if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, nil, record); err != nil {
+			t.Fatalf("Shutdown: %v", err)
+		}
+		if _, err := session.LoadSeen(root); errors.Is(err, session.ErrNoSession) != full {
+			t.Errorf("full %v: last seen after the shutdown: %v, want it removed only by a full one", full, err)
+		}
+	}
+}
+
 // A full shutdown whose save recorded nothing, or that saved nothing at all,
 // names no session: the start dialog then offers none as its own.
 func TestAFullShutdownThatSavedNothingNamesNoSession(t *testing.T) {
 	nothing := func(context.Context, core.Report) (session.Session, error) { return session.Session{}, nil }
 	for name, save := range map[string]func(context.Context, core.Report) (session.Session, error){"nothing open": nothing, "no save": nil} {
 		c, _, report, projects := desktop(t)
-		if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c)); err != nil {
+		if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c, t.TempDir())); err != nil {
 			t.Fatalf("%s: Shutdown: %v", name, err)
 		}
 		if sd := c.Ledger.State().ShutDown; sd == nil || sd.Session != "" {
@@ -92,7 +115,7 @@ func TestARefusedOrUnsavedShutdownRecordsNothing(t *testing.T) {
 		c.Probes[0].(*hosttest.FakeResumableProbe).State = revier.AgentState{Harness: "claude", Status: revier.StatusRunning}
 		root := t.TempDir()
 		plan := c.ShutdownPlan(surveyed(t, c, projects), "", core.ShutdownAll)
-		_, err := app.Shutdown(context.Background(), c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c))
+		_, err := app.Shutdown(context.Background(), c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c, t.TempDir()))
 		if !errors.Is(err, core.ErrAgentBusy) || shutDownOnRecord(c) || len(rt.Closed) != 0 {
 			t.Errorf("err = %v, recorded %v, closed %v; want the refusal and nothing recorded or closed", err, shutDownOnRecord(c), rt.Closed)
 		}
@@ -101,7 +124,7 @@ func TestARefusedOrUnsavedShutdownRecordsNothing(t *testing.T) {
 		c, _, report, projects := desktop(t)
 		failed := errors.New("disk full")
 		save := func(context.Context, core.Report) (session.Session, error) { return session.Session{}, failed }
-		_, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c))
+		_, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c, t.TempDir()))
 		if !errors.Is(err, failed) || shutDownOnRecord(c) {
 			t.Errorf("err = %v, recorded %v; want the save's failure and nothing recorded", err, shutDownOnRecord(c))
 		}
@@ -123,7 +146,7 @@ func (l unsaved) Update(apply func(*state.State) bool) *state.State {
 func TestAFullShutdownWhoseRecordWasNotSavedIsNotRecorded(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	c = c.WithLedger(unsaved{c.Ledger.(*ledger)})
-	record := app.NewShutdownRecord(c)
+	record := app.NewShutdownRecord(c, t.TempDir())
 
 	if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
 		t.Fatalf("Shutdown: %v", err)
@@ -143,7 +166,7 @@ func TestAFullShutdownWhoseRecordAnOpenEndedIsNotRecorded(t *testing.T) {
 			return true
 		})
 	}
-	record := app.NewShutdownRecord(c)
+	record := app.NewShutdownRecord(c, t.TempDir())
 
 	if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
 		t.Fatalf("Shutdown: %v", err)
@@ -161,7 +184,7 @@ func TestACancelledFullShutdownTakesItsRecordBack(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	rt.OnClose = func(revier.TargetRef) { cancel() }
 
-	closed, err := app.Shutdown(ctx, c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c))
+	closed, err := app.Shutdown(ctx, c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, root), app.NewShutdownRecord(c, t.TempDir()))
 	if err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
@@ -186,7 +209,7 @@ func TestAFullShutdownCancelledDuringItsLastCloseKeepsItsRecord(t *testing.T) {
 		}
 	}
 
-	closed, err := app.Shutdown(ctx, c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), app.NewShutdownRecord(c))
+	closed, err := app.Shutdown(ctx, c, plan, 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), app.NewShutdownRecord(c, t.TempDir()))
 	if err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
@@ -215,7 +238,7 @@ func TestAFullShutdownCancelledDuringItsSaveRecordsNothing(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	closed, err := app.Shutdown(ctx, c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c))
+	closed, err := app.Shutdown(ctx, c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, save, app.NewShutdownRecord(c, t.TempDir()))
 	if err != nil || len(closed) != 0 || shutDownOnRecord(c) || len(rt.Closed) != 0 {
 		t.Errorf("err = %v, walked %d, recorded %v, closed %v; want no error, nothing walked, recorded or closed", err, len(closed), shutDownOnRecord(c), rt.Closed)
 	}
@@ -256,7 +279,7 @@ func TestAnAbandonBeforeTheRecordIsWrittenKeepsAnEarlierRecord(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	earlier := earlierShutdown(c)
 	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
-	record := app.NewShutdownRecord(c)
+	record := app.NewShutdownRecord(c, t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// The recheck lists the runtime before the save: both presses come
@@ -283,7 +306,7 @@ func TestAnAbandonBeforeTheRecordIsWrittenKeepsAnEarlierRecord(t *testing.T) {
 func TestAnAbandonDuringTheLastStepKeepsTheRecord(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
-	record := app.NewShutdownRecord(c)
+	record := app.NewShutdownRecord(c, t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var onRecord bool
@@ -312,7 +335,7 @@ func TestAnAbandonTakesTheRecordBackOnlyWhenAStepWasNotReached(t *testing.T) {
 		if len(plan) != 2 {
 			t.Fatalf("plan = %+v, want two steps", plan)
 		}
-		record := app.NewShutdownRecord(c)
+		record := app.NewShutdownRecord(c, t.TempDir())
 		ctx, cancel := context.WithCancel(context.Background())
 		// The first press comes during step at, and the second once that
 		// step is done.

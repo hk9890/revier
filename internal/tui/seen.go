@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"log/slog"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/app"
@@ -53,8 +51,8 @@ func (m Model) recordSaw(answered *core.RemoteAnswers) tea.Cmd {
 // keepSeen keeps what the survey saw as what the surface last saw. The first
 // survey in which every host here listed checks whether revier ended without
 // a shutdown, before anything is written over what was last seen. After that
-// it keeps what the survey saw, unless a walk runs, nothing is open, or
-// nothing changed. A survey that holds less than the last one written is
+// it keeps what the survey saw, unless a walk runs, a full shutdown is on
+// record, nothing is open, or nothing changed. A survey that holds less than the last one written is
 // written only when the next survey of this machine agrees: a terminal
 // killed before the surface lists as closed, not as failed, for the moment
 // before the surface goes too. surveyed is false for the answers of a linked
@@ -68,7 +66,7 @@ func (m *Model) keepSeen(surveyed bool) tea.Cmd {
 		m.checking = true
 		return m.recover()
 	}
-	if m.walking() {
+	if m.walking() || m.onRecord {
 		return nil
 	}
 	s, ok := m.core.Seen(m.local, m.answers, m.seen)
@@ -106,12 +104,16 @@ func (m Model) recover() tea.Cmd {
 // takeRecovered takes the check's answer: what was last seen is written from
 // now on, and an end that lost something is offered on the start dialog
 // over the plain surface. What was last seen is written again whole, since
-// the check may have taken the file.
+// the check may have taken the file. A check that failed is asked again at
+// the next survey, and nothing is written until one answers: a write would
+// replace what the end before left with what is open now.
 func (m *Model) takeRecovered(msg recoveredMsg) {
-	m.checking, m.recovered, m.seen = false, true, session.Session{}
+	m.checking = false
+	logging.Repeat("unclean end", "unclean end", msg.err)
 	if msg.err != nil {
-		slog.Warn("unclean end", "err", msg.err)
+		return
 	}
+	m.recovered, m.seen = true, session.Session{}
 	if msg.ok && m.plain() {
 		m.openUnclean(msg.offer)
 	}

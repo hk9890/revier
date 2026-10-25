@@ -93,9 +93,11 @@ func TestSeenKeepsALinkAsLastSeenWhileItsHostDoesNotAnswer(t *testing.T) {
 	}
 }
 
-// A held link whose host never answered and that was never seen leaves
-// nothing to keep in its place, so nothing is taken.
-func TestSeenTakesNothingForALinkNeverAnsweredAndNeverSeen(t *testing.T) {
+// A held link whose host never answered while a surface ran is kept as a
+// save keeps it while its host is down: its window here, and none of its
+// agents. A host down for the whole run then costs its own agents, not the
+// snapshot of every other project.
+func TestSeenKeepsALinkNeverAnsweredWithoutItsAgents(t *testing.T) {
 	c, _, remote, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	remote.Err = errors.New("buildbox: connection refused")
 	projects := []core.Project{linkProject(t)}
@@ -104,8 +106,9 @@ func TestSeenTakesNothingForALinkNeverAnsweredAndNeverSeen(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, answers := range []core.RemoteAnswers{{}, c.AskRemotes(context.Background(), projects)} {
-		if s, ok := c.Seen(local, answers, session.Session{}); ok {
-			t.Errorf("Seen = %+v, want nothing for a link never seen", s)
+		s, ok := c.Seen(local, answers, session.Session{})
+		if !ok || len(s.Projects) != 1 || s.Targets() == 0 || s.Agents() != 0 {
+			t.Errorf("Seen = %+v, %v, want the link's window and none of its agents", s, ok)
 		}
 	}
 }

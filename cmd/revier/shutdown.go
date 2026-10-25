@@ -143,7 +143,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	var record *usecase.ShutdownRecord
 	var abandon func()
 	if only == "" && scope == core.ShutdownAll {
-		record = usecase.NewShutdownRecord(a.core)
+		record = usecase.NewShutdownRecord(a.core, a.stateRoot)
 		abandon = record.Abandon
 	}
 	walk, stop := interruptible(ctx, abandon)

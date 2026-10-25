@@ -25,6 +25,23 @@ func forget(t *testing.T, root string) {
 	}
 }
 
+// A check that cannot read what the end before left writes nothing over it:
+// what that end left is the one copy of what it had open.
+func TestAFailedCheckLeavesWhatTheEndBeforeLeft(t *testing.T) {
+	root := t.TempDir()
+	left := []byte("not a session")
+	if err := os.WriteFile(session.SeenPath(root), left, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := seenWorld(t, root)
+	for range 3 {
+		m = seenSurvey(m)
+	}
+	if got, err := os.ReadFile(session.SeenPath(root)); err != nil || string(got) != string(left) {
+		t.Errorf("seen.toml = %q, %v, want it left as the end before wrote it", got, err)
+	}
+}
+
 // A survey that finds the same as the last one written writes nothing; one
 // that finds a target opened writes again.
 func TestTheSurfaceWritesWhatItSawOnlyWhenItChanges(t *testing.T) {

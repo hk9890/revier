@@ -417,4 +417,12 @@ func TestAFullShutdownStillOpensItsOwnDialog(t *testing.T) {
 	if all, _ := session.List(root); len(all) != 0 {
 		t.Errorf("sessions = %+v, want no last-seen save", all)
 	}
+
+	// While the shutdown is on record, what the surface sees is not written:
+	// it would be left behind as what an end with no shutdown lost.
+	forget(t, root)
+	seenSurvey(seenSurvey(m))
+	if s, ok := seenOnDisk(t, root); ok {
+		t.Errorf("seen = %+v while a full shutdown is on record, want nothing written", s)
+	}
 }

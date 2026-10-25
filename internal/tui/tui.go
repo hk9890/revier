@@ -188,6 +188,7 @@ type Model struct {
 	shrink    session.Session                  // a survey that holds less than seen, written when the next survey agrees
 	checking  bool                             // the check for an end with no shutdown is out
 	recovered bool                             // that check has answered, so what the surface sees is written
+	onRecord  bool                             // a full shutdown is on record, from state: what is seen is not written
 	input     textinput.Model                  // the filter query, with its own cursor
 	over      hovered                          // what the pointer is on
 	cell      *pointerCell                     // where the pointer last was, nil before it moved
@@ -1111,6 +1112,7 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // a choice takes it down (D150).
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
+	m.onRecord = st.ShutDown != nil
 	switch sd := st.ShutDown; {
 	case m.dialog == dialogResume && !m.resume.unclean && sd == nil:
 		m.dialog = dialogNone

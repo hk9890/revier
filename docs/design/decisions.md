@@ -786,12 +786,12 @@ that shrink, and falling back to a close's save when no whole one exists.
 
 Extends D78 and D141. Two OOM kills of kitty left the newest save 38 h old. A
 running surface keeps what its survey saw apart from the saves, asking no probe
-or host, rewritten when what is open changes, never while a host here cannot
-list. A shrink waits for the next survey to agree, since a killed kitty lists
-as closed; an unanswered link keeps what was last seen (D89). After an end with
-no shutdown that lost a target, and no newer save, the next surface saves it as
-`last-seen` and offers it once. Rejected: a save on SIGHUP, which a SIGKILL
-never sends, and a restore point replayed from the state record (D151).
+or host, when what is open changes; never while a host here cannot list, nor
+while a full shutdown is on record, which ends the file. A shrink waits for the
+next survey, since a killed kitty lists as closed; an unanswered link keeps
+what was last seen (D89). An end with no shutdown that lost a target, and no
+newer save, is saved as `last-seen` and offered once. Rejected: a save on
+SIGHUP, which a SIGKILL never sends, and a replay of the record (D151).
 
 ### D151 — the state record is a file of its own: what revier did, and what a surface saw
 
