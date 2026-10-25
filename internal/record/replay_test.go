@@ -17,17 +17,6 @@ func sequence(t *testing.T, when time.Time) record.State {
 	return record.Replay(read(t, fixture("sequence"), when), when)
 }
 
-func machineOf(t *testing.T, st record.State, name string) record.Machine {
-	t.Helper()
-	for _, m := range st.Machines {
-		if m.Machine == name {
-			return m
-		}
-	}
-	t.Fatalf("machines = %+v, want one named %q", st.Machines, name)
-	return record.Machine{}
-}
-
 func targetsOf(m record.Machine) []string {
 	var out []string
 	for _, tg := range m.Targets {

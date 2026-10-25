@@ -76,3 +76,14 @@ func kinds(lines []record.Line) []string {
 	}
 	return out
 }
+
+func machineOf(t *testing.T, st record.State, name string) record.Machine {
+	t.Helper()
+	for _, m := range st.Machines {
+		if m.Machine == name {
+			return m
+		}
+	}
+	t.Fatalf("machines = %+v, want one named %q", st.Machines, name)
+	return record.Machine{}
+}

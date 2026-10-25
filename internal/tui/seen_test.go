@@ -4,49 +4,10 @@ import (
 	"errors"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/hk9890/revier/internal/config"
-	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/internal/theme"
-	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// seenWorld is world(t, 2) on a surface over root that refreshes at once, so
-// a test runs what each survey answers with: the check for an end with no
-// shutdown, and the write of what it saw. project-01's workspace holds no
-// agent, so no mirror's tick holds a test up for its second.
-func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
-	t.Helper()
-	rt, _, c, projects := world(t, 2)
-	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
-	rt.Add("session:project-01", "kitty")
-	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
-	return resize(m, 150, 30), rt
-}
-
-// seenSurvey is one survey with every command it answers with run and fed
-// back.
-func seenSurvey(m tui.Model) tui.Model {
-	m, cmd := deliver(m, m.Survey())
-	return run(m, cmd)
-}
-
-// seenOnDisk is what the surface last wrote under root, and whether it wrote
-// anything.
-func seenOnDisk(t *testing.T, root string) (session.Session, bool) {
-	t.Helper()
-	s, err := session.LoadSeen(root)
-	if errors.Is(err, session.ErrNoSession) {
-		return session.Session{}, false
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s, true
-}
 
 // forget removes what the surface wrote, so a test sees whether it writes
 // again.

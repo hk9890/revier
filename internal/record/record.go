@@ -3,7 +3,7 @@
 // $STATE/record and never pruned (decisions.md D151). `revier state` replays
 // it to say what was open at a moment.
 //
-// It is kept apart from the event file (decisions.md D112): a reader counts
+// It is kept apart from the event file (D151): a reader counts
 // those lines as uses, and a failure or a closed window is no use of a
 // project. An operation records what it did, failed or not; only a surface
 // records what it saw, as the difference between two of its own surveys
