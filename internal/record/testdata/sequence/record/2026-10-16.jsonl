@@ -1,0 +1,15 @@
+{"time":"2026-10-16T09:00:00+02:00","kind":"snapshot","by":"saw","pid":4242,"cmd":"tui","seen":{"current":"revier","projects":["far","revier","taskmgr"],"hosts":["gnome","kitty"],"instances":[{"host":"kitty","ref":"3","title":"revier"},{"host":"gnome","ref":"0x1a","title":"taskmgr - Firefox"},{"host":"kitty","ref":"5","title":"far"}],"targets":[{"project":"revier","target":"workspace","host":"kitty","ref":"3"},{"project":"taskmgr","target":"browser","host":"gnome","ref":"0x1a"},{"project":"far","target":"home","host":"kitty","ref":"5"}],"agents":[{"project":"revier","host":"kitty","ref":"3","panel":"7","harness":"claude","session":"s1","dir":"/home/hans/dev/github/revier"}]}}
+{"time":"2026-10-16T09:00:01+02:00","kind":"snapshot","by":"saw","pid":4242,"cmd":"tui","machine":"dt","seen":{"machine":"dt","projects":["far"],"agents":[{"project":"far","host":"kitty","ref":"5","panel":"2","harness":"claude","session":"s9","dir":"/srv/far"}]}}
+{"time":"2026-10-16T09:02:00+02:00","kind":"go","by":"did","pid":5151,"cmd":"go","project":"taskmgr","target":"editor","host":"gnome","ref":"0x2b","launched":true}
+{"time":"2026-10-16T09:02:10+02:00","kind":"instance opened","by":"saw","pid":4242,"cmd":"tui","host":"gnome","ref":"0x2b","title":"editor"}
+{"time":"2026-10-16T09:02:10+02:00","kind":"target opened","by":"saw","pid":4242,"cmd":"tui","project":"taskmgr","target":"editor","host":"gnome","ref":"0x2b"}
+{"time":"2026-10-16T09:03:00+02:00","kind":"agent opened","by":"saw","pid":4242,"cmd":"tui","project":"revier","host":"kitty","ref":"3","panel":"8","harness":"claude","session":"s2","dir":"/home/hans/dev/github/revier"}
+{"time":"2026-10-16T09:05:00+02:00","kind":"host unreachable","by":"saw","pid":4242,"cmd":"tui","host":"gnome","err":"wctl list: timeout"}
+{"time":"2026-10-16T09:05:30+02:00","kind":"host unreachable","by":"saw","pid":4242,"cmd":"tui","machine":"dt","err":"ssh: connect to host dt: timeout"}
+{"time":"2026-10-16T09:06:00+02:00","kind":"agent closed","by":"saw","pid":4242,"cmd":"tui","project":"revier","host":"kitty","ref":"3","panel":"8","harness":"claude","session":"s2","dir":"/home/hans/dev/github/revier"}
+{"time":"2026-10-16T09:08:00+02:00","kind":"host back","by":"saw","pid":4242,"cmd":"tui","machine":"dt"}
+{"time":"2026-10-16T09:10:00+02:00","kind":"host back","by":"saw","pid":4242,"cmd":"tui","host":"gnome"}
+{"time":"2026-10-16T09:10:00+02:00","kind":"instance closed","by":"saw","pid":4242,"cmd":"tui","host":"gnome","ref":"0x1a","title":"taskmgr - Firefox"}
+{"time":"2026-10-16T09:10:00+02:00","kind":"target closed","by":"saw","pid":4242,"cmd":"tui","project":"taskmgr","target":"browser","host":"gnome","ref":"0x1a"}
+{"time":"2026-10-16T09:10:30+02:00","kind":"project selected","by":"did","pid":4242,"cmd":"tui","project":"taskmgr","from":"revier"}
+{"time":"2026-10-16T09:11:00+02:00","kind":"go","by":"did","pid":5151,"cmd":"go","project":"taskmgr","target":"editor","host":"gnome","ref":"0x2b"}
