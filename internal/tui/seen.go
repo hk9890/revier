@@ -8,7 +8,6 @@ import (
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 // What the surface last saw: while it runs, it keeps what its surveys find
@@ -52,12 +51,8 @@ func (m Model) recordSaw(answered *core.RemoteAnswers) tea.Cmd {
 // survey in which every host here listed checks whether revier ended without
 // a shutdown, before anything is written over what was last seen. After that
 // it keeps what the survey saw, unless a walk runs, a full shutdown is on
-// record, nothing is open, or nothing changed. A survey that holds less than the last one written is
-// written only when the next survey of this machine agrees: a terminal
-// killed before the surface lists as closed, not as failed, for the moment
-// before the surface goes too. surveyed is false for the answers of a linked
-// host, which are laid over the same listing and so are no second look at
-// it.
+// record, or the core's KeepSeen keeps nothing. surveyed is false for the
+// answers of a linked host.
 func (m *Model) keepSeen(surveyed bool) tea.Cmd {
 	if !m.recovered {
 		if m.checking || len(m.local.Failed) > 0 {
@@ -69,18 +64,11 @@ func (m *Model) keepSeen(surveyed bool) tea.Cmd {
 	if m.walking() || m.onRecord {
 		return nil
 	}
-	s, ok := m.core.Seen(m.local, m.answers, m.seen)
-	if !ok || len(s.Projects) == 0 || s.SameAs(m.seen) {
-		m.shrink = session.Session{}
+	s, ok, held := m.core.KeepSeen(m.local, m.answers, m.seen, m.shrink, surveyed)
+	m.shrink = held
+	if !ok {
 		return nil
 	}
-	if lacks(s, m.seen) && (!surveyed || !s.SameAs(m.shrink)) {
-		if surveyed {
-			m.shrink = s
-		}
-		return nil
-	}
-	m.shrink = session.Session{}
 	s.At = m.now()
 	m.seen = s
 	root := m.stateRoot
@@ -117,26 +105,4 @@ func (m *Model) takeRecovered(msg recoveredMsg) {
 	if msg.ok && m.plain() {
 		m.openUnclean(msg.offer)
 	}
-}
-
-// lacks reports a target that was holds and s does not.
-func lacks(s, was session.Session) bool {
-	type at struct {
-		project revier.ProjectName
-		target  revier.TargetName
-	}
-	has := map[at]bool{}
-	for _, p := range s.Projects {
-		for _, t := range p.Targets {
-			has[at{p.Name, t.Name}] = true
-		}
-	}
-	for _, p := range was.Projects {
-		for _, t := range p.Targets {
-			if !has[at{p.Name, t.Name}] {
-				return true
-			}
-		}
-	}
-	return false
 }

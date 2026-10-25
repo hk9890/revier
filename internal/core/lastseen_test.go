@@ -136,3 +136,30 @@ func TestLostIsATargetTheSnapshotHoldsThatIsNotOpen(t *testing.T) {
 		t.Error("Lost while rt cannot list, want false")
 	}
 }
+
+// A survey that holds less than what was last kept is kept only when the
+// next survey of this machine agrees. An answer of a linked host is no second
+// look, and a survey that holds the same as the last keeps nothing.
+func TestKeepSeenKeepsAShrinkOnlyWhenTheNextSurveyAgrees(t *testing.T) {
+	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
+	full, ok, _ := c.KeepSeen(survey(t, c, projects, nil), core.RemoteAnswers{}, session.Session{}, session.Session{}, true)
+	if !ok || full.Targets() != 3 {
+		t.Fatalf("KeepSeen = %+v, %v, want the three open targets", full, ok)
+	}
+	if _, ok, _ := c.KeepSeen(survey(t, c, projects, nil), core.RemoteAnswers{}, full, session.Session{}, true); ok {
+		t.Error("KeepSeen kept a survey that holds the same, want nothing")
+	}
+
+	rt.Remove(revier.TargetRef{Host: "rt", ID: "2"})
+	smaller := survey(t, c, projects, nil)
+	_, ok, held := c.KeepSeen(smaller, core.RemoteAnswers{}, full, session.Session{}, true)
+	if ok || held.Targets() != 2 {
+		t.Fatalf("first smaller survey: kept %v, held %+v, want it held back", ok, held)
+	}
+	if _, ok, again := c.KeepSeen(smaller, core.RemoteAnswers{}, full, held, false); ok || !again.SameAs(held) {
+		t.Errorf("a linked host's answer: kept %v, held %+v, want it still held and nothing kept", ok, again)
+	}
+	if kept, ok, _ := c.KeepSeen(smaller, core.RemoteAnswers{}, full, held, true); !ok || kept.Targets() != 2 {
+		t.Errorf("second smaller survey: %+v, %v, want the shrink kept", kept, ok)
+	}
+}

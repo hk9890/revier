@@ -234,6 +234,51 @@ func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (
 	return s, true
 }
 
+// KeepSeen is what a surface writes as what it last saw, from its survey of
+// this machine and the answers of its linked hosts, given last, what it wrote
+// last, and held, a smaller survey kept back. It keeps nothing when Seen
+// records nothing, nothing is open, or nothing changed. A survey that holds
+// less than last is kept only when the next survey of this machine agrees: a
+// terminal killed before the surface lists as closed, not as failed, for the
+// moment before the surface goes too (decisions.md D150). surveyed is false
+// for the answers of a linked host, which are laid over the same listing and
+// so are no second look at it. hold is the survey to keep back for the next.
+func (c *Core) KeepSeen(local Report, answers RemoteAnswers, last, held session.Session, surveyed bool) (keep session.Session, ok bool, hold session.Session) {
+	s, ok := c.Seen(local, answers, last)
+	if !ok || len(s.Projects) == 0 || s.SameAs(last) {
+		return session.Session{}, false, session.Session{}
+	}
+	if lacks(s, last) && (!surveyed || !s.SameAs(held)) {
+		if surveyed {
+			return session.Session{}, false, s
+		}
+		return session.Session{}, false, held
+	}
+	return s, true, session.Session{}
+}
+
+// lacks reports a target that was holds and s does not.
+func lacks(s, was session.Session) bool {
+	type at struct {
+		project revier.ProjectName
+		target  revier.TargetName
+	}
+	has := map[at]bool{}
+	for _, p := range s.Projects {
+		for _, t := range p.Targets {
+			has[at{p.Name, t.Name}] = true
+		}
+	}
+	for _, p := range was.Projects {
+		for _, t := range p.Targets {
+			if !has[at{p.Name, t.Name}] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func projectOf(s session.Session, name revier.ProjectName) (session.Project, bool) {
 	for _, p := range s.Projects {
 		if p.Name == name {
