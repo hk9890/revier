@@ -292,7 +292,8 @@ func TestSessionSaveWithNothingOpenKeepsTheLastSession(t *testing.T) {
 	if out := capture(t, "session", "save"); !strings.Contains(out, "nothing is open") {
 		t.Errorf("save printed %q, want it to say nothing was saved", out)
 	}
-	if out := capture(t, "session", "list"); strings.Count(out, "\n") != 2 || !strings.Contains(out, "before-reboot") {
+	// The header, the one session, and the line naming what a restore opens.
+	if out := capture(t, "session", "list"); strings.Count(out, "\n") != 3 || !strings.Contains(out, "before-reboot") {
 		t.Errorf("list printed %q, want the one session saved before the reboot", out)
 	}
 	if out := capture(t, "session", "restore"); !strings.Contains(out, "opened 2") {
