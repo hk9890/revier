@@ -78,10 +78,13 @@ func (w walk) line() string {
 }
 
 // waiting is the wait after the closes, which waits for each step the walk
-// asked to close and that did not fail.
+// asked to close and that did not fail. With no such step, it waits for
+// nothing, as `revier shutdown` says no wait.
 func (w walk) waiting() string {
-	asked, _, _ := w.closed.Counts()
-	return fmt.Sprintf("waiting for %d to close", asked)
+	if asked, _, _ := w.closed.Counts(); asked > 0 {
+		return fmt.Sprintf("waiting for %d to close", asked)
+	}
+	return "nothing to wait for"
 }
 
 // progressMsg is one report of a walk, on the channel it came on, so the next

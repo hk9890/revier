@@ -152,3 +152,15 @@ func TestListWritesNoRecord(t *testing.T) {
 		t.Errorf("lines = %+v, want the prune's unbound alone", lines)
 	}
 }
+
+// A moment given at another offset is the same moment in local time: the
+// record names each day file by the local date.
+func TestAMomentAtAnotherOffsetIsLocal(t *testing.T) {
+	got, err := parseMoment("2026-10-15T23:30:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 10, 15, 23, 30, 0, 0, time.UTC); !got.Equal(want) || got.Location() != time.Local {
+		t.Errorf("moment = %v in %v, want %v in local time", got, got.Location(), want)
+	}
+}

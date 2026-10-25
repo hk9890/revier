@@ -543,9 +543,12 @@ func TestShutdownClosesWhenTheRecheckFindsNoBusyAgent(t *testing.T) {
 }
 
 // A step whose agents the recheck could not read closes nothing and says why:
-// a degraded survey reports no agent, and no agent read is not idle.
+// a degraded survey reports no agent, and no agent read is not idle. The
+// state record has no close of a step that was never asked to close.
 func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
+	l := &ledger{}
+	c.Ledger = l
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
 	out, err := c.Shutdown(context.Background(), plan, 0, core.ShutdownOpts{})
@@ -560,6 +563,9 @@ func TestShutdownLeavesOpenAStepTheRecheckCannotRead(t *testing.T) {
 	}
 	if note := out[0].Note(); !strings.Contains(note, "no longer surveyed") {
 		t.Errorf("note = %q, want the reason the step was left", note)
+	}
+	if closes := l.noted(record.KindClose); len(closes) != 0 {
+		t.Errorf("close lines = %+v, want none for steps left open", closes)
 	}
 }
 

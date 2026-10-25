@@ -116,7 +116,7 @@ func SaveSeen(stateRoot string, s session.Session) error {
 // listed. The end was clean when a full shutdown is on record (decisions.md
 // D141), when no surface kept what it saw, when any session was saved after
 // the surface last wrote it, since that save is newer word on what was open,
-// or when every target it holds is open now (decisions.md D150).
+// or when every target it holds is open now (D150).
 func Unclean(c *core.Core, stateRoot string, r core.Report) (session.Session, bool, error) {
 	if c.Ledger.State().ShutDown != nil {
 		return session.Session{}, false, nil

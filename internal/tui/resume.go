@@ -19,7 +19,7 @@ import (
 // the sessions screen, or the surface as it is. It is a screen like the
 // others, not a second surface. It is also the first screen after an end with
 // no shutdown that lost something, offering what the surface last saw
-// (decisions.md D150).
+// (D150).
 
 // resumeScreen is the start dialog: when revier was shut down, and the
 // session to offer, which is zero when none is saved. unclean is the dialog

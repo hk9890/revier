@@ -168,7 +168,7 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 // It records nothing while a host here could not list, since what that host
 // holds would be missing (decisions.md D89). A held link whose host gave no
 // answer keeps its entry of prev, what was last seen of it; with none it
-// records nothing either (decisions.md D150).
+// records nothing either (D150).
 func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (session.Session, bool) {
 	if len(local.Failed) > 0 {
 		return session.Session{}, false

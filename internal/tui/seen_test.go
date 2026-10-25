@@ -4,8 +4,15 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -113,5 +120,49 @@ func TestAShrinkIsWrittenOnlyWhenTheNextSurveyAgrees(t *testing.T) {
 	seenSurvey(m)
 	if s, _ := seenOnDisk(t, root); len(s.Projects) != 1 {
 		t.Errorf("seen = %+v after two, want project-01 alone", s)
+	}
+}
+
+// A linked host's answer is laid over the listing of the last survey here,
+// so it is no second look at a shrink: what the surface last saw keeps the
+// target until the next survey of this machine agrees.
+func TestALinkedHostsAnswerDoesNotConfirmAShrink(t *testing.T) {
+	root := t.TempDir()
+	rt, _, c, local := world(t, 2)
+	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
+	rt.Add("session:project-01", "kitty")
+	zero := rt.Add("session:project-00", "kitty")
+	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
+	c.Remotes = map[string]revier.Remote{"buildbox": remote}
+	projects := append(remoteOnDisk(t, "alpha"), local...)
+	m, now := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	m = resize(m, 150, 30)
+	// One survey here and one round to buildbox, with every command they
+	// answer with run, so what they keep is written.
+	round := func() {
+		t.Helper()
+		var cmd tea.Cmd
+		m, cmd = deliver(m, m.Survey())
+		m, cmd = deliver(m, cmd)
+		runAll(cmd)
+	}
+
+	round()
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 2 {
+		t.Fatalf("seen = %+v, want both projects", s)
+	}
+
+	rt.Remove(zero)
+	*now = now.Add(5 * time.Second)
+	round()
+	if len(remote.Asked) != 2 {
+		t.Fatalf("buildbox was asked %d times, want a second round after the shrink", len(remote.Asked))
+	}
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 2 {
+		t.Errorf("seen = %+v after a survey without project-00 and buildbox's answer, want both still", s)
+	}
+	round()
+	if s, _ := seenOnDisk(t, root); len(s.Projects) != 1 {
+		t.Errorf("seen = %+v after a second survey here, want project-01 alone", s)
 	}
 }

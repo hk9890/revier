@@ -95,6 +95,14 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	if len(pos) > 0 {
 		ref = pos[0]
 	}
+	// A session asked for by id or name is found without a survey, so one
+	// that names nothing fails before any host is asked.
+	var s session.Session
+	if ref != "" {
+		if s, err = session.Load(a.stateRoot, ref); err != nil {
+			return err
+		}
+	}
 	report, err := a.core.Survey(ctx, a.projects)
 	if err != nil {
 		return err
@@ -102,7 +110,6 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	// After an end with no shutdown, what a surface last saw is saved first,
 	// so a plain restore opens it when it is the newest save (decisions.md
 	// D150). A dry run saves nothing and previews the snapshot itself.
-	var s session.Session
 	unclean := false
 	switch {
 	case ref == "" && *dry:
@@ -113,10 +120,11 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if unclean {
+	switch {
+	case unclean:
 		_, _ = fmt.Fprintf(a.out, "revier ended without a shutdown; a restore saves what it last saw, at %s, and opens it\n", s.At.Local().Format("2006-01-02 15:04"))
-	} else {
-		s, err = session.Load(a.stateRoot, ref)
+	case ref == "":
+		s, err = session.Load(a.stateRoot, "")
 	}
 	if ref == "" && errors.Is(err, session.ErrNoWholeSession) {
 		_, _ = fmt.Fprintln(a.out, "no saved session holds every open project; each was saved as a project closed. revier session list shows them, and revier session restore <id> opens one")

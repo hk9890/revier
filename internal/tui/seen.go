@@ -32,7 +32,7 @@ type recoveredMsg struct {
 // and keeps it as what the surface last saw (keepSeen). Both are written by
 // the command it returns, never in Update.
 func (m *Model) observe(answered *core.RemoteAnswers) tea.Cmd {
-	return tea.Batch(m.recordSaw(answered), m.keepSeen())
+	return tea.Batch(m.recordSaw(answered), m.keepSeen(answered == nil))
 }
 
 // recordSaw is the state record's lines of a survey: what changed since the
@@ -55,10 +55,12 @@ func (m Model) recordSaw(answered *core.RemoteAnswers) tea.Cmd {
 // a shutdown, before anything is written over what was last seen. After that
 // it keeps what the survey saw, unless a walk runs, nothing is open, or
 // nothing changed. A survey that holds less than the last one written is
-// written only when the next survey agrees: a terminal killed before the
-// surface lists as closed, not as failed, for the moment before the surface
-// goes too.
-func (m *Model) keepSeen() tea.Cmd {
+// written only when the next survey of this machine agrees: a terminal
+// killed before the surface lists as closed, not as failed, for the moment
+// before the surface goes too. surveyed is false for the answers of a linked
+// host, which are laid over the same listing and so are no second look at
+// it.
+func (m *Model) keepSeen(surveyed bool) tea.Cmd {
 	if !m.recovered {
 		if m.checking || len(m.local.Failed) > 0 {
 			return nil
@@ -74,8 +76,10 @@ func (m *Model) keepSeen() tea.Cmd {
 		m.shrink = session.Session{}
 		return nil
 	}
-	if lacks(s, m.seen) && !s.SameAs(m.shrink) {
-		m.shrink = s
+	if lacks(s, m.seen) && (!surveyed || !s.SameAs(m.shrink)) {
+		if surveyed {
+			m.shrink = s
+		}
 		return nil
 	}
 	m.shrink = session.Session{}

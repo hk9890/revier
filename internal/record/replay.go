@@ -166,7 +166,7 @@ func apply(s *Seen, l Line) {
 		switch {
 		case l.Host != "":
 			s.Unlisted = with(s.Unlisted, l.Host, l.Err)
-			s.Hosts = slices.DeleteFunc(s.Hosts, func(h string) bool { return h == l.Host })
+			s.Hosts = slices.DeleteFunc(slices.Clone(s.Hosts), func(h string) bool { return h == l.Host })
 		case l.Project != "":
 			s.Unknown = with(s.Unknown, l.Project, l.Err)
 		default:
@@ -175,24 +175,33 @@ func apply(s *Seen, l Line) {
 	case KindHostBack:
 		switch {
 		case l.Host != "":
-			delete(s.Unlisted, l.Host)
+			s.Unlisted = without(s.Unlisted, l.Host)
 			if !slices.Contains(s.Hosts, l.Host) {
-				s.Hosts = append(s.Hosts, l.Host)
+				s.Hosts = append(slices.Clip(s.Hosts), l.Host)
 			}
 		case l.Project != "":
-			delete(s.Unknown, l.Project)
+			s.Unknown = without(s.Unknown, l.Project)
 		default:
 			s.Unreachable = ""
 		}
 	}
 }
 
+// with and without change a copy of m, as apply changes the hosts: what is
+// known of a scope holds the maps and the host list of the snapshot line it
+// started at, and a second replay of the same lines reads that line again.
 func with[K comparable](m map[K]string, k K, v string) map[K]string {
 	m = maps.Clone(m)
 	if m == nil {
 		m = map[K]string{}
 	}
 	m[k] = v
+	return m
+}
+
+func without[K comparable](m map[K]string, k K) map[K]string {
+	m = maps.Clone(m)
+	delete(m, k)
 	return m
 }
 

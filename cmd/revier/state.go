@@ -119,10 +119,11 @@ func cmdState(out io.Writer, args []string) error {
 }
 
 // parseMoment reads a moment as RFC 3339, or as a date and a time of day in
-// local time.
+// local time. It returns local time either way: the record is a file per
+// local day, and a moment of another offset can fall on another date.
 func parseMoment(text string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, text); err == nil {
-		return t, nil
+		return t.Local(), nil
 	}
 	for _, layout := range []string{time.DateTime, "2006-01-02 15:04"} {
 		if t, err := time.ParseInLocation(layout, text, time.Local); err == nil {

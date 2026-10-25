@@ -1108,7 +1108,7 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // back is not asked twice. A dialog up for an older shutdown is put up again
 // for the newer one, so it never offers a session no shutdown on record saved.
 // The dialog after an end with no shutdown has no record to go with, so only
-// a choice takes it down (decisions.md D150).
+// a choice takes it down (D150).
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	switch sd := st.ShutDown; {

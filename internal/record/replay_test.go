@@ -179,3 +179,24 @@ func TestDoneLinesAfterTheLastSurveyAreSince(t *testing.T) {
 		t.Errorf("since at 09:07 = %+v, want none: the go at 09:02 was surveyed", st.Since)
 	}
 }
+
+// A replay changes none of the lines it reads: a host that stops and one
+// that starts listing after a snapshot leave that snapshot as it was
+// written, so a second replay of the same lines starts from it again.
+func TestAReplayLeavesTheSnapshotItStartsAtAsItWas(t *testing.T) {
+	start := at("2026-10-16", "09:00:00")
+	snapshot := record.Seen{Hosts: []string{"kitty", "tmux"}, Unlisted: map[string]string{"gnome": "wctl list: timeout"}}
+	lines := []record.Line{
+		{Time: start, Kind: record.KindSnapshot, By: record.BySaw, Seen: &snapshot},
+		{Time: start.Add(time.Minute), Kind: record.KindHostUnreachable, By: record.BySaw, Host: "tmux", Err: "no server"},
+		{Time: start.Add(2 * time.Minute), Kind: record.KindHostBack, By: record.BySaw, Host: "gnome"},
+	}
+
+	record.Replay(lines, start.Add(3*time.Minute))
+	if !slices.Equal(snapshot.Hosts, []string{"kitty", "tmux"}) || snapshot.Unlisted["gnome"] != "wctl list: timeout" {
+		t.Errorf("snapshot = %+v after a replay, want it as written", snapshot)
+	}
+	if got := hostOf(machineOf(t, record.Replay(lines, start.Add(30*time.Second)), ""), "gnome"); got.Unknown == "" {
+		t.Errorf("gnome = %+v in a second replay before it listed again, want unknown", got)
+	}
+}

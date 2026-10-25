@@ -7,7 +7,7 @@
 // those lines as uses, and a failure or a closed window is no use of a
 // project. An operation records what it did, failed or not; only a surface
 // records what it saw, as the difference between two of its own surveys
-// (decisions.md D121).
+// (D121).
 //
 // Like the log it is process-wide, and a process that never called Setup
 // records nothing.

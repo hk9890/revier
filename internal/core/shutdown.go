@@ -606,9 +606,13 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
 			"unread", s.Unread, "err", res.Err)
-		c.note(record.Line{
-			Kind: record.KindClose, Project: s.Project, Target: s.Target, Host: s.Ref.Host, Ref: s.Ref.ID, Panel: s.Panel,
-		}.Failed(res.Err))
+		// A step left open was never asked to close, so the state record has
+		// no close of it.
+		if !res.Action.Leaves() {
+			c.note(record.Line{
+				Kind: record.KindClose, Project: s.Project, Target: s.Target, Host: s.Ref.Host, Ref: s.Ref.ID, Panel: s.Panel,
+			}.Failed(res.Err))
+		}
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
