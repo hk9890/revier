@@ -60,6 +60,8 @@ Without -p or --panel the project is the one --dir is in, else the one this
 directory resolves to. It goes to the new agent and raises its window; with
 --no-focus it does neither, and prints the address a script reaches the
 agent by, which names an agent once the harness in the tab has started.
+With --panel in a window that is no project's open workspace, it opens what
+[terminal] outside says: a plain shell tab beside the window, or nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
 
@@ -431,23 +433,34 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 // newTab opens a tab through here in the open workspace the core places it in.
 // The place is the owner of --panel; or the project -p names, else the one --dir
 // is in, else the one resolved as for any command, with the target after -p's
-// colon or the one pick chooses. --dir is a path on this machine, so a link,
-// whose tab starts on its host, drops it.
+// colon or the one pick chooses. A --panel that no project's workspace holds
+// gets what [terminal] outside says, and here is not called.
+func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
+	if panel != "" {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), dir, a.cfg.Outside(), func(w core.Workspace) error {
+			return a.tabHere(what, w, panel, dir, here)
+		})
+	}
+	place, err := a.tabPlace(ctx, project, dir, pick)
+	if err != nil {
+		return err
+	}
+	return a.tabHere(what, place, panel, dir, here)
+}
+
+// tabHere opens the tab through here in the workspace w. --dir is a path on
+// this machine, so a link, whose tab starts on its host, drops it.
 //
 // A --dir outside the project that holds --panel is dropped, and the tab opens
 // where the project's own tab would. That --dir is the kitty key's: kitty's
 // --cwd=current gives "/" for a panel whose shell sits in a deleted worktree.
-func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
-	place, err := a.tabPlace(ctx, project, panel, dir, pick)
-	if err != nil {
-		return err
-	}
-	if place.Project.Remote != nil {
+func (a *app) tabHere(what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
+	if w.Project.Remote != nil {
 		dir = ""
 	}
 	if panel != "" && dir != "" {
-		if p, ok := a.projectForPath(dir); !ok || p.Name != place.Project.Name {
-			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", place.Project.Name, "dir", dir)
+		if p, ok := a.projectForPath(dir); !ok || p.Name != w.Project.Name {
+			slog.Warn(what, "err", "--dir is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
 			dir = ""
 		}
 	}
@@ -456,13 +469,10 @@ func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick
 			return fmt.Errorf("--dir %s: not a directory", dir)
 		}
 	}
-	return here(place, dir)
+	return here(w, dir)
 }
 
-func (a *app) tabPlace(ctx context.Context, project, panel, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
-	if panel != "" {
-		return a.core.PanelOwner(ctx, a.projects, revier.PanelID(panel))
-	}
+func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
 	name, sel, _ := strings.Cut(project, ":")
 	p, inDir := a.projectForPath(dir)
 	if name != "" || dir == "" || !inDir {

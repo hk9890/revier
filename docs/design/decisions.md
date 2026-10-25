@@ -750,3 +750,12 @@ directory is recorded too, since an agent resumed from the repository root
 edits `main`. Each agent records the named agent its tab's mark names, and comes
 back as that agent; a name the project no longer declares is dropped and said,
 since another program in its place is not that agent. A link's host resolves it.
+
+### D148 — outside a workspace a terminal key does what config says, by default a plain tab
+
+A terminal key is pressed in any window of the terminal, and most of those are
+no project's. Refusing there made the user's terminal lose its own new-tab key,
+so the core opens a plain tab of the runtime's own shell beside the window, or
+nothing where config says so, through `PanelOpener` (D145: no second
+capability). Only that case is decided: every other failure is returned, and
+the key's own fallback to the terminal's new tab is for revier failing.

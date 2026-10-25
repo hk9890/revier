@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 )
 
 func termConfig(t *testing.T, text string) *config.Config {
@@ -32,8 +33,8 @@ func TestTheTerminalKeysHaveDefaults(t *testing.T) {
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
-	if got := cfg.Outside(); got != config.OutsideTab {
-		t.Errorf("Outside = %q, want %q", got, config.OutsideTab)
+	if got := cfg.Outside(); got != core.OutsideTab {
+		t.Errorf("Outside = %q, want %q", got, core.OutsideTab)
 	}
 }
 
@@ -62,8 +63,8 @@ command = ["plain"]
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
-	if got := cfg.Outside(); got != config.OutsideNone {
-		t.Errorf("Outside = %q, want %q", got, config.OutsideNone)
+	if got := cfg.Outside(); got != core.OutsideNone {
+		t.Errorf("Outside = %q, want %q", got, core.OutsideNone)
 	}
 }
 
@@ -102,7 +103,7 @@ key = "ctrl+shift+o"
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, wantKeys) {
 		t.Errorf("TermKeys = %+v, want %+v", got, wantKeys)
 	}
-	if got := cfg.Outside(); got != config.OutsideTab {
-		t.Errorf("Outside = %q, want %q", got, config.OutsideTab)
+	if got := cfg.Outside(); got != core.OutsideTab {
+		t.Errorf("Outside = %q, want %q", got, core.OutsideTab)
 	}
 }

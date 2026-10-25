@@ -35,12 +35,15 @@ These maps add a tab to the workspace you are in. `--copy-env` tells revier
 which kitty the key came from.
 
 ```
-map ctrl+shift+z launch --type=background --copy-env --cwd=current sh -lc 'exec revier agent new --panel "$1" --dir .' sh @active-kitty-window-id
+map ctrl+shift+z launch --type=background --copy-env --cwd=current sh -lc 'revier agent new --panel "$1" --dir . || kitten @ launch --type=tab --cwd=current' sh @active-kitty-window-id
 map ctrl+shift+t launch --type=background --copy-env --cwd=current sh -lc 'revier shell new --panel "$1" --dir . || kitten @ launch --type=tab --cwd=current' sh @active-kitty-window-id
 ```
 
-The first adds an agent tab. The second adds a shell tab, and falls back to
-kitty's own new tab in a window that is no project's workspace.
+The first adds an agent tab, the second a shell tab. In a window that is no
+project's workspace, both open a plain shell tab beside it, or nothing if you
+set `outside = "none"` in [`[terminal]`](../configuration.md#terminal). The
+`kitten @ launch` after `||` opens kitty's own new tab only when revier itself
+fails.
 
 ## What does not work
 

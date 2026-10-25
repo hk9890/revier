@@ -113,6 +113,31 @@ func TestTabAtAPanelIgnoresADirOutsideItsProject(t *testing.T) {
 	}
 }
 
+// [terminal] outside reaches a key pressed in a window that is no project's
+// workspace: "none" opens nothing there and is no failure, so the key's
+// fallback does not run either; the default opens a plain tab.
+func TestTabAtAPanelOutsideAWorkspaceTakesTheConfiguredAction(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "3"})
+	none := &config.Config{Terminal: config.Terminal{Outside: core.OutsideNone}}
+	a := withState(t, &app{cfg: none, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+
+	if err := a.newAgent(ctx, "", "3", "", core.Resume{}); err != nil {
+		t.Fatalf("agent new --panel 3, outside none: %v", err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Fatalf("tabs = %+v, want none", rt.Tabs)
+	}
+	a.cfg = &config.Config{}
+	if err := a.newShell(ctx, "", "3", ""); err != nil {
+		t.Fatalf("shell new --panel 3, outside tab: %v", err)
+	}
+	if len(rt.Tabs) != 1 {
+		t.Errorf("tabs = %+v, want the plain tab", rt.Tabs)
+	}
+}
+
 // A runtime that cannot attach a terminal says so, naming what would: a
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {

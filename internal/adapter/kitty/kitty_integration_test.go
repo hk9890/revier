@@ -368,7 +368,7 @@ func TestOpenTabOpensAPanelGroupAsOneTab(t *testing.T) {
 	}
 	want := []string{
 		"launch --type=tab --location=last --match window_id:4 --hold --keep-focus --cwd /home/user/dev/demo/wt claude --resume b",
-		"launch --type=window --match window_id:9 --hold --keep-focus --cwd /home/user/dev/demo/wt",
+		"launch --type=window --match window_id:9 --keep-focus --cwd /home/user/dev/demo/wt",
 	}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
@@ -398,8 +398,31 @@ func TestOpenTabMarksEveryWindowOfTheTab(t *testing.T) {
 	}
 	want := []string{
 		"launch --type=tab --location=last --match window_id:4 --hold --var revier_home=home --var revier_target=agent --keep-focus claude",
-		"launch --type=window --match window_id:9 --hold --var revier_home=home --var revier_target=agent --keep-focus",
+		"launch --type=window --match window_id:9 --var revier_home=home --var revier_target=agent --keep-focus",
 	}
+	if !slices.Equal(launches, want) {
+		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A plain shell tab, the one a key opens outside a workspace, is kitty's own
+// shell: it is launched without --hold, so its window closes when the shell
+// exits instead of waiting for a key.
+func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if _, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Dir:    "/home/user",
+		Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Dir: "/home/user"}},
+	}, nil); err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	var launches []string
+	for _, c := range rec.all() {
+		if c.args[0] == "launch" {
+			launches = append(launches, strings.Join(c.args, " "))
+		}
+	}
+	want := []string{"launch --type=tab --location=last --match window_id:4 --keep-focus --cwd /home/user"}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
 	}

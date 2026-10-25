@@ -878,11 +878,17 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bool, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
 	panels := r.PanelSpecs()
 
-	args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win), "--hold"}
 	first := 0
 	for i, p := range panels {
+		args := []string{"--type=tab", "--location=last", "--match", "window_id:" + strconv.Itoa(win)}
 		if i > 0 {
-			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}
+			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first)}
+		}
+		// A panel with no command is kitty's own shell, and its window
+		// closes when the shell exits; --hold would keep it open, waiting
+		// for a key.
+		if len(p.Command) > 0 {
+			args = append(args, "--hold")
 		}
 		args = append(args, varArgs(vars)...)
 		if keepFocus {

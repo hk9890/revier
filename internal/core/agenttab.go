@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -28,6 +29,10 @@ var (
 
 	// ErrUnknownAgent means the project has no named agent of that name.
 	ErrUnknownAgent = errors.New("no agent named")
+
+	// ErrNoWorkspace means the runtime holds the panel, but no project's
+	// open workspace does: a terminal window opened by hand.
+	ErrNoWorkspace = errors.New("its window is no project's open workspace")
 )
 
 // PanelAgentVar is the panel variable that names the named agent an agent tab
@@ -293,6 +298,10 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // One instance can back two targets. The target is the first of them that
 // declares an agent panel, because only that one has an agent tab to give; a
 // shell tab opened through it takes that target's shell panel too.
+//
+// An instance that holds the panel but backs no project's target is
+// ErrNoWorkspace, and the Workspace that comes with it holds only that
+// instance: where TabAtPanel opens a tab outside a workspace.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
 	if c.Runtime == nil {
@@ -349,9 +358,53 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if owner.Ref.IsZero() {
-		return Workspace{}, fmt.Errorf("panel %s: its window is no project's open workspace", panel)
+		return Workspace{Ref: ref, snap: snap}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 	}
 	return owner, nil
+}
+
+// Outside is what a terminal key does in a panel that no project's open
+// workspace holds (decisions.md D148).
+type Outside string
+
+const (
+	// OutsideTab opens a plain tab beside the panel: the runtime's own shell.
+	OutsideTab Outside = "tab"
+	// OutsideNone does nothing.
+	OutsideNone Outside = "none"
+)
+
+// TabAtPanel opens the tab a terminal key pressed in a panel asks for: in the
+// open workspace PanelOwner finds, through in. Where the runtime holds the
+// panel but no project's open workspace does, the key is not refused: it does
+// what outside says, a plain tab of the runtime's own shell beside the panel,
+// started in dir where dir is given, or nothing. Every other failure is
+// returned, so the key's own fallback runs (decisions.md D148).
+func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace) error) error {
+	w, err := c.PanelOwner(ctx, projects, panel)
+	if !errors.Is(err, ErrNoWorkspace) {
+		if err != nil {
+			return err
+		}
+		return in(w)
+	}
+	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside), "dir", dir)
+	if outside == OutsideNone {
+		return nil
+	}
+	opener, ok := c.Runtime.(revier.PanelOpener)
+	if !ok {
+		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
+	}
+	shell := revier.PanelSpec{Kind: revier.PanelShell, Dir: dir}
+	opened, err := opener.OpenTab(ctx, w.Ref, revier.Realization{Dir: dir, Panels: []revier.PanelSpec{shell}}, nil)
+	if err != nil {
+		return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), err)
+	}
+	if err := opener.FocusPanel(ctx, w.Ref, opened); err != nil {
+		return fmt.Errorf("%s: focus the plain tab: %w", c.Runtime.Name(), err)
+	}
+	return nil
 }
 
 // holdsPanel reports whether one of the instance's panels has the id.

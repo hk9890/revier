@@ -10,9 +10,9 @@ import (
 // and what they do in a terminal window that is no project's workspace. A
 // key left out has its default; one written empty is no key.
 type Terminal struct {
-	ShellKey *string `toml:"shell_key"`
-	AgentKey *string `toml:"agent_key"`
-	Outside  string  `toml:"outside"`
+	ShellKey *string      `toml:"shell_key"`
+	AgentKey *string      `toml:"agent_key"`
+	Outside  core.Outside `toml:"outside"`
 }
 
 // The defaults of [terminal]. The shell and agent keys are the chords the
@@ -20,13 +20,6 @@ type Terminal struct {
 const (
 	DefaultShellKey = "ctrl+shift+t"
 	DefaultAgentKey = "ctrl+shift+z"
-)
-
-// What a terminal key does outside a workspace: open a plain tab beside the
-// window, or nothing.
-const (
-	OutsideTab  = "tab"
-	OutsideNone = "none"
 )
 
 // TermKey is one terminal key config.toml declares, its chord parsed: the
@@ -43,11 +36,11 @@ type TermKey struct {
 // the shell's, the default agent's, then each named agent's, in file order.
 func (c *Config) TermKeys() []TermKey { return c.termKeys }
 
-// Outside is what a terminal key does outside a workspace: OutsideTab or
-// OutsideNone.
-func (c *Config) Outside() string {
+// Outside is what a terminal key does outside a workspace: core.OutsideTab
+// or core.OutsideNone.
+func (c *Config) Outside() core.Outside {
 	if c.Terminal.Outside == "" {
-		return OutsideTab
+		return core.OutsideTab
 	}
 	return c.Terminal.Outside
 }
@@ -60,9 +53,9 @@ func (c *Config) Outside() string {
 func (c *Config) validateTerminal(refused []error) []error {
 	var errs []error
 	switch c.Terminal.Outside {
-	case "", OutsideTab, OutsideNone:
+	case "", core.OutsideTab, core.OutsideNone:
 	default:
-		errs = append(errs, fmt.Errorf("terminal.outside: %q is neither %q nor %q", c.Terminal.Outside, OutsideTab, OutsideNone))
+		errs = append(errs, fmt.Errorf("terminal.outside: %q is neither %q nor %q", c.Terminal.Outside, core.OutsideTab, core.OutsideNone))
 		c.Terminal.Outside = ""
 	}
 	held := map[core.Chord]string{}
