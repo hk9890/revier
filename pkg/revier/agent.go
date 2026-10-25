@@ -66,9 +66,9 @@ type Panel struct {
 	// tmux window id. It is empty on a runtime that has no tabs.
 	Tab string `json:"tab,omitempty"`
 
-	// Dir is the working directory of the panel's foreground process, as the
-	// runtime reports it, and empty on a runtime that reports none. It can
-	// name a directory that was removed since.
+	// Dir is the panel's working directory, as the runtime reports it, and
+	// empty on a runtime that reports none. It can name a directory that was
+	// removed since.
 	Dir string `json:"dir,omitempty"`
 }
 

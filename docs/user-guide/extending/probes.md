@@ -41,8 +41,8 @@ file order, then the others.
 `id` is the panel (kitty window id, tmux pane id) and `tab` its tab. `kind` is
 `shell` when the command is a shell, else `tool`. `title` is the panel's
 title; many agents write their state there. `vars`, `pid`, `command`, `tab`
-and `dir` are optional. `pid` and `command` are the panel's foreground process,
-and `dir` its working directory, which kitty reports.
+and `dir` are optional. `pid` and `command` are the panel's foreground process.
+`dir` is the panel's working directory; only kitty reports it.
 
 Print one JSON object and exit 0 within 500 ms:
 
