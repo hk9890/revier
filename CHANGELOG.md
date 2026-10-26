@@ -6,6 +6,48 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.21.0
+
+- **A restore no longer loses agents to a smaller save.** Before, a plain
+  restore opened the newest save, so after you closed one project, or deleted
+  a few, it opened only what was left. Now a plain restore, the first entry of
+  the sessions screen and the start dialog take the newest save of the whole
+  set: one saved by hand, by a full shutdown, or after a crash. A save made
+  when you close a project is still listed, and you open it by its id.
+  `revier session list` ends with the id a plain restore opens.
+- **A crash no longer loses what was open.** While the TUI runs, revier
+  remembers what it shows. When revier ended without a shutdown, for example
+  because kitty was killed, the next start offers what was open as a
+  `last-seen` session. `revier session restore` offers it too.
+- **Named agents.** An `[[agent]]` in `config.toml` names a program that an
+  agent tab runs, such as a second agent beside Claude Code. Give it a `key`
+  for its own terminal key. `revier agent new <name>` opens one, and a
+  restore brings it back as that agent, not as the default one. A project
+  file can change an agent's command or add an agent of its own.
+- **`revier term install` writes your terminal keys into kitty.** It writes
+  `revier.conf` in kitty's configuration directory and adds one `include` at
+  the top of `kitty.conf`, also through stow links. You no longer write the
+  maps by hand. The keys come from the new `[terminal]` table (`shell_key`,
+  `agent_key`) and from each agent's `key`. `revier term status` shows them,
+  and `revier term uninstall` removes them.
+- **A terminal key in a window of no project opens a plain tab.** Before,
+  revier refused the key there. Set `[terminal] outside = "none"` to make it
+  do nothing.
+- **A terminal key works in a panel whose directory was removed.** Before,
+  ctrl+shift+t and ctrl+shift+z did nothing in a panel of a deleted worktree,
+  in kitty and with the tmux keys of the guide. Now the tab opens in the
+  project. In a worktree that still exists, the new tab still opens in that
+  worktree.
+- **`revier state` shows what revier had open at a moment.** `--at <time>`
+  goes back in time, and `--session <id>` explains why a save differs from
+  what was open when it was saved. The record it reads is kept under
+  revier's state directory.
+- **Shutdown says when it is safe to leave.** While the TUI shuts down, it
+  says to wait, and how many of what it closed are still open. Then it says "Shutdown complete", and
+  `revier shutdown` prints "shutdown complete; safe to leave". Every restore in
+  the TUI now ends on the project list, with the TUI raised. What did not
+  open is named in the footer.
+
 ## v0.20.0
 
 - **Action required: on GNOME, revier needs `wctl` 0.16.0 or later.** revier
