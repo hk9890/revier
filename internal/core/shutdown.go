@@ -152,19 +152,9 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 	for _, inst := range r.Instances {
 		instances[key(inst.Ref)] = inst
 	}
-	// An instance another project also holds - a shared target, one
-	// workspace two projects match - stays open for that project when only
-	// one project shuts down.
 	seen := map[string]bool{}
-	for _, v := range r.Views {
-		if only == "" || v.Project.Name == only {
-			continue
-		}
-		for _, tv := range v.Targets {
-			if !tv.Ref.IsZero() {
-				seen[key(tv.Ref)] = true
-			}
-		}
+	for k := range heldElsewhere(r, only) {
+		seen[k] = true
 	}
 	var plan []CloseStep
 	for _, v := range r.Views {
@@ -223,6 +213,43 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 		}
 	}
 	return plan
+}
+
+// heldElsewhere is each instance, by key, that a project other than only
+// holds, with that project: a shared target, or one workspace two projects
+// match. A shutdown of only alone leaves it open for that project. With no
+// only, every project shuts down and nothing is held.
+func heldElsewhere(r Report, only revier.ProjectName) map[string]revier.ProjectName {
+	held := map[string]revier.ProjectName{}
+	for _, v := range r.Views {
+		if only == "" || v.Project.Name == only {
+			continue
+		}
+		for _, tv := range v.Targets {
+			if _, ok := held[key(tv.Ref)]; !ok && !tv.Ref.IsZero() {
+				held[key(tv.Ref)] = v.Project.Name
+			}
+		}
+	}
+	return held
+}
+
+// SharedWith names the other projects that hold an open target of only's,
+// which its shutdown leaves open for them.
+func (c *Core) SharedWith(r Report, only revier.ProjectName) []revier.ProjectName {
+	held := heldElsewhere(r, only)
+	var out []revier.ProjectName
+	for _, v := range r.Views {
+		if v.Project.Name != only {
+			continue
+		}
+		for _, tv := range v.Targets {
+			if p, ok := held[key(tv.Ref)]; ok && !tv.Ref.IsZero() && !slices.Contains(out, p) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // CloseRow is one row of a project that del closes: a target, a window

@@ -127,6 +127,12 @@ func TestShutdownOfOneProjectKeepsWhatAnotherHolds(t *testing.T) {
 	if got, want := stepNames(c.ShutdownPlan(report, "", core.ShutdownAll)), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
 		t.Errorf("everything = %v, want %v", got, want)
 	}
+	if got := c.SharedWith(report, "revier"); !slices.Equal(got, []revier.ProjectName{"other"}) {
+		t.Errorf("SharedWith(revier) = %v, want other, which holds the workspace", got)
+	}
+	if got := c.SharedWith(report, ""); len(got) != 0 {
+		t.Errorf("SharedWith of everything = %v, want nothing", got)
+	}
 }
 
 // A window attached to the project by hand is the project's, and closes with

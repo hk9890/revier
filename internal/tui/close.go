@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -28,7 +29,8 @@ type closePlannedMsg struct {
 	drop     bool
 	projects []core.Project // what the survey covered, for the recheck inside the close
 	plan     []core.CloseStep
-	raises   int // Model.raises at the press
+	shared   []revier.ProjectName // what holds the open targets a project's close leaves open
+	raises   int                  // Model.raises at the press
 }
 
 // atEnd reports a query field with nothing right of its cursor, where del has
@@ -98,6 +100,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 	return m, func() tea.Msg {
 		asked.plan = surveyPlan(c, projects, project, func(r core.Report) []core.CloseStep {
 			if whole {
+				asked.shared = c.SharedWith(r, project)
 				return c.ShutdownPlan(r, project, core.ShutdownAll)
 			}
 			return c.ClosePlan(r, project, row)
@@ -118,6 +121,14 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		// another project holds what is open of it too. The delete is asked
 		// as for what is not open, and checked again on the answer.
 		m.confirm, m.ctarget = msg.project, msg.row.Target
+		return m, nil
+	}
+	if len(msg.plan) == 0 && len(msg.shared) > 0 {
+		holders := make([]string, len(msg.shared))
+		for i, p := range msg.shared {
+			holders[i] = string(p)
+		}
+		m.err = fmt.Errorf("%s: what is open of it stays open for %s", msg.label, strings.Join(holders, ", "))
 		return m, nil
 	}
 	if len(msg.plan) == 0 {
