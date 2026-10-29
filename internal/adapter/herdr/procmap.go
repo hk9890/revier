@@ -34,12 +34,15 @@ func paneProcesses(root, socket string, server int) map[string]int {
 		ppid int
 	}
 	byPID := map[int]process{}
-	for pid, e := range scanned {
-		pane := e.Vars["HERDR_PANE_ID"]
-		if pane == "" || filepath.Clean(e.Vars["HERDR_SOCKET_PATH"]) != filepath.Clean(socket) {
+	for pid, vars := range scanned {
+		if filepath.Clean(vars["HERDR_SOCKET_PATH"]) != filepath.Clean(socket) {
 			continue
 		}
-		byPID[pid] = process{pane: pane, ppid: e.PPID}
+		ppid, ok := proc.ParentIn(root, pid)
+		if !ok {
+			continue
+		}
+		byPID[pid] = process{pane: vars["HERDR_PANE_ID"], ppid: ppid}
 	}
 
 	out := map[string]int{}

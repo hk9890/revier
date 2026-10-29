@@ -86,8 +86,8 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 		return nil, fmt.Errorf("proc: %w", err)
 	}
 	byTag := map[string][]process{}
-	for pid, e := range scanned {
-		if p, ok := h.read(pid, e); ok {
+	for pid, vars := range scanned {
+		if p, ok := h.read(pid, vars); ok {
 			byTag[p.tag] = append(byTag[p.tag], p)
 		}
 	}
@@ -115,9 +115,9 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 	return out, nil
 }
 
-func (h *Host) read(pid int, e Environ) (process, bool) {
-	p := process{pid: pid, ppid: e.PPID, tag: e.Vars[TagVar], workspace: e.Vars[WorkspaceVar]}
-	if p.tag == "" || p.workspace == "" {
+func (h *Host) read(pid int, vars map[string]string) (process, bool) {
+	p := process{pid: pid, tag: vars[TagVar], workspace: vars[WorkspaceVar]}
+	if p.workspace == "" {
 		return process{}, false
 	}
 	dir := filepath.Join(h.root(), strconv.Itoa(pid))
@@ -138,7 +138,7 @@ func (h *Host) read(pid int, e Environ) (process, bool) {
 	for _, f := range []struct {
 		into *int
 		at   int
-	}{{&p.pgrp, 2}, {&p.tty, 4}, {&p.tpgid, 5}} {
+	}{{&p.ppid, 1}, {&p.pgrp, 2}, {&p.tty, 4}, {&p.tpgid, 5}} {
 		if *f.into, err = strconv.Atoi(fields[f.at]); err != nil {
 			return process{}, false
 		}
@@ -235,31 +235,25 @@ func statFields(stat []byte) []string {
 	return strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
 }
 
-// Environ is a process Scan found: its parent, and those of the variables
-// asked for that its environment sets.
-type Environ struct {
-	PPID int
-	Vars map[string]string
-}
-
 // Scan reads the environment of every process in the /proc tree at root once,
-// and returns by pid each process whose environment sets key, with key and
-// those of more that it sets.
+// and returns by pid each process whose environment sets key to a value, with
+// key and those of more that it sets.
 // A process of another user refuses the read of its environment and is passed
 // over, as is one that ended meanwhile.
-func Scan(root, key string, more ...string) (map[int]Environ, error) {
+func Scan(root, key string, more ...string) (map[int]map[string]string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
-	out := map[int]Environ{}
+	setsKey := []byte(key + "=")
+	out := map[int]map[string]string{}
 	for _, e := range entries {
 		pid, err := strconv.Atoi(e.Name())
 		if err != nil {
 			continue
 		}
 		env, err := os.ReadFile(filepath.Join(root, e.Name(), "environ"))
-		if err != nil || !bytes.Contains(env, []byte(key+"=")) {
+		if err != nil || !bytes.Contains(env, setsKey) {
 			continue
 		}
 		vars := map[string]string{}
@@ -269,14 +263,9 @@ func Scan(root, key string, more ...string) (map[int]Environ, error) {
 				vars[name] = value
 			}
 		}
-		if _, ok := vars[key]; !ok {
-			continue
+		if vars[key] != "" {
+			out[pid] = vars
 		}
-		ppid, ok := ParentIn(root, pid)
-		if !ok {
-			continue
-		}
-		out[pid] = Environ{PPID: ppid, Vars: vars}
 	}
 	return out, nil
 }
