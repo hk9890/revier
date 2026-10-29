@@ -1,6 +1,6 @@
-// What the host's Probe says of the herdr it finds, against a caller in place
-// of the socket and an empty herdr on PATH. No herdr runs, so the default
-// layer runs it.
+// What the host's Probe says of the herdr it finds, against a caller or a
+// socket of the test's own in place of the server, and an empty herdr on
+// PATH. No herdr runs, so the default layer runs it.
 package herdr_test
 
 import (
@@ -39,6 +39,20 @@ func TestProbeNeedsNoRunningServer(t *testing.T) {
 	h := &herdr.Host{Socket: filepath.Join(t.TempDir(), "none.sock")}
 	if err := h.Probe(context.Background()); err != nil {
 		t.Errorf("Probe = %v, want herdr usable", err)
+	}
+}
+
+// A server that listens and fails the ping fails the probe: Open starts a
+// server only where none listens, so it would fail on this one at every
+// keypress.
+func TestProbeRefusesAServerThatFailsThePing(t *testing.T) {
+	fakeHerdrOnPath(t)
+	sock := serve(t, func(map[string]any) string {
+		return `{"id":"revier","error":{"code":"unknown_method","message":"no such method"}}`
+	})
+	h := &herdr.Host{Socket: sock}
+	if err := h.Probe(context.Background()); err == nil || !strings.Contains(err.Error(), "unknown_method") {
+		t.Errorf("Probe = %v, want the failed ping named", err)
 	}
 }
 
