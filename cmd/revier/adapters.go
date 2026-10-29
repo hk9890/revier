@@ -23,8 +23,8 @@ import (
 )
 
 // The compiled-in adapters. This list is the whole registry: adding one is a
-// line here, not an init() somewhere, so what a build contains is readable in
-// one place.
+// line here and its name in defaultRuntimeOrder, not an init() somewhere, so
+// what a build contains is readable in one place.
 func runtimeAdapters() map[string]revier.Runtime {
 	return map[string]revier.Runtime{
 		"kitty": &kitty.Host{},

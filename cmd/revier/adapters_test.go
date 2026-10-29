@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,4 +93,17 @@ func TestAConfiguredProbeRunsBeforeHerdrAndOpencode(t *testing.T) {
 	if got, want := strings.Join(names, " "), "claude codex herdr opencode"; got != want {
 		t.Errorf("probes = %q, want %q", got, want)
 	}
+}
+
+// selectHost skips a default it cannot find without a word, so a name spelled
+// one way in the order and another in the registry drops that adapter, and an
+// adapter left out of the order is never tried.
+func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
+	check := func(kind string, registry, order []string) {
+		if !slices.Equal(registry, slices.Sorted(slices.Values(order))) {
+			t.Errorf("%s adapters %q, default order %q: want the same names", kind, registry, order)
+		}
+	}
+	check("runtime", slices.Sorted(maps.Keys(runtimeAdapters())), defaultRuntimeOrder)
+	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
 }
