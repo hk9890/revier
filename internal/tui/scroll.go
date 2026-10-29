@@ -105,7 +105,7 @@ func (m *Model) syncBody() {
 	m.follow(l.Index()*itemHeight, itemHeight)
 }
 
-// bodyList is the list the body scrolls: the link dialog's rows while it is
+// bodyList is the list the body scrolls: the remote screen's rows while it is
 // up, and otherwise the list the surface shows, the projects or the agents.
 // It is a pointer because the cursor moves on it.
 func (m *Model) bodyList() *list.Model {
@@ -124,8 +124,8 @@ func (m *Model) bodyList() *list.Model {
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
 	switch {
-	case m.dialog == dialogSessions, m.dialog == dialogLink && m.link.step == linkHosts:
-		return 1 // a host is its name alone, a session one line of counts
+	case m.dialog == dialogSessions, m.dialog == dialogLink && m.link.oneLine():
+		return 1 // a host is one line, a session one line of counts
 	}
 	return projectDelegate{}.Height()
 }

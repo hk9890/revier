@@ -150,12 +150,6 @@ instance (D84).
 A file on the host defines a project; a file here refers to one. One shape for
 both cost two workarounds.
 
-### D45 — a link is made from the host's own list
-
-The ssh config and the remote revier know the hosts and projects. A failure is
-said in revier's words with the next step, and ssh's errors are told apart by
-exit status 255.
-
 ### D46 — the set of open projects is revier's; the contents of a pane are not
 
 Which projects and targets were open is revier's model, and a reboot loses it.
@@ -641,7 +635,7 @@ The project files are shared between machines, so a link written on one
 names the other one itself, and there it asked itself over ssh every second
 for what its own survey lists. A link whose host is this machine, by name or
 by the HostName ssh gives it, is left out at load, and `revier doctor` names
-the files. The link dialog does not offer this machine. Rejected: answering
+the files. The remote screen does not list this machine. Rejected: answering
 the link from the local survey, which shows each agent there twice.
 
 ### D134 — a status is a command, drawn at one of four places
@@ -823,3 +817,13 @@ directory from the runtime. The tab starts in the directory a key passes, else
 the panel's, each only while it is a directory; else in the workspace where
 the project's tab starts, outside one where the runtime does. Rejected:
 dropping the directory, so every tab from a worktree opened in the project.
+
+### D154 — the remote screen lists the machines the user added
+
+Replaces D45. The ssh config also names forges and routers, which run no
+revier, so the remote screen lists the machines config.toml declares, and
+adds one from the ssh config. The file can be shared between machines, so
+each one leaves itself off the list (D131). As the screen opens, each machine
+is asked for its revier's version: no survey, so no D130 round. A link to a
+machine off the list still works, and `revier doctor` names it. The remote
+revier lists the projects; ssh's own failures are told apart by exit 255.

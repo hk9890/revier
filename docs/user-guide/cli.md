@@ -23,7 +23,7 @@ in full.
 | `revier open` | Run-or-raise the project's workspace. |
 | `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |
-| `revier link` | List hosts, list a host's projects, or link one. See [Projects on another machine](links.md). |
+| `revier link` | List the machines you added, list a host's projects, or link one. See [Projects on another machine](links.md). |
 | `revier run <action>` | Run an `[[action]]` in the project. |
 | `revier each -- <cmd>` | Run a command in every project's directory. `revier each log` shows past runs. |
 | `revier agent new` / `revier shell new` | Add an agent tab, of the default agent or a named one, or a shell tab to an open workspace. |

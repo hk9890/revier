@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/config"
 )
 
 // A message of several lines carries its label on the first line only: the
@@ -100,6 +102,32 @@ func TestDoctorNamesTheLinksToThisMachineItSkipped(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report should contain %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// A link to a machine the remote screen does not list still works, so it is
+// no problem; doctor names it, and not a link to a machine on the list.
+func TestDoctorNamesTheLinksToAMachineNotOnTheList(t *testing.T) {
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	doctorRoot(t, map[string]string{
+		"far.toml":  "[remote]\nhost = \"farbox\"\nproject = \"far\"\n",
+		"near.toml": "[remote]\nhost = \"buildbox\"\nproject = \"near\"\n",
+	})
+	root := os.Getenv("REVIER_CONFIG_HOME")
+	if err := config.AddMachine(root, "buildbox"); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v", err)
+	}
+	far := filepath.Join(root, "projects", "far.toml")
+	if want := "1 link to a machine not on the remote screen (a link works without it):\n  " + far + " (farbox)\n"; !strings.Contains(out.String(), want) {
+		t.Errorf("report should contain %q:\n%s", want, out.String())
+	}
+	if strings.Contains(out.String(), "near.toml") {
+		t.Errorf("a link to a machine on the list should not be named:\n%s", out.String())
 	}
 }
 

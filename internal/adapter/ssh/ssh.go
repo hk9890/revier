@@ -195,6 +195,20 @@ func (r *Remote) RunCommand(project revier.ProjectName, action string) []string 
 	return append(append([]string{"ssh", "-t"}, flags()...), "--", r.host, login(remote))
 }
 
+// Version asks the remote revier for its version: the word after "revier"
+// in what `revier version` prints, which every revier has.
+func (r *Remote) Version(ctx context.Context) (string, error) {
+	out, _, err := r.run(ctx, "revier", "version")
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) < 2 || fields[0] != "revier" {
+		return "", fmt.Errorf("%s: revier version: %q is no version", r.host, strings.TrimSpace(string(out)))
+	}
+	return fields[1], nil
+}
+
 // Survey asks the remote revier for the named projects, in one call.
 func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
 	return r.list(ctx, names)

@@ -1,6 +1,9 @@
 package revier
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // Remote is a revier on another machine (decisions.md D40). It is asked what
 // it knows, and nothing else: it lists no instances, opens nothing and focuses
@@ -11,6 +14,12 @@ import "context"
 type Remote interface {
 	// Name is the host as the project file names it.
 	Name() string
+
+	// Version is the version the remote revier reports for itself. It
+	// surveys nothing, so it is the cheap way to learn that the machine
+	// answers and runs a revier. A machine that answers and runs none is
+	// ErrNoRevier.
+	Version(ctx context.Context) (string, error)
 
 	// Survey reports the named projects as the remote revier sees them, one
 	// call for all of them. A name the remote does not know is an error, so
@@ -46,3 +55,7 @@ type Remote interface {
 	// the directory to start in.
 	PanelCommand(project ProjectName, kind PanelKind, agent string) []string
 }
+
+// ErrNoRevier is a machine that answers and has no revier to run: what a
+// Remote's call wraps where the remote shell could not find it.
+var ErrNoRevier = errors.New("no revier there")

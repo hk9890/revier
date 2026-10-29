@@ -150,6 +150,9 @@ func (m Model) top() string {
 	name := ""
 	switch m.dialog {
 	case dialogLink:
+		if m.link.hasBar() {
+			return m.bar()
+		}
 		name = m.link.title()
 	case dialogNew:
 		name = "Add a project on this machine"

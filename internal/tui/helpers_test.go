@@ -648,24 +648,31 @@ func onDisk(t *testing.T, names []string, path map[string]string, gitURL map[str
 	return projects, dir
 }
 
-// linkWorld is a surface with an ssh configuration naming buildbox and
-// farbox, a scratch configuration root to write links into, and a fake
-// buildbox that has the named projects.
+// linkWorld is a surface whose config.toml declares the machines buildbox
+// and farbox, over an ssh configuration that names them and github.com, a
+// scratch configuration root to write links into, and a fake buildbox that
+// has the named projects.
 func linkWorld(t *testing.T, projects []core.Project, onHost ...string) (tui.Model, *hosttest.FakeRemote, string) {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	sshConfig := filepath.Join(t.TempDir(), "config")
-	if err := os.WriteFile(sshConfig, []byte("Host buildbox\n  HostName 10.0.0.7\nHost farbox\n"), 0o600); err != nil {
+	if err := os.WriteFile(sshConfig, []byte("Host buildbox\n  HostName 10.0.0.7\nHost farbox\nHost github.com\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
+	for _, host := range []string{"buildbox", "farbox"} {
+		if err := config.AddMachine(root, host); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	var views []revier.ProjectView
 	for _, n := range onHost {
 		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
 	}
 	remote := hosttest.NewRemote("buildbox", views...)
+	remote.Revier = "0.21.0"
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), NewRemote: func(string) revier.Remote { return remote }}
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 80, 20), remote, root
 }

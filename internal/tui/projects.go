@@ -43,8 +43,8 @@ func (i projectItem) rowHeld() bool               { return i.held }
 func (i projectItem) rowBuiltin() bool            { return i.builtin }
 
 // tableRow is an item the project table draws: the projects here, and the
-// projects of a host in the link dialog. The two differ in whose home a path
-// is written against, and in the note a link dialog row has under the counts.
+// projects of a host in the remote screen. The two differ in whose home a path
+// is written against, and in the note a remote screen row has under the counts.
 type tableRow interface {
 	rowView() revier.ProjectView
 	rowPath() string
@@ -52,7 +52,7 @@ type tableRow interface {
 	rowUnsurveyed() bool
 	// rowHeld reports the project open, which decides the row's mark. A
 	// project here is held by an attachment the survey was not asked about
-	// too; a host's project in the link dialog is held by what the host said
+	// too; a host's project in the remote screen is held by what the host said
 	// and nothing of this machine's.
 	rowHeld() bool
 	// rowBuiltin reports the project revier builds in, which takes the
@@ -214,7 +214,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 // The table's measures: the gap between its columns, the digits an agent
 // count is padded to, the most the agent column takes, the most the project
 // column asks for, and the most of it a name takes. The agent column has what
-// the counts of all four states need; a link dialog row's "linked as" note is
+// the counts of all four states need; a remote screen row's "linked as" note is
 // cut to it. The project column asks for its widest name or path up to a width
 // that holds most paths, and a name longer than its cap is cut so its row alone
 // pays for it.

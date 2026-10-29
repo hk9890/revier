@@ -58,7 +58,7 @@ const barLine = 0
 const barSeparator = " · "
 
 // buttons are the bar's buttons on the screen in view: the surface's, or the
-// sessions screen's own. Every other screen has none.
+// sessions screen's or the remote screen's own. Every other screen has none.
 func (m Model) buttons() []barAction {
 	switch {
 	case m.confirm != "":
@@ -69,6 +69,8 @@ func (m Model) buttons() []barAction {
 		return append([]barAction{m.switchButton()}, barActions...)
 	case m.dialog == dialogSessions && !m.sessions.naming:
 		return sessionActions
+	case m.dialog == dialogLink && m.link.hasBar():
+		return remoteActions
 	}
 	return nil
 }
@@ -76,8 +78,11 @@ func (m Model) buttons() []barAction {
 // barLead is what stands on the bar before the buttons: the name of the
 // screen, where a screen has buttons of its own.
 func (m Model) barLead() string {
-	if m.dialog == dialogSessions && !m.sessions.naming {
+	switch {
+	case m.dialog == dialogSessions && !m.sessions.naming:
 		return " " + m.theme.Header.Render("Sessions") + "  "
+	case m.dialog == dialogLink && m.link.hasBar():
+		return " " + m.theme.Header.Render("Remote machines") + "  "
 	}
 	return ""
 }

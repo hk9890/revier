@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A failed ssh writes its reason to stderr, and the reason is nearly always
@@ -64,7 +66,7 @@ func classify(ctx context.Context, host string, args []string, stderr string, er
 		return reason(host, say)
 	}
 	if isNotFound(low, err) {
-		return reason(host, "no revier on the PATH ssh gives - put mise or asdf shims in ~/.zshenv")
+		return noRevier{reason(host, "no revier on the PATH ssh gives - put mise or asdf shims in ~/.zshenv")}
 	}
 	if isOlder(low) {
 		return reason(host, "the revier there has no `"+command(args)+"` - update revier on HOST")
@@ -138,6 +140,12 @@ func command(args []string) string {
 	}
 	return strings.Join(words, " ")
 }
+
+// noRevier is the line for a machine whose shell found no revier, which is
+// revier.ErrNoRevier to a caller that tells the states of a machine apart.
+type noRevier struct{ error }
+
+func (noRevier) Unwrap() error { return revier.ErrNoRevier }
 
 func reason(host, say string) error {
 	return errors.New(host + ": " + strings.ReplaceAll(say, "HOST", host))

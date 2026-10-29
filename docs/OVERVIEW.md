@@ -21,7 +21,7 @@ A findability map: where things live, and how to search for them.
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
-| `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the link dialog and `revier link`. |
+| `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the remote screen's "new", and the `HostName` that tells this machine apart. |
 | `internal/hosttest/` | The fake host, probe, key binder, terminal keys and remote that layer L2 runs against. |
 | `internal/testenv/` | The scratch configuration, state, ssh configuration and kitty configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool. |
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |

@@ -13,6 +13,8 @@ type FakeRemote struct {
 	mu   sync.Mutex
 	name string
 
+	// Revier is the version of the revier there: what Version answers with.
+	Revier string
 	// Views is what Survey answers with, whatever names it was asked for.
 	Views []revier.ProjectView
 	// Err makes every call fail, for the unreachable host path.
@@ -62,6 +64,15 @@ func NewRemote(name string, views ...revier.ProjectView) *FakeRemote {
 }
 
 func (f *FakeRemote) Name() string { return f.name }
+
+func (f *FakeRemote) Version(context.Context) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return "", f.Err
+	}
+	return f.Revier, nil
+}
 
 func (f *FakeRemote) Survey(_ context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
 	f.mu.Lock()

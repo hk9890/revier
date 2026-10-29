@@ -120,10 +120,13 @@ func editActions(root string, change func(lines []string, entries []table, have 
 
 // actionTables is every [[action]] entry of a file, in file order, which is
 // the order Load reads them in.
-func actionTables(lines []string) []table {
+func actionTables(lines []string) []table { return entriesOf(lines, "action") }
+
+// entriesOf is every [[name]] entry of a file, in file order.
+func entriesOf(lines []string, name string) []table {
 	var out []table
 	for _, t := range tables(lines) {
-		if t.array && t.name == "action" {
+		if t.array && t.name == name {
 			out = append(out, t)
 		}
 	}

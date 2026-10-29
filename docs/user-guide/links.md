@@ -19,19 +19,42 @@ host knows the project; this machine asks it over ssh.
 - On the host: the project, in its own project file. The host needs no tmux
   and no desktop.
 
+## Add the machine
+
+The remote screen lists the machines you added, not every host in
+`~/.ssh/config`. To add one, press **alt+r**, then **alt+n** (`new` on the
+screen's bar). Pick a host of your `~/.ssh/config`, and press Enter. revier
+writes it to `config.toml` at once ([Machines](configuration.md#machines)).
+
+Each row says what the machine answered when the screen opened:
+
+| Row | Means |
+|---|---|
+| `checking…` | No answer yet. The other rows do not wait for it. |
+| `revier 0.21.0` | The machine answers and runs that version of revier. |
+| `no revier` | The machine answers, but revier is not on the `PATH` of its login shell. |
+| `does not answer` | ssh failed. The pane on the right says why. |
+
+To take a machine off the list, press **alt+d** (`remove`) on its row. If a
+link still names the machine, revier asks first. The link stays and still
+works.
+
 ## Link a project
+
+In the TUI, press **alt+r**. Pick a machine, then a project (type to filter),
+then give the link a name. Esc goes back one step.
 
 From a shell:
 
 ```sh
-revier link                              # the hosts your ~/.ssh/config names
+revier link                              # the machines you added, as alt+r lists them
 revier link buildbox                     # the projects the revier on buildbox has
 revier link buildbox far                 # write a link to far on buildbox
 revier link buildbox far --name far-box  # the same, under another name here
 ```
 
-In the TUI, press **alt+r**. Pick a host, then a project (type to filter), then
-give the link a name. Esc goes back one step.
+`revier link buildbox` works for any host ssh reaches, also one you did not
+add.
 
 `revier link buildbox far` writes `projects/far.toml` in the configuration
 directory ([Files](configuration.md#files)):

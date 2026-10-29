@@ -67,7 +67,7 @@ type Core struct {
 
 	// Remotes are the revier installations on other machines, by host
 	// (decisions.md D40). NewRemote makes one for a host not yet here - a
-	// link written while the surface runs, or a host the link dialog asks
+	// link written while the surface runs, or a host the remote screen asks
 	// about - and the result is kept. With no NewRemote, a host with no
 	// entry is reported unreachable, not refused.
 	Remotes   map[string]revier.Remote
