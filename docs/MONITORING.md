@@ -91,9 +91,10 @@ doc reads what it already did.
 - A `saw` line comes from a surface alone: with no TUI or popup running, the
   record holds only what operations did. `revier list` writes no `saw`
   line, only what its prune changed in the state file.
-- A hidden popup surveys nothing (`docs/design/decisions.md` D86), so it
-  writes no `saw` line until its next raise. A change made while it was
-  hidden carries the time of that raise, not of the change.
+- A hidden popup surveys nothing unless a launch of its own is still coming
+  up (`docs/design/decisions.md` D86), so it writes no `saw` line until its
+  next raise. A change made while it was hidden carries the time of that
+  raise, not of the change.
 - A `snapshot` is a whole survey of one scope, this machine or one linked
   host (`machine`): at a surface's first survey, at the first of a day, when
   the project list changed, and at each save, with `saved`. Each other `saw`
