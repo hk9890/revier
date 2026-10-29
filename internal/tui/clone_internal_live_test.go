@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -28,7 +29,7 @@ func TestCloneCmdClonesOnTheTerminalItIsGiven(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "demo")
 	var screen bytes.Buffer
-	c := &cloneCmd{project: revier.Project{Name: "demo", Path: path, GitURL: repo}}
+	c := &cloneCmd{ledger: ledger.File{}, project: revier.Project{Name: "demo", Path: path, GitURL: repo}}
 	c.SetStdout(&screen)
 	if err := c.Run(); err != nil {
 		t.Fatalf("Run: %v\n%s", err, screen.String())
@@ -48,7 +49,7 @@ func TestCloneCmdFailureCarriesGitsReason(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	missing := filepath.Join(t.TempDir(), "absent.git")
-	c := &cloneCmd{project: revier.Project{Name: "demo", Path: filepath.Join(t.TempDir(), "demo"), GitURL: missing}}
+	c := &cloneCmd{ledger: ledger.File{}, project: revier.Project{Name: "demo", Path: filepath.Join(t.TempDir(), "demo"), GitURL: missing}}
 	c.SetStdout(&bytes.Buffer{})
 	err := c.Run()
 	if err == nil || !strings.Contains(err.Error(), "fatal:") {

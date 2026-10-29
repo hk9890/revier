@@ -22,7 +22,6 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/logging"
-	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -95,7 +94,6 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 		err = fmt.Errorf("project %q: git clone %s: %w: %s", p.Name, p.GitURL, err, gitCause(said.String()))
 	}
 	logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
-	record.Write(record.Line{Kind: record.KindClone, By: record.ByDid, Project: p.Name, Dir: p.Path}.Failed(err))
 	if err != nil {
 		return false, err
 	}

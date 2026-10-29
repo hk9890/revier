@@ -6,13 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"slices"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/app"
-	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -486,15 +484,16 @@ func (m Model) dropNote(name revier.ProjectName, target revier.TargetName) strin
 // terminal handed over so git's progress is on screen, and opens the home
 // target once it is done.
 func (m Model) clone(p core.Project, home revier.TargetName) tea.Cmd {
-	return tea.Exec(&cloneCmd{project: p.Project}, func(err error) tea.Msg {
+	return tea.Exec(&cloneCmd{ledger: m.core.Ledger, project: p.Project}, func(err error) tea.Msg {
 		return clonedMsg{project: p, home: home, err: err}
 	})
 }
 
-// cloneCmd is checkout.Ensure as something bubbletea can hand the terminal
-// to. The screen returns to the list the moment git exits; the footer shows
-// the reason the error of a failed clone carries.
+// cloneCmd is app.Clone as something bubbletea can hand the terminal to. The
+// screen returns to the list the moment git exits; the footer shows the
+// reason the error of a failed clone carries.
 type cloneCmd struct {
+	ledger  core.Ledger
 	project revier.Project
 	out     io.Writer
 }
@@ -507,18 +506,6 @@ func (c *cloneCmd) Run() error {
 	if out == nil {
 		out = io.Discard
 	}
-	_, err := checkout.Ensure(c.project, out)
+	_, err := app.Clone(c.ledger, c.project, out)
 	return err
-}
-
-// lastLine is the last non-empty line of git's output. Progress redraws a
-// line with carriage returns, so those end a line too.
-func lastLine(s string) string {
-	lines := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' })
-	for i := len(lines) - 1; i >= 0; i-- {
-		if l := strings.TrimSpace(lines[i]); l != "" {
-			return l
-		}
-	}
-	return ""
 }
