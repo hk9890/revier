@@ -9,6 +9,7 @@
 package checkout
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -83,15 +85,48 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	// "--" because a URL is data: one starting with a dash must not reach git
 	// as an option.
 	c := exec.Command("git", "clone", "--", p.GitURL, p.Path)
-	c.Stdout, c.Stderr = out, out
+	// One writer for both streams, so exec copies them in one goroutine and
+	// out is never written from two.
+	var said bytes.Buffer
+	both := io.MultiWriter(out, &said)
+	c.Stdout, c.Stderr = both, both
 	start := time.Now()
-	err = c.Run()
+	if err = c.Run(); err != nil {
+		err = fmt.Errorf("project %q: git clone %s: %w: %s", p.Name, p.GitURL, err, gitCause(said.String()))
+	}
 	logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
+	record.Write(record.Line{Kind: record.KindClone, By: record.ByDid, Project: p.Name, Dir: p.Path}.Failed(err))
 	if err != nil {
-		return false, fmt.Errorf("project %q: git clone %s: %w", p.Name, p.GitURL, err)
+		return false, err
 	}
 	Trust(p.Path, out)
 	return true, nil
+}
+
+// gitCause is why git says a clone failed: its first "fatal:" line, after the
+// line before it, which is where ssh says what went wrong. git ends with a
+// hint about access rights, so its last line names no cause. Output with no
+// "fatal:" line gives its last line.
+func gitCause(said string) string {
+	var lines []string
+	for _, l := range strings.FieldsFunc(said, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	for i, l := range lines {
+		if !strings.HasPrefix(l, "fatal:") {
+			continue
+		}
+		if i > 0 && !strings.HasPrefix(lines[i-1], "Cloning into") {
+			return lines[i-1] + "; " + l
+		}
+		return l
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return lines[len(lines)-1]
 }
 
 // Trust runs `mise trust` on dir, so the tools a checkout pins are active in

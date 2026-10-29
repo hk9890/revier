@@ -13,8 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/checkout"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -88,15 +90,26 @@ func TestEnsureWithoutGitURLNamesTheField(t *testing.T) {
 	}
 }
 
+// A failed clone carries git's own reason, and the state record keeps it.
 func TestEnsureReportsAFailedClone(t *testing.T) {
 	bare(t)
+	root := t.TempDir()
+	record.Setup(root, "go")
+	t.Cleanup(func() { record.Setup("", "") })
 	path := filepath.Join(t.TempDir(), "demo")
 	_, err := checkout.Ensure(revier.Project{Name: "demo", Path: path, GitURL: filepath.Join(t.TempDir(), "absent.git")}, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "git clone") {
-		t.Fatalf("err = %v, want the clone failure", err)
+	if err == nil || !strings.Contains(err.Error(), "git clone") || !strings.Contains(err.Error(), "fatal:") {
+		t.Fatalf("err = %v, want the clone failure with git's reason", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("a failed clone must not leave a directory that looks like a checkout")
+	}
+	lines, rerr := record.Read(root, time.Now())
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if len(lines) != 1 || lines[0].Kind != record.KindClone || lines[0].Project != "demo" || lines[0].Err != err.Error() {
+		t.Errorf("record = %+v, want one clone line with the error", lines)
 	}
 }
 
