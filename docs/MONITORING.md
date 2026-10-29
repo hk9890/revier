@@ -50,6 +50,7 @@ doc reads what it already did.
 | `record line skipped` | one `WARN` per line of the state record that is not a line, with `file` and `line` |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
 | `probe` | an agent probe failed, and the agent shows unknown |
+| `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered` |
 | `panel mark` | one `WARN` per panel of a launch that could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps; `by` is why: `saved` by hand, `shutdown`, `project-closed`, or `last-seen` for what a surface last saw, saved after an end with no shutdown. A plain restore never opens a `project-closed` save (`docs/design/decisions.md` D149) |
 | `session seen` | one `WARN` when a surface could not write what it last saw, `$STATE/seen.toml`, with `path` (`docs/design/decisions.md` D150) |
@@ -76,7 +77,7 @@ doc reads what it already did.
 - A press is in the log and in the event file. Explain a failure from the
   log: a failed operation writes no event. Its error is in the state record.
 - `agent session` lines come from the TUI alone, so none are written while no
-  surface runs.
+  surface runs or the popup is hidden.
 
 ## The state record
 
@@ -90,6 +91,9 @@ doc reads what it already did.
 - A `saw` line comes from a surface alone: with no TUI or popup running, the
   record holds only what operations did. `revier list` writes no `saw`
   line, only what its prune changed in the state file.
+- A hidden popup surveys nothing (`docs/design/decisions.md` D86), so it
+  writes no `saw` line until its next raise. A change made while it was
+  hidden carries the time of that raise, not of the change.
 - A `snapshot` is a whole survey of one scope, this machine or one linked
   host (`machine`): at a surface's first survey, at the first of a day, when
   the project list changed, and at each save, with `saved`. Each other `saw`
