@@ -46,13 +46,22 @@ func (h *Host) Capabilities() revier.Capabilities {
 	return revier.Capabilities{}
 }
 
-// Probe reports herdr usable when the binary exists. It does not require a
-// running server.
+// Probe reports herdr usable when the binary exists and the server, when one
+// listens, answers and is not older than this host was tested against. It
+// does not require a running server: Open checks the one it starts. A server
+// that listens and fails the ping is refused, as Open would refuse it.
 func (h *Host) Probe(ctx context.Context) error {
 	if _, err := exec.LookPath("herdr"); err != nil {
 		return fmt.Errorf("herdr not on PATH: %w", err)
 	}
-	return nil
+	version, err := h.ping(ctx)
+	if errors.Is(err, errNoServer) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return supported(version)
 }
 
 // Instances lists every workspace on the server, with the panes of all its
