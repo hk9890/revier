@@ -11,9 +11,10 @@ import (
 )
 
 // WriteFile writes data to path whole or not at all: it goes to a temporary
-// file beside path and is renamed over it, so a crash mid-write leaves the
-// old file, not half of the new one. mode is the file's permission bits,
-// which the temporary file does not otherwise carry.
+// file beside path, is flushed to disk, and is renamed over it, so a crash or
+// a power loss mid-write leaves the old file, not half of the new one. mode
+// is the file's permission bits, which the temporary file does not otherwise
+// carry.
 func WriteFile(path string, data []byte, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
@@ -24,10 +25,15 @@ func WriteFile(path string, data []byte, mode os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
-	if err := tmp.Close(); err != nil {
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
 		return err
 	}
-	if err := os.Chmod(tmp.Name(), mode); err != nil {
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
