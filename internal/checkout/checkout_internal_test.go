@@ -17,6 +17,7 @@ func TestGitCauseNamesWhatFailed(t *testing.T) {
 			"fatal: repository '/absent.git' does not exist",
 		},
 		{"no fatal line", "Cloning into '/p'...\nerror: something\n", "error: something"},
+		{"interrupted", "Cloning into '/p'...\n", ""},
 		{"no output", "", ""},
 	} {
 		if got := gitCause(c.stderr); got != c.want {

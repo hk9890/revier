@@ -207,10 +207,14 @@ func (mi *mirror) take(msg mirroredMsg) {
 // positive count. The first move up asks for the scrollback, which the mirror
 // does not read while it follows the end; back at the end it stops reading
 // it. Until the scrollback is here there is nothing above the screen to stop
-// at, so the moves are kept as they come.
+// at, so the moves are kept as they come. After a raise the scrollback is
+// read once the raise's survey answers, as ask reads.
 func (mi *mirror) scroll(c *core.Core, a revier.AgentView, by int) tea.Cmd {
 	if by > 0 && !mi.deep {
 		mi.deep, mi.off = true, by
+		if mi.held {
+			return nil
+		}
 		return mi.readScreen(c, a)
 	}
 	mi.off = max(mi.off+by, 0)

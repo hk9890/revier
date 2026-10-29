@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
@@ -81,9 +83,15 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 		return false, err
 	}
 	_, _ = fmt.Fprintf(out, "revier: %s is not on this machine; cloning %s\n", p.Path, p.GitURL)
+	// git draws its progress only on a terminal, and out reaches it through
+	// the pipe that keeps what it said: a terminal behind out gets it anyway.
+	args := []string{"clone"}
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		args = append(args, "--progress")
+	}
 	// "--" because a URL is data: one starting with a dash must not reach git
 	// as an option.
-	c := exec.Command("git", "clone", "--", p.GitURL, p.Path)
+	c := exec.Command("git", append(args, "--", p.GitURL, p.Path)...)
 	// One writer for both streams, so exec copies them in one goroutine and
 	// out is never written from two.
 	var said bytes.Buffer
@@ -91,7 +99,10 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	c.Stdout, c.Stderr = both, both
 	start := time.Now()
 	if err = c.Run(); err != nil {
-		err = fmt.Errorf("project %q: git clone %s: %w: %s", p.Name, p.GitURL, err, gitCause(said.String()))
+		err = fmt.Errorf("project %q: git clone %s: %w", p.Name, p.GitURL, err)
+		if cause := gitCause(said.String()); cause != "" {
+			err = fmt.Errorf("%w: %s", err, cause)
+		}
 	}
 	logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
 	if err != nil {
@@ -103,12 +114,13 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 
 // gitCause is why git says a clone failed: its first "fatal:" line, after the
 // line before it, which is where ssh says what went wrong. git ends with a
-// hint about access rights, so its last line names no cause. Output with no
-// "fatal:" line gives its last line.
+// hint about access rights, so its last line names no cause, and its
+// "Cloning into" line names none either. Output with no "fatal:" line gives
+// its last line.
 func gitCause(said string) string {
 	var lines []string
 	for _, l := range strings.FieldsFunc(said, func(r rune) bool { return r == '\n' || r == '\r' }) {
-		if l = strings.TrimSpace(l); l != "" {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "Cloning into") {
 			lines = append(lines, l)
 		}
 	}
@@ -116,7 +128,7 @@ func gitCause(said string) string {
 		if !strings.HasPrefix(l, "fatal:") {
 			continue
 		}
-		if i > 0 && !strings.HasPrefix(lines[i-1], "Cloning into") {
+		if i > 0 {
 			return lines[i-1] + "; " + l
 		}
 		return l

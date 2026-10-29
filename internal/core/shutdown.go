@@ -216,18 +216,18 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 }
 
 // heldElsewhere is each instance, by key, that a project other than only
-// holds, with that project: a shared target, or one workspace two projects
-// match. A shutdown of only alone leaves it open for that project. With no
+// holds, with every such project: a shared target, or one workspace two
+// projects match. A shutdown of only alone leaves it open for them. With no
 // only, every project shuts down and nothing is held.
-func heldElsewhere(r Report, only revier.ProjectName) map[string]revier.ProjectName {
-	held := map[string]revier.ProjectName{}
+func heldElsewhere(r Report, only revier.ProjectName) map[string][]revier.ProjectName {
+	held := map[string][]revier.ProjectName{}
 	for _, v := range r.Views {
 		if only == "" || v.Project.Name == only {
 			continue
 		}
 		for _, tv := range v.Targets {
-			if _, ok := held[key(tv.Ref)]; !ok && !tv.Ref.IsZero() {
-				held[key(tv.Ref)] = v.Project.Name
+			if k := key(tv.Ref); !tv.Ref.IsZero() && !slices.Contains(held[k], v.Project.Name) {
+				held[k] = append(held[k], v.Project.Name)
 			}
 		}
 	}
@@ -244,8 +244,10 @@ func (c *Core) SharedWith(r Report, only revier.ProjectName) []revier.ProjectNam
 			continue
 		}
 		for _, tv := range v.Targets {
-			if p, ok := held[key(tv.Ref)]; ok && !tv.Ref.IsZero() && !slices.Contains(out, p) {
-				out = append(out, p)
+			for _, p := range held[key(tv.Ref)] {
+				if !slices.Contains(out, p) {
+					out = append(out, p)
+				}
 			}
 		}
 	}

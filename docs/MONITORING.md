@@ -77,7 +77,8 @@ doc reads what it already did.
 - A press is in the log and in the event file. Explain a failure from the
   log: a failed operation writes no event. Its error is in the state record.
 - `agent session` lines come from the TUI alone, so none are written while no
-  surface runs or the popup is hidden.
+  surface runs, or while the popup is hidden and no launch of its own is
+  coming up.
 
 ## The state record
 
