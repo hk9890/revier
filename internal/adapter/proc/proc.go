@@ -13,8 +13,9 @@
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
 // ParentIn, which the herdr host finds a pane's process with, Foreground and
-// ForegroundIn, which the tmux and herdr hosts read a pane's command with, and
-// RunsUnder, the panels a shutdown closes last.
+// ForegroundIn, which the tmux and herdr hosts read a pane's command with,
+// Scan, the one read of every process's environment, which this host and the
+// herdr host share, and RunsUnder, the panels a shutdown closes last.
 package proc
 
 import (
@@ -24,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,17 +81,13 @@ type process struct {
 // Instances reads /proc once. A process of another user refuses the read of
 // its environment and is passed over, as is one that ended meanwhile.
 func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
-	entries, err := os.ReadDir(h.root())
+	scanned, err := Scan(h.root(), TagVar, WorkspaceVar)
 	if err != nil {
 		return nil, fmt.Errorf("proc: %w", err)
 	}
 	byTag := map[string][]process{}
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil {
-			continue
-		}
-		if p, ok := h.read(pid); ok {
+	for pid, e := range scanned {
+		if p, ok := h.read(pid, e); ok {
 			byTag[p.tag] = append(byTag[p.tag], p)
 		}
 	}
@@ -117,25 +115,12 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 	return out, nil
 }
 
-func (h *Host) read(pid int) (process, bool) {
-	dir := filepath.Join(h.root(), strconv.Itoa(pid))
-	env, err := os.ReadFile(filepath.Join(dir, "environ"))
-	if err != nil || !bytes.Contains(env, []byte(TagVar+"=")) {
-		return process{}, false
-	}
-	p := process{pid: pid}
-	for _, kv := range strings.Split(string(env), "\x00") {
-		name, value, _ := strings.Cut(kv, "=")
-		switch name {
-		case TagVar:
-			p.tag = value
-		case WorkspaceVar:
-			p.workspace = value
-		}
-	}
+func (h *Host) read(pid int, e Environ) (process, bool) {
+	p := process{pid: pid, ppid: e.PPID, tag: e.Vars[TagVar], workspace: e.Vars[WorkspaceVar]}
 	if p.tag == "" || p.workspace == "" {
 		return process{}, false
 	}
+	dir := filepath.Join(h.root(), strconv.Itoa(pid))
 	cmdline, err := os.ReadFile(filepath.Join(dir, "cmdline"))
 	if err != nil {
 		return process{}, false
@@ -153,7 +138,7 @@ func (h *Host) read(pid int) (process, bool) {
 	for _, f := range []struct {
 		into *int
 		at   int
-	}{{&p.ppid, 1}, {&p.pgrp, 2}, {&p.tty, 4}, {&p.tpgid, 5}} {
+	}{{&p.pgrp, 2}, {&p.tty, 4}, {&p.tpgid, 5}} {
 		if *f.into, err = strconv.Atoi(fields[f.at]); err != nil {
 			return process{}, false
 		}
@@ -248,6 +233,52 @@ func (h *Host) Focused(context.Context) (revier.TargetRef, error) { return revie
 // the fields are counted from its last closing one: state, then ppid.
 func statFields(stat []byte) []string {
 	return strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
+}
+
+// Environ is a process Scan found: its parent, and those of the variables
+// asked for that its environment sets.
+type Environ struct {
+	PPID int
+	Vars map[string]string
+}
+
+// Scan reads the environment of every process in the /proc tree at root once,
+// and returns by pid each process whose environment sets key, with key and
+// those of more that it sets.
+// A process of another user refuses the read of its environment and is passed
+// over, as is one that ended meanwhile.
+func Scan(root, key string, more ...string) (map[int]Environ, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int]Environ{}
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		env, err := os.ReadFile(filepath.Join(root, e.Name(), "environ"))
+		if err != nil || !bytes.Contains(env, []byte(key+"=")) {
+			continue
+		}
+		vars := map[string]string{}
+		for _, kv := range strings.Split(string(env), "\x00") {
+			name, value, _ := strings.Cut(kv, "=")
+			if name == key || slices.Contains(more, name) {
+				vars[name] = value
+			}
+		}
+		if _, ok := vars[key]; !ok {
+			continue
+		}
+		ppid, ok := ParentIn(root, pid)
+		if !ok {
+			continue
+		}
+		out[pid] = Environ{PPID: ppid, Vars: vars}
+	}
+	return out, nil
 }
 
 // Parent reads a process's parent from this machine's /proc.

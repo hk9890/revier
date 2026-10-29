@@ -1,11 +1,7 @@
 package herdr
 
 import (
-	"bytes"
-	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
 )
@@ -29,7 +25,7 @@ import (
 // The environment of another user's process cannot be read, and is passed
 // over, as is a process that ended meanwhile.
 func paneProcesses(root, socket string, server int) map[string]int {
-	entries, err := os.ReadDir(root)
+	scanned, err := proc.Scan(root, "HERDR_PANE_ID", "HERDR_SOCKET_PATH")
 	if err != nil {
 		return nil
 	}
@@ -38,33 +34,12 @@ func paneProcesses(root, socket string, server int) map[string]int {
 		ppid int
 	}
 	byPID := map[int]process{}
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil {
+	for pid, e := range scanned {
+		pane := e.Vars["HERDR_PANE_ID"]
+		if pane == "" || filepath.Clean(e.Vars["HERDR_SOCKET_PATH"]) != filepath.Clean(socket) {
 			continue
 		}
-		env, err := os.ReadFile(filepath.Join(root, e.Name(), "environ"))
-		if err != nil || !bytes.Contains(env, []byte("HERDR_PANE_ID=")) {
-			continue
-		}
-		pane, sock := "", ""
-		for _, kv := range strings.Split(string(env), "\x00") {
-			name, value, _ := strings.Cut(kv, "=")
-			switch name {
-			case "HERDR_PANE_ID":
-				pane = value
-			case "HERDR_SOCKET_PATH":
-				sock = value
-			}
-		}
-		if pane == "" || filepath.Clean(sock) != filepath.Clean(socket) {
-			continue
-		}
-		ppid, ok := proc.ParentIn(root, pid)
-		if !ok {
-			continue
-		}
-		byPID[pid] = process{pane: pane, ppid: ppid}
+		byPID[pid] = process{pane: pane, ppid: e.PPID}
 	}
 
 	out := map[string]int{}
