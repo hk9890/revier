@@ -245,6 +245,11 @@ func (h *Host) running(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return supported(version)
+}
+
+// supported refuses a herdr older than this host was tested against.
+func supported(version string) error {
 	if older(version, minVersion) {
 		return fmt.Errorf("herdr %s is older than %s, the oldest revier works with", version, minVersion)
 	}
