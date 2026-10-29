@@ -81,11 +81,17 @@ func RemoveAction(root string, i int, was Action) error {
 	})
 }
 
-// editActions runs one change to the [[action]] tables of config.toml and
-// writes the result only if it parses as Load parses it and decodes to the
-// actions the change meant. Actions written in another form, such as an
-// inline array, are refused: the line editor would not find them.
+// editActions runs one change to the [[action]] tables of config.toml.
 func editActions(root string, change func(lines []string, entries []table, have []Action) ([]string, []Action, error)) error {
+	return editEntries(root, "action", func(c *Config) []Action { return c.Actions }, sameAction, change)
+}
+
+// editEntries runs one change to the [[name]] tables of config.toml, which
+// of reads from a parse, and writes the result only if it parses as Load
+// parses it and decodes to the entries the change meant. Entries written in
+// another form, such as an inline array, are refused: the line editor would
+// not find them.
+func editEntries[T any](root, name string, of func(*Config) []T, same func(a, b T) bool, change func(lines []string, entries []table, have []T) ([]string, []T, error)) error {
 	path := File(root)
 	old, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -96,11 +102,11 @@ func editActions(root string, change func(lines []string, entries []table, have 
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	lines := strings.Split(string(old), "\n")
-	entries := actionTables(lines)
-	if len(entries) != len(cfg.Actions) {
-		return fmt.Errorf("%s: the actions are not written as [[action]] tables; change them by hand", path)
+	entries := entriesOf(lines, name)
+	if len(entries) != len(of(cfg)) {
+		return fmt.Errorf("%s: the %ss are not written as [[%s]] tables; change them by hand", path, name, name)
 	}
-	lines, want, err := change(lines, entries, cfg.Actions)
+	lines, want, err := change(lines, entries, of(cfg))
 	if err != nil {
 		return err
 	}
@@ -112,8 +118,8 @@ func editActions(root string, change func(lines []string, entries []table, have 
 	if err := problemsAdded(cfg, got); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if !slices.EqualFunc(got.Actions, want, sameAction) {
-		return fmt.Errorf("%s: the actions did not come out as written; change them by hand", path)
+	if !slices.EqualFunc(of(got), want, same) {
+		return fmt.Errorf("%s: the %ss did not come out as written; change them by hand", path, name)
 	}
 	return replaceFile(path, []byte(text))
 }

@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -30,7 +32,7 @@ func TestAMachineStillCheckedHoldsNoOtherRow(t *testing.T) {
 	if err != nil || checks == nil {
 		t.Fatalf("open = %v, %v; want the machines asked", checks, err)
 	}
-	s.checked(checkedMsg{host: "farbox", version: "0.21.0"})
+	s.checked(checkedMsg{host: "farbox", ask: s.checks["farbox"].ask, version: "0.21.0"})
 
 	states := map[string]string{}
 	for _, item := range s.hosts.Items() {
@@ -44,6 +46,75 @@ func TestAMachineStillCheckedHoldsNoOtherRow(t *testing.T) {
 	s.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyDown}))
 	if _, ask := s.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})); ask == nil || s.asking != "farbox" {
 		t.Errorf("asking = %q, want Enter on farbox to ask it while buildbox is checked", s.asking)
+	}
+}
+
+// machinesScreen is a remote screen opened over config.toml's machines
+// buildbox and farbox, with an ssh configuration that names router too.
+func machinesScreen(t *testing.T) (*linkScreen, surface) {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	for _, host := range []string{"buildbox", "farbox"} {
+		if err := config.AddMachine(root, host); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sshConfig := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(sshConfig, []byte("Host buildbox\nHost farbox\nHost router\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
+	th := theme.Default()
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), core: &core.Core{}, list: 60, pane: 40, page: 5}
+	s := newLinkScreen(th)
+	if _, err := s.open(sf.core); err != nil {
+		t.Fatal(err)
+	}
+	return &s, sf
+}
+
+// "new" and a remove's question each leave the machines, so an ask of a
+// machine's projects still out is abandoned with them: its answer must not
+// open the host's projects over the step the user moved to.
+func TestNewAndARemoveQuestionAbandonAnAskStillOut(t *testing.T) {
+	enter := pressedKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	answer := askedMsg{host: "buildbox", views: []revier.ProjectView{{Project: revier.Project{Name: "alpha"}}}}
+
+	s, sf := machinesScreen(t)
+	s.key(sf, enter)
+	if err := s.openAdd(); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = s.asked(nil, answer)
+	if s.step != linkAdding {
+		t.Errorf("step = %v, want the ssh hosts still up after the answer", s.step)
+	}
+
+	s, sf = machinesScreen(t)
+	s.key(sf, enter)
+	link := core.Project{Project: revier.Project{Name: "alpha", Remote: &revier.Link{Host: "buildbox", Project: "alpha"}}}
+	if _, err := s.remove(sf.core, []core.Project{link}); err != nil || s.removing != "buildbox" {
+		t.Fatalf("removing = %q, err = %v, want the question", s.removing, err)
+	}
+	_, _ = s.asked(nil, answer)
+	if s.step != linkHosts || s.removing != "buildbox" {
+		t.Errorf("step = %v, removing = %q, want the question still over the machines", s.step, s.removing)
+	}
+}
+
+// Each visit asks again, and an answer to an ask of an earlier visit is not
+// the one a row waits for: a machine that was down then and is up now must
+// not read as down.
+func TestAnAnswerOfAnEarlierVisitIsNotTaken(t *testing.T) {
+	s, sf := machinesScreen(t)
+	earlier := s.checks["buildbox"].ask
+	if _, err := s.open(sf.core); err != nil {
+		t.Fatal(err)
+	}
+	s.checked(checkedMsg{host: "buildbox", ask: earlier, err: errors.New("buildbox: no answer on port 22")})
+	if got, _ := s.checks["buildbox"].state(sf.theme); got != "checking…" {
+		t.Errorf("state = %q, want the ask of this visit still out", got)
 	}
 }
 

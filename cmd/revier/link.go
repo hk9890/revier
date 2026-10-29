@@ -24,9 +24,8 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	// Refused before the host is asked: the ask would be ssh to itself.
-	here := config.ThisMachine()
 	if len(pos) > 0 {
-		if err := here.RefuseLink(pos[0]); err != nil {
+		if err := config.ThisMachine().RefuseLink(pos[0]); err != nil {
 			return err
 		}
 	}
@@ -34,7 +33,7 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 	case 0:
 		hosts := a.cfg.MachineHosts()
 		if len(hosts) == 0 {
-			_, _ = fmt.Fprintf(a.out, "no machines in %s; add one with alt+n on the remote screen\n", config.File(a.cfgRoot))
+			_, _ = fmt.Fprintf(a.out, "no machines in %s; add a [[machine]] table there, or one with alt+n on the remote screen\n", config.File(a.cfgRoot))
 			return nil
 		}
 		for _, h := range hosts {

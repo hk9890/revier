@@ -55,8 +55,10 @@ type hostItem struct {
 func (i hostItem) FilterValue() string { return i.host }
 
 // machineCheck is a machine's answer to the screen's ask for its revier's
-// version, or why it gave none. The zero value is an ask still out.
+// version, or why it gave none. Unanswered, it is an ask still out. ask
+// numbers the ask, so an answer to an earlier one is not taken for it.
 type machineCheck struct {
+	ask      int
 	answered bool
 	version  string
 	err      error
@@ -78,6 +80,7 @@ func (c machineCheck) state(th theme.Theme) (string, lipgloss.Style) {
 // checkedMsg is a machine's answer to the screen's ask for its version.
 type checkedMsg struct {
 	host    string
+	ask     int
 	version string
 	err     error
 }
@@ -204,6 +207,7 @@ type linkScreen struct {
 	step     linkStep
 	hosts    list.Model              // the machines, the first step
 	checks   map[string]machineCheck // what each machine answered this visit
+	asks     int                     // the version asks made so far, which numbers each one
 	adding   list.Model              // the ssh hosts "new" offers
 	removing string                  // the machine a remove asks about, while it does
 	links    int                     // how many links name that machine
@@ -258,8 +262,9 @@ func (m Model) addMachine() (tea.Model, tea.Cmd) {
 
 // removeMachine is the remote screen's "remove".
 func (m Model) removeMachine() (tea.Model, tea.Cmd) {
-	m.err = m.link.remove(m.projects)
-	return m, nil
+	var cmd tea.Cmd
+	cmd, m.err = m.link.remove(m.core, m.projects)
+	return m, cmd
 }
 
 // checked takes a machine's answer to the screen's ask for its version.
@@ -319,69 +324,72 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 // and every ask is its own command, so no machine holds the screen or
 // another machine's row. With no machines, the step says how to add one.
 func (s *linkScreen) open(c *core.Core) (tea.Cmd, error) {
-	cfg, _, err := readConfig()
+	cfg, err := readConfig()
 	if err != nil {
 		return nil, err
 	}
-	hosts := cfg.MachineHosts()
 	s.checks = map[string]machineCheck{}
-	s.load(hosts, "")
+	cmd := s.load(c, cfg.MachineHosts(), "")
 	s.hosts.Select(0)
 	// A link written last time left its query behind; Esc here would clear
 	// it instead of closing the dialog.
 	s.setFilter("")
 	s.step, s.removing = linkHosts, ""
-	cmds := make([]tea.Cmd, 0, len(hosts))
-	for _, h := range hosts {
-		cmds = append(cmds, s.check(c, h))
-	}
-	return tea.Batch(cmds...), nil
+	return cmd, nil
 }
 
-// readConfig is config.toml as it is now, and the root it is under: the
-// screen reads it at each change, so a machine added by hand is listed.
-func readConfig() (*config.Config, string, error) {
+// readConfig is config.toml as it is now: the screen reads it at each
+// change, so a machine added by hand is listed.
+func readConfig() (*config.Config, error) {
 	root, err := config.Root()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	cfg, err := config.Read(root)
-	return cfg, root, err
+	return config.Read(root)
 }
 
 // load lists hosts as the machines, each with what it answered this visit,
-// with the cursor on at where at is one of them.
-func (s *linkScreen) load(hosts []string, at string) {
+// with the cursor on at where at is one of them. A machine not asked this
+// visit, one added by hand among them, is asked now.
+func (s *linkScreen) load(c *core.Core, hosts []string, at string) tea.Cmd {
+	var cmds []tea.Cmd
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
-		c := s.checks[h]
-		items = append(items, hostItem{host: h, check: &c})
+		if _, ok := s.checks[h]; !ok {
+			cmds = append(cmds, s.check(c, h))
+		}
+		answer := s.checks[h]
+		items = append(items, hostItem{host: h, check: &answer})
 	}
 	_ = s.hosts.SetItems(items)
 	if i := slices.Index(hosts, at); i >= 0 {
 		s.hosts.Select(i)
 	}
+	return tea.Batch(cmds...)
 }
 
 // check asks a machine for its revier's version, off the terminal. It is no
-// survey, so it is no round of the host's (decisions.md D130).
+// survey, so it is no round of the host's (decisions.md D154, D130).
 func (s *linkScreen) check(c *core.Core, host string) tea.Cmd {
-	s.checks[host] = machineCheck{}
+	s.asks++
+	ask := s.asks
+	s.checks[host] = machineCheck{ask: ask}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), askWait)
 		defer cancel()
 		v, err := c.VersionOn(ctx, host)
-		return checkedMsg{host: host, version: v, err: err}
+		return checkedMsg{host: host, ask: ask, version: v, err: err}
 	}
 }
 
 // checked takes a machine's answer into its row. A machine removed since
-// the ask has no row to take it.
+// the ask has no row to take it, and the answer to an ask of an earlier
+// visit, or of before a remove, is not the one the row waits for.
 func (s *linkScreen) checked(msg checkedMsg) {
-	if _, ok := s.checks[msg.host]; !ok {
+	if was, ok := s.checks[msg.host]; !ok || was.ask != msg.ask {
 		return
 	}
-	c := machineCheck{answered: true, version: msg.version, err: msg.err}
+	c := machineCheck{ask: msg.ask, answered: true, version: msg.version, err: msg.err}
 	s.checks[msg.host] = c
 	for i, item := range s.hosts.Items() {
 		if it, ok := item.(hostItem); ok && it.host == msg.host {
@@ -396,9 +404,10 @@ func (s *linkScreen) hasBar() bool { return s.step == linkHosts && s.removing ==
 
 // openAdd is "new": the step that offers the hosts the ssh configuration
 // names, without the machines on the list and without this machine. With
-// none to offer it says why, and the step does not open.
+// none to offer it says why, and the step does not open. An ask still out is
+// abandoned with the machines, as Esc abandons it.
 func (s *linkScreen) openAdd() error {
-	cfg, _, err := readConfig()
+	cfg, err := readConfig()
 	if err != nil {
 		return err
 	}
@@ -416,7 +425,7 @@ func (s *linkScreen) openAdd() error {
 	case len(all) == 0:
 		return fmt.Errorf("no hosts in %s; add a Host entry there first", config.ContractHome(path))
 	case len(hosts) == 0:
-		return fmt.Errorf("every host in %s is on the list", config.ContractHome(path))
+		return fmt.Errorf("every host in %s is on the list or is this machine", config.ContractHome(path))
 	}
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
@@ -424,7 +433,7 @@ func (s *linkScreen) openAdd() error {
 	}
 	_ = s.adding.SetItems(items)
 	s.adding.Select(0)
-	s.step = linkAdding
+	s.step, s.asking = linkAdding, ""
 	return nil
 }
 
@@ -436,36 +445,31 @@ func (s *linkScreen) add(c *core.Core) (tea.Cmd, error) {
 	if !ok {
 		return nil, nil
 	}
-	_, root, err := readConfig()
+	if err := withConfigRoot(func(root string) error { return config.AddMachine(root, it.host) }); err != nil {
+		return nil, err
+	}
+	cfg, err := readConfig()
 	if err != nil {
 		return nil, err
 	}
-	if err := config.AddMachine(root, it.host); err != nil {
-		return nil, err
-	}
-	cfg, _, err := readConfig()
-	if err != nil {
-		return nil, err
-	}
-	cmd := s.check(c, it.host)
-	s.load(cfg.MachineHosts(), it.host)
 	s.step = linkHosts
-	return cmd, nil
+	return s.load(c, cfg.MachineHosts(), it.host), nil
 }
 
 // remove is "remove" on the machine under the cursor. A machine a link
 // names is asked about first, since the link stays and its machine leaves
-// the list; any other one goes at once.
-func (s *linkScreen) remove(projects []core.Project) error {
+// the list; any other one goes at once. The question abandons an ask still
+// out, whose answer would open a host's projects under it.
+func (s *linkScreen) remove(c *core.Core, projects []core.Project) (tea.Cmd, error) {
 	it, ok := s.hosts.SelectedItem().(hostItem)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if n := linksTo(projects, it.host); n > 0 {
-		s.removing, s.links = it.host, n
-		return nil
+		s.removing, s.links, s.asking = it.host, n, ""
+		return nil, nil
 	}
-	return s.drop(it.host)
+	return s.drop(c, it.host)
 }
 
 // linksTo is how many of projects are links to host.
@@ -480,38 +484,43 @@ func linksTo(projects []core.Project, host string) int {
 }
 
 // drop takes host off the list: its [[machine]] table goes from
-// config.toml, at once, and its row from the machines.
-func (s *linkScreen) drop(host string) error {
+// config.toml, at once, its row from the machines, and an ask of its
+// projects still out is abandoned. The cursor keeps its place, or goes to
+// the new last row where it was on the last.
+func (s *linkScreen) drop(c *core.Core, host string) (tea.Cmd, error) {
 	s.removing = ""
-	_, root, err := readConfig()
-	if err != nil {
-		return err
+	if s.asking == host {
+		s.asking = ""
 	}
-	if err := config.RemoveMachine(root, host); err != nil {
-		return err
+	if err := withConfigRoot(func(root string) error { return config.RemoveMachine(root, host) }); err != nil {
+		return nil, err
 	}
-	cfg, _, err := readConfig()
+	cfg, err := readConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	delete(s.checks, host)
-	s.load(cfg.MachineHosts(), "")
-	return nil
+	at := s.hosts.Index()
+	hosts := cfg.MachineHosts()
+	cmd := s.load(c, hosts, "")
+	s.hosts.Select(max(0, min(at, len(hosts)-1)))
+	return cmd, nil
 }
 
 // removeKey is every press while a remove asks about a machine: Enter takes
 // it off the list, and any other key keeps it.
 func (s *linkScreen) removeKey(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 	var res linkResult
+	var cmd tea.Cmd
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
 		return res, tea.Quit
 	case key.Matches(msg, sf.keys.Enter):
-		res.err = s.drop(s.removing)
+		cmd, res.err = s.drop(sf.core, s.removing)
 	default:
 		s.removing = ""
 	}
-	return res, nil
+	return res, cmd
 }
 
 // key is every press while the dialog is up. It takes a step at a time: the

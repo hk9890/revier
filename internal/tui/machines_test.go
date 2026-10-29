@@ -141,6 +141,54 @@ func TestRemoveTakesAMachineWithNoLinkOffAtOnce(t *testing.T) {
 	}
 }
 
+// A remove on the last row leaves the cursor on the new last row, and a
+// machine added by hand since the screen opened is listed and asked.
+func TestRemoveOnTheLastRowKeepsTheCursorThereAndAsksAMachineAddedByHand(t *testing.T) {
+	text := "[[machine]]\nhost = \"buildbox\"\n\n[[machine]]\nhost = \"farbox\"\n\n[[machine]]\nhost = \"deadbox\"\n"
+	m, root := machinesWorld(t, text, "", nil)
+	m = step(m, "alt+r")
+	if err := config.AddMachine(root, "router"); err != nil {
+		t.Fatal(err)
+	}
+	m = step(m, "down")
+	m = step(m, "down")
+	m = step(m, "alt+d")
+	if row := selectedRow(t, m); !strings.Contains(row, "router") {
+		t.Errorf("selected %q, want the cursor on the new last row", row)
+	}
+	if r := rows(m); len(r) < 3 || !strings.Contains(r[2], "router") || !strings.Contains(r[2], "revier 0.21.0") {
+		t.Errorf("rows = %q, want router listed and asked", r)
+	}
+}
+
+// A remove's question holds the rows still: a second click on a row is no
+// Enter that answers it.
+func TestARemoveQuestionHoldsTheRowsStill(t *testing.T) {
+	m, _, root := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha")
+	m = step(m, "alt+r")
+	m = step(m, "alt+d")
+	_, x := margins(m)
+	y := -1
+	for i, line := range strings.Split(drawn(m), "\n") {
+		if left, _, _ := strings.Cut(line, "│"); strings.Contains(left, "buildbox") && !strings.Contains(left, "Take") {
+			y = i
+			break
+		}
+	}
+	m = clickAt(m, x+5, y)
+	m = clickAt(m, x+5, y)
+	cfg, err := config.Read(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Declares("buildbox") {
+		t.Error("a double click under the question took buildbox off the list")
+	}
+	if body := screen(m); !strings.Contains(body, "Take buildbox off the list?") {
+		t.Errorf("screen =\n%s\nwant the question still up", body)
+	}
+}
+
 // "remove" on a machine a link names asks first, and says the link stays;
 // Esc keeps the machine, and Enter takes it off with the link left here.
 func TestRemoveAsksFirstForAMachineALinkNames(t *testing.T) {

@@ -137,6 +137,22 @@ func TestRemoveMachineKeepsTheComments(t *testing.T) {
 	}
 }
 
+// A host listed twice goes whole: with only its first table gone, its
+// second would put it back on the list.
+func TestRemoveMachineTakesEveryTableOfTheHost(t *testing.T) {
+	root := writeConfig(t, twoMachines+"\n[[machine]]\nhost = \"buildbox\"\n")
+	if err := config.RemoveMachine(root, "buildbox"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Read(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hosts := cfg.MachineHosts(); !slices.Equal(hosts, []string{"farbox"}) || cfg.Declares("buildbox") {
+		t.Errorf("machines = %v, want [farbox] and buildbox gone", hosts)
+	}
+}
+
 func TestRemoveMachineRefusesAHostNotOnTheList(t *testing.T) {
 	root := writeConfig(t, twoMachines)
 	if err := config.RemoveMachine(root, "router"); err == nil {

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 )
@@ -71,52 +70,27 @@ func AddMachine(root, host string) error {
 	})
 }
 
-// RemoveMachine deletes the [[machine]] table for host. Its header and its
-// values go; its comments stay.
+// RemoveMachine deletes every [[machine]] table for host: a host listed
+// twice is on the list by its second table once its first is gone. Each
+// table's header and values go; its comments stay.
 func RemoveMachine(root, host string) error {
 	return editMachines(root, func(lines []string, entries []table, have []RemoteMachine) ([]string, []RemoteMachine, error) {
-		i := slices.Index(have, RemoteMachine{Host: host})
-		if i < 0 {
+		want := slices.DeleteFunc(slices.Clone(have), func(m RemoteMachine) bool { return m.Host == host })
+		if len(want) == len(have) {
 			return nil, nil, fmt.Errorf("%s is not on the list", host)
 		}
-		t := entries[i]
-		return dropLines(lines, t.header, t.end), slices.Delete(slices.Clone(have), i, i+1), nil
+		// From the last, so each drop leaves the lines of the ones before
+		// it where entries found them.
+		for i := len(have) - 1; i >= 0; i-- {
+			if have[i].Host == host {
+				lines = dropLines(lines, entries[i].header, entries[i].end)
+			}
+		}
+		return lines, want, nil
 	})
 }
 
-// editMachines runs one change to the [[machine]] tables of config.toml, and
-// writes the result only if it parses as Load parses it and decodes to the
-// machines the change meant. Machines written in another form, such as an
-// inline array, are refused: the line editor would not find them.
+// editMachines runs one change to the [[machine]] tables of config.toml.
 func editMachines(root string, change func(lines []string, entries []table, have []RemoteMachine) ([]string, []RemoteMachine, error)) error {
-	path := File(root)
-	old, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	cfg, err := parse(old)
-	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	lines := strings.Split(string(old), "\n")
-	entries := entriesOf(lines, "machine")
-	if len(entries) != len(cfg.Machines) {
-		return fmt.Errorf("%s: the machines are not written as [[machine]] tables; change them by hand", path)
-	}
-	lines, want, err := change(lines, entries, cfg.Machines)
-	if err != nil {
-		return err
-	}
-	text := strings.Join(lines, "\n")
-	got, err := parse([]byte(text))
-	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	if err := problemsAdded(cfg, got); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	if !slices.Equal(got.Machines, want) {
-		return fmt.Errorf("%s: the machines did not come out as written; change them by hand", path)
-	}
-	return replaceFile(path, []byte(text))
+	return editEntries(root, "machine", func(c *Config) []RemoteMachine { return c.Machines }, func(a, b RemoteMachine) bool { return a == b }, change)
 }
