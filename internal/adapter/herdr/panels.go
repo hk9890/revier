@@ -29,7 +29,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	if err := keeps(vars); err != nil {
 		return "", err
 	}
-	if err := buildable(panels); err != nil {
+	if err := h.buildable(ctx, panels); err != nil {
 		return "", err
 	}
 	workspace, err := h.current(ctx, ref)

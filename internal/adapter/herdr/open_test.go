@@ -5,6 +5,7 @@ package herdr_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ func TestFocusAndCloseRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
 		"Focus": func(h *herdr.Host) error { return h.Focus(context.Background(), stale) },
 		"Close": func(h *herdr.Host) error { return h.Close(context.Background(), stale) },
 	} {
-		h, asked := recording()
+		h, asked := recording(t)
 		if err := act(h); err == nil || !strings.Contains(err.Error(), "4242/w1 is gone") {
 			t.Errorf("%s = %v, want the workspace named as gone", name, err)
 		}
@@ -32,7 +33,7 @@ func TestFocusAndCloseRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
 }
 
 func TestFocusActsOnTheWorkspaceOfTheServerThatAnswers(t *testing.T) {
-	h, asked := recording()
+	h, asked := recording(t)
 	if err := h.Focus(context.Background(), revier.TargetRef{Host: "herdr", ID: "9/w1"}); err != nil {
 		t.Fatalf("Focus: %v", err)
 	}
@@ -42,7 +43,7 @@ func TestFocusActsOnTheWorkspaceOfTheServerThatAnswers(t *testing.T) {
 }
 
 func TestARefOfAnotherHostIsRefused(t *testing.T) {
-	h, asked := recording()
+	h, asked := recording(t)
 	ref := revier.TargetRef{Host: "tmux", ID: "9/$1"}
 	if err := h.Focus(context.Background(), ref); err == nil {
 		t.Error("Focus took a tmux ref")
@@ -75,7 +76,7 @@ func TestAttachCommandCarriesAPrivateSocket(t *testing.T) {
 // One layout holds at most 24 panes, so a larger one is refused before herdr
 // is asked anything.
 func TestOpenRefusesMorePanelsThanATabHolds(t *testing.T) {
-	h, asked := recording()
+	h, asked := recording(t)
 	panels := make([]revier.PanelSpec, 25)
 	_, err := h.Open(context.Background(), revier.Realization{Name: "big", Panels: panels})
 	if err == nil || !strings.Contains(err.Error(), "at most 24") {
@@ -83,5 +84,19 @@ func TestOpenRefusesMorePanelsThanATabHolds(t *testing.T) {
 	}
 	if len(*asked) != 0 {
 		t.Errorf("asked %q, want nothing", *asked)
+	}
+}
+
+// A server that fails the ping is named as failed. Its PATH is not guessed,
+// so a program that may be on its PATH alone is not called missing.
+func TestOpenNamesAServerThatFailsThePing(t *testing.T) {
+	h := &herdr.Host{}
+	h.SetCaller(func(context.Context, string, any) (int, []byte, error) {
+		return 0, nil, context.DeadlineExceeded
+	})
+	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"revier-no-such-program"}}}
+	_, err := h.Open(context.Background(), revier.Realization{Name: "x", Panels: panels})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Open = %v, want the failed ping", err)
 	}
 }

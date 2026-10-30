@@ -66,10 +66,12 @@ func writeProc(t *testing.T, root string, pid, ppid int, env ...string) {
 }
 
 // recording is a host whose server has pid 9 and answers every request with
-// an empty result, and the methods it was asked.
-func recording() (*herdr.Host, *[]string) {
+// an empty result, and the methods it was asked. Its /proc is empty, so the
+// server's PATH is this process's.
+func recording(t *testing.T) (*herdr.Host, *[]string) {
 	var asked []string
 	h := &herdr.Host{}
+	h.SetProcRoot(t.TempDir())
 	h.SetCaller(func(_ context.Context, method string, _ any) (int, []byte, error) {
 		asked = append(asked, method)
 		return 9, []byte(`{}`), nil

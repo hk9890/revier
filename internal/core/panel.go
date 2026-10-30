@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -445,12 +446,12 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	if opened {
 		failed = Result{Target: res.Target, Ref: res.Ref}
 	}
+	var real revier.Realization
 	if !open {
 		res.Agents = inTab(resumes)
 		// A tab its key opens is not read through the listed tabs, so the
 		// panels of a link's tab get their argv here.
-		real, err := c.linkPanels(p, *t.Runtime)
-		if err != nil {
+		if real, err = c.linkPanels(p, *t.Runtime); err != nil {
 			return failed, err
 		}
 		if tab, err = opener.OpenTab(ctx, in.Ref, real, c.tabVars(p, t, in, opened)); err != nil {
@@ -467,12 +468,37 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		}
 	}
 	if err := opener.FocusPanel(ctx, in.Ref, tab); err != nil {
+		if !open && ended(ctx, c.Runtime, in.Ref, tab, real.PanelSpecs()) {
+			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, panelstart.ExitedAtOnce(real.PanelSpecs()[0]))
+		}
 		return failed, fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
 	}
 	if err := c.raise(ctx, osw, t.Name); err != nil {
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// ended reports whether a tab of one panel, just opened, is gone because its
+// command exited before its focus: the instance is still listed and no longer
+// holds the panel. A tab of more panels keeps the others when the first
+// exits, so it opened, and its focus error stands. An instance that is not
+// listed, or a host that cannot list, failed in another way, and its own
+// error says how.
+func ended(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID, specs []revier.PanelSpec) bool {
+	if len(specs) != 1 {
+		return false
+	}
+	instances, err := host.Instances(ctx)
+	if err != nil {
+		return false
+	}
+	for _, in := range instances {
+		if in.Ref.ID == ref.ID {
+			return !slices.ContainsFunc(in.Panels, func(p revier.Panel) bool { return p.ID == panel })
+		}
+	}
+	return false
 }
 
 // tabVars is the mark on the panels of a tab its key opens: the tab's own. The

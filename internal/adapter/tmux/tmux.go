@@ -420,7 +420,7 @@ func exited(err error, p revier.PanelSpec) error {
 // words tmux has for it.
 func closed(err error) bool {
 	s := err.Error()
-	for _, gone := range []string{"can't find pane", "can't find window", "can't find session", "no such session", "no current target", "server exited unexpectedly"} {
+	for _, gone := range []string{"can't find pane", "no such pane", "can't find window", "can't find session", "no such session", "no current target", "server exited unexpectedly"} {
 		if strings.Contains(s, gone) {
 			return true
 		}

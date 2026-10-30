@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -563,7 +564,8 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 // is empty while no tab is running, so an error after the tab opened is told
 // from one before. With focus it refuses an OS window it cannot raise, then
 // focuses the panel and raises the OS window; without, the focus stays where
-// OpenTab left it.
+// OpenTab left it. A tab of one panel whose command exited before its focus
+// runs nothing, so its panel is empty and the error says the command exited.
 func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revier.Realization, vars map[string]string, what string, focus bool) (revier.PanelID, error) {
 	host, opener := t.host, t.opener
 	var osw revier.TargetRef
@@ -582,6 +584,9 @@ func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revie
 		return panel, nil
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, panel); err != nil {
+		if ended(ctx, host, w.Ref, panel, tab.PanelSpecs()) {
+			return "", fmt.Errorf("%s: %s: %w", host.Name(), what, panelstart.ExitedAtOnce(tab.PanelSpecs()[0]))
+		}
 		return panel, fmt.Errorf("%s: focus the %s: %w", host.Name(), what, err)
 	}
 	return panel, c.raise(ctx, osw, w.Target)

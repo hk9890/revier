@@ -32,7 +32,7 @@ func TestOpenTabRefusesAVarHerdrWouldChange(t *testing.T) {
 		"too many":  {many, "at most 16 vars"},
 		"leading ␠": {map[string]string{"revier_target": " a"}, "not kept as written"},
 	} {
-		h, asked := recording()
+		h, asked := recording(t)
 		_, err := h.OpenTab(context.Background(), ref, revier.Realization{Launch: []string{"sh"}}, c.vars)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: OpenTab = %v, want %q", name, err, c.want)
@@ -54,6 +54,7 @@ func TestOpenTabClosesATabWhoseAnswerWasLost(t *testing.T) {
 	}
 	var closed []string
 	h := &herdr.Host{}
+	h.SetProcRoot(t.TempDir())
 	h.SetCaller(func(_ context.Context, method string, params any) (int, []byte, error) {
 		switch method {
 		case "session.snapshot":
@@ -78,7 +79,8 @@ func TestOpenTabClosesATabWhoseAnswerWasLost(t *testing.T) {
 }
 
 // Every panel operation that acts on a pane first checks the server is the
-// one that assigned the ref: herdr numbers panes per server too.
+// one that assigned the ref: herdr numbers panes per server too. OpenTab pings
+// twice: first to read the server's PATH.
 func TestPanelOperationsRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
 	stale := revier.TargetRef{Host: "herdr", ID: "4242/w1"}
 	c := context.Background()
@@ -95,11 +97,11 @@ func TestPanelOperationsRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
 		},
 		"ClosePanel": func(h *herdr.Host) error { return h.ClosePanel(c, stale, "w1:p1") },
 	} {
-		h, asked := recording()
+		h, asked := recording(t)
 		if err := act(h); err == nil || !strings.Contains(err.Error(), "4242/w1 is gone") {
 			t.Errorf("%s = %v, want the workspace named as gone", name, err)
 		}
-		if !slices.Equal(*asked, []string{"ping"}) {
+		if !slices.Equal(slices.Compact(slices.Clone(*asked)), []string{"ping"}) {
 			t.Errorf("%s asked %q, want ping alone", name, *asked)
 		}
 	}

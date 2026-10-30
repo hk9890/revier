@@ -1,6 +1,8 @@
 package panelstart_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hk9890/revier/internal/panelstart"
@@ -23,6 +25,33 @@ func TestStartableRefusesAProgramNotOnPATH(t *testing.T) {
 	err := panelstart.Startable([]revier.PanelSpec{shell, missing})
 	if want := `the agent panel's command "no-such-agent" is not on PATH`; err == nil || err.Error() != want {
 		t.Fatalf("Startable = %v, want %q", err, want)
+	}
+}
+
+// The PATH searched is the one given, not this process's: herdr starts a
+// panel with its server's. Only an executable file there is a program.
+func TestStartableOnSearchesTheGivenPATH(t *testing.T) {
+	testenv.NoTools(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "agent"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plain"), []byte("text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"agent"}}
+	if err := panelstart.StartableOn([]revier.PanelSpec{agent}, dir); err != nil {
+		t.Errorf("StartableOn(%s) = %v, want nil", dir, err)
+	}
+	err := panelstart.StartableOn([]revier.PanelSpec{agent}, "")
+	if want := `the agent panel's command "agent" is not on PATH`; err == nil || err.Error() != want {
+		t.Errorf("StartableOn on an empty PATH = %v, want %q", err, want)
+	}
+	plain := revier.PanelSpec{Kind: revier.PanelTool, Command: []string{"plain"}}
+	err = panelstart.StartableOn([]revier.PanelSpec{plain}, dir)
+	if want := `the tool panel's command "plain" is not on PATH`; err == nil || err.Error() != want {
+		t.Errorf("StartableOn with a file that is not executable = %v, want %q", err, want)
 	}
 }
 

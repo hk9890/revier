@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,7 +43,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("herdr: realization has no name to give the workspace")
 	}
 	panels := r.PanelSpecs()
-	if err := buildable(panels); err != nil {
+	if err := h.buildable(ctx, panels); err != nil {
 		return revier.TargetRef{}, err
 	}
 	if err := h.running(ctx); err != nil {
@@ -191,13 +192,41 @@ func (n layoutNode) panes() []string {
 	return out
 }
 
-// buildable refuses panels that one tab cannot hold, or that panelstart.Startable
-// refuses.
-func buildable(panels []revier.PanelSpec) error {
+// buildable refuses panels that one tab cannot hold, or whose program is not
+// on the PATH of the server that starts them.
+func (h *Host) buildable(ctx context.Context, panels []revier.PanelSpec) error {
 	if len(panels) > maxPanes {
 		return fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
 	}
-	return panelstart.Startable(panels)
+	path, err := h.serverPATH(ctx)
+	if err != nil {
+		return err
+	}
+	return panelstart.StartableOn(panels, path)
+}
+
+// serverPATH is the PATH herdr starts a pane's program with: its server's,
+// since a layout carries no environment. With no server running, or one whose
+// environment cannot be read or holds no PATH, it is this process's, the one
+// a server Open starts is given. A server that fails the ping is an error: a
+// PATH guessed in its place would name a program as missing that the server
+// may hold, instead of the server's own failure.
+func (h *Host) serverPATH(ctx context.Context) (string, error) {
+	pid, err := h.request(ctx, "ping", struct{}{}, nil)
+	if errors.Is(err, errNoServer) {
+		return os.Getenv("PATH"), nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if env, err := os.ReadFile(filepath.Join(h.root(), strconv.Itoa(pid), "environ")); err == nil {
+		for _, kv := range strings.Split(string(env), "\x00") {
+			if path, ok := strings.CutPrefix(kv, "PATH="); ok {
+				return path, nil
+			}
+		}
+	}
+	return os.Getenv("PATH"), nil
 }
 
 // running makes sure a server answers, starting one when none does, and

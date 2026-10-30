@@ -26,6 +26,13 @@ import (
 // and could attach their own tmux or hold a pane's foreground.
 func server(t *testing.T) *herdr.Host {
 	t.Helper()
+	return serverWith(t)
+}
+
+// serverWith is server with env, as "NAME=value", over the environment it
+// would start with.
+func serverWith(t *testing.T, env ...string) *herdr.Host {
+	t.Helper()
 	bin, err := exec.LookPath("herdr")
 	if err != nil {
 		t.Skip("herdr not installed; L4 needs it")
@@ -42,6 +49,7 @@ func server(t *testing.T) *herdr.Host {
 	cmd := exec.Command(bin, "server")
 	cmd.Env = append(scrubbed(os.Environ()),
 		"XDG_CONFIG_HOME="+dir, "XDG_STATE_HOME="+dir, "HERDR_SOCKET_PATH="+sock, "SHELL=/bin/sh")
+	cmd.Env = append(cmd.Env, env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start herdr server: %v", err)

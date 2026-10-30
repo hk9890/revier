@@ -150,6 +150,32 @@ func TestOpenRefusesAPanelWhoseCommandIsNotOnPath(t *testing.T) {
 	}
 }
 
+// herdr starts a panel's program from its server's PATH, not revier's: a
+// program on the server's alone opens, and one on revier's alone is refused.
+func TestOpenChecksAPanelAgainstTheServersPATH(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "onlyhere"), []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"onlyhere"}}}
+	revierPATH := os.Getenv("PATH")
+
+	t.Run("on the server's PATH", func(t *testing.T) {
+		h, c := serverWith(t, "PATH="+bin+":"+revierPATH), ctx(t)
+		if _, err := h.Open(c, revier.Realization{Name: "x", Panels: panels}); err != nil {
+			t.Errorf("Open = %v, want the panel opened from the server's PATH", err)
+		}
+	})
+	t.Run("on revier's PATH", func(t *testing.T) {
+		h, c := serverWith(t, "PATH="+revierPATH), ctx(t)
+		t.Setenv("PATH", bin+":"+revierPATH)
+		_, err := h.Open(c, revier.Realization{Name: "x", Panels: panels})
+		if want := `the agent panel's command "onlyhere" is not on PATH`; err == nil || err.Error() != want {
+			t.Errorf("Open = %v, want %q", err, want)
+		}
+	})
+}
+
 // A panel whose command ends at once is named, and nothing of the workspace
 // is left to be matched.
 func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
