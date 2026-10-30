@@ -105,7 +105,7 @@ func seenAgents(v revier.ProjectView, listed map[string]revier.Instance) []recor
 			}
 			for _, p := range inst.Panels {
 				if p.ID == a.Panel {
-					seen.Agent = p.Vars[PanelAgentVar]
+					seen.Agent = p.Vars[revier.PanelAgentVar]
 				}
 			}
 		}

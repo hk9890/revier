@@ -344,14 +344,25 @@ func (f *FakeRuntime) ClosePanel(_ context.Context, ref revier.TargetRef, panel 
 // Retitle changes a panel's title wherever it is listed, as the program in it
 // does when its state changes.
 func (f *Fake) Retitle(panel revier.PanelID, title string) {
+	f.editPanel(panel, func(p *revier.Panel) { p.Title = title })
+}
+
+// Replace puts panel in place of the panel of its id wherever it is listed,
+// as a shell does when it starts a program in its foreground.
+func (f *Fake) Replace(panel revier.Panel) {
+	f.editPanel(panel.ID, func(p *revier.Panel) { *p = panel })
+}
+
+// editPanel applies edit to the panel of the id wherever it is listed.
+func (f *Fake) editPanel(id revier.PanelID, edit func(*revier.Panel)) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for i := range f.instances {
 		// A fresh slice: a listing already handed out shares the old one.
 		panels := append([]revier.Panel(nil), f.instances[i].Panels...)
 		for j := range panels {
-			if panels[j].ID == panel {
-				panels[j].Title = title
+			if panels[j].ID == id {
+				edit(&panels[j])
 			}
 		}
 		f.instances[i].Panels = panels

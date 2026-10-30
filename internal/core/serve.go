@@ -21,8 +21,13 @@ type Served struct {
 	// the served-processes host titles the instance, so that realization's
 	// Match finds it.
 	Workspace string
-	Dir       string
-	Argv      []string
+	// Agent is the named agent the process runs, and empty for the default
+	// agent and a shell: the served-processes host marks the panel with it,
+	// as an agent tab is marked, so the project's address still means the
+	// default agent there (decisions.md D145).
+	Agent string
+	Dir   string
+	Argv  []string
 	// Outcome is what a conversation asked for came to.
 	Outcome AgentOutcome
 }
@@ -106,7 +111,7 @@ func (c *Core) ServeAgent(p Project, r Resume) (Served, error) {
 	if len(spec.Command) == 0 {
 		return Served{}, fmt.Errorf("%s: the agent panel declares no command to run", p.Name)
 	}
-	return Served{Workspace: real.Name, Dir: spec.Dir, Argv: spec.Command, Outcome: outcome}, nil
+	return Served{Workspace: real.Name, Agent: r.Agent, Dir: spec.Dir, Argv: spec.Command, Outcome: outcome}, nil
 }
 
 // ServeShell is the project's shell panel, or the user's login shell where it

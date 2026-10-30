@@ -100,9 +100,9 @@ tmux capture-pane -p -t "$pane"                           # the text arrived
 tmux list-windows -t home -F '#{window_index} #{window_active}'   # the new window is not the current one
 ```
 
-`revier agent prompt` and `revier agent send-keys` type into a pane. Run them
-only with the scratch configuration above: without it, they reach the user's
-real agent.
+`revier agent prompt` and `revier agent send-keys` type into a pane, and
+`revier agent close` closes one. Run them only with the scratch configuration
+above: without it, they reach the user's real agent.
 
 ## Drive save and restore across a reboot
 
