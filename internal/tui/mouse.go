@@ -41,12 +41,12 @@ func clicked(it list.Item) any {
 //
 // A row of the list or of the pane is chosen with one click and opened with a
 // second, as a row of a file manager is: choosing it costs nothing and opening
-// it opens a window. The project's name over the pane, "logs" beside it, the
-// footer's error and a button on the bar are not rows but things to do, and
-// one click does them, on release, so a drag that begins on one runs nothing.
+// it opens a window. The project's name over the pane, the footer's error and
+// a button on the bar are not rows but things to do, and one click does them,
+// on release, so a drag that begins on one runs nothing.
 //
-// Whatever the pointer is over is lit, so all three say they can be clicked
-// before they are. A drag selects text instead (selection.go).
+// Whatever the pointer is over is lit, so each of them says it can be clicked
+// before it is. A drag selects text instead (selection.go).
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// A delete or a remove waiting for its answer holds the screen still:
 	// the question names one project or machine, and a wheel moving the
@@ -155,7 +155,7 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	if m.over != p.over {
 		return m, nil
 	}
-	if m.over.kind == hoverFooter || m.over.kind == hoverLogs {
+	if m.over.kind == hoverFooter {
 		return m.openLogs()
 	}
 	if !m.hasRows() {

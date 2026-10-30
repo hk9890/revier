@@ -128,7 +128,7 @@ func (m Model) helpSections() []helpSection {
 		}},
 		{title: "Logs", entries: []helpEntry{
 			{key: k.Logs.Help().Key, desc: "the warnings and errors of the log, from any screen, on the newest line this TUI wrote by the time of the footer's error; on the screen, close it"},
-			{key: "click", desc: "on the footer's error, or on logs in the top bar or at the top of the pane, the same"},
+			{key: "click", desc: "on the footer's error or on logs in the top bar, the same"},
 			{key: "↑ / ↓", desc: "move; home, end, pgup and pgdown too"},
 			{key: "enter", desc: "show every field of the line"},
 			{key: "esc", desc: "back to the lines, and from them to the screen before"},
