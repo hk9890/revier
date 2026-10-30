@@ -392,20 +392,29 @@ const (
 // tab of the runtime's own shell beside the panel, or nothing. Every other
 // failure is returned, so the key's own fallback runs (decisions.md D148).
 //
-// The tab starts in dir, else in the panel's own directory, else where in
-// or the runtime starts it; each only while it is a directory. A key passes
-// the directory its terminal names for the panel, which can be one removed
-// since (decisions.md D153).
-func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, dir string, outside Outside, in func(Workspace, string) error) error {
+// A tab of kind starts in dir, else where in or the runtime starts it; each
+// only while it is a directory. A shell tab, and the plain tab outside a
+// workspace, start in the panel's own directory before that; an agent tab
+// does not, so an agent pressed from a worktree starts in the project, where
+// it can enter any worktree (decisions.md D158). A key passes the directory
+// its terminal names for the panel, which can be one removed since
+// (decisions.md D153).
+func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, kind revier.PanelKind, dir string, outside Outside, in func(Workspace, string) error) error {
 	w, err := c.PanelOwner(ctx, projects, panel)
 	if !dirExists(dir) {
-		dir = panelDir(w, panel)
+		dir = ""
 	}
 	if !errors.Is(err, ErrNoWorkspace) {
 		if err != nil {
 			return err
 		}
+		if dir == "" && kind != revier.PanelAgent {
+			dir = panelDir(w, panel)
+		}
 		return in(w, dir)
+	}
+	if dir == "" {
+		dir = panelDir(w, panel)
 	}
 	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside), "dir", dir)
 	if outside == OutsideNone {

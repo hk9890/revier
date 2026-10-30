@@ -58,6 +58,9 @@ leaves it empty when `kitty.conf` itself is a link.
   tmux. `revier term status` names each such map by its line.
 - A terminal key on the same chord as `trigger_key` or a target's `key` is
   left out: the desktop takes that press first.
+- A shell tab starts in the directory of the window you pressed the key in.
+  An agent tab starts in the project, so from a worktree the agent can still
+  enter any worktree.
 - In a window that is no project's workspace, a key opens a plain shell tab
   beside it, or nothing if you set `outside = "none"`. When revier itself
   fails, kitty's own new tab opens.

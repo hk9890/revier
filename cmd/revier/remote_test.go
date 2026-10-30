@@ -146,6 +146,39 @@ func TestTabAtAPanelStartsInThePanelsDirectory(t *testing.T) {
 	}
 }
 
+// The agent key in a worktree's panel starts its agent in the project, where
+// the agent can enter any worktree; the shell key there starts in the
+// worktree.
+func TestTabAtAPanelStartsAnAgentInTheProject(t *testing.T) {
+	demo := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Match: revier.Match{Title: "^home$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
+	}})
+	worktree := filepath.Join(demo.Path, "wt")
+	if err := os.Mkdir(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("home", "", revier.Panel{ID: "3", Dir: worktree})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+
+	if err := a.newAgent(ctx, "", "3", "", core.Resume{}); err != nil {
+		t.Fatalf("agent new --panel 3: %v", err)
+	}
+	if err := a.newShell(ctx, "", "3", ""); err != nil {
+		t.Fatalf("shell new --panel 3: %v", err)
+	}
+	var dirs []string
+	for _, tab := range rt.Tabs {
+		dirs = append(dirs, tab.Real.Dir)
+	}
+	if want := []string{demo.Path, worktree}; !slices.Equal(dirs, want) {
+		t.Errorf("tab dirs = %q, want %q", dirs, want)
+	}
+}
+
 // [terminal] outside reaches a key pressed in a window that is no project's
 // workspace: "none" opens nothing there and is no failure, so the key's
 // fallback does not run either; the default opens a plain tab.
