@@ -520,6 +520,21 @@ func TestCloseLastPutsTheCallersOwnTerminalAtTheEnd(t *testing.T) {
 	}
 }
 
+// A tab that holds the caller's own panel closes that panel last: its close
+// ends the process, and a panel after it would stay open.
+func TestShutdownClosesTheCallersOwnPanelOfATabLast(t *testing.T) {
+	c, rt, projects := groupTab(t, revier.StatusIdle)
+	c.Self = func(p revier.Panel) bool { return p.ID == "2" }
+	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
+
+	if _, err := c.Shutdown(context.Background(), plan, 0, reading(projects)); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if !slices.Equal(rt.ClosedPanels, []revier.PanelID{"3", "2"}) {
+		t.Errorf("panels closed = %v, want the caller's own panel last", rt.ClosedPanels)
+	}
+}
+
 // A tab step is rechecked against every panel of its tab, so an agent that
 // turns busy in the panel beside the one that names the step refuses the
 // close.

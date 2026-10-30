@@ -2,7 +2,8 @@
 
 An agent is a panel in a workspace that runs a coding agent, such as Claude
 Code. This page shows how to drive an agent from a script, open more agent
-tabs, resume an agent on its conversation, and let an agent configure revier.
+tabs, end an agent, resume an agent on its conversation, and let an agent
+configure revier.
 
 ## What revier sees
 
@@ -85,16 +86,16 @@ kitty key, see [kitty](integrations/kitty.md).
 To end an agent, close it by its address:
 
 ```bash
-addr=$(revier agent new -p shop --no-focus)
-revier agent close "$addr"              # prints: closed the tab
+revier agent close shop:home:7          # prints: closed the tab
 ```
 
 `revier agent close` returns once the agent is gone. An agent in a tab
 beside the workspace's own, such as one `agent new` opened, closes with its
 whole tab, the shell beside it included. An agent in the workspace's own tab
 closes as its panel alone, and the shell there stays. The command prints
-which of the two it did. It refuses an agent that is `running` or in
-`attention` unless you give `--force`, and saves no session.
+which of the two it did. It refuses while an agent in what it closes, any
+agent of that tab, is `running` or in `attention`, unless you give
+`--force`. It saves no session.
 
 ## Resume an agent
 

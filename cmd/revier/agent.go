@@ -77,9 +77,10 @@ close ends the agent by closing its panel, and returns once the panel is
 gone. In a tab beside the workspace's own, as new opens one, the whole tab
 closes, the shell beside the agent with it; in the workspace's own tab, the
 agent's panel closes alone.
-It prints which of the two it did. It refuses an agent that is running or
-waiting for an answer unless --force is given, and a panel that runs no
-agent. It saves no session.
+It prints which of the two it did. Unless --force is given, it refuses while
+an agent in what it closes, the tab's other agents included, is running or
+waiting for an answer. It refuses a panel that runs no agent, and saves no
+session.
 
 exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
@@ -397,8 +398,10 @@ func (a *app) closeAgent(ctx context.Context, address string, force bool) error 
 	projects := []core.Project{p}
 	report := a.core.SurveyToClose(ctx, projects, p.Name)
 	plan := a.core.ClosePlan(report, p.Name, core.CloseRow{Agent: ag.Ref, Panel: ag.Panel.ID})
+	// The address also finds an agent this machine serves to a terminal on
+	// another one, which only that terminal closes.
 	if len(plan) == 0 {
-		return fmt.Errorf("%s: the agent is no longer open here", address)
+		return fmt.Errorf("%s: no panel of this machine shows the agent; nothing closed", address)
 	}
 	if busy := core.Busy(plan); len(busy) > 0 && !force {
 		return busyAgent(address, busy)
