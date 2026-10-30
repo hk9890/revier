@@ -84,7 +84,7 @@ usage:
                                 panel shows
   revier agent send-keys <agent> <key>..
                                 type keys into an agent, whatever it is doing
-  revier agent focus <agent> [--ref instance]
+  revier agent focus <agent>
                                 go to an agent's tab and raise its window
   revier agent new [name] [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open

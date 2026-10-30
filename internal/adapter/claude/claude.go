@@ -82,6 +82,9 @@ type listedSession struct {
 	SessionID string `json:"sessionId"`
 	Status    string `json:"status"`
 	Cwd       string `json:"cwd"`
+	// Name is the session's name, the one Claude Code's peer messages
+	// address it by.
+	Name string `json:"name"`
 }
 
 func (p *Probe) Name() string { return "claude" }
@@ -105,7 +108,7 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	}
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
-		state.Status, state.Dir, state.Session = Status(s.Status), s.Cwd, revier.SessionID(s.SessionID)
+		state.Status, state.Dir, state.Session, state.Name = Status(s.Status), s.Cwd, revier.SessionID(s.SessionID), s.Name
 	}
 	return state, nil
 }

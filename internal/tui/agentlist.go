@@ -499,6 +499,9 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	if it.project.Remote != nil {
 		line("Host", it.project.Remote.Host, th.Path)
 	}
+	if it.agent.Target != "" {
+		line("Address", printable(core.Address(it.project.Name, it.agent.Target, it.agent.Panel)), th.Path)
+	}
 	path := it.project.Path
 	if it.agent.State.Dir != "" {
 		path = it.agent.State.Dir
@@ -508,6 +511,9 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
+	if it.agent.State.Name != "" {
+		line("Name", printable(harnessOf(it.agent)+":"+it.agent.State.Name), th.Path)
+	}
 	if at := it.detail.At; !at.IsZero() {
 		line("Last", spokeAt(now, at), th.Path)
 	}

@@ -1213,6 +1213,10 @@ type Report struct {
 	// tags is where the runtime here shows each panel a linked host can name:
 	// what places a host's agents, whenever its answer is laid over.
 	tags map[revier.PanelID]shown
+	// places is the target each link's panels here are addressed through:
+	// what labels a host's agents once localise placed them (decisions.md
+	// D155).
+	places map[revier.ProjectName]places
 	// asked is each linked host an answer laid over the report came from,
 	// with why it gave no answer, or "" when it answered: what a record of
 	// the survey says of each host (decisions.md D151).
@@ -1351,7 +1355,9 @@ func (c *Core) lay(r *Report, answers RemoteAnswers) {
 			r.asked[a.link.Host] = a.err.Error()
 		}
 		at := len(v.Agents)
-		c.localise(r.tags, merge(v, a))
+		added := merge(v, a)
+		c.localise(r.tags, added)
+		r.places[v.Project.Name].label(added)
 		dropDoubles(v, at)
 	}
 }
@@ -1377,13 +1383,20 @@ func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, attached map[revier.ProjectName][]revier.TargetRef) Report {
 	snap, failed := c.listing(ctx)
 	bound := st.Bound
-	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap), before: st}
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap), places: map[revier.ProjectName]places{}, before: st}
 	if len(failed) > 0 {
 		r.Failed = failed
 	}
 	probed := probeCache{}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed))
+		v := c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed)
+		// view labelled each agent it probed. A link's agents are its host's,
+		// placed once they are laid over, through the targets the link holds
+		// here: a link that holds none places nothing.
+		if p.Remote != nil && v.Held() {
+			r.places[p.Name] = c.places(snap, p, bound[p.Name])
+		}
+		r.Views = append(r.Views, v)
 	}
 	for _, h := range c.hosts() {
 		if failed[h.Name()] != nil {
@@ -1531,12 +1544,20 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// target and an attachment; listing it twice would report the same agent
 	// twice, so each lands in a view once, and the read behind it is the
 	// survey's, not this view's.
+	//
+	// Each agent is labelled with the target its instance was first found
+	// for, and then with the first open tab that lists its panel: the rule
+	// places keeps for revier agent. An agent of a link that this side read
+	// itself, in a terminal attached by hand, has none: the link's address
+	// reaches the agents its host lists alone.
 	seen := map[string]bool{}
-	probe := func(inst revier.Instance) {
+	var tabs places
+	probe := func(inst revier.Instance, target revier.TargetName) {
 		if k := key(inst.Ref); !seen[k] {
 			seen[k] = true
 			for _, a := range c.agentsOf(ctx, probed, inst) {
 				a.State.Dir = elsewhere(p.Path, a.State.Dir)
+				a.Target = target
 				v.Agents = append(v.Agents, a)
 			}
 		}
@@ -1544,23 +1565,28 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// A link's targets are panels running an ssh, and what the agent on the
 	// far side is doing is its host's word, added by merge. Probing them
 	// here would read the ssh.
-	probeOnce := func(inst revier.Instance) {
+	probeOnce := func(inst revier.Instance, target revier.TargetName) {
 		if local {
-			probe(inst)
+			probe(inst, target)
 		}
 	}
 
 	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
 		if p.isTab(i) {
-			v.Targets = append(v.Targets, c.tabView(snap, failed, p, i, bound, tv))
+			tv, tab := c.tabView(snap, failed, p, i, bound, tv)
+			if tab != nil && tabs.tabs == nil {
+				tabs.tabs = map[string]revier.TargetName{}
+			}
+			tabs.addTab(tab)
+			v.Targets = append(v.Targets, tv)
 			continue
 		}
 		// What this machine serves to a terminal elsewhere is probed whether
 		// or not a host here can realize the target: a machine reached over
 		// ssh alone has no runtime.
 		if inst, ok := c.served(snap, p, i); ok {
-			probeOnce(inst)
+			probeOnce(inst, t.Name)
 		}
 		host, _, m, err := c.resolveAt(p, i)
 		// A target no host here can realize is the expected headless result,
@@ -1585,7 +1611,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 				if t.Home {
 					v.Running, v.Home = true, inst.Ref
 				}
-				probeOnce(inst)
+				probeOnce(inst, t.Name)
 			}
 		}
 		v.Targets = append(v.Targets, tv)
@@ -1630,8 +1656,11 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	for _, ref := range attached {
 		if inst, ok := byRef(snap, ref); ok && !window[key(ref)] {
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
-			probe(inst)
+			probe(inst, "")
 		}
+	}
+	if local {
+		tabs.label(v.Agents)
 	}
 	return v
 }

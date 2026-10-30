@@ -120,10 +120,10 @@ func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnTmux(t *testing.T) {
 	capture(t, "open", "lead")
 
 	address := strings.TrimSpace(capture(t, "agent", "new", "-p", "lead", "--no-focus"))
-	if !regexp.MustCompile(`^lead:%\d+$`).MatchString(address) {
-		t.Fatalf("printed %q, want lead:<pane>", address)
+	if !regexp.MustCompile(`^lead:home:%\d+$`).MatchString(address) {
+		t.Fatalf("printed %q, want lead:home:<pane>", address)
 	}
-	pane := strings.TrimPrefix(address, "lead:")
+	pane := strings.TrimPrefix(address, "lead:home:")
 	got := strings.ReplaceAll(strings.TrimSpace(tmuxRun(t, "display-message", "-p", "-t", pane, "#{pane_start_command} panes=#{window_panes} index=#{window_index}")), `"`, "")
 	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "lead", "-F", "#{window_index}")), "\n")
 	if want := "sh -c sleep 300 panes=2 index=" + windows[len(windows)-1]; len(windows) != 3 || got != want {

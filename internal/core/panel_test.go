@@ -507,3 +507,33 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 		t.Errorf("dry run = %v, want what the restore did: %v", dry, res.Agents)
 	}
 }
+
+// An agent in an open tab target is addressed through the tab, and every
+// address the survey gives names its agent back, the tab's and the
+// workspace's (decisions.md D155).
+func TestATabsAgentIsAddressedThroughTheTab(t *testing.T) {
+	inTab := func(p revier.Panel) revier.Panel {
+		p.Vars = map[string]string{core.PanelTargetVar: "agent"}
+		return p
+	}
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("session:revier", "kitty", inTab(agentPanel("1", "idle")), inTab(shellPanel("2")), agentPanel("3", "busy"))
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	p := prepared(t, listedTabsProject(""))
+
+	targets := map[revier.PanelID]revier.TargetName{}
+	for _, v := range agentsOf(t, c, p) {
+		targets[v.Panel] = v.Target
+		a, err := c.Agent(context.Background(), p, string(v.Target)+":"+v.Panel.String())
+		if err != nil || a.Panel.ID != v.Panel {
+			t.Errorf("Agent(%s) = %+v, %v; want panel %s", core.Address(p.Name, v.Target, v.Panel), a, err, v.Panel)
+		}
+	}
+	if targets["1"] != "agent" || targets["3"] != "home" {
+		t.Errorf("targets = %v, want 1 in the agent tab and 3 in home", targets)
+	}
+	_, err := c.Agent(context.Background(), p, "")
+	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:agent:1, revier:home:3") {
+		t.Errorf("Agent() err = %v, want the two addresses the survey gives", err)
+	}
+}

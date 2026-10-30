@@ -42,8 +42,8 @@ func ValidateName(name revier.ProjectName) error {
 }
 
 // CanAddress is why an agent address cannot name the project, or nil.
-// `revier agent` addresses <project>:<target>, and the address is split at
-// its first colon.
+// `revier agent` addresses <project>:<target>:<panel>, and the address is
+// split at its first colon.
 func CanAddress(name revier.ProjectName) error {
 	if strings.ContainsRune(string(name), ':') {
 		return fmt.Errorf("project name %q contains \":\", which separates a project from its target in an agent address", name)

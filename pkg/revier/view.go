@@ -79,8 +79,13 @@ type AgentView struct {
 	Panel PanelID `json:"panel"`
 	// Ref is the instance holding the panel. A panel id is unique only within
 	// the process that numbers it, so the two together name one agent.
-	Ref   TargetRef  `json:"ref,omitzero"`
-	State AgentState `json:"state"`
+	Ref TargetRef `json:"ref,omitzero"`
+	// Target is the project's target the agent is addressed through, which
+	// with the project and the panel is the agent's one address:
+	// <project>:<target>:<panel> (decisions.md D155). It is empty for an
+	// agent no target of this machine holds.
+	Target TargetName `json:"target,omitempty"`
+	State  AgentState `json:"state"`
 	// Conversation is set only in the answer to Remote.Conversations: what a
 	// save records for an agent whose process is on another machine.
 	Conversation *Conversation `json:"conversation,omitempty"`

@@ -88,8 +88,8 @@ func TestAgentNewWithNoFocusLeavesTheCurrentWindowAndPrintsTheAddress(t *testing
 	before := tmuxRun(t, "display-message", "-p", "-t", "work:", "#{window_id} #{pane_id}")
 
 	address := strings.TrimSpace(capture(t, "agent", "new", "-p", "work", "--no-focus"))
-	if !regexp.MustCompile(`^work:%\d+$`).MatchString(address) {
-		t.Fatalf("printed %q, want work:<pane>", address)
+	if !regexp.MustCompile(`^work:home:%\d+$`).MatchString(address) {
+		t.Fatalf("printed %q, want work:home:<pane>", address)
 	}
 	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
 	if len(windows) != 2 || windows[1] != "2 0" {
@@ -98,8 +98,11 @@ func TestAgentNewWithNoFocusLeavesTheCurrentWindowAndPrintsTheAddress(t *testing
 	if after := tmuxRun(t, "display-message", "-p", "-t", "work:", "#{window_id} #{pane_id}"); after != before {
 		t.Errorf("current window and pane = %q, want %q as before", after, before)
 	}
-	pane := strings.TrimPrefix(address, "work:")
+	pane := strings.TrimPrefix(address, "work:home:")
 	if in := strings.TrimSpace(tmuxRun(t, "display-message", "-p", "-t", pane, "#{window_panes} #{window_active}")); in != "2 0" {
 		t.Errorf("pane %s is in a window of (panes, active) %q, want the new one", pane, in)
 	}
+	eventually(t, "the printed address naming the new agent", func() bool {
+		return run(io.Discard, []string{"agent", "read", address, "--screen"}) == nil
+	})
 }

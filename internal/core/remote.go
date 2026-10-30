@@ -331,7 +331,8 @@ func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 // two are told apart by the panel they landed on and not by assuming they
 // cannot meet. The local one stands: it read the panel itself, while the
 // host's word about it crossed a machine. at is where the host's agents
-// begin in v.Agents.
+// begin in v.Agents. The one that stands takes the host's target, which
+// the address its host lists it under resolves through.
 func dropDoubles(v *revier.ProjectView, at int) {
 	if at == 0 {
 		// Nothing was read here, so nothing the host named can be a second
@@ -339,14 +340,19 @@ func dropDoubles(v *revier.ProjectView, at int) {
 		// link, so it keeps the slice it already has.
 		return
 	}
-	held := make(map[string]bool, at)
-	for _, a := range v.Agents[:at] {
-		held[key(a.Ref)+"\x00"+string(a.Panel)] = true
+	held := make(map[string]int, at)
+	for i, a := range v.Agents[:at] {
+		held[key(a.Ref)+"\x00"+string(a.Panel)] = i
 	}
-	kept := v.Agents[:at:at]
+	// A copy: the agents read here are the listing's, which Lay leaves as
+	// they were.
+	kept := slices.Clone(v.Agents[:at])
 	for _, a := range v.Agents[at:] {
-		if !held[key(a.Ref)+"\x00"+string(a.Panel)] {
+		i, double := held[key(a.Ref)+"\x00"+string(a.Panel)]
+		if !double {
 			kept = append(kept, a)
+		} else if kept[i].Target == "" {
+			kept[i].Target = a.Target
 		}
 	}
 	v.Agents = kept

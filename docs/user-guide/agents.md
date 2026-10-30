@@ -28,12 +28,15 @@ revier agent read shop --screen --lines 40     # what its panel shows
 revier agent send-keys shop esc                # interrupt, or answer a dialog
 ```
 
-The first argument is the agent's address: `shop` names the project's only
-agent, and `shop:agent` the agent in the target `agent`. Beside named agents,
-`shop` names the project's default agent, the one that runs no named agent.
-A tab that `agent new` added has no target name: its address is
-`<project>:<number>`, and `agent new --no-focus` prints it. When an address
-names more than one agent, the error lists an address for each.
+The first argument is the agent's address: `<project>:<target>:<panel>`,
+for example `shop:home:7`. The agent list shows it in the pane, `revier list
+--json` gives each agent's `target` and `panel`, and `agent new --no-focus`
+prints it. Two short forms name the one agent there is: `shop`, the project's
+only agent, and `shop:agent`, the only agent in the target `agent`. Beside
+named agents, both name the default agent, the one that runs no named agent.
+An agent in a window no target holds, such as a terminal you attached
+or a link's tab you moved to another window, has no address: go to it from
+the agent list.
 
 - `prompt` types one line and submits it. It refuses an agent in `attention`
   or `unknown`, because the Enter would answer a dialog. Use `send-keys` for
@@ -62,7 +65,7 @@ panels of the project's agent tab. It goes to the new tab, unless you give
 revier agent new -p shop                # in the workspace of shop
 revier agent new dtop -p shop           # the named agent dtop
 revier agent new --dir ~/dev/shop-wt    # start the agent in a worktree
-revier agent new -p shop --no-focus     # stay here; print the address, e.g. shop:7
+revier agent new -p shop --no-focus     # stay here; print the address, e.g. shop:home:7
 revier shell new -p shop
 ```
 

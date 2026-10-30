@@ -71,9 +71,11 @@ func (c *Core) tags(snap snapshot) map[revier.PanelID]shown {
 // panel here shows keeps the host's name for it, its tag,
 // and loses its ref: the ref is an instance of a host on that machine, which
 // nothing here can act on, and a runtime there named as the one here would
-// otherwise pass for it (here).
+// otherwise pass for it (here). Every agent loses the host's target, which
+// names a target there; places labels the agent with a target here.
 func (c *Core) localise(tags map[revier.PanelID]shown, agents []revier.AgentView) {
 	for i, a := range agents {
+		agents[i].Target = ""
 		at, ok := tags[a.Panel]
 		if !ok {
 			agents[i].Ref = revier.TargetRef{}
@@ -147,23 +149,21 @@ func (c *Core) hostAgents(ctx context.Context, p Project) ([]revier.AgentView, e
 }
 
 // linkAgent finds the agent addr names in a link, among those a panel here
-// shows: with addr empty, the link's only agent; with a target name, the only
-// agent in the panels scope lists for that target, which are its instance's or,
-// for a tab, the tab's alone; otherwise the panel here with that id.
-func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revier.TargetName, scope []held, snap snapshot) (Agent, error) {
+// shows, as Agent does: with a target, among the panels scope lists for it,
+// which are its instance's or, for a tab, the tab's alone; with a panel, that
+// panel here among them.
+func (c *Core) linkAgent(ctx context.Context, p Project, addr address, scope []held, snap snapshot, bound Bindings) (Agent, error) {
 	agents, err := c.hostAgents(ctx, p)
 	if err != nil {
 		return Agent{}, err
 	}
 	c.localise(c.tags(snap), agents)
-	where := string(p.Name)
-	if addr != "" {
-		where += ":" + addr
-	}
-	in := map[string]bool{}
+	in := map[string]revier.TargetName{}
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
-			in[key(h.inst.Ref)+"\x00"+string(panel.ID)] = true
+			if k := key(h.inst.Ref) + "\x00" + string(panel.ID); in[k] == "" {
+				in[k] = h.target
+			}
 		}
 	}
 	var found []Agent
@@ -173,13 +173,14 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 			elsewhere++
 			continue
 		}
-		if (only != "" && !in[key(a.Ref)+"\x00"+string(a.Panel)]) || (only == "" && addr != "" && string(a.Panel) != addr) {
+		target, held := in[key(a.Ref)+"\x00"+string(a.Panel)]
+		if (addr.target != "" && !held) || (addr.byPanel && a.Panel != addr.panel) {
 			continue
 		}
 		inst, _ := byRef(snap, a.Ref)
 		for _, panel := range inst.Panels {
 			if panel.ID == a.Panel {
-				found = append(found, Agent{Ref: a.Ref, Panel: panel, State: a.State, link: &p})
+				found = append(found, Agent{Ref: a.Ref, Panel: panel, State: a.State, target: target, link: &p})
 			}
 		}
 	}
@@ -187,17 +188,30 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 	case len(found) == 1:
 		return found[0], nil
 	case len(found) > 1:
-		addrs := ""
-		for _, a := range found {
-			addrs += " " + string(p.Name) + ":" + a.Panel.ID.String()
+		if def, ok := defaultAgent(found); ok && !addr.byPanel {
+			return def, nil
 		}
-		return Agent{}, fmt.Errorf("%s %w: use one of%s", where, ErrAmbiguous, addrs)
-	case only == "" && addr != "":
-		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", where, ErrNotAgent)
+		return Agent{}, c.ambiguous(snap, p, bound, addr.where, found)
+	case addr.byPanel && holds(scope, addr.panel):
+		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", addr.where, ErrNotAgent)
+	case addr.byPanel:
+		return Agent{}, addr.noPanel()
 	case elsewhere > 0:
-		return Agent{}, fmt.Errorf("%s: %w", where, ErrAgentElsewhere)
+		return Agent{}, fmt.Errorf("%s: %w", addr.where, ErrAgentElsewhere)
 	}
-	return Agent{}, fmt.Errorf("%s: %w", where, ErrNoAgent)
+	return Agent{}, fmt.Errorf("%s: %w", addr.where, ErrNoAgent)
+}
+
+// holds reports whether an instance of scope holds the panel.
+func holds(scope []held, panel revier.PanelID) bool {
+	for _, h := range scope {
+		for _, p := range h.inst.Panels {
+			if p.ID == panel {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // rereadLink asks the host for the agent's state again, by the tag the panel

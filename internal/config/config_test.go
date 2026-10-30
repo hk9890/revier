@@ -151,7 +151,7 @@ func TestValidateRejects(t *testing.T) {
 			`target name "-p"`,
 		},
 		{
-			// An agent address is <project>:<target>, split at the colon.
+			// An agent address is <project>:<target>:<panel>, split at its first colon.
 			"project name with a colon",
 			revier.Project{Name: "a:b", Path: "/p", Targets: []revier.Target{{Name: "a", Home: true, Window: &base}}},
 			`project name "a:b"`,

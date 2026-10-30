@@ -220,8 +220,9 @@ func TestATabThatDidNotOpenIsNoEvent(t *testing.T) {
 	}
 }
 
-// An agent focused by its instance and its panel, as `revier agent focus
-// --ref` names one, is the same event a press of it is.
+// An agent focused by its instance and its panel, as the survey reports it
+// and `revier agent focus <project>:<target>:<panel>` resolves it, is the
+// same event a press of it is.
 func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")

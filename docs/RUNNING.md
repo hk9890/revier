@@ -96,7 +96,7 @@ tmux capture-pane -p -t "$pane"                           # the text arrived
 ./bin/revier agent send-keys demo x enter                 # typed in any state, st waiting included
 ./bin/revier agent read demo --screen --lines 5           # the pane's last lines, as plain text
 ./bin/revier agent read demo                              # refused: the session file names no conversation
-./bin/revier agent new -p demo --no-focus                 # prints demo:<pane>
+./bin/revier agent new -p demo --no-focus                 # prints demo:home:<pane>
 tmux list-windows -t home -F '#{window_index} #{window_active}'   # the new window is not the current one
 ```
 

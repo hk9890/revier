@@ -478,6 +478,7 @@ type listed struct {
 	at      time.Time
 	dir     string
 	screen  string
+	name    string // what the harness calls it
 }
 
 // listedWorld is listedSurface with the agent list in view and its asks
@@ -504,7 +505,7 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 		marker := fmt.Sprintf("agent-%d", i)
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
-		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir}
+		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir, Name: a.name}
 		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
 		probes, fakes = append(probes, p), append(fakes, p)
 		if !slices.Contains(names, a.project) {

@@ -127,6 +127,20 @@ func TestInspectNamesTheConversationTheListingGives(t *testing.T) {
 	}
 }
 
+// The name is the one Claude Code's peer messages address the session by,
+// and the listing the status came from carries it too.
+func TestInspectNamesTheSessionAsTheListingDoes(t *testing.T) {
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(agents(`[{"pid": 101, "sessionId": "a", "name": "revier-a0", "status": "idle"}]`, nil))
+	got, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+	if err != nil || got.Name != "revier-a0" {
+		t.Errorf("Name = %q, %v; want revier-a0", got.Name, err)
+	}
+	if got, _ := p.Inspect(context.Background(), revier.Panel{PID: 999}); got.Name != "" {
+		t.Errorf("Name = %q for a panel Claude does not list, want none", got.Name)
+	}
+}
+
 func TestInspectKeepsTheTitleAsActivity(t *testing.T) {
 	p := &claude.Probe{SessionsDir: t.TempDir()}
 	p.SetAgents(agents(statusJSON, nil))

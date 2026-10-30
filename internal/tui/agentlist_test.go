@@ -345,3 +345,30 @@ func TestTheAgentPaneNamesTheAgentAndItsProject(t *testing.T) {
 		t.Errorf("the agent is not the pane's title:\n%s", body)
 	}
 }
+
+// The pane says the address revier reaches the agent by, and the name its
+// harness gives it, as harness:name; an agent its harness names nothing has
+// no such line.
+func TestTheAgentPaneSaysTheAddressAndTheHarnessName(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one", name: "alpha-a0"})
+	body := pane(m)
+	for _, want := range []string{"Address  alpha:home:1", "Name     claude:alpha-a0"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("pane has no %q:\n%s", want, body)
+		}
+	}
+	m, _, _ = listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one"})
+	if body := pane(m); strings.Contains(body, "Name ") {
+		t.Errorf("pane names an agent its harness names nothing:\n%s", body)
+	}
+}
+
+// The name is the harness's text, so what would move the cursor or recolour
+// the terminal is dropped before the pane draws it.
+func TestTheAgentPaneDrawsTheHarnessNameAsPlainText(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one", name: "\x1b[31mred\x07\nline"})
+	body := pane(m)
+	if !strings.Contains(body, "Name     claude:redline") || strings.Contains(body, "\x07") {
+		t.Errorf("pane draws the name with its control text:\n%q", body)
+	}
+}
