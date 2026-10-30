@@ -309,6 +309,23 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	}
 }
 
+// A terminal key's plain tab is one shell panel: when the runtime's shell
+// exits before the focus, the error says the shell exited, not the focus.
+func TestAPlainTabWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
+	c := &core.Core{Runtime: endingTab{rt}}
+
+	err := c.TabAtPanel(context.Background(), nil, "9", "", core.OutsideTab, func(core.Workspace, string) error {
+		t.Fatal("in ran for a window of no project")
+		return nil
+	})
+	want := `kitty: plain tab: the shell panel's shell exited as soon as it started`
+	if err == nil || err.Error() != want {
+		t.Fatalf("TabAtPanel = %v, want %q", err, want)
+	}
+}
+
 // A tab of two panels whose first command exited still holds the second, so
 // it opened: the focus failure stands, and the tab is not called gone.
 func TestATabWhoseFirstCommandEndedBesideAnotherReportsTheFocus(t *testing.T) {

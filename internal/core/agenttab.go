@@ -413,6 +413,9 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 		return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), err)
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, opened); err != nil {
+		if ended(ctx, c.Runtime, w.Ref, opened, []revier.PanelSpec{shell}) {
+			return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), panelstart.ExitedAtOnce(shell))
+		}
 		return fmt.Errorf("%s: focus the plain tab: %w", c.Runtime.Name(), err)
 	}
 	return nil
