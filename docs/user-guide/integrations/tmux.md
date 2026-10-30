@@ -46,9 +46,12 @@ and revier outside tmux, it switches none.
 ## Add tabs from a tmux key
 
 ```
-bind-key A run-shell -b 'revier agent new --panel "#{pane_id}" --dir "#{pane_current_path}"'
+bind-key A run-shell -b 'revier agent new --panel "#{pane_id}"'
 bind-key S run-shell -b 'revier shell new --panel "#{pane_id}" --dir "#{pane_current_path}"'
 ```
+
+The shell window starts in the pane's directory. The agent window starts in
+the project, so from a worktree the agent can still enter any worktree.
 
 In a session that is no project's workspace, both keys open a plain shell
 window there, or nothing if you set

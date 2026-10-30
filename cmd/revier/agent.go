@@ -51,8 +51,8 @@ usage:
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project;
-             with --panel, the default is the directory kitty reports
-             for that panel
+             with --panel too, the agent starts in the project, not
+             in the panel's directory
   --no-focus leave the focus where it is, and print the new agent's address
 
 new opens a tab in an open workspace: the project's agent panel and its
