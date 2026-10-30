@@ -38,3 +38,5 @@ Outside herdr:
   ([Agents](../agents.md#drive-an-agent-from-a-script)). Use `send-keys`.
 - `revier agent wait`: it ends only at its timeout.
 - `revier shutdown` does not wait for an opencode turn to end.
+- `revier agent close` does not refuse an opencode agent in a turn: it shows
+  `unknown` there, and only `running` and `attention` count as busy.

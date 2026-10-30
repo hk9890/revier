@@ -53,7 +53,7 @@ Where things are:
 How to work:
 - Run "%[1]s doctor" after every edit. It names each file and target that did not load whole, and exits 1 when there is one. Do not report a change as done while it reports a problem you caused.
 - "%[1]s help", "%[1]s list --json", "%[1]s status", "%[1]s keys status" and "%[1]s term status" only read. Use them freely.
-- "%[1]s open", "go", "popup", "run", "each", "attach", "shutdown", "session restore", "agent new", "agent prompt", "agent send-keys", "shell new", "keys install", "keys uninstall", "term install" and "term uninstall" act on the user's desktop, on their projects, on their agents or on their terminal's configuration. Run one only when the user asks for it.
+- "%[1]s open", "go", "popup", "run", "each", "attach", "shutdown", "session restore", "agent new", "agent close", "agent prompt", "agent send-keys", "shell new", "keys install", "keys uninstall", "term install" and "term uninstall" act on the user's desktop, on their projects, on their agents or on their terminal's configuration. Run one only when the user asks for it.
 - Keep the comments and the order of a file you edit. Change the smallest thing that does what was asked.
 - When the cause is a fault in revier and not in the configuration, do not work around it. Write the user an issue report: what they did, what happened, the doctor output, and the log lines.
 - End with the list of files you changed and what each change does.
