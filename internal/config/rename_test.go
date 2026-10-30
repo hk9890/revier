@@ -75,10 +75,10 @@ func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
 	}
 }
 
-// A name that is only part of a longer word in a pattern beside {{.Name}} is
-// not the name written out: the file `revier new` writes for "a" or "idea"
-// matches the editor's class "^jetbrains-idea", and is renamed.
-func TestRenameTakesTheNameOnlyAsAWordOfItsOwn(t *testing.T) {
+// The editor class "^jetbrains-idea" that `revier new` writes is not the name
+// written out, though a project named "a", "idea" or "jetbrains" finds itself
+// in it: the file `revier new` writes for such a name is renamed.
+func TestRenameLeavesTheEditorClassOfRevierNew(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []revier.ProjectName{"a", "idea", "jetbrains"} {
 		root := t.TempDir()
@@ -88,6 +88,17 @@ func TestRenameTakesTheNameOnlyAsAWordOfItsOwn(t *testing.T) {
 		if _, err := config.Rename(root, name, "b", config.Inherited{}); err != nil {
 			t.Errorf("Rename(%s): %v, want the file revier new wrote renamed", name, err)
 		}
+	}
+}
+
+// The name joined to a longer word by "-" is still the name written out:
+// {{.Name}}-editor would open newname-editor while ^myproj-editor$ went on
+// looking for the old one, so the rename is refused.
+func TestRenameRefusesTheNameJoinedByADash(t *testing.T) {
+	body := strings.NewReplacer("  name = \"home\"\n", "  name = \"{{.Name}}-editor\"\n", "^session:{{.Name}}$", "^myproj-editor$").Replace(valid)
+	root := renameRoot(t, "myproj", body)
+	if _, err := config.Rename(root, "myproj", "newname", config.Inherited{}); err == nil || !strings.Contains(err.Error(), "writes the name out") {
+		t.Errorf("err = %v, want the refusal", err)
 	}
 }
 
