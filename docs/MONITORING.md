@@ -15,6 +15,17 @@ doc reads what it already did.
 - A remote project's operations run in the revier on its host, and log there.
 - `revier list` logs only `WARN` and `ERROR`: a surface with a linked project
   runs it on that host every refresh.
+- The TUI's logs screen (alt+l) lists the `WARN` and `ERROR` lines of the days
+  kept, newest first (`internal/logging.Read`). It writes nothing to the log,
+  and counts the lines it cannot decode on its rule.
+- A footer error opens that screen on the newest `WARN` or `ERROR` line of the
+  TUI's `pid` at or before the time the footer took the error
+  (`docs/design/decisions.md` D157). That is the error's line only when the
+  error has one:
+  - A survey error has no time: the cursor starts on the newest line.
+  - An outcome logged at `INFO`, such as `session save: nothing open` or a
+    cancelled restore or shutdown, has no line: the cursor starts on an older
+    one.
 
 ## Fields
 

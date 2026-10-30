@@ -18,7 +18,7 @@ A findability map: where things live, and how to search for them.
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
 | `internal/fsutil/` | The atomic file write every store uses, and the write through a link that config.toml and the terminal's configuration use. |
-| `internal/logging/` | The daily log file every process appends to, and the helpers that time an operation. |
+| `internal/logging/` | The daily log file every process appends to, the helpers that time an operation, and the reader the TUI's logs screen lists. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |

@@ -126,6 +126,13 @@ func (m Model) helpSections() []helpSection {
 			{key: "esc", desc: "one step back"},
 			{key: "any key", desc: "after a full shutdown, quit at once rather than after its result"},
 		}},
+		{title: "Logs", entries: []helpEntry{
+			{key: k.Logs.Help().Key, desc: "the warnings and errors of the log, from any screen, on the newest line this TUI wrote by the time of the footer's error; on the screen, close it"},
+			{key: "click", desc: "on the footer's error or on logs at the top of the pane, the same"},
+			{key: "↑ / ↓", desc: "move; home, end, pgup and pgdown too"},
+			{key: "enter", desc: "show every field of the line"},
+			{key: "esc", desc: "back to the lines, and from them to the screen before"},
+		}},
 		{title: "Query editing", entries: []helpEntry{
 			{key: "ctrl+a", desc: "start of the line"},
 			{key: "ctrl+e", desc: "end of the line"},

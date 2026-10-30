@@ -528,11 +528,11 @@ const (
 	detailStateWidth = 15
 )
 
-// nameLine is the pane's first line: the name button, and the project's
-// project-line status at the right edge where the button leaves room for it
-// (decisions.md D134).
+// nameLine is the pane's first line: "logs", the name button, and the
+// project's project-line status at the right edge where the button leaves
+// room for it (decisions.md D134).
 func (m Model) nameLine(name revier.ProjectName, w int) string {
-	button := m.nameButton(name, w)
+	button := clipTo(m.logsItem()+m.nameButton(name, w-logsItemWidth), w)
 	room := w - lipgloss.Width(button) - gridGap
 	status := m.statusAt(core.StatusProjectLine, name).fit(*m.theme, room)
 	if status == "" {

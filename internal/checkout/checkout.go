@@ -79,7 +79,9 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	case p.GitURL == "":
 		return false, fmt.Errorf("project %q: %s does not exist, and %w", p.Name, p.Path, ErrNoGitURL)
 	}
+	start := time.Now()
 	if err := os.MkdirAll(filepath.Dir(p.Path), 0o755); err != nil {
+		logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
 		return false, err
 	}
 	_, _ = fmt.Fprintf(out, "revier: %s is not on this machine; cloning %s\n", p.Path, p.GitURL)
@@ -97,7 +99,6 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	var said bytes.Buffer
 	both := io.MultiWriter(out, &said)
 	c.Stdout, c.Stderr = both, both
-	start := time.Now()
 	if err = c.Run(); err != nil {
 		err = fmt.Errorf("project %q: git clone %s: %w", p.Name, p.GitURL, err)
 		if cause := gitCause(said.String()); cause != "" {

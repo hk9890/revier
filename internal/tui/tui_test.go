@@ -1054,8 +1054,8 @@ func TestCtrlAltKeysFire(t *testing.T) {
 	}
 }
 
-// An action that renders to nothing says so in words, not in a formatting
-// verb that was handed no error.
+// An action that renders to nothing is refused, and the footer says so in
+// words, not in a formatting verb that was handed no error.
 func TestAnActionThatRunsNothingSaysSo(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	m := refreshed(t, c, projects, stateWith(t, nil), []config.Action{{Key: "ctrl-y", Name: "sync"}})
@@ -1064,8 +1064,8 @@ func TestAnActionThatRunsNothingSaysSo(t *testing.T) {
 		t.Fatal("ctrl+y ran no action")
 	}
 	f := footer(run(m, cmd))
-	if !strings.Contains(f, `action "sync"`) || strings.Contains(f, "%!") {
-		t.Errorf("footer = %q, want the action named and no formatting verb", f)
+	if !strings.Contains(f, `action "sync" runs nothing`) || strings.Contains(f, "%!") {
+		t.Errorf("footer = %q, want the refusal in words and no formatting verb", f)
 	}
 }
 
@@ -1583,24 +1583,24 @@ func TestTheWheelOverThePaneScrollsThePane(t *testing.T) {
 	// One column left of the border is still the list.
 	m = wheel(m, border-1, tea.MouseWheelDown)
 	m = wheel(m, border-1, tea.MouseWheelUp)
-	if top := strings.Split(pane(m), "\n")[0]; top != "Project  first edit alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "logs Project  first edit alt+e" {
 		t.Fatalf("pane top = %q, want the list to have taken the wheel", top)
 	}
 
 	m = wheel(m, border, tea.MouseWheelDown)
-	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "logs Project  first edit alt+e" {
 		t.Errorf("the wheel over the pane did not scroll it:\n%s", pane(m))
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "first") {
 		t.Errorf("selected %q, want the wheel over the pane to leave the selection on first", row)
 	}
 	m = survey(m)
-	if top := strings.Split(pane(m), "\n")[0]; top == "Project  first edit alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top == "logs Project  first edit alt+e" {
 		t.Errorf("a refresh put the pane back at its top")
 	}
 
 	m, _ = press(m, "down")
-	if top := strings.Split(pane(m), "\n")[0]; top != "Project  second edit alt+e" {
+	if top := strings.Split(pane(m), "\n")[0]; top != "logs Project  second edit alt+e" {
 		t.Errorf("pane top = %q after moving to the next project, want its name", top)
 	}
 }

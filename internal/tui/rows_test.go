@@ -219,8 +219,9 @@ func TestEnterThatRunsNothingKeepsTheQuery(t *testing.T) {
 	}
 }
 
-// A launch that fails after the search ended says why in the footer, where
-// the user is left looking: no window came up to take the focus away.
+// A launch that fails after the search ended names the go and its project in
+// the footer, where the user is left looking: no window came up to take the
+// focus away. The log keeps why.
 func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 	rt, _, c, projects := world(t, 3)
 	for i := range projects {
@@ -233,7 +234,7 @@ func TestAFailedLaunchSaysSoInTheFooter(t *testing.T) {
 		t.Fatal("enter on a project returned no command")
 	}
 	m = run(m, cmd)
-	if f := footer(m); !strings.Contains(f, "kitty is not running") {
+	if f := footer(m); !strings.Contains(f, "go failed: project-00") {
 		t.Errorf("footer = %q, want the launch failure said", f)
 	}
 	assertSearchEnded(t, m, "00", " 3/3 ", "project-00")

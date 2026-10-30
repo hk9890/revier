@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -12,6 +13,7 @@ import (
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -171,6 +173,8 @@ func (m Model) top() string {
 		name = "Shutdown"
 	case dialogResume:
 		name = "Welcome back"
+	case dialogLogs:
+		name = "Logs"
 	default:
 		return m.bar()
 	}
@@ -258,6 +262,8 @@ func (m Model) subtitle() string {
 		return " " + m.theme.Meta.Render(m.shutdownTitle())
 	case dialogResume:
 		return " " + m.theme.Meta.Render(m.resumeTitle())
+	case dialogLogs:
+		return m.logs.subtitle(m.surface())
 	}
 	if m.agents.shown {
 		return " " + m.fieldView(m.agents.query, focusList)
@@ -340,6 +346,8 @@ func (m Model) ruleCount() string {
 		return m.link.count(th)
 	case m.dialog == dialogSessions && !m.sessions.naming:
 		return th.NameDim.Render(core.Count(len(m.sessions.list.Items()), "session"))
+	case m.dialog == dialogLogs:
+		return th.NameDim.Render(m.logs.count())
 	case m.dialog == dialogNew, m.dialog == dialogConfig, m.dialog == dialogProject, m.dialog == dialogHelp, m.dialog == dialogSessions, m.dialog == dialogShutdown,
 		m.dialog == dialogResume:
 		return ""
@@ -406,6 +414,8 @@ func (m Model) empty() string {
 	switch {
 	case m.dialog == dialogSessions:
 		return say(th.NameDim, "No saved sessions. "+sessionsBarKey+" saves the projects open now.")
+	case m.dialog == dialogLogs:
+		return say(th.NameDim, fmt.Sprintf("Nothing went wrong on this machine in the last %d days.", logging.Keep))
 	case m.dialog == dialogLink && m.link.empty() != "":
 		return say(th.NameDim, m.link.empty())
 	case m.dialog != dialogNone:
@@ -441,37 +451,56 @@ func (m Model) onlyAssistant() bool {
 	return len(m.projects) == 1 && m.isAssistant(m.projects[0].Name)
 }
 
+// footerPrompt is the footer's line while a walk runs or a question waits
+// for its answer: the walk's says how to stop it, so no error hides it.
+func (m Model) footerPrompt() (string, bool) {
+	switch {
+	case m.sessions.restoring != "":
+		return m.sessions.progressLine(*m.theme), true
+	case m.shut.running:
+		return m.theme.Meta.Render(" " + m.shut.walk.line()), true
+	case m.confirm != "":
+		return m.deletePrompt(), true
+	case m.dialog == dialogConfig && m.config.dropping:
+		return m.config.dropPrompt(m.surface()), true
+	case m.dialog == dialogProject && m.proj.dropping:
+		return m.proj.dropPrompt(*m.theme), true
+	case m.link.asking != "":
+		return m.link.askingLine(*m.theme), true
+	}
+	return "", false
+}
+
+// footerErr is the error the footer shows, and when it was set: a key's or
+// an activation's, else the last survey's, which has no time, since its
+// host's line is logged once for a run of failures. None while a prompt
+// stands in the footer.
+func (m Model) footerErr() (time.Time, error) {
+	if _, ok := m.footerPrompt(); ok {
+		return time.Time{}, nil
+	}
+	if m.err != nil {
+		return m.errAt, m.err
+	}
+	return time.Time{}, m.surveyErr
+}
+
 // footer is the key legend, or the last failure. An error replaces the legend
 // rather than being added to it: a survey that failed is the only thing worth
-// reading on that line. A walk that runs is the exception: its line says how
-// to stop it, so no error hides it while it runs.
+// reading on that line. A prompt is the exception: no error hides it. A click
+// on the error opens the logs screen on its line, so the pointer lights it.
 func (m Model) footer() string {
-	if m.sessions.restoring != "" {
-		return m.sessions.progressLine(*m.theme)
+	if line, ok := m.footerPrompt(); ok {
+		return line
 	}
-	if m.shut.running {
-		return m.theme.Meta.Render(" " + m.shut.walk.line())
-	}
-	if m.confirm != "" {
-		return m.deletePrompt()
-	}
-	if m.dialog == dialogConfig && m.config.dropping {
-		return m.config.dropPrompt(m.surface())
-	}
-	if m.dialog == dialogProject && m.proj.dropping {
-		return m.proj.dropPrompt(*m.theme)
-	}
-	if m.link.asking != "" {
-		return m.link.askingLine(*m.theme)
-	}
-	err := m.err
-	if err == nil {
-		err = m.surveyErr
-	}
-	if err != nil {
-		// One line, whatever the error: a joined error is one per line, and a
-		// second line in the footer pushes the frame past the terminal.
-		return m.theme.Attention.Render(" " + strings.ReplaceAll(err.Error(), "\n", "; "))
+	if _, err := m.footerErr(); err != nil {
+		style := m.theme.Attention
+		if m.over.kind == hoverFooter {
+			style = m.theme.OnHover(style)
+		}
+		// On the logs screen the key closes it, and the screen read the log
+		// before this error was logged: the footer names no key.
+		return style.Render(" " + short(err, m.dialog != dialogLogs))
 	}
 	if m.sessions.saving {
 		return m.sessions.progressLine(*m.theme)
@@ -500,6 +529,9 @@ func (m Model) footer() string {
 	}
 	if m.dialog == dialogSessions {
 		return " " + m.help.ShortHelpView(m.sessions.help(m.keys))
+	}
+	if m.dialog == dialogLogs {
+		return " " + m.help.ShortHelpView(m.logs.help(m.keys))
 	}
 	if m.dialog == dialogShutdown && m.shut.quitting {
 		return " " + m.help.ShortHelpView([]key.Binding{helpKey("any key", "quit")})

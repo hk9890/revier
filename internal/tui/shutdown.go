@@ -307,10 +307,11 @@ func surveyPlan(c *core.Core, projects []core.Project, only revier.ProjectName, 
 }
 
 // planned takes the plan's survey. An answer for a wizard that has left the
-// confirm step, or for a choice made before the one it shows, is dropped.
+// confirm step, or for a choice made before the one it shows, is dropped. A
+// wizard under the logs screen has not left it.
 func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 	s := m.shut
-	if m.dialog != dialogShutdown || s.step != shutConfirm || s.planned ||
+	if m.under() != dialogShutdown || s.step != shutConfirm || s.planned ||
 		msg.whole != s.whole || msg.project != s.project || msg.scope != s.scope {
 		return m, nil
 	}
@@ -413,7 +414,8 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	// A cancel before the first close fails the save on the context it
 	// ended; the user's word for that is the cancel. Any other failure is
 	// said as it came.
-	if s.walk.cancelled && errors.Is(msg.err, context.Canceled) {
+	cancelled := s.walk.cancelled && errors.Is(msg.err, context.Canceled)
+	if cancelled {
 		msg.err = errors.New("cancelled; nothing closed")
 	}
 	if msg.recheck != nil {
@@ -432,6 +434,9 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		m.err = msg.err
+		if !cancelled {
+			m.err = fail("shutdown", "", msg.err)
+		}
 		return m, nil
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed

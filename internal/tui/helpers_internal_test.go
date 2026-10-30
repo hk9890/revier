@@ -10,7 +10,7 @@ import (
 // them builds it, with the screens New would give it: Model holds them by
 // pointer.
 func bare(m Model) Model {
-	m.link, m.sessions, m.config, m.proj, m.agents, m.create = &linkScreen{}, &sessionsScreen{}, &configScreen{}, &projectScreen{}, &agentList{}, &createScreen{}
+	m.link, m.sessions, m.config, m.proj, m.agents, m.create, m.logs = &linkScreen{}, &sessionsScreen{}, &configScreen{}, &projectScreen{}, &agentList{}, &createScreen{}, &logsScreen{}
 	return m
 }
 

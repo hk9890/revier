@@ -846,3 +846,14 @@ name, which its peer messages address. revier shows it beside the address and
 decides nothing by it: Claude Code keeps it neither unique nor fixed, and an
 address made of it would reach Claude agents alone. It comes from the listing
 the probe already reads (D55), so a survey pays nothing for it.
+
+### D157 — the footer names what failed, and the logs screen holds the rest
+
+Extends D69. The footer is one line, and an operation's error can quote a tool
+or join several, so the footer names the operation and its project; the full
+text is on a logs screen of this machine's WARN and ERROR lines over the days
+the log keeps, newest first, each field drawn as text (D108). A link's
+operation logs on its host, so the screen reads the local file alone. The
+surface keeps when it took the error, and the screen opens on the newest line
+of its own process at or before then: a warning written between the two takes
+the cursor. Rejected: finding the line by its text, which rewording breaks.

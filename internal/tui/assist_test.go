@@ -227,8 +227,8 @@ func TestAConfigurationTheAssistantBrokeIsSaid(t *testing.T) {
 	}
 	m, cmd := m.Assisted(nil)
 	m, _ = deliver(m, cmd)
-	if got := footer(m); !strings.Contains(got, "config.toml") {
-		t.Errorf("footer = %q, want it to name the file that does not load", got)
+	if got := footer(m); !strings.Contains(got, "config load failed (alt+l for details)") {
+		t.Errorf("footer = %q, want it to say the configuration does not load", got)
 	}
 	if body := strings.Join(rows(m), "\n"); !strings.Contains(body, "project-00") {
 		t.Errorf("the list did not stand over the broken configuration:\n%s", body)

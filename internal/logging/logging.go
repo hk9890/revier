@@ -3,6 +3,9 @@
 // appends to the same file - a keybinding's, the TUI, a restore - so each line
 // carries the pid and the command that wrote it.
 //
+// Read is the one reader of it: the WARN and ERROR lines the TUI's logs
+// screen lists.
+//
 // It is the log/slog default logger and nothing else. A package that logs calls
 // slog directly; a process that never called Setup writes nothing here.
 // cmd/revier installs a discarding logger when Setup fails, so slog's own
@@ -14,7 +17,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -213,15 +215,11 @@ func prune(dir string, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	y, m, dd := now.Date()
-	oldest := time.Date(y, m, dd-(Keep-1), 0, 0, 0, 0, now.Location())
+	oldest := oldestKept(now)
 	for _, e := range entries {
 		name := e.Name()
-		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
-			continue
-		}
-		day, err := time.ParseInLocation(layout, strings.TrimSuffix(strings.TrimPrefix(name, prefix), suffix), now.Location())
-		if err != nil || !day.Before(oldest) {
+		day, ok := fileDay(name, now.Location())
+		if !ok || !day.Before(oldest) {
 			continue
 		}
 		// Two processes can start the same new day and prune together.

@@ -173,7 +173,11 @@ func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		m.dialog = dialogNone
 	}
 	if msg.err != nil {
+		// A cancel is the user's word, and says itself.
 		m.err = msg.err
+		if !one.walk.cancelled {
+			m.err = fail("close", one.project, msg.err)
+		}
 		return m, nil
 	}
 	one.closed = msg.closed
