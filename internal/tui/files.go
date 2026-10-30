@@ -229,7 +229,7 @@ func (m Model) targetOpen(project revier.ProjectName, tv revier.TargetView) (boo
 		return false, fmt.Errorf("%s is coming up; wait for its window before deleting it", tv.Name)
 	}
 	ref, bound := m.bound[project][tv.Name]
-	return !tv.Ref.IsZero() || (bound && m.hostHere(ref.Host)), nil
+	return !tv.Ref.IsZero() || (bound && m.core.HostHere(ref.Host)), nil
 }
 
 // confirmDelete takes the key that answers the question. Only "y" deletes;
@@ -299,31 +299,14 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 	return nil
 }
 
-// refuseRunning refuses deleting or renaming a project with a target running
-// or a window attached to it. The last survey says what runs; a target that
-// landed since, or a launch whose window is still to appear, is read from
-// state, else the change would leave that window reachable by no name. An
-// attachment or a binding on a host here is alive: every refresh prunes the
-// ones that host no longer lists. One on another host - a surface started
-// where that host does not probe - cannot be reached from here, so it does
-// not hold the change up.
+// refuseRunning refuses deleting or renaming a project while anything of it
+// runs here, as core.RefuseChange says, or while a launch of it is still to
+// show its window: the window would land reachable by no name.
 func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
-	name := v.Project.Name
-	// Before the first survey the view is the files' alone, and says nothing
-	// about what runs.
-	if !m.surveyed {
-		return fmt.Errorf("no survey has answered yet; wait for it before %s %s", doing, name)
-	}
-	if m.running(v) {
-		return fmt.Errorf("%s is running; close its targets before %s it", name, doing)
-	}
-	if err := m.refuseUnsettled(v, doing); err != nil {
+	if err := m.core.RefuseChange(v, core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached}, doing); err != nil {
 		return err
 	}
-	if m.attachedHere(name) {
-		return fmt.Errorf("%s has an attached window open; close it before %s the project", name, doing)
-	}
-	return nil
+	return m.refusePending(v, doing)
 }
 
 // refuseUnsettled refuses the change while what of the project runs is not
@@ -331,16 +314,17 @@ func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 // still to appear. A close cannot reach either, so a delete that closes first
 // is refused for them too.
 func (m Model) refuseUnsettled(v revier.ProjectView, doing string) error {
-	name := v.Project.Name
-	// A target whose host could not list may be running (decisions.md D89):
-	// the change waits for the host, not for a guess.
-	for _, t := range v.Targets {
-		if t.Unknown != "" {
-			return fmt.Errorf("%s: %s; wait for the host before %s it", name, t.Unknown, doing)
-		}
+	if err := core.RefuseUnknown(v, doing); err != nil {
+		return err
 	}
-	if m.pending.Pending(time.Now()) && m.pending.Project == name {
-		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
+	return m.refusePending(v, doing)
+}
+
+// refusePending refuses the change while a launch of the project is still to
+// show its window. The surface alone holds such a launch between its surveys.
+func (m Model) refusePending(v revier.ProjectView, doing string) error {
+	if m.pending.Pending(time.Now()) && m.pending.Project == v.Project.Name {
+		return fmt.Errorf("%s is coming up; wait for its window before %s it", v.Project.Name, doing)
 	}
 	return nil
 }
@@ -366,35 +350,9 @@ func (m Model) refuseStartedTarget(project revier.ProjectName, target revier.Tar
 	return nil
 }
 
-// running reports a project with a target running, by the last survey or by
-// where state says a target landed.
-func (m Model) running(v revier.ProjectView) bool {
-	running := v.Held()
-	for _, ref := range m.bound[v.Project.Name] {
-		running = running || m.hostHere(ref.Host)
-	}
-	return running
-}
-
-// attachedHere reports a window attached to the project on the window host
-// here.
-func (m Model) attachedHere(name revier.ProjectName) bool {
-	for _, ref := range m.attached[name] {
-		if m.core.Window != nil && ref.Host == m.core.Window.Name() {
-			return true
-		}
-	}
-	return false
-}
-
 // openHere reports a project with anything open that a close here reaches.
 func (m Model) openHere(v revier.ProjectView) bool {
-	return m.running(v) || m.attachedHere(v.Project.Name)
-}
-
-// hostHere reports a host this surface lists, whose refs a refresh prunes.
-func (m Model) hostHere(host string) bool {
-	return (m.core.Runtime != nil && host == m.core.Runtime.Name()) || (m.core.Window != nil && host == m.core.Window.Name())
+	return m.core.RunsHere(v, m.bound[v.Project.Name]) || m.core.AttachedHere(m.attached[v.Project.Name])
 }
 
 func without(projects []core.Project, name revier.ProjectName) []core.Project {
