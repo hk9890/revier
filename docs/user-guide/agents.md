@@ -76,8 +76,9 @@ panel of its layout. With a name, the tab's agent panel runs that
 Without `-p`, the project is the one `--dir` is in, else the one revier
 finds as for every command ([Concepts](concepts.md#project)). The workspace
 must be open already. With `--panel`, a window that is no project's workspace
-gets a plain shell tab beside it, or nothing if you set
-[`outside`](configuration.md#terminal) to `none`. To bind these commands to a
+gets a plain shell tab beside it, nothing if you set
+[`outside`](configuration.md#terminal) to `none`, or with `agent` a tab of
+the agent. To bind these commands to a
 kitty key, see [kitty](integrations/kitty.md).
 
 ## Resume an agent

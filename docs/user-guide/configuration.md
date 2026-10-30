@@ -423,10 +423,16 @@ outside   = "tab"
 |---|---|---|
 | `shell_key` | `ctrl+shift+t` | Opens a shell tab in the workspace of the focused window, as `revier shell new` does. |
 | `agent_key` | `ctrl+shift+z` | Opens a tab with the workspace's agent, as `revier agent new` does. |
-| `outside` | `tab` | What a key does in a window of no workspace: `tab` opens a plain tab beside it, `none` does nothing. |
+| `outside` | `tab` | What a key does in a window of no workspace: `tab` opens a plain tab beside it, `none` does nothing, `agent` runs the agent the key opens. |
 
 - Write a key in the [key](#keys) form. An empty string turns that key off.
 - A named agent's key is its `key` in `[[agent]]`.
+- With `outside = "agent"`, in a window of no workspace, `agent_key` opens a
+  tab that runs the first `[[agent]]` of `config.toml`, and a named agent's
+  key that agent, each in the window's directory. The shell key still opens
+  a plain tab. With no `[[agent]]` in `config.toml`, `agent_key` opens a
+  plain tab. An agent whose `command` uses a [template](#templates) opens no
+  tab there, because no project fills it in; the error names the agent.
 - revier refuses a key that another terminal key already holds, or that it
   cannot read. The other keys still work.
 - `revier term install` leaves out a key on the same chord as `trigger_key`
