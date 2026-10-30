@@ -61,14 +61,19 @@ func (m *Model) syncBody() {
 		m.follow(at, 1)
 		return
 	}
-	// The help screen scrolls itself: its offset is the reader's, and a
-	// survey arriving under it must not move it.
-	if m.dialog == dialogHelp {
-		// It has no pane beside it, so it is wider than the list it
+	// The help screen and a log line read in full scroll themselves: the
+	// offset is the reader's, and a survey arriving under it must not move
+	// it.
+	if m.dialog == dialogHelp || m.dialog == dialogLogs && m.logs.reading {
+		// Neither has a pane beside it, so each is wider than the list it
 		// stands over.
 		m.body.SetWidth(m.listWidth())
 		offset := m.body.YOffset()
-		m.body.SetContent(m.helpScreen())
+		if m.dialog == dialogHelp {
+			m.body.SetContent(m.helpScreen())
+		} else {
+			m.body.SetContent(m.logs.full(m.surface()))
+		}
 		m.body.SetYOffset(offset)
 		return
 	}
@@ -105,8 +110,8 @@ func (m *Model) syncBody() {
 	m.follow(l.Index()*itemHeight, itemHeight)
 }
 
-// bodyList is the list the body scrolls: the remote screen's rows while it is
-// up, and otherwise the list the surface shows, the projects or the agents.
+// bodyList is the list the body scrolls: the rows of the remote, sessions
+// or logs screen while it is up, and otherwise the list the surface shows, the projects or the agents.
 // It is a pointer because the cursor moves on it.
 func (m *Model) bodyList() *list.Model {
 	switch m.dialog {
@@ -114,6 +119,8 @@ func (m *Model) bodyList() *list.Model {
 		return m.link.list()
 	case dialogSessions:
 		return &m.sessions.list
+	case dialogLogs:
+		return &m.logs.list
 	}
 	if m.agents.shown {
 		return &m.agents.list
@@ -124,8 +131,8 @@ func (m *Model) bodyList() *list.Model {
 // itemHeight is how many lines one row of the list takes.
 func (m Model) itemHeight() int {
 	switch {
-	case m.dialog == dialogSessions, m.dialog == dialogLink && m.link.oneLine():
-		return 1 // a host is one line, a session one line of counts
+	case m.dialog == dialogSessions, m.dialog == dialogLogs, m.dialog == dialogLink && m.link.oneLine():
+		return 1 // a host is one line, a session one line of counts, a log line one line
 	}
 	return projectDelegate{}.Height()
 }

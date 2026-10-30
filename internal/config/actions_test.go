@@ -35,11 +35,11 @@ var (
 // A new action is a new [[action]] table at the end; nothing before it moves.
 func TestAddActionAppendsATable(t *testing.T) {
 	root := writeConfig(t, twoActions)
-	lint := config.Action{Key: "alt+l", Name: "lint", Run: []string{"mise", "run", "lint"}}
+	lint := config.Action{Key: "alt+g", Name: "lint", Run: []string{"mise", "run", "lint"}}
 	if err := config.AddAction(root, []config.Action{copyPath, sync}, lint); err != nil {
 		t.Fatal(err)
 	}
-	want := twoActions + "\n[[action]]\nkey = \"alt+l\"\nname = \"lint\"\nrun = [\"mise\", \"run\", \"lint\"]\n"
+	want := twoActions + "\n[[action]]\nkey = \"alt+g\"\nname = \"lint\"\nrun = [\"mise\", \"run\", \"lint\"]\n"
 	if got := readConfig(t, root); got != want {
 		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
 	}

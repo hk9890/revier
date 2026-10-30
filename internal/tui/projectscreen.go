@@ -522,8 +522,9 @@ func (m Model) nameButtonText(name revier.ProjectName) (text, hint string) {
 	return " " + string(name) + " ", edit.Desc + " " + edit.Key + " "
 }
 
-// nameButtonStart is the column the button starts on: the label column less
-// the button's own leading space, so the name stands level with the values
+// nameButtonStart is the column the button starts on after "Project": the
+// label column less the button's own leading space. The pane's "logs" before
+// it moves both right, so the name no longer stands level with the values
 // under it.
 const nameButtonStart = detailLabelWidth - 1
 

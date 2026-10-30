@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// The footer says why `revier assist` failed: the last line the command said
-// on stderr, which the surface keeps and does not show, and not a bare exit
-// status.
+// The log keeps why `revier assist` failed, while the footer names the
+// failure: the last line the command said on stderr, which the surface keeps
+// and does not show, and not a bare exit status.
 func TestAssistErrIsTheReasonTheCommandGave(t *testing.T) {
 	exit := errors.New("exit status 1")
 	for _, tc := range []struct {

@@ -99,6 +99,10 @@ record. The log is in `logs/` in the state directory
 ([Environment variables](cli.md#environment-variables)). revier removes files
 older than 14 days.
 
+In the TUI, press alt+l, or click the error in the footer, to list the
+warnings and errors of the log, newest first; see
+[Screens](tui.md#screens). With jq:
+
 ```bash
 L=${REVIER_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/revier}/logs/revier-$(date +%F).log
 jq -c 'select(.level != "INFO")' "$L"     # everything that went wrong

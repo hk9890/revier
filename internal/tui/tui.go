@@ -69,9 +69,10 @@ const (
 
 // dialog is a screen standing over the surface: the remote screen, the
 // new-project field, the sessions screen, the config screen, the help screen,
-// the shutdown wizard, the project screen, or the start dialog after a full
-// shutdown. A screen's step is the screen's own. dialogNone is the surface
-// itself, which is where it is nearly always.
+// the shutdown wizard, the project screen, the start dialog after a full
+// shutdown, or the logs screen, which stands over any of them. A screen's
+// step is the screen's own. dialogNone is the surface itself, which is where
+// it is nearly always.
 type dialog int
 
 const (
@@ -84,6 +85,7 @@ const (
 	dialogShutdown
 	dialogProject
 	dialogResume
+	dialogLogs
 )
 
 // hasRows reports a screen whose body is list rows: what a click selects and
@@ -97,15 +99,17 @@ func (m Model) hasRows() bool {
 		return !m.sessions.naming
 	case dialogLink:
 		return m.link.list() != nil
+	case dialogLogs:
+		return !m.logs.reading
 	}
 	return false
 }
 
-// hasPane reports a screen with the detail pane beside it. The help and
-// config screens are about no project, and the project screen is the
+// hasPane reports a screen with the detail pane beside it. The help, config
+// and logs screens are about no project, and the project screen is the
 // project's own, so they take the whole width.
 func (d dialog) hasPane() bool {
-	return d != dialogHelp && d != dialogConfig && d != dialogProject
+	return d != dialogHelp && d != dialogConfig && d != dialogProject && d != dialogLogs
 }
 
 // Model is the bubbletea model. Construct it with New.
@@ -136,6 +140,7 @@ type Model struct {
 	// the next refresh wiped would be on screen for under a second.
 	// surveyErr is the last refresh's, and the next refresh replaces it.
 	err       error
+	errAt     time.Time // when err was set: the logs screen opens on the newest line this process wrote at or before it
 	surveyErr error
 	focus     focus
 	tcursor   int                // the target row the pane's cursor is on
@@ -226,6 +231,7 @@ type Model struct {
 	sessions *sessionsScreen // the sessions screen, and its save or restore (sessions.go)
 	config   *configScreen   // the config screen (configscreen.go)
 	proj     *projectScreen  // the project screen (projectscreen.go)
+	logs     *logsScreen     // the logs screen (logs.go)
 	agents   *agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
@@ -252,6 +258,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 		config: new(newConfigScreen(th, cfg)),
 		status: newStatuses(cfg.Statuses()),
 		proj:   new(newProjectScreen(th)),
+		logs:   new(newLogsScreen(th)),
 		// Init surveys.
 		surveying: true,
 	}
@@ -701,8 +708,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if follow := mm.followSelection(); follow != nil {
 		cmd = tea.Batch(cmd, follow)
 	}
-	if mm.err != nil && mm.err != m.err && !loggedAlready(msg) {
-		slog.Error("tui", "err", mm.err)
+	// A new error is logged before its time is kept, so the line it is
+	// logged as is at or before that time: the logs screen opens on it.
+	if mm.err != nil && mm.err != m.err {
+		if !loggedAlready(msg) {
+			slog.Error("tui", "err", mm.err)
+		}
+		mm.errAt = mm.now()
 	}
 	// The pointer moving within one row, or over nothing, changes nothing on
 	// the screen, and a terminal reports every cell it crosses.
@@ -761,12 +773,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // loggedAlready reports a message whose error the operation behind it has
-// logged: a press, a bind, a focus or an action. Every other error set on m.err -
-// a form refused, a file that did not load, a clone - is logged by Update. A
+// logged: a press, a bind, a focus, an action or a clone. Every other error set
+// on m.err - a form refused, a file that did not load - is logged by Update. A
 // failed survey is shown from m.surveyErr and logged by core.SurveyLocal.
 func loggedAlready(msg tea.Msg) bool {
 	switch msg.(type) {
-	case actedMsg, restoredMsg, savedMsg, shutdownMsg:
+	case actedMsg, restoredMsg, savedMsg, shutdownMsg, clonedMsg:
 		return true
 	}
 	return false
@@ -974,10 +986,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reloadViews()
 			statuses = msg.statuses
 		case msg.assisted:
-			// The old list stands here too, with the reason under it: the
-			// user is back to read what the assistant wrote, and a
-			// config.toml that no longer loads is the first thing to know.
-			m.err = msg.err
+			// The old list stands here too, with the failure under it and
+			// its reason on the logs screen: the user is back to read what
+			// the assistant wrote, and a config.toml that no longer loads is
+			// the first thing to know.
+			m.err = fail("config load", "", msg.err)
 		default:
 			// The old list stands: a file broken while hidden must not
 			// empty the popup.
@@ -1000,7 +1013,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case assistedMsg:
-		m.err = msg.err
+		m.err = fail("assist", "", msg.err)
 		return m, reloadAssisted
 	case actedMsg:
 		// The timer's next survey shows the result. Starting one here would
@@ -1045,7 +1058,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
 		if msg.err != nil {
-			m.err = msg.err
+			m.err = fail("clone", msg.project.Name, msg.err)
 			return m, nil
 		}
 		return m, m.goTarget(msg.project, msg.home)
@@ -1111,17 +1124,41 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // is not offered again, so a user who went on to pick a session and came
 // back is not asked twice. A dialog up for an older shutdown is put up again
 // for the newer one, so it never offers a session no shutdown on record saved.
-// The dialog after an end with no shutdown has no record to go with, so only
+// A dialog under the logs screen is the dialog: Esc goes back to what it
+// became. The dialog after an end with no shutdown has no record to go with, so only
 // a choice takes it down (D150).
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	m.onRecord = st.ShutDown != nil
 	switch sd := st.ShutDown; {
-	case m.dialog == dialogResume && !m.resume.unclean && sd == nil:
-		m.dialog = dialogNone
-	case sd != nil && !sd.At.Equal(m.resume.at) && (m.plain() || m.dialog == dialogResume):
+	case m.under() == dialogResume && !m.resume.unclean && sd == nil:
+		m.setUnder(dialogNone)
+	case sd != nil && !sd.At.Equal(m.resume.at) && (m.plain() || m.under() == dialogResume):
+		logs := m.dialog == dialogLogs
 		m.openResume(*sd)
+		if logs {
+			m.dialog = dialogLogs
+		}
 	}
+}
+
+// under is the screen the user is on, or the one the logs screen stands
+// over: an answer for that screen is still its own.
+func (m Model) under() dialog {
+	if m.dialog == dialogLogs {
+		return m.logs.from
+	}
+	return m.dialog
+}
+
+// setUnder replaces the screen the user is on, or the one the logs screen
+// stands over, which Esc then goes back to.
+func (m *Model) setUnder(d dialog) {
+	if m.dialog == dialogLogs {
+		m.logs.from = d
+		return
+	}
+	m.dialog = d
 }
 
 // plain reports the surface itself, with nothing the user is in the middle
@@ -1196,6 +1233,11 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
+	// After a full shutdown any key quits at once; a screen opened then
+	// would close with the surface a moment later.
+	if key.Matches(msg, m.keys.Logs) && m.dialog != dialogLogs && !m.shut.quitting {
+		return m.openLogs()
+	}
 	switch m.dialog {
 	case dialogNew:
 		return m.createKey(msg)
@@ -1213,6 +1255,8 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 		return m.shutdownKey(msg)
 	case dialogResume:
 		return m.resumeKey(msg)
+	case dialogLogs:
+		return m.logsKey(msg)
 	}
 	if m.agents.shown {
 		return m.agentsKey(msg)
@@ -1491,18 +1535,18 @@ func (m Model) goRow(i int) tea.Cmd {
 		return nil
 	}
 	row := rows[i]
+	v, _ := m.selected()
 	if ref := row.attached; !ref.IsZero() {
-		c, errands := m.core, m.errands
+		c, errands, project := m.core, m.errands, v.Project.Name
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)
 			logging.Op("focus attached", start, err, "ref", ref)
-			return actedMsg{err: err, went: true, errands: errands}
+			return actedMsg{err: fail("focus", project, err), went: true, errands: errands}
 		}
 	}
-	v, _ := m.selected()
 	p, ok := m.project(v.Project.Name)
 	if !ok {
 		return nil
@@ -1523,6 +1567,9 @@ func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*core.BindWait)
 		defer cancel()
 		_, _, err := c.ActivateWaiting(ctx, p, name, nil)
+		if !refused(p, err) {
+			err = fail("go", p.Name, err)
+		}
 		return actedMsg{err: err, went: true, errands: errands}
 	}
 }
@@ -1550,6 +1597,8 @@ func (m Model) action(msg keyPress) (tea.Cmd, bool) {
 		// The plan writes the action's launch, which makes its project the
 		// current one, as a command makes it: a desktop key pressed next on a
 		// window no rule names falls back to it.
+		// A plan that fails is a refusal: the project or the action leaves
+		// nothing to run, and its own text says why in the footer.
 		run, err := app.PlanAction(m.core, p, act.Name, act.Run)
 		if err != nil {
 			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
@@ -1559,7 +1608,7 @@ func (m Model) action(msg keyPress) (tea.Cmd, bool) {
 		cmd.Dir = run.Dir
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			run.Done(err)
-			return actedMsg{err: err}
+			return actedMsg{err: fail("action "+act.Name, p.Name, err)}
 		}), true
 	}
 	return nil, false

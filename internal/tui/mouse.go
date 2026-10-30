@@ -41,9 +41,9 @@ func clicked(it list.Item) any {
 //
 // A row of the list or of the pane is chosen with one click and opened with a
 // second, as a row of a file manager is: choosing it costs nothing and opening
-// it opens a window. The project's name over the pane and a button on the bar
-// are not rows but things to do, and one click does them, on release, so a
-// drag that begins on one runs nothing.
+// it opens a window. The project's name over the pane, "logs" beside it, the
+// footer's error and a button on the bar are not rows but things to do, and
+// one click does them, on release, so a drag that begins on one runs nothing.
 //
 // Whatever the pointer is over is lit, so all three say they can be clicked
 // before they are. A drag selects text instead (selection.go).
@@ -77,9 +77,10 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if mouse.Button == tea.MouseLeft {
 		m.press = &press{at: *m.cell, over: m.over}
 	}
-	// The help screen has no rows, and more lines than a short terminal
-	// holds: the wheel scrolls it, and a click does nothing.
-	if m.dialog == dialogHelp {
+	// The help screen and a log line read in full have no rows, and more
+	// lines than a short terminal holds: the wheel scrolls them, and a click
+	// does nothing.
+	if m.dialog == dialogHelp || m.dialog == dialogLogs && m.logs.reading {
 		switch mouse.Button {
 		case tea.MouseWheelUp:
 			m.body.ScrollUp(1)
@@ -126,6 +127,12 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.toList()
 		}
 		m.bodyList().Select(index)
+		// A log line opens at one click: it runs nothing.
+		if m.dialog == dialogLogs {
+			m.logs.reading = true
+			m.body.SetYOffset(0)
+			return m, nil
+		}
 		last := m.last
 		m.last = click{index: index, row: clicked(m.bodyList().SelectedItem()), at: m.now()}
 		if last.index == index && last.row == m.last.row && m.last.at.Sub(last.at) < doubleClick {
@@ -142,9 +149,16 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 // clickAction runs the button or pane target a click was released on, when
 // it is still the one the press landed on: a survey between the two can move
-// another target under the pointer.
+// another target under the pointer. The footer's error opens the logs screen
+// from any screen, one with no rows too.
 func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
-	if !m.hasRows() || m.over != p.over {
+	if m.over != p.over {
+		return m, nil
+	}
+	if m.over.kind == hoverFooter || m.over.kind == hoverLogs {
+		return m.openLogs()
+	}
+	if !m.hasRows() {
 		return m, nil
 	}
 	switch m.over.kind {

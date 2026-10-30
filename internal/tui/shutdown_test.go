@@ -58,8 +58,11 @@ func TestAltQFullShutdownSavesThenClosesEverything(t *testing.T) {
 	if sd := shutDownOnRecord(t, root); sd == nil || sd.Session != all[0].ID {
 		t.Errorf("shutdown on record = %+v, want one naming session %s", sd, all[0].ID)
 	}
-	if _, quit := press(m, "esc"); quit == nil || quit() != tea.Quit() {
-		t.Error("a key on the result of a full shutdown did not quit")
+	// The logs key too: a screen opened now would close with the surface.
+	for _, k := range []string{"esc", "alt+l"} {
+		if _, quit := press(m, k); quit == nil || quit() != tea.Quit() {
+			t.Errorf("%s on the result of a full shutdown did not quit", k)
+		}
 	}
 }
 

@@ -1,5 +1,7 @@
 package tui
 
+import "charm.land/lipgloss/v2"
+
 // What the pointer is on. The surface lights it, a step below the selection,
 // so a row or a button says it can be clicked before it is.
 //
@@ -16,6 +18,8 @@ const (
 	hoverAgent            // an agent row in the pane
 	hoverField            // a section's query field; index is its focus
 	hoverName             // the project's name at the top of the pane
+	hoverLogs             // "logs" at the top of the pane
+	hoverFooter           // the error in the footer
 )
 
 type hovered struct {
@@ -35,6 +39,9 @@ func (h hovered) is(k hoverKind, index int) bool {
 func (m Model) hoverAt(x, y int) hovered {
 	if i := m.barAt(x, y); i >= 0 {
 		return hovered{kind: hoverBar, index: i}
+	}
+	if m.footerAt(x, y) {
+		return hovered{kind: hoverFooter}
 	}
 	// The project query is over the list's column, or, where the pane stands
 	// in the list's place, over the whole width the pane then covers.
@@ -75,9 +82,14 @@ func (m Model) paneAt(x, y int) hovered {
 		return hovered{}
 	}
 	line += m.detail.YOffset()
-	// The pane's content starts past its border and padding.
+	// The pane's content starts past its border and padding. Its top line
+	// is "logs", then the name button.
 	_, mc := m.margins()
-	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
+	cx := x - mc - m.listWidth() - paneChrome
+	if line == 0 && cx >= 0 && cx < lipgloss.Width(logsLabel) {
+		return hovered{kind: hoverLogs}
+	}
+	if cx -= logsItemWidth + nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
 		return hovered{kind: hoverName}
 	}
 	// A wide pane sets the mirror beside the facts, on the same lines as the
@@ -99,4 +111,15 @@ func (m Model) paneAt(x, y int) hovered {
 		}
 	}
 	return hovered{}
+}
+
+// footerAt reports whether a terminal cell is on the footer's error. On the
+// logs screen the error opens nothing: the screen is up.
+func (m Model) footerAt(x, y int) bool {
+	if _, err := m.footerErr(); err == nil || m.dialog == dialogLogs {
+		return false
+	}
+	mr, mc := m.margins()
+	w, h := m.inner()
+	return y == mr+chromeHeight-1+h && x >= mc && x < mc+min(lipgloss.Width(m.footer()), w)
 }

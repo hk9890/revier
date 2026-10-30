@@ -32,6 +32,7 @@ type keyMap struct {
 	Targets  key.Binding
 	Switch   key.Binding
 	Shutdown key.Binding
+	Logs     key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -76,6 +77,8 @@ func newKeyMap(actions []config.Action) keyMap {
 		// The shutdown's button is on the sessions screen; its key reaches
 		// the wizard from the surface as well, so it is the surface's own.
 		Shutdown: key.NewBinding(key.WithKeys(shutdownBarKey), key.WithHelp(shutdownBarKey, "shutdown")),
+		// The log is read from every screen, so its key is on no bar.
+		Logs: key.NewBinding(key.WithKeys(logsKey), key.WithHelp(logsKey, "logs")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {

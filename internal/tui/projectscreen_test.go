@@ -107,6 +107,21 @@ func TestTheNameInThePaneOpensTheProjectScreen(t *testing.T) {
 	}
 }
 
+// The name button starts after "logs" and the label, with a space around its
+// text: the cell before that space opens nothing, and the space after the
+// text opens the screen.
+func TestTheNameButtonIsWhereItIsDrawn(t *testing.T) {
+	m, _, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
+	const button = "demo edit alt+e"
+	x, y := paneCell(t, m, button)
+	if before := clickAt(m, x-2, y); strings.Contains(screen(before), "Project demo") {
+		t.Errorf("a click left of the name opened the project screen:\n%s", screen(before))
+	}
+	if last := clickAt(m, x+len(button), y); !strings.Contains(screen(last), "Project demo") {
+		t.Errorf("a click on the name's last cell did not open the screen:\n%s", screen(last))
+	}
+}
+
 func TestTheProjectScreenWritesAValue(t *testing.T) {
 	m, file, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
 	m, _ = press(m, "alt+e")

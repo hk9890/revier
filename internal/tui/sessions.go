@@ -369,7 +369,7 @@ func (sc *sessionsScreen) saved(root string, th theme.Theme, msg savedMsg) error
 		return msg.err
 	case msg.err != nil:
 		slog.Error("session save", "err", msg.err)
-		return msg.err
+		return fail("session save", "", msg.err)
 	}
 	err := sc.load(root, th, msg.stored.ID)
 	sc.outcome = sessionOutcome{id: msg.stored.ID, saved: true, notes: msg.gaps.Notes()}
@@ -423,7 +423,7 @@ func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	case msg.err != nil && sc.walk.cancelled:
 		return fmt.Errorf("the restore of %s was cancelled; nothing opened", msg.id)
 	case msg.err != nil:
-		return msg.err
+		return fail("restore", "", msg.err)
 	}
 	if msg.notReached > 0 {
 		return fmt.Errorf("the restore of %s was cancelled: %s not reached", msg.id, core.Count(msg.notReached, "target"))
@@ -431,7 +431,13 @@ func (sc *sessionsScreen) restored(msg restoredMsg) error {
 	if _, _, failed := msg.restored.Counts(); failed > 0 {
 		return fmt.Errorf("the restore of %s: %s did not open", msg.id, core.Count(failed, "target"))
 	}
-	return msg.back
+	// A return home the user cancelled did not fail, and says so itself.
+	if sc.walk.cancelled {
+		return msg.back
+	}
+	// Every target opened: what failed is the return to the project the
+	// session was left on.
+	return fail("return home", msg.current, msg.back)
 }
 
 // help is the footer of the step in view.

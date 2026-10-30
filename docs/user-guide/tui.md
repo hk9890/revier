@@ -14,14 +14,17 @@ the `revier list` table and exits.
 ## The screen
 
 - **The top line** has a button for each thing that is not about one project:
-  agents, new, remote, sessions, config, assist and help. Each
+  agents, new, remote, sessions, config, logs, assist and help. Each
   button shows its key. In a narrow terminal the last buttons fold into `≡`;
   their keys still work.
 - **The query line** filters the rows under it.
 - **The project list** is on the left. **The pane** on the right shows the
   project under the cursor.
 - **The footer** shows the keys for where the cursor is. An error replaces
-  them until the next key press.
+  them until the next key press. When an operation such as a go, a clone or an
+  action fails, the footer names it and the project, for example
+  `clone failed: alpha (alt+l for details)`; the [logs screen](#screens) has
+  the full error.
 
 A [status](extending/status.md#places) can show on the rule under the top
 line, and in the pane.
@@ -36,7 +39,9 @@ machine shows its link name, for example `far@buildbox`; see
 
 ### The pane
 
-The pane shows the project's status, path and git URL, then two sections:
+The pane's top line holds `logs`, which opens the [logs screen](#screens), and
+the project's name, which opens the project screen. Under it the pane shows the
+project's status, path and git URL, then two sections:
 
 - **Targets**: each target, its key and its state, then each window you
   attached with `revier attach`.
@@ -102,8 +107,9 @@ not list stays where it is.
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.
 
-**Mouse.** A click selects, a double click acts as Enter. The wheel scrolls
-the pane or an agent's terminal. A drag copies the text of a box to the
+**Mouse.** A click selects, a double click acts as Enter. A click on the
+error in the footer opens the logs screen, as alt+l does. The wheel
+scrolls the pane or an agent's terminal. A drag copies the text of a box to the
 clipboard (OSC 52, works over ssh). Use shift+drag for the terminal's own
 selection.
 
@@ -156,6 +162,7 @@ Each screen takes the place of the list. Esc goes back one step.
 | alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |
 | alt+a | assist | Raise `revier-config-assistant`: Claude Code beside the TUI, briefed to fix your configuration. See [agents.md](agents.md#let-an-agent-configure-revier). |
 | alt+h | help | Every key the TUI knows, including your target keys and actions |
+| alt+l | logs | The warnings and errors of this machine's log over the last 14 days, newest first. When the footer shows an error, the cursor starts on the newest line the TUI wrote by the time of that error, which is usually the error's own. Enter, or a click, shows every field of a line. It opens from every screen; Esc or alt+l goes back to the screen you opened it from. A linked project's operations are in the log of its host. |
 
 In a form, Tab and ↑ ↓ move between fields, Enter saves, Esc cancels. The
 fields are those of [configuration.md](configuration.md).
