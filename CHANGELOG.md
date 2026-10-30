@@ -6,6 +6,64 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.22.0
+
+- **Action required: an agent address now has three parts,
+  `<project>:<target>:<panel>`, and `revier agent focus --ref` is removed.**
+  Before, `<project>:<panel>` failed when two kitty processes held one
+  project's windows, and some agents had no address that worked. A script that uses `<project>:<panel>` must use the new form.
+  The agent pane, `revier list --json`, `revier agent new --no-focus` and
+  every "which agent?" error print it. `<project>` and `<project>:<target>`
+  still name the default agent, now on a link too. Where you used
+  `agent focus --ref`, give the address.
+- **Action required: drop `--dir` from the tmux agent key.** If you copied
+  the tmux binding from the guide, change it to
+  `bind-key A run-shell -b 'revier agent new --panel "#{pane_id}"'`. With
+  `--dir`, the agent still starts in the worktree.
+- **Action required: an `[[action]]` on alt+l must move to another key.**
+  alt+l now opens the logs screen, so `config.toml` with an action on it no
+  longer loads.
+- **A terminal key's agent tab starts in the project.** Before, ctrl+shift+z
+  in an agent that works in a worktree started the new agent in that
+  worktree, so it could enter no other worktree. A shell tab still starts in
+  the panel's directory.
+- **A logs screen.** alt+l, the new "logs" button in the top bar, or a click
+  on the footer's error opens a list of this machine's warnings and errors,
+  newest first. Enter shows a line in full. The footer now names only what
+  failed; the reason is on the logs screen.
+- **The remote screen lists your machines.** Before, alt+r and `revier link`
+  listed every host of `~/.ssh/config`. Now they list the new `[[machine]]`
+  tables of `config.toml`, so the list is empty until you add a machine:
+  alt+n on the remote screen adds a host of the ssh configuration, and alt+d
+  removes one. Both keep the comments in `config.toml`. Each row shows that
+  machine's revier version, "no revier" or "does not answer". A link to a
+  machine that is not on the list still works, and `revier doctor` names it.
+- **A link shows a link icon.** In the project list and on the remote screen,
+  a link now has the link icon, not the server icon. A host's projects list
+  the linked ones first.
+- **An agent row shows the agent's name.** Under its age, a row in the agent
+  list and in the project pane shows the name the harness gives the agent,
+  for Claude Code the name its peer messages use. The pane also shows the
+  agent's address. An exec probe can report the name in a new `name` field.
+- **revier no longer picks a herdr server it cannot drive.** Before, a running
+  herdr server older than 0.9.5, or one that did not answer, was chosen, and
+  every key then failed. Now revier goes on to the next runtime of
+  `[hosts] runtime`.
+- **herdr: revier finds a panel's program as herdr does.** Before, revier
+  started from a desktop key refused a program that a herdr server started
+  from a login shell could run, and let through one that herdr could not
+  find.
+- **A tab whose command exits at once says so.** Before, a tab whose only
+  command exited right after it opened failed with "can't find pane", which
+  named neither the panel nor its command.
+- **A failed clone says why git failed.** Before, the error was only
+  "exit status 128". A clone onto a terminal now shows git's progress.
+- **del on a project whose window another project holds names that project.**
+  Before, the footer said "nothing of it is open here" while the row showed
+  the window open.
+- **A config or state file is no longer left broken by a crash during a
+  write.**
+
 ## v0.21.0
 
 - **A restore no longer loses agents to a smaller save.** Before, a plain
