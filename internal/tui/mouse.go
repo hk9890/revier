@@ -46,7 +46,7 @@ func clicked(it list.Item) any {
 // on release, so a drag that begins on one runs nothing.
 //
 // Whatever the pointer is over is lit, so each of them says it can be clicked
-// before they are. A drag selects text instead (selection.go).
+// before it is. A drag selects text instead (selection.go).
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// A delete or a remove waiting for its answer holds the screen still:
 	// the question names one project or machine, and a wheel moving the

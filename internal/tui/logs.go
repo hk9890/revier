@@ -21,8 +21,9 @@ import (
 
 // The logs screen: the WARN and ERROR lines of this machine's log, over the
 // days the log keeps, newest first. Enter on a line shows every field of it.
-// It opens from every screen, on alt+l, a click on the footer's error or on
-// its button on the top bar, and Esc goes back to the screen it came from.
+// It opens from every screen on alt+l and a click on the footer's error, from
+// the surface on its button on the top bar too, and Esc goes back to the
+// screen it came from.
 // A link's operations log on its host, so this machine's file is all it reads
 // (decisions.md D157). Every field is drawn as text (D108).
 

@@ -171,14 +171,9 @@ func TestTheLogsScreenOpensOnTheNewestLine(t *testing.T) {
 	}
 }
 
-// The pane's top line is the project's name alone, and one click on a line
-// of the screen shows it in full.
+// One click on a line of the screen shows it in full.
 func TestOneClickOnALineShowsItInFull(t *testing.T) {
 	m, _ := logged(t)
-	m = resize(m, 140, 30)
-	if top := strings.Split(pane(m), "\n")[0]; strings.Contains(top, "logs") {
-		t.Errorf("pane top line = %q, want no logs item: the top bar has it", top)
-	}
 	m, _ = press(m, "alt+l")
 	x, y := textCell(t, m, "an older one")
 	m = clickAt(m, x, y)

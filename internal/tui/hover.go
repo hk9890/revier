@@ -83,13 +83,15 @@ func (m Model) paneAt(x, y int) hovered {
 	line += m.detail.YOffset()
 	// The pane's content starts past its border and padding.
 	_, mc := m.margins()
-	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
-		return hovered{kind: hoverName}
-	}
 	// A wide pane sets the mirror beside the facts, on the same lines as the
-	// rows: a cell right of the facts is the mirror, and runs nothing.
+	// rows: a cell right of the facts is the mirror, and runs nothing. The
+	// name button is cut where the facts end, so a cell there is not it
+	// either.
 	if m.paneCols() >= widePaneWidth && x-mc-m.listWidth()-paneChrome >= maxFactsWidth {
 		return hovered{}
+	}
+	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
+		return hovered{kind: hoverName}
 	}
 	if line == m.afield {
 		return hovered{kind: hoverField, index: int(focusAgents)}

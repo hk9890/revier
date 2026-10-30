@@ -39,7 +39,7 @@ machine shows its link name, for example `far@buildbox`; see
 
 ### The pane
 
-The pane's top line is the project's name, which opens the project screen.
+The pane's top line holds the project's name, which opens the project screen.
 Under it the pane shows the project's status, path and git URL, then two
 sections:
 

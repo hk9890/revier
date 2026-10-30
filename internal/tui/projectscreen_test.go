@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A rename onto the built-in's name takes its place: one row of that name,
@@ -119,6 +121,24 @@ func TestTheNameButtonIsWhereItIsDrawn(t *testing.T) {
 	}
 	if last := clickAt(m, x+len(button), y); !strings.Contains(screen(last), "Project demo") {
 		t.Errorf("a click on the name's last cell did not open the screen:\n%s", screen(last))
+	}
+}
+
+// A name too long for the facts beside the mirror's column is cut where the
+// facts end: the pointer right of them lights nothing, and on the name lights
+// it.
+func TestThePointerRightOfACutNameLightsNothing(t *testing.T) {
+	name := strings.Repeat("n", 90)
+	projects := core.Prepare([]revier.Project{{Name: revier.ProjectName(name), Path: t.TempDir()}})
+	m := resize(refreshed(t, &core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, stateWith(t, nil), nil), 300, 40)
+	x, y := paneCell(t, m, "Project  n")
+	inColour(t)
+	before := drawn(m)
+	if drawn(motion(m, x+85, y)) != before {
+		t.Errorf("the pointer right of the facts lit the name")
+	}
+	if drawn(motion(m, x+9, y)) == before {
+		t.Errorf("the pointer on the name did not light it")
 	}
 }
 
