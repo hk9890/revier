@@ -22,16 +22,12 @@ import (
 // The logs screen: the WARN and ERROR lines of this machine's log, over the
 // days the log keeps, newest first. Enter on a line shows every field of it.
 // It opens from every screen, on alt+l, a click on the footer's error or on
-// "logs" at the top of the pane, and Esc goes back to the screen it came from.
+// its button on the top bar, and Esc goes back to the screen it came from.
 // A link's operations log on its host, so this machine's file is all it reads
 // (decisions.md D157). Every field is drawn as text (D108).
 
 // logsKey opens the screen from any other, and closes it.
 const logsKey = "alt+l"
-
-// logsLabel is the item at the left of the pane's top line that opens the
-// screen.
-const logsLabel = "logs"
 
 // maxLogMsg and maxLogProject are the widest the message and the project
 // columns grow; a longer one is cut.
@@ -123,8 +119,8 @@ type logsResult struct {
 	closed bool // back to the screen it came from
 }
 
-// openLogs is alt+l, a click on the footer's error and a click on "logs" at
-// the top of the pane. When the footer shows an error, the cursor starts on
+// openLogs is alt+l, a click on the footer's error and a click on its button
+// on the top bar. When the footer shows an error, the cursor starts on
 // the newest line this process wrote by the time it was set (open). The
 // screen it opens over keeps its focus, the pane's cursor and its scroll
 // too, for Esc to go back to.
@@ -276,17 +272,3 @@ func (sc *logsScreen) count() string {
 	}
 	return text
 }
-
-// logsItem is the item at the left of the pane's top line that opens the
-// screen, lit under the pointer, and the gap after it.
-func (m Model) logsItem() string {
-	th := *m.theme
-	style := th.Help
-	if m.over.kind == hoverLogs {
-		style = th.OnHover(style)
-	}
-	return style.Render(logsLabel) + " "
-}
-
-// logsItemWidth is the columns the item and its gap take.
-var logsItemWidth = lipgloss.Width(logsLabel) + 1

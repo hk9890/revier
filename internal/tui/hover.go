@@ -18,7 +18,6 @@ const (
 	hoverAgent            // an agent row in the pane
 	hoverField            // a section's query field; index is its focus
 	hoverName             // the project's name at the top of the pane
-	hoverLogs             // "logs" at the top of the pane
 	hoverFooter           // the error in the footer
 )
 
@@ -82,14 +81,9 @@ func (m Model) paneAt(x, y int) hovered {
 		return hovered{}
 	}
 	line += m.detail.YOffset()
-	// The pane's content starts past its border and padding. Its top line
-	// is "logs", then the name button.
+	// The pane's content starts past its border and padding.
 	_, mc := m.margins()
-	cx := x - mc - m.listWidth() - paneChrome
-	if line == 0 && cx >= 0 && cx < lipgloss.Width(logsLabel) {
-		return hovered{kind: hoverLogs}
-	}
-	if cx -= logsItemWidth + nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
+	if cx := x - mc - m.listWidth() - paneChrome - nameButtonStart; line == 0 && cx >= 0 && cx < m.nameButtonWidth(v.Project.Name) {
 		return hovered{kind: hoverName}
 	}
 	// A wide pane sets the mirror beside the facts, on the same lines as the

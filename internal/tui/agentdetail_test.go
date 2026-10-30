@@ -259,7 +259,7 @@ func TestTheWheelOverTheProjectPaneScrollsTheMirror(t *testing.T) {
 	if strings.Contains(body, "row 79") || !strings.Contains(body, "row 76") {
 		t.Errorf("pane is not scrolled up by a notch:\n%s", body)
 	}
-	if !strings.HasPrefix(body, "logs Project  duo") {
+	if !strings.HasPrefix(body, "Project  duo") {
 		t.Errorf("the wheel moved the facts above the mirror:\n%s", body)
 	}
 }
@@ -275,7 +275,7 @@ func TestAWidePaneLaysTheMirrorBesideTheFacts(t *testing.T) {
 
 	wide, _, _ := shownWorld(t, 300, 40, agent)
 	top := strings.Split(pane(wide), "\n")[0]
-	if !strings.HasPrefix(top, "logs Project  duo") || !strings.Contains(top, "Screen") {
+	if !strings.HasPrefix(top, "Project  duo") || !strings.Contains(top, "Screen") {
 		t.Errorf("pane top = %q, want the name and the mirror's heading on one line", top)
 	}
 	stacked, _, _ := shownWorld(t, 250, 40, agent)
@@ -301,7 +301,7 @@ func TestTheWheelOverTheFactsBesideTheMirrorScrollsThePane(t *testing.T) {
 
 	next, _ := m.Update(tea.MouseWheelMsg{X: border + 4, Y: 8, Button: tea.MouseWheelDown})
 	m = next.(tui.Model)
-	if body := pane(m); strings.HasPrefix(body, "logs Project  duo") {
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
 		t.Errorf("the wheel over the facts did not scroll the pane:\n%s", body)
 	}
 
@@ -412,11 +412,11 @@ func TestNothingIsReadForAPaneWithNoRowForTheMirror(t *testing.T) {
 func TestAPaneThatFitsAgainStandsAtItsTop(t *testing.T) {
 	m, _, _ := shownWorld(t, 140, 22, crowd(16)...)
 	m = wheel(m, paneBorder(t, m)+4, tea.MouseWheelDown)
-	if body := pane(m); strings.HasPrefix(body, "logs Project  duo") {
+	if body := pane(m); strings.HasPrefix(body, "Project  duo") {
 		t.Fatalf("the wheel did not scroll a pane with no row for the mirror:\n%s", body)
 	}
 	m = resize(m, 140, 60)
-	if body := pane(m); !strings.HasPrefix(body, "logs Project  duo") || !strings.Contains(body, "Screen") {
+	if body := pane(m); !strings.HasPrefix(body, "Project  duo") || !strings.Contains(body, "Screen") {
 		t.Errorf("the pane that fits again stands scrolled:\n%s", body)
 	}
 }

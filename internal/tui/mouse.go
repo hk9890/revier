@@ -155,7 +155,7 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 	if m.over != p.over {
 		return m, nil
 	}
-	if m.over.kind == hoverFooter || m.over.kind == hoverLogs {
+	if m.over.kind == hoverFooter {
 		return m.openLogs()
 	}
 	if !m.hasRows() {

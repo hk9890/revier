@@ -171,17 +171,16 @@ func TestTheLogsScreenOpensOnTheNewestLine(t *testing.T) {
 	}
 }
 
-// "logs" at the top of the pane opens the screen, and one click on a line
-// shows it in full.
-func TestLogsInThePaneOpensTheScreen(t *testing.T) {
+// The pane's top line is the project's name alone, and one click on a line
+// of the screen shows it in full.
+func TestOneClickOnALineShowsItInFull(t *testing.T) {
 	m, _ := logged(t)
 	m = resize(m, 140, 30)
-	x, y := paneCell(t, m, "logs Project")
-	m = clickAt(m, x, y)
-	if top := barLine(m); !strings.Contains(top, "Logs") {
-		t.Fatalf("top line = %q after a click on logs, want the logs screen", top)
+	if top := strings.Split(pane(m), "\n")[0]; strings.Contains(top, "logs") {
+		t.Errorf("pane top line = %q, want no logs item: the top bar has it", top)
 	}
-	x, y = textCell(t, m, "an older one")
+	m, _ = press(m, "alt+l")
+	x, y := textCell(t, m, "an older one")
 	m = clickAt(m, x, y)
 	if s := screen(m); !strings.Contains(s, "ERROR an older one") || !strings.Contains(s, "pid") {
 		t.Errorf("one click on a line did not show it in full:\n%s", s)
@@ -276,7 +275,7 @@ func TestTheLogsScreenKeepsThePaneCursor(t *testing.T) {
 		t.Fatal("alt+t put no cursor in the pane")
 	}
 	m, _ = press(m, "alt+l")
-	if s := drawn(m); !strings.Contains(s, "an older one") || strings.Contains(s, "logs Project") {
+	if s := drawn(m); !strings.Contains(s, "an older one") || strings.Contains(s, "Project  project") {
 		t.Errorf("the logs screen over the pane's cursor shows the pane, not the log:\n%s", s)
 	}
 	m, _ = press(m, "esc")
@@ -314,7 +313,7 @@ func TestTheUnreadableLinesAreCountedOnANarrowTerminal(t *testing.T) {
 	}
 }
 
-// The pointer lights "logs" in the pane and the error in the footer: both
+// The pointer lights "logs" on the top bar and the error in the footer: both
 // are clicked.
 func TestThePointerLightsLogsAndTheFootersError(t *testing.T) {
 	inColour(t)

@@ -116,7 +116,9 @@ ssh -O exit -o ControlPath="$XDG_RUNTIME_DIR/revier/ssh-%C" buildbox
 
 A call that reads an answer never asks for a password and gives up after five
 seconds. When a call fails, revier says why in one line and what to fix, for
-example `host key not known - run ssh <host> once to accept it`.
+example `host key not known - run ssh <host> once to accept it`. In the TUI,
+the footer names what failed, and alt+l opens the
+[logs screen](tui.md#screens) with this reason.
 
 ## What does not work over a link
 
