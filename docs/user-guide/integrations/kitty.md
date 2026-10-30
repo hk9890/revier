@@ -33,9 +33,7 @@ your other kitty windows stay out of its reach.
 
 kitty keys add a tab to the workspace you are in: ctrl+shift+z an agent tab,
 ctrl+shift+t a shell tab, and the `key` of each named agent a tab of that
-agent. A shell tab starts in the directory of the window you pressed the key
-in; an agent tab starts in the project, so from a worktree the agent can still
-enter any worktree. [`[terminal]`](../configuration.md#terminal) sets them. To write them
+agent. [`[terminal]`](../configuration.md#terminal) sets them. To write them
 into kitty's configuration:
 
 ```bash
@@ -60,6 +58,9 @@ leaves it empty when `kitty.conf` itself is a link.
   tmux. `revier term status` names each such map by its line.
 - A terminal key on the same chord as `trigger_key` or a target's `key` is
   left out: the desktop takes that press first.
+- A shell tab starts in the directory of the window you pressed the key in.
+  An agent tab starts in the project, so from a worktree the agent can still
+  enter any worktree.
 - In a window that is no project's workspace, a key opens a plain shell tab
   beside it, or nothing if you set `outside = "none"`. When revier itself
   fails, kitty's own new tab opens.

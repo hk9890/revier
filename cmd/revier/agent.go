@@ -51,8 +51,8 @@ usage:
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project;
-             with --panel too, the agent starts in the project, not
-             in the panel's directory
+             without --dir, --panel starts them in the project too,
+             not in the panel's directory
   --no-focus leave the focus where it is, and print the new agent's address
 
 new opens a tab in an open workspace: the project's agent panel and its
@@ -424,7 +424,8 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 // is in, else the one resolved as for any command, with the target after -p's
 // colon or the one pick chooses. A --panel that no project's workspace holds
 // gets what [terminal] outside says, and here is not called. With --panel and
-// no --dir, a shell tab's directory is the panel's own (decisions.md D158).
+// no --dir, a shell tab's directory is the panel's own (decisions.md D153),
+// and an agent tab's is the project's (D158).
 func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
 		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
