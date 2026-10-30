@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -59,5 +63,59 @@ func TestListMatchTakesNoNames(t *testing.T) {
 	err := cmdList(context.Background(), a, []string{"--match", "demo", "demo"})
 	if err == nil || !strings.HasPrefix(err.Error(), "usage:") {
 		t.Errorf("err = %v, want a usage error", err)
+	}
+}
+
+// stderrOf runs f and returns what it wrote on stderr, and its error.
+func stderrOf(t *testing.T, f func() error) (string, error) {
+	t.Helper()
+	stderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	err = f()
+	os.Stderr = stderr
+	_ = w.Close()
+	printed, _ := io.ReadAll(r)
+	return string(printed), err
+}
+
+// Names a list does not know cost the names it knows nothing: those are
+// listed, each unknown one has its line on stderr with the project it
+// probably meant, and the exit fails, so a revier on another machine still
+// reports a missing project file.
+func TestListOfKnownAndUnknownNamesListsTheKnown(t *testing.T) {
+	a := listApp(t)
+	a.projects = append(a.projects, core.PrepareProject(revier.Project{Name: "task-manager-ui", Path: "/x/task-manager-ui"}))
+	ctx := context.Background()
+
+	for _, flags := range [][]string{{"--json"}, nil} {
+		var out bytes.Buffer
+		a.out = &out
+		args := append(flags, "demo", "taskmgr-ui", "zzzz-no-such-project")
+		printed, err := stderrOf(t, func() error { return cmdList(ctx, a, args) })
+		if !errors.Is(err, errNoProjectNamed) {
+			t.Errorf("list %q: err = %v, want errNoProjectNamed", args, err)
+		}
+		if status, say := outcome(err); status == 0 || say {
+			t.Errorf("list %q: outcome = %d, %v; want a failure main prints nothing for", args, status, say)
+		}
+		want := "revier: no project named \"taskmgr-ui\"; did you mean task-manager-ui?\n" +
+			"revier: no project named \"zzzz-no-such-project\"\n"
+		if printed != want {
+			t.Errorf("list %q: stderr = %q, want %q", args, printed, want)
+		}
+		if !strings.Contains(out.String(), "demo") || strings.Contains(out.String(), "task-manager-ui") {
+			t.Errorf("list %q: stdout = %q, want demo alone", args, out.String())
+		}
+	}
+
+	var out bytes.Buffer
+	a.out = &out
+	_, err := stderrOf(t, func() error { return cmdList(ctx, a, []string{"--json", "zzzz-no-such-project"}) })
+	if !errors.Is(err, errNoProjectNamed) || out.Len() != 0 {
+		t.Errorf("list of an unknown name alone: err = %v, stdout = %q; want the failure and nothing", err, out.String())
 	}
 }

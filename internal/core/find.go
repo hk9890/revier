@@ -1,7 +1,9 @@
 package core
 
 import (
+	"cmp"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -43,4 +45,51 @@ func dirName(path string) string {
 func repoName(url string) string {
 	url = strings.TrimSuffix(strings.TrimRight(url, "/"), ".git")
 	return url[strings.LastIndexAny(url, "/:")+1:]
+}
+
+// Closest is the names of the projects a name that is no project's probably
+// meant, the nearest first and at most three: the projects Matches finds for
+// the name, and those whose name is at most half the name's length of edits
+// from it.
+func Closest(projects []Project, name string) []revier.ProjectName {
+	type near struct {
+		name revier.ProjectName
+		dist int
+	}
+	var found []near
+	for _, p := range projects {
+		d := edits(strings.ToLower(name), strings.ToLower(string(p.Name)))
+		if d <= len(name)/2 || Matches(revier.ProjectView{Project: p.Project}, name) {
+			found = append(found, near{p.Name, d})
+		}
+	}
+	slices.SortStableFunc(found, func(a, b near) int { return cmp.Compare(a.dist, b.dist) })
+	var names []revier.ProjectName
+	for _, n := range found[:min(len(found), 3)] {
+		names = append(names, n.name)
+	}
+	return names
+}
+
+// edits is the Levenshtein distance between a and b: the fewest inserted,
+// deleted or replaced characters that turn one into the other.
+func edits(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := range ra {
+		cur := make([]int, len(rb)+1)
+		cur[0] = i + 1
+		for j := range rb {
+			replace := prev[j]
+			if ra[i] != rb[j] {
+				replace++
+			}
+			cur[j+1] = min(prev[j+1]+1, cur[j]+1, replace)
+		}
+		prev = cur
+	}
+	return prev[len(rb)]
 }

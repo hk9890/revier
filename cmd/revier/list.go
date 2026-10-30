@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -30,16 +32,24 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
 	// (decisions.md D40), and a name it does not know is an error, so a
-	// missing project file there is reported, not shown as nothing.
+	// missing project file there is reported, not shown as nothing. The
+	// names it knows are listed all the same, for the person who asked about
+	// several at once.
 	projects := a.projects
+	var unknown []string
 	if len(pos) > 0 {
 		projects = nil
 		for _, name := range pos {
 			p, ok := a.project(revier.ProjectName(name))
 			if !ok {
-				return fmt.Errorf("no project named %q", name)
+				unknown = append(unknown, strconv.Quote(name))
+				fmt.Fprintf(os.Stderr, "revier: no project named %q%s\n", name, didYouMean(a.projects, name))
+				continue
 			}
 			projects = append(projects, p)
+		}
+		if len(projects) == 0 {
+			return unknownProjects(unknown)
 		}
 	}
 
@@ -72,7 +82,10 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		}
 		enc := json.NewEncoder(a.out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(views)
+		if err := enc.Encode(views); err != nil {
+			return err
+		}
+		return unknownProjects(unknown)
 	}
 
 	if err := a.table(views); err != nil {
@@ -84,7 +97,33 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		root, _ := configRootForMessage()
 		_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
 	}
-	return nil
+	return unknownProjects(unknown)
+}
+
+// errNoProjectNamed means a list was asked for a name that is no project's.
+// Each such name has had its line on stderr, so main prints none.
+var errNoProjectNamed = errors.New("no project named")
+
+// unknownProjects is what a list asked for the quoted names, which are no
+// project's, ends with: nil for no name.
+func unknownProjects(quoted []string) error {
+	if len(quoted) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w %s", errNoProjectNamed, strings.Join(quoted, ", "))
+}
+
+// didYouMean is what the line about a name that is no project's adds: the
+// projects it probably meant, or nothing.
+func didYouMean(projects []core.Project, name string) string {
+	var names []string
+	for _, n := range core.Closest(projects, name) {
+		names = append(names, string(n))
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "; did you mean " + strings.Join(names, ", ") + "?"
 }
 
 // table is the list as a person at this machine reads it.
