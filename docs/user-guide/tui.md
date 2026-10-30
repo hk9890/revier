@@ -14,7 +14,7 @@ the `revier list` table and exits.
 ## The screen
 
 - **The top line** has a button for each thing that is not about one project:
-  agents, new, remote, sessions, config, assist and help. Each
+  agents, new, remote, sessions, config, logs, assist and help. Each
   button shows its key. In a narrow terminal the last buttons fold into `≡`;
   their keys still work.
 - **The query line** filters the rows under it.

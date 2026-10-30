@@ -188,6 +188,17 @@ func TestLogsInThePaneOpensTheScreen(t *testing.T) {
 	}
 }
 
+// "logs" on the top bar opens the screen, as alt+l does.
+func TestLogsOnTheBarOpensTheScreen(t *testing.T) {
+	m, _ := logged(t)
+	m = resize(m, 140, 30)
+	mr, _ := margins(m)
+	m = clickAt(m, column(barLine(m), "logs alt+l"), mr)
+	if top := barLine(m); !strings.Contains(top, "Logs") {
+		t.Fatalf("top line = %q after a click on the bar's logs, want the logs screen", top)
+	}
+}
+
 // A plan that arrives while the logs screen stands over the shutdown wizard
 // is the wizard's: Esc goes back to the plan, not to a survey nobody asks for
 // again.

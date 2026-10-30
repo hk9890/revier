@@ -26,7 +26,7 @@ func TestTheActionBarNamesEveryButtonAndItsKey(t *testing.T) {
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
 
 	bar := barLine(m)
-	for _, want := range []string{"agents", "alt+space", "new", "alt+n", "remote", "alt+r", "config", "alt+c", "help", "alt+h"} {
+	for _, want := range []string{"agents", "alt+space", "new", "alt+n", "remote", "alt+r", "config", "alt+c", "logs", "alt+l", "help", "alt+h"} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("bar = %q, want it to name %q", bar, want)
 		}
@@ -515,10 +515,10 @@ func TestANarrowBarKeepsItsLastButtonsBehindTheBurger(t *testing.T) {
 }
 
 // A terminal with room for every button has no burger. The shutdown's button
-// is the sessions screen's, so the surface's bar fits 125 columns.
+// is the sessions screen's, so the surface's bar fits 138 columns.
 func TestAWideBarHasNoBurger(t *testing.T) {
 	_, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 125, 20)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 138, 20)
 	if bar := barLine(m); strings.Contains(bar, "≡") || !strings.Contains(bar, "help alt+h") || strings.Contains(bar, "shutdown") {
 		t.Errorf("bar = %q, want every button, no shutdown and no burger", bar)
 	}

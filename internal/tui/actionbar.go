@@ -32,6 +32,7 @@ var barActions = []barAction{
 	{label: "remote", key: "alt+r", run: Model.openLink},
 	{label: "sessions", key: sessionsBarKey, run: Model.openSessions},
 	{label: "config", key: "alt+c", run: Model.openConfig},
+	{label: "logs", key: logsKey, run: Model.openLogs},
 	{label: "assist", key: "alt+a", run: Model.openAssist},
 	{label: "help", key: helpBarKey, run: Model.openHelp},
 }
