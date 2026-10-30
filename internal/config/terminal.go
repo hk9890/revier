@@ -26,8 +26,8 @@ const (
 // the shell's, the default agent's, then each named agent's, in file order.
 func (c *Config) TermKeys() []core.TermKey { return c.termKeys }
 
-// Outside is what a terminal key does outside a workspace: core.OutsideTab
-// or core.OutsideNone.
+// Outside is what a terminal key does outside a workspace: core.OutsideTab,
+// core.OutsideNone or core.OutsideAgent.
 func (c *Config) Outside() core.Outside {
 	if c.Terminal.Outside == "" {
 		return core.OutsideTab
@@ -35,17 +35,31 @@ func (c *Config) Outside() core.Outside {
 	return c.Terminal.Outside
 }
 
+// OutsideKey is what a key that asks for agent does outside a workspace, empty
+// agent the default one: with core.OutsideAgent it runs one of config.toml's
+// named agents, whose commands no project renders there.
+func (c *Config) OutsideKey(agent string) core.OutsideKey {
+	k := core.OutsideKey{Outside: c.Outside(), Agent: agent}
+	for _, t := range UsableAgents(c.Agents) {
+		var a agentTable
+		if recode(t, &a) == nil {
+			k.Agents = append(k.Agents, core.NamedAgent{Name: a.Name, Command: a.Command})
+		}
+	}
+	return k
+}
+
 // validateTerminal takes the terminal keys into termKeys and is why each one
 // left out was refused: a chord that does not parse, or one an earlier key
-// holds already. A value of outside that is neither choice is the default,
-// and a problem. refused is validateAgents' answer for c.Agents: a refused
-// table's key is no key, and its refusal says so already.
+// holds already. A value of outside that is none of the choices is the
+// default, and a problem. refused is validateAgents' answer for c.Agents: a
+// refused table's key is no key, and its refusal says so already.
 func (c *Config) validateTerminal(refused []error) []error {
 	var errs []error
 	switch c.Terminal.Outside {
-	case "", core.OutsideTab, core.OutsideNone:
+	case "", core.OutsideTab, core.OutsideNone, core.OutsideAgent:
 	default:
-		errs = append(errs, fmt.Errorf("terminal.outside: %q is neither %q nor %q", c.Terminal.Outside, core.OutsideTab, core.OutsideNone))
+		errs = append(errs, fmt.Errorf("terminal.outside: %q is none of %q, %q and %q", c.Terminal.Outside, core.OutsideTab, core.OutsideNone, core.OutsideAgent))
 		c.Terminal.Outside = ""
 	}
 	held := map[core.Chord]string{}

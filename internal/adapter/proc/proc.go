@@ -288,6 +288,13 @@ func ParentIn(root string, pid int) (int, bool) {
 	return ppid, err == nil
 }
 
+// Dir is the working directory of the process pid, as tmux reads it for
+// pane_current_path, or "" where /proc cannot say.
+func Dir(pid int) string {
+	dir, _ := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "cwd"))
+	return dir
+}
+
 // Foreground reads the foreground process of the terminal pid runs in: the
 // leader of the terminal's foreground process group, and its argv. That is
 // the process tmux names in pane_current_command, so the two agree.

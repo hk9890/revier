@@ -66,7 +66,8 @@ directory resolves to. It goes to the new agent and raises its window; with
 --no-focus it does neither, and prints the address a script reaches the
 agent by, which names an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
-[terminal] outside says: a plain shell tab beside the window, or nothing.
+[terminal] outside says: a plain shell tab beside the window, the agent, or
+nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
 
@@ -418,19 +419,20 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", revier.PanelAgent, project, panel, dir, a.core.AgentTarget, here)
+	return a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
 // The place is the owner of --panel; or the project -p names, else the one --dir
 // is in, else the one resolved as for any command, with the target after -p's
 // colon or the one pick chooses. A --panel that no project's workspace holds
-// gets what [terminal] outside says, and here is not called. With --panel and
-// no --dir, a shell tab's directory is the panel's own (decisions.md D153),
-// and an agent tab's is the project's (D158).
-func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
+// gets what [terminal] outside says, with agent the named agent an agent tab
+// asks for, and here is not called. With --panel and no --dir, a shell tab's
+// directory is the panel's own (decisions.md D153), and an agent tab's is the
+// project's (D158).
+func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, agent, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
-		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.OutsideKey(agent), func(w core.Workspace, dir string) error {
 			return a.tabHere(what, w, panel, dir, here)
 		})
 	}

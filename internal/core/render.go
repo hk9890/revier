@@ -97,11 +97,14 @@ func renderRealization(p revier.Project, r revier.Realization) (revier.Realizati
 	return out, nil
 }
 
+// readsTemplate reports whether expand renders s as a template.
+func readsTemplate(s string) bool { return strings.Contains(s, "{{") }
+
 // expand renders one string. A template referring to a missing key is an
 // error rather than an empty string: a launch argv silently losing an argument
 // is far harder to diagnose than a refusal at load.
 func expand(p revier.Project, s string) (string, error) {
-	if !strings.Contains(s, "{{") {
+	if !readsTemplate(s) {
 		return s, nil
 	}
 	t, err := template.New("realization").Option("missingkey=error").Parse(s)

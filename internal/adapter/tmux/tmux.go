@@ -131,8 +131,10 @@ func (h *Host) Probe(ctx context.Context) error {
 //
 // Two tmux calls, both bulk: one for session names and one for panes. Their
 // number is constant, not per project, which is the property the hot path
-// actually needs. Each pane's foreground process is then read from /proc:
-// two file reads per pane, and no process.
+// actually needs. Each pane's foreground process, and its directory, are then
+// read from /proc: two file reads and a readlink per pane, and no process.
+// The directory is read there and not as pane_current_path, which is free
+// text like pane_title, and a line carries one free-text field.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	sessions, named, err := h.sessions(ctx)
 	if err != nil || len(sessions) == 0 {
@@ -194,6 +196,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			Vars:    parseVars(paneVars),
 			PID:     pid,
 			Command: command,
+			Dir:     proc.Dir(pid),
 			Tab:     windowID,
 		})
 	}

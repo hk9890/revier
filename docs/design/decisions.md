@@ -874,3 +874,13 @@ wherever kitty was installed. A tmux pane id says which runtime holds it, so a
 key given one takes tmux wherever the list names tmux before `none`.
 Rejected: choosing tmux wherever `$TMUX` is set, which moves every command run
 in a tmux pane, and a panel no runtime holds taken as outside a workspace.
+
+### D164 — outside a workspace an agent key can run an agent of config.toml
+
+Extends D148. The agent key gave the shell key's plain tab, and the user's own
+fallback to an agent no longer ran. config can now say `agent`: an agent key
+opens a tab of the agent it names, the default one being config.toml's first
+`[[agent]]`, since no layout says which; with none, the plain tab, logged. It
+starts in the panel's directory, so tmux reads a pane's from `/proc`. A project
+template there is refused and no tab opens: no project holds the window, and a
+directory in its place would hand a program a path it never asked for.

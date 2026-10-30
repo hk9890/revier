@@ -92,7 +92,7 @@ key = "ctrl+shift+o"
 `)
 	want := []string{
 		`agent "idle": has no command`,
-		`terminal.outside: "window" is neither "tab" nor "none"`,
+		`terminal.outside: "window" is none of "tab", "none" and "agent"`,
 		`terminal.agent_key: key "ctrl+shift+t" is held by terminal.shell_key already`,
 		`agent "dtop" key: key "hyperish+d": unknown modifier "hyperish"`,
 	}
@@ -105,5 +105,34 @@ key = "ctrl+shift+o"
 	}
 	if got := cfg.Outside(); got != core.OutsideTab {
 		t.Errorf("Outside = %q, want %q", got, core.OutsideTab)
+	}
+}
+
+// outside = "agent" is read, and a key outside a workspace gets config.toml's
+// usable named agents in file order, their commands as written, templates
+// unrendered: the first is the default agent's.
+func TestOutsideAgentGetsConfigsNamedAgents(t *testing.T) {
+	cfg := termConfig(t, `
+[terminal]
+outside = "agent"
+
+[[agent]]
+name = "claude"
+command = ["claude"]
+
+[[agent]]
+name = "idle"
+
+[[agent]]
+name = "dtop"
+command = ["dtop", "{{.Path}}"]
+key = "ctrl+shift+d"
+`)
+	want := core.OutsideKey{Outside: core.OutsideAgent, Agent: "dtop", Agents: []core.NamedAgent{
+		{Name: "claude", Command: []string{"claude"}},
+		{Name: "dtop", Command: []string{"dtop", "{{.Path}}"}},
+	}}
+	if got := cfg.OutsideKey("dtop"); !reflect.DeepEqual(got, want) {
+		t.Errorf("OutsideKey = %+v, want %+v", got, want)
 	}
 }
