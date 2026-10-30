@@ -891,6 +891,34 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	}
 }
 
+// A tab whose command exits as soon as it starts is named as having exited,
+// on every press, whether the exit comes before OpenTab returns or between it
+// and the focus of the tab.
+func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
+	h, c := server(t), ctx(t)
+	cr := &core.Core{Runtime: h}
+	p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+			Match: revier.Match{Title: "^home$"},
+		}},
+		{Name: "quick", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}},
+		}},
+	}})
+	if _, err := press(c, cr, p, "home"); err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+
+	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	for range 2 {
+		if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
+			t.Errorf("press quick = %v, want %q", err, want)
+		}
+	}
+}
+
 // tmux escapes non-printable bytes in format output on some versions and not
 // others: 3.4 renders a raw \x1f as the literal text "\037" while 3.7 emits the
 // byte. A control-character delimiter therefore parsed on the author's machine

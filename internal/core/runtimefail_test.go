@@ -243,6 +243,54 @@ func TestANewAgentThatCannotBeFocusedIsStillAdded(t *testing.T) {
 	}
 }
 
+// The tab's command exited before the focus, so nothing runs: the agent is
+// not added, and the error names the command that exited, not the focus.
+func TestANewAgentWhoseCommandEndedBeforeItsFocusIsNotAdded(t *testing.T) {
+	c, rt, p, _ := openWorkspace(t)
+	c.Runtime = endingTab{rt}
+
+	outcome, err := newAgent(t, c, p, "home", core.Resume{})
+	want := `rt: agent tab: the agent panel's command "claude --model opus" exited as soon as it started`
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+	if outcome != core.AgentNotAdded {
+		t.Errorf("outcome = %v, want not added", outcome)
+	}
+}
+
+// errPaneGone is what a runtime says when asked to focus a panel that is not
+// there.
+var errPaneGone = errors.New("can't find pane")
+
+// endingTab is a runtime whose tab commands exit as soon as they start, as
+// `true` does on tmux: the tab's panel is gone when the core focuses it, and
+// the focus fails.
+type endingTab struct{ *hosttest.FakeRuntime }
+
+func (e endingTab) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	_ = e.ClosePanel(ctx, ref, panel)
+	return errPaneGone
+}
+
+// A tab whose command exited before its focus is reported as a command that
+// exited, under the tab's opening: the focus failure names neither the panel
+// nor its command.
+func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
+	c := &core.Core{Runtime: endingTab{rt}}
+	proj := tabProject()
+	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}}}})
+
+	_, err := press(context.Background(), c, prepared(t, proj), "quick")
+	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
 // An agent whose tab cannot be made current is not raised: the OS window would
 // come up showing another tab.
 func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
