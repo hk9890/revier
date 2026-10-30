@@ -29,9 +29,9 @@ import (
 // (decisions.md D110).
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
-// its address, the directory it works in, and its harness and the name the
-// harness gives it. Beside the list the pane names the agent and mirrors its
-// terminal (mirror.go).
+// its project and the directory it works in, and the name its harness gives
+// it. Beside the list the pane names the agent and mirrors its terminal
+// (mirror.go).
 
 // switchChord is the key that switches between the two lists: alt+space, the
 // default of the desktop key that opens the surface. On a desktop that takes
@@ -92,40 +92,36 @@ func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, no
 	return agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At)}
 }
 
-// address leads the row's second line: the agent's address, which names its
-// project. An agent no target holds has none (decisions.md D155), so its
-// project stands there instead.
-func (i agentItem) address() string {
-	if i.agent.Target == "" {
-		return i.project.Label()
-	}
-	return printable(core.Address(i.project.Name, i.agent.Target, i.agent.Panel))
-}
-
-// worktree follows the address: the directory the agent works in when it is
-// not the project's own, which is how a worktree shows. Whether it is the
-// project's own is the core's to say, on the machine that read the agent: a
-// view carries the directory only when it is not.
+// worktree is the directory the agent works in when it is not the project's
+// own, which is how a worktree shows. Whether it is the project's own is the
+// core's to say, on the machine that read the agent: a view carries the
+// directory only when it is not.
 func (i agentItem) worktree() string {
 	if dir := i.agent.State.Dir; dir != "" {
-		return filepath.Base(dir)
+		return printable(filepath.Base(dir))
 	}
 	return ""
 }
 
-// ident ends the row's second line: the harness, and the name the harness
-// gives the agent where it gives one.
-func (i agentItem) ident() string {
-	if name := i.agent.State.Name; name != "" {
-		return printable(harnessOf(i.agent) + ":" + name)
+// where leads the row's second line: the project, and the worktree.
+func (i agentItem) where() string {
+	out := printable(i.project.Label())
+	if wt := i.worktree(); wt != "" {
+		out += " · " + wt
 	}
-	return harnessOf(i.agent)
+	return out
+}
+
+// name ends the row's second line: the name the harness gives the agent,
+// which Claude Code's peer messages address, or nothing.
+func (i agentItem) name() string {
+	return printable(i.agent.State.Name)
 }
 
 // FilterValue is what the query matches: what the agent is on, then the
 // second line as it reads, left to right.
 func (i agentItem) FilterValue() string {
-	return i.text + " " + i.address() + " " + i.worktree() + " " + i.ident()
+	return i.text + " " + i.where() + " " + i.name()
 }
 
 // agentList is the surface's second list.
@@ -161,7 +157,7 @@ type agentDelegate struct {
 	hover int
 }
 
-// Height is two, as a project row's: the agent, and which one it is under it.
+// Height is two, as a project row's: the agent, and where it works under it.
 func (d agentDelegate) Height() int                         { return 2 }
 func (d agentDelegate) Spacing() int                        { return 0 }
 func (d agentDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
@@ -181,14 +177,17 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 }
 
 // agentLines is an agent's row, in the agent list and in the project pane's
-// Agents alike: its state, what it is on and how long ago it spoke, over its
-// address and worktree, and its harness and name under the age. matches are
-// the byte positions of FilterValue the query matched. A selected or
+// Agents alike: its state, what it is on and how long ago it spoke, over
+// where it works and the name its harness gives it, under the age. matches
+// are the byte positions of FilterValue the query matched. A selected or
 // pointed-at row is lit on every line; cursor is whether a selected row
-// carries the cursor's bar. whole wraps what the agent is on under itself
-// where it would be cut: the pane's rows take as many lines as they need,
-// and the list's are two lines high.
-func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, over, cursor, whole bool) string {
+// carries the cursor's bar.
+//
+// inPane draws the row for the project pane: what the agent is on wraps
+// under itself rather than being cut, and the second line leaves out the
+// project, which every row there shares, and is left out where it would be
+// blank. The list's rows are two lines high.
+func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, over, cursor, inPane bool) string {
 	style := func(s lipgloss.Style) lipgloss.Style {
 		switch {
 		case sel:
@@ -227,7 +226,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 		name = name.Bold(true)
 	}
 	parts := []string{ellipsis(it.text, room)}
-	if wrapped := wrap(it.text, room); whole && len(wrapped) > 0 {
+	if wrapped := wrap(it.text, room); inPane && len(wrapped) > 0 {
 		parts = wrapped
 	}
 	lines := make([]string, 0, len(parts)+1)
@@ -240,38 +239,31 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 		}
 	}
 
-	// The ident stands under the age, the two ending at the same cell. Where
-	// the line is short of room the address gives first, then the worktree:
-	// the pane spells out both.
-	address, worktree, ident := it.address(), it.worktree(), it.ident()
-	at := len(it.text) + 1
-	wat := at + len(address) + 1
-	iat := wat + len(worktree) + 1
+	// The name stands under the age, the two ending at the same cell, and
+	// where gives way to it when the line is short of room.
+	where, from := it.where(), len(it.text)+1
+	if inPane {
+		where, from = it.worktree(), from+len(it.where())-len(it.worktree())
+	}
+	if inPane && where == "" && it.name() == "" {
+		return strings.Join(lines, "\n")
+	}
 	lit := func(s string, from int) string {
 		return highlight(s, within(matches, from, len(s)), style(th.Path), style(th.Match))
 	}
-	ident = ellipsis(ident, width-indent-1)
-	right := lit(ident, iat) + space(1)
-	var left string
-	lead := width - indent - lipgloss.Width(right) - gridGap
-	tail := lipgloss.Width(" · " + worktree)
-	switch {
-	case worktree == "":
-		left = lit(ellipsis(address, lead), at)
-	case lead-tail >= minAddressWidth:
-		left = lit(ellipsis(address, lead-tail), at) + style(th.Path).Render(" · ") + lit(worktree, wat)
-	default:
-		left = lit(ellipsis(worktree, lead), wat)
+	right := ""
+	if name := ellipsis(it.name(), width-indent-1); name != "" {
+		right = lit(name, len(it.text)+1+len(it.where())+1) + space(1)
 	}
-	second := bar + space(indent-1) + left
+	room = width - indent - lipgloss.Width(right)
+	if right != "" {
+		room -= gridGap
+	}
+	second := bar + space(indent-1) + lit(ellipsis(where, room), from)
 	second += space(width-lipgloss.Width(second)-lipgloss.Width(right)) + right
 
 	return strings.Join(append(lines, fill(second, width, style)), "\n")
 }
-
-// minAddressWidth is the least of an address a row shows beside a worktree:
-// two letters and the ellipsis. Short of that the worktree stands alone.
-const minAddressWidth = 3
 
 // partOffsets is where each of the parts wrap cut text into starts in it, in
 // bytes, as the filter counts its matches. wrap drops the spaces it breaks

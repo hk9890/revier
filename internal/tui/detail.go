@@ -478,8 +478,8 @@ func gridRest(w int) int {
 }
 
 // The pane's columns. Narrower than the list's, because the pane is. The lead
-// is the cursor bar, a space, and a target's kind mark and a space, which an
-// agent's row leaves blank. The state column fits the widest state, a
+// is the cursor bar, a space, and a target's kind mark and a space, which the
+// remote screen's agent row leaves blank. The state column fits the widest state, a
 // glyph and "no host here", and a gap, so the key or activity after it has the
 // room.
 const (

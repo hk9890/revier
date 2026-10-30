@@ -45,9 +45,9 @@ sections:
 
 - **Targets**: each target, its key and its state, then each window you
   attached with `revier attach`.
-- **Agents**: each agent in two lines, as the [agent list](#the-agent-list)
-  shows it. Under the list is the terminal of the selected agent, as it is
-  now.
+- **Agents**: each agent as the [agent list](#the-agent-list) shows it,
+  without the project. Under the list is the terminal of the selected agent,
+  as it is now.
 
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a
@@ -125,18 +125,17 @@ Each agent takes two lines:
 
 ```
  idle       Fix the login redirect                          4m
-            shop:home:2 · login-fix              claude:shop-a0
+            shop · login-fix                           shop-a0
 ```
 
 - The first line: the agent's state, what it does, and how long ago it spoke.
-- The second line: the agent's [address](agents.md#drive-an-agent-from-a-script),
-  then the worktree it works in, if it works in one. At the right is its harness
-  and the name the harness gives it. Claude Code's other agents send messages
-  to that name, here `shop-a0`. An agent with no address shows its project.
-- When a line is too narrow, the address is cut first.
+- The second line: the project, then the worktree the agent works in, if it
+  works in one. At the right is the name its harness gives it. Claude Code's
+  other agents send messages to that name.
 
-Type to filter by any of this text. The pane shows the address, the harness,
-the name, and the agent's terminal.
+Type to filter by any of this text. The pane shows the agent's
+[address](agents.md#drive-an-agent-from-a-script), its harness, its name, and
+its terminal.
 
 ## The popup
 

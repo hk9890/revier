@@ -49,33 +49,23 @@ func secondLine(a revier.AgentView, p revier.ProjectName, w int) string {
 	return second
 }
 
-// An agent no target holds has no address, so its project stands in the
-// address's place.
-func TestAnAgentRowWithNoAddressSaysItsProject(t *testing.T) {
-	row := secondLine(revier.AgentView{Panel: "7", State: revier.AgentState{Harness: "claude", Name: "a0"}}, "alpha", 80)
-	if !strings.HasPrefix(strings.TrimSpace(row), "alpha ") || strings.Contains(row, ":7") {
-		t.Errorf("second line = %q, want the project where the agent has no address", row)
-	}
-}
-
-// A second line short of room cuts the address first, keeping the worktree
-// and the harness's name whole, and drops the address before the worktree.
-func TestANarrowAgentRowCutsTheAddressFirst(t *testing.T) {
-	a := revier.AgentView{Target: "home", Panel: "152", State: revier.AgentState{
+// A second line short of room cuts the project and the worktree, and keeps
+// the name whole.
+func TestANarrowAgentRowKeepsTheName(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{
 		Harness: "claude", Name: "revier-c0", Dir: "/p/revier/.claude/worktrees/agent-key-starts"}}
 	width := func(left string) int {
-		return 2 + listedStateWidth + lipgloss.Width(left) + gridGap + lipgloss.Width("claude:revier-c0 ")
+		return 2 + listedStateWidth + lipgloss.Width(left) + gridGap + lipgloss.Width("revier-c0 ")
 	}
 	for _, c := range []struct {
 		width int
 		want  string
 	}{
-		{80, "revier:home:152 · agent-key-starts"},
-		{width("revier:ho… · agent-key-starts"), "revier:ho… · agent-key-starts"},
-		{width("agent-key-starts"), "agent-key-starts"},
+		{80, "revier · agent-key-starts"},
+		{width("revier · agent-k…"), "revier · agent-k…"},
 	} {
 		row := strings.TrimSpace(secondLine(a, "revier", c.width))
-		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " claude:revier-c0") {
+		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " revier-c0") {
 			t.Errorf("w=%d: second line = %q, want %q and the whole name", c.width, row, c.want)
 		}
 	}
@@ -133,17 +123,20 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	}
 }
 
-// A query that matches the second line lights its letters there: the address
-// cut short, the worktree after it, and the harness's name at the end.
+// A query that matches the second line lights its letters there: the
+// worktree, and the name, in the list and in the pane, which leaves the
+// project out.
 func TestTheMatchedLettersAreLitOnTheSecondLine(t *testing.T) {
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = lipgloss.NewStyle().Transform(strings.ToUpper)
-	it := newAgentItem(revier.AgentView{Target: "home", Panel: "152", State: revier.AgentState{
+	it := newAgentItem(revier.AgentView{State: revier.AgentState{
 		Harness: "claude", Name: "revier-c0", Activity: "one", Dir: "/p/revier/.claude/worktrees/delete-key"}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, time.Now())
-	for query, want := range map[string]string{"delete": "DELETE-key", "c0": "claude:revier-C0", "home": "revier:HOME:152"} {
+	for query, want := range map[string]string{"delete": "DELETE-key", "c0": "revier-C0"} {
 		matches := ranked(ungrouped)(query, []string{it.FilterValue()})[0].MatchedIndexes
-		if got := ansi.Strip(agentLines(m.spun(), it, matches, 80, false, false, false, false)); !strings.Contains(got, want) {
-			t.Errorf("%s: agent row = %q, want %q", query, got, want)
+		for _, inPane := range []bool{false, true} {
+			if got := ansi.Strip(agentLines(m.spun(), it, matches, 80, false, false, false, inPane)); !strings.Contains(got, want) {
+				t.Errorf("%s, in pane %v: agent row = %q, want %q", query, inPane, got, want)
+			}
 		}
 	}
 }

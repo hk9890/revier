@@ -177,5 +177,5 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 }
 
 // lineSpan is the pane lines a row takes, start inclusive and end exclusive:
-// an agent's row wraps its activity onto as many lines as it needs.
+// an agent's row wraps what it is on onto as many lines as it needs (agentLines).
 type lineSpan struct{ start, end int }

@@ -51,9 +51,9 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 }
 
 // A row is the agent's state and what it is on, without its harness, over
-// its address; the age of what it said last stands at the row's right end,
-// and the harness and its name for the agent under it.
-func TestAnAgentRowLeadsWithItsStateAndNamesItsAddress(t *testing.T) {
+// its project; the age of what it said last stands at the row's right end,
+// and the name its harness gives it under the age.
+func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
 		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done", at: now.Add(-4 * time.Minute), name: "alpha-a0"})
@@ -69,17 +69,18 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsAddress(t *testing.T) {
 	if !strings.HasSuffix(strings.TrimSpace(first), "4m") {
 		t.Errorf("row = %q, want the age at its right end", first)
 	}
-	if column(second, "alpha:home:1") != column(first, "Taskmgr tickets") {
-		t.Errorf("second line = %q, want the address under the summary of %q", second, first)
+	if column(second, "alpha") != column(first, "Taskmgr tickets") || strings.Contains(second, "claude") {
+		t.Errorf("second line = %q, want the project under the summary of %q, and no harness", second, first)
 	}
-	if end := strings.TrimRight(second, " "); !strings.HasSuffix(end, "claude:alpha-a0") || column(second, "claude:alpha-a0")+len("claude:alpha-a0") != column(first, "4m")+len("4m") {
-		t.Errorf("second line = %q, want harness:name ending under the age of %q", second, first)
+	if end := strings.TrimRight(second, " "); !strings.HasSuffix(end, " alpha-a0") || column(second, "alpha-a0")+len("alpha-a0") != column(first, "4m")+len("4m") {
+		t.Errorf("second line = %q, want the name ending under the age of %q", second, first)
 	}
 }
 
 // The project pane's Agents draw a row as the agent list does: the state, what
-// the agent is on and its age, over its address, its worktree, and its harness
-// and name.
+// the agent is on and its age, over its worktree and its name. The project,
+// which every row there shares, is left out, and so is a second line that
+// would be blank.
 func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	m, _, _ := listedSurface(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done",
@@ -92,31 +93,28 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	if !strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
 		t.Errorf("first line = %q, want the state, the summary and the age, and no harness", first)
 	}
-	if !strings.Contains(second, "alpha:home:1 · delete-key") || !strings.HasSuffix(second, "claude:alpha-a0") {
-		t.Errorf("second line = %q, want the address, the worktree, and harness:name", second)
+	if !strings.HasPrefix(second, "delete-key") || !strings.HasSuffix(second, " alpha-a0") {
+		t.Errorf("second line = %q, want the worktree alone, and the name", second)
 	}
-}
 
-// An agent its harness names nothing shows the harness alone.
-func TestAnAgentRowWithNoNameSaysTheHarness(t *testing.T) {
-	m, _, _ := listedWorld(t, 140, 20, listed{project: "alpha", status: revier.StatusIdle, on: "one"})
-	second, _, _ := strings.Cut(lines(m)[5], "│")
-	if !strings.HasSuffix(strings.TrimSpace(second), " claude") || !strings.Contains(second, "alpha:home:1") {
-		t.Errorf("second line = %q, want the address and the harness alone", second)
+	m, _, _ = listedSurface(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets"})
+	rows = strings.Split(pane(m), "\n")
+	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i < 0 || i+1 < len(rows) && rows[i+1] != "" {
+		t.Errorf("pane = %q, want no second line for an agent with no worktree and no name", rows)
 	}
 }
 
 // An agent that works in another directory than its project's shows it
-// beside the address: that is how a worktree reads.
-func TestAnAgentInAWorktreeNamesItBesideItsAddress(t *testing.T) {
+// beside the project: that is how a worktree reads.
+func TestAnAgentInAWorktreeNamesItBesideItsProject(t *testing.T) {
 	m, _, _ := listedWorld(t, 140, 20,
 		listed{project: "alpha", status: revier.StatusIdle, on: "one", dir: "/p/alpha"},
 		listed{project: "alpha", status: revier.StatusIdle, on: "two", dir: "/p/alpha/.claude/worktrees/delete-key"})
 	body := strings.Join(lines(m), "\n")
-	if !strings.Contains(body, ":2 · delete-key") {
+	if !strings.Contains(body, "alpha · delete-key") {
 		t.Errorf("no row names the worktree:\n%s", body)
 	}
-	if strings.Contains(body, ":1 · ") {
+	if strings.Count(body, "alpha · ") != 1 {
 		t.Errorf("an agent in the project's own directory names a directory:\n%s", body)
 	}
 }
