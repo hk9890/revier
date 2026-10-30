@@ -857,3 +857,11 @@ operation logs on its host, so the screen reads the local file alone. The
 surface keeps when it took the error, and the screen opens on the newest line
 of its own process at or before then: a warning written between the two takes
 the cursor. Rejected: finding the line by its text, which rewording breaks.
+
+### D158 — a terminal key's agent tab starts in the project, not in the panel's directory
+
+Extends D153, which still holds for a shell tab. An agent pressed from a
+worktree started in that worktree, and Claude Code, which takes the directory
+it starts in as its project, could then enter no other worktree. An agent
+tab now starts where the project's agent tab starts, unless the key or the
+command names a directory; a second agent in the same worktree takes `--dir`.

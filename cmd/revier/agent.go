@@ -416,7 +416,7 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", project, panel, dir, a.core.AgentTarget, here)
+	return a.newTab(ctx, "agent new", revier.PanelAgent, project, panel, dir, a.core.AgentTarget, here)
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
@@ -424,10 +424,10 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 // is in, else the one resolved as for any command, with the target after -p's
 // colon or the one pick chooses. A --panel that no project's workspace holds
 // gets what [terminal] outside says, and here is not called. With --panel and
-// no --dir, the directory is the panel's own.
-func (a *app) newTab(ctx context.Context, what, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
+// no --dir, a shell tab's directory is the panel's own (decisions.md D158).
+func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
-		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
 			return a.tabHere(what, w, panel, dir, here)
 		})
 	}

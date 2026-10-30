@@ -396,17 +396,17 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 func tabAtPanel(t *testing.T, c *core.Core, projects []core.Project, panel revier.PanelID, dir string, outside core.Outside) (core.Workspace, error) {
 	t.Helper()
 	var got core.Workspace
-	err := c.TabAtPanel(context.Background(), projects, panel, dir, outside, func(w core.Workspace, _ string) error {
+	err := c.TabAtPanel(context.Background(), projects, panel, revier.PanelShell, dir, outside, func(w core.Workspace, _ string) error {
 		got = w
 		return nil
 	})
 	return got, err
 }
 
-// The tab starts in the directory given, else in the panel's own directory,
-// each while it is one: a worktree removed under the panel's shell, given by
-// a tmux key or reported by kitty, leaves the tab where in starts it. Outside
-// a workspace the plain tab starts there too.
+// A shell tab starts in the directory given, else in the panel's own
+// directory, each while it is one: a worktree removed under the panel's
+// shell, given by a key or reported by kitty, leaves the tab where in starts
+// it. Outside a workspace the plain tab starts there too.
 func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 	here, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: here}, {ID: "2", Dir: gone}}, nil)
@@ -423,7 +423,7 @@ func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 		{"2", gone, ""},
 	} {
 		got := "unset"
-		err := c.TabAtPanel(context.Background(), projects, tc.panel, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
+		err := c.TabAtPanel(context.Background(), projects, tc.panel, revier.PanelShell, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
 			got = dir
 			return nil
 		})
@@ -437,6 +437,44 @@ func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 	}
 	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Dir != here || rt.Tabs[0].Real.Panels[0].Dir != here {
 		t.Errorf("tabs = %+v, want one plain tab in %s", rt.Tabs, here)
+	}
+}
+
+// An agent tab starts in the directory given, else where in starts it, never
+// in the panel's own directory: an agent pressed from a worktree starts in
+// the project, where it can enter any worktree. Outside a workspace the key
+// opens a plain shell tab, which starts in the panel's directory.
+func TestTabAtPanelStartsAnAgentOutsideThePanelsDirectory(t *testing.T) {
+	worktree, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
+	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: worktree}}, nil)
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: worktree})
+
+	for _, tc := range []struct {
+		dir, want string
+	}{
+		{"", ""},
+		{given, given},
+		{gone, ""},
+	} {
+		got := "unset"
+		err := c.TabAtPanel(context.Background(), projects, "1", revier.PanelAgent, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
+			got = dir
+			return nil
+		})
+		if err != nil || got != tc.want {
+			t.Errorf("dir %q: in got %q, %v, want %q", tc.dir, got, err, tc.want)
+		}
+	}
+
+	err := c.TabAtPanel(context.Background(), projects, "9", revier.PanelAgent, "", core.OutsideTab, func(core.Workspace, string) error {
+		t.Fatal("in ran for a window of no project")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("TabAtPanel outside: %v", err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Dir != worktree {
+		t.Errorf("tabs = %+v, want one plain tab in %s", rt.Tabs, worktree)
 	}
 }
 

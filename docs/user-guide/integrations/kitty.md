@@ -33,7 +33,9 @@ your other kitty windows stay out of its reach.
 
 kitty keys add a tab to the workspace you are in: ctrl+shift+z an agent tab,
 ctrl+shift+t a shell tab, and the `key` of each named agent a tab of that
-agent. [`[terminal]`](../configuration.md#terminal) sets them. To write them
+agent. A shell tab starts in the directory of the window you pressed the key
+in; an agent tab starts in the project, so from a worktree the agent can still
+enter any worktree. [`[terminal]`](../configuration.md#terminal) sets them. To write them
 into kitty's configuration:
 
 ```bash
