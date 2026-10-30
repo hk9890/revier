@@ -1411,8 +1411,9 @@ func (m Model) listPage() int {
 }
 
 // agentsOnPage is how many agent rows past the cursor fit on the pane, below
-// it for 1 and above it for -1. An agent's row is as tall as its activity
-// needs, so rows are not lines.
+// it for 1 and above it for -1. An agent's row is as tall as what it is on
+// needs, and a line under that where it works in a worktree or has a name, so
+// rows are not lines.
 func (m Model) agentsOnPage(dir int) int {
 	n, room := 0, m.detail.Height()
 	for i := m.acursor + dir; i >= 0 && i < len(m.alines); i += dir {

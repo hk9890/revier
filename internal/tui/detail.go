@@ -330,7 +330,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString(m.fieldView(m.ainput, focusAgents) + "\n")
 		for i, row := range m.agentRows() {
 			start := lineNow()
-			b.WriteString(detailAgent(m.spun(), row, w, i == m.acursor, m.over.is(hoverAgent, i), m.focus == focusAgents))
+			b.WriteString(agentLines(m.spun(), row.agentItem, row.matches, w, i == m.acursor, m.over.is(hoverAgent, i), m.focus == focusAgents, true))
 			b.WriteString("\n")
 			m.alines = append(m.alines, lineSpan{start, lineNow()})
 		}
@@ -423,67 +423,28 @@ func kindMark(th theme.Theme, row targetRow, style func(lipgloss.Style) lipgloss
 	return style(glyphStyle).Render(glyph) + style(lipgloss.NewStyle()).Render(" ")
 }
 
-// detailAgent is one row of the Agents section, on the Targets section's grid:
-// the harness under the target names, the state glyph and words under theirs,
-// and the activity where their keys are, wrapped under itself. A selected or
-// pointed-at row is lit as a target row is, on every line it takes.
-//
-// cursor is whether the selected row carries the cursor's bar.
-func detailAgent(th theme.Theme, row agentRow, w int, sel, over, cursor bool) string {
-	style := func(s lipgloss.Style) lipgloss.Style {
-		switch {
-		case sel:
-			return th.OnSelection(s)
-		case over:
-			return th.OnHover(s)
-		}
-		return s
-	}
-	// The agent mirrored below is marked while the cursor is in the list, so
-	// the mirror has a row it belongs to; the cursor's bar is the Agents' own.
-	bar := style(th.Path).Render(" ")
-	if sel && cursor {
-		bar = th.Cursor.Render(th.Glyphs.Cursor)
-	}
-	lead := bar + style(th.Path).Render(strings.Repeat(" ", detailLeadWidth-1))
-	a := row.agent
-	harness := harnessOf(a)
-	offset := len(harness) + 1 // the label is the harness, a space, the activity
-	head := clipTo(gridHead(lead,
-		highlight(harness, row.matches, style(th.ProjectName), style(th.Match)),
-		style(statusStyle(th, a.State.Status)).Render(statusLabel(th, a.State.Status)), style(lipgloss.NewStyle())), w)
+// detailAgent is one row of the remote screen's Agents: an agent on the host,
+// on the pane's grid: the harness, the state glyph and words, and the
+// activity wrapped under itself. It carries no address: the host's address
+// for the agent names nothing on this machine.
+func detailAgent(th theme.Theme, a revier.AgentView, w int) string {
+	lead := strings.Repeat(" ", detailLeadWidth)
+	head := clipTo(gridHead(lead, th.ProjectName.Render(harnessOf(a)),
+		statusStyle(th, a.State.Status).Render(statusLabel(th, a.State.Status)), lipgloss.NewStyle()), w)
 	parts := wrap(a.State.Activity, gridRest(w))
 	if len(parts) == 0 {
-		return fill(head, w, style)
+		return head
 	}
-	indent := style(lipgloss.NewStyle()).Render(strings.Repeat(" ", lipgloss.Width(head)))
+	indent := strings.Repeat(" ", lipgloss.Width(head))
 	lines := make([]string, len(parts))
-	for i, at := range partOffsets(a.State.Activity, parts) {
-		matches := within(row.matches, offset+at, len(parts[i]))
-		text := highlight(parts[i], matches, style(th.Path), style(th.Match))
+	for i, part := range parts {
 		start := indent
 		if i == 0 {
 			start = head
 		}
-		lines[i] = fill(start+text, w, style)
+		lines[i] = start + th.Path.Render(part)
 	}
 	return strings.Join(lines, "\n")
-}
-
-// partOffsets is where each of the parts wrap cut text into starts in it, in
-// bytes, as the filter counts its matches. wrap drops the spaces it breaks
-// at, so each part is looked for from where the one before it ended.
-func partOffsets(text string, parts []string) []int {
-	out := make([]int, len(parts))
-	from := 0
-	for i, part := range parts {
-		if at := strings.Index(text[from:], part); at >= 0 {
-			from += at
-		}
-		out[i] = from
-		from = min(from+len(part), len(text))
-	}
-	return out
 }
 
 // within is the matches that fall in n bytes from start, counted from start.
@@ -517,8 +478,8 @@ func gridRest(w int) int {
 }
 
 // The pane's columns. Narrower than the list's, because the pane is. The lead
-// is the cursor bar, a space, and a target's kind mark and a space, which an
-// agent's row leaves blank. The state column fits the widest state, a
+// is the cursor bar, a space, and a target's kind mark and a space, which the
+// remote screen's agent row leaves blank. The state column fits the widest state, a
 // glyph and "no host here", and a gap, so the key or activity after it has the
 // room.
 const (

@@ -26,10 +26,9 @@ func column(t *testing.T, row, word string) int {
 	return lipgloss.Width(plain[:i])
 }
 
-// The pane's Targets and Agents share one grid: the name, the state glyph and
-// the key or activity each start in the same cell in both sections, whatever
-// the harness is called.
-func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
+// The pane's targets and attached windows share one grid: the state glyph
+// starts in the same cell in both.
+func TestThePaneLinesUpTargetsAndAttachedWindows(t *testing.T) {
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	g := m.theme.Glyphs
 	const w = 60
@@ -37,24 +36,38 @@ func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
 		Name: "home", Key: "ctrl+shift+u", Available: true, Ref: revier.TargetRef{Host: "rt", ID: "1"},
 	}}, w, false, false)
 	attached := m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: "Pull requests"}}, w, false, false)
-
-	for _, harness := range []string{"claude", "gemini-cli", "cursor-agent-with-a-long-name"} {
-		agent := detailAgent(m.spun(), agentRow{agent: revier.AgentView{State: revier.AgentState{
-			Harness: harness, Status: revier.StatusAttention, Activity: "needs a decision",
-		}}}, w, false, false, false)
-		name := harness[:min(len(harness), detailNameWidth-1)]
-		if a, b := column(t, target, "home"), column(t, agent, name); a != b {
-			t.Errorf("%s: target name at %d, harness at %d", harness, a, b)
-		}
-		if a, b := column(t, target, g.Running+" running"), column(t, agent, g.NeedsYou+" needs you"); a != b {
-			t.Errorf("%s: target state at %d, agent state at %d", harness, a, b)
-		}
-		if a, b := column(t, target, "ctrl+shift+u"), column(t, agent, "needs a decision"); a != b {
-			t.Errorf("%s: target key at %d, activity at %d", harness, a, b)
-		}
-	}
 	if a, b := column(t, target, g.Running+" running"), column(t, attached, g.Running+" running"); a != b {
 		t.Errorf("target state at %d, attached state at %d", a, b)
+	}
+}
+
+// secondLine is the second line of an agent's row of project p, w cells wide,
+// as plain text.
+func secondLine(a revier.AgentView, p revier.ProjectName, w int) string {
+	row := agentLines(theme.Default(), newAgentItem(a, revier.Project{Name: p}, revier.AgentDetail{}, time.Now()), nil, w, false, false, false, false)
+	_, second, _ := strings.Cut(ansi.Strip(row), "\n")
+	return second
+}
+
+// A second line short of room cuts the project and the worktree, and keeps
+// the name whole.
+func TestANarrowAgentRowKeepsTheName(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{
+		Harness: "claude", Name: "revier-c0", Dir: "/p/revier/.claude/worktrees/agent-key-starts"}}
+	width := func(left string) int {
+		return 2 + listedStateWidth + lipgloss.Width(left) + gridGap + lipgloss.Width("revier-c0 ")
+	}
+	for _, c := range []struct {
+		width int
+		want  string
+	}{
+		{80, "revier · agent-key-starts"},
+		{width("revier · agent-k…"), "revier · agent-k…"},
+	} {
+		row := strings.TrimSpace(secondLine(a, "revier", c.width))
+		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " revier-c0") {
+			t.Errorf("w=%d: second line = %q, want %q and the whole name", c.width, row, c.want)
+		}
 	}
 }
 
@@ -63,11 +76,16 @@ func TestThePaneLinesUpTargetsAndAgents(t *testing.T) {
 func TestAPaneRowFitsThePane(t *testing.T) {
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	title := strings.Repeat("a very long window title ", 4)
+	long := newAgentItem(revier.AgentView{Target: "a-long-target-name", Panel: "1234", State: revier.AgentState{
+		Harness: "cursor-agent-with-a-long-name", Name: "a-long-session-name", Activity: title, Dir: "/p/" + title,
+	}}, revier.Project{Name: "a-long-project-name"}, revier.AgentDetail{At: time.Now()}, time.Now())
 	for _, w := range []int{20, 42, 60} {
 		rows := []string{
 			m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: title}}, w, false, false),
 			m.detailRow(targetRow{target: revier.TargetView{Name: "a-long-target-name", Key: "ctrl+shift+alt+u"}}, w, false, false),
-			detailAgent(m.spun(), agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "cursor-agent-with-a-long-name", Activity: title}}}, w, false, false, false),
+			detailAgent(m.spun(), long.agent, w),
+			agentLines(m.spun(), long, nil, w, true, false, true, false),
+			agentLines(m.spun(), long, nil, w, true, false, true, true),
 		}
 		for _, row := range rows {
 			for _, line := range strings.Split(row, "\n") {
@@ -98,10 +116,28 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = upper
-	row := agentRow{agent: revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}}
-	row.matches = ranked(ungrouped)("then", []string{row.label()})[0].MatchedIndexes
-	if got := ansi.Strip(detailAgent(m.spun(), row, 60, false, false, false)); !strings.Contains(got, "THEN words") {
+	it := newAgentItem(revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}, revier.Project{Name: "alpha"}, revier.AgentDetail{}, time.Now())
+	matches := ranked(ungrouped)("then", []string{it.filterValue(true)})[0].MatchedIndexes
+	if got := ansi.Strip(agentLines(m.spun(), it, matches, 60, false, false, false, true)); !strings.Contains(got, "THEN words") {
 		t.Errorf("agent row = %q, want the letters of then lit", got)
+	}
+}
+
+// A query that matches the second line lights its letters there: the
+// worktree, and the name, in the list and in the pane, which leaves the
+// project out.
+func TestTheMatchedLettersAreLitOnTheSecondLine(t *testing.T) {
+	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m.theme.Match = lipgloss.NewStyle().Transform(strings.ToUpper)
+	it := newAgentItem(revier.AgentView{State: revier.AgentState{
+		Harness: "claude", Name: "revier-c0", Activity: "one", Dir: "/p/revier/.claude/worktrees/delete-key"}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, time.Now())
+	for query, want := range map[string]string{"delete": "DELETE-key", "c0": "revier-C0"} {
+		for _, inPane := range []bool{false, true} {
+			matches := ranked(ungrouped)(query, []string{it.filterValue(inPane)})[0].MatchedIndexes
+			if got := ansi.Strip(agentLines(m.spun(), it, matches, 80, false, false, false, inPane)); !strings.Contains(got, want) {
+				t.Errorf("%s, in pane %v: agent row = %q, want %q", query, inPane, got, want)
+			}
+		}
 	}
 }
 

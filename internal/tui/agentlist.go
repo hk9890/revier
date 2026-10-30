@@ -29,8 +29,9 @@ import (
 // (decisions.md D110).
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
-// its project and the directory it works in. Beside the list the pane names
-// the agent and mirrors its terminal (mirror.go).
+// its project and the directory it works in, and the name its harness gives
+// it. Beside the list the pane names the agent and mirrors its terminal
+// (mirror.go).
 
 // switchChord is the key that switches between the two lists: alt+space, the
 // default of the desktop key that opens the surface. On a desktop that takes
@@ -44,10 +45,11 @@ func switches(msg keyPress) bool {
 	return ok && c == switchChord
 }
 
-// agentItem is one row of the agent list: an agent, the project a panel of
-// which shows it, and what it said last. It is carried whole, so the delegate
-// renders from the item and looks nothing up: a row is drawn on every frame,
-// and the summary of an agent with no title is read out of its whole message.
+// agentItem is one row of the agent list, and of the project pane's Agents: an
+// agent, the project a panel of which shows it, and what it said last. It is
+// carried whole, so the delegate renders from the item and looks nothing up: a
+// row is drawn on every frame, and the summary of an agent with no title is
+// read out of its whole message.
 type agentItem struct {
 	agent   revier.AgentView
 	project revier.Project
@@ -85,21 +87,53 @@ func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled b
 	return harnessOf(a), false
 }
 
-// where is the row's second line: the project, and the directory the agent
-// works in when it is not the project's own, which is how a worktree shows.
-// Whether it is the project's own is the core's to say, on the machine that
-// read the agent: a view carries the directory only when it is not.
-func (i agentItem) where() string {
-	out := i.project.Label()
+// newAgentItem is the row of an agent of project p that said d, at now.
+func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, now time.Time) agentItem {
+	text, titled := summary(a, d)
+	return agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At)}
+}
+
+// worktree is the directory the agent works in when it is not the project's
+// own, which is how a worktree shows. Whether it is the project's own is the
+// core's to say, on the machine that read the agent: a view carries the
+// directory only when it is not.
+func (i agentItem) worktree() string {
 	if dir := i.agent.State.Dir; dir != "" {
-		out += " · " + filepath.Base(dir)
+		return printable(filepath.Base(dir))
+	}
+	return ""
+}
+
+// where leads the row's second line: the project, and the worktree. The
+// project pane leaves the project out, as every row there shares it.
+func (i agentItem) where(inPane bool) string {
+	wt := i.worktree()
+	if inPane {
+		return wt
+	}
+	out := printable(i.project.Label())
+	if wt != "" {
+		out += " · " + wt
 	}
 	return out
 }
 
-// FilterValue is what the query matches: what the agent is on, then where.
+// name ends the row's second line: the name the harness gives the agent,
+// which Claude Code's peer messages address, or nothing.
+func (i agentItem) name() string {
+	return printable(i.agent.State.Name)
+}
+
+// filterValue is what a query over the rows matches: what the agent is on,
+// then the second line as it reads, left to right. It holds only what the row
+// draws, so every letter a query matches is lit.
+func (i agentItem) filterValue(inPane bool) string {
+	return i.text + " " + i.where(inPane) + " " + i.name()
+}
+
+// FilterValue is what the agent list's query matches.
 func (i agentItem) FilterValue() string {
-	return i.text + " " + i.where()
+	return i.filterValue(false)
 }
 
 // agentList is the surface's second list.
@@ -149,9 +183,23 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	if !ok {
 		return
 	}
-	th := d.theme
 	sel := index == m.Index()
-	over := index == d.hover && !sel
+	// The list renders into a strings.Builder, which cannot fail.
+	_, _ = fmt.Fprint(w, agentLines(d.theme, it, m.MatchesForItem(index), m.Width(), sel, index == d.hover && !sel, true, false))
+}
+
+// agentLines is an agent's row, in the agent list and in the project pane's
+// Agents alike: its state, what it is on and how long ago it spoke, over
+// where it works and the name its harness gives it, under the age. matches
+// are the byte positions of filterValue the query matched. A selected or
+// pointed-at row is lit on every line; cursor is whether a selected row
+// carries the cursor's bar.
+//
+// inPane draws the row for the project pane: what the agent is on wraps
+// under itself rather than being cut, and the second line leaves out the
+// project, which every row there shares, and is left out where it would be
+// blank. The list's rows are two lines high.
+func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, over, cursor, inPane bool) string {
 	style := func(s lipgloss.Style) lipgloss.Style {
 		switch {
 		case sel:
@@ -164,9 +212,8 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	space := func(n int) string { return style(th.Path).Render(strings.Repeat(" ", max(n, 0))) }
 	cell := func(s string, w int) string { return s + space(w-lipgloss.Width(s)) }
 
-	width := m.Width()
 	bar := space(1)
-	if sel {
+	if sel && cursor {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
 	prefix := bar + space(1)
@@ -183,7 +230,6 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	}
 	room := width - indent - lipgloss.Width(age)
 
-	matches := m.MatchesForItem(index)
 	name := th.ProjectName
 	if !it.titled {
 		name = th.NameDim
@@ -191,15 +237,61 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	if sel {
 		name = name.Bold(true)
 	}
-	shown := ellipsis(it.text, room)
-	first := prefix + state + cell(highlight(shown, within(matches, 0, len(shown)), style(name), style(th.Match)), room) + age
+	parts := []string{ellipsis(it.text, room)}
+	if inPane {
+		if wrapped := wrap(it.text, room); len(wrapped) > 0 {
+			parts = wrapped
+		}
+	}
+	lines := make([]string, 0, len(parts)+1)
+	for i, from := range partOffsets(it.text, parts) {
+		text := cell(highlight(parts[i], within(matches, from, len(parts[i])), style(name), style(th.Match)), room)
+		if i == 0 {
+			// Narrower than the state and the age, the line is cut, so a
+			// click lands on the row drawn under the pointer.
+			lines = append(lines, fill(clipTo(prefix+state+text+age, width), width, style))
+		} else {
+			lines = append(lines, fill(bar+space(indent-1)+text, width, style))
+		}
+	}
 
-	where := ellipsis(it.where(), width-indent)
-	second := bar + space(indent-1) +
-		highlight(where, within(matches, len(it.text)+1, len(where)), style(th.Path), style(th.Match))
+	// The name stands under the age, the two ending at the same cell, and
+	// where gives way to it when the line is short of room.
+	where, from := it.where(inPane), len(it.text)+1
+	if inPane && where == "" && it.name() == "" {
+		return strings.Join(lines, "\n")
+	}
+	lit := func(s string, from int) string {
+		return highlight(s, within(matches, from, len(s)), style(th.Path), style(th.Match))
+	}
+	right := ""
+	if name := ellipsis(it.name(), width-indent-1); name != "" {
+		right = lit(name, from+len(where)+1) + space(1)
+	}
+	room = width - indent - lipgloss.Width(right)
+	if right != "" {
+		room -= gridGap
+	}
+	second := bar + space(indent-1) + lit(ellipsis(where, room), from)
+	second += space(width-lipgloss.Width(second)-lipgloss.Width(right)) + right
 
-	// The list renders into a strings.Builder, which cannot fail.
-	_, _ = fmt.Fprint(w, fill(first, width, style)+"\n"+fill(second, width, style))
+	return strings.Join(append(lines, fill(second, width, style)), "\n")
+}
+
+// partOffsets is where each of the parts wrap cut text into starts in it, in
+// bytes, as the filter counts its matches. wrap drops the spaces it breaks
+// at, so each part is looked for from where the one before it ended.
+func partOffsets(text string, parts []string) []int {
+	out := make([]int, len(parts))
+	from := 0
+	for i, part := range parts {
+		if at := strings.Index(text[from:], part); at >= 0 {
+			from += at
+		}
+		out[i] = from
+		from = min(from+len(part), len(text))
+	}
+	return out
 }
 
 // listedRank is the order of the states on the agent list: the agents that
@@ -222,9 +314,7 @@ func agentItems(views []revier.ProjectView, details map[agentKey]revier.AgentDet
 	var items []agentItem
 	for _, v := range views {
 		for _, a := range v.Agents {
-			d := details[keyOf(a)]
-			text, titled := summary(a, d)
-			items = append(items, agentItem{agent: a, project: v.Project, detail: d, text: text, titled: titled, age: shortAgo(now, d.At)})
+			items = append(items, newAgentItem(a, v.Project, details[keyOf(a)], now))
 		}
 	}
 	timed := func(s revier.Status) bool { return s == revier.StatusAttention || s == revier.StatusIdle }
@@ -514,8 +604,8 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
-	if it.agent.State.Name != "" {
-		line("Name", printable(harnessOf(it.agent)+":"+it.agent.State.Name), th.Path)
+	if name := it.name(); name != "" {
+		line("Name", name, th.Path)
 	}
 	if at := it.detail.At; !at.IsZero() {
 		line("Last", spokeAt(now, at), th.Path)

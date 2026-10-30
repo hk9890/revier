@@ -51,11 +51,12 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 }
 
 // A row is the agent's state and what it is on, without its harness, over
-// its project; the age of what it said last stands at the row's right end.
+// its project; the age of what it said last stands at the row's right end,
+// and the name its harness gives it under the age.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
-		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done", at: now.Add(-4 * time.Minute)})
+		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done", at: now.Add(-4 * time.Minute), name: "alpha-a0"})
 	all := lines(m)
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
@@ -68,8 +69,39 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	if !strings.HasSuffix(strings.TrimSpace(first), "4m") {
 		t.Errorf("row = %q, want the age at its right end", first)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(second), " alpha") || column(second, "alpha") != column(first, "Taskmgr tickets") {
-		t.Errorf("second line = %q, want the project under the summary of %q", second, first)
+	if column(second, "alpha") != column(first, "Taskmgr tickets") || strings.Contains(second, "claude") {
+		t.Errorf("second line = %q, want the project under the summary of %q, and no harness", second, first)
+	}
+	if end := strings.TrimRight(second, " "); !strings.HasSuffix(end, " alpha-a0") || column(second, "alpha-a0")+len("alpha-a0") != column(first, "4m")+len("4m") {
+		t.Errorf("second line = %q, want the name ending under the age of %q", second, first)
+	}
+}
+
+// The project pane's Agents draw a row as the agent list does: the state, what
+// the agent is on and its age, over its worktree and its name. The project,
+// which every row there shares, is left out, and so is a second line that
+// would be blank.
+func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
+	m, _, _ := listedSurface(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done",
+			at: time.Now().Add(-4 * time.Minute), name: "alpha-a0", dir: "/p/alpha/.claude/worktrees/delete-key"})
+	rows := strings.Split(pane(m.Said()), "\n")
+	var first, second string
+	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i >= 0 && i+1 < len(rows) {
+		first, second = rows[i], rows[i+1]
+	}
+	if !strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
+		t.Errorf("first line = %q, want the state, the summary and the age, and no harness", first)
+	}
+	if !strings.HasPrefix(second, "delete-key") || !strings.HasSuffix(second, " alpha-a0") {
+		t.Errorf("second line = %q, want the worktree alone, and the name", second)
+	}
+
+	// The Screen heading's blank line follows the row at once.
+	m, _, _ = listedSurface(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets"})
+	rows = strings.Split(pane(m), "\n")
+	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i < 0 || i+2 >= len(rows) || rows[i+1] != "" || !strings.HasPrefix(rows[i+2], "Screen") {
+		t.Errorf("pane = %q, want no second line for an agent with no worktree and no name", rows)
 	}
 }
 
@@ -83,7 +115,7 @@ func TestAnAgentInAWorktreeNamesItBesideItsProject(t *testing.T) {
 	if !strings.Contains(body, "alpha · delete-key") {
 		t.Errorf("no row names the worktree:\n%s", body)
 	}
-	if strings.Count(body, "alpha ·") != 1 {
+	if strings.Count(body, "alpha · ") != 1 {
 		t.Errorf("an agent in the project's own directory names a directory:\n%s", body)
 	}
 }
@@ -347,12 +379,12 @@ func TestTheAgentPaneNamesTheAgentAndItsProject(t *testing.T) {
 }
 
 // The pane says the address revier reaches the agent by, and the name its
-// harness gives it, as harness:name; an agent its harness names nothing has
-// no such line.
+// harness gives it, under the harness line; an agent its harness names
+// nothing has no such line.
 func TestTheAgentPaneSaysTheAddressAndTheHarnessName(t *testing.T) {
 	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one", name: "alpha-a0"})
 	body := pane(m)
-	for _, want := range []string{"Address  alpha:home:1", "Name     claude:alpha-a0"} {
+	for _, want := range []string{"Address  alpha:home:1", "Harness  claude", "Name     alpha-a0"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("pane has no %q:\n%s", want, body)
 		}
@@ -368,7 +400,7 @@ func TestTheAgentPaneSaysTheAddressAndTheHarnessName(t *testing.T) {
 func TestTheAgentPaneDrawsTheHarnessNameAsPlainText(t *testing.T) {
 	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one", name: "\x1b[31mred\x07\nline"})
 	body := pane(m)
-	if !strings.Contains(body, "Name     claude:redline") || strings.Contains(body, "\x07") {
+	if !strings.Contains(body, "Name     redline") || strings.Contains(body, "\x07") {
 		t.Errorf("pane draws the name with its control text:\n%q", body)
 	}
 }

@@ -112,17 +112,12 @@ func (m *Model) endPaneSearch() {
 	}
 }
 
-// agentRow is one row of the pane's Agents section. matches are the byte
-// positions of its label the query matched, for the highlight.
+// agentRow is one row of the pane's Agents section: the agent list's row of
+// the agent, so the two read alike. matches are the byte positions of its
+// filterValue in the pane the query matched, for the highlight.
 type agentRow struct {
-	agent   revier.AgentView
+	agentItem
 	matches []int
-}
-
-// label is what the agent query matches: the harness, and what the agent is
-// doing, which is where a conversation's name shows.
-func (r agentRow) label() string {
-	return harnessOf(r.agent) + " " + r.agent.State.Activity
 }
 
 // same reports whether two rows are one agent, whatever the query matched.
@@ -148,9 +143,10 @@ func (m Model) agentRows() []agentRow {
 	}
 	all := make([]agentRow, len(v.Agents))
 	labels := make([]string, len(v.Agents))
+	now := m.now()
 	for i, a := range v.Agents {
-		all[i] = agentRow{agent: a}
-		labels[i] = all[i].label()
+		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], now)}
+		labels[i] = all[i].filterValue(true)
 	}
 	if m.afilter == "" {
 		return all
@@ -181,5 +177,5 @@ func (m Model) goAgentRow(i int) tea.Cmd {
 }
 
 // lineSpan is the pane lines a row takes, start inclusive and end exclusive:
-// an agent's row wraps its activity onto as many lines as it needs.
+// an agent's row wraps what it is on onto as many lines as it needs (agentLines).
 type lineSpan struct{ start, end int }

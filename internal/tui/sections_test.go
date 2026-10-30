@@ -154,6 +154,17 @@ func TestTypingInAgentsFiltersThemAndEnterGoesToTheAgent(t *testing.T) {
 	}
 }
 
+// The agent query matches what the rows draw: the project, which every row
+// shares and no row draws, matches no agent.
+func TestTheAgentQueryDoesNotMatchTheProject(t *testing.T) {
+	_, m := agentWorld(t)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "demo")
+	if body := pane(m); strings.Contains(body, "fix-remote-work") || strings.Contains(body, "UX and naming") {
+		t.Errorf("agent query 'demo' should match no agent of demo:\n%s", body)
+	}
+}
+
 // Esc clears the query of the section the cursor is in, and a second Esc
 // takes the cursor back to the projects.
 func TestEscClearsTheSectionsQueryThenGoesBack(t *testing.T) {
