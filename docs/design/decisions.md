@@ -865,3 +865,12 @@ Claude Code, which takes the directory it starts in as its project, could then
 enter no other worktree. An agent tab now starts where the project's agent tab
 starts, unless the key or the command names a directory; a second agent in the
 same worktree takes `--dir`.
+
+### D159 — a key pressed in a tmux pane reaches tmux, whichever runtime comes first
+
+Extends D148. One process has one runtime, the first of the list that works,
+and on a desktop that is kitty, which holds no tmux pane: the tmux key failed
+wherever kitty was installed. A tmux pane id says which runtime holds it, so a
+key given one takes tmux wherever the list names tmux before `none`.
+Rejected: choosing tmux wherever `$TMUX` is set, which moves every command run
+in a tmux pane, and a panel no runtime holds taken as outside a workspace.

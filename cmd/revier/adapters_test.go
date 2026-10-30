@@ -95,6 +95,37 @@ func TestAConfiguredProbeRunsBeforeHerdrAndOpencode(t *testing.T) {
 	}
 }
 
+// A key pressed in a tmux pane reaches tmux, also where kitty comes first and
+// would probe as usable: kitty holds no tmux pane, and the key failed.
+func TestATmuxPaneNarrowsTheRuntimeToTmux(t *testing.T) {
+	cases := []struct {
+		order, want []string
+	}{
+		{defaultRuntimeOrder, []string{"tmux"}},
+		{[]string{"kitty", "tmux"}, []string{"tmux"}},
+		{[]string{"kitty"}, []string{"kitty"}},
+		{[]string{"kitty", hostNone, "tmux"}, []string{"kitty", hostNone, "tmux"}},
+		{[]string{hostNone}, []string{hostNone}},
+		{nil, nil},
+	}
+	for _, c := range cases {
+		if got := atTmuxPane(c.order); !slices.Equal(got, c.want) {
+			t.Errorf("atTmuxPane(%q) = %q, want %q", c.order, got, c.want)
+		}
+	}
+
+	kitty := hosttest.NewRuntime("kitty")
+	tmux := hosttest.NewRuntime("tmux")
+	adapters := map[string]revier.Runtime{"kitty": kitty, "tmux": tmux}
+	got, err := selectHost(context.Background(), "runtime", nil, atTmuxPane(defaultRuntimeOrder), adapters)
+	if err != nil {
+		t.Fatalf("selectHost: %v", err)
+	}
+	if got == nil || got.Name() != "tmux" {
+		t.Fatalf("selected %v, want tmux though kitty probes as usable", got)
+	}
+}
+
 // selectHost skips a default it cannot find without a word, so a name spelled
 // one way in the order and another in the registry drops that adapter, and an
 // adapter left out of the order is never tried.

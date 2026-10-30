@@ -370,7 +370,7 @@ func cmdAgentNew(out io.Writer, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	a, err := newApp(ctx, out)
+	a, err := newAppAt(ctx, out, *panel)
 	if err != nil {
 		return err
 	}

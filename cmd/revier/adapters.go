@@ -66,15 +66,20 @@ var (
 // express this: it means "search the defaults".
 const hostNone = "none"
 
-// selectHosts picks the adapters for this machine.
+// selectHosts picks the adapters for this machine, for a command a terminal
+// key runs in panel, or "" for any other command.
 //
 // A configured list is a preference order: each name is tried until one probes
 // successfully. If none does, that is a hard error naming all of them - the
 // user asked for these by name, and silently falling back to an adapter they
 // did not list would hide a broken setup. With no list configured the defaults
 // are searched and finding nothing is survivable.
-func selectHosts(ctx context.Context, cfg *config.Config) (revier.Runtime, revier.WindowController, error) {
-	rt, err := selectHost(ctx, "runtime", cfg.Hosts.Runtime, defaultRuntimeOrder, runtimeAdapters())
+func selectHosts(ctx context.Context, cfg *config.Config, panel string) (revier.Runtime, revier.WindowController, error) {
+	want, defaults := cfg.Hosts.Runtime, defaultRuntimeOrder
+	if tmux.IsPane(panel) {
+		want, defaults = atTmuxPane(want), atTmuxPane(defaults)
+	}
+	rt, err := selectHost(ctx, "runtime", want, defaults, runtimeAdapters())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,6 +88,23 @@ func selectHosts(ctx context.Context, cfg *config.Config) (revier.Runtime, revie
 		return nil, nil, err
 	}
 	return rt, win, nil
+}
+
+// atTmuxPane narrows a runtime list to tmux for a key pressed in a tmux pane,
+// which only tmux holds. Without it the first runtime of the list that works
+// wins, and on a desktop that is kitty, which finds no such panel. A list that
+// turns the runtime off before it names tmux, or never names it, stays as it
+// is.
+func atTmuxPane(order []string) []string {
+	for _, name := range order {
+		switch name {
+		case "tmux":
+			return []string{"tmux"}
+		case hostNone:
+			return order
+		}
+	}
+	return order
 }
 
 // hostProblems is every name in [hosts] that no compiled-in adapter carries,

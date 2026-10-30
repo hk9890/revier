@@ -52,6 +52,7 @@ bind-key S run-shell -b 'revier shell new --panel "#{pane_id}" --dir "#{pane_cur
 
 The shell window starts in the pane's directory. The agent window starts in
 the project, so from a worktree the agent can still enter any worktree.
+Where kitty is your runtime for everything else, both keys still reach tmux.
 
 In a session that is no project's workspace, both keys open a plain shell
 window there, or nothing if you set
