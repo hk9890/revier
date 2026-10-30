@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -67,7 +66,13 @@ var nameTemplate = regexp.MustCompile(`\{\{\s*\.Name\b`)
 // that writes the name out everywhere stays consistent with itself, and a
 // launch or a panel command is nothing Match reads.
 func writesName(targets []revier.Target, name revier.ProjectName) (revier.TargetName, string, bool) {
-	forms := []string{string(name), regexp.QuoteMeta(string(name))}
+	// The name counts only as a word of its own: a name that is part of a
+	// longer word, as "idea" is of the class "^jetbrains-idea" that `revier
+	// new` writes, is not the name written out.
+	var forms []*regexp.Regexp
+	for _, form := range []string{string(name), regexp.QuoteMeta(string(name))} {
+		forms = append(forms, regexp.MustCompile(`(^|[^\w-])`+regexp.QuoteMeta(form)+`($|[^\w-])`))
+	}
 	for _, t := range targets {
 		for _, r := range []*revier.Realization{t.Runtime, t.Window} {
 			if r == nil {
@@ -80,7 +85,7 @@ func writesName(targets []revier.Target, name revier.ProjectName) (revier.Target
 					continue
 				}
 				for _, form := range forms {
-					if literal == "" && strings.Contains(v, form) {
+					if literal == "" && form.MatchString(v) {
 						literal = v
 					}
 				}

@@ -75,6 +75,22 @@ func TestRenameRefusesAFileThatWritesTheNameOut(t *testing.T) {
 	}
 }
 
+// A name that is only part of a longer word in a pattern beside {{.Name}} is
+// not the name written out: the file `revier new` writes for "a" or "idea"
+// matches the editor's class "^jetbrains-idea", and is renamed.
+func TestRenameTakesTheNameOnlyAsAWordOfItsOwn(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []revier.ProjectName{"a", "idea", "jetbrains"} {
+		root := t.TempDir()
+		if _, err := config.Create(root, name, dir, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := config.Rename(root, name, "b", config.Inherited{}); err != nil {
+			t.Errorf("Rename(%s): %v, want the file revier new wrote renamed", name, err)
+		}
+	}
+}
+
 // A project named after a program its file runs - claude, with a panel that
 // runs claude - is renamed like any other: a launch or a panel command is
 // nothing Match reads, and a realization that writes the name out everywhere
