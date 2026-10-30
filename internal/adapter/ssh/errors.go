@@ -129,7 +129,7 @@ func isOlder(low string) bool {
 
 // command is the revier command args run, without its flags and arguments:
 // "shell new" of `revier shell new -p far`, and "agent focus" of `revier agent
-// focus far:1`. A revier command is one word, or a group and one word.
+// focus far:agent:1`. A revier command is one word, or a group and one word.
 func command(args []string) string {
 	var words []string
 	for _, a := range args[1:min(len(args), 3)] {
