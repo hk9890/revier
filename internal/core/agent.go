@@ -128,13 +128,6 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 // several agents run in what addr names, the only one that is no named
 // agent's is the default agent, and the one meant (D145).
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
-	bound := c.state().Bound[p.Name]
-	// Agents are panels, and only the runtime and the served processes
-	// list instances with panels.
-	snap, err := c.answered(ctx, nameOf(c.Runtime), nameOf(c.Served))
-	if err != nil {
-		return Agent{}, err
-	}
 	target, id, byPanel := strings.Cut(addr, ":")
 	only := revier.TargetName(target)
 	where := string(p.Name)
@@ -144,10 +137,16 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 			return Agent{}, fmt.Errorf("%s has no target %q: an agent's address is <project>, <project>:<target> or <project>:<target>:<panel>", p.Name, target)
 		}
 	}
+	bound := c.state().Bound[p.Name]
+	// Agents are panels, and only the runtime and the served processes
+	// list instances with panels.
+	snap, err := c.answered(ctx, nameOf(c.Runtime), nameOf(c.Served))
+	if err != nil {
+		return Agent{}, err
+	}
 	scope := c.running(snap, p, bound, only)
-	named := addressing{project: p.Name, places: c.places(snap, p, bound)}
 	if p.Remote != nil {
-		return c.linkAgent(ctx, p, where, only, revier.PanelID(id), byPanel, scope, snap, named)
+		return c.linkAgent(ctx, p, where, only, revier.PanelID(id), byPanel, scope, snap, bound)
 	}
 	if only != "" && len(scope) == 0 {
 		return Agent{}, fmt.Errorf("%s is not running", where)
@@ -180,21 +179,16 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 	if def, ok := defaultAgent(found); ok && !byPanel {
 		return def, nil
 	}
-	return Agent{}, named.ambiguous(where, found)
-}
-
-// addressing spells the address of each agent of one project.
-type addressing struct {
-	project revier.ProjectName
-	places  places
+	return Agent{}, c.ambiguous(snap, p, bound, where, found)
 }
 
 // ambiguous refuses where, which names every agent of found, with the
 // address of each.
-func (n addressing) ambiguous(where string, found []Agent) error {
+func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string, found []Agent) error {
+	pl := c.places(snap, p, bound)
 	addrs := make([]string, len(found))
 	for i, a := range found {
-		addrs[i] = Address(n.project, n.places.of(a.Ref, a.Panel.ID), a.Panel.ID)
+		addrs[i] = Address(p.Name, pl.of(a.Ref, a.Panel.ID), a.Panel.ID)
 	}
 	return fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
 }
@@ -216,7 +210,19 @@ type places struct {
 }
 
 func (c *Core) places(snap snapshot, p Project, bound Bindings) places {
-	pl := places{tabs: map[string]revier.TargetName{}, refs: map[string]revier.TargetName{}}
+	pl := c.tabPlaces(snap, p, bound)
+	pl.refs = map[string]revier.TargetName{}
+	for _, h := range c.running(snap, p, bound, "") {
+		pl.refs[key(h.inst.Ref)] = h.target
+	}
+	return pl
+}
+
+// tabPlaces is places of the open tabs alone. The survey labels each agent
+// with the target it found the agent's instance for, in the order running
+// walks them, and lays these over it, so it walks the targets once.
+func (c *Core) tabPlaces(snap snapshot, p Project, bound Bindings) places {
+	pl := places{tabs: map[string]revier.TargetName{}}
 	for i, t := range p.Targets {
 		if !p.isTab(i) {
 			continue
@@ -226,9 +232,6 @@ func (c *Core) places(snap snapshot, p Project, bound Bindings) places {
 				pl.tabs[key(h.inst.Ref)+"\x00"+string(panel.ID)] = t.Name
 			}
 		}
-	}
-	for _, h := range c.running(snap, p, bound, "") {
-		pl.refs[key(h.inst.Ref)] = h.target
 	}
 	return pl
 }
@@ -242,10 +245,13 @@ func (pl places) of(ref revier.TargetRef, panel revier.PanelID) revier.TargetNam
 	return pl.refs[key(ref)]
 }
 
-// label sets the target of each agent.
+// label sets the target of each agent that pl places, and leaves the target
+// of any other as it is.
 func (pl places) label(agents []revier.AgentView) {
 	for i, a := range agents {
-		agents[i].Target = pl.of(a.Ref, a.Panel)
+		if t := pl.of(a.Ref, a.Panel); t != "" {
+			agents[i].Target = t
+		}
 	}
 }
 

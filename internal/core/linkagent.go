@@ -71,9 +71,11 @@ func (c *Core) tags(snap snapshot) map[revier.PanelID]shown {
 // panel here shows keeps the host's name for it, its tag,
 // and loses its ref: the ref is an instance of a host on that machine, which
 // nothing here can act on, and a runtime there named as the one here would
-// otherwise pass for it (here).
+// otherwise pass for it (here). Every agent loses the host's target, which
+// names a target there; places labels the agent with a target here.
 func (c *Core) localise(tags map[revier.PanelID]shown, agents []revier.AgentView) {
 	for i, a := range agents {
+		agents[i].Target = ""
 		at, ok := tags[a.Panel]
 		if !ok {
 			agents[i].Ref = revier.TargetRef{}
@@ -150,7 +152,7 @@ func (c *Core) hostAgents(ctx context.Context, p Project) ([]revier.AgentView, e
 // shows, as Agent does: with only set, among the panels scope lists for that
 // target, which are its instance's or, for a tab, the tab's alone; with
 // byPanel, the panel here with the id id among them.
-func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revier.TargetName, id revier.PanelID, byPanel bool, scope []held, snap snapshot, named addressing) (Agent, error) {
+func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revier.TargetName, id revier.PanelID, byPanel bool, scope []held, snap snapshot, bound Bindings) (Agent, error) {
 	agents, err := c.hostAgents(ctx, p)
 	if err != nil {
 		return Agent{}, err
@@ -186,7 +188,7 @@ func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revi
 		if def, ok := defaultAgent(found); ok && !byPanel {
 			return def, nil
 		}
-		return Agent{}, named.ambiguous(where, found)
+		return Agent{}, c.ambiguous(snap, p, bound, where, found)
 	case byPanel:
 		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", where, ErrNotAgent)
 	case elsewhere > 0:

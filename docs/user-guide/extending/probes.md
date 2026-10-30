@@ -53,6 +53,7 @@ Print one JSON object and exit 0 within 500 ms:
 | `activity` | no | One line about the work, shown on the agent's row. |
 | `dir` | no | The agent's directory when it is not the project's, for example a worktree. |
 | `session` | no | The conversation id. `revier events` records the agent by it. |
+| `name` | no | What the harness calls the agent; it need not be unique. The agent list's pane shows it as `<harness>:<name>`. |
 
 A non-zero exit, bad JSON, an unknown `status` or a run over 500 ms makes the
 panel `unknown`; the log has the reason and the probe's stderr. revier runs
