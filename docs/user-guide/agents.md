@@ -74,9 +74,8 @@ panel of its layout. With a name, the tab's agent panel runs that
 [named agent](configuration.md#named-agents), and the tab keeps the shell.
 
 Without `-p` or `--panel`, the project is the one `--dir` is in, else the
-one the current directory is in. A directory in no project is an error, not
-the project of the focused window: name the project with `-p`. The workspace
-must be open already. With `--panel`, a window that is no project's workspace
+one the current directory is in. A directory in no project is an error. The
+workspace must be open already. With `--panel`, a window that is no project's workspace
 gets a plain shell tab beside it, or nothing if you set
 [`outside`](configuration.md#terminal) to `none`. To bind these commands to a
 kitty key, see [kitty](integrations/kitty.md).

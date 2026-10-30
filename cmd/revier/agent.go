@@ -62,9 +62,10 @@ shell, the tab a restore adds for an agent opened beside the workspace. With
 <name> the tab's agent panel runs that named agent, and an address of the
 project alone still names the default agent among them.
 Without -p or --panel the project is the one --dir is in, else the one this
-directory is in; a directory in no project is an error, which exits 3. It goes to the new agent and raises its window; with
---no-focus it does neither, and prints the address a script reaches the
-agent by, which names an agent once the harness in the tab has started.
+directory is in; a directory in no project is an error, which exits 3. It
+goes to the new agent and raises its window; with --no-focus it does
+neither, and prints the address a script reaches the agent by, which names
+an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
 [terminal] outside says: a plain shell tab beside the window, or nothing.
 
