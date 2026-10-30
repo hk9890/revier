@@ -415,12 +415,15 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 	if !ok {
 		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
 	}
-	shell := revier.PanelSpec{Kind: revier.PanelShell, Dir: dir}
-	opened, err := opener.OpenTab(ctx, w.Ref, revier.Realization{Dir: dir, Panels: []revier.PanelSpec{shell}}, nil)
+	plain := revier.Realization{Dir: dir, Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Dir: dir}}}
+	opened, err := opener.OpenTab(ctx, w.Ref, plain, nil)
 	if err != nil {
 		return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), err)
 	}
 	if err := opener.FocusPanel(ctx, w.Ref, opened); err != nil {
+		if ended(ctx, c.Runtime, w.Ref, opened, plain.Panels) {
+			return fmt.Errorf("%s: plain tab: %w", c.Runtime.Name(), panelstart.ExitedAtOnce(plain.Panels[0]))
+		}
 		return fmt.Errorf("%s: focus the plain tab: %w", c.Runtime.Name(), err)
 	}
 	return nil
