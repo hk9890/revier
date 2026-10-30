@@ -74,7 +74,9 @@ exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
 for the agent, which a survey there reports it under.
 
-wait prints the status it ended on. prompt types one line and submits it,
+wait prints the status it ended on. On a panel that is not an agent's, such
+as the one agent new --no-focus prints before its harness has started, wait
+waits for the harness to start, within --timeout. prompt types one line and submits it,
 and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
 waits for that turn. It refuses a panel that is not an agent's, an agent
@@ -134,6 +136,12 @@ func cmdAgent(out io.Writer, args []string) error {
 // covers the host probes and the lookup as well as the wait, since a host that
 // never answers is a wait that never ends.
 func cmdAgentWait(out io.Writer, args []string) error {
+	return agentWait(out, args, newApp)
+}
+
+// agentWait is cmdAgentWait on the app that open makes: a test makes it on a
+// fake host.
+func agentWait(out io.Writer, args []string, open func(context.Context, io.Writer) (*app, error)) error {
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
@@ -156,8 +164,11 @@ func cmdAgentWait(out io.Writer, args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
 	defer cancel()
-	state, err := waitFor(ctx, out, pos[0], statuses)
+	state, err := waitFor(ctx, out, open, pos[0], statuses)
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(err, core.ErrNotAgent) {
+			return fmt.Errorf("%w after %gs waiting for %s to be %s; it is still not an agent's: %w", errWaitTimeout, *timeout, pos[0], *until, err)
+		}
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
 	if err != nil {
@@ -169,12 +180,12 @@ func cmdAgentWait(out io.Writer, args []string) error {
 
 // waitFor finds the agent an address names and waits for one of the statuses.
 // The state is the last one read, zero when the agent was never found.
-func waitFor(ctx context.Context, out io.Writer, address string, until []revier.Status) (revier.AgentState, error) {
-	a, err := newApp(ctx, out)
+func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.Writer) (*app, error), address string, until []revier.Status) (revier.AgentState, error) {
+	a, err := open(ctx, out)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	ag, err := a.agent(ctx, address)
+	ag, err := a.startedAgent(ctx, address)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
@@ -183,6 +194,33 @@ func waitFor(ctx context.Context, out io.Writer, address string, until []revier.
 		return state, fmt.Errorf("%s: %w", address, err)
 	}
 	return state, nil
+}
+
+// startedAgent is the agent an address names, once its harness has started.
+// The panel of `agent new --no-focus` is a shell until then, so a panel that
+// is not an agent's is looked up again until ctx ends, and the refusal it
+// ended on is returned. Only a panel address is refused with ErrNotAgent: an
+// address with no agent in it fails at once, as prompt does.
+func (a *app) startedAgent(ctx context.Context, address string) (core.Agent, error) {
+	var notAgent error
+	for {
+		ag, err := a.agent(ctx, address)
+		switch {
+		case errors.Is(err, core.ErrNotAgent):
+			notAgent = err
+		case err != nil && ctx.Err() != nil && notAgent != nil:
+			// The deadline cut the lookup short: the panel is still what the
+			// last lookup found.
+			return core.Agent{}, notAgent
+		default:
+			return ag, err
+		}
+		select {
+		case <-ctx.Done():
+			return core.Agent{}, notAgent
+		case <-time.After(core.AgentPoll):
+		}
+	}
 }
 
 func cmdAgentPrompt(out io.Writer, args []string) error {

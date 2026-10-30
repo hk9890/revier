@@ -358,6 +358,23 @@ func (f *Fake) Retitle(panel revier.PanelID, title string) {
 	}
 }
 
+// Replace puts panel in place of the panel of its id wherever it is listed,
+// as a shell does when it starts a program in its foreground.
+func (f *Fake) Replace(panel revier.Panel) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.instances {
+		// A fresh slice: a listing already handed out shares the old one.
+		panels := append([]revier.Panel(nil), f.instances[i].Panels...)
+		for j := range panels {
+			if panels[j].ID == panel.ID {
+				panels[j] = panel
+			}
+		}
+		f.instances[i].Panels = panels
+	}
+}
+
 // Add registers a live instance and returns its ref.
 func (f *Fake) Add(title, class string, panels ...revier.Panel) revier.TargetRef {
 	f.mu.Lock()

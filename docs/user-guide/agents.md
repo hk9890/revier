@@ -44,7 +44,9 @@ the agent list.
 - `wait --until` takes `idle`, `running`, `attention`, or `stopped` (idle or
   attention: the turn stopped, the agent did not exit). A `--timeout` that
   runs out has its own [exit code](cli.md#exit-codes), so a script can tell a
-  timeout from a failure.
+  timeout from a failure. On an address `agent new --no-focus` printed, `wait`
+  first waits for the agent to start in its panel, within the same
+  `--timeout`, so you can run it at once.
 - `read` needs a harness whose conversation revier can read, which today is
   Claude Code. `--screen` works for every harness.
 - `send-keys` types keys whatever the agent does, so read the screen first.
