@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -117,5 +118,69 @@ func TestListOfKnownAndUnknownNamesListsTheKnown(t *testing.T) {
 	_, err := stderrOf(t, func() error { return cmdList(ctx, a, []string{"--json", "zzzz-no-such-project"}) })
 	if !errors.Is(err, errNoProjectNamed) || out.Len() != 0 {
 		t.Errorf("list of an unknown name alone: err = %v, stdout = %q; want the failure and nothing", err, out.String())
+	}
+}
+
+// --agents is one row per agent, with the address `revier agent` takes. A
+// link's agent is addressed by the link's name, not its label, and an agent
+// no target holds has no address, in the table or in the JSON.
+func TestListAgentsIsOneRowPerAgentWithItsAddress(t *testing.T) {
+	link := revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far"}}
+	views := []revier.ProjectView{
+		{Project: revier.Project{Name: "demo"}, Running: true, Agents: []revier.AgentView{
+			{Panel: "7", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "tests"}},
+			{Panel: "8", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Dir: "/x/demo/wt"}},
+		}},
+		{Project: link, Running: true, Agents: []revier.AgentView{
+			{Panel: "2", Target: "agent", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}},
+			{Panel: "20", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}},
+		}},
+	}
+
+	rows := agentRows(views)
+	var addresses []string
+	for _, r := range rows {
+		addresses = append(addresses, r.Address)
+	}
+	if want := []string{"demo:home:7", "demo:home:8", "far:agent:2", ""}; !slices.Equal(addresses, want) {
+		t.Errorf("addresses = %q, want %q", addresses, want)
+	}
+	encoded, err := json.Marshal(rows[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"address"`) || !strings.Contains(string(encoded), `"panel":"20"`) {
+		t.Errorf("the agent no target holds = %s, want its panel and no address", encoded)
+	}
+
+	var out bytes.Buffer
+	a := &app{out: &out}
+	if err := a.agentTable(views); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 || !strings.HasPrefix(lines[1], "demo:home:7 ") || !strings.Contains(lines[2], "/x/demo/wt") ||
+		!strings.HasPrefix(lines[4], "- (far panel 20) ") || strings.Contains(out.String(), "@buildbox") {
+		t.Errorf("table =\n%s\nwant a header and one row per agent", out.String())
+	}
+}
+
+// `revier list --agents` lists the agents of the projects asked for, from the
+// survey.
+func TestListAgentsListsTheSurveyedAgents(t *testing.T) {
+	a := listApp(t)
+	ctx := context.Background()
+
+	out := output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "--json"}) })
+	var rows []agentRow
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Address != "demo:home:7" || rows[0].Activity != "Dtop authentication options" {
+		t.Errorf("rows = %+v, want demo's agent at demo:home:7", rows)
+	}
+	out = output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "tm"}) })
+	if out != "" {
+		t.Errorf("list --agents tm = %q, want nothing for a project with no agent", out)
 	}
 }

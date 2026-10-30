@@ -31,15 +31,16 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json [--conversations]] [--match <word> | name..]
+  revier list [--json [--conversations]] [--agents] [--match <word> | name..]
                                 what the TUI shows, printed once, or for the
                                 named projects, exiting 1 after them when a
                                 name is no project's; --match lists the
                                 projects whose name, directory, repository,
                                 name on a link's host or agent activity holds
                                 the word, or whose agent the harness names so;
-                                --conversations names the conversation each
-                                agent holds
+                                --agents prints one row per agent, with the
+                                address revier agent takes; --conversations
+                                names the conversation each agent holds
   revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
                                 missing directory is cloned from git_url; --attach

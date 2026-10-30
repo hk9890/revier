@@ -34,7 +34,7 @@ usage:
   revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>:<target>:<panel>, the agent's address as
-             revier list --json and agent new --no-focus give it; or
+             revier list --agents and agent new --no-focus give it; or
              <project> or <project>:<target>, for the only agent there, or
              the default agent among named ones
   --until    idle, running, attention, or stopped (idle or attention)
