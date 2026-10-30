@@ -166,6 +166,31 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 	}
 }
 
+// A link's agent whose tab moved to a window no target of the link holds is
+// shown, and has no address: the refusal names its panel and suggests no
+// address that would itself be refused (decisions.md D154).
+func TestALinksAgentInNoTargetHasNoAddress(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusIdle)}})
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("far", "", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Command: []string{"ssh", "-t", "buildbox"}})
+	rt.Add("moved away", "", revier.Panel{ID: "11", Kind: revier.PanelTool, PID: 4300, Command: []string{"ssh", "-t", "buildbox"}})
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	p := linkProject(t)
+
+	targets := map[revier.PanelID]revier.TargetName{}
+	for _, v := range agentsOf(t, c, p) {
+		targets[v.Panel] = v.Target
+	}
+	if len(targets) != 2 || targets["9"] != "home" || targets["11"] != "" {
+		t.Errorf("targets = %v, want 9 in home and 11 shown in none", targets)
+	}
+	_, err := c.Agent(context.Background(), p, "")
+	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "use one of far:home:9; no target of far holds panel 11") || strings.Contains(err.Error(), "far::") {
+		t.Errorf("err = %v, want far:home:9 suggested and panel 11 named without an address", err)
+	}
+}
+
 // Beside a link's named agents, the link's address names its default agent,
 // as a local project's does (decisions.md D145): the one panel here that
 // carries no named agent's mark.

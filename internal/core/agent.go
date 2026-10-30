@@ -183,14 +183,27 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 }
 
 // ambiguous refuses where, which names every agent of found, with the
-// address of each.
+// address of each. An agent no target holds - a link's tab moved to another
+// window - has none, and is named by its panel, which only the agent list
+// reaches (decisions.md D154).
 func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string, found []Agent) error {
 	pl := c.places(snap, p, bound)
-	addrs := make([]string, len(found))
-	for i, a := range found {
-		addrs[i] = Address(p.Name, pl.of(a.Ref, a.Panel.ID), a.Panel.ID)
+	var addrs, loose []string
+	for _, a := range found {
+		if t := pl.of(a.Ref, a.Panel.ID); t != "" {
+			addrs = append(addrs, Address(p.Name, t, a.Panel.ID))
+		} else {
+			loose = append(loose, a.Panel.ID.String())
+		}
 	}
-	return fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
+	var hints []string
+	if len(addrs) > 0 {
+		hints = append(hints, "use one of "+strings.Join(addrs, ", "))
+	}
+	if len(loose) > 0 {
+		hints = append(hints, fmt.Sprintf("no target of %s holds panel %s, which only the agent list reaches", p.Name, strings.Join(loose, ", ")))
+	}
+	return fmt.Errorf("%s %w: %s", where, ErrAmbiguous, strings.Join(hints, "; "))
 }
 
 // Address is an agent's address: its project, the target that holds it and

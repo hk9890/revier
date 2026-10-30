@@ -830,14 +830,14 @@ revier lists the projects; ssh's own failures are told apart by exit 255.
 
 ### D154 — an agent's one address is its project, its target and its panel
 
-`<project>:<target>:<panel>` names every agent once. The target names the
-process a panel id is unique in, which D75 carried as a ref no one types; a
-bare `<project>:<panel>` failed when two kitty processes held one project, and
-left some agents with no address at all. It is gone, not kept beside: a herdr
-panel id holds a colon. `<project>` and `<project>:<target>` stay for the
-default agent (D145). The survey labels each agent with its target, an open
-tab first, so a surface prints what `revier agent` resolves. A link's agent
-is addressed through the target here that shows it; no address crosses (D84).
+`<project>:<target>:<panel>` names an agent once: the target names the process
+a panel id is unique in, which D75 carried as a ref no one types. The bare
+`<project>:<panel>` failed when two kitty processes held one project; it is
+gone, as a herdr panel id holds a colon. `<project>` and `<project>:<target>`
+stay for the default agent (D145). The survey labels each agent, an open tab
+first, so a surface prints what `revier agent` resolves; a link's agent goes
+through the target here that shows it (D84). An agent no target holds - a
+link's tab moved away, a terminal attached by hand (D95) - has no address.
 
 ### D155 — a harness's name for an agent is shown, never used
 
