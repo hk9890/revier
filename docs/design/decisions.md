@@ -815,8 +815,8 @@ removed worktree did nothing, not even its fallback. The key now passes the
 panel alone, and revier reads the panel's directory from the runtime. A shell
 tab, the plain one outside a workspace too, starts in the directory a key
 passes, else the panel's, each only while it is a directory; else where the
-project's tab or the runtime starts it. Rejected: dropping the directory, so
-every shell tab from a worktree opened in the project; D158 does it for an agent.
+project's tab does, outside a workspace where the runtime does. Rejected:
+dropping the directory, so a shell tab from a worktree opened in the project.
 
 ### D154 — the remote screen lists the machines the user added
 
@@ -860,8 +860,8 @@ the cursor. Rejected: finding the line by its text, which rewording breaks.
 
 ### D158 — a terminal key's agent tab starts in the project, not in the panel's directory
 
-Extends D153. An agent pressed from a
-worktree started in that worktree, and Claude Code, which takes the directory
-it starts in as its project, could then enter no other worktree. An agent
-tab now starts where the project's agent tab starts, unless the key or the
-command names a directory; a second agent in the same worktree takes `--dir`.
+Extends D153. An agent pressed from a worktree started in that worktree, and
+Claude Code, which takes the directory it starts in as its project, could then
+enter no other worktree. An agent tab now starts where the project's agent tab
+starts, unless the key or the command names a directory; a second agent in the
+same worktree takes `--dir`.
