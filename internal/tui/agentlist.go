@@ -45,10 +45,11 @@ func switches(msg keyPress) bool {
 	return ok && c == switchChord
 }
 
-// agentItem is one row of the agent list: an agent, the project a panel of
-// which shows it, and what it said last. It is carried whole, so the delegate
-// renders from the item and looks nothing up: a row is drawn on every frame,
-// and the summary of an agent with no title is read out of its whole message.
+// agentItem is one row of the agent list, and of the project pane's Agents: an
+// agent, the project a panel of which shows it, and what it said last. It is
+// carried whole, so the delegate renders from the item and looks nothing up: a
+// row is drawn on every frame, and the summary of an agent with no title is
+// read out of its whole message.
 type agentItem struct {
 	agent   revier.AgentView
 	project revier.Project
@@ -103,10 +104,15 @@ func (i agentItem) worktree() string {
 	return ""
 }
 
-// where leads the row's second line: the project, and the worktree.
-func (i agentItem) where() string {
+// where leads the row's second line: the project, and the worktree. The
+// project pane leaves the project out, as every row there shares it.
+func (i agentItem) where(inPane bool) string {
+	wt := i.worktree()
+	if inPane {
+		return wt
+	}
 	out := printable(i.project.Label())
-	if wt := i.worktree(); wt != "" {
+	if wt != "" {
 		out += " · " + wt
 	}
 	return out
@@ -118,10 +124,16 @@ func (i agentItem) name() string {
 	return printable(i.agent.State.Name)
 }
 
-// FilterValue is what the query matches: what the agent is on, then the
-// second line as it reads, left to right.
+// filterValue is what a query over the rows matches: what the agent is on,
+// then the second line as it reads, left to right. It holds only what the row
+// draws, so every letter a query matches is lit.
+func (i agentItem) filterValue(inPane bool) string {
+	return i.text + " " + i.where(inPane) + " " + i.name()
+}
+
+// FilterValue is what the agent list's query matches.
 func (i agentItem) FilterValue() string {
-	return i.text + " " + i.where() + " " + i.name()
+	return i.filterValue(false)
 }
 
 // agentList is the surface's second list.
@@ -179,7 +191,7 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 // agentLines is an agent's row, in the agent list and in the project pane's
 // Agents alike: its state, what it is on and how long ago it spoke, over
 // where it works and the name its harness gives it, under the age. matches
-// are the byte positions of FilterValue the query matched. A selected or
+// are the byte positions of filterValue the query matched. A selected or
 // pointed-at row is lit on every line; cursor is whether a selected row
 // carries the cursor's bar.
 //
@@ -226,14 +238,18 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 		name = name.Bold(true)
 	}
 	parts := []string{ellipsis(it.text, room)}
-	if wrapped := wrap(it.text, room); inPane && len(wrapped) > 0 {
-		parts = wrapped
+	if inPane {
+		if wrapped := wrap(it.text, room); len(wrapped) > 0 {
+			parts = wrapped
+		}
 	}
 	lines := make([]string, 0, len(parts)+1)
 	for i, from := range partOffsets(it.text, parts) {
 		text := cell(highlight(parts[i], within(matches, from, len(parts[i])), style(name), style(th.Match)), room)
 		if i == 0 {
-			lines = append(lines, fill(prefix+state+text+age, width, style))
+			// Narrower than the state and the age, the line is cut, so a
+			// click lands on the row drawn under the pointer.
+			lines = append(lines, fill(clipTo(prefix+state+text+age, width), width, style))
 		} else {
 			lines = append(lines, fill(bar+space(indent-1)+text, width, style))
 		}
@@ -241,10 +257,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 
 	// The name stands under the age, the two ending at the same cell, and
 	// where gives way to it when the line is short of room.
-	where, from := it.where(), len(it.text)+1
-	if inPane {
-		where, from = it.worktree(), from+len(it.where())-len(it.worktree())
-	}
+	where, from := it.where(inPane), len(it.text)+1
 	if inPane && where == "" && it.name() == "" {
 		return strings.Join(lines, "\n")
 	}
@@ -253,7 +266,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	}
 	right := ""
 	if name := ellipsis(it.name(), width-indent-1); name != "" {
-		right = lit(name, len(it.text)+1+len(it.where())+1) + space(1)
+		right = lit(name, from+len(where)+1) + space(1)
 	}
 	room = width - indent - lipgloss.Width(right)
 	if right != "" {
@@ -591,8 +604,8 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
-	if it.agent.State.Name != "" {
-		line("Name", printable(it.agent.State.Name), th.Path)
+	if name := it.name(); name != "" {
+		line("Name", name, th.Path)
 	}
 	if at := it.detail.At; !at.IsZero() {
 		line("Last", spokeAt(now, at), th.Path)

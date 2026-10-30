@@ -38,9 +38,9 @@ type detailsMsg struct {
 
 // askDetails sends for what every agent of the project under the list's
 // cursor said last, and when: when another project comes under it, and again
-// on every survey. The pane draws none of it (decisions.md D125): which agent
-// it mirrors first depends on when each spoke. The read runs off the update
-// loop, so the screen never waits on it.
+// on every survey. The pane's agent rows draw it as the agent list's do, and
+// which agent the pane mirrors first depends on when each spoke (decisions.md
+// D125). The read runs off the update loop, so the screen never waits on it.
 //
 // The agent list asks for every agent on the surface instead: its rows stand
 // in the order the agents spoke in (D110).
@@ -101,7 +101,7 @@ func (m Model) detailsWanted() (revier.ProjectName, []revier.AgentView) {
 // since left is dropped, and so is one older than the answer already taken:
 // the asks are not answered in order. An agent the answer has nothing for
 // keeps what it said before, so one read that failed does not blank the row
-// of the agent list that shows it.
+// that shows it.
 func (m *Model) took(msg detailsMsg) {
 	if msg.project != m.aasked || msg.seq <= m.atook {
 		return

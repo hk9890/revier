@@ -114,7 +114,7 @@ func (m *Model) endPaneSearch() {
 
 // agentRow is one row of the pane's Agents section: the agent list's row of
 // the agent, so the two read alike. matches are the byte positions of its
-// FilterValue the query matched, for the highlight.
+// filterValue in the pane the query matched, for the highlight.
 type agentRow struct {
 	agentItem
 	matches []int
@@ -146,7 +146,7 @@ func (m Model) agentRows() []agentRow {
 	now := m.now()
 	for i, a := range v.Agents {
 		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], now)}
-		labels[i] = all[i].FilterValue()
+		labels[i] = all[i].filterValue(true)
 	}
 	if m.afilter == "" {
 		return all

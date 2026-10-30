@@ -97,9 +97,10 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 		t.Errorf("second line = %q, want the worktree alone, and the name", second)
 	}
 
+	// The Screen heading's blank line follows the row at once.
 	m, _, _ = listedSurface(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets"})
 	rows = strings.Split(pane(m), "\n")
-	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i < 0 || i+1 < len(rows) && rows[i+1] != "" {
+	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i < 0 || i+2 >= len(rows) || rows[i+1] != "" || !strings.HasPrefix(rows[i+2], "Screen") {
 		t.Errorf("pane = %q, want no second line for an agent with no worktree and no name", rows)
 	}
 }

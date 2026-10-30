@@ -78,7 +78,7 @@ func TestAPaneRowFitsThePane(t *testing.T) {
 	title := strings.Repeat("a very long window title ", 4)
 	long := newAgentItem(revier.AgentView{Target: "a-long-target-name", Panel: "1234", State: revier.AgentState{
 		Harness: "cursor-agent-with-a-long-name", Name: "a-long-session-name", Activity: title, Dir: "/p/" + title,
-	}}, revier.Project{Name: "a-long-project-name"}, revier.AgentDetail{}, time.Now())
+	}}, revier.Project{Name: "a-long-project-name"}, revier.AgentDetail{At: time.Now()}, time.Now())
 	for _, w := range []int{20, 42, 60} {
 		rows := []string{
 			m.detailRow(targetRow{attached: revier.TargetRef{Host: "wm", ID: "2", Title: title}}, w, false, false),
@@ -117,7 +117,7 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = upper
 	it := newAgentItem(revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}, revier.Project{Name: "alpha"}, revier.AgentDetail{}, time.Now())
-	matches := ranked(ungrouped)("then", []string{it.FilterValue()})[0].MatchedIndexes
+	matches := ranked(ungrouped)("then", []string{it.filterValue(true)})[0].MatchedIndexes
 	if got := ansi.Strip(agentLines(m.spun(), it, matches, 60, false, false, false, true)); !strings.Contains(got, "THEN words") {
 		t.Errorf("agent row = %q, want the letters of then lit", got)
 	}
@@ -132,8 +132,8 @@ func TestTheMatchedLettersAreLitOnTheSecondLine(t *testing.T) {
 	it := newAgentItem(revier.AgentView{State: revier.AgentState{
 		Harness: "claude", Name: "revier-c0", Activity: "one", Dir: "/p/revier/.claude/worktrees/delete-key"}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, time.Now())
 	for query, want := range map[string]string{"delete": "DELETE-key", "c0": "revier-C0"} {
-		matches := ranked(ungrouped)(query, []string{it.FilterValue()})[0].MatchedIndexes
 		for _, inPane := range []bool{false, true} {
+			matches := ranked(ungrouped)(query, []string{it.filterValue(inPane)})[0].MatchedIndexes
 			if got := ansi.Strip(agentLines(m.spun(), it, matches, 80, false, false, false, inPane)); !strings.Contains(got, want) {
 				t.Errorf("%s, in pane %v: agent row = %q, want %q", query, inPane, got, want)
 			}

@@ -133,7 +133,8 @@ Each agent takes two lines:
   works in one. At the right is the name its harness gives it. Claude Code's
   other agents send messages to that name.
 
-Type to filter by any of this text. The pane shows the agent's
+Type to filter by what the agent does, its project, its worktree or its
+name. The pane shows the agent's
 [address](agents.md#drive-an-agent-from-a-script), its harness, its name, and
 its terminal.
 
