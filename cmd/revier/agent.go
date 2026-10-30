@@ -61,11 +61,11 @@ new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace. With
 <name> the tab's agent panel runs that named agent, and an address of the
 project alone still names the default agent among them.
-Without -p or --panel the project is the one --dir is in, else the one this
-directory is in; a directory in no project is an error, which exits 3. It
-goes to the new agent and raises its window; with --no-focus it does
-neither, and prints the address a script reaches the agent by, which names
-an agent once the harness in the tab has started.
+Without -p or --panel the project is the one --dir is in, or without --dir
+the one this directory is in; a directory in no project is an error, which
+exits 3. It goes to the new agent and raises its window; with --no-focus it
+does neither, and prints the address a script reaches the agent by, which
+names an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
 [terminal] outside says: a plain shell tab beside the window, or nothing.
 
@@ -423,12 +423,12 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
-// The place is the owner of --panel; or the project -p names, else the one --dir
-// is in, else the one the working directory is in, with the target after -p's
-// colon or the one pick chooses. A --panel that no project's workspace holds
-// gets what [terminal] outside says, and here is not called. With --panel and
-// no --dir, a shell tab's directory is the panel's own (decisions.md D153),
-// and an agent tab's is the project's (D158).
+// The place is the owner of --panel; or the project -p names, else the one
+// --dir is in, or without --dir the one the working directory is in, with the
+// target after -p's colon or the one pick chooses. A --panel that no project's
+// workspace holds gets what [terminal] outside says, and here is not called.
+// With --panel and no --dir, a shell tab's directory is the panel's own
+// (decisions.md D153), and an agent tab's is the project's (D158).
 func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
 		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
@@ -480,10 +480,10 @@ func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.
 	return a.core.TabIn(ctx, p, revier.TargetName(sel), pick)
 }
 
-// dirProject is the project --dir is in, else the one the working directory
-// is in. A tab is opened from a terminal or a script, which has a directory:
-// one in no project fails, and never opens the tab in the project of the
-// focused window or the last one (decisions.md D160).
+// dirProject is the project --dir is in, or without --dir the one the working
+// directory is in. A tab is opened from a terminal or a script, which has a
+// directory: one in no project fails, and never opens the tab in the project
+// of the focused window or the last one (decisions.md D160).
 func (a *app) dirProject(dir string) (core.Project, error) {
 	if dir == "" {
 		cwd, err := os.Getwd()

@@ -62,10 +62,10 @@ panels of the project's agent tab. It goes to the new tab, unless you give
 `--no-focus`. `revier shell new` adds a tab with the shell alone.
 
 ```bash
-revier agent new -p shop                # in the workspace of shop
-revier agent new dtop -p shop           # the named agent dtop
-revier agent new --dir ~/dev/shop-wt    # start the agent in a worktree
-revier agent new -p shop --no-focus     # stay here; print the address, e.g. shop:home:7
+revier agent new -p shop                       # in the workspace of shop
+revier agent new dtop -p shop                  # the named agent dtop
+revier agent new -p shop --dir ~/dev/shop-wt   # start the agent in a worktree
+revier agent new -p shop --no-focus            # stay here; print the address, e.g. shop:home:7
 revier shell new -p shop
 ```
 
@@ -73,10 +73,10 @@ Without a name, the tab runs the project's default agent: the first agent
 panel of its layout. With a name, the tab's agent panel runs that
 [named agent](configuration.md#named-agents), and the tab keeps the shell.
 
-Without `-p` or `--panel`, the project is the one `--dir` is in, else the
-one the current directory is in. A directory in no project is an error. The
-workspace must be open already. With `--panel`, a window that is no project's workspace
-gets a plain shell tab beside it, or nothing if you set
+Without `-p` or `--panel`, the project is the one `--dir` is in, or without
+`--dir` the one the current directory is in. A directory in no project is an
+error. The workspace must be open already. With `--panel`, a window that is
+no project's workspace gets a plain shell tab beside it, or nothing if you set
 [`outside`](configuration.md#terminal) to `none`. To bind these commands to a
 kitty key, see [kitty](integrations/kitty.md).
 
