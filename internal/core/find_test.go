@@ -52,9 +52,30 @@ func TestClosestNamesTheProjectsANameProbablyMeant(t *testing.T) {
 		"skills":               {"copilot-skills"},
 		"zzzz-no-such-project": nil,
 		"nosuchproject":        nil,
+		"":                     nil,
 	} {
 		if got := core.Closest(projects, name); !slices.Equal(got, want) {
 			t.Errorf("Closest(%q) = %q, want %q", name, got, want)
+		}
+	}
+	// The edits allowed count characters, not bytes: three edits are all
+	// of "abc", and é is two bytes.
+	abc := []core.Project{{Project: revier.Project{Name: "abc"}}}
+	if got := core.Closest(abc, "ééé"); got != nil {
+		t.Errorf("Closest(ééé) = %q, want nothing", got)
+	}
+}
+
+func TestRepoName(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/owner/repo":  "repo",
+		"https://github.com/owner/repo/": "repo",
+		"git@github.com:owner/repo.git":  "repo",
+		"git@host:repo.git":              "repo",
+		"":                               "",
+	} {
+		if got := core.RepoName(in); got != want {
+			t.Errorf("RepoName(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

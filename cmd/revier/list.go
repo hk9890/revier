@@ -116,7 +116,10 @@ func (a *app) printJSON(v any) error {
 type agentRow struct {
 	// Address is what `revier agent` takes; an agent no target holds has
 	// none.
-	Address  string             `json:"address,omitempty"`
+	Address string `json:"address,omitempty"`
+	// Name is what the harness calls the agent, shown beside the address
+	// (decisions.md D161), which `--match` finds the agent's project by.
+	Name     string             `json:"name,omitempty"`
 	Project  revier.ProjectName `json:"project"`
 	Target   revier.TargetName  `json:"target"`
 	Panel    revier.PanelID     `json:"panel"`
@@ -133,7 +136,7 @@ func agentRows(views []revier.ProjectView) []agentRow {
 	for _, v := range views {
 		for _, ag := range v.Agents {
 			row := agentRow{
-				Project: v.Project.Name, Target: ag.Target, Panel: ag.Panel,
+				Name: ag.State.Name, Project: v.Project.Name, Target: ag.Target, Panel: ag.Panel,
 				Status: ag.State.Status, Activity: ag.State.Activity, Harness: ag.State.Harness, Dir: ag.State.Dir,
 			}
 			if ag.Target != "" {
@@ -153,20 +156,14 @@ func (a *app) agentTable(views []revier.ProjectView) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	dash := func(s string) string {
-		if s == "" {
-			return "-"
-		}
-		return s
-	}
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ADDRESS\tSTATUS\tACTIVITY\tHARNESS\tDIR")
+	_, _ = fmt.Fprintln(w, "ADDRESS\tNAME\tSTATUS\tACTIVITY\tHARNESS\tDIR")
 	for _, r := range rows {
 		address := r.Address
 		if address == "" {
 			address = fmt.Sprintf("- (%s panel %s)", r.Project, r.Panel)
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", address, r.Status, dash(r.Activity), dash(r.Harness), dash(r.Dir))
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", address, dash(r.Name), r.Status, dash(r.Activity), dash(r.Harness), dash(r.Dir))
 	}
 	return w.Flush()
 }

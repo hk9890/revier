@@ -6,7 +6,6 @@ import (
 	"flag"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -74,16 +73,7 @@ func TestAHelpFlagAfterTheSeparatorIsAnArgument(t *testing.T) {
 
 // The flag parser prints nothing of its own: main prints the error once.
 func TestAnUnknownFlagIsNotPrintedByTheParser(t *testing.T) {
-	stderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stderr = w
-	err = run(io.Discard, []string{"each", "--bogus", "--", "true"})
-	os.Stderr = stderr
-	_ = w.Close()
-	printed, _ := io.ReadAll(r)
+	printed, err := stderrOf(t, func() error { return run(io.Discard, []string{"each", "--bogus", "--", "true"}) })
 
 	if err == nil || !strings.Contains(err.Error(), "-bogus") {
 		t.Errorf("err = %v, want the unknown flag", err)

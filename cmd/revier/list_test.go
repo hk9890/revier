@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -67,22 +65,6 @@ func TestListMatchTakesNoNames(t *testing.T) {
 	}
 }
 
-// stderrOf runs f and returns what it wrote on stderr, and its error.
-func stderrOf(t *testing.T, f func() error) (string, error) {
-	t.Helper()
-	stderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stderr = w
-	err = f()
-	os.Stderr = stderr
-	_ = w.Close()
-	printed, _ := io.ReadAll(r)
-	return string(printed), err
-}
-
 // Names a list does not know cost the names it knows nothing: those are
 // listed, each unknown one has its line on stderr with the project it
 // probably meant, and the exit fails, so a revier on another machine still
@@ -128,7 +110,7 @@ func TestListAgentsIsOneRowPerAgentWithItsAddress(t *testing.T) {
 	link := revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far"}}
 	views := []revier.ProjectView{
 		{Project: revier.Project{Name: "demo"}, Running: true, Agents: []revier.AgentView{
-			{Panel: "7", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "tests"}},
+			{Panel: "7", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "tests", Name: "dynatui-94"}},
 			{Panel: "8", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Dir: "/x/demo/wt"}},
 		}},
 		{Project: link, Running: true, Agents: []revier.AgentView{
@@ -152,6 +134,9 @@ func TestListAgentsIsOneRowPerAgentWithItsAddress(t *testing.T) {
 	if strings.Contains(string(encoded), `"address"`) || !strings.Contains(string(encoded), `"panel":"20"`) {
 		t.Errorf("the agent no target holds = %s, want its panel and no address", encoded)
 	}
+	if rows[0].Name != "dynatui-94" {
+		t.Errorf("rows[0].Name = %q, want the harness's name beside the address", rows[0].Name)
+	}
 
 	var out bytes.Buffer
 	a := &app{out: &out}
@@ -159,7 +144,7 @@ func TestListAgentsIsOneRowPerAgentWithItsAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 5 || !strings.HasPrefix(lines[1], "demo:home:7 ") || !strings.Contains(lines[2], "/x/demo/wt") ||
+	if len(lines) != 5 || !strings.HasPrefix(lines[1], "demo:home:7 ") || !strings.Contains(lines[1], "dynatui-94") || !strings.Contains(lines[2], "/x/demo/wt") ||
 		!strings.HasPrefix(lines[4], "- (far panel 20) ") || strings.Contains(out.String(), "@buildbox") {
 		t.Errorf("table =\n%s\nwant a header and one row per agent", out.String())
 	}
