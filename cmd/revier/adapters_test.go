@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -92,6 +95,49 @@ func TestAConfiguredProbeRunsBeforeHerdrAndOpencode(t *testing.T) {
 	}
 	if got, want := strings.Join(names, " "), "claude codex herdr opencode"; got != want {
 		t.Errorf("probes = %q, want %q", got, want)
+	}
+}
+
+// A key pressed in a tmux pane reaches tmux, also where kitty comes first and
+// would probe as usable: kitty holds no tmux pane, and the key failed.
+func TestATmuxPaneNarrowsTheRuntimeToTmux(t *testing.T) {
+	cases := []struct {
+		order, want []string
+	}{
+		{defaultRuntimeOrder, []string{"tmux"}},
+		{[]string{"kitty", "tmux"}, []string{"tmux"}},
+		{[]string{"kitty"}, []string{"kitty"}},
+		{[]string{"kitty", hostNone, "tmux"}, []string{"kitty", hostNone, "tmux"}},
+		{[]string{hostNone}, []string{hostNone}},
+		{nil, nil},
+	}
+	for _, c := range cases {
+		if got := atTmuxPane(c.order); !slices.Equal(got, c.want) {
+			t.Errorf("atTmuxPane(%q) = %q, want %q", c.order, got, c.want)
+		}
+	}
+}
+
+// The two commands a tmux key runs try tmux alone, and a kitty window id
+// still tries the list in order. With no tool on the PATH no host probes as
+// usable, so the error names every host the command tried.
+func TestATmuxKeysCommandsTryTmuxAlone(t *testing.T) {
+	root := configRoot(t, "[hosts]\nruntime = [\"kitty\", \"tmux\"]\nwindow = [\"none\"]\n", nil)
+	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
+	testenv.NoTools(t)
+
+	for _, args := range [][]string{
+		{"agent", "new", "--panel", "%3"},
+		{"shell", "new", "--panel", "%3"},
+	} {
+		err := run(io.Discard, args)
+		if err == nil || !strings.Contains(err.Error(), "tmux:") || strings.Contains(err.Error(), "kitty") {
+			t.Errorf("revier %s: err = %v, want tmux alone tried", strings.Join(args, " "), err)
+		}
+	}
+	err := run(io.Discard, []string{"agent", "new", "--panel", "3"})
+	if err == nil || !strings.Contains(err.Error(), "kitty:") || !strings.Contains(err.Error(), "tmux:") {
+		t.Errorf("revier agent new --panel 3: err = %v, want kitty and tmux tried", err)
 	}
 }
 

@@ -30,6 +30,17 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
+// IsPane reports whether id has the form of a tmux pane id, "%" and a
+// number, which no other runtime's panel id has.
+func IsPane(id string) bool {
+	n, ok := strings.CutPrefix(id, "%")
+	if !ok {
+		return false
+	}
+	_, err := strconv.ParseUint(n, 10, 64)
+	return err == nil
+}
+
 // sep separates fields in tmux format output.
 //
 // It is a printable character on purpose. tmux escapes non-printable bytes in

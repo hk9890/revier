@@ -22,10 +22,12 @@ usage:
   revier shell exec -p <project> [--tag <tag>] [--dir <path>]
 
   --panel    the open workspace that holds this panel; kitty's
-             @active-kitty-window-id is the window a key was pressed in
+             @active-kitty-window-id is the window a key was pressed in,
+             and tmux's #{pane_id} the pane, which takes tmux as the
+             runtime wherever the runtime list names it before none
   --dir      start the shell here, not where the target's shell starts;
-             with --panel, the default is the directory kitty reports
-             for that panel
+             with --panel, the default is the directory the runtime
+             reports for that panel
 
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless
@@ -79,7 +81,7 @@ func cmdShellNew(out io.Writer, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	a, err := newApp(ctx, out)
+	a, err := newAppAt(ctx, out, *panel)
 	if err != nil {
 		return err
 	}
