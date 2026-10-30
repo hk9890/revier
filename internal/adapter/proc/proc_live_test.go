@@ -7,7 +7,10 @@ package proc_test
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +34,11 @@ func TestAProcessStartedAsANamedAgentCarriesItsMark(t *testing.T) {
 		for _, e := range env {
 			args = append(args, "-e", e)
 		}
-		if out, err := exec.Command("tmux", append(args, "exec sleep 600")...).CombinedOutput(); err != nil {
+		// The server's environment is every pane's: a name this test runs
+		// under, inside an agent served here, would mark the default one.
+		cmd := exec.Command("tmux", append(args, "exec sleep 600")...)
+		cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, proc.AgentVar+"=") })
+		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("tmux new-session: %v: %s", err, out)
 		}
 	}

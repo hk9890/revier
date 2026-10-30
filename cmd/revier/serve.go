@@ -51,10 +51,7 @@ func serve(project, tag string, what func(*core.Core, core.Project) (core.Served
 	}
 	env := os.Environ()
 	if tag != "" {
-		env = append(env, proc.TagVar+"="+tag, proc.WorkspaceVar+"="+s.Workspace)
-		if s.Agent != "" {
-			env = append(env, proc.AgentVar+"="+s.Agent)
-		}
+		env = append(env, proc.TagVar+"="+tag, proc.WorkspaceVar+"="+s.Workspace, proc.AgentVar+"="+s.Agent)
 	}
 	return syscall.Exec(path, s.Argv, env)
 }

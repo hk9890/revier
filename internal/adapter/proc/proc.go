@@ -44,7 +44,8 @@ const (
 	WorkspaceVar = "REVIER_WORKSPACE"
 
 	// AgentVar names the named agent the process runs. The default agent
-	// and a shell carry none.
+	// and a shell carry it empty, so a name inherited from the environment
+	// `revier agent exec` ran in does not mark them.
 	AgentVar = "REVIER_AGENT"
 )
 
