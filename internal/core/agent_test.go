@@ -44,7 +44,7 @@ func TestAgentRefusesAnAmbiguousProject(t *testing.T) {
 // one panel that carries no named agent's mark.
 func TestAgentIsTheDefaultAgentAmongNamedOnes(t *testing.T) {
 	named := agentPanel("1", "idle")
-	named.Vars = map[string]string{core.PanelAgentVar: "dtop"}
+	named.Vars = map[string]string{revier.PanelAgentVar: "dtop"}
 	c, _ := agentCore(named, agentPanel("2", "busy"))
 
 	a, err := c.Agent(context.Background(), prepared(t, project()), "")
@@ -56,7 +56,7 @@ func TestAgentIsTheDefaultAgentAmongNamedOnes(t *testing.T) {
 // Two agents with no mark, or none without one, are still ambiguous.
 func TestAgentRefusesTwoDefaultAgentsAndOnlyNamedOnes(t *testing.T) {
 	mark := func(p revier.Panel, name string) revier.Panel {
-		p.Vars = map[string]string{core.PanelAgentVar: name}
+		p.Vars = map[string]string{revier.PanelAgentVar: name}
 		return p
 	}
 	for what, panels := range map[string][]revier.Panel{
@@ -257,7 +257,7 @@ func TestAnAddressOfAPanelAloneIsRefused(t *testing.T) {
 // agent is what an address that names no panel means.
 func TestAnAddressWithAPanelNamesANamedAgent(t *testing.T) {
 	named := agentPanel("1", "idle")
-	named.Vars = map[string]string{core.PanelAgentVar: "dtop"}
+	named.Vars = map[string]string{revier.PanelAgentVar: "dtop"}
 	c, _ := agentCore(named, agentPanel("2", "busy"))
 	a, err := c.Agent(context.Background(), prepared(t, project()), "home:1")
 	if err != nil || a.Panel.ID != "1" {

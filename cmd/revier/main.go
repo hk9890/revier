@@ -40,6 +40,9 @@ usage:
                                 missing directory is cloned from git_url; --attach
                                 ends with this terminal on it (tmux, herdr)
   revier new [name]             write a project file for this directory
+  revier rename <old> <new>     give a project a new name: its file, its state
+                                and the saved sessions move with it; refused
+                                while anything of it runs
   revier link [host [project]] [--name name]
                                 the machines config.toml declares, other than
                                 this machine; a host's projects; or a link to
@@ -86,6 +89,10 @@ usage:
                                 type keys into an agent, whatever it is doing
   revier agent focus <agent>
                                 go to an agent's tab and raise its window
+  revier agent close <agent> [--force]
+                                end an agent: close its tab, or in the
+                                workspace's own tab its panel alone; refuses
+                                while an agent there is busy unless --force
   revier agent new [name] [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open
                                 workspace: the default agent, or the named
@@ -236,8 +243,9 @@ func outcome(err error) (status int, say bool) {
 	// with a status too, and that one is revier's failure: it is printed.
 	case errors.Is(err, errActionFailed) && errors.As(err, &exit):
 		return exit.ExitCode(), false
-	// A window that belongs to no project is a normal outcome with its own
-	// status, so a script can tell it from a failure.
+	// A window or, for a tab, a directory that belongs to no project is a
+	// normal outcome with its own status, so a script can tell it from a
+	// failure.
 	case errors.Is(err, errNoProject):
 		return exitNoProject, true
 	// The keys command has already said, key by key, what did not happen. A
@@ -353,6 +361,10 @@ func run(out io.Writer, args []string) error {
 		return cmdAttach(ctx, a, args)
 	case "link":
 		return cmdLink(ctx, a, args)
+	case "rename":
+		// An app: the rename is refused while the project runs, which the
+		// hosts are listed to know.
+		return cmdRename(ctx, a, args)
 	case "status":
 		return cmdStatus(ctx, a, args)
 	case "session":

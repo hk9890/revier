@@ -36,6 +36,21 @@ func TestASurveyReportsTheAgentsServedToAnotherMachine(t *testing.T) {
 	}
 }
 
+// Beside a named agent served to another machine, the project's address names
+// the served default agent, as it does beside a named agent's tab here.
+func TestTheProjectNamesTheServedDefaultAgentBesideANamedOne(t *testing.T) {
+	named := agentPanel("box.4242", "idle")
+	named.Vars = map[string]string{revier.PanelAgentVar: "dtop"}
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", named, agentPanel("box.4300", "busy"))
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	a, err := c.Agent(context.Background(), prepared(t, project()), "")
+	if err != nil || a.Panel.ID != "box.4300" {
+		t.Fatalf("Agent = %+v, %v; want box.4300, the default agent", a, err)
+	}
+}
+
 // The activity line is the panel's title here: it crosses the ssh, and the
 // process on the host has none.
 func TestALinksAgentTakesItsActivityFromThePanelHere(t *testing.T) {
@@ -201,7 +216,7 @@ func TestALinksAddressNamesItsDefaultAgent(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
 		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("far", "", ssh("9", 4242, map[string]string{core.PanelAgentVar: "dtop"}), ssh("11", 4300, nil))
+	rt.Add("far", "", ssh("9", 4242, map[string]string{revier.PanelAgentVar: "dtop"}), ssh("11", 4300, nil))
 	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 
 	a, err := c.Agent(context.Background(), linkProject(t), "")
@@ -668,7 +683,7 @@ func TestANamedAgentOfALinkIsAskedOfItsHost(t *testing.T) {
 	if _, err := newAgent(t, c, linkProject(t), "home", core.Resume{Agent: "dtop"}); err != nil {
 		t.Fatalf("NewAgent: %v", err)
 	}
-	if len(rt.Tabs) != 1 || rt.Tabs[0].Vars[core.PanelAgentVar] != "dtop" {
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Vars[revier.PanelAgentVar] != "dtop" {
 		t.Fatalf("tabs = %+v, want one tab marked dtop", rt.Tabs)
 	}
 	samePanels(t, "agent tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
@@ -686,7 +701,7 @@ func TestARestoreOfALinkAsksTheHostForItsNamedAgent(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("far", "",
 		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242},
-		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Vars: map[string]string{core.PanelAgentVar: "dtop"}})
+		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Vars: map[string]string{revier.PanelAgentVar: "dtop"}})
 	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)})
 	if err != nil {
@@ -712,15 +727,15 @@ func TestARestoreOfALinkAsksTheHostForItsNamedAgent(t *testing.T) {
 }
 
 // `revier agent exec --agent` runs the named agent this machine declares for
-// the project, and refuses a name it does not declare.
+// the project, under its name, and refuses a name it does not declare.
 func TestServeRunsTheNamedAgent(t *testing.T) {
 	p := prepared(t, agentProject())
 	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop", "--watch"}}}
 	c := &core.Core{Probes: []revier.AgentProbe{resumable()}}
 
 	s, err := c.ServeAgent(p, core.Resume{Agent: "dtop"})
-	if err != nil || !slices.Equal(s.Argv, []string{"dtop", "--watch"}) {
-		t.Errorf("ServeAgent = %+v, %v; want dtop --watch", s, err)
+	if err != nil || !slices.Equal(s.Argv, []string{"dtop", "--watch"}) || s.Agent != "dtop" {
+		t.Errorf("ServeAgent = %+v, %v; want dtop --watch, served as dtop", s, err)
 	}
 	if _, err := c.ServeAgent(p, core.Resume{Agent: "review"}); !errors.Is(err, core.ErrUnknownAgent) {
 		t.Errorf("ServeAgent err = %v, want ErrUnknownAgent", err)

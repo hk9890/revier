@@ -2,7 +2,8 @@
 
 An agent is a panel in a workspace that runs a coding agent, such as Claude
 Code. This page shows how to drive an agent from a script, open more agent
-tabs, resume an agent on its conversation, and let an agent configure revier.
+tabs, end an agent, resume an agent on its conversation, and let an agent
+configure revier.
 
 ## What revier sees
 
@@ -44,7 +45,10 @@ the agent list.
 - `wait --until` takes `idle`, `running`, `attention`, or `stopped` (idle or
   attention: the turn stopped, the agent did not exit). A `--timeout` that
   runs out has its own [exit code](cli.md#exit-codes), so a script can tell a
-  timeout from a failure.
+  timeout from a failure. On a panel address that is not an agent's yet, such
+  as the one `agent new --no-focus` prints, `wait` first waits for an agent to
+  start in the panel, within the same `--timeout`, so you can run it at once.
+  Without `--timeout`, a panel where no agent starts holds the wait for good.
 - `read` needs a harness whose conversation revier can read, which today is
   Claude Code. `--screen` works for every harness.
 - `send-keys` types keys whatever the agent does, so read the screen first.
@@ -62,10 +66,10 @@ panels of the project's agent tab. It goes to the new tab, unless you give
 `--no-focus`. `revier shell new` adds a tab with the shell alone.
 
 ```bash
-revier agent new -p shop                # in the workspace of shop
-revier agent new dtop -p shop           # the named agent dtop
-revier agent new --dir ~/dev/shop-wt    # start the agent in a worktree
-revier agent new -p shop --no-focus     # stay here; print the address, e.g. shop:home:7
+revier agent new -p shop                       # in the workspace of shop
+revier agent new dtop -p shop                  # the named agent dtop
+revier agent new -p shop --dir ~/dev/shop-wt   # start the agent in a worktree
+revier agent new -p shop --no-focus            # stay here; print the address, e.g. shop:home:7
 revier shell new -p shop
 ```
 
@@ -73,13 +77,29 @@ Without a name, the tab runs the project's default agent: the first agent
 panel of its layout. With a name, the tab's agent panel runs that
 [named agent](configuration.md#named-agents), and the tab keeps the shell.
 
-Without `-p`, the project is the one `--dir` is in, else the one revier
-finds as for every command ([Concepts](concepts.md#project)). The workspace
-must be open already. With `--panel`, a window that is no project's workspace
-gets a plain shell tab beside it, nothing if you set
+Without `-p` or `--panel`, the project is the one `--dir` is in, or without
+`--dir` the one the current directory is in. A directory in no project is an
+error. The workspace must be open already. With `--panel`, a window that is
+no project's workspace gets a plain shell tab beside it, nothing if you set
 [`outside`](configuration.md#terminal) to `none`, or with `agent` a tab of
 the agent. To bind these commands to a
 kitty key, see [kitty](integrations/kitty.md).
+
+## End an agent
+
+To end an agent, close it by its address:
+
+```bash
+revier agent close shop:home:7          # prints: closed the tab
+```
+
+`revier agent close` returns once the agent is gone. An agent in a tab
+beside the workspace's own, such as one `agent new` opened, closes with its
+whole tab, the shell beside it included. An agent in the workspace's own tab
+closes as its panel alone, and the shell there stays. The command prints
+which of the two it did. It refuses while an agent in what it closes, any
+agent of that tab, is `running` or in `attention`, unless you give
+`--force`. It saves no session.
 
 ## Resume an agent
 

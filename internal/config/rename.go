@@ -79,6 +79,11 @@ func writesName(targets []revier.Target, name revier.ProjectName) (revier.Target
 					templated = true
 					continue
 				}
+				// The editor class `revier new` writes holds no name, though
+				// a project named "a" or "idea" finds itself in it.
+				if v == editorClass {
+					continue
+				}
 				for _, form := range forms {
 					if literal == "" && strings.Contains(v, form) {
 						literal = v

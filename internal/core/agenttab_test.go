@@ -62,7 +62,7 @@ func TestNewAgentWithANameOpensThatAgentsTab(t *testing.T) {
 	if outcome != core.AgentEmpty {
 		t.Errorf("outcome = %v, want empty", outcome)
 	}
-	if len(rt.Tabs) != 1 || !maps.Equal(rt.Tabs[0].Vars, map[string]string{core.PanelAgentVar: "dtop"}) {
+	if len(rt.Tabs) != 1 || !maps.Equal(rt.Tabs[0].Vars, map[string]string{revier.PanelAgentVar: "dtop"}) {
 		t.Fatalf("Tabs = %+v, want one tab marked revier_agent=dtop", rt.Tabs)
 	}
 	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{

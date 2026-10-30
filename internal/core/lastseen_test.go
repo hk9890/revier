@@ -20,7 +20,7 @@ import (
 // directory - and the probe is asked nothing: the survey read it already.
 func TestSeenRecordsWhatSessionRecordsWithoutAskingAProbe(t *testing.T) {
 	marked := agent("3", "", "")
-	marked.Vars[core.PanelAgentVar] = "dtop"
+	marked.Vars[revier.PanelAgentVar] = "dtop"
 	listed := agent("4", "def-456", "/p/wt")
 	listed.Vars[core.PanelTargetVar] = "agent"
 	tab := agent("5", "ghi-789", "/p")

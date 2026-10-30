@@ -39,12 +39,6 @@ var (
 	ErrNoWorkspace = errors.New("its window is no project's open workspace")
 )
 
-// PanelAgentVar is the panel variable that names the named agent an agent tab
-// runs. Every panel of the tab carries it, as OpenTab sets a tab's vars on
-// each; a tab holds one agent, so the tab's mark is its agent's. The default
-// agent's tab carries none (decisions.md D145).
-const PanelAgentVar = "revier_agent"
-
 // agentTab is the tab an agent opens in: a copy of the first panel the
 // workspace's layout declares as an agent, started as startAgent says, and a
 // copy of the first declared shell panel beside it, in the same directory. A
@@ -97,7 +91,7 @@ func agentVars(r Resume) map[string]string {
 	if r.Agent == "" {
 		return nil
 	}
-	return map[string]string{PanelAgentVar: r.Agent}
+	return map[string]string{revier.PanelAgentVar: r.Agent}
 }
 
 // namedAgent is the project's named agent of that name.
