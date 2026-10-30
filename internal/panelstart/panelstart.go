@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -36,16 +38,16 @@ func StartableOn(panels []revier.PanelSpec, path string) error {
 	return nil
 }
 
-// onPath reports whether a directory of path holds program as an executable
-// file. A relative directory is passed over: it names another place in the
-// panel's directory than in this one.
+// onPath reports whether a directory of path holds program as a file this
+// user may run. A relative directory is passed over: it names another place in
+// the panel's directory than in this one.
 func onPath(program, path string) bool {
 	for _, dir := range filepath.SplitList(path) {
 		if !filepath.IsAbs(dir) {
 			continue
 		}
-		info, err := os.Stat(filepath.Join(dir, program))
-		if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+		file := filepath.Join(dir, program)
+		if info, err := os.Stat(file); err == nil && info.Mode().IsRegular() && unix.Faccessat(unix.AT_FDCWD, file, unix.X_OK, unix.AT_EACCESS) == nil {
 			return true
 		}
 	}

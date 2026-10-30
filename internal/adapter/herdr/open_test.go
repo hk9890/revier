@@ -5,6 +5,7 @@ package herdr_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -83,5 +84,19 @@ func TestOpenRefusesMorePanelsThanATabHolds(t *testing.T) {
 	}
 	if len(*asked) != 0 {
 		t.Errorf("asked %q, want nothing", *asked)
+	}
+}
+
+// A server that fails the ping is named as failed. Its PATH is not guessed,
+// so a program that may be on its PATH alone is not called missing.
+func TestOpenNamesAServerThatFailsThePing(t *testing.T) {
+	h := &herdr.Host{}
+	h.SetCaller(func(context.Context, string, any) (int, []byte, error) {
+		return 0, nil, context.DeadlineExceeded
+	})
+	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"revier-no-such-program"}}}
+	_, err := h.Open(context.Background(), revier.Realization{Name: "x", Panels: panels})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Open = %v, want the failed ping", err)
 	}
 }

@@ -243,19 +243,37 @@ func TestANewAgentThatCannotBeFocusedIsStillAdded(t *testing.T) {
 	}
 }
 
-// The tab's command exited before the focus, so nothing runs: the agent is
-// not added, and the error names the command that exited, not the focus.
-func TestANewAgentWhoseCommandEndedBeforeItsFocusIsNotAdded(t *testing.T) {
+// The agent's command exited before the focus, but the tab's shell still
+// runs: the tab opened, so the agent counts as added and the focus failure
+// stands.
+func TestANewAgentWhoseCommandEndedBesideItsShellIsStillAdded(t *testing.T) {
 	c, rt, p, _ := openWorkspace(t)
 	c.Runtime = endingTab{rt}
 
 	outcome, err := newAgent(t, c, p, "home", core.Resume{})
-	want := `rt: agent tab: the agent panel's command "claude --model opus" exited as soon as it started`
-	if err == nil || err.Error() != want {
-		t.Fatalf("err = %v, want %q", err, want)
+	if !errors.Is(err, errPaneGone) {
+		t.Fatalf("err = %v, want the focus failure", err)
 	}
-	if outcome != core.AgentNotAdded {
-		t.Errorf("outcome = %v, want not added", outcome)
+	if outcome == core.AgentNotAdded {
+		t.Error("outcome = not added, want the tab whose shell runs reported as added")
+	}
+}
+
+// A shell tab is one panel: when its shell exits before the focus nothing
+// runs, and the error says the shell exited.
+func TestANewShellWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: endingTab{rt}}
+	rt.Add("notes:revier", "")
+	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "notes")
+	if err != nil {
+		t.Fatalf("AgentWorkspace: %v", err)
+	}
+
+	err = c.NewShell(context.Background(), w, "")
+	want := `rt: shell tab: the shell panel's shell exited as soon as it started`
+	if err == nil || err.Error() != want {
+		t.Fatalf("NewShell = %v, want %q", err, want)
 	}
 }
 
@@ -288,6 +306,23 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+// A tab of two panels whose first command exited still holds the second, so
+// it opened: the focus failure stands, and the tab is not called gone.
+func TestATabWhoseFirstCommandEndedBesideAnotherReportsTheFocus(t *testing.T) {
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
+	c := &core.Core{Runtime: endingTab{rt}}
+	proj := tabProject()
+	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{
+			{Kind: revier.PanelTool, Command: []string{"true"}}, {Kind: revier.PanelShell}}}})
+
+	_, err := press(context.Background(), c, prepared(t, proj), "quick")
+	if !errors.Is(err, errPaneGone) || !strings.Contains(err.Error(), "focus tab quick") {
+		t.Fatalf("err = %v, want the focus failure of tab quick", err)
 	}
 }
 

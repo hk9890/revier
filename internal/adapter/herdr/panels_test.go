@@ -101,7 +101,7 @@ func TestPanelOperationsRefuseAWorkspaceOfAnEarlierServer(t *testing.T) {
 		if err := act(h); err == nil || !strings.Contains(err.Error(), "4242/w1 is gone") {
 			t.Errorf("%s = %v, want the workspace named as gone", name, err)
 		}
-		if !slices.Equal(slices.Compact(*asked), []string{"ping"}) {
+		if !slices.Equal(slices.Compact(slices.Clone(*asked)), []string{"ping"}) {
 			t.Errorf("%s asked %q, want ping alone", name, *asked)
 		}
 	}

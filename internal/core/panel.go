@@ -468,7 +468,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		}
 	}
 	if err := opener.FocusPanel(ctx, in.Ref, tab); err != nil {
-		if !open && ended(ctx, c.Runtime, in.Ref, tab) {
+		if !open && ended(ctx, c.Runtime, in.Ref, tab, real.PanelSpecs()) {
 			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, panelstart.ExitedAtOnce(real.PanelSpecs()[0]))
 		}
 		return failed, fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
@@ -479,11 +479,16 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	return res, nil
 }
 
-// ended reports whether the instance is still listed and no longer holds the
-// panel: the command of a tab just opened exited before its focus. An
-// instance that is not listed, or a host that cannot list, failed in another
-// way, and its own error says how.
-func ended(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID) bool {
+// ended reports whether a tab of one panel, just opened, is gone because its
+// command exited before its focus: the instance is still listed and no longer
+// holds the panel. A tab of more panels keeps the others when the first
+// exits, so it opened, and its focus error stands. An instance that is not
+// listed, or a host that cannot list, failed in another way, and its own
+// error says how.
+func ended(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID, specs []revier.PanelSpec) bool {
+	if len(specs) != 1 {
+		return false
+	}
 	instances, err := host.Instances(ctx)
 	if err != nil {
 		return false

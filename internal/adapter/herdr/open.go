@@ -198,24 +198,35 @@ func (h *Host) buildable(ctx context.Context, panels []revier.PanelSpec) error {
 	if len(panels) > maxPanes {
 		return fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
 	}
-	return panelstart.StartableOn(panels, h.serverPATH(ctx))
+	path, err := h.serverPATH(ctx)
+	if err != nil {
+		return err
+	}
+	return panelstart.StartableOn(panels, path)
 }
 
 // serverPATH is the PATH herdr starts a pane's program with: its server's,
 // since a layout carries no environment. With no server running, or one whose
 // environment cannot be read or holds no PATH, it is this process's, the one
-// a server Open starts is given.
-func (h *Host) serverPATH(ctx context.Context) string {
-	if pid, err := h.request(ctx, "ping", struct{}{}, nil); err == nil {
-		if env, err := os.ReadFile(filepath.Join(h.root(), strconv.Itoa(pid), "environ")); err == nil {
-			for _, kv := range strings.Split(string(env), "\x00") {
-				if path, ok := strings.CutPrefix(kv, "PATH="); ok {
-					return path
-				}
+// a server Open starts is given. A server that fails the ping is an error: a
+// PATH guessed in its place would name a program as missing that the server
+// may hold, instead of the server's own failure.
+func (h *Host) serverPATH(ctx context.Context) (string, error) {
+	pid, err := h.request(ctx, "ping", struct{}{}, nil)
+	if errors.Is(err, errNoServer) {
+		return os.Getenv("PATH"), nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if env, err := os.ReadFile(filepath.Join(h.root(), strconv.Itoa(pid), "environ")); err == nil {
+		for _, kv := range strings.Split(string(env), "\x00") {
+			if path, ok := strings.CutPrefix(kv, "PATH="); ok {
+				return path, nil
 			}
 		}
 	}
-	return os.Getenv("PATH")
+	return os.Getenv("PATH"), nil
 }
 
 // running makes sure a server answers, starting one when none does, and
