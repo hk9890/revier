@@ -131,14 +131,22 @@ func TestAFailedCloneOpensTheLogOnItsLine(t *testing.T) {
 		t.Fatalf("footer = %q, want %q", got, want)
 	}
 	x, y := textCell(t, failed, "clone failed")
-	clicked := clickAt(failed, x, y)
-	keyed, _ := press(failed, "alt+l")
-	for how, m := range map[string]tui.Model{"a click": clicked, "alt+l": keyed} {
+	// The copies of a model share the screen, so each way is checked before
+	// the next one opens it again.
+	var keyed tui.Model
+	for _, way := range []struct {
+		how  string
+		open func() tui.Model
+	}{
+		{"a click", func() tui.Model { return clickAt(failed, x, y) }},
+		{"alt+l", func() tui.Model { keyed, _ = press(failed, "alt+l"); return keyed }},
+	} {
+		m := way.open()
 		if top := barLine(m); !strings.Contains(top, "Logs") {
-			t.Fatalf("%s: top line = %q, want the logs screen", how, top)
+			t.Fatalf("%s: top line = %q, want the logs screen", way.how, top)
 		}
 		if row := selectedRow(t, m); !strings.Contains(row, "the failure") {
-			t.Errorf("%s: cursor on %q, want the clone's line", how, row)
+			t.Errorf("%s: cursor on %q, want the clone's line", way.how, row)
 		}
 	}
 
@@ -246,7 +254,8 @@ func TestARefusedGoSaysWhyInTheFooter(t *testing.T) {
 }
 
 // The screen the logs screen opened over keeps its focus: Esc comes back to
-// the pane's cursor where it was.
+// the pane's cursor where it was. The pane's cursor is not the pane's place
+// on the screen: the log stands over the whole width, not the pane.
 func TestTheLogsScreenKeepsThePaneCursor(t *testing.T) {
 	m, _ := logged(t)
 	m, _ = press(m, "alt+t")
@@ -256,9 +265,28 @@ func TestTheLogsScreenKeepsThePaneCursor(t *testing.T) {
 		t.Fatal("alt+t put no cursor in the pane")
 	}
 	m, _ = press(m, "alt+l")
+	if s := drawn(m); !strings.Contains(s, "an older one") || strings.Contains(s, "logs Project") {
+		t.Errorf("the logs screen over the pane's cursor shows the pane, not the log:\n%s", s)
+	}
 	m, _ = press(m, "esc")
 	if got := paneCursor(m); got != was {
 		t.Errorf("pane cursor = %q after the logs screen, want %q", got, was)
+	}
+}
+
+// Esc comes back to the screen as it was scrolled: the help screen read
+// half way stands half way again.
+func TestTheLogsScreenKeepsTheScrollOfTheScreenUnderIt(t *testing.T) {
+	m, _ := logged(t)
+	m, _ = press(m, "alt+h")
+	for range 5 {
+		m, _ = press(m, "down")
+	}
+	was := drawn(m)
+	m, _ = press(m, "alt+l")
+	m, _ = press(m, "esc")
+	if got := drawn(m); got != was {
+		t.Errorf("the help screen after the logs screen =\n%s\nwant it as it was scrolled:\n%s", got, was)
 	}
 }
 

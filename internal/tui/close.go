@@ -163,19 +163,20 @@ func confirms(msg closePlannedMsg) bool {
 	return false
 }
 
-// closed takes the answer of a close del or alt+del asked for. The surface
-// comes back as it was, and the next survey shows what went. A delete runs
-// only when everything closed.
-func (m Model) closed(msg shutdownMsg) (tea.Model, tea.Cmd) {
+// closed takes the answer of a close del or alt+del asked for, and whether
+// its error is the cancel (shutDown). The surface comes back as it was, and
+// the next survey shows what went. A delete runs only when everything closed.
+func (m Model) closed(msg shutdownMsg, cancelled bool) (tea.Model, tea.Cmd) {
 	one := m.shut
 	m.shut = shutdown{}
-	if m.dialog == dialogShutdown {
-		m.dialog = dialogNone
+	if m.under() == dialogShutdown {
+		m.setUnder(dialogNone)
 	}
 	if msg.err != nil {
-		// A cancel is the user's word, and says itself.
+		// A cancel is the user's word, and says itself; a failure that came
+		// with a cancel is still a failure.
 		m.err = msg.err
-		if !one.walk.cancelled {
+		if !cancelled {
 			m.err = fail("close", one.project, msg.err)
 		}
 		return m, nil

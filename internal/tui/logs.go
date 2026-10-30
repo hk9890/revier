@@ -111,6 +111,7 @@ type logsScreen struct {
 	skipped int    // the lines of the log that did not decode
 	reading bool   // the line under the cursor is shown in full
 	from    dialog // the screen it was opened from, which Esc goes back to
+	offset  int    // how far that screen was scrolled, which Esc gives back
 }
 
 func newLogsScreen(th theme.Theme) logsScreen {
@@ -119,17 +120,17 @@ func newLogsScreen(th theme.Theme) logsScreen {
 
 // logsResult is what a press on the screen leaves for the surface.
 type logsResult struct {
-	err    error // the footer's
-	closed bool  // back to the screen it came from
+	closed bool // back to the screen it came from
 }
 
 // openLogs is alt+l, a click on the footer's error and a click on "logs" at
 // the top of the pane. When the footer shows an error, the cursor starts on
-// the newest line this process wrote by the time it was set (open). The screen it opens over keeps its focus,
-// the pane's cursor too, for Esc to go back to.
+// the newest line this process wrote by the time it was set (open). The
+// screen it opens over keeps its focus, the pane's cursor and its scroll
+// too, for Esc to go back to.
 func (m Model) openLogs() (tea.Model, tea.Cmd) {
 	at, _ := m.footerErr()
-	m.logs.from = m.dialog
+	m.logs.from, m.logs.offset = m.dialog, m.body.YOffset()
 	m.err = m.logs.open(m.surface(), m.now(), at)
 	m.body.SetYOffset(0)
 	m.dialog = dialogLogs
@@ -152,13 +153,17 @@ func (m Model) logsKey(msg keyPress) (tea.Model, tea.Cmd) {
 	}
 	was := m.logs.reading
 	res, cmd := m.logs.key(m.surface(), msg)
-	m.err = res.err
+	m.err = nil
 	if m.logs.reading && !was {
 		m.body.SetYOffset(0)
 	}
 	if res.closed {
+		// The screen's own text first: a viewport holds no offset past
+		// the end of what it shows.
 		m.dialog = m.logs.from
 		m.layout()
+		m.syncBody()
+		m.body.SetYOffset(m.logs.offset)
 	}
 	return m, cmd
 }

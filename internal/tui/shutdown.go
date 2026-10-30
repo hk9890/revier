@@ -430,7 +430,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if s.one {
-		return m.closed(msg)
+		return m.closed(msg, cancelled)
 	}
 	if msg.err != nil {
 		m.err = msg.err

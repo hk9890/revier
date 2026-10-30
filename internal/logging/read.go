@@ -52,14 +52,8 @@ func (l Line) Fields() []Field {
 	return out
 }
 
-// rawText is a field's value as Fields gives it, and no value as "".
-func rawText(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	return fieldValue(raw)
-}
-
+// fieldValue is a field's value as Fields gives it, and no value or null as
+// "".
 func fieldValue(raw json.RawMessage) string {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
@@ -147,7 +141,7 @@ func readDay(path string) (lines []Line, skipped int, err error) {
 		}
 		lines = append(lines, Line{
 			Time: rec.Time, Level: rec.Level, Msg: rec.Msg, Pid: rec.Pid, Cmd: rec.Cmd,
-			Project: rawText(rec.Project), Err: rawText(rec.Err), Raw: bytes.Clone(raw),
+			Project: fieldValue(rec.Project), Err: fieldValue(rec.Err), Raw: bytes.Clone(raw),
 		})
 	}
 	return lines, skipped, nil

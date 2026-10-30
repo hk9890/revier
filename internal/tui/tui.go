@@ -1233,7 +1233,9 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 	if m.confirm != "" {
 		return m.confirmDelete(msg)
 	}
-	if key.Matches(msg, m.keys.Logs) && m.dialog != dialogLogs {
+	// After a full shutdown any key quits at once; a screen opened then
+	// would close with the surface a moment later.
+	if key.Matches(msg, m.keys.Logs) && m.dialog != dialogLogs && !m.shut.quitting {
 		return m.openLogs()
 	}
 	switch m.dialog {

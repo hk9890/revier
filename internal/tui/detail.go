@@ -46,13 +46,13 @@ func (m Model) paneWidth() int {
 
 // paneCols is the columns the pane renders in: its share beside the list,
 // or, on a terminal too narrow to split, the whole width while the cursor is
-// on it, where it stands in the list's place. Zero is a
-// pane not on screen.
+// on it, where it stands in the list's place. Zero is a pane not on screen:
+// a screen with no pane has none, also over a cursor the pane keeps.
 func (m Model) paneCols() int {
 	if pane := m.paneWidth(); pane > 0 {
 		return pane
 	}
-	if m.focus != focusList {
+	if m.focus != focusList && m.dialog.hasPane() {
 		w, _ := m.inner()
 		return w
 	}

@@ -33,10 +33,17 @@ func fail(what string, project revier.ProjectName, err error) error {
 }
 
 // refused reports an error that is a refusal and not a failure: a target with
-// no host here or no such target, and a target or a project its file refused.
+// no host here or no such target, a project with no home, a tab no runtime
+// opens, an agent no panel here shows, and a target or a project its file
+// refused.
 // Its own text says why, and is short, so the footer keeps it.
 func refused(p core.Project, err error) bool {
-	if errors.Is(err, core.ErrNoHost) || errors.Is(err, core.ErrNoTarget) || p.Invalid != nil && errors.Is(err, p.Invalid) {
+	for _, why := range []error{core.ErrNoHost, core.ErrNoTarget, core.ErrNoHome, core.ErrNoTabs, core.ErrUnraisable, core.ErrAgentElsewhere, core.ErrAgentGone, core.ErrNoAgent} {
+		if errors.Is(err, why) {
+			return true
+		}
+	}
+	if p.Invalid != nil && errors.Is(err, p.Invalid) {
 		return true
 	}
 	for i := range p.Targets {
@@ -49,18 +56,18 @@ func refused(p core.Project, err error) bool {
 
 // short is the footer's text for an error. An operation's names what failed
 // and, when asked, the key that opens the rest; any other error is its own
-// text, which a refusal words for the footer, on one line: a second line
-// pushes the frame past the terminal.
+// text, which a refusal words for the footer. Either is one line, an
+// action's name too: a second line pushes the frame past the terminal.
 func short(err error, withKey bool) string {
+	text := err.Error()
 	if f, ok := err.(*failed); ok {
-		text := f.what + " failed"
+		text = f.what + " failed"
 		if f.project != "" {
 			text += ": " + string(f.project)
 		}
 		if withKey {
 			text += " (" + logsKey + " for details)"
 		}
-		return text
 	}
-	return strings.ReplaceAll(err.Error(), "\n", "; ")
+	return strings.ReplaceAll(text, "\n", "; ")
 }

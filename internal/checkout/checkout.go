@@ -61,7 +61,23 @@ func Origin(dir string) string {
 //
 // No deadline: the clone of a large repository outlasts any timeout a keypress
 // command sets for its host calls.
+//
+// Every failure is a clone line of the log, one refused before git ran too:
+// the TUI names a failed clone alone and leaves why to the log.
 func Ensure(p revier.Project, out io.Writer) (bool, error) {
+	start := time.Now()
+	cloned, err := ensure(p, out)
+	if cloned || err != nil {
+		logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
+	}
+	if cloned {
+		Trust(p.Path, out)
+	}
+	return cloned, err
+}
+
+// ensure is Ensure up to the clone, which it reports.
+func ensure(p revier.Project, out io.Writer) (bool, error) {
 	if p.Remote != nil {
 		// A link records the host's path and repository for its targets to
 		// render (decisions.md D83). Cloning either here would put a second
@@ -79,9 +95,7 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	case p.GitURL == "":
 		return false, fmt.Errorf("project %q: %s does not exist, and %w", p.Name, p.Path, ErrNoGitURL)
 	}
-	start := time.Now()
 	if err := os.MkdirAll(filepath.Dir(p.Path), 0o755); err != nil {
-		logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
 		return false, err
 	}
 	_, _ = fmt.Fprintf(out, "revier: %s is not on this machine; cloning %s\n", p.Path, p.GitURL)
@@ -104,12 +118,8 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 		if cause := gitCause(said.String()); cause != "" {
 			err = fmt.Errorf("%w: %s", err, cause)
 		}
-	}
-	logging.Op("clone", start, err, "project", p.Name, "git_url", p.GitURL, "path", p.Path)
-	if err != nil {
 		return false, err
 	}
-	Trust(p.Path, out)
 	return true, nil
 }
 
