@@ -1,7 +1,7 @@
 // Package sshconfig reads the hosts an ssh configuration names: the list
-// `ssh <tab>` offers, and the list the link dialog offers (decisions.md
-// D45). It also reads the HostName ssh connects to for a host, by which
-// revier knows a link host that is this machine (D131).
+// `ssh <tab>` offers, and the list the remote screen's "new" offers
+// (decisions.md D154). It also reads the HostName ssh connects to for a host,
+// by which revier knows a link host that is this machine (D131).
 package sshconfig
 
 import (

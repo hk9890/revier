@@ -1,11 +1,13 @@
 package ssh_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // exitStatus stands for the *exec.ExitError a failed ssh returns: an error
@@ -59,9 +61,12 @@ func TestClassifySeesTheShellCannotFindRevier(t *testing.T) {
 		{"fish", "fish: Unknown command: revier", exitStatus(127)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ssh.Classify("box", nil, tc.stderr, tc.err).Error()
-			if !strings.Contains(got, "PATH ssh gives") {
+			err := ssh.Classify("box", nil, tc.stderr, tc.err)
+			if got := err.Error(); !strings.Contains(got, "PATH ssh gives") {
 				t.Errorf("classify = %q, want the PATH named", got)
+			}
+			if !errors.Is(err, revier.ErrNoRevier) {
+				t.Errorf("classify = %v, want it to be revier.ErrNoRevier", err)
 			}
 		})
 	}
@@ -122,5 +127,14 @@ func TestClassifyDoesNotReadTheRemotesWordsAsSshsOwn(t *testing.T) {
 	got := ssh.Classify("box", []string{"revier", "list"}, "open /etc/revier: permission denied", exitStatus(1)).Error()
 	if strings.Contains(got, "key auth") {
 		t.Errorf("classify = %q, want the remote's own words passed through", got)
+	}
+}
+
+// Only a shell that found no revier is revier.ErrNoRevier: a machine that
+// does not answer is not one that answers with no revier.
+func TestClassifyIsNoRevierOnlyWhereTheShellFoundNone(t *testing.T) {
+	err := ssh.Classify("box", []string{"revier", "version"}, "ssh: connect to host x port 22: Connection refused", exitStatus(255))
+	if errors.Is(err, revier.ErrNoRevier) {
+		t.Errorf("classify = %v, want a refused connection not to be revier.ErrNoRevier", err)
 	}
 }

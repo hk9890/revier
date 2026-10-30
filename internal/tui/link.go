@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -22,20 +24,67 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The link dialog (decisions.md D45): alt+r lists the hosts the ssh
-// configuration names, Enter on one asks the revier there for its projects,
-// Enter on a project asks what to name the link, and Enter on the name writes
-// it here, which is then a row like any other. Three steps in the list's own
-// place, with the pane beside them.
+// The remote screen (decisions.md D154): alt+r lists the machines config.toml
+// declares, each with what its revier answered when the screen opened. Enter
+// on one asks the revier there for its projects, Enter on a project asks what
+// to name the link, and Enter on the name writes it here, which is then a row
+// like any other. Three steps in the list's own place, with the pane beside
+// them. The bar's "new" adds a machine from the ssh configuration, a step of
+// its own, and "remove" takes the one under the cursor off the list.
 
 // askWait bounds one ask of a host. Long enough for a cold ssh; short
 // enough that a host that is down is a message, not a wait.
 const askWait = 15 * time.Second
 
-// hostItem is one row of the dialog's first step.
-type hostItem struct{ host string }
+// addMachineKey is the remote screen's "new".
+const addMachineKey = "alt+n"
+
+// remoteActions are the remote screen's own buttons.
+var remoteActions = []barAction{
+	{label: "new", key: addMachineKey, run: Model.addMachine},
+	{label: "remove", key: "alt+d", run: Model.removeMachine},
+}
+
+// hostItem is one row of the machines, or of the ssh hosts "new" offers.
+// check is what the machine answered, nil on a row of the ssh hosts, which
+// is not asked.
+type hostItem struct {
+	host  string
+	check *machineCheck
+}
 
 func (i hostItem) FilterValue() string { return i.host }
+
+// machineCheck is a machine's answer to the screen's ask for its revier's
+// version, or why it gave none. Unanswered, it is an ask still out. ask
+// numbers the ask, so an answer to an earlier one is not taken for it.
+type machineCheck struct {
+	ask      int
+	answered bool
+	version  string
+	err      error
+}
+
+// state is what the machine's row says of it.
+func (c machineCheck) state(th theme.Theme) (string, lipgloss.Style) {
+	switch {
+	case !c.answered:
+		return "checking…", th.NameDim
+	case errors.Is(c.err, revier.ErrNoRevier):
+		return "no revier", th.Attention
+	case c.err != nil:
+		return "does not answer", th.Attention
+	}
+	return "revier " + c.version, th.Running
+}
+
+// checkedMsg is a machine's answer to the screen's ask for its version.
+type checkedMsg struct {
+	host    string
+	ask     int
+	version string
+	err     error
+}
 
 // remoteItem is one row of the dialog's second step: a project on the host,
 // and the link here that already points at it, if any. It is drawn by the
@@ -51,12 +100,31 @@ func (i remoteItem) rowPath() string             { return remoteHome(i.view.Proj
 func (i remoteItem) rowUnsurveyed() bool         { return false }
 func (i remoteItem) rowHeld() bool               { return i.view.Held() }
 func (i remoteItem) rowBuiltin() bool            { return false }
+func (i remoteItem) rowLinked() bool             { return i.linked != "" }
 
-func (i remoteItem) rowNote() string {
-	if i.linked == "" {
-		return ""
+// remoteOrder puts the projects a link here names already first, and then
+// sorts as the main list does: an agent that wants the user, then the open
+// projects, and otherwise the host's order.
+func remoteOrder(a, b remoteItem) int {
+	return cmp.Or(cmp.Compare(a.rank(), b.rank()), cmp.Compare(a.need(), b.need()))
+}
+
+func (i remoteItem) rank() int {
+	if i.linked != "" {
+		return 0
 	}
-	return "linked as " + string(i.linked)
+	return 1
+}
+
+func (i remoteItem) need() int {
+	switch {
+	case i.view.Attention():
+		return 0
+	case i.view.Held():
+		return 1
+	default:
+		return 2
+	}
 }
 
 // remoteHome writes a path on the host the way config.ContractHome writes one here,
@@ -122,7 +190,18 @@ func (d hostDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		return s
 	}
 	row := cursor(th, sel) + th.Remote.Render(th.Glyphs.Remote) + " " + style(th.ProjectName).Render(it.host)
-	_, _ = fmt.Fprint(w, fill(row, m.Width(), style))
+	if it.check != nil {
+		// The states stand in one column, after the widest host.
+		width := 0
+		for _, other := range m.Items() {
+			if o, ok := other.(hostItem); ok {
+				width = max(width, lipgloss.Width(o.host))
+			}
+		}
+		text, st := it.check.state(th)
+		row += style(th.Path).Render(strings.Repeat(" ", width-lipgloss.Width(it.host)+2)) + style(st).Render(text)
+	}
+	_, _ = fmt.Fprint(w, fill(clipTo(row, m.Width()), m.Width(), style))
 }
 
 // cursor is the bar down the left of a row, lit on the selected one.
@@ -137,28 +216,34 @@ func cursor(th theme.Theme, sel bool) string {
 type linkStep int
 
 const (
-	linkHosts  linkStep = iota // which host
+	linkHosts  linkStep = iota // which machine
+	linkAdding                 // which ssh host to add as a machine
 	linkRemote                 // which of its projects
 	linkNaming                 // what to name the link
 )
 
-// linkScreen is the link dialog while it is up.
+// linkScreen is the remote screen while it is up.
 type linkScreen struct {
 	step     linkStep
-	hosts    list.Model         // the hosts, the first step
-	remote   list.Model         // a host's projects, the second
-	host     string             // the host the second step shows
-	filter   string             // the query over the host's projects
-	before   revier.ProjectName // the host's project the cursor was on when its query began
-	query    textinput.Model    // that query, with its own cursor
-	asking   string             // the host an ask is out to, while it is
-	name     textinput.Model    // the name field of the last step
-	proposed bool               // whether the name is still the one offered, which the first character typed replaces
+	hosts    list.Model              // the machines, the first step
+	checks   map[string]machineCheck // what each machine answered this visit
+	asks     int                     // the version asks made so far, which numbers each one
+	adding   list.Model              // the ssh hosts "new" offers
+	removing string                  // the machine a remove asks about, while it does
+	links    int                     // how many links name that machine
+	remote   list.Model              // a host's projects, the second
+	host     string                  // the host the second step shows
+	filter   string                  // the query over the host's projects
+	before   revier.ProjectName      // the host's project the cursor was on when its query began
+	query    textinput.Model         // that query, with its own cursor
+	asking   string                  // the host an ask is out to, while it is
+	name     textinput.Model         // the name field of the last step
+	proposed bool                    // whether the name is still the one offered, which the first character typed replaces
 }
 
 func newLinkScreen(th theme.Theme) linkScreen {
 	return linkScreen{
-		hosts: newHostList(th), remote: newRemoteList(th),
+		hosts: newHostList(th), adding: newHostList(th), remote: newRemoteList(th),
 		query: newPrompt(th, ""), name: newLinkNameInput(th),
 	}
 }
@@ -180,17 +265,46 @@ type linkResult struct {
 // openLink is alt+r. The cursor comes back to the list first, so the surface
 // the dialog stands over is the one it is left on.
 func (m Model) openLink() (tea.Model, tea.Cmd) {
-	if m.err = m.link.open(); m.err != nil {
+	var cmd tea.Cmd
+	if cmd, m.err = m.link.open(m.core); m.err != nil {
 		return m, nil
 	}
 	m.toList()
 	m.dialog = dialogLink
+	return m, cmd
+}
+
+// addMachine is the remote screen's "new".
+func (m Model) addMachine() (tea.Model, tea.Cmd) {
+	m.err = m.link.openAdd()
+	return m, nil
+}
+
+// removeMachine is the remote screen's "remove".
+func (m Model) removeMachine() (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	cmd, m.err = m.link.remove(m.core, m.projects)
+	return m, cmd
+}
+
+// checked takes a machine's answer to the screen's ask for its version.
+func (m Model) checked(msg checkedMsg) (tea.Model, tea.Cmd) {
+	m.link.checked(msg)
 	return m, nil
 }
 
 // linkKey is every press while the dialog is up, and what it left for the
-// surface: the dialog closed, or a link that is then a row.
+// surface: the dialog closed, or a link that is then a row. The bar's keys
+// act where the bar is drawn.
 func (m Model) linkKey(msg keyPress) (tea.Model, tea.Cmd) {
+	if m.link.hasBar() {
+		switch {
+		case msg.String() == addMachineKey:
+			return m.addMachine()
+		case key.Matches(msg, m.keys.Delete):
+			return m.removeMachine()
+		}
+	}
 	res, cmd := m.link.key(m.surface(), msg)
 	m.err = res.err
 	switch {
@@ -225,32 +339,208 @@ func (m Model) asked(msg askedMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// open is the dialog's first step, over the hosts the ssh configuration
-// names. No hosts is a message, not an empty list to be puzzled at.
-func (s *linkScreen) open() error {
+// open is the screen's first step, over the machines config.toml declares,
+// and an ask of each one for its revier's version. Each visit asks again,
+// and every ask is its own command, so no machine holds the screen or
+// another machine's row. With no machines, the step says how to add one.
+func (s *linkScreen) open(c *core.Core) (tea.Cmd, error) {
+	cfg, err := readConfig()
+	if err != nil {
+		return nil, err
+	}
+	s.checks = map[string]machineCheck{}
+	cmd := s.load(c, cfg.MachineHosts(), "")
+	s.hosts.Select(0)
+	// A link written last time left its query behind; Esc here would clear
+	// it instead of closing the dialog.
+	s.setFilter("")
+	s.step, s.removing = linkHosts, ""
+	return cmd, nil
+}
+
+// readConfig is config.toml as it is now: the screen reads it at each
+// change, so a machine added by hand is listed.
+func readConfig() (*config.Config, error) {
+	root, err := config.Root()
+	if err != nil {
+		return nil, err
+	}
+	return config.Read(root)
+}
+
+// load lists hosts as the machines, each with what it answered this visit,
+// with the cursor on at where at is one of them. A machine not asked this
+// visit, one added by hand among them, is asked now.
+func (s *linkScreen) load(c *core.Core, hosts []string, at string) tea.Cmd {
+	var cmds []tea.Cmd
+	items := make([]list.Item, 0, len(hosts))
+	for _, h := range hosts {
+		if _, ok := s.checks[h]; !ok {
+			cmds = append(cmds, s.check(c, h))
+		}
+		answer := s.checks[h]
+		items = append(items, hostItem{host: h, check: &answer})
+	}
+	_ = s.hosts.SetItems(items)
+	if i := slices.Index(hosts, at); i >= 0 {
+		s.hosts.Select(i)
+	}
+	return tea.Batch(cmds...)
+}
+
+// check asks a machine for its revier's version, off the terminal. It is no
+// survey, so it is no round of the host's (decisions.md D154, D130).
+func (s *linkScreen) check(c *core.Core, host string) tea.Cmd {
+	s.asks++
+	ask := s.asks
+	s.checks[host] = machineCheck{ask: ask}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), askWait)
+		defer cancel()
+		v, err := c.VersionOn(ctx, host)
+		return checkedMsg{host: host, ask: ask, version: v, err: err}
+	}
+}
+
+// checked takes a machine's answer into its row. A machine removed since
+// the ask has no row to take it, and the answer to an ask of an earlier
+// visit, or of before a remove, is not the one the row waits for.
+func (s *linkScreen) checked(msg checkedMsg) {
+	if was, ok := s.checks[msg.host]; !ok || was.ask != msg.ask {
+		return
+	}
+	c := machineCheck{ask: msg.ask, answered: true, version: msg.version, err: msg.err}
+	s.checks[msg.host] = c
+	for i, item := range s.hosts.Items() {
+		if it, ok := item.(hostItem); ok && it.host == msg.host {
+			s.hosts.SetItem(i, hostItem{host: it.host, check: &c})
+		}
+	}
+}
+
+// hasBar reports the step that draws the screen's bar: the machines, while
+// no remove asks about one.
+func (s *linkScreen) hasBar() bool { return s.step == linkHosts && s.removing == "" }
+
+// openAdd is "new": the step that offers the hosts the ssh configuration
+// names, without the machines on the list and without this machine. With
+// none to offer it says why, and the step does not open. An ask still out is
+// abandoned with the machines, as Esc abandons it.
+func (s *linkScreen) openAdd() error {
+	cfg, err := readConfig()
+	if err != nil {
+		return err
+	}
 	path, err := sshconfig.Path()
 	if err != nil {
 		return err
 	}
-	hosts, err := sshconfig.Hosts(path)
+	all, err := sshconfig.Hosts(path)
 	if err != nil {
 		return err
 	}
-	hosts = slices.DeleteFunc(hosts, config.ThisMachine().Is)
-	if len(hosts) == 0 {
-		return fmt.Errorf("no hosts in %s; add a Host entry to link a project on another machine", config.ContractHome(path))
+	here := config.ThisMachine()
+	hosts := slices.DeleteFunc(slices.Clone(all), func(h string) bool { return cfg.Declares(h) || here.Is(h) })
+	switch {
+	case len(all) == 0:
+		return fmt.Errorf("no hosts in %s; add a Host entry there first", config.ContractHome(path))
+	case len(hosts) == 0:
+		return fmt.Errorf("every host in %s is on the list or is this machine", config.ContractHome(path))
 	}
 	items := make([]list.Item, 0, len(hosts))
 	for _, h := range hosts {
 		items = append(items, hostItem{host: h})
 	}
-	_ = s.hosts.SetItems(items)
-	s.hosts.Select(0)
-	// A link written last time left its query behind; Esc here would clear
-	// it instead of closing the dialog.
-	s.setFilter("")
-	s.step = linkHosts
+	_ = s.adding.SetItems(items)
+	s.adding.Select(0)
+	s.step, s.asking = linkAdding, ""
 	return nil
+}
+
+// add is Enter on an ssh host: a [[machine]] table for it in config.toml,
+// at once, and the machines again, with the cursor on it and an ask out to
+// it.
+func (s *linkScreen) add(c *core.Core) (tea.Cmd, error) {
+	it, ok := s.adding.SelectedItem().(hostItem)
+	if !ok {
+		return nil, nil
+	}
+	if err := withConfigRoot(func(root string) error { return config.AddMachine(root, it.host) }); err != nil {
+		return nil, err
+	}
+	cfg, err := readConfig()
+	if err != nil {
+		return nil, err
+	}
+	s.step = linkHosts
+	return s.load(c, cfg.MachineHosts(), it.host), nil
+}
+
+// remove is "remove" on the machine under the cursor. A machine a link
+// names is asked about first, since the link stays and its machine leaves
+// the list; any other one goes at once. The question abandons an ask still
+// out, whose answer would open a host's projects under it.
+func (s *linkScreen) remove(c *core.Core, projects []core.Project) (tea.Cmd, error) {
+	it, ok := s.hosts.SelectedItem().(hostItem)
+	if !ok {
+		return nil, nil
+	}
+	if n := linksTo(projects, it.host); n > 0 {
+		s.removing, s.links, s.asking = it.host, n, ""
+		return nil, nil
+	}
+	return s.drop(c, it.host)
+}
+
+// linksTo is how many of projects are links to host.
+func linksTo(projects []core.Project, host string) int {
+	n := 0
+	for _, p := range projects {
+		if p.Remote != nil && p.Remote.Host == host {
+			n++
+		}
+	}
+	return n
+}
+
+// drop takes host off the list: its [[machine]] table goes from
+// config.toml, at once, its row from the machines, and an ask of its
+// projects still out is abandoned. The cursor keeps its place, or goes to
+// the new last row where it was on the last.
+func (s *linkScreen) drop(c *core.Core, host string) (tea.Cmd, error) {
+	s.removing = ""
+	if s.asking == host {
+		s.asking = ""
+	}
+	if err := withConfigRoot(func(root string) error { return config.RemoveMachine(root, host) }); err != nil {
+		return nil, err
+	}
+	cfg, err := readConfig()
+	if err != nil {
+		return nil, err
+	}
+	delete(s.checks, host)
+	at := s.hosts.Index()
+	hosts := cfg.MachineHosts()
+	cmd := s.load(c, hosts, "")
+	s.hosts.Select(max(0, min(at, len(hosts)-1)))
+	return cmd, nil
+}
+
+// removeKey is every press while a remove asks about a machine: Enter takes
+// it off the list, and any other key keeps it.
+func (s *linkScreen) removeKey(sf surface, msg keyPress) (linkResult, tea.Cmd) {
+	var res linkResult
+	var cmd tea.Cmd
+	switch {
+	case key.Matches(msg, sf.keys.Quit):
+		return res, tea.Quit
+	case key.Matches(msg, sf.keys.Enter):
+		cmd, res.err = s.drop(sf.core, s.removing)
+	default:
+		s.removing = ""
+	}
+	return res, cmd
 }
 
 // key is every press while the dialog is up. It takes a step at a time: the
@@ -261,6 +551,9 @@ func (s *linkScreen) open() error {
 func (s *linkScreen) key(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 	if s.step == linkNaming {
 		return s.nameKey(sf, msg)
+	}
+	if s.removing != "" {
+		return s.removeKey(sf, msg)
 	}
 	var res linkResult
 	if by, ok := sf.keys.move(msg, func(int) int { return sf.page }); ok {
@@ -277,11 +570,15 @@ func (s *linkScreen) key(sf surface, msg keyPress) (linkResult, tea.Cmd) {
 		}
 		res.closed = s.back()
 	case key.Matches(msg, sf.keys.Enter):
-		if s.step == linkHosts {
-			return res, s.ask(sf.core)
-		}
 		var cmd tea.Cmd
-		cmd, res.err = s.pick()
+		switch s.step {
+		case linkHosts:
+			return res, s.ask(sf.core)
+		case linkAdding:
+			cmd, res.err = s.add(sf.core)
+		default:
+			cmd, res.err = s.pick()
+		}
 		return res, cmd
 	case s.step == linkRemote && promptKey(msg):
 		next, cmd := s.query.Update(msg.input())
@@ -328,14 +625,18 @@ func (s *linkScreen) selected() revier.ProjectName {
 	return it.view.Project.Name
 }
 
-// back is Esc: the second step goes back to the first, and the first reports
-// that the dialog closed. An ask still out is abandoned with the step it was
-// made from, because its answer must not pull the surface back into a dialog
-// the user has just left.
+// back is Esc: a host's projects and the ssh hosts go back to the machines,
+// and the machines report that the dialog closed. An ask still out is
+// abandoned with the step it was made from, because its answer must not pull
+// the surface back into a dialog the user has just left.
 func (s *linkScreen) back() (closed bool) {
 	s.asking = ""
-	if s.step == linkRemote {
+	switch s.step {
+	case linkRemote:
 		s.query.Blur()
+		s.step = linkHosts
+		return false
+	case linkAdding:
 		s.step = linkHosts
 		return false
 	}
@@ -348,11 +649,17 @@ func (s *linkScreen) list() *list.Model {
 	switch s.step {
 	case linkHosts:
 		return &s.hosts
+	case linkAdding:
+		return &s.adding
 	case linkRemote:
 		return &s.remote
 	}
 	return nil
 }
+
+// oneLine reports a step whose rows are one line each: a machine or an ssh
+// host is its name, and a host's projects are drawn as the projects here.
+func (s *linkScreen) oneLine() bool { return s.step == linkHosts || s.step == linkAdding }
 
 // ask is Enter on a host: the host is asked for its projects, off the
 // terminal, and the answer opens the second step.
@@ -381,9 +688,14 @@ func (s *linkScreen) asked(projects []core.Project, msg askedMsg) (tea.Cmd, erro
 	if msg.err != nil {
 		return nil, msg.err
 	}
-	items := make([]list.Item, 0, len(msg.views))
+	rows := make([]remoteItem, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, linked: core.LinkedAs(projects, msg.host, v.Project.Name)})
+		rows = append(rows, remoteItem{view: v, linked: core.LinkedAs(projects, msg.host, v.Project.Name)})
+	}
+	slices.SortStableFunc(rows, remoteOrder)
+	items := make([]list.Item, len(rows))
+	for i, r := range rows {
+		items[i] = r
 	}
 	s.host = msg.host
 	s.setFilter("")
@@ -503,9 +815,14 @@ func (s *linkScreen) write(sf surface) linkResult {
 	return res
 }
 
-// title names the step, on the surface's first line.
+// title names the step, on the surface's first line, where the machines draw
+// the bar instead.
 func (s *linkScreen) title() string {
 	switch s.step {
+	case linkHosts:
+		return "Remove a machine from the list"
+	case linkAdding:
+		return "Add a machine from the ssh configuration"
 	case linkRemote:
 		return s.host
 	case linkNaming:
@@ -515,14 +832,22 @@ func (s *linkScreen) title() string {
 		}
 		return name
 	}
-	return "Link a project on another machine"
+	return ""
 }
 
-// subtitle is the line over the rule: the query over a host's projects, or
-// the name field. The hosts step says nothing there - the title over it
-// already says what the rows are, and the rule under it counts them - but it
-// keeps the line, so the rows do not move as the step changes.
+// subtitle is the line over the rule: the query over a host's projects, the
+// name field, or the question a remove asks. The machines and the ssh hosts
+// say nothing there - the bar or the title over them already says what the
+// rows are, and the rule under them counts them - but they keep the line, so
+// the rows do not move as the step changes.
 func (s *linkScreen) subtitle(th theme.Theme) string {
+	if s.removing != "" {
+		stay := "stay"
+		if s.links == 1 {
+			stay = "stays"
+		}
+		return " " + th.Attention.Render(fmt.Sprintf("Take %s off the list? %s to it %s here.", s.removing, core.Count(s.links, "link"), stay))
+	}
 	switch s.step {
 	case linkRemote:
 		return " " + inputView(s.query)
@@ -545,7 +870,9 @@ func (s *linkScreen) subtitle(th theme.Theme) string {
 func (s *linkScreen) count(th theme.Theme) string {
 	switch {
 	case s.step == linkHosts:
-		return th.NameDim.Render(fmt.Sprintf("%d hosts", len(s.hosts.Items())))
+		return th.NameDim.Render(core.Count(len(s.hosts.Items()), "machine"))
+	case s.step == linkAdding:
+		return th.NameDim.Render(core.Count(len(s.adding.Items()), "host"))
 	case s.step == linkRemote && s.filter != "":
 		return th.NameDim.Render(fmt.Sprintf("%d/%d projects", len(s.remote.VisibleItems()), len(s.remote.Items())))
 	case s.step == linkRemote:
@@ -554,21 +881,29 @@ func (s *linkScreen) count(th theme.Theme) string {
 	return ""
 }
 
-// empty is what stands in place of rows when the query left none.
+// empty is what stands in place of rows: how to add a machine where there is
+// none, or that the query left none.
 func (s *linkScreen) empty() string {
-	if s.step == linkRemote && s.filter != "" {
+	switch {
+	case s.step == linkHosts && len(s.hosts.Items()) == 0:
+		return "No machines on the list. " + addMachineKey + " adds one from the ssh configuration."
+	case s.step == linkRemote && s.filter != "":
 		return fmt.Sprintf("No project on %s matches %q.", s.host, s.filter)
 	}
 	return ""
 }
 
-// help is the footer. Its two list steps take the same keys and mean
-// different things by them.
+// help is the footer. Its list steps take the same keys and mean different
+// things by them.
 func (s *linkScreen) help(k keyMap) []key.Binding {
-	switch s.step {
-	case linkHosts:
-		return []key.Binding{helpKey("enter", "list its projects"), helpKey("esc", "back"), k.Quit}
-	case linkRemote:
+	switch {
+	case s.removing != "":
+		return []key.Binding{helpKey("enter", "take it off"), helpKey("esc", "keep it"), k.Quit}
+	case s.step == linkHosts:
+		return []key.Binding{helpKey("enter", "list its projects"), helpKey(addMachineKey, "new"), helpKey("alt+d", "remove"), helpKey("esc", "back"), k.Quit}
+	case s.step == linkAdding:
+		return []key.Binding{helpKey("enter", "add it"), helpKey("esc", "back"), k.Quit}
+	case s.step == linkRemote:
 		return []key.Binding{helpKey("enter", "name the link"), helpKey("type", "filter"), helpKey("esc", "clear/back"), k.Quit}
 	}
 	return []key.Binding{helpKey("enter", "link"), helpKey("esc", "back"), k.Quit}
@@ -577,6 +912,7 @@ func (s *linkScreen) help(k keyMap) []key.Binding {
 // restyle redraws the rows and the fields in a theme.
 func (s *linkScreen) restyle(th theme.Theme) {
 	s.hosts.SetDelegate(hostDelegate{theme: th})
+	s.adding.SetDelegate(hostDelegate{theme: th})
 	s.light(th, -1)
 	styleField(&s.query, th)
 	styleField(&s.name, th)
@@ -626,14 +962,21 @@ func newLinkNameInput(th theme.Theme) textinput.Model {
 // detail is the pane past the first step: what the host said about the
 // project under the cursor.
 func (s *linkScreen) detail(sf surface) string {
-	it, ok := s.remote.SelectedItem().(remoteItem)
-	if !ok || s.step == linkHosts {
-		return ""
-	}
-	th, v, w := sf.theme, it.view, sf.pane
+	th, w := sf.theme, sf.pane
 	line := func(label, value string, style lipgloss.Style) string {
 		return hang(th.Meta.Render(pad(label, detailLabelWidth)), value, w, style) + "\n"
 	}
+	switch s.step {
+	case linkHosts:
+		return s.machineDetail(sf, line)
+	case linkAdding:
+		return ""
+	}
+	it, ok := s.remote.SelectedItem().(remoteItem)
+	if !ok {
+		return ""
+	}
+	v := it.view
 	out := th.Header.Render(clipTo(string(v.Project.Name)+"@"+s.host, w)) + "\n"
 	out += line("Path", v.Project.Path, th.Path)
 	status, style := "stopped", th.NameDim
@@ -645,7 +988,7 @@ func (s *linkScreen) detail(sf surface) string {
 	}
 	out += line("Status", status, style)
 	if it.linked != "" {
-		out += line("Linked as", string(it.linked), th.Remote)
+		out += line("Link", string(it.linked), th.Remote)
 	} else if s.step == linkRemote {
 		out += th.Meta.Render(clipTo("Enter: name a link to it here", w)) + "\n"
 	}
@@ -656,6 +999,25 @@ func (s *linkScreen) detail(sf surface) string {
 		}
 	}
 	return out
+}
+
+// machineDetail is the pane on the machines: what the machine under the
+// cursor answered, and why where it gave no version, and how many links
+// here name it.
+func (s *linkScreen) machineDetail(sf surface, line func(label, value string, style lipgloss.Style) string) string {
+	it, ok := s.hosts.SelectedItem().(hostItem)
+	if !ok || it.check == nil {
+		return ""
+	}
+	th, w := sf.theme, sf.pane
+	out := th.Header.Render(clipTo(it.host, w)) + "\n"
+	state, style := it.check.state(th)
+	out += line("Status", state, style)
+	if it.check.err != nil {
+		out += line("Reason", it.check.err.Error(), th.Meta)
+	}
+	out += line("Links", core.Count(linksTo(sf.projects, it.host), "link")+" here", th.NameDim)
+	return out + th.Meta.Render(clipTo("Enter: list its projects", w)) + "\n"
 }
 
 // askingLine is the footer while an ask is out.

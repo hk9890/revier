@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -13,31 +14,37 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// alt+r lists the hosts the ssh configuration names; Enter on one asks it
-// and shows its projects, with the link here that already points at each.
-func TestAltRListsHostsAndEnterListsTheHostsProjects(t *testing.T) {
+// alt+r lists the machines config.toml declares, and not every host the ssh
+// configuration names; Enter on one asks it and shows its projects, with the
+// link here that already points at each.
+func TestAltRListsTheMachinesAndEnterListsTheHostsProjects(t *testing.T) {
 	m, remote, _ := linkWorld(t, remoteOnDisk(t, "alpha"), "alpha", "beta")
 
 	m = step(m, "alt+r")
-	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") {
-		t.Fatalf("rows = %q, want the two hosts", r)
+	if r := rows(m); len(r) < 2 || !strings.Contains(r[0], "buildbox") || !strings.Contains(r[1], "farbox") || strings.Contains(screen(m), "github.com") {
+		t.Fatalf("rows = %q, want the two machines and not github.com", r)
 	}
-	if h := barLine(m); !strings.Contains(h, "Link") {
-		t.Errorf("header = %q, want the dialog named", h)
+	if h := barLine(m); !strings.Contains(h, "Remote machines") || !strings.Contains(h, "new alt+n") {
+		t.Errorf("header = %q, want the screen named, and its bar", h)
 	}
 
 	m = step(m, "enter")
 	if last := remote.Asked[len(remote.Asked)-1]; len(last) != 0 {
 		t.Errorf("asked %v, want the dialog's ask to be for every project", remote.Asked)
 	}
-	// Two lines a project, as on the surface: the name, and the path with
-	// the note beside it.
+	// Two lines a project, as on the surface: the name, with the link mark
+	// in the folder column in front of it, and the path.
+	linked := theme.Default().Glyphs.Linked
 	r := rows(m)
-	if len(r) < 4 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[1], "linked as alpha") {
-		t.Errorf("rows = %q, want alpha marked as linked", r)
+	if len(r) < 4 || !strings.Contains(r[0], linked+" alpha") || strings.Contains(r[1], "linked as") {
+		t.Errorf("rows = %q, want alpha marked as linked with the link glyph alone", r)
 	}
-	if !strings.Contains(r[2], "beta") || strings.Contains(r[3], "linked") {
+	if !strings.Contains(r[2], "beta") || strings.Contains(r[2]+r[3], linked) {
 		t.Errorf("rows = %q, want beta unlinked", r)
+	}
+	// The pane names the link, its label apart from the name.
+	if p := pane(resize(m, 120, 20)); !regexp.MustCompile(`Link +alpha`).MatchString(p) {
+		t.Errorf("pane = %q, want the link named after its label and a space", p)
 	}
 	if h := barLine(m); !strings.Contains(h, "buildbox") {
 		t.Errorf("header = %q, want the host named", h)
@@ -246,11 +253,11 @@ func TestEscClosesTheHostsAfterALinkWrittenFromAQuery(t *testing.T) {
 	m = step(m, "enter")
 
 	m = step(m, "alt+r")
-	if h := barLine(m); !strings.Contains(h, "Link") {
-		t.Fatalf("header = %q, want the hosts up", h)
+	if h := barLine(m); !strings.Contains(h, "Remote machines") {
+		t.Fatalf("header = %q, want the machines up", h)
 	}
 	m, _ = press(m, "esc")
-	if h := barLine(m); strings.Contains(h, "Link") {
+	if h := barLine(m); strings.Contains(h, "Remote machines") {
 		t.Errorf("header = %q, want the dialog closed by the first esc", h)
 	}
 }
@@ -338,32 +345,36 @@ func TestAHostThatDoesNotAnswerIsSaidInTheFooter(t *testing.T) {
 }
 
 // This machine is no host to link to: a link to it is left out of every
-// load, so the dialog does not offer it.
+// load, so the screen does not list it, though a config.toml shared with the
+// other machines declares it.
 func TestAltRLeavesThisMachineOut(t *testing.T) {
 	machine, err := os.Hostname()
 	if err != nil {
 		t.Skip("no hostname:", err)
 	}
-	m, _, _ := linkWorld(t, nil)
-	sshConfig := filepath.Join(t.TempDir(), "config")
-	if err := os.WriteFile(sshConfig, []byte("Host "+machine+"\nHost buildbox\n"), 0o600); err != nil {
+	m, _, root := linkWorld(t, nil)
+	if err := config.AddMachine(root, machine); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
 	m = step(m, "alt+r")
 	if body := strings.Join(rows(m), "\n"); strings.Contains(body, machine) || !strings.Contains(body, "buildbox") {
-		t.Errorf("rows = %q, want buildbox alone", body)
+		t.Errorf("rows = %q, want the machines without this one", body)
 	}
 }
 
-// With no hosts configured there is nothing to choose from, and the footer
-// says where a host would come from.
-func TestAltRWithNoHostsSaysSo(t *testing.T) {
-	m, _, _ := linkWorld(t, nil)
-	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+// With no machines declared the screen opens, with no error, and says how to
+// add one.
+func TestAltRWithNoMachinesSaysHowToAddOne(t *testing.T) {
+	m, _, root := linkWorld(t, nil)
+	if err := os.WriteFile(config.File(root), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	m = step(m, "alt+r")
-	if f := footer(m); !strings.Contains(f, "no hosts") {
-		t.Errorf("footer = %q, want no hosts said", f)
+	if body := screen(m); !strings.Contains(body, "No machines on the list. alt+n adds one") {
+		t.Errorf("screen =\n%s\nwant how to add a machine", body)
+	}
+	if f := footer(m); strings.Contains(f, "no ") {
+		t.Errorf("footer = %q, want no error", f)
 	}
 }
 

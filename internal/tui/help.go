@@ -108,6 +108,12 @@ func (m Model) helpSections() []helpSection {
 			{key: "esc", desc: "clear the filter, or " + m.leaveWord()},
 		}},
 		{title: "Top bar", entries: barHelpEntries()},
+		{title: "Remote machines", entries: []helpEntry{
+			{key: "enter", desc: "list the machine's projects, to link one here"},
+			{key: addMachineKey, desc: "add a machine from the ssh configuration"},
+			{key: "alt+d", desc: "take the machine off the list; a link to it stays"},
+			{key: "esc", desc: "back to the projects"},
+		}},
 		{title: "Sessions", entries: []helpEntry{
 			{key: "enter", desc: "restore the session: open what it recorded and is not running"},
 			{key: sessionsBarKey, desc: "save the projects open now, under an optional name"},
@@ -144,7 +150,7 @@ func (m Model) helpSections() []helpSection {
 func barHelpEntries() []helpEntry {
 	descs := map[string]string{
 		"new":      "add a project on this machine",
-		"remote":   "link a project on another machine",
+		"remote":   "the machines you added: whether each runs revier, and its projects to link",
 		"sessions": "save, restore and shut down the set of open projects",
 		"config":   "change the configuration",
 		"assist":   "raise revier-config-assistant, the coding agent briefed to configure revier",

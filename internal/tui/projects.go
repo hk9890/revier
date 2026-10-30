@@ -37,22 +37,24 @@ func (i projectItem) FilterValue() string { return string(i.view.Project.Name) }
 
 func (i projectItem) rowView() revier.ProjectView { return i.view }
 func (i projectItem) rowPath() string             { return config.ContractHome(i.view.Project.Path) }
-func (i projectItem) rowNote() string             { return "" }
+func (i projectItem) rowLinked() bool             { return false }
 func (i projectItem) rowUnsurveyed() bool         { return i.unsurveyed }
 func (i projectItem) rowHeld() bool               { return i.held }
 func (i projectItem) rowBuiltin() bool            { return i.builtin }
 
 // tableRow is an item the project table draws: the projects here, and the
-// projects of a host in the link dialog. The two differ in whose home a path
-// is written against, and in the note a link dialog row has under the counts.
+// projects of a host in the remote screen. The two differ in whose home a path
+// is written against, and in the link mark a remote screen row has under the
+// counts.
 type tableRow interface {
 	rowView() revier.ProjectView
 	rowPath() string
-	rowNote() string
+	// rowLinked reports a host's project that a link here names already.
+	rowLinked() bool
 	rowUnsurveyed() bool
 	// rowHeld reports the project open, which decides the row's mark. A
 	// project here is held by an attachment the survey was not asked about
-	// too; a host's project in the link dialog is held by what the host said
+	// too; a host's project in the remote screen is held by what the host said
 	// and nothing of this machine's.
 	rowHeld() bool
 	// rowBuiltin reports the project revier builds in, which takes the
@@ -123,7 +125,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		return s
 	}
 
-	v, path, rowNote := it.rowView(), it.rowPath(), it.rowNote()
+	v, path, linked := it.rowView(), it.rowPath(), it.rowLinked()
 	width := m.Width()
 	// The mark says whether the project is open, and nothing else: what its
 	// agents are doing is the right-hand side's, as counts by state.
@@ -134,8 +136,8 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	case it.rowHeld():
 		mark, markStyle, name = th.Glyphs.Running, th.Running, th.ProjectName
 	}
-	// A row with a note of its own is one Enter has nothing to do on.
-	if rowNote != "" {
+	// A row linked already is one Enter has nothing to do on.
+	if linked {
 		name = th.NameDim
 	}
 	if sel {
@@ -151,13 +153,15 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := bar + gap + style(markStyle).Render(mark) + gap
 	if th.Glyphs.Folder != "" {
 		// The column says where the checkout is: here, not here, or on a
-		// host; or that there is none, revier's own project.
+		// host through a link; or that there is none, revier's own project.
+		// A host's project that a link here names already is marked as the
+		// link is.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
 		switch {
+		case linked || v.Project.Remote != nil:
+			folder, folderStyle = th.Glyphs.Linked, th.Remote
 		case it.rowBuiltin():
 			folder, folderStyle = th.Glyphs.Builtin, th.Accent
-		case v.Project.Remote != nil:
-			folder, folderStyle = th.Glyphs.Remote, th.Remote
 		case !v.PathExists:
 			folder, folderStyle = th.Glyphs.NoFolder, th.PathMissing
 		}
@@ -196,9 +200,10 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 	// A missing path stays grey: a third of the rows in maroon from end to
 	// end read as a list of errors.
+	// A set with no folder column marks a linked row beside the counts.
 	note := ""
-	if rowNote != "" {
-		note = style(th.Meta).Render(ellipsis(rowNote, agentCol))
+	if linked && th.Glyphs.Folder == "" {
+		note = style(th.Remote).Render(th.Glyphs.Linked)
 	}
 	second := bar + style(th.Path).Render(strings.Repeat(" ", indent-1)) +
 		cell(style(th.Path).Render(elide(path, projectCol)), projectCol+gridGap) + note
@@ -214,10 +219,9 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 // The table's measures: the gap between its columns, the digits an agent
 // count is padded to, the most the agent column takes, the most the project
 // column asks for, and the most of it a name takes. The agent column has what
-// the counts of all four states need; a link dialog row's "linked as" note is
-// cut to it. The project column asks for its widest name or path up to a width
-// that holds most paths, and a name longer than its cap is cut so its row alone
-// pays for it.
+// the counts of all four states need. The project column asks for its widest
+// name or path up to a width that holds most paths, and a name longer than its
+// cap is cut so its row alone pays for it.
 const (
 	gridGap         = 2
 	countWidth      = 2

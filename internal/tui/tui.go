@@ -67,7 +67,7 @@ const (
 	focusAgents
 )
 
-// dialog is a screen standing over the surface: the link dialog, the
+// dialog is a screen standing over the surface: the remote screen, the
 // new-project field, the sessions screen, the config screen, the help screen,
 // the shutdown wizard, the project screen, or the start dialog after a full
 // shutdown. A screen's step is the screen's own. dialogNone is the surface
@@ -221,7 +221,7 @@ type Model struct {
 	// large ones are held by pointer: Model is copied on every message, and
 	// past 64 KB each copy is a heap allocation rather than a copy on the
 	// stack.
-	link     *linkScreen     // the link dialog (link.go)
+	link     *linkScreen     // the remote screen (link.go)
 	create   *createScreen   // the new-project screen (newproject.go)
 	sessions *sessionsScreen // the sessions screen, and its save or restore (sessions.go)
 	config   *configScreen   // the config screen (configscreen.go)
@@ -1022,6 +1022,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case askedMsg:
 		return m.asked(msg)
+	case checkedMsg:
+		return m.checked(msg)
 	case savedMsg:
 		return m.saved(msg)
 	case restoredMsg:

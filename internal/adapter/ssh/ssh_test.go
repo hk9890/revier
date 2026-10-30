@@ -41,6 +41,32 @@ func TestSurveyAsksForTheNamedProjectsInOneCall(t *testing.T) {
 	}
 }
 
+// Version is the word after "revier" in what `revier version` prints.
+func TestVersionReadsTheWordAfterRevier(t *testing.T) {
+	r := ssh.New("buildbox")
+	calls := record(r, "revier 0.21.0 (c7566fe, 2026-10-26T00:38:30Z)\n", nil)
+
+	got, err := r.Version(context.Background())
+	if err != nil {
+		t.Fatalf("Version: %v", err)
+	}
+	if want := []string{"revier", "version"}; len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
+		t.Errorf("ran %v, want one call %v", *calls, want)
+	}
+	if got != "0.21.0" {
+		t.Errorf("version = %q, want 0.21.0", got)
+	}
+}
+
+// An answer that is not revier's is an error, not a version.
+func TestVersionRefusesAnAnswerThatIsNotRevier(t *testing.T) {
+	r := ssh.New("buildbox")
+	record(r, "hello from the profile\n", nil)
+	if v, err := r.Version(context.Background()); err == nil {
+		t.Errorf("Version = %q, want an error", v)
+	}
+}
+
 // A save asks the same question with each agent's conversation in the answer.
 func TestConversationsAsksTheSurveyForTheConversations(t *testing.T) {
 	r := ssh.New("buildbox")

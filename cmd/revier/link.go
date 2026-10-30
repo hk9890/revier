@@ -4,19 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"slices"
 	"text/tabwriter"
 
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/sshconfig"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// cmdLink is the link dialog as a command (decisions.md D45): with nothing,
-// the hosts the ssh configuration names; with a host, the projects the
-// revier there has; with a host and a project, a link to it written here.
+// cmdLink is the remote screen as a command (decisions.md D154): with
+// nothing, the machines config.toml declares; with a host, the projects the
+// revier there has; with a host and a project, a link to it written here. A
+// host need not be declared to be linked.
 func cmdLink(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("link", flag.ContinueOnError)
 	name := fs.String("name", "", "the link's name here; the project's own name by default")
@@ -25,26 +24,16 @@ func cmdLink(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	// Refused before the host is asked: the ask would be ssh to itself.
-	here := config.ThisMachine()
 	if len(pos) > 0 {
-		if err := here.RefuseLink(pos[0]); err != nil {
+		if err := config.ThisMachine().RefuseLink(pos[0]); err != nil {
 			return err
 		}
 	}
 	switch len(pos) {
 	case 0:
-		path, err := sshconfig.Path()
-		if err != nil {
-			return err
-		}
-		hosts, err := sshconfig.Hosts(path)
-		if err != nil {
-			return err
-		}
-		// This machine is no host to link to (decisions.md D131).
-		hosts = slices.DeleteFunc(hosts, here.Is)
+		hosts := a.cfg.MachineHosts()
 		if len(hosts) == 0 {
-			_, _ = fmt.Fprintf(a.out, "no hosts in %s\n", path)
+			_, _ = fmt.Fprintf(a.out, "no machines in %s; add a [[machine]] table there, or one with alt+n on the remote screen\n", config.File(a.cfgRoot))
 			return nil
 		}
 		for _, h := range hosts {

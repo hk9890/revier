@@ -82,12 +82,31 @@ func cmdDoctor(out io.Writer, args []string) error {
 			_, _ = fmt.Fprintf(out, "  %s\n", file)
 		}
 	}
+	// Not a problem either: the link works, and the remote screen does not
+	// list its machine (decisions.md D154).
+	if off := offList(cfg, projects); len(off) > 0 {
+		_, _ = fmt.Fprintf(out, "%s to a machine not on the remote screen (a link works without it):\n", core.Count(len(off), "link"))
+		for _, p := range off {
+			_, _ = fmt.Fprintf(out, "  %s (%s)\n", p.File, p.Remote.Host)
+		}
+	}
 	if bad > 0 {
 		// Exit 1, so a script that checks the configuration can act on it.
 		// Nothing is printed by the caller: the report above is the message.
 		return problemsFound{files: bad}
 	}
 	return nil
+}
+
+// offList is the links whose host no [[machine]] table of config.toml names.
+func offList(cfg *config.Config, projects []core.Project) []core.Project {
+	var out []core.Project
+	for _, p := range projects {
+		if p.Remote != nil && !cfg.Declares(p.Remote.Host) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // subject is what a refusal of config.toml or of a status table is about,

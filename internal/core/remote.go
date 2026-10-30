@@ -48,9 +48,20 @@ func (c *Core) remote(host string) (revier.Remote, error) {
 }
 
 // ProjectsOn lists every project the revier on a host has, as it sees them:
-// what the link dialog offers to link (decisions.md D45).
+// what the remote screen offers to link (decisions.md D154).
 func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectView, error) {
 	return c.survey(ctx, host, nil)
+}
+
+// VersionOn is the version of the revier on a host: whether a machine on the
+// remote screen answers and runs one (decisions.md D154). It is no survey,
+// so it is no round of the host's (D130).
+func (c *Core) VersionOn(ctx context.Context, host string) (string, error) {
+	r, err := c.remote(host)
+	if err != nil {
+		return "", err
+	}
+	return r.Version(ctx)
 }
 
 // ThisMachine reports a link's host that names the machine revier runs on.

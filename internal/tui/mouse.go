@@ -48,10 +48,11 @@ func clicked(it list.Item) any {
 // Whatever the pointer is over is lit, so all three say they can be clicked
 // before they are. A drag selects text instead (selection.go).
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	// A delete waiting for its answer holds the screen still: the question
-	// names one project, and a wheel moving the highlight to another would
-	// leave the user answering about a row they are no longer looking at.
-	if m.confirm != "" {
+	// A delete or a remove waiting for its answer holds the screen still:
+	// the question names one project or machine, and a wheel moving the
+	// highlight to another would leave the user answering about a row they
+	// are no longer looking at. A second click would be Enter, the answer.
+	if m.confirm != "" || m.dialog == dialogLink && m.link.removing != "" {
 		return m, nil
 	}
 	mouse := msg.Mouse()

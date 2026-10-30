@@ -41,9 +41,10 @@ usage:
                                 ends with this terminal on it (tmux, herdr)
   revier new [name]             write a project file for this directory
   revier link [host [project]] [--name name]
-                                the ssh hosts other than this machine; a host's
-                                projects; or a link to one, written here under
-                                --name or the project's own
+                                the machines config.toml declares, other than
+                                this machine; a host's projects; or a link to
+                                one, written here under --name or the project's
+                                own
   revier go <target> [-p name] [--picker]
                                 run-or-raise a target; pressing it again returns home;
                                 --picker opens the popup when no project resolves

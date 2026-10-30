@@ -299,7 +299,7 @@ func TestAHostEventNamesTheProjectThatLinksToIt(t *testing.T) {
 	}
 }
 
-// The link that `revier link` and the link dialog name for a host's project
+// The link that `revier link` and the remote screen name for a host's project
 // is the one its event lines name. The projects are in the order of their
 // files, where `far-2.toml` stands before `far.toml`.
 func TestLinkedAsIsTheLinkAHostEventNames(t *testing.T) {

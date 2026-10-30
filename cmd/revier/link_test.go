@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -42,6 +43,47 @@ func TestLinkListsTheHostsProjectsAndWhatIsLinked(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) != 3 || !strings.HasSuffix(strings.TrimSpace(lines[1]), "far") || !strings.HasSuffix(strings.TrimSpace(lines[2]), "-") {
 		t.Errorf("table = %q, want far linked as far and other unlinked", out)
+	}
+}
+
+// `revier link` lists the machines config.toml declares, as the remote
+// screen does, and not every host the ssh configuration names.
+func TestLinkListsTheDeclaredMachines(t *testing.T) {
+	a, _ := hostWith(t)
+	sshConfig := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(sshConfig, []byte("Host buildbox\nHost github.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
+
+	out := output(t, a, func() error { return cmdLink(context.Background(), a, nil) })
+	if !strings.Contains(out, "no machines in "+config.File(a.cfgRoot)) || !strings.Contains(out, "alt+n") {
+		t.Errorf("printed %q, want no machines and how to add one", out)
+	}
+
+	if err := config.AddMachine(a.cfgRoot, "buildbox"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Read(a.cfgRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.cfg = cfg
+	out = output(t, a, func() error { return cmdLink(context.Background(), a, nil) })
+	if out != "buildbox\n" {
+		t.Errorf("printed %q, want buildbox alone", out)
+	}
+}
+
+// A host need not be declared to be linked.
+func TestLinkAsksAHostThatIsNotDeclared(t *testing.T) {
+	a, remote := hostWith(t, "far")
+	out := output(t, a, func() error { return cmdLink(context.Background(), a, []string{"buildbox"}) })
+	if !strings.Contains(out, "far") {
+		t.Errorf("table = %q, want the host's project", out)
+	}
+	if len(remote.Asked) != 1 {
+		t.Errorf("asked %v, want the host asked once", remote.Asked)
 	}
 }
 

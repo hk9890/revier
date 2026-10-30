@@ -57,6 +57,8 @@ type Config struct {
 	// Terminal is the terminal's keys and what they do outside a workspace
 	// (terminal.go).
 	Terminal Terminal `toml:"terminal"`
+	// Machines are the machines the remote screen lists (machines.go).
+	Machines []RemoteMachine `toml:"machine"`
 
 	// Problems is what config.toml declares that nothing can use, each with
 	// its reason: an action the TUI could never run, a shared target no
@@ -75,6 +77,7 @@ type Config struct {
 
 	statuses []core.Status  // Status without the tables a rule refused
 	termKeys []core.TermKey // the terminal keys no rule refused
+	machines []string       // the hosts of the machines no rule refused
 }
 
 // UI is how the TUI looks. Both names are resolved at load: a typo is one of
@@ -297,6 +300,13 @@ func parse(data []byte) (*Config, error) {
 	statuses, errs := validateStatuses(cfg.Status, false)
 	cfg.statuses = statuses
 	cfg.Problems = append(cfg.Problems, errs...)
+	for i, err := range validateMachines(cfg.Machines) {
+		if err != nil {
+			cfg.Problems = append(cfg.Problems, err)
+			continue
+		}
+		cfg.machines = append(cfg.machines, cfg.Machines[i].Host)
+	}
 	return cfg, nil
 }
 

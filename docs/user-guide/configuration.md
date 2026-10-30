@@ -29,13 +29,14 @@ Which file can hold which table:
 | `[[target]]` with `[target.remote.window]`, `[target.remote.runtime]` | yes, shared | no | yes |
 | `[[status]]` at `rule-left`, `rule-right` | yes | no | no |
 | `[[status]]` at `project-line`, `project` | yes, shared with local projects only | yes | yes |
-| `[ui]`, `[hosts]`, `[[action]]`, `[[probe]]` | yes | no | no |
+| `[ui]`, `[hosts]`, `[[action]]`, `[[probe]]`, `[[machine]]` | yes | no | no |
 
 - revier ignores an unknown key, and a table in a file that does not take it.
   `revier doctor` reports only a `[[status]]` at a rule place and a target
   part in the wrong file. If a field has no effect, check its spelling.
-- `revier new`, `revier link`, the project screen (alt+e) and the config
-  screen (alt+c) also write these files. They keep your comments.
+- `revier new`, `revier link`, the project screen (alt+e), the config
+  screen (alt+c) and the remote screen (alt+r) also write these files. They
+  keep your comments.
 - Every TUI reads the files again when it gets the focus; the popup, when
   you raise it. After you change `[ui]`, `[hosts]` or `[[probe]]` by hand,
   restart the TUI.
@@ -370,6 +371,26 @@ revier adds what the file leaves out:
   named `agent`, and cannot have panels.
 - revier skips a link whose host is this machine (by name, or by `HostName`
   in `~/.ssh/config`), so both machines can share the project files.
+- A link works also when its host is not one of your
+  [machines](#machines). `revier doctor` names such a link.
+
+## Machines
+
+The machines the remote screen (alt+r) and `revier link` list. Only in
+`config.toml`. The remote screen's `new` (alt+n) writes a table, and its
+`remove` (alt+d) deletes one.
+
+```toml
+[[machine]]
+host = "buildbox"
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `host` | required | The ssh destination, as for `[remote] host`: a `Host` of `~/.ssh/config`, or `user@machine`. No leading `-`, no whitespace. |
+
+- revier does not list a machine that is this machine (by name, or by
+  `HostName` in `~/.ssh/config`), so both machines can share `config.toml`.
 
 ## `[ui]`
 
