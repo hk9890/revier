@@ -76,8 +76,8 @@ for the agent, which a survey there reports it under.
 
 wait prints the status it ended on. On a panel that is not an agent's, such
 as the one agent new --no-focus prints before its harness has started, wait
-waits for the harness to start, within --timeout. prompt types one line and submits it,
-and returns once an idle agent has started on it, so
+waits for the harness to start, within --timeout. prompt types one line and
+submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
 waits for that turn. It refuses a panel that is not an agent's, an agent
 waiting for an answer, where the Enter would pick an option in its dialog,
@@ -202,6 +202,12 @@ func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.W
 // ended on is returned. Only a panel address is refused with ErrNotAgent: an
 // address with no agent in it fails at once, as prompt does.
 func (a *app) startedAgent(ctx context.Context, address string) (core.Agent, error) {
+	name, _, _ := strings.Cut(address, ":")
+	poll := core.AgentPoll
+	if p, ok := a.project(revier.ProjectName(name)); ok && p.Remote != nil {
+		// A link's lookup is an ssh to its host, as each read of its wait is.
+		poll = core.LinkPoll
+	}
 	var notAgent error
 	for {
 		ag, err := a.agent(ctx, address)
@@ -218,7 +224,7 @@ func (a *app) startedAgent(ctx context.Context, address string) (core.Agent, err
 		select {
 		case <-ctx.Done():
 			return core.Agent{}, notAgent
-		case <-time.After(core.AgentPoll):
+		case <-time.After(poll):
 		}
 	}
 }

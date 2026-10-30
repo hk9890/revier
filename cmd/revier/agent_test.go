@@ -40,13 +40,15 @@ func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Wri
 }
 
 // The address agent new --no-focus prints names a shell until the harness
-// starts in it: wait waits for that, then for the status.
+// starts in it: wait waits for that, then for the status. The agent goes idle
+// only after the lookup that finds it busy, so the wait after the lookup is
+// what sees it go idle.
 func TestAgentWaitWaitsForTheHarnessToStart(t *testing.T) {
 	rt, open := shellTab(t)
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		rt.Replace(revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent busy", Command: []string{"agent"}})
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(core.AgentPoll + 250*time.Millisecond)
 		rt.Retitle("1", "agent idle")
 	}()
 	var out bytes.Buffer
