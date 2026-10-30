@@ -85,6 +85,19 @@ func TestATagIsAPanelOfItsWorkspace(t *testing.T) {
 	}
 }
 
+// A named agent's panel carries its name as the mark an agent tab carries, and
+// the default agent's carries none.
+func TestANamedAgentIsMarkedWithItsName(t *testing.T) {
+	root := t.TempDir()
+	fake(t, root, 100, 1, []string{"claude"}, tagged("box.7", "session:demo")...)
+	fake(t, root, 200, 1, []string{"dtop"}, append(tagged("box.9", "session:demo"), proc.AgentVar+"=dtop")...)
+
+	panels := instances(t, root)[0].Panels
+	if len(panels) != 2 || panels[0].Vars != nil || panels[1].Vars[revier.PanelAgentVar] != "dtop" {
+		t.Fatalf("panels = %+v, want box.7 unmarked and box.9 marked dtop", panels)
+	}
+}
+
 // Everything an agent starts inherits its tag: a shell tool, and a second
 // Claude Code that the listing reports as a session of its own. The panel is
 // the agent, whatever the pids say.
