@@ -41,11 +41,11 @@ func clicked(it list.Item) any {
 //
 // A row of the list or of the pane is chosen with one click and opened with a
 // second, as a row of a file manager is: choosing it costs nothing and opening
-// it opens a window. The project's name over the pane, "logs" beside it, the
-// footer's error and a button on the bar are not rows but things to do, and
-// one click does them, on release, so a drag that begins on one runs nothing.
+// it opens a window. The project's name over the pane, the footer's error and
+// a button on the bar are not rows but things to do, and one click does them,
+// on release, so a drag that begins on one runs nothing.
 //
-// Whatever the pointer is over is lit, so all three say they can be clicked
+// Whatever the pointer is over is lit, so each of them says it can be clicked
 // before they are. A drag selects text instead (selection.go).
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// A delete or a remove waiting for its answer holds the screen still:

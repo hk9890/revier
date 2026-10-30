@@ -107,7 +107,7 @@ func TestTheNameInThePaneOpensTheProjectScreen(t *testing.T) {
 	}
 }
 
-// The name button starts after "logs" and the label, with a space around its
+// The name button starts after the label, with a space around its
 // text: the cell before that space opens nothing, and the space after the
 // text opens the screen.
 func TestTheNameButtonIsWhereItIsDrawn(t *testing.T) {
