@@ -429,7 +429,8 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 // gets what [terminal] outside says, with agent the named agent an agent tab
 // asks for, and here is not called. With --panel and no --dir, a shell tab's
 // directory is the panel's own (decisions.md D153), and an agent tab's is the
-// project's (D158).
+// project's (D158). Outside a workspace, with outside = "agent", an agent tab
+// starts in the panel's directory (D164).
 func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, agent, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
 		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.OutsideKey(agent), func(w core.Workspace, dir string) error {

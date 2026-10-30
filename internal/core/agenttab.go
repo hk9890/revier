@@ -463,8 +463,8 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 
 // agent is the named agent a key outside a workspace runs: the one the key
 // names, else config.toml's first. With none declared there is no agent to
-// run, and the key opens the plain tab. A name config.toml does not declare,
-// and a command that reads a project template, are refused: outside a
+// run, and the key opens the plain tab. A name config.toml does not declare is
+// refused. A command that reads a project template is refused: outside a
 // workspace there is no project to render it against (decisions.md D164).
 func (o OutsideKey) agent() (NamedAgent, bool, error) {
 	if o.Agent == "" && len(o.Agents) == 0 {

@@ -58,9 +58,8 @@ while your `runtime` list names tmux: see [`[hosts]`](../configuration.md#hosts)
 In a session that is no project's workspace, both keys open a plain shell
 window there, or nothing if you set
 [`outside`](../configuration.md#terminal) to `none`. Set it to `agent` to
-have the agent key start the first `[[agent]]` of `config.toml` there, in the
-pane's directory; `revier agent new <name> --panel "#{pane_id}"` starts that
-named agent.
+have the agent key start an agent there; see
+[`[terminal]`](../configuration.md#terminal).
 
 ## What does not work
 
