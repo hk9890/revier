@@ -362,3 +362,13 @@ func TestTheAgentPaneSaysTheAddressAndTheHarnessName(t *testing.T) {
 		t.Errorf("pane names an agent its harness names nothing:\n%s", body)
 	}
 }
+
+// The name is the harness's text, so what would move the cursor or recolour
+// the terminal is dropped before the pane draws it.
+func TestTheAgentPaneDrawsTheHarnessNameAsPlainText(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "one", name: "\x1b[31mred\x07\nline"})
+	body := pane(m)
+	if !strings.Contains(body, "Name     claude:redline") || strings.Contains(body, "\x07") {
+		t.Errorf("pane draws the name with its control text:\n%q", body)
+	}
+}

@@ -500,7 +500,7 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 		line("Host", it.project.Remote.Host, th.Path)
 	}
 	if it.agent.Target != "" {
-		line("Address", core.Address(it.project.Name, it.agent.Target, it.agent.Panel), th.Path)
+		line("Address", printable(core.Address(it.project.Name, it.agent.Target, it.agent.Panel)), th.Path)
 	}
 	path := it.project.Path
 	if it.agent.State.Dir != "" {
@@ -512,7 +512,7 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
 	if it.agent.State.Name != "" {
-		line("Name", harnessOf(it.agent)+":"+it.agent.State.Name, th.Path)
+		line("Name", printable(harnessOf(it.agent)+":"+it.agent.State.Name), th.Path)
 	}
 	if at := it.detail.At; !at.IsZero() {
 		line("Last", spokeAt(now, at), th.Path)

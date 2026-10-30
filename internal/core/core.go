@@ -1390,17 +1390,11 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 	probed := probeCache{}
 	for _, p := range projects {
 		v := c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed)
-		// view labelled each agent it probed, so a local view needs only its
-		// open tabs placed. A link's agents are its host's, placed once they
-		// are laid over, through the targets the link holds here: a link that
-		// holds none places nothing. The survey is the hot path.
-		switch {
-		case p.Remote != nil && v.Held():
-			pl := c.places(snap, p, bound[p.Name])
-			pl.label(v.Agents)
-			r.places[p.Name] = pl
-		case p.Remote == nil && len(v.Agents) > 0:
-			c.tabPlaces(snap, p, bound[p.Name]).label(v.Agents)
+		// view labelled each agent it probed. A link's agents are its host's,
+		// placed once they are laid over, through the targets the link holds
+		// here: a link that holds none places nothing.
+		if p.Remote != nil && v.Held() {
+			r.places[p.Name] = c.places(snap, p, bound[p.Name])
 		}
 		r.Views = append(r.Views, v)
 	}
@@ -1552,8 +1546,12 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// survey's, not this view's.
 	//
 	// Each agent is labelled with the target its instance was first found
-	// for, which is the target places names for it outside the open tabs.
+	// for, and then with the first open tab that lists its panel: the rule
+	// places keeps for revier agent. An agent of a link that this side read
+	// itself, in a terminal attached by hand, has none: the link's address
+	// reaches the agents its host lists alone.
 	seen := map[string]bool{}
+	var tabs places
 	probe := func(inst revier.Instance, target revier.TargetName) {
 		if k := key(inst.Ref); !seen[k] {
 			seen[k] = true
@@ -1576,7 +1574,12 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	for i, t := range p.Targets {
 		tv := revier.TargetView{Name: t.Name, Key: t.Key}
 		if p.isTab(i) {
-			v.Targets = append(v.Targets, c.tabView(snap, failed, p, i, bound, tv))
+			tv, tab := c.tabView(snap, failed, p, i, bound, tv)
+			if tab != nil && tabs.tabs == nil {
+				tabs.tabs = map[string]revier.TargetName{}
+			}
+			tabs.addTab(tab)
+			v.Targets = append(v.Targets, tv)
 			continue
 		}
 		// What this machine serves to a terminal elsewhere is probed whether
@@ -1655,6 +1658,9 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 			v.Targets = append(v.Targets, revier.TargetView{Host: ref.Host, Ref: inst.Ref, Attached: true, Available: true})
 			probe(inst, "")
 		}
+	}
+	if local {
+		tabs.label(v.Agents)
 	}
 	return v
 }

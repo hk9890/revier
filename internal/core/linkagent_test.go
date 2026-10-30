@@ -563,6 +563,13 @@ func TestALinkListsAnAgentBothSidesReportOnce(t *testing.T) {
 	if agents[0].Ref != pane || agents[0].Panel != "9" || agents[0].State.Status != revier.StatusRunning {
 		t.Errorf("agent = %+v, want panel 9 of %v as the probe here read it", agents[0], pane)
 	}
+	// It keeps the address its host lists it under, which resolves.
+	if agents[0].Target != "home" {
+		t.Errorf("target = %q, want home, the host's agent's", agents[0].Target)
+	}
+	if a, err := c.Agent(context.Background(), p, "home:9"); err != nil || a.Panel.ID != "9" {
+		t.Errorf("Agent(far:home:9) = %+v, %v; want panel 9", a, err)
+	}
 	if plan := c.ShutdownPlan(report, "", core.ShutdownAll); len(core.Busy(plan)) != 1 {
 		t.Errorf("busy steps = %d, want the one agent named once", len(core.Busy(plan)))
 	}
@@ -717,5 +724,37 @@ func TestServeRunsTheNamedAgent(t *testing.T) {
 	}
 	if _, err := c.ServeAgent(p, core.Resume{Agent: "review"}); !errors.Is(err, core.ErrUnknownAgent) {
 		t.Errorf("ServeAgent err = %v, want ErrUnknownAgent", err)
+	}
+}
+
+// An agent this side read in a link's window attached by hand, which its
+// host does not list, has no address: the link's address reaches only the
+// agents its host lists (decisions.md D155).
+func TestALinksAgentReadHereAloneHasNoAddress(t *testing.T) {
+	c, _, _, pane := linked(t)
+	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "fixing",
+		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}}
+	p := linkProject(t)
+	c.Ledger = attachments(map[revier.ProjectName][]revier.TargetRef{p.Name: {pane}})
+
+	report, err := c.Survey(context.Background(), []core.Project{p})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if agents := report.Views[0].Agents; len(agents) != 1 || agents[0].Panel != "9" || agents[0].Target != "" {
+		t.Errorf("agents = %+v, want panel 9 with no target", agents)
+	}
+}
+
+// A link's address that names a panel its target does not hold, or a target
+// that is not running, is refused as a local project's is.
+func TestALinksAddressIsRefusedAsALocalOneIs(t *testing.T) {
+	c, _, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	p := linkProject(t)
+	if _, err := c.Agent(context.Background(), p, "home:99"); err == nil || !strings.Contains(err.Error(), `home has no running panel "99"`) {
+		t.Errorf("Agent(far:home:99) err = %v, want no running panel", err)
+	}
+	if _, err := c.Agent(context.Background(), p, "logs:9"); err == nil || !strings.Contains(err.Error(), "far:logs:9 is not running") {
+		t.Errorf("Agent(far:logs:9) err = %v, want not running", err)
 	}
 }

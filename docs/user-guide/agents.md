@@ -34,8 +34,7 @@ for example `shop:home:7`. The agent list shows it in the pane, `revier list
 prints it. Two short forms name the one agent there is: `shop`, the project's
 only agent, and `shop:agent`, the only agent in the target `agent`. Beside
 named agents, both name the default agent, the one that runs no named agent.
-When an address names more than one agent, the error lists the address of
-each. An agent in a window no target holds, such as a terminal you attached
+An agent in a window no target holds, such as a terminal you attached
 or a link's tab you moved to another window, has no address: go to it from
 the agent list.
 

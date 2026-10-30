@@ -563,31 +563,33 @@ func (c *Core) holds(snap snapshot, p Project, name revier.TargetName, bound Bin
 	return found && key(inst.Ref) == key(in.Ref)
 }
 
-// tabView is a tab target's row in the survey. It is available where the
-// runtime can open it, and its ref is the instance that holds it while the tab
-// is open. The instance's agents are its own target's to report.
-func (c *Core) tabView(snap snapshot, failed hostErrs, p Project, i int, bound Bindings, tv revier.TargetView) revier.TargetView {
+// tabView is a tab target's row in the survey, and the tab while it is open,
+// as heldTab finds it. It is available where the runtime can open it, and its
+// ref is the instance that holds it while the tab is open. The instance's
+// agents are its own target's to report.
+func (c *Core) tabView(snap snapshot, failed hostErrs, p Project, i int, bound Bindings, tv revier.TargetView) (revier.TargetView, []held) {
 	// A tab never reaches resolveAt, so its own refusal is read here.
 	if err := p.compiled[i].err; err != nil {
 		tv.Reason = err.Error()
-		return tv
+		return tv, nil
 	}
 	if _, ok := c.Runtime.(revier.PanelOpener); !ok {
-		return tv
+		return tv, nil
 	}
 	// The runtime could not list: whether the tab is open is not known,
 	// which is not the same as closed.
 	if ferr := failed[c.Runtime.Name()]; ferr != nil {
 		tv.Available, tv.Host, tv.Unknown = true, c.Runtime.Name(), ferr.Error()
-		return tv
+		return tv, nil
 	}
-	in, _, _, open, err := c.container(snap, p, i, bound)
+	in, _, tab, open, err := c.container(snap, p, i, bound)
 	if err != nil {
-		return tv
+		return tv, nil
 	}
 	tv.Available, tv.Host = true, c.Runtime.Name()
-	if open {
-		tv.Ref = in.Ref
+	if !open {
+		return tv, nil
 	}
-	return tv
+	tv.Ref = in.Ref
+	return tv, []held{tabIn(in, p.Targets[i].Name, tab)}
 }

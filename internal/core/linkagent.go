@@ -149,19 +149,21 @@ func (c *Core) hostAgents(ctx context.Context, p Project) ([]revier.AgentView, e
 }
 
 // linkAgent finds the agent addr names in a link, among those a panel here
-// shows, as Agent does: with only set, among the panels scope lists for that
-// target, which are its instance's or, for a tab, the tab's alone; with
-// byPanel, the panel here with the id id among them.
-func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revier.TargetName, id revier.PanelID, byPanel bool, scope []held, snap snapshot, bound Bindings) (Agent, error) {
+// shows, as Agent does: with a target, among the panels scope lists for it,
+// which are its instance's or, for a tab, the tab's alone; with a panel, that
+// panel here among them.
+func (c *Core) linkAgent(ctx context.Context, p Project, addr address, scope []held, snap snapshot, bound Bindings) (Agent, error) {
 	agents, err := c.hostAgents(ctx, p)
 	if err != nil {
 		return Agent{}, err
 	}
 	c.localise(c.tags(snap), agents)
-	in := map[string]bool{}
+	in := map[string]revier.TargetName{}
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
-			in[key(h.inst.Ref)+"\x00"+string(panel.ID)] = true
+			if k := key(h.inst.Ref) + "\x00" + string(panel.ID); in[k] == "" {
+				in[k] = h.target
+			}
 		}
 	}
 	var found []Agent
@@ -171,13 +173,14 @@ func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revi
 			elsewhere++
 			continue
 		}
-		if (only != "" && !in[key(a.Ref)+"\x00"+string(a.Panel)]) || (byPanel && a.Panel != id) {
+		target, held := in[key(a.Ref)+"\x00"+string(a.Panel)]
+		if (addr.target != "" && !held) || (addr.byPanel && a.Panel != addr.panel) {
 			continue
 		}
 		inst, _ := byRef(snap, a.Ref)
 		for _, panel := range inst.Panels {
 			if panel.ID == a.Panel {
-				found = append(found, Agent{Ref: a.Ref, Panel: panel, State: a.State, link: &p})
+				found = append(found, Agent{Ref: a.Ref, Panel: panel, State: a.State, target: target, link: &p})
 			}
 		}
 	}
@@ -185,16 +188,30 @@ func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revi
 	case len(found) == 1:
 		return found[0], nil
 	case len(found) > 1:
-		if def, ok := defaultAgent(found); ok && !byPanel {
+		if def, ok := defaultAgent(found); ok && !addr.byPanel {
 			return def, nil
 		}
-		return Agent{}, c.ambiguous(snap, p, bound, where, found)
-	case byPanel:
-		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", where, ErrNotAgent)
+		return Agent{}, c.ambiguous(snap, p, bound, addr.where, found)
+	case addr.byPanel && holds(scope, addr.panel):
+		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", addr.where, ErrNotAgent)
+	case addr.byPanel:
+		return Agent{}, addr.noPanel()
 	case elsewhere > 0:
-		return Agent{}, fmt.Errorf("%s: %w", where, ErrAgentElsewhere)
+		return Agent{}, fmt.Errorf("%s: %w", addr.where, ErrAgentElsewhere)
 	}
-	return Agent{}, fmt.Errorf("%s: %w", where, ErrNoAgent)
+	return Agent{}, fmt.Errorf("%s: %w", addr.where, ErrNoAgent)
+}
+
+// holds reports whether an instance of scope holds the panel.
+func holds(scope []held, panel revier.PanelID) bool {
+	for _, h := range scope {
+		for _, p := range h.inst.Panels {
+			if p.ID == panel {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // rereadLink asks the host for the agent's state again, by the tag the panel
