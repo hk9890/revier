@@ -31,7 +31,9 @@ usage:
 
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless
--p names one. For a project on another machine the tab is a shell there, and
+-p names one. Without -p or --panel the project is the one --dir is in, else
+the one this directory is in; a directory in no project is an error, which
+exits 3. For a project on another machine the tab is a shell there, and
 --dir, a path on this machine, is dropped. With --panel in a window that is
 no project's open workspace, it opens what [terminal] outside says: a plain
 shell tab beside the window, or nothing.
