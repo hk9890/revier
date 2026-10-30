@@ -82,7 +82,7 @@ type AgentView struct {
 	Ref TargetRef `json:"ref,omitzero"`
 	// Target is the project's target the agent is addressed through, which
 	// with the project and the panel is the agent's one address:
-	// <project>:<target>:<panel> (decisions.md D154). It is empty for an
+	// <project>:<target>:<panel> (decisions.md D155). It is empty for an
 	// agent no target of this machine holds.
 	Target TargetName `json:"target,omitempty"`
 	State  AgentState `json:"state"`

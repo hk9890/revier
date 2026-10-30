@@ -168,7 +168,7 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 
 // A link's agent whose tab moved to a window no target of the link holds is
 // shown, and has no address: the refusal names its panel and suggests no
-// address that would itself be refused (decisions.md D154).
+// address that would itself be refused (decisions.md D155).
 func TestALinksAgentInNoTargetHasNoAddress(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
 		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusIdle)}})

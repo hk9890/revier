@@ -249,7 +249,7 @@ type Workspace struct {
 
 // AddressIn is the address of the panel a tab opened in the workspace w: the
 // one the survey shows it by, whose target is the first of the project's
-// that holds the workspace's instance (decisions.md D154).
+// that holds the workspace's instance (decisions.md D155).
 func (c *Core) AddressIn(w Workspace, panel revier.PanelID) string {
 	pl := c.places(w.snap, w.Project, c.state().Bound[w.Project.Name])
 	return Address(w.Project.Name, pl.of(w.Ref, panel), panel)

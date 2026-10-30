@@ -124,7 +124,7 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 // Agent finds the agent panel addr names in a project. addr is what follows
 // the project in the agent's address: empty, for the project's only agent; a
 // target name, for the only agent in that target; or a target and a panel id,
-// <target>:<panel>, for that panel of the target (decisions.md D154). Where
+// <target>:<panel>, for that panel of the target (decisions.md D155). Where
 // several agents run in what addr names, the only one that is no named
 // agent's is the default agent, and the one meant (D145).
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
@@ -185,7 +185,7 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 // ambiguous refuses where, which names every agent of found, with the
 // address of each. An agent no target holds - a link's tab moved to another
 // window - has none, and is named by its panel, which only the agent list
-// reaches (decisions.md D154).
+// reaches (decisions.md D155).
 func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string, found []Agent) error {
 	pl := c.places(snap, p, bound)
 	var addrs, loose []string
@@ -207,7 +207,7 @@ func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string,
 }
 
 // Address is an agent's address: its project, the target that holds it and
-// its panel (decisions.md D154). A panel id is one process's - a kitty window
+// its panel (decisions.md D155). A panel id is one process's - a kitty window
 // id is - and the target names the process, so the three name one agent.
 func Address(project revier.ProjectName, target revier.TargetName, panel revier.PanelID) string {
 	return string(project) + ":" + string(target) + ":" + panel.String()

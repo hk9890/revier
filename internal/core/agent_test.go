@@ -224,7 +224,7 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 
 // A panel id is one process's: two kitty processes each number their windows
 // from 1. The target in the address names the process, so each of two agents
-// in a window 1 has an address of its own (decisions.md D154).
+// in a window 1 has an address of its own (decisions.md D155).
 func TestAPanelIDHeldTwiceIsNamedByItsTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))

@@ -232,7 +232,7 @@ processes of one project can each hold a panel 1, so an agent found again by
 its id alone was ambiguous. The survey already reads each agent from its
 instance, so `AgentView` carries that ref, and going to an agent uses the pair
 rather than a second lookup. What a user types names the instance by its
-target (D154).
+target (D155).
 
 ### D76 — the popup and the fallback to it are revier's, in kitty on GNOME
 
@@ -828,7 +828,7 @@ is asked for its revier's version: no survey, so no round (D130). A link to a
 machine off the list still works, and `revier doctor` names it. The remote
 revier lists the projects; ssh's own failures are told apart by exit 255.
 
-### D154 — an agent's one address is its project, its target and its panel
+### D155 — an agent's one address is its project, its target and its panel
 
 `<project>:<target>:<panel>` names an agent once: the target names the process
 a panel id is unique in, which D75 carried as a ref no one types. The bare
@@ -839,7 +839,7 @@ first, so a surface prints what `revier agent` resolves; a link's agent goes
 through the target here that shows it (D84). An agent no target holds - a
 link's tab moved away, a terminal attached by hand (D95) - has no address.
 
-### D155 — a harness's name for an agent is shown, never used
+### D156 — a harness's name for an agent is shown, never used
 
 A probe may report what its harness calls the agent: Claude Code's session
 name, which its peer messages address. revier shows it beside the address and

@@ -1215,7 +1215,7 @@ type Report struct {
 	tags map[revier.PanelID]shown
 	// places is the target each link's panels here are addressed through:
 	// what labels a host's agents once localise placed them (decisions.md
-	// D154).
+	// D155).
 	places map[revier.ProjectName]places
 	// asked is each linked host an answer laid over the report came from,
 	// with why it gave no answer, or "" when it answered: what a record of
