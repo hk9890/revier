@@ -40,6 +40,9 @@ usage:
                                 missing directory is cloned from git_url; --attach
                                 ends with this terminal on it (tmux, herdr)
   revier new [name]             write a project file for this directory
+  revier rename <old> <new>     give a project a new name: its file, its state
+                                and the saved sessions move with it; refused
+                                while anything of it runs
   revier link [host [project]] [--name name]
                                 the machines config.toml declares, other than
                                 this machine; a host's projects; or a link to
@@ -358,6 +361,10 @@ func run(out io.Writer, args []string) error {
 		return cmdAttach(ctx, a, args)
 	case "link":
 		return cmdLink(ctx, a, args)
+	case "rename":
+		// An app: the rename is refused while the project runs, which the
+		// hosts are listed to know.
+		return cmdRename(ctx, a, args)
 	case "status":
 		return cmdStatus(ctx, a, args)
 	case "session":

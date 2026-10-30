@@ -20,6 +20,7 @@ in full.
 | `revier popup` | The TUI in a kitty window of its own. |
 | `revier list` | Print every project, its state, agents and targets. |
 | `revier new` | Write a project file for the current directory. |
+| `revier rename <old> <new>` | Give a closed project a new name. See [Projects](projects.md). |
 | `revier open` | Run-or-raise the project's workspace. |
 | `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |

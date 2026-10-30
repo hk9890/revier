@@ -265,9 +265,12 @@ func projectTOML(name revier.ProjectName, dir, gitURL string, shared []map[strin
 	p("[[target]]\nname = \"editor\"\n")
 	p("  [target.window]\n")
 	p("  launch = [\"snap\", \"run\", \"intellij-idea\", \"{{.Path}}\"]\n")
-	p("  match = { class = \"^jetbrains-idea\", title = %s }\n", quote("^"+namePattern(name)+"( |$)"))
+	p("  match = { class = %s, title = %s }\n", quote(editorClass), quote("^"+namePattern(name)+"( |$)"))
 	return b.String()
 }
+
+// editorClass is the window class of the editor `revier new` writes.
+const editorClass = "^jetbrains-idea"
 
 // namePattern is the name inside a match regexp: the {{.Name}} template, or
 // the name quoted literally when it holds a character a regexp would read,
