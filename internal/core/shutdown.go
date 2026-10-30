@@ -333,10 +333,28 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 // shell beside the agent; the guess the other way leaves one shell of an
 // added tab open, which the next shutdown closes.
 func agentPanels(in revier.Instance, panel revier.PanelID) []revier.PanelID {
-	if own, known := ownTab(in, panel); own || !known {
+	if !addedTab(in, panel) {
 		return []revier.PanelID{panel}
 	}
 	return tabAt(in, panel)
+}
+
+// addedTab reports a panel in a tab the workspace opened beside its own, the
+// tab an agent's close takes whole (agentPanels).
+func addedTab(in revier.Instance, panel revier.PanelID) bool {
+	own, known := ownTab(in, panel)
+	return known && !own
+}
+
+// ClosesTab reports an agent's step that closes the whole tab the agent sits
+// in, not the agent's panel alone, as the instances the plan was drawn from
+// list it (decisions.md D94).
+func ClosesTab(instances []revier.Instance, s CloseStep) bool {
+	if s.Panel == "" || s.Target != "" {
+		return false
+	}
+	i := slices.IndexFunc(instances, func(in revier.Instance) bool { return key(in.Ref) == key(s.Ref) })
+	return i >= 0 && addedTab(instances[i], s.Panel)
 }
 
 // agentsIn are the agents in an instance, or in the given panels of it when
@@ -390,8 +408,11 @@ func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
 
 // CloseLast moves the steps that would end the calling process to the end of
 // the plan, so a shutdown run from a terminal of a workspace closes everything
-// else before its own terminal. self reports a panel the process runs under,
-// and nil keeps the plan's order.
+// else before its own terminal. Inside a step that closes a tab, the panel the
+// process runs under moves to the end of the tab too: `revier agent close` run
+// from the shell beside the agent would otherwise end itself before the
+// agent's panel. self reports a panel the process runs under, and nil keeps
+// the plan's order.
 // A window host lists a window with no panels, so its process stands for it.
 func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.Panel) bool) []CloseStep {
 	if self == nil {
@@ -414,16 +435,33 @@ func CloseLast(plan []CloseStep, instances []revier.Instance, self func(revier.P
 		return false
 	}
 	out := slices.Clone(plan)
-	slices.SortStableFunc(out, func(a, b CloseStep) int {
-		switch ea, eb := ends(a), ends(b); {
-		case ea == eb:
+	for i, s := range out {
+		inst := byRef[key(s.Ref)]
+		endsAt := func(id revier.PanelID) bool {
+			j := slices.IndexFunc(inst.Panels, func(p revier.Panel) bool { return p.ID == id })
+			return j >= 0 && self(inst.Panels[j])
+		}
+		if slices.ContainsFunc(s.Panels, endsAt) {
+			out[i].Panels = slices.Clone(s.Panels)
+			moveLast(out[i].Panels, endsAt)
+		}
+	}
+	moveLast(out, ends)
+	return out
+}
+
+// moveLast moves the elements last reports to the end of s, keeping the order
+// of each part.
+func moveLast[T any](s []T, last func(T) bool) {
+	slices.SortStableFunc(s, func(a, b T) int {
+		switch la, lb := last(a), last(b); {
+		case la == lb:
 			return 0
-		case eb:
+		case lb:
 			return -1
 		}
 		return 1
 	})
-	return out
 }
 
 // CloseResult is one step of a shutdown and what came of it. Open is a step
