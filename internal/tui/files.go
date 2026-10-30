@@ -300,33 +300,16 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 }
 
 // refuseRunning refuses deleting or renaming a project while anything of it
-// runs here, as core.RefuseChange says, or while a launch of it is still to
-// show its window: the window would land reachable by no name.
+// runs here, as core.RefuseChange says.
 func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
-	if err := m.core.RefuseChange(v, core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached}, doing); err != nil {
-		return err
-	}
-	return m.refusePending(v, doing)
+	return m.core.RefuseChange(v, core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached, Launch: m.pending}, doing)
 }
 
 // refuseUnsettled refuses the change while what of the project runs is not
-// known: a target whose host could not list, or a launch whose window is
-// still to appear. A close cannot reach either, so a delete that closes first
-// is refused for them too.
+// known, as core.RefuseUnsettled says. A close cannot reach it, so a delete
+// that closes first is refused for it too.
 func (m Model) refuseUnsettled(v revier.ProjectView, doing string) error {
-	if err := core.RefuseUnknown(v, doing); err != nil {
-		return err
-	}
-	return m.refusePending(v, doing)
-}
-
-// refusePending refuses the change while a launch of the project is still to
-// show its window. The surface alone holds such a launch between its surveys.
-func (m Model) refusePending(v revier.ProjectView, doing string) error {
-	if m.pending.Pending(time.Now()) && m.pending.Project == v.Project.Name {
-		return fmt.Errorf("%s is coming up; wait for its window before %s it", v.Project.Name, doing)
-	}
-	return nil
+	return core.RefuseUnsettled(v, m.pending, doing)
 }
 
 // refuseStartedTarget refuses deleting the entry of a target that runs, or

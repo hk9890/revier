@@ -3,9 +3,11 @@ package core_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -39,6 +41,9 @@ func TestRefuseChange(t *testing.T) {
 		{"its host could not list", unknown, core.Settled{Surveyed: true}, "tmux could not list; wait for the host before renaming it"},
 		{"a window attached here", idle, core.Settled{Surveyed: true, Attached: attached("gnome")}, "demo has an attached window open"},
 		{"a window attached on another host", idle, core.Settled{Surveyed: true, Attached: attached("other")}, ""},
+		{"a launch of it still to show its window", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "demo", Target: "home", At: time.Now()}}, "demo is coming up; wait for its window before renaming it"},
+		{"a launch of it past its window", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "demo", Target: "home", At: time.Now().Add(-time.Hour)}}, ""},
+		{"a launch of another project", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "other", Target: "home", At: time.Now()}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := c.RefuseChange(tc.view, tc.settled, "renaming")

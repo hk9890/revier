@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
@@ -23,7 +25,7 @@ func renameApp(t *testing.T, rt *hosttest.FakeRuntime) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{cfg: cfg, cfgRoot: root, projects: projects, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}
+	a := &app{cfg: cfg, cfgRoot: root, projects: projects, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}, out: io.Discard}
 	return withState(t, a, &state.State{})
 }
 
@@ -37,9 +39,9 @@ func exists(t *testing.T, path string) bool {
 func TestRenameMovesTheProjectFile(t *testing.T) {
 	a := renameApp(t, hosttest.NewRuntime("tmux"))
 	out := output(t, a, func() error { return cmdRename(context.Background(), a, []string{"a", "b"}) })
-	b := filepath.Join(a.cfgRoot, "projects", "b.toml")
-	if !exists(t, b) || exists(t, filepath.Join(a.cfgRoot, "projects", "a.toml")) {
-		t.Errorf("after the rename, b.toml there: %v, a.toml gone: want both", exists(t, b))
+	b, old := exists(t, filepath.Join(a.cfgRoot, "projects", "b.toml")), exists(t, filepath.Join(a.cfgRoot, "projects", "a.toml"))
+	if !b || old {
+		t.Errorf("after the rename, b.toml there: %v, a.toml there: %v; want b.toml alone", b, old)
 	}
 	if !strings.Contains(out, "renamed a to b") {
 		t.Errorf("printed %q, want the rename named", out)
@@ -47,29 +49,37 @@ func TestRenameMovesTheProjectFile(t *testing.T) {
 }
 
 // A rename is refused, and moves nothing, while the project runs, while its
-// host cannot say whether it runs, or when the new name is not one.
+// host cannot say whether it runs, while a launch of it is still to show its
+// window, or when the new name is not one.
 func TestRenameIsRefused(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		to   string
 		rt   func() *hosttest.FakeRuntime
+		st   *state.State
 		want string
 	}{
 		{"running", "b", func() *hosttest.FakeRuntime {
 			rt := hosttest.NewRuntime("tmux")
 			rt.Add("home", "")
 			return rt
-		}, "a is running; close its targets before renaming it"},
+		}, nil, "a is running; close its targets before renaming it"},
 		{"host unknown", "b", func() *hosttest.FakeRuntime {
 			rt := hosttest.NewRuntime("tmux")
 			rt.SetInstancesErr(errors.New("no server"))
 			return rt
-		}, "wait for the host before renaming it"},
-		{"a space in the name", "b c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, "contains whitespace"},
-		{"a slash in the name", "b/c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, "contains '/'"},
+		}, nil, "wait for the host before renaming it"},
+		{"coming up", "b", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") },
+			&state.State{Launch: &state.Launch{Project: "a", Target: "home", At: time.Now()}},
+			"a is coming up; wait for its window before renaming it"},
+		{"a space in the name", "b c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, nil, "contains whitespace"},
+		{"a slash in the name", "b/c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, nil, "contains '/'"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := renameApp(t, tc.rt())
+			if tc.st != nil {
+				a = withState(t, a, tc.st)
+			}
 			err := cmdRename(context.Background(), a, []string{"a", tc.to})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("err = %v, want a refusal %q", err, tc.want)

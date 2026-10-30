@@ -34,9 +34,9 @@ Which file can hold which table:
 - revier ignores an unknown key, and a table in a file that does not take it.
   `revier doctor` reports only a `[[status]]` at a rule place and a target
   part in the wrong file. If a field has no effect, check its spelling.
-- `revier new`, `revier link`, the project screen (alt+e), the config
-  screen (alt+c) and the remote screen (alt+r) also write these files. They
-  keep your comments.
+- `revier new`, `revier link`, `revier rename`, the project screen (alt+e),
+  the config screen (alt+c) and the remote screen (alt+r) also write these
+  files. They keep your comments.
 - Every TUI reads the files again when it gets the focus; the popup, when
   you raise it. After you change `[ui]`, `[hosts]` or `[[probe]]` by hand,
   restart the TUI.

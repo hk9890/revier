@@ -36,15 +36,17 @@ func cmdRename(ctx context.Context, a *app, args []string) error {
 	case p.File == "":
 		return fmt.Errorf("%s is built in and in no file; there is nothing to rename", from)
 	}
-	report, err := a.core.Survey(ctx, []core.Project{p})
+	// The hosts here alone: what a link's host says is never what the guard
+	// reads, and an unreachable one would hold the rename up for nothing.
+	report, err := a.core.SurveyLocal(ctx, []core.Project{p})
 	if err != nil {
 		return err
 	}
 	// The first settle of this process: no window is new to it, so it claims
-	// nothing, and it prunes the refs to windows that are gone, which the
-	// guard would otherwise read as running.
+	// nothing and expires no launch, and it prunes the refs to windows that
+	// are gone, which the guard would otherwise read as running.
 	st := a.core.Settle(report, a.projects, time.Now())
-	settled := core.Settled{Surveyed: true, Bound: st.Bound, Attached: st.Attached}
+	settled := core.Settled{Surveyed: true, Bound: st.Bound, Attached: st.Attached, Launch: st.Launch}
 	if err := a.core.RefuseChange(report.Views[0], settled, "renaming"); err != nil {
 		return err
 	}
