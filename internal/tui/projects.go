@@ -153,16 +153,15 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := bar + gap + style(markStyle).Render(mark) + gap
 	if th.Glyphs.Folder != "" {
 		// The column says where the checkout is: here, not here, or on a
-		// host; or that there is none, revier's own project; or, for a
-		// host's project, that a link here names it already.
+		// host through a link; or that there is none, revier's own project.
+		// A host's project that a link here names already is marked as the
+		// link is.
 		folder, folderStyle := th.Glyphs.Folder, th.Meta
 		switch {
-		case linked:
+		case linked || v.Project.Remote != nil:
 			folder, folderStyle = th.Glyphs.Linked, th.Remote
 		case it.rowBuiltin():
 			folder, folderStyle = th.Glyphs.Builtin, th.Accent
-		case v.Project.Remote != nil:
-			folder, folderStyle = th.Glyphs.Remote, th.Remote
 		case !v.PathExists:
 			folder, folderStyle = th.Glyphs.NoFolder, th.PathMissing
 		}

@@ -2,7 +2,8 @@
 
 A project can live on another machine, the **host**: a build box, or a
 workstation you reach over ssh. You link it here, and it is a row in your list
-like any other, shown as `<name>@<host>`, for example `far@buildbox`.
+like any other, shown as `<name>@<host>` with a link icon, for example
+`far@buildbox`.
 
 The checkout, the agents and the shell run on the host. This machine shows them
 in tabs of your own terminal, each tab an ssh to the host. The revier on the

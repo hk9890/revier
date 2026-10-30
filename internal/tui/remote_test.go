@@ -72,7 +72,7 @@ func TestALinkNothingHereHoldsCountsNoAgent(t *testing.T) {
 }
 
 // The row names the host after the project, so two projects of one name
-// on two machines read apart, and the icon column says it is remote.
+// on two machines read apart, and the icon column marks it as a link.
 func TestARemoteProjectsRowNamesItsHost(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
@@ -82,8 +82,8 @@ func TestARemoteProjectsRowNamesItsHost(t *testing.T) {
 	if !strings.Contains(row, "alpha@buildbox") {
 		t.Errorf("row = %q, want alpha@buildbox", row)
 	}
-	if !strings.Contains(row, theme.Default().Glyphs.Remote) {
-		t.Errorf("row = %q, want the remote glyph in the icon column", row)
+	if !strings.Contains(row, theme.Default().Glyphs.Linked+" alpha@buildbox") {
+		t.Errorf("row = %q, want the link glyph in the icon column", row)
 	}
 }
 

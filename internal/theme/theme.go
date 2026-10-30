@@ -90,15 +90,15 @@ type Glyphs struct {
 	// row, and gives the name the room; the pane says it.
 	Folder   string
 	NoFolder string
-	// Remote takes the folder column for a project on another machine. A
-	// set that draws the folder draws this too.
+	// Remote stands in front of a machine on the remote screen. A set that
+	// draws the folder draws this too.
 	Remote string
 	// Builtin takes the folder column for the project revier builds in and
 	// no file declares. A set that draws the folder draws this too.
 	Builtin string
-	// Linked marks a host's project that a link here names already. It takes
-	// the folder column in a set that draws one, and stands beside the counts
-	// in a set that does not; every set draws it.
+	// Linked takes the folder column for a link, and on the remote screen for
+	// a host's project that a link here names already. A set with no folder
+	// column marks the host's project beside the counts; every set draws it.
 	Linked string
 
 	// Window and Container are a kind column in front of a target's name in
