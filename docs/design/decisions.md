@@ -231,8 +231,8 @@ A panel id is unique only within the process that numbers it, and two kitty
 processes of one project can each hold a panel 1, so an agent found again by
 its id alone was ambiguous. The survey already reads each agent from its
 instance, so `AgentView` carries that ref, and going to an agent uses the pair
-rather than a second lookup. A link sends the host's ref back to the host,
-which is the only side it means anything to.
+rather than a second lookup. What a user types names the instance by its
+target (D154).
 
 ### D76 — the popup and the fallback to it are revier's, in kitty on GNOME
 
@@ -827,3 +827,22 @@ each one leaves itself off the list (D131). As the screen opens, each machine
 is asked for its revier's version: no survey, so no round (D130). A link to a
 machine off the list still works, and `revier doctor` names it. The remote
 revier lists the projects; ssh's own failures are told apart by exit 255.
+
+### D154 — an agent's one address is its project, its target and its panel
+
+`<project>:<target>:<panel>` names every agent once. The target names the
+process a panel id is unique in, which D75 carried as a ref no one types; a
+bare `<project>:<panel>` failed when two kitty processes held one project, and
+left some agents with no address at all. It is gone, not kept beside: a herdr
+panel id holds a colon. `<project>` and `<project>:<target>` stay for the
+default agent (D145). The survey labels each agent with its target, an open
+tab first, so a surface prints what `revier agent` resolves. A link's agent
+is addressed through the target here that shows it; no address crosses (D84).
+
+### D155 — a harness's name for an agent is shown, never used
+
+A probe may report what its harness calls the agent: Claude Code's session
+name, which its peer messages address. revier shows it beside the address and
+decides nothing by it: Claude Code keeps it neither unique nor fixed, and an
+address made of it would reach Claude agents alone. It comes from the listing
+the probe already reads (D55), so a survey pays nothing for it.

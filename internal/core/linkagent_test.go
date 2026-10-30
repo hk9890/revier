@@ -26,10 +26,10 @@ func TestASurveyReportsTheAgentsServedToAnotherMachine(t *testing.T) {
 	for name, rt := range map[string]revier.Runtime{"beside a runtime": hosttest.NewRuntime("rt"), "with no runtime": nil} {
 		c := &core.Core{Runtime: rt, Served: served, Probes: []revier.AgentProbe{probe}}
 		agents := agentsOf(t, c, p)
-		if len(agents) != 1 || agents[0].Panel != "box.4242" || agents[0].Ref != ref || agents[0].State.Status != revier.StatusRunning {
-			t.Errorf("%s: agents = %+v, want box.4242 running in %v", name, agents, ref)
+		if len(agents) != 1 || agents[0].Panel != "box.4242" || agents[0].Ref != ref || agents[0].Target != "home" || agents[0].State.Status != revier.StatusRunning {
+			t.Errorf("%s: agents = %+v, want box.4242 of home running in %v", name, agents, ref)
 		}
-		a, err := c.Agent(context.Background(), p, "box.4242")
+		a, err := c.Agent(context.Background(), p, "home:box.4242")
 		if err != nil || a.Ref != ref {
 			t.Errorf("%s: Agent = %+v, %v; want the served one", name, a, err)
 		}
@@ -84,7 +84,7 @@ func TestAPromptForALinksAgentIsTypedIntoThePanelHere(t *testing.T) {
 	}
 
 	remote.Views[0].Agents = []revier.AgentView{hostAgent("box.4242", revier.StatusAttention)}
-	waiting, err := c.Agent(context.Background(), p, "9")
+	waiting, err := c.Agent(context.Background(), p, "home:9")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestAnAgentShownNowhereHereIsNotFound(t *testing.T) {
 	if _, err := c.Agent(context.Background(), linkProject(t), ""); !errors.Is(err, core.ErrAgentElsewhere) {
 		t.Errorf("err = %v, want ErrAgentElsewhere", err)
 	}
-	if _, err := c.Agent(context.Background(), linkProject(t), "10"); !errors.Is(err, core.ErrNotAgent) {
+	if _, err := c.Agent(context.Background(), linkProject(t), "home:10"); !errors.Is(err, core.ErrNotAgent) {
 		t.Errorf("err = %v, want ErrNotAgent for the shell panel", err)
 	}
 	c, _, _, _ = linked(t)
@@ -148,6 +148,40 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 		if _, err := c.Agent(context.Background(), p, addr); !errors.Is(err, core.ErrAmbiguous) {
 			t.Errorf("Agent(%q) err = %v, want ErrAmbiguous", addr, err)
 		}
+	}
+
+	// The survey addresses each through the target that lists it: the tab
+	// for its own panel, the workspace for the agent tab's.
+	targets := map[revier.PanelID]revier.TargetName{}
+	for _, v := range agentsOf(t, c, p) {
+		targets[v.Panel] = v.Target
+	}
+	if targets["9"] != "agent" || targets["11"] != "home" {
+		t.Errorf("targets = %v, want 9 in agent and 11 in home", targets)
+	}
+	for addr, panel := range map[string]revier.PanelID{"agent:9": "9", "home:11": "11"} {
+		if a, err := c.Agent(context.Background(), p, addr); err != nil || a.Panel.ID != panel {
+			t.Errorf("Agent(far:%s) = %+v, %v; want panel %s", addr, a, err, panel)
+		}
+	}
+}
+
+// Beside a link's named agents, the link's address names its default agent,
+// as a local project's does (decisions.md D145): the one panel here that
+// carries no named agent's mark.
+func TestALinksAddressNamesItsDefaultAgent(t *testing.T) {
+	ssh := func(id string, pid int, vars map[string]string) revier.Panel {
+		return revier.Panel{ID: revier.PanelID(id), Kind: revier.PanelTool, PID: pid, Command: []string{"ssh", "-t", "buildbox"}, Vars: vars}
+	}
+	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
+		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("far", "", ssh("9", 4242, map[string]string{core.PanelAgentVar: "dtop"}), ssh("11", 4300, nil))
+	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+
+	a, err := c.Agent(context.Background(), linkProject(t), "")
+	if err != nil || a.Panel.ID != "11" {
+		t.Errorf("Agent(far) = %+v, %v; want panel 11, the default agent", a, err)
 	}
 }
 

@@ -114,7 +114,9 @@ the trigger key instead. Agents that need you are on top, then working
 agents, then idle ones, then those in state `unknown`. Among those that need
 you and among the idle ones, the one that spoke last is first. Each row shows
 how long ago the agent spoke. Type to filter by project or by what the agent
-does. The pane shows the agent's terminal.
+does. The pane shows the agent's [address](agents.md#drive-an-agent-from-a-script),
+the name its harness gives it, such as `claude:shop-a0` for the name Claude
+Code's agents message it by, and the agent's terminal.
 
 ## The popup
 

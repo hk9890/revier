@@ -30,11 +30,13 @@ usage:
   revier agent read <agent> [--screen [--lines <n>]]
   revier agent send-keys <agent> [--] <key>..
   revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
-  revier agent focus <agent> [--ref <instance>]
+  revier agent focus <agent>
   revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
-  <agent>    <project>, for the project's only agent, or <project>:<target>
-             or <project>:<panel> for one of several
+  <agent>    <project>:<target>:<panel>, the agent's address as
+             revier list --json and agent new --no-focus give it; or
+             <project> or <project>:<target>, for the only agent there, or
+             the default agent among named ones
   --until    idle, running, attention, or stopped (idle or attention)
   --timeout  give up after this many seconds and exit 2; 0 waits for good
   --screen   print what the agent's panel shows, not what the agent said
@@ -52,8 +54,6 @@ usage:
              with --panel, the default is the directory kitty reports
              for that panel
   --no-focus leave the focus where it is, and print the new agent's address
-  --ref      the instance holding <project>:<panel>, as the survey reports
-             it: a panel id is unique only within one kitty process
 
 new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace. With
@@ -314,17 +314,14 @@ func cmdAgentKeys(out io.Writer, args []string) error {
 }
 
 // cmdAgentFocus brings one agent to the front.
-// With --ref the address names a panel of that instance, so a panel id two
-// kitty processes share still names one agent.
 func cmdAgentFocus(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent focus", flag.ContinueOnError)
-	instance := fs.String("ref", "", "the instance holding the panel")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
-		return errors.New("usage: revier agent focus <agent> [--ref <instance>]")
+		return errors.New("usage: revier agent focus <agent>")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
@@ -334,24 +331,13 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	}
 	address := pos[0]
 	start := time.Now()
-	// The agent as the survey names one: with --ref its harness and its
-	// conversation are not known, and the event carries neither.
-	var agent revier.AgentView
-	name, sel, _ := strings.Cut(address, ":")
-	switch {
-	case *instance == "":
-		ag, err := a.agent(ctx, address)
-		if err != nil {
-			return err
-		}
-		agent = revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID, State: ag.State}
-	case a.core.Runtime == nil:
-		return fmt.Errorf("%w: no runtime holds panels", core.ErrNoHost)
-	default:
-		agent = revier.AgentView{Ref: revier.TargetRef{Host: a.core.Runtime.Name(), ID: *instance}, Panel: revier.PanelID(sel)}
+	ag, err := a.agent(ctx, address)
+	if err != nil {
+		return err
 	}
-	err = a.core.FocusAgent(ctx, revier.ProjectName(name), agent)
-	logging.Op("agent focus", start, err, "address", address, "ref", agent.Ref, "panel", agent.Panel)
+	name, _, _ := strings.Cut(address, ":")
+	err = a.core.FocusAgent(ctx, revier.ProjectName(name), revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID, State: ag.State})
+	logging.Op("agent focus", start, err, "address", address, "ref", ag.Ref, "panel", ag.Panel.ID)
 	return err
 }
 
@@ -408,7 +394,7 @@ func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.R
 	return a.agentTab(ctx, project, panel, dir, r, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
 		added, outcome, err := a.core.AddAgent(ctx, w, r)
 		if added != "" {
-			_, _ = fmt.Fprintf(a.out, "%s:%s\n", w.Project.Name, added)
+			_, _ = fmt.Fprintln(a.out, a.core.AddressIn(w, added))
 		}
 		return outcome, err
 	})
@@ -487,8 +473,8 @@ func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.
 	return a.core.TabIn(ctx, p, revier.TargetName(sel), pick)
 }
 
-// agent finds the agent an address names: <project>, or <project>:<target>,
-// or <project>:<panel>.
+// agent finds the agent an address names: <project>, <project>:<target> or
+// <project>:<target>:<panel>.
 func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
 	name, sel, _ := strings.Cut(address, ":")
 	p, ok := a.project(revier.ProjectName(name))

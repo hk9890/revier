@@ -1213,6 +1213,10 @@ type Report struct {
 	// tags is where the runtime here shows each panel a linked host can name:
 	// what places a host's agents, whenever its answer is laid over.
 	tags map[revier.PanelID]shown
+	// places is the target each link's panels here are addressed through:
+	// what labels a host's agents once localise placed them (decisions.md
+	// D154).
+	places map[revier.ProjectName]places
 	// asked is each linked host an answer laid over the report came from,
 	// with why it gave no answer, or "" when it answered: what a record of
 	// the survey says of each host (decisions.md D151).
@@ -1351,7 +1355,9 @@ func (c *Core) lay(r *Report, answers RemoteAnswers) {
 			r.asked[a.link.Host] = a.err.Error()
 		}
 		at := len(v.Agents)
-		c.localise(r.tags, merge(v, a))
+		added := merge(v, a)
+		c.localise(r.tags, added)
+		r.places[v.Project.Name].label(added)
 		dropDoubles(v, at)
 	}
 }
@@ -1377,13 +1383,23 @@ func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, attached map[revier.ProjectName][]revier.TargetRef) Report {
 	snap, failed := c.listing(ctx)
 	bound := st.Bound
-	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap), before: st}
+	r := Report{Views: make([]revier.ProjectView, 0, len(projects)), tags: c.tags(snap), places: map[revier.ProjectName]places{}, before: st}
 	if len(failed) > 0 {
 		r.Failed = failed
 	}
 	probed := probeCache{}
 	for _, p := range projects {
-		r.Views = append(r.Views, c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed))
+		v := c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed)
+		// Only a view with agents, or a link's, whose agents its host adds
+		// later, needs its targets placed: the survey is the hot path.
+		if len(v.Agents) > 0 || p.Remote != nil {
+			pl := c.places(snap, p, bound[p.Name])
+			pl.label(v.Agents)
+			if p.Remote != nil {
+				r.places[p.Name] = pl
+			}
+		}
+		r.Views = append(r.Views, v)
 	}
 	for _, h := range c.hosts() {
 		if failed[h.Name()] != nil {

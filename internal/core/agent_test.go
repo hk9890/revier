@@ -31,10 +31,10 @@ func TestAgentRefusesAnAmbiguousProject(t *testing.T) {
 	p := prepared(t, project())
 
 	_, err := c.Agent(context.Background(), p, "")
-	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:1, revier:2") {
-		t.Fatalf("err = %v, want ErrAmbiguous naming revier:1 and revier:2", err)
+	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:home:1, revier:home:2") {
+		t.Fatalf("err = %v, want ErrAmbiguous naming revier:home:1 and revier:home:2", err)
 	}
-	a, err := c.Agent(context.Background(), p, "2")
+	a, err := c.Agent(context.Background(), p, "home:2")
 	if err != nil || a.Panel.ID != "2" {
 		t.Fatalf("Agent by panel id = %+v, %v; want panel 2", a, err)
 	}
@@ -100,15 +100,18 @@ func TestAgentRefusesWhatIsNotAnAgent(t *testing.T) {
 	}{
 		{"", core.ErrNoAgent},
 		{"diff", core.ErrNoAgent},
-		{"1", core.ErrNotAgent},
-		{"3", core.ErrNotAgent},
+		{"home:1", core.ErrNotAgent},
+		{"home:3", core.ErrNotAgent},
+		{"diff:5", core.ErrNotAgent},
 	} {
 		if _, err := c.Agent(context.Background(), p, tc.addr); !errors.Is(err, tc.want) {
 			t.Errorf("Agent(%q) err = %v, want %v", tc.addr, err, tc.want)
 		}
 	}
-	if _, err := c.Agent(context.Background(), p, "nosuch"); err == nil {
-		t.Error("an address naming nothing must be an error")
+	for _, addr := range []string{"nosuch", "home:9"} {
+		if _, err := c.Agent(context.Background(), p, addr); err == nil {
+			t.Errorf("Agent(%q): an address naming nothing must be an error", addr)
+		}
 	}
 }
 
@@ -220,25 +223,66 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 }
 
 // A panel id is one process's: two kitty processes each number their windows
-// from 1. With an agent in each of two such windows, a bare "1" names
-// neither - it would type into whichever came first - and the agents are
-// named by their targets instead.
-func TestAPanelIDHeldTwiceNamesNoAgent(t *testing.T) {
+// from 1. The target in the address names the process, so each of two agents
+// in a window 1 has an address of its own (decisions.md D154).
+func TestAPanelIDHeldTwiceIsNamedByItsTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	rt.Add("diff:revier", "kitty", agentPanel("1", "idle"))
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
-	if _, err := c.Agent(context.Background(), p, "1"); !errors.Is(err, core.ErrAmbiguous) {
-		t.Errorf("Agent(1) = %v, want ErrAmbiguous: two windows hold a panel 1", err)
-	}
 	_, err := c.Agent(context.Background(), p, "")
-	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:home") || !strings.Contains(err.Error(), "revier:diff") {
-		t.Errorf("Agent() = %v, want both agents named by their targets", err)
+	if !errors.Is(err, core.ErrAmbiguous) || !strings.Contains(err.Error(), "revier:home:1, revier:diff:1") {
+		t.Errorf("Agent() = %v, want both agents named by their addresses", err)
 	}
-	if a, err := c.Agent(context.Background(), p, "diff"); err != nil || a.Ref.Title != "diff:revier" {
-		t.Errorf("Agent(diff) = %+v, %v; want the diff window's agent", a, err)
+	for addr, title := range map[string]string{"home:1": "session:revier", "diff:1": "diff:revier"} {
+		if a, err := c.Agent(context.Background(), p, addr); err != nil || a.Ref.Title != title {
+			t.Errorf("Agent(%s) = %+v, %v; want the agent in %s", addr, a, err, title)
+		}
+	}
+}
+
+// A panel id alone is no address: the target that names the process the id
+// is unique in comes first, and the refusal says so.
+func TestAnAddressOfAPanelAloneIsRefused(t *testing.T) {
+	c, _ := agentCore(agentPanel("1", "idle"), agentPanel("2", "busy"))
+	_, err := c.Agent(context.Background(), prepared(t, project()), "2")
+	if err == nil || !strings.Contains(err.Error(), `no target "2"`) || !strings.Contains(err.Error(), "<project>:<target>:<panel>") {
+		t.Errorf("Agent(2) err = %v, want the address form named", err)
+	}
+}
+
+// A panel named in full is that panel, a named agent's too: the default
+// agent is what an address that names no panel means.
+func TestAnAddressWithAPanelNamesANamedAgent(t *testing.T) {
+	named := agentPanel("1", "idle")
+	named.Vars = map[string]string{core.PanelAgentVar: "dtop"}
+	c, _ := agentCore(named, agentPanel("2", "busy"))
+	a, err := c.Agent(context.Background(), prepared(t, project()), "home:1")
+	if err != nil || a.Panel.ID != "1" {
+		t.Errorf("Agent(home:1) = %+v, %v; want the named agent in panel 1", a, err)
+	}
+}
+
+// Every agent a survey reports carries the target its address names, and
+// the address names it back.
+func TestEveryAgentsAddressNamesItBack(t *testing.T) {
+	c, rt := agentCore(shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
+	rt.Add("diff:revier", "kitty", agentPanel("2", "busy"))
+	p := prepared(t, project())
+
+	agents := agentsOf(t, c, p)
+	if len(agents) != 3 {
+		t.Fatalf("agents = %+v, want three", agents)
+	}
+	for _, v := range agents {
+		addr := core.Address(p.Name, v.Target, v.Panel)
+		_, rest, _ := strings.Cut(addr, ":")
+		a, err := c.Agent(context.Background(), p, rest)
+		if err != nil || a.Ref != v.Ref || a.Panel.ID != v.Panel {
+			t.Errorf("Agent(%s) = %+v, %v; want panel %s of %v", addr, a, err, v.Panel, v.Ref)
+		}
 	}
 }
 

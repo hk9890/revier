@@ -147,19 +147,15 @@ func (c *Core) hostAgents(ctx context.Context, p Project) ([]revier.AgentView, e
 }
 
 // linkAgent finds the agent addr names in a link, among those a panel here
-// shows: with addr empty, the link's only agent; with a target name, the only
-// agent in the panels scope lists for that target, which are its instance's or,
-// for a tab, the tab's alone; otherwise the panel here with that id.
-func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revier.TargetName, scope []held, snap snapshot) (Agent, error) {
+// shows, as Agent does: with only set, among the panels scope lists for that
+// target, which are its instance's or, for a tab, the tab's alone; with
+// byPanel, the panel here with the id id among them.
+func (c *Core) linkAgent(ctx context.Context, p Project, where string, only revier.TargetName, id revier.PanelID, byPanel bool, scope []held, snap snapshot, named addressing) (Agent, error) {
 	agents, err := c.hostAgents(ctx, p)
 	if err != nil {
 		return Agent{}, err
 	}
 	c.localise(c.tags(snap), agents)
-	where := string(p.Name)
-	if addr != "" {
-		where += ":" + addr
-	}
 	in := map[string]bool{}
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
@@ -173,7 +169,7 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 			elsewhere++
 			continue
 		}
-		if (only != "" && !in[key(a.Ref)+"\x00"+string(a.Panel)]) || (only == "" && addr != "" && string(a.Panel) != addr) {
+		if (only != "" && !in[key(a.Ref)+"\x00"+string(a.Panel)]) || (byPanel && a.Panel != id) {
 			continue
 		}
 		inst, _ := byRef(snap, a.Ref)
@@ -187,12 +183,11 @@ func (c *Core) linkAgent(ctx context.Context, p Project, addr string, only revie
 	case len(found) == 1:
 		return found[0], nil
 	case len(found) > 1:
-		addrs := ""
-		for _, a := range found {
-			addrs += " " + string(p.Name) + ":" + a.Panel.ID.String()
+		if def, ok := defaultAgent(found); ok && !byPanel {
+			return def, nil
 		}
-		return Agent{}, fmt.Errorf("%s %w: use one of%s", where, ErrAmbiguous, addrs)
-	case only == "" && addr != "":
+		return Agent{}, named.ambiguous(where, found)
+	case byPanel:
 		return Agent{}, fmt.Errorf("%s is %w: the host lists no agent in it", where, ErrNotAgent)
 	case elsewhere > 0:
 		return Agent{}, fmt.Errorf("%s: %w", where, ErrAgentElsewhere)

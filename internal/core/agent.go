@@ -121,11 +121,12 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 	return worst, true
 }
 
-// Agent finds the agent panel addr names in a project: with addr empty, the
-// project's only agent; with a target name, the only agent in that target's
-// instance; otherwise the panel with that id. Where several agents run there,
-// the only one that is no named agent's is the default agent, and the one
-// meant (decisions.md D145).
+// Agent finds the agent panel addr names in a project. addr is what follows
+// the project in the agent's address: empty, for the project's only agent; a
+// target name, for the only agent in that target; or a target and a panel id,
+// <target>:<panel>, for that panel of the target (decisions.md D154). Where
+// several agents run in what addr names, the only one that is no named
+// agent's is the default agent, and the one meant (D145).
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
 	bound := c.state().Bound[p.Name]
 	// Agents are panels, and only the runtime and the served processes
@@ -134,52 +135,118 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 	if err != nil {
 		return Agent{}, err
 	}
-	where, only := string(p.Name), revier.TargetName("")
-	if _, ok := p.index(revier.TargetName(addr)); ok {
-		where, only = where+":"+addr, revier.TargetName(addr)
+	target, id, byPanel := strings.Cut(addr, ":")
+	only := revier.TargetName(target)
+	where := string(p.Name)
+	if addr != "" {
+		where += ":" + addr
+		if _, ok := p.index(only); !ok {
+			return Agent{}, fmt.Errorf("%s has no target %q: an agent's address is <project>, <project>:<target> or <project>:<target>:<panel>", p.Name, target)
+		}
 	}
 	scope := c.running(snap, p, bound, only)
+	named := addressing{project: p.Name, places: c.places(snap, p, bound)}
 	if p.Remote != nil {
-		return c.linkAgent(ctx, p, addr, only, scope, snap)
+		return c.linkAgent(ctx, p, where, only, revier.PanelID(id), byPanel, scope, snap, named)
 	}
-	switch {
-	case addr != "" && only == "":
-		return c.panel(ctx, scope, p.Name, addr)
-	case only != "" && len(scope) == 0:
+	if only != "" && len(scope) == 0 {
 		return Agent{}, fmt.Errorf("%s is not running", where)
 	}
 
 	var found []Agent
-	var targets []revier.TargetName
-	ids := map[revier.PanelID]int{}
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
-			if probe, ok := c.agentProbe(panel); ok {
-				found = append(found, Agent{Ref: h.inst.Ref, Panel: panel, State: c.read(ctx, probe, h.inst.Ref, panel)})
-				targets = append(targets, h.target)
-				ids[panel.ID]++
+			if byPanel && panel.ID != revier.PanelID(id) {
+				continue
+			}
+			probe, ok := c.agentProbe(panel)
+			if !ok {
+				if byPanel {
+					return Agent{}, fmt.Errorf("%s is %w: %s", where, ErrNotAgent, notAgentReason(panel))
+				}
+				continue
+			}
+			found = append(found, Agent{Ref: h.inst.Ref, Panel: panel, State: c.read(ctx, probe, h.inst.Ref, panel)})
+		}
+	}
+	switch {
+	case len(found) == 0 && byPanel:
+		return Agent{}, fmt.Errorf("%s: %s has no running panel %q", where, only, id)
+	case len(found) == 0:
+		return Agent{}, fmt.Errorf("%s: %w", where, ErrNoAgent)
+	case len(found) == 1:
+		return found[0], nil
+	}
+	if def, ok := defaultAgent(found); ok && !byPanel {
+		return def, nil
+	}
+	return Agent{}, named.ambiguous(where, found)
+}
+
+// addressing spells the address of each agent of one project.
+type addressing struct {
+	project revier.ProjectName
+	places  places
+}
+
+// ambiguous refuses where, which names every agent of found, with the
+// address of each.
+func (n addressing) ambiguous(where string, found []Agent) error {
+	addrs := make([]string, len(found))
+	for i, a := range found {
+		addrs[i] = Address(n.project, n.places.of(a.Ref, a.Panel.ID), a.Panel.ID)
+	}
+	return fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
+}
+
+// Address is an agent's address: its project, the target that holds it and
+// its panel (decisions.md D154). A panel id is one process's - a kitty window
+// id is - and the target names the process, so the three name one agent.
+func Address(project revier.ProjectName, target revier.TargetName, panel revier.PanelID) string {
+	return string(project) + ":" + string(target) + ":" + panel.String()
+}
+
+// places is the target each panel of one project's instances is addressed
+// through: the open tab target that lists it, else the first target, in the
+// project's order, whose instance holds it. Each is a target Agent finds the
+// panel in, so the address made of it names the agent back.
+type places struct {
+	tabs map[string]revier.TargetName
+	refs map[string]revier.TargetName
+}
+
+func (c *Core) places(snap snapshot, p Project, bound Bindings) places {
+	pl := places{tabs: map[string]revier.TargetName{}, refs: map[string]revier.TargetName{}}
+	for i, t := range p.Targets {
+		if !p.isTab(i) {
+			continue
+		}
+		for _, h := range c.heldTab(snap, p, i, bound) {
+			for _, panel := range h.inst.Panels {
+				pl.tabs[key(h.inst.Ref)+"\x00"+string(panel.ID)] = t.Name
 			}
 		}
 	}
-	switch len(found) {
-	case 0:
-		return Agent{}, fmt.Errorf("%s: %w", where, ErrNoAgent)
-	case 1:
-		return found[0], nil
+	for _, h := range c.running(snap, p, bound, "") {
+		pl.refs[key(h.inst.Ref)] = h.target
 	}
-	if def, ok := defaultAgent(found); ok {
-		return def, nil
+	return pl
+}
+
+// of is the target the panel of the instance ref is addressed through, empty
+// for one no target holds.
+func (pl places) of(ref revier.TargetRef, panel revier.PanelID) revier.TargetName {
+	if t, ok := pl.tabs[key(ref)+"\x00"+string(panel)]; ok {
+		return t
 	}
-	// A panel id is one process's - a kitty window id is - so two windows can
-	// each hold a panel 1. Such an agent is named by its target instead.
-	addrs := make([]string, len(found))
-	for i, a := range found {
-		addrs[i] = string(p.Name) + ":" + a.Panel.ID.String()
-		if ids[a.Panel.ID] > 1 {
-			addrs[i] = string(p.Name) + ":" + string(targets[i])
-		}
+	return pl.refs[key(ref)]
+}
+
+// label sets the target of each agent.
+func (pl places) label(agents []revier.AgentView) {
+	for i, a := range agents {
+		agents[i].Target = pl.of(a.Ref, a.Panel)
 	}
-	return Agent{}, fmt.Errorf("%s %w: use one of %s", where, ErrAmbiguous, strings.Join(addrs, ", "))
 }
 
 // defaultAgent is the only agent of found that carries no named agent's mark.
@@ -194,37 +261,6 @@ func defaultAgent(found []Agent) (Agent, bool) {
 		return Agent{}, false
 	}
 	return def[0], true
-}
-
-// panel finds an agent by panel id among a project's running instances. An
-// id held in more than one of them - each by its own process - names none.
-func (c *Core) panel(ctx context.Context, scope []held, project revier.ProjectName, id string) (Agent, error) {
-	var hits []held
-	var hit revier.Panel
-	for _, h := range scope {
-		for _, panel := range h.inst.Panels {
-			if panel.ID.String() == id {
-				hits, hit = append(hits, h), panel
-			}
-		}
-	}
-	switch len(hits) {
-	case 0:
-		return Agent{}, fmt.Errorf("%s has no target and no running panel named %q", project, id)
-	case 1:
-	default:
-		names := make([]string, len(hits))
-		for i, h := range hits {
-			names[i] = string(project) + ":" + string(h.target)
-		}
-		return Agent{}, fmt.Errorf("%s:%s %w: more than one window holds a panel %s; use one of %s",
-			project, id, ErrAmbiguous, id, strings.Join(names, ", "))
-	}
-	probe, ok := c.agentProbe(hit)
-	if !ok {
-		return Agent{}, fmt.Errorf("%s:%s is %w: %s", project, id, ErrNotAgent, notAgentReason(hit))
-	}
-	return Agent{Ref: hits[0].inst.Ref, Panel: hit, State: c.read(ctx, probe, hits[0].inst.Ref, hit)}, nil
 }
 
 func notAgentReason(panel revier.Panel) string {

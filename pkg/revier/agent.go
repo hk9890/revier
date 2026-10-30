@@ -150,6 +150,12 @@ type AgentState struct {
 	// (decisions.md D112); a save asks Resumable instead, which answers for
 	// that moment.
 	Session SessionID `json:"session,omitempty"`
+
+	// Name is what the harness calls the agent, empty when it names none:
+	// Claude Code's session name, the one its peer messages address. A
+	// surface shows it beside revier's address and decides nothing by it,
+	// since a harness need not keep it unique or stable (decisions.md D155).
+	Name string `json:"name,omitempty"`
 }
 
 // Status is what an agent is doing. StatusAttention is the state the product
