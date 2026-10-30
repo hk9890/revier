@@ -807,16 +807,16 @@ or cancelled too, now ends on the project list with the cursor on the project
 the session was left on, and raises the surface once. What did not open is the
 footer's alone: the result pane is gone, since nothing would show it.
 
-### D153 — a terminal key's tab starts in the panel's directory, which revier reads
+### D153 — a terminal key's shell tab starts in the panel's directory, which revier reads
 
-Extends D147 and D148. kitty's key gave revier the panel's directory by
-starting its `sh` there, and kitty cannot start a process in a removed
-directory, so a key in a panel of a removed worktree did nothing, not even its
-fallback. The key now passes the panel alone, and revier reads the panel's
-directory from the runtime. The tab starts in the directory a key passes, else
-the panel's, each only while it is a directory; else in the workspace where
-the project's tab starts, outside one where the runtime does. Rejected:
-dropping the directory, so every tab from a worktree opened in the project.
+Extends D147 and D148. kitty's key started its `sh` in the panel's directory,
+and kitty cannot start a process in a removed one, so a key in a panel of a
+removed worktree did nothing, not even its fallback. The key now passes the
+panel alone, and revier reads the panel's directory from the runtime. A shell
+tab, the plain one outside a workspace too, starts in the directory a key
+passes, else the panel's, each only while it is a directory; else where the
+project's tab or the runtime starts it. Rejected: dropping the directory, so
+every shell tab from a worktree opened in the project; D158 does it for an agent.
 
 ### D154 — the remote screen lists the machines the user added
 
@@ -860,7 +860,7 @@ the cursor. Rejected: finding the line by its text, which rewording breaks.
 
 ### D158 — a terminal key's agent tab starts in the project, not in the panel's directory
 
-Extends D153, which still holds for a shell tab. An agent pressed from a
+Extends D153. An agent pressed from a
 worktree started in that worktree, and Claude Code, which takes the directory
 it starts in as its project, could then enter no other worktree. An agent
 tab now starts where the project's agent tab starts, unless the key or the
