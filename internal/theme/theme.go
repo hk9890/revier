@@ -96,6 +96,9 @@ type Glyphs struct {
 	// Builtin takes the folder column for the project revier builds in and
 	// no file declares. A set that draws the folder draws this too.
 	Builtin string
+	// Linked stands under the counts of a project on another machine that a
+	// link here names already. Every set draws it.
+	Linked string
 
 	// Window and Container are a kind column in front of a target's name in
 	// the pane: a target that is a window of its own, and one whose instance
@@ -126,7 +129,7 @@ var glyphSets = map[string]Glyphs{
 	"unicode": {
 		Running: "\u25cf", Stopped: "\u25cb", Cursor: "\u258c",
 		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
-		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715",
+		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715", Linked: "\u21c4",
 		Window: "\u25a1", Container: "\u25a3", Branch: "\u251c", LastBranch: "\u2514",
 	},
 	"nerd": {
@@ -144,6 +147,7 @@ var glyphSets = map[string]Glyphs{
 		NoFolder:   "\uf114", // nf-fa-folder_o
 		Remote:     "\uf233", // nf-fa-server
 		Builtin:    "\uf013", // nf-fa-cog
+		Linked:     "\uf0c1", // nf-fa-link
 		Window:     "\uf2d0", // nf-fa-window_maximize
 		Container:  "\uf2d2", // nf-fa-window_restore
 		Branch:     "\u251c", // a box-drawing tee, as in the unicode set
@@ -152,7 +156,7 @@ var glyphSets = map[string]Glyphs{
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
-		Start: "+", Keep: "=", Skip: "x",
+		Start: "+", Keep: "=", Skip: "x", Linked: "~",
 		Branch: "|", LastBranch: "`",
 	},
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,13 +33,18 @@ func TestAltRListsTheMachinesAndEnterListsTheHostsProjects(t *testing.T) {
 		t.Errorf("asked %v, want the dialog's ask to be for every project", remote.Asked)
 	}
 	// Two lines a project, as on the surface: the name, and the path with
-	// the note beside it.
+	// the link mark beside it.
+	linked := theme.Default().Glyphs.Linked
 	r := rows(m)
-	if len(r) < 4 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[1], "linked as alpha") {
-		t.Errorf("rows = %q, want alpha marked as linked", r)
+	if len(r) < 4 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[1], linked) || strings.Contains(r[1], "linked as") {
+		t.Errorf("rows = %q, want alpha marked as linked with the link glyph alone", r)
 	}
-	if !strings.Contains(r[2], "beta") || strings.Contains(r[3], "linked") {
+	if !strings.Contains(r[2], "beta") || strings.Contains(r[3], linked) {
 		t.Errorf("rows = %q, want beta unlinked", r)
+	}
+	// The pane names the link, its label apart from the name.
+	if p := pane(resize(m, 120, 20)); !regexp.MustCompile(`Link +alpha`).MatchString(p) {
+		t.Errorf("pane = %q, want the link named after its label and a space", p)
 	}
 	if h := barLine(m); !strings.Contains(h, "buildbox") {
 		t.Errorf("header = %q, want the host named", h)

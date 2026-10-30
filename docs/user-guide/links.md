@@ -42,7 +42,8 @@ works.
 ## Link a project
 
 In the TUI, press **alt+r**. Pick a machine, then a project (type to filter),
-then give the link a name. Esc goes back one step.
+then give the link a name. Esc goes back one step. A project you linked
+already has a link icon; the pane names the link.
 
 From a shell:
 

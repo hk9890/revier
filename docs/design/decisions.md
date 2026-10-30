@@ -824,6 +824,6 @@ Replaces D45. The ssh config also names forges and routers, which run no
 revier, so the remote screen lists the machines config.toml declares, and
 adds one from the ssh config. The file can be shared between machines, so
 each one leaves itself off the list (D131). As the screen opens, each machine
-is asked for its revier's version: no survey, so no D130 round. A link to a
+is asked for its revier's version: no survey, so no round (D130). A link to a
 machine off the list still works, and `revier doctor` names it. The remote
 revier lists the projects; ssh's own failures are told apart by exit 255.

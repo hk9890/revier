@@ -391,8 +391,6 @@ host = "buildbox"
 
 - revier does not list a machine that is this machine (by name, or by
   `HostName` in `~/.ssh/config`), so both machines can share `config.toml`.
-- `revier doctor` reports a table with no `host`, with a host it refuses,
-  and a host that two tables name.
 
 ## `[ui]`
 

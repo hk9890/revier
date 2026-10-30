@@ -99,13 +99,7 @@ func (i remoteItem) rowPath() string             { return remoteHome(i.view.Proj
 func (i remoteItem) rowUnsurveyed() bool         { return false }
 func (i remoteItem) rowHeld() bool               { return i.view.Held() }
 func (i remoteItem) rowBuiltin() bool            { return false }
-
-func (i remoteItem) rowNote() string {
-	if i.linked == "" {
-		return ""
-	}
-	return "linked as " + string(i.linked)
-}
+func (i remoteItem) rowLinked() bool             { return i.linked != "" }
 
 // remoteHome writes a path on the host the way config.ContractHome writes one here,
 // with its home directory as ~. The host's home is not known here, so it is
@@ -963,7 +957,7 @@ func (s *linkScreen) detail(sf surface) string {
 	}
 	out += line("Status", status, style)
 	if it.linked != "" {
-		out += line("Linked as", string(it.linked), th.Remote)
+		out += line("Link", string(it.linked), th.Remote)
 	} else if s.step == linkRemote {
 		out += th.Meta.Render(clipTo("Enter: name a link to it here", w)) + "\n"
 	}
