@@ -61,6 +61,7 @@ const (
 	KindShellNew        = "shell new"
 	KindAction          = "action"
 	KindAttach          = "attach"
+	KindClone           = "clone"
 	KindClose           = "close"
 	KindShutdown        = "shutdown"
 	KindShutdownRefused = "shutdown refused"

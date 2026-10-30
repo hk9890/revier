@@ -15,8 +15,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/hk9890/revier/internal/checkout"
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -516,8 +517,9 @@ func cmdAgentExec(args []string) error {
 	return serve(*project, *tag, func(c *core.Core, p core.Project) (core.Served, error) {
 		// A checkout that is missing here is cloned by the agent's panel
 		// alone: the shell's starts beside it, and two clones into one
-		// directory fail each other.
-		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
+		// directory fail each other. serve's core keeps no state, but the
+		// clone's line still goes to the state record.
+		if _, err := usecase.Clone(ledger.File{}, p.Project, os.Stderr); err != nil {
 			return core.Served{}, err
 		}
 		s, err := c.ServeAgent(p, core.Resume{Session: revier.SessionID(*resume), Dir: *dir, Agent: *agent})

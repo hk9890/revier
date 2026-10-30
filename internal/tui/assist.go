@@ -102,3 +102,15 @@ func assistErr(err error, said string) error {
 	}
 	return fmt.Errorf("revier assist: %w", err)
 }
+
+// lastLine is the last non-empty line of what a command said. A redrawn line
+// ends at a carriage return, so that ends a line too.
+func lastLine(s string) string {
+	lines := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' })
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return l
+		}
+	}
+	return ""
+}

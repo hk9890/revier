@@ -226,6 +226,30 @@ func TestDelOnWhatIsNotOpenSaysSo(t *testing.T) {
 	}
 }
 
+// del on a project whose one open window another project holds too names
+// that project, and closes nothing: the window stays open for it.
+func TestDelOnWhatAnotherProjectHoldsNamesIt(t *testing.T) {
+	_, wm, c, _ := world(t, 1)
+	var raw []revier.Project
+	for _, name := range []revier.ProjectName{"alpha", "beta"} {
+		raw = append(raw, revier.Project{Name: name, Path: "/p/" + string(name), Targets: []revier.Target{
+			{Name: "editor", Home: true, Key: "ctrl-shift-o", Window: &revier.Realization{
+				Launch: []string{"code"}, Match: revier.Match{Class: "^code$"}}},
+		}})
+	}
+	wm.Add("shared", "code")
+	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 150, 30)
+
+	m, cmd := press(m, "delete")
+	m = run(m, cmd)
+	if f := footer(m); !strings.Contains(f, "alpha: what is open of it stays open for beta") {
+		t.Errorf("footer = %q, want the project that holds the window named", f)
+	}
+	if len(wm.Closed) != 0 {
+		t.Errorf("closed %v, want nothing", wm.Closed)
+	}
+}
+
 // alt+del on an agent deletes nothing: an agent is in no file.
 func TestAltDelOnAnAgentDeletesNothing(t *testing.T) {
 	_, _, c, projects := world(t, 2)

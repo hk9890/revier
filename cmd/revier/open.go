@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/hk9890/revier/internal/checkout"
+	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -52,7 +52,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	if open == core.OpenClone {
-		if _, err := checkout.Ensure(p.Project, os.Stderr); err != nil {
+		if _, err := usecase.Clone(a.core.Ledger, p.Project, os.Stderr); err != nil {
 			return err
 		}
 		// The clone ran without a deadline. The host calls still need one,

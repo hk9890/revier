@@ -127,6 +127,20 @@ func TestShutdownOfOneProjectKeepsWhatAnotherHolds(t *testing.T) {
 	if got, want := stepNames(c.ShutdownPlan(report, "", core.ShutdownAll)), []string{"home", "notes", "editor"}; !slices.Equal(got, want) {
 		t.Errorf("everything = %v, want %v", got, want)
 	}
+	if got := c.SharedWith(report, "revier"); !slices.Equal(got, []revier.ProjectName{"other"}) {
+		t.Errorf("SharedWith(revier) = %v, want other, which holds the workspace", got)
+	}
+	if got := c.SharedWith(report, ""); len(got) != 0 {
+		t.Errorf("SharedWith of everything = %v, want nothing", got)
+	}
+
+	third := agentProject()
+	third.Name = "third"
+	third.Targets = third.Targets[:1]
+	report = survey(t, c, append(projects, prepared(t, third)), nil)
+	if got := c.SharedWith(report, "revier"); !slices.Equal(got, []revier.ProjectName{"other", "third"}) {
+		t.Errorf("SharedWith(revier) = %v, want other and third, which both hold the workspace", got)
+	}
 }
 
 // A window attached to the project by hand is the project's, and closes with

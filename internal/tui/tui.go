@@ -797,7 +797,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, mirrorTick(m.mirrorEvery(), m.mirror.gen)
 	case surveyMsg:
-		m.surveying = false
+		m.surveying, m.mirror.held = false, false
 		m.surveyErr = msg.err
 		var seen tea.Cmd
 		if msg.err == nil {
@@ -934,6 +934,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.offerResume()
 			m.askAgain()
 			m.mirror.restart()
+			m.mirror.held = true
 			// A tick still out was set while nobody looked, up to the slow
 			// refresh away: it is dropped, and the reload surveys instead.
 			if !m.surveying {

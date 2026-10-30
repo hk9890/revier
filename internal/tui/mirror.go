@@ -56,6 +56,7 @@ type mirror struct {
 	took     int       // the number of the last read taken
 	ticking  bool      // whether a tick is out, so a switch starts no second one
 	gen      int       // the number of the tick that is out; an older one is dropped
+	held     bool      // reads wait for the survey a raise asked for: the last one is from before the hide
 
 	// The lines text was last set as, and the width they were set at: the
 	// pane is drawn again on every message, and a scrollback is long. A read
@@ -132,8 +133,13 @@ func (m Model) mirroring() (listedKey, revier.AgentView, bool) {
 // another agent comes under the cursor, and when the mirror comes back into
 // view with a screen read before it left, and on every tick after. It starts
 // the tick when the mirror comes into view, and the tick ends itself when it
-// leaves.
+// leaves. After a raise it asks nothing until the raise's survey answers: a
+// panel that closed while the popup was hidden is still in the survey from
+// before the hide, and a read of it fails.
 func (mi *mirror) ask(c *core.Core, key listedKey, a revier.AgentView, msg tea.Msg, every time.Duration) tea.Cmd {
+	if mi.held {
+		return nil
+	}
 	var cmds []tea.Cmd
 	back := !mi.ticking
 	if back {
@@ -201,10 +207,14 @@ func (mi *mirror) take(msg mirroredMsg) {
 // positive count. The first move up asks for the scrollback, which the mirror
 // does not read while it follows the end; back at the end it stops reading
 // it. Until the scrollback is here there is nothing above the screen to stop
-// at, so the moves are kept as they come.
+// at, so the moves are kept as they come. After a raise the scrollback is
+// read once the raise's survey answers, as ask reads.
 func (mi *mirror) scroll(c *core.Core, a revier.AgentView, by int) tea.Cmd {
 	if by > 0 && !mi.deep {
 		mi.deep, mi.off = true, by
+		if mi.held {
+			return nil
+		}
 		return mi.readScreen(c, a)
 	}
 	mi.off = max(mi.off+by, 0)

@@ -56,6 +56,18 @@ func CreateProject(cfgRoot string, ledger core.Ledger, projects []core.Project, 
 	return p, nil
 }
 
+// Clone clones the repository of a project whose directory is missing, with
+// git's output on out, and reports whether it cloned. The state record has
+// each clone, and each refusal or failure, with its error (decisions.md
+// D151); a directory that is there writes nothing.
+func Clone(ledger core.Ledger, p revier.Project, out io.Writer) (bool, error) {
+	cloned, err := checkout.Ensure(p, out)
+	if cloned || err != nil {
+		ledger.Note(record.Line{Kind: record.KindClone, Project: p.Name, Dir: p.Path}.Failed(err))
+	}
+	return cloned, err
+}
+
 // LinkProject writes a link under name to the project a host reports as on,
 // or under the project's own name when name is empty. A name whose file is
 // there is refused, so no project is overwritten, and so is a host that is

@@ -61,6 +61,25 @@ func TestTheMirrorIsReadAgainWhenItComesBackIntoView(t *testing.T) {
 	}
 }
 
+// A raise reads no panel before its survey answers, a wheel over the mirror
+// included: the survey from before the hide still lists a panel that closed
+// while the popup was hidden.
+func TestTheRaiseReadsThePanelOnceItsSurveyAnswers(t *testing.T) {
+	m, _, _ := listedWorld(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "one", screen: "first screen"})
+	asked := m.MirrorAsked()
+	m = m.Raised()
+	next, _ := m.Update(tea.MouseWheelMsg{X: paneBorder(t, m) + 4, Y: 12, Button: tea.MouseWheelUp})
+	m = next.(tui.Model)
+	if got := m.MirrorAsked(); got != asked {
+		t.Errorf("reads asked for = %d after the raise and a wheel, want %d: none before its survey", got, asked)
+	}
+	m = survey(m)
+	if got := m.MirrorAsked(); got != asked+1 {
+		t.Errorf("reads asked for = %d after the raise's survey, want %d", got, asked+1)
+	}
+}
+
 // A wheel up over a screen with nothing above it has no line to hold: the
 // mirror follows the end again, and reads the scrollback no more.
 func TestAWheelWithNothingAboveTheScreenLeavesTheMirrorFollowing(t *testing.T) {

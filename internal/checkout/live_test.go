@@ -88,12 +88,13 @@ func TestEnsureWithoutGitURLNamesTheField(t *testing.T) {
 	}
 }
 
+// A failed clone carries git's own reason.
 func TestEnsureReportsAFailedClone(t *testing.T) {
 	bare(t)
 	path := filepath.Join(t.TempDir(), "demo")
 	_, err := checkout.Ensure(revier.Project{Name: "demo", Path: path, GitURL: filepath.Join(t.TempDir(), "absent.git")}, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "git clone") {
-		t.Fatalf("err = %v, want the clone failure", err)
+	if err == nil || !strings.Contains(err.Error(), "git clone") || !strings.Contains(err.Error(), "fatal:") {
+		t.Fatalf("err = %v, want the clone failure with git's reason", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("a failed clone must not leave a directory that looks like a checkout")

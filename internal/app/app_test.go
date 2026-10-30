@@ -19,6 +19,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/testenv"
@@ -310,5 +311,24 @@ func TestAnActionThatRunsNothingWritesNoLaunch(t *testing.T) {
 	}
 	if l.st.Launch != nil {
 		t.Errorf("launch = %+v, want none", l.st.Launch)
+	}
+}
+
+// A clone that cannot run is in the state record with its error, and a
+// directory that is there clones nothing and records nothing.
+func TestCloneRecordsWhatItDidNot(t *testing.T) {
+	l := &ledger{}
+	missing := revier.Project{Name: "gone", Path: filepath.Join(t.TempDir(), "gone")}
+	_, err := app.Clone(l, missing, io.Discard)
+	if err == nil {
+		t.Fatal("a clone with no git_url succeeded")
+	}
+	if len(l.notes) != 1 || l.notes[0].Kind != record.KindClone || l.notes[0].Project != "gone" || l.notes[0].Err != err.Error() {
+		t.Errorf("notes = %+v, want one clone line with the error", l.notes)
+	}
+
+	l = &ledger{}
+	if cloned, err := app.Clone(l, revier.Project{Name: "here", Path: t.TempDir()}, io.Discard); cloned || err != nil || len(l.notes) != 0 {
+		t.Errorf("Clone of a directory that is there = %v, %v, notes %+v; want nothing done", cloned, err, l.notes)
 	}
 }
