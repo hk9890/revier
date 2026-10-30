@@ -1392,13 +1392,14 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 		v := c.view(ctx, snap, failed, p, bound[p.Name], attached[p.Name], probed)
 		// view labelled each agent it probed, so a local view needs only its
 		// open tabs placed. A link's agents are its host's, placed once they
-		// are laid over. The survey is the hot path.
+		// are laid over, through the targets the link holds here: a link that
+		// holds none places nothing. The survey is the hot path.
 		switch {
-		case p.Remote != nil:
+		case p.Remote != nil && v.Held():
 			pl := c.places(snap, p, bound[p.Name])
 			pl.label(v.Agents)
 			r.places[p.Name] = pl
-		case len(v.Agents) > 0:
+		case p.Remote == nil && len(v.Agents) > 0:
 			c.tabPlaces(snap, p, bound[p.Name]).label(v.Agents)
 		}
 		r.Views = append(r.Views, v)
