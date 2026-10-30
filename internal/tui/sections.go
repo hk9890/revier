@@ -112,17 +112,12 @@ func (m *Model) endPaneSearch() {
 	}
 }
 
-// agentRow is one row of the pane's Agents section. matches are the byte
-// positions of its label the query matched, for the highlight.
+// agentRow is one row of the pane's Agents section: the agent list's row of
+// the agent, so the two read alike. matches are the byte positions of its
+// FilterValue the query matched, for the highlight.
 type agentRow struct {
-	agent   revier.AgentView
+	agentItem
 	matches []int
-}
-
-// label is what the agent query matches: the harness, and what the agent is
-// doing, which is where a conversation's name shows.
-func (r agentRow) label() string {
-	return harnessOf(r.agent) + " " + r.agent.State.Activity
 }
 
 // same reports whether two rows are one agent, whatever the query matched.
@@ -148,9 +143,10 @@ func (m Model) agentRows() []agentRow {
 	}
 	all := make([]agentRow, len(v.Agents))
 	labels := make([]string, len(v.Agents))
+	now := m.now()
 	for i, a := range v.Agents {
-		all[i] = agentRow{agent: a}
-		labels[i] = all[i].label()
+		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], now)}
+		labels[i] = all[i].FilterValue()
 	}
 	if m.afilter == "" {
 		return all

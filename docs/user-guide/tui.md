@@ -45,8 +45,9 @@ sections:
 
 - **Targets**: each target, its key and its state, then each window you
   attached with `revier attach`.
-- **Agents**: each agent, its harness, its state and what it does. Under the
-  list is the terminal of the selected agent, as it is now.
+- **Agents**: each agent in two lines, as the [agent list](#the-agent-list)
+  shows it. Under the list is the terminal of the selected agent, as it is
+  now.
 
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a
@@ -118,11 +119,24 @@ selection.
 Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. Agents that need you are on top, then working
 agents, then idle ones, then those in state `unknown`. Among those that need
-you and among the idle ones, the one that spoke last is first. Each row shows
-how long ago the agent spoke. Type to filter by project or by what the agent
-does. The pane shows the agent's [address](agents.md#drive-an-agent-from-a-script),
-the name its harness gives it, such as `claude:shop-a0` for the name Claude
-Code's agents message it by, and the agent's terminal.
+you and among the idle ones, the one that spoke last is first.
+
+Each agent takes two lines:
+
+```
+ idle       Fix the login redirect                          4m
+            shop:home:2 · login-fix              claude:shop-a0
+```
+
+- The first line: the agent's state, what it does, and how long ago it spoke.
+- The second line: the agent's [address](agents.md#drive-an-agent-from-a-script),
+  then the worktree it works in, if it works in one. At the right is its harness
+  and the name the harness gives it. Claude Code's other agents send messages
+  to that name, here `shop-a0`. An agent with no address shows its project.
+- When a line is too narrow, the address is cut first.
+
+Type to filter by any of this text. The pane shows the address, the harness,
+the name, and the agent's terminal.
 
 ## The popup
 

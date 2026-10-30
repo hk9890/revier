@@ -995,7 +995,7 @@ func (s *linkScreen) detail(sf surface) string {
 	if len(v.Agents) > 0 {
 		out += heading(th, "Agents", w)
 		for _, a := range v.Agents {
-			out += detailAgent(sf.spun, agentRow{agent: a}, w, false, false, false) + "\n"
+			out += detailAgent(sf.spun, a, w) + "\n"
 		}
 	}
 	return out
