@@ -32,14 +32,14 @@ func TestAltRListsTheMachinesAndEnterListsTheHostsProjects(t *testing.T) {
 	if last := remote.Asked[len(remote.Asked)-1]; len(last) != 0 {
 		t.Errorf("asked %v, want the dialog's ask to be for every project", remote.Asked)
 	}
-	// Two lines a project, as on the surface: the name, and the path with
-	// the link mark beside it.
+	// Two lines a project, as on the surface: the name, with the link mark
+	// in the folder column in front of it, and the path.
 	linked := theme.Default().Glyphs.Linked
 	r := rows(m)
-	if len(r) < 4 || !strings.Contains(r[0], "alpha") || !strings.Contains(r[1], linked) || strings.Contains(r[1], "linked as") {
+	if len(r) < 4 || !strings.Contains(r[0], linked+" alpha") || strings.Contains(r[1], "linked as") {
 		t.Errorf("rows = %q, want alpha marked as linked with the link glyph alone", r)
 	}
-	if !strings.Contains(r[2], "beta") || strings.Contains(r[3], linked) {
+	if !strings.Contains(r[2], "beta") || strings.Contains(r[2]+r[3], linked) {
 		t.Errorf("rows = %q, want beta unlinked", r)
 	}
 	// The pane names the link, its label apart from the name.

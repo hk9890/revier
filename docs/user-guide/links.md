@@ -42,8 +42,10 @@ works.
 ## Link a project
 
 In the TUI, press **alt+r**. Pick a machine, then a project (type to filter),
-then give the link a name. Esc goes back one step. A project you linked
-already has a link icon; the pane names the link.
+then give the link a name. Esc goes back one step. The projects you linked
+already stand at the top, with a link icon; the pane names the link. The
+others follow as in your list: an agent that waits for you first, then the
+open projects.
 
 From a shell:
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -169,5 +170,32 @@ func TestTheLinkScreenWalksItsStepsWithNoRootModel(t *testing.T) {
 	}
 	if res, _ := s.key(sf, esc); !res.closed {
 		t.Errorf("result = %+v, want Esc on the machines to close the dialog", res)
+	}
+}
+
+// A host's projects list the ones a link here names first, and then as the
+// main list does: an agent that wants the user, then the open projects, and
+// otherwise the host's order.
+func TestAHostsProjectsListTheLinkedFirstThenAsTheMainList(t *testing.T) {
+	view := func(name string) revier.ProjectView {
+		return revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(name)}}
+	}
+	open, asks := view("open"), view("asks")
+	open.Running = true
+	asks.Agents = []revier.AgentView{{State: revier.AgentState{Status: revier.StatusAttention}}}
+	rows := []remoteItem{
+		{view: view("stopped")},
+		{view: open},
+		{view: view("later")},
+		{view: asks},
+		{view: view("mine"), linked: "rs-mine"},
+	}
+	slices.SortStableFunc(rows, remoteOrder)
+	var got []string
+	for _, r := range rows {
+		got = append(got, string(r.view.Project.Name))
+	}
+	if want := []string{"mine", "asks", "open", "stopped", "later"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
 	}
 }

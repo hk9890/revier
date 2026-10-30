@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -100,6 +101,31 @@ func (i remoteItem) rowUnsurveyed() bool         { return false }
 func (i remoteItem) rowHeld() bool               { return i.view.Held() }
 func (i remoteItem) rowBuiltin() bool            { return false }
 func (i remoteItem) rowLinked() bool             { return i.linked != "" }
+
+// remoteOrder puts the projects a link here names already first, and then
+// sorts as the main list does: an agent that wants the user, then the open
+// projects, and otherwise the host's order.
+func remoteOrder(a, b remoteItem) int {
+	return cmp.Or(cmp.Compare(a.rank(), b.rank()), cmp.Compare(a.need(), b.need()))
+}
+
+func (i remoteItem) rank() int {
+	if i.linked != "" {
+		return 0
+	}
+	return 1
+}
+
+func (i remoteItem) need() int {
+	switch {
+	case i.view.Attention():
+		return 0
+	case i.view.Held():
+		return 1
+	default:
+		return 2
+	}
+}
 
 // remoteHome writes a path on the host the way config.ContractHome writes one here,
 // with its home directory as ~. The host's home is not known here, so it is
@@ -662,9 +688,14 @@ func (s *linkScreen) asked(projects []core.Project, msg askedMsg) (tea.Cmd, erro
 	if msg.err != nil {
 		return nil, msg.err
 	}
-	items := make([]list.Item, 0, len(msg.views))
+	rows := make([]remoteItem, 0, len(msg.views))
 	for _, v := range msg.views {
-		items = append(items, remoteItem{view: v, linked: core.LinkedAs(projects, msg.host, v.Project.Name)})
+		rows = append(rows, remoteItem{view: v, linked: core.LinkedAs(projects, msg.host, v.Project.Name)})
+	}
+	slices.SortStableFunc(rows, remoteOrder)
+	items := make([]list.Item, len(rows))
+	for i, r := range rows {
+		items[i] = r
 	}
 	s.host = msg.host
 	s.setFilter("")

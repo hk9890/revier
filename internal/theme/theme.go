@@ -96,8 +96,9 @@ type Glyphs struct {
 	// Builtin takes the folder column for the project revier builds in and
 	// no file declares. A set that draws the folder draws this too.
 	Builtin string
-	// Linked stands under the counts of a project on another machine that a
-	// link here names already. Every set draws it.
+	// Linked marks a host's project that a link here names already. It takes
+	// the folder column in a set that draws one, and stands beside the counts
+	// in a set that does not; every set draws it.
 	Linked string
 
 	// Window and Container are a kind column in front of a target's name in
