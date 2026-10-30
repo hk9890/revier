@@ -86,6 +86,10 @@ usage:
                                 type keys into an agent, whatever it is doing
   revier agent focus <agent>
                                 go to an agent's tab and raise its window
+  revier agent close <agent> [--force]
+                                end an agent: close its tab, or in the
+                                workspace's own tab its panel alone; refuses
+                                while the agent is busy unless --force
   revier agent new [name] [-p name | --panel id] [--resume id] [--dir path] [--no-focus]
                                 add an agent tab, with its shell, to an open
                                 workspace: the default agent, or the named

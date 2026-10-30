@@ -73,6 +73,20 @@ Without a name, the tab runs the project's default agent: the first agent
 panel of its layout. With a name, the tab's agent panel runs that
 [named agent](configuration.md#named-agents), and the tab keeps the shell.
 
+To end an agent, close it by its address:
+
+```bash
+addr=$(revier agent new -p shop --no-focus)
+revier agent close "$addr"              # prints: closed the tab
+```
+
+`revier agent close` returns once the agent is gone. An agent in a tab
+beside the workspace's own, such as one `agent new` opened, closes with its
+whole tab, the shell beside it included. An agent in the workspace's own tab
+closes as its panel alone, and the shell there stays. The command prints
+which of the two it did. It refuses an agent that is `running` or in
+`attention` unless you give `--force`, and saves no session.
+
 Without `-p`, the project is the one `--dir` is in, else the one revier
 finds as for every command ([Concepts](concepts.md#project)). The workspace
 must be open already. With `--panel`, a window that is no project's workspace

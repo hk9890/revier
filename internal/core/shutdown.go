@@ -333,10 +333,28 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 // shell beside the agent; the guess the other way leaves one shell of an
 // added tab open, which the next shutdown closes.
 func agentPanels(in revier.Instance, panel revier.PanelID) []revier.PanelID {
-	if own, known := ownTab(in, panel); own || !known {
+	if !addedTab(in, panel) {
 		return []revier.PanelID{panel}
 	}
 	return tabAt(in, panel)
+}
+
+// addedTab reports a panel in a tab the workspace opened beside its own, the
+// tab an agent's close takes whole (agentPanels).
+func addedTab(in revier.Instance, panel revier.PanelID) bool {
+	own, known := ownTab(in, panel)
+	return known && !own
+}
+
+// ClosesTab reports an agent's step that closes the whole tab the agent sits
+// in, not the agent's panel alone, as the instances the plan was drawn from
+// list it (decisions.md D94).
+func ClosesTab(instances []revier.Instance, s CloseStep) bool {
+	if s.Panel == "" || s.Target != "" {
+		return false
+	}
+	i := slices.IndexFunc(instances, func(in revier.Instance) bool { return key(in.Ref) == key(s.Ref) })
+	return i >= 0 && addedTab(instances[i], s.Panel)
 }
 
 // agentsIn are the agents in an instance, or in the given panels of it when

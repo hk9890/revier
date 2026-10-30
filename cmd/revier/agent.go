@@ -31,6 +31,7 @@ usage:
   revier agent send-keys <agent> [--] <key>..
   revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
   revier agent focus <agent>
+  revier agent close <agent> [--force]
   revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>:<target>:<panel>, the agent's address as
@@ -56,6 +57,8 @@ usage:
              without --dir, --panel starts them in the project too,
              not in the panel's directory
   --no-focus leave the focus where it is, and print the new agent's address
+  --force    with close, close an agent that is running or waiting for an
+             answer
 
 new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace. With
@@ -69,6 +72,14 @@ With --panel in a window that is no project's open workspace, it opens what
 [terminal] outside says: a plain shell tab beside the window, or nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
+
+close ends the agent by closing its panel, and returns once the panel is
+gone. In a tab beside the workspace's own, as new opens one, the whole tab
+closes, the shell beside the agent with it; in the workspace's own tab, the
+agent's panel closes alone.
+It prints which of the two it did. It refuses an agent that is running or
+waiting for an answer unless --force is given, and a panel that runs no
+agent. It saves no session.
 
 exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
@@ -121,6 +132,8 @@ func cmdAgent(out io.Writer, args []string) error {
 		return cmdAgentNew(out, args)
 	case "focus":
 		return cmdAgentFocus(out, args)
+	case "close":
+		return cmdAgentClose(out, args)
 	case "exec":
 		return cmdAgentExec(args)
 	default:
@@ -341,6 +354,77 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	err = a.core.FocusAgent(ctx, revier.ProjectName(name), revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID, State: ag.State})
 	logging.Op("agent focus", start, err, "address", address, "ref", ag.Ref, "panel", ag.Panel.ID)
 	return err
+}
+
+// cmdAgentClose ends one agent by closing its panel, as del on its row in the
+// TUI does: through the core's close path, without a session save, and
+// refused while the agent works or waits for an answer unless forced.
+func cmdAgentClose(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("agent close", flag.ContinueOnError)
+	force := fs.Bool("force", false, "close the agent while it works or waits for an answer")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return errors.New("usage: revier agent close <agent> [--force]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
+	defer cancel()
+	a, err := newApp(ctx, out)
+	if err != nil {
+		return err
+	}
+	start := time.Now()
+	err = a.closeAgent(ctx, pos[0], *force)
+	logging.Op("agent close", start, err, "address", pos[0], "force", *force)
+	return err
+}
+
+// closeAgent closes the panel of the agent an address names, and says
+// whether that closed the agent's whole tab or its panel alone (decisions.md
+// D94).
+func (a *app) closeAgent(ctx context.Context, address string, force bool) error {
+	ag, err := a.agent(ctx, address)
+	if errors.Is(err, core.ErrNotAgent) {
+		return fmt.Errorf("%s: no agent runs in that panel", address)
+	}
+	if err != nil {
+		return err
+	}
+	name, _, _ := strings.Cut(address, ":")
+	p, _ := a.project(revier.ProjectName(name))
+	projects := []core.Project{p}
+	report := a.core.SurveyToClose(ctx, projects, p.Name)
+	plan := a.core.ClosePlan(report, p.Name, core.CloseRow{Agent: ag.Ref, Panel: ag.Panel.ID})
+	if len(plan) == 0 {
+		return fmt.Errorf("%s: the agent is no longer open here", address)
+	}
+	if busy := core.Busy(plan); len(busy) > 0 && !force {
+		return busyAgent(address, busy)
+	}
+	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, core.ShutdownOpts{Force: force, Projects: projects})
+	var refused *core.BusyRefusal
+	switch {
+	case errors.As(err, &refused):
+		return busyAgent(address, core.Busy(refused.Plan))
+	case err != nil:
+		return fmt.Errorf("%s: %w; nothing closed", address, err)
+	}
+	if r := closed[0]; r.Action.Leaves() || r.Err != nil || r.Open {
+		return fmt.Errorf("%s: %s", address, r.Note())
+	}
+	if core.ClosesTab(report.Instances, plan[0]) {
+		_, _ = fmt.Fprintln(a.out, "closed the tab")
+	} else {
+		_, _ = fmt.Fprintln(a.out, "closed the agent panel")
+	}
+	return nil
+}
+
+// busyAgent refuses the close of an agent that works or waits for an answer.
+func busyAgent(address string, busy []core.CloseStep) error {
+	return fmt.Errorf("%s: %s; nothing closed. use --force to close it anyway", address, busyNote(busy[0].BusyAgents()))
 }
 
 // cmdAgentNew adds an agent tab to an open workspace. It is what the kitty

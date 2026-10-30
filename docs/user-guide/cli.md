@@ -32,6 +32,7 @@ in full.
 | `revier agent read` | Print an agent's last reply, or its screen. |
 | `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
 | `revier agent focus` | Go to an agent's tab. |
+| `revier agent close` | End one agent: close its tab, or in the workspace's own tab its panel alone. |
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
