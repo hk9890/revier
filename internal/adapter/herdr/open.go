@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -190,46 +191,13 @@ func (n layoutNode) panes() []string {
 	return out
 }
 
-// buildable refuses panels that one tab cannot hold, or that startable
+// buildable refuses panels that one tab cannot hold, or that panelstart.Startable
 // refuses.
 func buildable(panels []revier.PanelSpec) error {
 	if len(panels) > maxPanes {
 		return fmt.Errorf("herdr: a tab holds at most %d panels, and this one has %d", maxPanes, len(panels))
 	}
-	return startable(panels)
-}
-
-// startable refuses panels whose program is not on PATH before herdr starts
-// any of them: herdr starts it anyway, and the pane closes at once without
-// saying why. A program named by a path is left to herdr: it is read against
-// the panel's directory, not this one.
-func startable(panels []revier.PanelSpec) error {
-	for _, p := range panels {
-		if len(p.Command) == 0 || strings.Contains(p.Command[0], "/") {
-			continue
-		}
-		if _, err := exec.LookPath(p.Command[0]); err != nil {
-			return fmt.Errorf("%s command %q is not on PATH", whose(p), p.Command[0])
-		}
-	}
-	return nil
-}
-
-// exitedAtOnce says the panel's command ended as soon as it started.
-func exitedAtOnce(p revier.PanelSpec) error {
-	if len(p.Command) == 0 {
-		return fmt.Errorf("%s shell exited as soon as it started", whose(p))
-	}
-	return fmt.Errorf("%s command %q exited as soon as it started", whose(p), strings.Join(p.Command, " "))
-}
-
-// whose names what a command belongs to: a panel by its kind, and a launch,
-// which has none, by its command alone.
-func whose(p revier.PanelSpec) string {
-	if p.Kind == "" {
-		return "the"
-	}
-	return "the " + string(p.Kind) + " panel's"
+	return panelstart.Startable(panels)
 }
 
 // running makes sure a server answers, starting one when none does, and

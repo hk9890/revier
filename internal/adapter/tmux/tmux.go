@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -301,7 +302,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, fmt.Errorf("tmux: realization has no name to give the session")
 	}
 	panels := r.PanelSpecs()
-	if err := startable(panels); err != nil {
+	if err := panelstart.Startable(panels); err != nil {
 		return revier.TargetRef{}, err
 	}
 
@@ -311,7 +312,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	if strings.TrimSpace(out) == "" {
 		// tmux prints nothing when the session ended before it could.
-		return revier.TargetRef{}, exitedAtOnce(panels[0])
+		return revier.TargetRef{}, panelstart.ExitedAtOnce(panels[0])
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
 	if len(f) != 4 {
@@ -404,30 +405,13 @@ func (h *Host) fill(ctx context.Context, window, first string, panels []revier.P
 	return panes, nil
 }
 
-// startable refuses panels whose program is not on PATH before tmux starts
-// any of them. tmux starts it anyway, the pane closes at once, and the step
-// after fails on an id that no longer exists - which names neither the panel
-// nor its command. A program named by a path is left to tmux: it is read
-// against the panel's directory, not this one.
-func startable(panels []revier.PanelSpec) error {
-	for _, p := range panels {
-		if len(p.Command) == 0 || strings.Contains(p.Command[0], "/") {
-			continue
-		}
-		if _, err := exec.LookPath(p.Command[0]); err != nil {
-			return fmt.Errorf("%s command %q is not on PATH", whose(p), p.Command[0])
-		}
-	}
-	return nil
-}
-
 // exited names the panel whose command ended as soon as it started, when a
 // step of an Open or an OpenTab failed because tmux closed what that panel's
 // pane held: the pane, its window, its session, or the server with its last
 // session. Any other failure is tmux's own and is returned as it is.
 func exited(err error, p revier.PanelSpec) error {
 	if noServer(err) || closed(err) {
-		return exitedAtOnce(p)
+		return panelstart.ExitedAtOnce(p)
 	}
 	return err
 }
@@ -444,24 +428,6 @@ func closed(err error) bool {
 	return false
 }
 
-// exitedAtOnce says the panel's command ended as soon as it started.
-func exitedAtOnce(p revier.PanelSpec) error {
-	if len(p.Command) == 0 {
-		return fmt.Errorf("%s shell exited as soon as it started", whose(p))
-	}
-	return fmt.Errorf("%s command %q exited as soon as it started", whose(p), strings.Join(p.Command, " "))
-}
-
-// whose names what a command belongs to: a panel by its kind. A realization's
-// launch has no kind, and neither has a panel whose kind was left out, so
-// either is named by its command alone.
-func whose(p revier.PanelSpec) string {
-	if p.Kind == "" {
-		return "the"
-	}
-	return "the " + string(p.Kind) + " panel's"
-}
-
 // OpenTab opens a window after the last one of the session: r.Launch alone,
 // or r.Panels with every later one split into the first. It goes last, not
 // into the lowest free index, so the panels keep their order in the listing a
@@ -476,7 +442,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 	panels := r.PanelSpecs()
-	if err := startable(panels); err != nil {
+	if err := panelstart.Startable(panels); err != nil {
 		return "", err
 	}
 	args := []string{"new-window", "-d", "-a", "-P", "-F", "#{window_id}" + sep + "#{pane_id}", "-t", sessionOf(ref.ID) + ":{end}"}
@@ -485,7 +451,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 	if strings.TrimSpace(out) == "" {
-		return "", exitedAtOnce(panels[0])
+		return "", panelstart.ExitedAtOnce(panels[0])
 	}
 	f := strings.SplitN(strings.TrimSpace(out), sep, 2)
 	window := f[0]

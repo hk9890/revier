@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -47,7 +48,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 				// A command that ends just after the check apply makes is
 				// gone by its mark.
 				if isCode(err, "pane_not_found") {
-					err = exitedAtOnce(panels[i])
+					err = panelstart.ExitedAtOnce(panels[i])
 				}
 				break
 			}
@@ -137,7 +138,7 @@ func (h *Host) apply(ctx context.Context, key, id string, panels []revier.PanelS
 	}
 	for i, id := range panes {
 		if !slices.ContainsFunc(snap.Panes, func(p pane) bool { return p.ID == id }) {
-			return tab, nil, exitedAtOnce(panels[i])
+			return tab, nil, panelstart.ExitedAtOnce(panels[i])
 		}
 	}
 	return tab, panes, nil

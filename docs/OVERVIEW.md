@@ -10,6 +10,7 @@ A findability map: where things live, and how to search for them.
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
 | `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `herdr` (runtime; `kitty` also the terminal keys, `herdr` also a probe), `gnome` (window and key binder), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher in `assist.go`), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/panelstart/` | What the tmux and herdr hosts say about a panel whose command does not start: not on PATH, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
