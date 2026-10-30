@@ -18,7 +18,7 @@ in full.
 |---|---|
 | `revier` | The TUI. See [The TUI](tui.md). |
 | `revier popup` | The TUI in a kitty window of its own. |
-| `revier list` | Print every project, its state, agents and targets. |
+| `revier list` | Print every project, its state, agents and targets. `--match <word>` prints only the projects whose name, directory, repository or agent activity holds the word. |
 | `revier new` | Write a project file for the current directory. |
 | `revier open` | Run-or-raise the project's workspace. |
 | `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |

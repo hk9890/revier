@@ -154,7 +154,8 @@ type AgentState struct {
 	// Name is what the harness calls the agent, empty when it names none:
 	// Claude Code's session name, the one its peer messages address. A
 	// surface shows it beside revier's address and decides nothing by it,
-	// since a harness need not keep it unique or stable (decisions.md D156).
+	// since a harness need not keep it unique or stable (decisions.md D156);
+	// a search finds the agent's project by it (D161).
 	Name string `json:"name,omitempty"`
 }
 

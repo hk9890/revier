@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -18,9 +19,13 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
 	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
+	match := fs.String("match", "", "only the projects this word finds")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
+	}
+	if *match != "" && len(pos) > 0 {
+		return errors.New("usage: revier list --match <word> takes no project names")
 	}
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
@@ -45,12 +50,19 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	if err := report.HostErr(); err != nil {
 		fmt.Fprintf(os.Stderr, "revier: warning: %v\n", err)
 	}
-	views := report.Views
 
 	// Drop attachments and bindings whose windows are gone, so state does not
 	// accumulate refs to closed windows forever. A list is the first settle
 	// of its process, so no window is new to it and it claims nothing.
 	a.core.Settle(report, a.projects, time.Now())
+
+	if *match != "" {
+		report.Views = slices.DeleteFunc(report.Views, func(v revier.ProjectView) bool { return !core.Matches(v, *match) })
+		if len(report.Views) == 0 {
+			return fmt.Errorf("no project matches %q", *match)
+		}
+	}
+	views := report.Views
 
 	if *asJSON {
 		// What a save on another machine records for its link to a project
