@@ -88,8 +88,8 @@ func (m Model) underCursor() (revier.ProjectName, bool) {
 	return m.selectedName()
 }
 
-// assistErr is what the surface shows for how `revier assist` ended: the
-// reason the command gave, which is the last line it said when that line is
+// assistErr is what the log keeps for how `revier assist` ended, while the
+// footer names the failure alone: the reason the command gave, which is the last line it said when that line is
 // its failure line. A command that ended without one - killed, or failed
 // after a warning alone - is named, since a bare exit status says nothing
 // about what ended.

@@ -986,9 +986,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reloadViews()
 			statuses = msg.statuses
 		case msg.assisted:
-			// The old list stands here too, with the reason under it: the
-			// user is back to read what the assistant wrote, and a
-			// config.toml that no longer loads is the first thing to know.
+			// The old list stands here too, with the failure under it and
+			// its reason on the logs screen: the user is back to read what
+			// the assistant wrote, and a config.toml that no longer loads is
+			// the first thing to know.
 			m.err = fail("config load", "", msg.err)
 		default:
 			// The old list stands: a file broken while hidden must not
