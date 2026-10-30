@@ -716,7 +716,7 @@ func named(t *testing.T) core.Project {
 // name for the default agent, whose panel carries no mark.
 func TestSessionRecordsTheNamedAgentEachPanelRuns(t *testing.T) {
 	marked := agent("3", "", "")
-	marked.Vars[core.PanelAgentVar] = "dtop"
+	marked.Vars[revier.PanelAgentVar] = "dtop"
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"), marked)
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
@@ -755,7 +755,7 @@ func TestRestoreOpensANamedAgentInItsOwnTab(t *testing.T) {
 		{Kind: revier.PanelAgent, Title: "dtop", Command: []string{"dtop"}, Dir: project},
 		{Kind: revier.PanelShell, Command: []string{"zsh"}, Dir: project},
 	})
-	if want := map[string]string{core.PanelAgentVar: "dtop"}; !maps.Equal(rt.Tabs[0].Vars, want) {
+	if want := map[string]string{revier.PanelAgentVar: "dtop"}; !maps.Equal(rt.Tabs[0].Vars, want) {
 		t.Errorf("named tab vars = %v, want %v", rt.Tabs[0].Vars, want)
 	}
 	if rt.Tabs[1].Real.Panels[0].Title != "Claude Code" || len(rt.Tabs[1].Vars) != 0 {
