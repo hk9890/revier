@@ -49,6 +49,8 @@ revier finds the project you mean in this order:
 4. The project revier acted on last.
 
 A desktop key has no useful directory, so it starts at step 3.
+`revier agent new` and `revier shell new` stop at step 2: from a directory in
+no project they fail, so an agent never starts in a project you did not mean.
 
 ## Target
 

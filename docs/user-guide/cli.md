@@ -65,7 +65,7 @@ doctor` says why), `?` its host did not answer.
 | `0` | Success. |
 | `1` | Failure. `revier doctor` also exits `1` when a file has a problem. |
 | `2` | `revier agent wait` timed out. |
-| `3` | No project found: not from the directory, the focused window or the last project. |
+| `3` | No project found: not from the directory, the focused window or the last project. For `revier agent new` and `revier shell new` without `-p`: the directory is in no project. |
 | `4` | `revier keys install` or `uninstall`, or `revier term install` or `uninstall`: some key is not as asked. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |

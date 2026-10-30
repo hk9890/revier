@@ -874,3 +874,12 @@ wherever kitty was installed. A tmux pane id says which runtime holds it, so a
 key given one takes tmux wherever the list names tmux before `none`.
 Rejected: choosing tmux wherever `$TMUX` is set, which moves every command run
 in a tmux pane, and a panel no runtime holds taken as outside a workspace.
+
+### D160 — a tab asked for from a directory in no project fails
+
+`revier agent new` and `revier shell new` without `-p` or `--panel` take the
+project of `--dir`, else of the working directory, and fail with the no-project
+status when neither is in one. They run in a terminal or a script, which has a
+directory; the focused window and the last project exist for a desktop key,
+which has none. The fallback started an agent in another project and exited 0,
+and a warning comes too late: the agent already runs. Other commands keep it.
