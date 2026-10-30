@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -113,16 +116,28 @@ func TestATmuxPaneNarrowsTheRuntimeToTmux(t *testing.T) {
 			t.Errorf("atTmuxPane(%q) = %q, want %q", c.order, got, c.want)
 		}
 	}
+}
 
-	kitty := hosttest.NewRuntime("kitty")
-	tmux := hosttest.NewRuntime("tmux")
-	adapters := map[string]revier.Runtime{"kitty": kitty, "tmux": tmux}
-	got, err := selectHost(context.Background(), "runtime", nil, atTmuxPane(defaultRuntimeOrder), adapters)
-	if err != nil {
-		t.Fatalf("selectHost: %v", err)
+// The two commands a tmux key runs try tmux alone, and a kitty window id
+// still tries the list in order. With no tool on the PATH no host probes as
+// usable, so the error names every host the command tried.
+func TestATmuxKeysCommandsTryTmuxAlone(t *testing.T) {
+	root := configRoot(t, "[hosts]\nruntime = [\"kitty\", \"tmux\"]\nwindow = [\"none\"]\n", nil)
+	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
+	testenv.NoTools(t)
+
+	for _, args := range [][]string{
+		{"agent", "new", "--panel", "%3"},
+		{"shell", "new", "--panel", "%3"},
+	} {
+		err := run(io.Discard, args)
+		if err == nil || !strings.Contains(err.Error(), "tmux:") || strings.Contains(err.Error(), "kitty") {
+			t.Errorf("revier %s: err = %v, want tmux alone tried", strings.Join(args, " "), err)
+		}
 	}
-	if got == nil || got.Name() != "tmux" {
-		t.Fatalf("selected %v, want tmux though kitty probes as usable", got)
+	err := run(io.Discard, []string{"agent", "new", "--panel", "3"})
+	if err == nil || !strings.Contains(err.Error(), "kitty:") || !strings.Contains(err.Error(), "tmux:") {
+		t.Errorf("revier agent new --panel 3: err = %v, want kitty and tmux tried", err)
 	}
 }
 

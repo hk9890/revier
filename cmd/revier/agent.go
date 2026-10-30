@@ -47,7 +47,9 @@ usage:
   <key>      esc, enter, tab, shift+tab, space, backspace, up, down, left,
              right, ctrl+c, or one character
   --panel    the open workspace that holds this panel; kitty's
-             @active-kitty-window-id is the window a key was pressed in
+             @active-kitty-window-id is the window a key was pressed in,
+             and tmux's #{pane_id} the pane, which takes tmux as the
+             runtime wherever the runtime list names it before none
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project;
