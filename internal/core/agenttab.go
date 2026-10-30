@@ -30,7 +30,8 @@ var (
 	// shell in.
 	ErrNoTabsToOpen = errors.New("runtime has no tabs to open an agent or a shell in")
 
-	// ErrUnknownAgent means the project has no named agent of that name.
+	// ErrUnknownAgent means no named agent of that name is declared: by the
+	// project, or by config.toml for a key outside a workspace.
 	ErrUnknownAgent = errors.New("no agent named")
 
 	// ErrNoWorkspace means the runtime holds the panel, but no project's
@@ -400,10 +401,11 @@ type OutsideKey struct {
 // TabAtPanel opens the tab a terminal key pressed in a panel asks for: in the
 // open workspace PanelOwner finds, through in, with the directory the tab
 // starts in. Where the runtime holds the panel but no project's open
-// workspace does, the key is not refused: it does what outside says, a plain
-// tab of the runtime's own shell beside the panel, a tab of the agent an
-// agent key asks for, or nothing. Every other failure is returned, so the
-// key's own fallback runs (decisions.md D148, D164).
+// workspace does, the key is not refused for that: it does what outside
+// says, a plain tab of the runtime's own shell beside the panel, a tab of the
+// agent an agent key asks for, or nothing. Every other failure is returned,
+// so the key's own fallback runs (decisions.md D148, D164); so is an agent
+// that cannot run there, as agent says.
 //
 // A tab of kind starts in dir, else where in or the runtime starts it; each
 // only while it is a directory. A shell tab, and every tab outside a

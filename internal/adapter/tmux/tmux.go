@@ -132,7 +132,8 @@ func (h *Host) Probe(ctx context.Context) error {
 // Two tmux calls, both bulk: one for session names and one for panes. Their
 // number is constant, not per project, which is the property the hot path
 // actually needs. Each pane's foreground process, and its directory, are then
-// read from /proc: two file reads and a readlink per pane, and no process.
+// read from /proc: two file reads and a readlink per pane, a second readlink
+// where /proc hides the first, and no process.
 // The directory is read there and not as pane_current_path, which is free
 // text like pane_title, and a line carries one free-text field.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
@@ -188,7 +189,8 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		if !ok || owner[paneID] != sessionID {
 			continue
 		}
-		pid, command := foreground(panePID, paneCmd)
+		shell, _ := strconv.Atoi(panePID)
+		pid, command := foreground(shell, paneCmd)
 		inst.Panels = append(inst.Panels, revier.Panel{
 			ID:      revier.PanelID(paneID),
 			Kind:    kindOf(paneCmd),
@@ -196,7 +198,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			Vars:    parseVars(paneVars),
 			PID:     pid,
 			Command: command,
-			Dir:     proc.Dir(pid),
+			Dir:     proc.Dir(pid, shell),
 			Tab:     windowID,
 		})
 	}
@@ -208,8 +210,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 // .../bin/claude` is then python3 or node to every probe, so the argv is read
 // from /proc. Where /proc cannot be read, the pane's first process and the
 // program tmux names stand in.
-func foreground(panePID, paneCmd string) (int, []string) {
-	pid, _ := strconv.Atoi(panePID)
+func foreground(pid int, paneCmd string) (int, []string) {
 	if fg, argv, ok := proc.Foreground(pid); ok {
 		return fg, argv
 	}

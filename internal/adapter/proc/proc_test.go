@@ -172,3 +172,22 @@ func TestOpenAndFocusAreRefused(t *testing.T) {
 		t.Error("Focus succeeded")
 	}
 }
+
+// A process's directory is the first of the pids /proc shows one for: a
+// foreground process of another user hides its own, and the pane's process
+// stands in, as tmux's pane_current_path does.
+func TestDirFallsBackToTheNextProcess(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "20"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/home/user/work", filepath.Join(root, "20", "cwd")); err != nil {
+		t.Fatal(err)
+	}
+	if got := proc.DirIn(root, 10, 20); got != "/home/user/work" {
+		t.Errorf("DirIn(hidden, shown) = %q, want /home/user/work", got)
+	}
+	if got := proc.DirIn(root, 10, 0); got != "" {
+		t.Errorf("DirIn(hidden, none) = %q, want none", got)
+	}
+}

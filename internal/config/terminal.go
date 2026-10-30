@@ -37,9 +37,13 @@ func (c *Config) Outside() core.Outside {
 
 // OutsideKey is what a key that asks for agent does outside a workspace, empty
 // agent the default one: with core.OutsideAgent it runs one of config.toml's
-// named agents, whose commands no project renders there.
+// named agents, whose commands no project renders there. Every other value
+// runs none, so the agents are read for that one alone.
 func (c *Config) OutsideKey(agent string) core.OutsideKey {
 	k := core.OutsideKey{Outside: c.Outside(), Agent: agent}
+	if k.Outside != core.OutsideAgent {
+		return k
+	}
 	for _, t := range UsableAgents(c.Agents) {
 		var a agentTable
 		if recode(t, &a) == nil {

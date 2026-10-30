@@ -66,8 +66,8 @@ directory resolves to. It goes to the new agent and raises its window; with
 --no-focus it does neither, and prints the address a script reaches the
 agent by, which names an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
-[terminal] outside says: a plain shell tab beside the window, the agent, or
-nothing.
+[terminal] outside says: a plain shell tab beside the window, the agent in
+the window's directory, or nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
 
