@@ -69,6 +69,9 @@ Keep the `[hosts]` line. Without `runtime = ["tmux"]` the workspace opens as a
 real kitty OS window; without `window = ["none"]` a window target launches a
 real application and moves the user's focus.
 
+Leave the server and `$S` in place for the recipes below;
+[Clean up](#clean-up) removes them.
+
 `revier new` and `revier open <unknown name>` write into
 `$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
 `MISE_STATE_DIR=$S/mise` as well, so the trust lands outside the user's list.
@@ -349,8 +352,10 @@ To try a generated map, hand the user its `sh -c` line from
 
 ## Clean up
 
-Run this once the last recipe that uses `$S` is done; they share its state:
+Run this in the shell that ran the recipes, once the last recipe that uses
+`$S` is done; they share its state:
 
 ```bash
-tmux kill-server; rm -rf "$S" "$TMUX_TMPDIR"   # the private server only
+[ -n "$TMUX_TMPDIR" ] && env -u TMUX tmux kill-server   # the private server only
+rm -rf "$S" "$H" "$TMUX_TMPDIR"
 ```

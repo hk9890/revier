@@ -70,7 +70,7 @@ needs must live in the tagged commit. To move the tag onto such a fix:
 
 1. Land the `release.yml` fix by PR ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
 2. Create a new detached worktree at the new `origin/main` and run the gate,
-   as in step 3.
+   as in step 3 of [Cut a release](#cut-a-release).
 3. From the main checkout's root, move the tag and remove the worktree:
 
    ```bash

@@ -100,10 +100,11 @@ that did not focus after `Open` passed L2 and failed L4.
   against the latest release weekly. To bump the pin, update the version and
   digest in `ci.yml` and record a new
   `internal/adapter/herdr/testdata/herdr-<version>/snapshot.json`: start the
-  private server in [RUNNING.md](RUNNING.md#run-a-private-herdr-server), build
-  the state the L3 test reads with `hd herdr ...` commands, and save
-  `hd herdr api snapshot`. The test serves the file as one response line and
-  reads only its `result`.
+  private server in [RUNNING.md](RUNNING.md#run-a-private-herdr-server)
+  without its last line, build the state the L3 test reads with
+  `hd herdr ...` commands, and save `hd herdr api snapshot`. Point the
+  `os.ReadFile` path in `herdr_integration_test.go` at the new file. The test
+  serves the file as one response line and reads only its `result`.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

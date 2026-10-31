@@ -53,8 +53,8 @@ the agent list.
   Claude Code. `--screen` works for every harness.
 - `send-keys` types keys whatever the agent does, so read the screen first.
   `revier agent --help` lists the key names.
-- `revier agent focus shop` makes the agent's tab current and raises its
-  window. Unlike the commands above, it moves the keyboard.
+- `revier agent focus shop` brings the agent to the front. Unlike the
+  commands above, it moves the keyboard.
 
 For a project on another machine, see
 [What does not work over a link](links.md#what-does-not-work-over-a-link).

@@ -56,7 +56,8 @@ Where kitty is your runtime for everything else, both keys still reach tmux
 while your `runtime` list names tmux: see [`[hosts]`](../configuration.md#hosts).
 
 In a session that is no project's workspace, `outside` in
-[`[terminal]`](../configuration.md#terminal) sets what both keys do.
+[`[terminal]`](../configuration.md#terminal) sets what both keys do: `A`
+counts as the agent key, `S` as the shell key.
 
 ## What does not work
 

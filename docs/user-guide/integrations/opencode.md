@@ -7,7 +7,7 @@ it is idle. revier shows it as present rather than guess.
 
 ## What you need
 
-- `opencode` in a workspace. Nothing to install.
+- `opencode` in a workspace. Nothing to install or set.
 
 To make it a workspace's agent, put it in the agent panel's `command` (see
 [Panels](../configuration.md#panels)):
@@ -32,8 +32,8 @@ To make it a workspace's agent, put it in the agent panel's `command` (see
 
 Outside herdr:
 
-- State: `running`, `attention`, `idle`. An opencode agent never sorts first
-  as one that needs you.
+- State: always `unknown`, never `running`, `attention` or `idle`. An
+  opencode agent never sorts first as one that needs you.
 - `revier agent prompt`: it refuses an agent in state `unknown`
   ([Agents](../agents.md#drive-an-agent-from-a-script)). Use `send-keys`.
 - `revier agent wait`: it ends only at its timeout.
