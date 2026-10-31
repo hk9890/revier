@@ -50,7 +50,8 @@ var (
 	ErrNoMessage = errors.New("the agent's last message cannot be read")
 )
 
-// AgentPoll is how often Wait and Prompt read an agent again. LinkPoll is
+// AgentPoll is how often Wait and Prompt read an agent again, and how often
+// StartedAgent looks a new agent up until its harness starts. LinkPoll is
 // the same for a link's agent, whose every read is an ssh to its host.
 const (
 	AgentPoll = 500 * time.Millisecond

@@ -29,7 +29,7 @@ func problemTexts(cfg *config.Config) []string {
 // and a key outside a workspace opens a tab.
 func TestTheTerminalKeysHaveDefaults(t *testing.T) {
 	cfg := termConfig(t, "")
-	want := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true}, {Chord: "ctrl+shift+z"}}
+	want := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true, Label: "terminal.shell_key"}, {Chord: "ctrl+shift+z", Label: "terminal.agent_key"}}
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
@@ -59,7 +59,7 @@ command = ["plain"]
 	if len(cfg.Problems) > 0 {
 		t.Fatalf("Problems = %v", cfg.Problems)
 	}
-	want := []core.TermKey{{Chord: "ctrl+alt+a"}, {Chord: "ctrl+shift+d", Agent: "dtop"}}
+	want := []core.TermKey{{Chord: "ctrl+alt+a", Label: "terminal.agent_key"}, {Chord: "ctrl+shift+d", Agent: "dtop", Label: `agent "dtop" key`}}
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
@@ -99,7 +99,7 @@ key = "ctrl+shift+o"
 	if got := problemTexts(cfg); !reflect.DeepEqual(got, want) {
 		t.Errorf("Problems =\n%q\nwant\n%q", got, want)
 	}
-	wantKeys := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true}, {Chord: "ctrl+shift+o", Agent: "ok"}}
+	wantKeys := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true, Label: "terminal.shell_key"}, {Chord: "ctrl+shift+o", Agent: "ok", Label: `agent "ok" key`}}
 	if got := cfg.TermKeys(); !reflect.DeepEqual(got, wantKeys) {
 		t.Errorf("TermKeys = %+v, want %+v", got, wantKeys)
 	}

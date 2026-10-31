@@ -38,7 +38,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// `target "worktree"`, and a target name has no length limit.
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	bad := 0
-	if problems := slices.Concat(hostProblems(cfg), cfg.Problems, outsideProblems(cfg)); len(problems) > 0 {
+	if problems := slices.Concat(hostProblems(cfg), cfg.Problems, outsideProblems(cfg, projects)); len(problems) > 0 {
 		bad++
 		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
 		for _, err := range problems {
@@ -112,19 +112,21 @@ func offList(cfg *config.Config, projects []core.Project) []core.Project {
 // outsideProblems is each terminal key that fails at every press outside a
 // workspace, because the agent it runs there cannot run in no project
 // (decisions.md D164). kitty's own new tab hides the failure, so doctor says
-// it; every other command does not, since the configuration loaded whole.
-func outsideProblems(cfg *config.Config) []error {
+// it; every other command does not, since the configuration loaded whole. A
+// key `revier term install` does not write is never pressed, so it is left
+// out; with a trigger key that does not parse, install writes none.
+func outsideProblems(cfg *config.Config, projects []core.Project) []error {
+	trigger, err := cfg.TriggerKey()
+	if err != nil {
+		return nil
+	}
 	var errs []error
-	for _, k := range cfg.TermKeys() {
+	for _, k := range core.InstalledTermKeys(cfg.TermKeys(), projects, trigger) {
 		if k.Shell {
 			continue
 		}
 		if err := cfg.OutsideKey(k.Agent).Refusal(); err != nil {
-			what := "terminal.agent_key"
-			if k.Agent != "" {
-				what = fmt.Sprintf("agent %q key", k.Agent)
-			}
-			errs = append(errs, fmt.Errorf("%s: %w", what, err))
+			errs = append(errs, fmt.Errorf("%s: %w", k.Label, err))
 		}
 	}
 	return errs

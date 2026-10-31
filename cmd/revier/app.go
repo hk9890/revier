@@ -241,14 +241,15 @@ func (a *app) resolveAway(ctx context.Context) (core.Project, bool) {
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
-// longest match so a project nested inside another wins. Where the paths as
-// text find none, it compares them with every symlink resolved: a shell keeps
-// the path through a link, a tmux window starts in the one behind it.
+// longest match so a project nested inside another wins. It compares the paths
+// with every symlink resolved: a shell keeps the path through a link, a tmux
+// window starts in the one behind it. Where that finds none, it compares them
+// as text, which still places a directory that does not exist yet.
 func (a *app) projectForPath(dir string) (core.Project, bool) {
-	if p, ok := a.projectContaining(dir, filepath.Clean); ok {
+	if p, ok := a.projectContaining(resolveLinks(dir), resolveLinks); ok {
 		return p, true
 	}
-	return a.projectContaining(resolveLinks(dir), resolveLinks)
+	return a.projectContaining(filepath.Clean(dir), filepath.Clean)
 }
 
 // projectContaining is projectForPath with every project's path in one form.
@@ -261,9 +262,6 @@ func (a *app) projectContaining(dir string, form func(string) string) (core.Proj
 			continue
 		}
 		root := form(p.Path)
-		if root == "" {
-			continue
-		}
 		if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
 			if len(root) > bestLen {
 				best, bestLen = p, len(root)

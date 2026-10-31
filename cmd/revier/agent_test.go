@@ -291,3 +291,24 @@ func TestADirectoryIsInAProjectThroughASymlink(t *testing.T) {
 		}
 	}
 }
+
+// A project nested in another through a symlink still wins over the outer
+// project that holds the directory as text: the longest match wins.
+func TestANestedProjectReachedThroughASymlinkWins(t *testing.T) {
+	mono := t.TempDir()
+	nested := filepath.Join(mono, "nested")
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(nested, link); err != nil {
+		t.Fatal(err)
+	}
+	a := &app{projects: []core.Project{
+		core.PrepareProject(revier.Project{Name: "mono", Path: mono}),
+		core.PrepareProject(revier.Project{Name: "nested", Path: link}),
+	}}
+	if p, ok := a.projectForPath(nested); !ok || p.Name != "nested" {
+		t.Errorf("project of %s = %q, %v, want nested", nested, p.Name, ok)
+	}
+}

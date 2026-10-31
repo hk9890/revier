@@ -279,6 +279,26 @@ key = "ctrl+shift+y"
 	}
 }
 
+// A key `revier term install` refuses, because the desktop holds its chord, is
+// never pressed in the terminal, so doctor does not report its agent.
+func TestDoctorLeavesOutAKeyTermInstallRefuses(t *testing.T) {
+	configRoot(t, `
+[ui]
+trigger_key = "ctrl+alt+r"
+[terminal]
+agent_key = ""
+outside = "agent"
+[[agent]]
+name = "review"
+command = ["review", "{{.Name}}"]
+key = "ctrl+alt+r"
+`, map[string]string{"sound.toml": sound})
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Errorf("err = %v, want a clean report:\n%s", err, out.String())
+	}
+}
+
 // A link declares its realization under [target.remote], so a link target
 // with none is never told to add the local table a line above told it to
 // move, and a local target keeps the local advice.

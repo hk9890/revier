@@ -632,7 +632,11 @@ func TestOutsideKeyRefusalIsTheRefusalOfThePress(t *testing.T) {
 			t.Errorf("%+v: Refusal = %v, want refused %v", tc.key, err, tc.refused)
 		}
 	}
-	if _, err := keyOutside(t, revier.PanelAgent, "", templated); err == nil || err.Error() != (core.OutsideKey{Outside: core.OutsideAgent, Agents: templated}).Refusal().Error() {
+	refusal := (core.OutsideKey{Outside: core.OutsideAgent, Agents: templated}).Refusal()
+	if refusal == nil {
+		t.Fatal("Refusal = nil, want the refusal of a templated agent")
+	}
+	if _, err := keyOutside(t, revier.PanelAgent, "", templated); err == nil || err.Error() != refusal.Error() {
 		t.Errorf("press: err = %v, want the refusal Refusal names", err)
 	}
 }
