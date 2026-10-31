@@ -243,6 +243,32 @@ func TestTabAtAPanelOutsideAWorkspaceRunsTheAgentTheKeyAsksFor(t *testing.T) {
 	}
 }
 
+// Outside a workspace no tab resumes a conversation, so --resume there warns
+// that it was not resumed, as a workspace's tab that started empty does,
+// whatever outside opens; without --resume nothing is said.
+func TestTabAtAPanelOutsideAWorkspaceSaysItDidNotResume(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "3", Dir: t.TempDir()})
+	a := withState(t, &app{projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+	for _, outside := range []core.Outside{core.OutsideTab, core.OutsideNone, core.OutsideAgent} {
+		a.cfg = &config.Config{Terminal: config.Terminal{Outside: outside}, Agents: []map[string]any{{"name": "claude", "command": []any{"claude"}}}}
+		for _, r := range []core.Resume{{Session: "abc-123"}, {}} {
+			printed, err := stderrOf(t, func() error { return a.newAgent(ctx, "", "3", "", r) })
+			if err != nil {
+				t.Fatalf("outside %s, --resume %q: %v", outside, r.Session, err)
+			}
+			want := ""
+			if r.Session != "" {
+				want = "revier: warning: abc-123 was not resumed (no workspace holds panel 3)\n"
+			}
+			if printed != want {
+				t.Errorf("outside %s, --resume %q: stderr = %q, want %q", outside, r.Session, printed, want)
+			}
+		}
+	}
+}
+
 // A runtime that cannot attach a terminal says so, naming what would: a
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {

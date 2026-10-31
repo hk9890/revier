@@ -508,9 +508,12 @@ func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.R
 }
 
 // agentTab opens an agent tab, started as r says, through open in the
-// workspace newTab places it in.
+// workspace newTab places it in. A --panel no workspace holds resumes
+// nothing, and says so as a workspace's tab does.
 func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.Resume, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
+	inWorkspace := false
 	here := func(w core.Workspace, dir string) error {
+		inWorkspace = true
 		start := time.Now()
 		r.Dir = dir
 		outcome, err := open(w, r)
@@ -523,7 +526,11 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
+	err := a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
+	if err == nil && !inWorkspace && r.Session != "" {
+		fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (no workspace holds panel %s)\n", r.Session, panel)
+	}
+	return err
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
