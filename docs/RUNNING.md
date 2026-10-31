@@ -14,6 +14,11 @@ a window the user is reading.
 Every recipe below runs on a private substrate instead. Nothing here attaches a
 client, reaches a display, or is visible in the user's own tmux.
 
+`revier keys install`, `revier term install` and their `uninstall` rewrite the
+user's desktop and kitty configuration, the kitty one often a link into a
+dotfiles repository. Leave them to the user, except `term` on a scratch kitty
+directory; `keys status`, `term status` and `--dry-run` read only.
+
 Run `mise run build` first. The recipes call `./bin/revier`, and a fresh
 worktree has none.
 
@@ -58,13 +63,14 @@ export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 ./bin/revier open demo         # run-or-raise the workspace
 ./bin/revier list              # agent state and target availability
 ./bin/revier list --json       # what both renderers read
-
-tmux kill-server; rm -rf "$S" "$TMUX_TMPDIR"   # the private server only
 ```
 
 Keep the `[hosts]` line. Without `runtime = ["tmux"]` the workspace opens as a
 real kitty OS window; without `window = ["none"]` a window target launches a
 real application and moves the user's focus.
+
+Leave the server and `$S` in place for the recipes below;
+[Clean up](#clean-up) removes them.
 
 `revier new` and `revier open <unknown name>` write into
 `$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
@@ -112,6 +118,7 @@ bindings are gone, project files and the saved session stay.
 ```bash
 ./bin/revier session save --name before-reboot   # what is open now
 ./bin/revier session list                        # id, reason, label, counts
+ls "$REVIER_STATE_HOME/sessions"                 # <id>.toml: names, conversations, dirs; never a host or argv
 tmux kill-server                                 # the private server only
 ./bin/revier session restore --dry-run           # what it would open
 ./bin/revier session restore                     # the newest whole save, in file order
@@ -152,10 +159,6 @@ st busy; ./bin/revier shutdown                   # refused, names the agent
 ./bin/revier shutdown --force                    # saves when changed, then closes
 tmux list-sessions                               # no server running
 ```
-
-Sessions land in `$REVIER_STATE_HOME/sessions/<id>.toml`. Read one to see what
-a restore acts on; it holds names, conversations and directories, never a host
-or an argv.
 
 ## Drive a link without a host
 
@@ -281,15 +284,6 @@ hd herdr api snapshot | jq .                          # what Instances reads, in
 hd herdr server stop; rm -rf "$D"
 ```
 
-To record a fixture for `internal/adapter/herdr/testdata/herdr-<version>/`,
-build the state the L3 test reads with `hd herdr ...` commands and save
-`hd herdr api snapshot`. The test reads only the `result` the line carries.
-
-## Verify an adapter against its real tool
-
-Run `mise run test:live`, the L4 layer [TESTING.md](TESTING.md) owns; it is
-headless.
-
 ## When a screen is unavoidable
 
 Only the GNOME host and kitty's `Open` and `Focus` need the user's live
@@ -341,19 +335,10 @@ A binding is a command. Run `./bin/revier keys status --json` to print the one
 each key would carry; it reads and never binds. Running the command itself is
 the user's step, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).
 
-`revier keys install` and `revier keys uninstall` rewrite the user's desktop
-configuration, so they are the user's step and never a verification step. Their
-`--dry-run` reads and prints only, and is safe to run.
-
 ## Verify the terminal keys without the user's kitty
 
-`revier term install` and `revier term uninstall` rewrite the user's kitty
-configuration, often a link into a dotfiles repository, so against the user's
-own they are the user's step. `revier term status` and `--dry-run` read and
-print only, and are safe to run.
-
-Run them on a scratch kitty directory, with `$S` from the scratch
-configuration recipe:
+Run `revier term install` and `revier term uninstall` on a scratch kitty
+directory, with `$S` from the scratch configuration recipe:
 
 ```bash
 export KITTY_CONFIG_DIRECTORY=$S/kitty; mkdir -p "$KITTY_CONFIG_DIRECTORY"
@@ -365,3 +350,13 @@ printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
 
 To try a generated map, hand the user its `sh -c` line from
 `$S/kitty/revier.conf`, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).
+
+## Clean up
+
+Run this in the shell that ran the recipes, once the last recipe that uses
+`$S` is done; they share its state:
+
+```bash
+[ -n "$TMUX_TMPDIR" ] && env -u TMUX tmux kill-server   # the private server only
+rm -rf "$S" "$H" "$TMUX_TMPDIR"
+```

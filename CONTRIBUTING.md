@@ -14,12 +14,9 @@ owns each step. AI agents start from [AGENTS.md](AGENTS.md).
 
 ## Before you open a PR
 
-- `mise run quality:full` passes.
-- The commit subject and body follow
-  [docs/CHANGE-WORKFLOW.md](docs/CHANGE-WORKFLOW.md#commits).
-- The change meets the rules in [docs/REVIEWING.md](docs/REVIEWING.md).
-- A change to the model is recorded in `docs/design/decisions.md`; see
-  [docs/design/README.md](docs/design/README.md).
+Follow [the commit rules](docs/CHANGE-WORKFLOW.md#commits) and
+[the pre-PR gates](docs/CHANGE-WORKFLOW.md#before-opening-a-pr) of
+`docs/CHANGE-WORKFLOW.md`, and the rules in [docs/REVIEWING.md](docs/REVIEWING.md).
 
 ## Where things live
 

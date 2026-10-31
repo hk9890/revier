@@ -4,13 +4,8 @@
 by hand against a release tag. The run builds, vets and tests before
 publishing, so a green run is the provenance for that commit.
 
-A release carries 2 archives (linux x64 and arm64, each holding `revier`
-alone), a per-archive SPDX SBOM (syft), a checksums
-file signed keyless with cosign (`.sig` + `.pem`), and SLSA build provenance
-from `actions/attest-build-provenance`. Archive names —
-`revier_0.1.0_linux_x64.tar.gz` — let installers such as `mise` auto-detect
-the right asset. Version injection: `internal/build`, stamped by
-`.goreleaser.yaml` in a release and by `mise run build` locally.
+Archive names — `revier_0.1.0_linux_x64.tar.gz` — let installers such as
+`mise` auto-detect the right asset.
 
 One setting that looks wrong and is not: cosign is pinned to **v2.6.5**
 because v3 defaults to `--new-bundle-format`, which the `--output-signature`
@@ -21,7 +16,8 @@ and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 `mise run quality:full` gates every step. Drive the binary per
 [RUNNING.md](RUNNING.md) as well when the release changes runtime behaviour.
 
-1. Pick `vX.Y.Z` and confirm it is free: `git tag --list "v*"`.
+1. Pick `vX.Y.Z` and confirm it is free:
+   `git fetch --tags origin && git tag --list "v*"`.
 2. Write the `CHANGELOG.md` section (see below) and land it like any other
    change: worktree, PR, merge ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
 3. Create a worktree detached at the merged commit, and run the gate in it.
@@ -74,7 +70,7 @@ needs must live in the tagged commit. To move the tag onto such a fix:
 
 1. Land the `release.yml` fix by PR ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
 2. Create a new detached worktree at the new `origin/main` and run the gate,
-   as in step 3.
+   as in step 3 of [Cut a release](#cut-a-release).
 3. From the main checkout's root, move the tag and remove the worktree:
 
    ```bash
@@ -82,6 +78,9 @@ needs must live in the tagged commit. To move the tag onto such a fix:
    git push -f origin vX.Y.Z
    git worktree remove .claude/worktrees/release-vX.Y.Z
    ```
+
+4. Dispatch and verify again, as in steps 5 and 6 of
+   [Cut a release](#cut-a-release).
 
 Re-dispatching against an existing tag overwrites its assets instead of
 failing (`release.replace_existing_artifacts`). To add a missing asset without

@@ -32,8 +32,8 @@ To make it a workspace's agent, put it in the agent panel's `command` (see
 
 Outside herdr:
 
-- State: working, needs you, idle. An opencode agent never sorts first as one
-  that needs you.
+- State: always `unknown`, never `running`, `attention` or `idle`. An
+  opencode agent never sorts first as one that needs you.
 - `revier agent prompt`: it refuses an agent in state `unknown`
   ([Agents](../agents.md#drive-an-agent-from-a-script)). Use `send-keys`.
 - `revier agent wait`: it ends only at its timeout.

@@ -12,3 +12,6 @@ boundaries, and why. How this tree relates to `docs/` is [../DOCUMENTING.md](../
 
 Each fact lives in exactly one of these. A document that needs a fact another
 one owns links to it.
+
+[CODING.md](../CODING.md#where-a-change-goes) says when to search
+decisions.md before a change.

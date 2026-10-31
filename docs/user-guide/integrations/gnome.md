@@ -14,8 +14,8 @@ revier also writes its desktop keys into GNOME, and the popup needs it.
   `sh -lc`.
 
 revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
-`wctl version --json` names a running extension. Else it runs with no window
-host and says nothing; see [`[hosts]`](../configuration.md#hosts).
+`wctl version --json` names a running extension. Else it does what
+[`[hosts]`](../configuration.md#hosts) says.
 
 ## Set it up
 

@@ -65,7 +65,9 @@ the doc carries the substrates that verify a change without touching it.
 ### Finding out what revier did
 
 **MUST read [docs/MONITORING.md](docs/MONITORING.md) before you open a log file
-or explain a past run, restore or keypress.** Every process writes to one daily
+or anything else under the state directory (`~/.local/state/revier` by
+default), before you run `revier events` or `revier state`, and before you
+explain a past run, restore or keypress.** Every process writes to one daily
 file, so a line means nothing until you know which process wrote it.
 
 ### Cutting a release, or changing what a release ships
