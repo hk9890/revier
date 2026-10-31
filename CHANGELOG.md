@@ -57,10 +57,10 @@ Each section is also the text of its release on the
   shell key still opens a plain tab, and `tab` and `none` do not change. This
   works in kitty and tmux.
 - **In tmux and herdr, a tab opened beside a pane starts in that pane's
-  directory.** Before, tmux and herdr did not report a pane's directory. So
-  `revier shell new --panel <id>` without `--dir`, and the plain tab of
-  `outside = "tab"`, started where the runtime put them. Now they start in
-  the pane's directory, as in kitty.
+  directory.** Before, `revier shell new --panel <id>` without `--dir`, and
+  the plain tab of `outside = "tab"`, started where the runtime put them, not
+  in the pane's directory. Now they start in the pane's directory, as in
+  kitty.
 - **`revier list` with an unknown name still lists the names it knows.**
   Before, one unknown name in `revier list a b` stopped the command, and it
   printed nothing. Now it lists the known projects. Each unknown name gets a
