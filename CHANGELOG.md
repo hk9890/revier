@@ -6,6 +6,89 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.23.0
+
+- **Action required: `revier agent new` and `revier shell new` without `-p`
+  now fail in a directory that is in no project.** Before, the project came
+  from `--dir`, else the current directory. If neither was in a project,
+  revier used the focused window's project, else the last project. So an
+  agent could start in a project you did not mean. Now the project is the one
+  that `--dir` is in. Without `--dir`, it is the one the current directory is
+  in. A `--dir` in no project fails, even when you run the command inside a
+  project. Such a directory is, for example, a worktree outside the project's
+  directory. The command exits with status 3. Where a script or alias does
+  this, add `-p <project>`, for example
+  `revier agent new -p shop --dir ~/dev/shop-wt`. `--panel` does not change.
+- **`revier rename <old> <new>` renames a closed project.** Before, only the
+  project screen (alt+e) could rename a project. Now an agent or a script can
+  do it too. The file, the state and the saved sessions move to the new name.
+  The command refuses while any part of the project runs, including a launch
+  that still waits for its window. It also refuses while a window is attached
+  to the project, or while a host cannot say what runs. Do not move a project
+  file by hand: the saved sessions keep the old name, and revier no longer
+  finds the project's open windows.
+- **`revier agent close <agent>` ends one agent.** Before, no command ended
+  one agent, so a script typed `/exit`, and that worked only for Claude Code.
+  Now the command closes the agent and returns when it is gone. It closes the
+  agent's tab, and the shell in that tab, when the agent is in a tab beside
+  the workspace's own tab. In the workspace's own tab, it closes only the
+  agent's panel. It refuses while an agent in what it closes is `running` or
+  in `attention`, unless you give `--force`. It saves no session.
+- **`revier list --agents` prints one row per agent, with its address.** Each
+  row shows the address that `revier agent` takes, the agent's name, status,
+  activity, harness and directory. With `--json`, each agent is one flat
+  object. Before, you had to build the address from `revier list --json`. An
+  agent that no target holds has no address, so its row names its project
+  and panel.
+- **`revier list --match <word>` lists only the projects that a word
+  finds.** The word can be part of a project's name, the name of its
+  directory, its repository, its name on a link's host or an agent's
+  activity. Case does not matter. It can also be the full name the harness
+  gives an agent. `--match` takes no project names. When nothing matches,
+  the command fails.
+- **A terminal agent key can now start an agent in a window of no
+  workspace.** Before, no value of `[terminal] outside` started an agent.
+  With `tab`, the agent keys opened the same plain shell tab as the shell
+  key. With `none`, they did nothing. Now `outside = "agent"` opens a tab in
+  the window's directory that runs the agent the key asks for. A named
+  agent's key runs that agent. `agent_key` runs the first `[[agent]]` of
+  `config.toml`, and with no `[[agent]]` it opens a plain tab. An agent whose
+  `command` uses a template opens no tab there, and the error names it. The
+  shell key still opens a plain tab, and `tab` and `none` do not change. This
+  works in kitty and tmux.
+- **In tmux and herdr, a tab opened beside a pane starts in that pane's
+  directory.** Before, tmux and herdr did not report a pane's directory. So
+  `revier shell new --panel <id>` without `--dir`, and the plain tab of
+  `outside = "tab"`, started where the runtime put them. Now they start in
+  the pane's directory, as in kitty.
+- **`revier list` with an unknown name still lists the names it knows.**
+  Before, one unknown name in `revier list a b` stopped the command, and it
+  printed nothing. Now it lists the known projects. Each unknown name gets a
+  line on stderr, with "did you mean ...?" when a project name is near. The
+  exit status is still 1.
+- **`revier agent wait` on a panel with no agent yet waits for the agent to
+  start.** Before, on such an address, for example the one that
+  `revier agent new --no-focus` prints, `wait` failed at once with "not an
+  agent panel", and `--timeout` had no effect. Now it waits for an agent to
+  start, within the same `--timeout`, then for the status. Without
+  `--timeout`, `wait` on a panel where no agent starts waits for good.
+- **The tmux keys open their tab where kitty is also installed.** Before,
+  `revier agent new --panel "#{pane_id}"` and `revier shell new --panel
+  "#{pane_id}"` failed with "no open target holds panel" when kitty was the
+  first runtime that worked. Now a tmux pane id makes these commands use
+  tmux, if `[hosts] runtime` names tmux before `none` or you set no list.
+- **On a link, the project's address finds the default agent beside named
+  agents.** Before, `<project>` and `<project>:<target>` were ambiguous on a
+  link when two or more agents ran there, even when all but one were named
+  agents. Now the address names the default agent, as it does on this
+  machine. The project's machine must run v0.23.0. This works only for
+  agents started after the upgrade.
+- **A rename no longer refuses a project whose name is part of
+  `jetbrains-idea`, such as "a", "idea" or "jetbrains".** Before, the
+  project screen refused to rename such a project when `revier new` had
+  written its file. Now the editor's window class in that file does not block
+  the rename.
+
 ## v0.22.0
 
 - **Action required: an agent address now has three parts,
