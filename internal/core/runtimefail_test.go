@@ -316,7 +316,7 @@ func TestAPlainTabWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 	c := &core.Core{Runtime: endingTab{rt}}
 
-	err := c.TabAtPanel(context.Background(), nil, "9", revier.PanelShell, "", core.OutsideTab, func(core.Workspace, string) error {
+	err := c.TabAtPanel(context.Background(), nil, "9", revier.PanelShell, "", core.OutsideKey{Outside: core.OutsideTab}, func(core.Workspace, string) error {
 		t.Fatal("in ran for a window of no project")
 		return nil
 	})
@@ -334,7 +334,7 @@ func TestAPlainTabWhoseFocusFailsWhileItsShellRunsReportsTheFocus(t *testing.T) 
 	rt.FocusPanelErr = errRuntimeGone
 	c := &core.Core{Runtime: rt}
 
-	err := c.TabAtPanel(context.Background(), nil, "9", revier.PanelShell, "", core.OutsideTab, func(core.Workspace, string) error {
+	err := c.TabAtPanel(context.Background(), nil, "9", revier.PanelShell, "", core.OutsideKey{Outside: core.OutsideTab}, func(core.Workspace, string) error {
 		t.Fatal("in ran for a window of no project")
 		return nil
 	})

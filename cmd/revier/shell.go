@@ -98,7 +98,7 @@ func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
 		return err
 	}
-	return a.newTab(ctx, "shell new", revier.PanelShell, project, panel, dir, homeTarget, here)
+	return a.newTab(ctx, "shell new", revier.PanelShell, "", project, panel, dir, homeTarget, here)
 }
 
 // homeTarget is the target `revier shell new -p <project>` opens its tab in.

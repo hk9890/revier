@@ -8,6 +8,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -107,6 +108,50 @@ func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 	err := run(io.Discard, []string{"agent", "new", "--panel", "%999"})
 	if err == nil || !strings.Contains(err.Error(), "%999") {
 		t.Errorf("err = %v, want the unknown panel named", err)
+	}
+}
+
+// With outside "agent", in a tmux session that is no project's workspace, the
+// agent key opens a window that runs config.toml's first named agent in the
+// pane's directory, a named agent's key that agent, and the shell key a plain
+// shell window.
+func TestAgentNewOutsideAWorkspaceRunsTheConfiguredAgent(t *testing.T) {
+	scratch(t)
+	root := os.Getenv("REVIER_CONFIG_HOME")
+	marks := t.TempDir()
+	cfg, err := os.OpenFile(filepath.Join(root, "config.toml"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cfg.WriteString("[terminal]\noutside = \"agent\"\n" +
+		"[[agent]]\nname = \"first\"\ncommand = [\"sh\", \"-c\", \"pwd > " + marks + "/first; exec sleep 300\"]\n" +
+		"[[agent]]\nname = \"second\"\ncommand = [\"sh\", \"-c\", \"pwd > " + marks + "/second; exec sleep 300\"]\n")
+	_ = cfg.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose := t.TempDir()
+	tmuxRun(t, "new-session", "-d", "-s", "loose", "-c", loose, "sh")
+	pane := strings.TrimSpace(tmuxRun(t, "list-panes", "-t", "loose", "-F", "#{pane_id}"))
+
+	for _, args := range [][]string{{"agent", "new", "--panel", pane}, {"agent", "new", "second", "--panel", pane}, {"shell", "new", "--panel", pane}} {
+		if err := run(io.Discard, args); err != nil {
+			t.Fatalf("%s: %v", strings.Join(args, " "), err)
+		}
+	}
+	for _, name := range []string{"first", "second"} {
+		var got []byte
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if got, _ = os.ReadFile(filepath.Join(marks, name)); len(got) > 0 {
+				break
+			}
+		}
+		if dir := strings.TrimSpace(string(got)); dir != loose {
+			t.Errorf("agent %s started in %q, want %q", name, dir, loose)
+		}
+	}
+	if windows := strings.Fields(tmuxRun(t, "list-windows", "-t", "loose", "-F", "#{window_panes}")); len(windows) != 4 {
+		t.Errorf("windows of loose = %q, want its own, two agents and a shell", windows)
 	}
 }
 

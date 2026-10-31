@@ -80,8 +80,9 @@ panel of its layout. With a name, the tab's agent panel runs that
 Without `-p` or `--panel`, the project is the one `--dir` is in, or without
 `--dir` the one the current directory is in. A directory in no project is an
 error. The workspace must be open already. With `--panel`, a window that is
-no project's workspace gets a plain shell tab beside it, or nothing if you set
-[`outside`](configuration.md#terminal) to `none`. To bind these commands to a
+no project's workspace gets a plain shell tab beside it, nothing if you set
+[`outside`](configuration.md#terminal) to `none`, or with `agent` a tab of
+the agent. To bind these commands to a
 kitty key, see [kitty](integrations/kitty.md).
 
 ## End an agent

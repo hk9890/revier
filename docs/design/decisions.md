@@ -884,3 +884,14 @@ script, which has a directory; the focused window and the last project exist
 for a desktop key, which has none. The fallback started an agent in another
 project and exited 0, and a warning comes too late: the agent already runs.
 Other commands keep it.
+
+### D164 — outside a workspace an agent key can run an agent of config.toml
+
+Extends D148. The agent key gave the shell key's plain tab, and the user's own
+fallback to an agent no longer ran. config can now say `agent`: an agent key
+opens a tab of the agent it names, the default one being config.toml's first
+`[[agent]]`, since no layout says which; with none, the plain tab, logged. It
+starts in the panel's directory, which every runtime must therefore report. A
+project template there is refused and no tab opens: no project holds the
+window, and a directory in its place would hand a program a path it never
+asked for.

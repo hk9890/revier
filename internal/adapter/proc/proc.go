@@ -296,6 +296,22 @@ func ParentIn(root string, pid int) (int, bool) {
 	return ppid, err == nil
 }
 
+// Dir is the working directory of the first of pids that /proc shows one
+// for, or "" where it shows none. tmux reads pane_current_path the same way:
+// the foreground process's, else the pane's own, since /proc hides the
+// directory of a process another user runs, such as sudo.
+func Dir(pids ...int) string { return DirIn("/proc", pids...) }
+
+// DirIn is Dir from the /proc tree at root, which a test replaces.
+func DirIn(root string, pids ...int) string {
+	for _, pid := range pids {
+		if dir, err := os.Readlink(filepath.Join(root, strconv.Itoa(pid), "cwd")); err == nil {
+			return dir
+		}
+	}
+	return ""
+}
+
 // Foreground reads the foreground process of the terminal pid runs in: the
 // leader of the terminal's foreground process group, and its argv. That is
 // the process tmux names in pane_current_command, so the two agree.

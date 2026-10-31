@@ -62,8 +62,12 @@ leaves it empty when `kitty.conf` itself is a link.
   An agent tab starts in the project, so from a worktree the agent can still
   enter any worktree.
 - In a window that is no project's workspace, a key opens a plain shell tab
-  beside it, or nothing if you set `outside = "none"`. When revier itself
-  fails, kitty's own new tab opens.
+  beside it, or nothing if you set `outside = "none"`. To have ctrl+shift+z
+  and each named agent's key start that agent there, in the window's
+  directory, set `outside = "agent"`; see
+  [`[terminal]`](../configuration.md#terminal). When revier itself fails, for
+  example on an agent whose command uses a template, kitty's own new tab
+  opens.
 
 **You wrote these maps by hand before.** Delete your own `map ctrl+shift+z`
 and `map ctrl+shift+t` lines that run `revier agent new` or `revier shell new`
