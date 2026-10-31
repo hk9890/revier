@@ -33,7 +33,9 @@ Each section is also the text of its release on the
   agent's tab, and the shell in that tab, when the agent is in a tab beside
   the workspace's own tab. In the workspace's own tab, it closes only the
   agent's panel. It refuses while an agent in what it closes is `running` or
-  in `attention`, unless you give `--force`. It saves no session.
+  in `attention`, unless you give `--force`. An opencode agent outside herdr
+  shows `unknown`, so the command does not refuse it in a turn. It saves no
+  session.
 - **`revier list --agents` prints one row per agent, with its address.** Each
   row shows the address that `revier agent` takes, the agent's name, status,
   activity, harness and directory. With `--json`, each agent is one flat
@@ -58,9 +60,10 @@ Each section is also the text of its release on the
   works in kitty and tmux.
 - **In tmux and herdr, a tab opened beside a pane starts in that pane's
   directory.** Before, `revier shell new --panel <id>` without `--dir`, and
-  the plain tab of `outside = "tab"`, started where the runtime put them, not
-  in the pane's directory. Now they start in the pane's directory, as in
-  kitty.
+  the plain tab of `outside = "tab"`, did not start in the pane's directory.
+  In a workspace, the shell tab started in the project's directory. Outside a
+  workspace, the plain tab started where the runtime put it. Now they start
+  in the pane's directory, as in kitty.
 - **`revier list` with an unknown name still lists the names it knows.**
   Before, one unknown name in `revier list a b` stopped the command, and it
   printed nothing. Now it lists the known projects. Each unknown name gets a
