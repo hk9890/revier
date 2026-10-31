@@ -19,8 +19,17 @@ the behaviour associated with it.
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
 | Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
 
+Before a change to a port or to a decision the core makes, search
+[decisions.md](design/decisions.md) for the concept: an entry in force may
+already settle it, or name the alternative it rejected.
+
 Adding a public type to `pkg/revier` widens the surface an out-of-tree adapter
 depends on. Put it in `internal/` unless an adapter must name it.
+
+Give each new path that revier reads or writes under the user's home a
+`REVIER_*` override, as `REVIER_SSH_CONFIG` for `~/.ssh/config`, unless its
+tool has one already, as `CLAUDE_CONFIG_DIR` for `~/.claude`. Wire it into the
+tests as [TESTING.md](TESTING.md#conventions) says.
 
 ## Adapters hold no policy
 

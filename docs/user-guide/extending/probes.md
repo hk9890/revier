@@ -7,7 +7,7 @@ program: it reads one panel as JSON on stdin and prints one state as JSON.
 On this machine, a probe reads the runtime's panels. For a link,
 declare and install the probe on the host. There it reads the process that
 `revier agent exec` started for the link's agent panel. That panel has no
-`title`, so use `pid` or `command`.
+`title`, `tab` or `dir`, so use `pid` or `command`.
 
 ## Declare a probe
 
@@ -42,7 +42,7 @@ file order, then the others.
 `shell` when the command is a shell, else `tool`. `title` is the panel's
 title; many agents write their state there. `vars`, `pid`, `command`, `tab`
 and `dir` are optional. `pid` and `command` are the panel's foreground process.
-`dir` is the panel's working directory; only kitty reports it.
+`dir` is the panel's working directory.
 
 Print one JSON object and exit 0 within 500 ms:
 

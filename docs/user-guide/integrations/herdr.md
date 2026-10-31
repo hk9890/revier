@@ -49,8 +49,9 @@ Code, revier shows the state herdr detects, unless a
   show those lines, not the newest.
 - herdr brings its workspaces back as shells, without revier's marks, each
   time its server starts. A tab target in such a workspace opens a second
-  tab, and the revier open that starts the server, as the first one after a
-  reboot does, opens a second workspace beside the one herdr brought back.
-  Run `herdr`, close those workspaces, then run `revier session restore`.
+  tab. A revier open that starts the server, such as the first one after a
+  reboot, opens a second workspace beside the one herdr brought back. To fix
+  both, run `herdr`, close those workspaces, then run
+  `revier session restore`.
 - The popup is a kitty window. With herdr and no kitty, run `revier` in a
   terminal.

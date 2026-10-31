@@ -50,9 +50,7 @@ nothing else is left in `kitty.conf`, uninstall removes the file too, or
 leaves it empty when `kitty.conf` itself is a link.
 
 - revier writes through links, so a `kitty.conf` in a dotfiles repository
-  stays a link. If `kitty.conf`, `revier.conf` or the kitty directory is a
-  link to nothing, install and uninstall change nothing until you fix the
-  link.
+  stays a link.
 - A map of your own below the include wins: for example a
   `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
   tmux. `revier term status` names each such map by its line.
@@ -61,13 +59,10 @@ leaves it empty when `kitty.conf` itself is a link.
 - A shell tab starts in the directory of the window you pressed the key in.
   An agent tab starts in the project, so from a worktree the agent can still
   enter any worktree.
-- In a window that is no project's workspace, a key opens a plain shell tab
-  beside it, or nothing if you set `outside = "none"`. To have ctrl+shift+z
-  and each named agent's key start that agent there, in the window's
-  directory, set `outside = "agent"`; see
-  [`[terminal]`](../configuration.md#terminal). When revier itself fails, for
-  example on an agent whose command uses a template, kitty's own new tab
-  opens.
+- In a window that is no project's workspace, `outside` in
+  [`[terminal]`](../configuration.md#terminal) sets what a key does. When
+  revier itself fails, for example on an agent whose command uses a
+  template, kitty's own new tab opens.
 
 **You wrote these maps by hand before.** Delete your own `map ctrl+shift+z`
 and `map ctrl+shift+t` lines that run `revier agent new` or `revier shell new`
@@ -83,8 +78,6 @@ term status` names them as `shadowed by kitty.conf:<line>`.
 - A kitty window you opened yourself is no workspace until you run
   `revier attach` in it. revier reads its agents only when it is the one
   unnamed window of its kitty process.
-- Under Wayland, without GNOME, revier cannot bring a kitty window to the
-  front.
 
 **revier opens a second kitty instead of yours.** Your kitty has no control
 socket. Do step 1 of [Set it up](#set-it-up) and restart kitty.

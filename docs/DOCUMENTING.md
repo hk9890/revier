@@ -72,6 +72,8 @@ user guide or the code; write them there, not in `product.md`,
 - Inside `docs/design/`, tag the concept a decision sets `(Dnn)`. Write
   a bare `Dnn` where the prose names the decision itself, as in "Replaces
   D71".
+- Write a `CHANGELOG.md` section as
+  [RELEASING.md](RELEASING.md#what-goes-in-the-changelog-section) says.
 - No check runs on Markdown: `mise run quality` and CI test only Go. Check
   links and anchors by hand.
 
