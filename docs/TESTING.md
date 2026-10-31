@@ -62,10 +62,6 @@ that did not focus after `Open` passed L2 and failed L4.
   in its `helpers_test.go` that runs `os.Exit(testenv.Run(m))`. A test that
   forgets its own `t.Setenv` then writes into a scratch directory whose
   configuration names no host, and the package fails, naming the file.
-  - Give each new path that revier reads or writes under the user's home a
-    `REVIER_*` override, unless its tool already has a variable for it.
-    ssh has none, so `~/.ssh/config` has `REVIER_SSH_CONFIG`. Claude Code
-    has `CLAUDE_CONFIG_DIR`, so `~/.claude` keeps it.
   - Set a new `REVIER_*` override in `testenv.Run`, and name it in the
     failure message there.
   - Add the function that resolves it to the list this rule opens with
@@ -101,10 +97,13 @@ that did not focus after `Open` passed L2 and failed L4.
   whatever is installed, which is how CI caught the delimiter difference above.
 - Keep herdr pinned in `.github/workflows/ci.yml`: it is pre-1.0 and its JSON
   API has no version. `.github/workflows/herdr-latest.yml` runs its live tests
-  against the latest release weekly. To bump the pin, record a new
-  `internal/adapter/herdr/testdata/herdr-<version>/` with the private server
-  in [RUNNING.md](RUNNING.md#run-a-private-herdr-server), and update the version
-  and digest in `ci.yml`.
+  against the latest release weekly. To bump the pin, update the version and
+  digest in `ci.yml` and record a new
+  `internal/adapter/herdr/testdata/herdr-<version>/snapshot.json`: start the
+  private server in [RUNNING.md](RUNNING.md#run-a-private-herdr-server), build
+  the state the L3 test reads with `hd herdr ...` commands, and save
+  `hd herdr api snapshot`. The test serves the file as one response line and
+  reads only its `result`.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

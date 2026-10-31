@@ -22,6 +22,11 @@ the behaviour associated with it.
 Adding a public type to `pkg/revier` widens the surface an out-of-tree adapter
 depends on. Put it in `internal/` unless an adapter must name it.
 
+Give each new path that revier reads or writes under the user's home a
+`REVIER_*` override, as `REVIER_SSH_CONFIG` for `~/.ssh/config`, unless its
+tool has one already, as `CLAUDE_CONFIG_DIR` for `~/.claude`. Wire it into the
+tests as [TESTING.md](TESTING.md#conventions) says.
+
 ## Adapters hold no policy
 
 Template rendering, choosing the realization and the instance a target

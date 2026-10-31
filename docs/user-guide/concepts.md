@@ -73,8 +73,9 @@ share, such as an editor, go once in `config.toml`
 ## Home, tabs and panels
 
 Each project has one home target: the workspace you return to. In kitty it is
-an OS window. In tmux it is a session. A workspace holds tabs, and a tab holds
-panels. A panel is one pane: an agent, a shell or another tool.
+an OS window. In tmux it is a session. In herdr it is a workspace. A
+workspace holds tabs, and a tab holds panels. A panel is one pane: an agent,
+a shell or another tool.
 
 ## Agents
 

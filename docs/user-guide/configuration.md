@@ -29,11 +29,13 @@ Which file can hold which table:
 | `[[target]]` with `[target.remote.window]`, `[target.remote.runtime]` | yes, shared | no | yes |
 | `[[status]]` at `rule-left`, `rule-right` | yes | no | no |
 | `[[status]]` at `project-line`, `project` | yes, shared with local projects only | yes | yes |
-| `[ui]`, `[hosts]`, `[[action]]`, `[[probe]]`, `[[machine]]` | yes | no | no |
+| `[[agent]]` | yes, shared with local projects only | yes, without `key` | no |
+| `[ui]`, `[terminal]`, `[hosts]`, `[[action]]`, `[[probe]]`, `[[machine]]` | yes | no | no |
 
 - revier ignores an unknown key, and a table in a file that does not take it.
-  `revier doctor` reports only a `[[status]]` at a rule place and a target
-  part in the wrong file. If a field has no effect, check its spelling.
+  `revier doctor` reports only a `[[status]]` at a rule place, a target
+  part in the wrong file, an `[[agent]]` in a link file and an agent's `key`
+  in a project file. If a field has no effect, check its spelling.
 - `revier new`, `revier link`, `revier rename`, the project screen (alt+e),
   the config screen (alt+c) and the remote screen (alt+r) also write these
   files. They keep your comments.
@@ -162,8 +164,8 @@ project cannot share a key. A target named `popup` or `picker` cannot have a key
 ### Tabs
 
 `inside` opens the target as a tab of another target's instance: a kitty tab,
-or a tmux window. `tabs` on the outer target opens a new instance with those
-tabs.
+a tmux window or a herdr tab. `tabs` on the outer target opens a new instance
+with those tabs.
 
 ```toml
 [[target]]
