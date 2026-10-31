@@ -178,6 +178,51 @@ func TestWaitEndsWhenTheAgentIsGone(t *testing.T) {
 	}
 }
 
+// The panel of a new agent tab is a shell until its harness starts:
+// StartedAgent looks it up again until it is an agent's.
+func TestStartedAgentWaitsForTheHarnessToStart(t *testing.T) {
+	c, rt := agentCore(shellPanel("1"))
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		rt.Replace(agentPanel("1", "busy"))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	a, err := c.StartedAgent(ctx, prepared(t, project()), "home:1")
+	if err != nil || a.Panel.ID != "1" || a.State.Status != revier.StatusRunning {
+		t.Fatalf("StartedAgent = %+v, %v; want panel 1, running", a, err)
+	}
+}
+
+// A panel that never becomes an agent's ends on ctx with the refusal of the
+// last lookup, which says what the panel still is.
+func TestStartedAgentEndsOnItsContextWithTheRefusal(t *testing.T) {
+	c, _ := agentCore(shellPanel("1"))
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if _, err := c.StartedAgent(ctx, prepared(t, project()), "home:1"); !errors.Is(err, core.ErrNotAgent) {
+		t.Fatalf("err = %v, want ErrNotAgent", err)
+	}
+}
+
+// Only a panel that is not an agent's is looked up again: an address with no
+// agent in it fails at once.
+func TestStartedAgentFailsAtOnceWhereNoPanelIsNamed(t *testing.T) {
+	c, _ := agentCore(shellPanel("1"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	if _, err := c.StartedAgent(ctx, prepared(t, project()), ""); !errors.Is(err, core.ErrNoAgent) {
+		t.Fatalf("err = %v, want ErrNoAgent", err)
+	}
+	if time.Since(start) >= core.AgentPoll {
+		t.Error("StartedAgent looked the address up again")
+	}
+}
+
 // The prompt lands in the agent's panel and is submitted, and Prompt returns
 // only once the agent has left idle: `prompt && wait --until stopped` must
 // wait for the turn it asked for, not match the rest before it.
