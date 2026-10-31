@@ -54,8 +54,10 @@ names what did not load and how to fix it. Every field is in
 [Configuration](configuration.md#project-file), and the `{{...}}` values are
 in [Templates](configuration.md#templates).
 
-To rename a project, close it, then use the project screen in the TUI (alt+e).
-revier moves the file and changes the name in every saved session.
+To rename a project, close it, then run `revier rename <old> <new>`, or use the
+project screen in the TUI (alt+e). revier moves the file and changes the name
+in every saved session. Do not move the file by hand: the saved sessions keep
+the old name, and an open window of the project is no longer found.
 
 ## Share targets and actions
 

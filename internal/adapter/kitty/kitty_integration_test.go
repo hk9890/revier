@@ -431,6 +431,29 @@ func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
 	}
 }
 
+// The agent tab a key opens outside a workspace with outside "agent" is one
+// agent panel and no vars: kitty runs the agent's command in the window's
+// directory, held as an agent tab of a workspace is.
+func TestOpenTabOfAnAgentOutsideAWorkspaceRunsItInTheDirectory(t *testing.T) {
+	h, rec := host(t, "unix:@kitty-4000")
+	if _, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+		Dir:    "/home/user",
+		Panels: []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}, Dir: "/home/user"}},
+	}, nil); err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	var launches []string
+	for _, c := range rec.all() {
+		if c.args[0] == "launch" {
+			launches = append(launches, strings.Join(c.args, " "))
+		}
+	}
+	want := []string{"launch --type=tab --location=last --match window_id:4 --hold --keep-focus --cwd /home/user claude"}
+	if !slices.Equal(launches, want) {
+		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 // While no OS window of the kitty holds the keyboard, a launch moves none, and
 // --keep-focus would have kitty ask the desktop to focus its last OS window:
 // the tab opens without it.

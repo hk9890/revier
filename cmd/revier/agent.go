@@ -31,6 +31,7 @@ usage:
   revier agent send-keys <agent> [--] <key>..
   revier agent new [<name>] [-p <project>[:<target>] | --panel <id>] [--resume <id>] [--dir <path>] [--no-focus]
   revier agent focus <agent>
+  revier agent close <agent> [--force]
   revier agent exec -p <project> [--agent <name>] [--tag <tag>] [--resume <id>] [--dir <path>]
 
   <agent>    <project>:<target>:<panel>, the agent's address as
@@ -56,26 +57,41 @@ usage:
              without --dir, --panel starts them in the project too,
              not in the panel's directory
   --no-focus leave the focus where it is, and print the new agent's address
+  --force    with close, close an agent that is running or waiting for an
+             answer
 
 new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace. With
 <name> the tab's agent panel runs that named agent, and an address of the
 project alone still names the default agent among them.
-Without -p or --panel the project is the one --dir is in, else the one this
-directory resolves to. It goes to the new agent and raises its window; with
---no-focus it does neither, and prints the address a script reaches the
-agent by, which names an agent once the harness in the tab has started.
+Without -p or --panel the project is the one --dir is in, or without --dir
+the one this directory is in; a directory in no project is an error, which
+exits 3. It goes to the new agent and raises its window; with --no-focus it
+does neither, and prints the address a script reaches the agent by, which
+names an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
-[terminal] outside says: a plain shell tab beside the window, or nothing.
+[terminal] outside says: a plain shell tab beside the window, the agent in
+the window's directory, or nothing.
 
 focus makes the agent's tab current and raises the window that holds it.
+
+close ends the agent by closing its panel, and returns once the panel is
+gone. In a tab beside the workspace's own, as new opens one, the whole tab
+closes, the shell beside the agent with it; in the workspace's own tab, the
+agent's panel closes alone.
+It prints which of the two it did. Unless --force is given, it refuses while
+an agent in what it closes, the tab's other agents included, is running or
+waiting for an answer. It refuses a panel that runs no agent, and saves no
+session.
 
 exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
 for the agent, which a survey there reports it under.
 
-wait prints the status it ended on. prompt types one line and submits it,
-and returns once an idle agent has started on it, so
+wait prints the status it ended on. On a panel that is not an agent's, such
+as the one agent new --no-focus prints before its harness has started, wait
+waits for the harness to start, within --timeout. prompt types one line and
+submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
 waits for that turn. It refuses a panel that is not an agent's, an agent
 waiting for an answer, where the Enter would pick an option in its dialog,
@@ -121,6 +137,8 @@ func cmdAgent(out io.Writer, args []string) error {
 		return cmdAgentNew(out, args)
 	case "focus":
 		return cmdAgentFocus(out, args)
+	case "close":
+		return cmdAgentClose(out, args)
 	case "exec":
 		return cmdAgentExec(args)
 	default:
@@ -134,6 +152,12 @@ func cmdAgent(out io.Writer, args []string) error {
 // covers the host probes and the lookup as well as the wait, since a host that
 // never answers is a wait that never ends.
 func cmdAgentWait(out io.Writer, args []string) error {
+	return agentWait(out, args, newApp)
+}
+
+// agentWait is cmdAgentWait on the app that open makes: a test makes it on a
+// fake host.
+func agentWait(out io.Writer, args []string, open func(context.Context, io.Writer) (*app, error)) error {
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
@@ -156,8 +180,11 @@ func cmdAgentWait(out io.Writer, args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*timeout*float64(time.Second)))
 	}
 	defer cancel()
-	state, err := waitFor(ctx, out, pos[0], statuses)
+	state, err := waitFor(ctx, out, open, pos[0], statuses)
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(err, core.ErrNotAgent) {
+			return fmt.Errorf("%w after %gs waiting for %s to be %s; it is still not an agent's: %w", errWaitTimeout, *timeout, pos[0], *until, err)
+		}
 		return fmt.Errorf("%w after %gs waiting for %s to be %s; it is %s", errWaitTimeout, *timeout, pos[0], *until, state.Status)
 	}
 	if err != nil {
@@ -169,12 +196,12 @@ func cmdAgentWait(out io.Writer, args []string) error {
 
 // waitFor finds the agent an address names and waits for one of the statuses.
 // The state is the last one read, zero when the agent was never found.
-func waitFor(ctx context.Context, out io.Writer, address string, until []revier.Status) (revier.AgentState, error) {
-	a, err := newApp(ctx, out)
+func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.Writer) (*app, error), address string, until []revier.Status) (revier.AgentState, error) {
+	a, err := open(ctx, out)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	ag, err := a.agent(ctx, address)
+	ag, err := a.startedAgent(ctx, address)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
@@ -183,6 +210,39 @@ func waitFor(ctx context.Context, out io.Writer, address string, until []revier.
 		return state, fmt.Errorf("%s: %w", address, err)
 	}
 	return state, nil
+}
+
+// startedAgent is the agent an address names, once its harness has started.
+// The panel of `agent new --no-focus` is a shell until then, so a panel that
+// is not an agent's is looked up again until ctx ends, and the refusal it
+// ended on is returned. Only a panel address is refused with ErrNotAgent: an
+// address with no agent in it fails at once, as prompt does.
+func (a *app) startedAgent(ctx context.Context, address string) (core.Agent, error) {
+	name, _, _ := strings.Cut(address, ":")
+	poll := core.AgentPoll
+	if p, ok := a.project(revier.ProjectName(name)); ok && p.Remote != nil {
+		// A link's lookup is an ssh to its host, as each read of its wait is.
+		poll = core.LinkPoll
+	}
+	var notAgent error
+	for {
+		ag, err := a.agent(ctx, address)
+		switch {
+		case errors.Is(err, core.ErrNotAgent):
+			notAgent = err
+		case err != nil && ctx.Err() != nil && notAgent != nil:
+			// The deadline cut the lookup short: the panel is still what the
+			// last lookup found.
+			return core.Agent{}, notAgent
+		default:
+			return ag, err
+		}
+		select {
+		case <-ctx.Done():
+			return core.Agent{}, notAgent
+		case <-time.After(poll):
+		}
+	}
 }
 
 func cmdAgentPrompt(out io.Writer, args []string) error {
@@ -343,6 +403,79 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	return err
 }
 
+// cmdAgentClose ends one agent by closing its panel, as del on its row in the
+// TUI does: through the core's close path, without a session save, and
+// refused while the agent works or waits for an answer unless forced.
+func cmdAgentClose(out io.Writer, args []string) error {
+	fs := flag.NewFlagSet("agent close", flag.ContinueOnError)
+	force := fs.Bool("force", false, "close the agent while it works or waits for an answer")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return errors.New("usage: revier agent close <agent> [--force]")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
+	defer cancel()
+	a, err := newApp(ctx, out)
+	if err != nil {
+		return err
+	}
+	start := time.Now()
+	err = a.closeAgent(ctx, pos[0], *force)
+	logging.Op("agent close", start, err, "address", pos[0], "force", *force)
+	return err
+}
+
+// closeAgent closes the panel of the agent an address names, and says
+// whether that closed the agent's whole tab or its panel alone (decisions.md
+// D94).
+func (a *app) closeAgent(ctx context.Context, address string, force bool) error {
+	ag, err := a.agent(ctx, address)
+	if errors.Is(err, core.ErrNotAgent) {
+		return fmt.Errorf("%s: no agent runs in that panel", address)
+	}
+	if err != nil {
+		return err
+	}
+	name, _, _ := strings.Cut(address, ":")
+	p, _ := a.project(revier.ProjectName(name))
+	projects := []core.Project{p}
+	report := a.core.SurveyToClose(ctx, projects, p.Name)
+	plan := a.core.ClosePlan(report, p.Name, core.CloseRow{Agent: ag.Ref, Panel: ag.Panel.ID})
+	// The address also finds an agent this machine serves to a terminal on
+	// another one, which only that terminal closes.
+	if len(plan) == 0 {
+		return fmt.Errorf("%s: no panel of this machine shows the agent; nothing closed", address)
+	}
+	if busy := core.Busy(plan); len(busy) > 0 && !force {
+		return busyAgent(address, busy)
+	}
+	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, core.ShutdownOpts{Force: force, Projects: projects})
+	var refused *core.BusyRefusal
+	switch {
+	case errors.As(err, &refused):
+		return busyAgent(address, core.Busy(refused.Plan))
+	case err != nil:
+		return fmt.Errorf("%s: %w; nothing closed", address, err)
+	}
+	if r := closed[0]; r.Action.Leaves() || r.Err != nil || r.Open {
+		return fmt.Errorf("%s: %s", address, r.Note())
+	}
+	if core.ClosesTab(report.Instances, plan[0]) {
+		_, _ = fmt.Fprintln(a.out, "closed the tab")
+	} else {
+		_, _ = fmt.Fprintln(a.out, "closed the agent panel")
+	}
+	return nil
+}
+
+// busyAgent refuses the close of an agent that works or waits for an answer.
+func busyAgent(address string, busy []core.CloseStep) error {
+	return fmt.Errorf("%s: %s; nothing closed. use --force to close it anyway", address, busyNote(busy[0].BusyAgents()))
+}
+
 // cmdAgentNew adds an agent tab to an open workspace. It is what the kitty
 // hotkey runs, so it prints nothing on success: there is no terminal to read
 // it in. With --no-focus the caller is a script, and reads the address.
@@ -418,19 +551,21 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", revier.PanelAgent, project, panel, dir, a.core.AgentTarget, here)
+	return a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
-// The place is the owner of --panel; or the project -p names, else the one --dir
-// is in, else the one resolved as for any command, with the target after -p's
-// colon or the one pick chooses. A --panel that no project's workspace holds
-// gets what [terminal] outside says, and here is not called. With --panel and
-// no --dir, a shell tab's directory is the panel's own (decisions.md D153),
-// and an agent tab's is the project's (D158).
-func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
+// The place is the owner of --panel; or the project -p names, else the one
+// --dir is in, or without --dir the one the working directory is in, with the
+// target after -p's colon or the one pick chooses. A --panel that no project's
+// workspace holds gets what [terminal] outside says, with agent the named
+// agent an agent tab asks for, and here is not called. With --panel and no
+// --dir, a shell tab's directory is the panel's own (decisions.md D153), and
+// an agent tab's is the project's (D158). Outside a workspace, with outside =
+// "agent", an agent tab starts in the panel's directory (D164).
+func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, agent, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
-		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.Outside(), func(w core.Workspace, dir string) error {
+		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.OutsideKey(agent), func(w core.Workspace, dir string) error {
 			return a.tabHere(what, w, panel, dir, here)
 		})
 	}
@@ -466,15 +601,49 @@ func (a *app) tabHere(what string, w core.Workspace, panel, dir string, here fun
 
 func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
 	name, sel, _ := strings.Cut(project, ":")
-	p, inDir := a.projectForPath(dir)
-	if name != "" || dir == "" || !inDir {
-		var err error
-		if p, err = a.resolveProject(ctx, name); err != nil {
-			return core.Workspace{}, err
-		}
+	var p core.Project
+	var err error
+	if name != "" {
+		p, err = a.resolveProject(ctx, name)
+	} else {
+		p, err = a.dirProject(dir)
+	}
+	if err != nil {
+		return core.Workspace{}, err
 	}
 	return a.core.TabIn(ctx, p, revier.TargetName(sel), pick)
 }
+
+// dirProject is the project --dir is in, or without --dir the one the working
+// directory is in. A tab is opened from a terminal or a script, which has a
+// directory: one in no project fails, and never opens the tab in the project
+// of the focused window or the last one (decisions.md D160).
+func (a *app) dirProject(dir string) (core.Project, error) {
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return core.Project{}, fmt.Errorf("working directory: %w", err)
+		}
+		dir = cwd
+	}
+	p, ok := a.projectForPath(dir)
+	if !ok {
+		return core.Project{}, dirInNoProject(dir)
+	}
+	slog.Info("resolve", "project", p.Name, "by", "directory", "dir", dir)
+	return p, nil
+}
+
+// dirInNoProject is a directory a tab was asked for that no project holds. It
+// is errNoProject, so it exits with that status, but says which directory
+// and what to give instead.
+type dirInNoProject string
+
+func (d dirInNoProject) Error() string {
+	return string(d) + " is in no project; name one with -p <project>"
+}
+
+func (d dirInNoProject) Unwrap() error { return errNoProject }
 
 // agent finds the agent an address names: <project>, <project>:<target> or
 // <project>:<target>:<panel>.

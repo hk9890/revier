@@ -311,7 +311,7 @@ func (pl places) label(agents []revier.AgentView) {
 func defaultAgent(found []Agent) (Agent, bool) {
 	var def []Agent
 	for _, a := range found {
-		if a.Panel.Vars[PanelAgentVar] == "" {
+		if a.Panel.Vars[revier.PanelAgentVar] == "" {
 			def = append(def, a)
 		}
 	}

@@ -62,7 +62,7 @@ func TestNewAgentWithANameOpensThatAgentsTab(t *testing.T) {
 	if outcome != core.AgentEmpty {
 		t.Errorf("outcome = %v, want empty", outcome)
 	}
-	if len(rt.Tabs) != 1 || !maps.Equal(rt.Tabs[0].Vars, map[string]string{core.PanelAgentVar: "dtop"}) {
+	if len(rt.Tabs) != 1 || !maps.Equal(rt.Tabs[0].Vars, map[string]string{revier.PanelAgentVar: "dtop"}) {
 		t.Fatalf("Tabs = %+v, want one tab marked revier_agent=dtop", rt.Tabs)
 	}
 	samePanels(t, "tab", rt.Tabs[0].Real.Panels, []revier.PanelSpec{
@@ -396,7 +396,7 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 func tabAtPanel(t *testing.T, c *core.Core, projects []core.Project, panel revier.PanelID, dir string, outside core.Outside) (core.Workspace, error) {
 	t.Helper()
 	var got core.Workspace
-	err := c.TabAtPanel(context.Background(), projects, panel, revier.PanelShell, dir, outside, func(w core.Workspace, _ string) error {
+	err := c.TabAtPanel(context.Background(), projects, panel, revier.PanelShell, dir, core.OutsideKey{Outside: outside}, func(w core.Workspace, _ string) error {
 		got = w
 		return nil
 	})
@@ -423,7 +423,7 @@ func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
 		{"2", gone, ""},
 	} {
 		got := "unset"
-		err := c.TabAtPanel(context.Background(), projects, tc.panel, revier.PanelShell, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
+		err := c.TabAtPanel(context.Background(), projects, tc.panel, revier.PanelShell, tc.dir, core.OutsideKey{Outside: core.OutsideTab}, func(_ core.Workspace, dir string) error {
 			got = dir
 			return nil
 		})
@@ -457,7 +457,7 @@ func TestTabAtPanelStartsAnAgentOutsideThePanelsDirectory(t *testing.T) {
 		{gone, ""},
 	} {
 		got := "unset"
-		err := c.TabAtPanel(context.Background(), projects, "1", revier.PanelAgent, tc.dir, core.OutsideTab, func(_ core.Workspace, dir string) error {
+		err := c.TabAtPanel(context.Background(), projects, "1", revier.PanelAgent, tc.dir, core.OutsideKey{Outside: core.OutsideTab}, func(_ core.Workspace, dir string) error {
 			got = dir
 			return nil
 		})
@@ -466,7 +466,7 @@ func TestTabAtPanelStartsAnAgentOutsideThePanelsDirectory(t *testing.T) {
 		}
 	}
 
-	err := c.TabAtPanel(context.Background(), projects, "9", revier.PanelAgent, "", core.OutsideTab, func(core.Workspace, string) error {
+	err := c.TabAtPanel(context.Background(), projects, "9", revier.PanelAgent, "", core.OutsideKey{Outside: core.OutsideTab}, func(core.Workspace, string) error {
 		t.Fatal("in ran for a window of no project")
 		return nil
 	})
@@ -532,6 +532,82 @@ func TestTabAtPanelOutsideAWorkspaceWithNoneDoesNothing(t *testing.T) {
 	}
 	if len(rt.Tabs) != 0 || len(rt.PanelFocuses) != 0 {
 		t.Errorf("tabs = %+v, focuses = %v, want none", rt.Tabs, rt.PanelFocuses)
+	}
+}
+
+// outsideAgents are config.toml's named agents as a key outside a workspace
+// reads them: the first is the default agent's.
+var outsideAgents = []core.NamedAgent{
+	{Name: "claude", Command: []string{"claude"}},
+	{Name: "dtop", Command: []string{"dtop", "--fast"}},
+}
+
+// keyOutside presses a key of kind, asking for agent, in a window of no
+// project with outside "agent", and returns the one tab it opened, in dir.
+func keyOutside(t *testing.T, kind revier.PanelKind, agent string, agents []core.NamedAgent) (revier.PanelSpec, error) {
+	t.Helper()
+	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
+	loose := rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
+	dir := t.TempDir()
+	err := c.TabAtPanel(context.Background(), projects, "9", kind, dir, core.OutsideKey{Outside: core.OutsideAgent, Agent: agent, Agents: agents}, func(core.Workspace, string) error {
+		t.Fatal("in ran for a window of no project")
+		return nil
+	})
+	if err != nil {
+		if len(rt.Tabs) != 0 {
+			t.Errorf("tabs = %+v, want none beside a refusal", rt.Tabs)
+		}
+		return revier.PanelSpec{}, err
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != loose || len(rt.Tabs[0].Real.Panels) != 1 || len(rt.Tabs[0].Vars) != 0 {
+		t.Fatalf("tabs = %+v, want one tab of one panel and no vars in %v", rt.Tabs, loose)
+	}
+	tab := rt.Tabs[0]
+	if tab.Real.Dir != dir || tab.Real.Panels[0].Dir != dir || !slices.Equal(rt.PanelFocuses, []revier.PanelID{tab.Panel}) {
+		t.Errorf("tab = %+v, focuses %v, want it in %s and focused", tab, rt.PanelFocuses, dir)
+	}
+	return tab.Real.Panels[0], nil
+}
+
+// With outside "agent" the agent key opens a tab that runs config.toml's
+// first named agent, a named agent's key that agent, and the shell key the
+// plain tab outside "tab" opens.
+func TestTabAtPanelOutsideAWorkspaceWithAgentRunsTheAgent(t *testing.T) {
+	for _, tc := range []struct {
+		kind  revier.PanelKind
+		agent string
+		want  revier.PanelSpec
+	}{
+		{revier.PanelAgent, "", revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"claude"}}},
+		{revier.PanelAgent, "dtop", revier.PanelSpec{Kind: revier.PanelAgent, Title: "dtop", Command: []string{"dtop", "--fast"}}},
+		{revier.PanelShell, "", revier.PanelSpec{Kind: revier.PanelShell}},
+	} {
+		got, err := keyOutside(t, tc.kind, tc.agent, outsideAgents)
+		if err != nil || got.Kind != tc.want.Kind || got.Title != tc.want.Title || !slices.Equal(got.Command, tc.want.Command) {
+			t.Errorf("%s key %q: panel %+v, %v, want %+v", tc.kind, tc.agent, got, err, tc.want)
+		}
+	}
+}
+
+// With outside "agent" and no [[agent]] in config.toml the agent key has no
+// agent to run, and opens the plain tab.
+func TestTabAtPanelOutsideAWorkspaceWithAgentAndNoneDeclaredOpensAPlainTab(t *testing.T) {
+	got, err := keyOutside(t, revier.PanelAgent, "", nil)
+	if err != nil || got.Kind != revier.PanelShell || len(got.Command) != 0 {
+		t.Errorf("panel %+v, %v, want the plain shell", got, err)
+	}
+}
+
+// With outside "agent" a command that reads a project template, and a name
+// config.toml does not declare, are refused and open no tab: no project holds
+// the window to render the template against.
+func TestTabAtPanelOutsideAWorkspaceWithAgentRefusesATemplate(t *testing.T) {
+	templated := []core.NamedAgent{{Name: "dtop", Command: []string{"dtop", "{{.Path}}"}}}
+	if _, err := keyOutside(t, revier.PanelAgent, "", templated); err == nil || !strings.Contains(err.Error(), "reads a project template") || !strings.Contains(err.Error(), "dtop") {
+		t.Errorf("template: err = %v, want the agent named and the template refused", err)
+	}
+	if _, err := keyOutside(t, revier.PanelAgent, "nope", outsideAgents); !errors.Is(err, core.ErrUnknownAgent) {
+		t.Errorf("unknown name: err = %v, want ErrUnknownAgent", err)
 	}
 }
 

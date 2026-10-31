@@ -13,9 +13,10 @@ import (
 )
 
 // serve replaces this process with what a project serves. The process keeps
-// its pid, and everything it starts inherits the two variables, which is how
-// the served-processes host finds the agent again under its tag. It asks no
-// host anything: the project file alone says what runs.
+// its pid, and everything it starts inherits the variables, which is how the
+// served-processes host finds the agent again under its tag, with the named
+// agent's mark. It asks no host anything: the project file alone says what
+// runs.
 func serve(project, tag string, what func(*core.Core, core.Project) (core.Served, error)) error {
 	cfgRoot, err := config.Root()
 	if err != nil {
@@ -50,7 +51,7 @@ func serve(project, tag string, what func(*core.Core, core.Project) (core.Served
 	}
 	env := os.Environ()
 	if tag != "" {
-		env = append(env, proc.TagVar+"="+tag, proc.WorkspaceVar+"="+s.Workspace)
+		env = append(env, proc.TagVar+"="+tag, proc.WorkspaceVar+"="+s.Workspace, proc.AgentVar+"="+s.Agent)
 	}
 	return syscall.Exec(path, s.Argv, env)
 }

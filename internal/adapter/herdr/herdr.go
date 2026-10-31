@@ -69,7 +69,8 @@ func (h *Host) Probe(ctx context.Context) error {
 //
 // One request, whatever the project count: session.snapshot carries every
 // workspace, tab and pane. herdr names no pane's process, so one read of /proc
-// finds them, and each pane's foreground process is then read as tmux's is.
+// finds them, and each pane's foreground process and directory are then read
+// as tmux's are.
 // A pane moved to another workspace has a new id, and its process still
 // carries the old one, so herdr is asked for that pane's process alone: one
 // request per moved pane, not per pane.
@@ -115,6 +116,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 			Vars:    vars(p),
 			PID:     fg,
 			Command: command,
+			Dir:     proc.DirIn(h.root(), fg, shell),
 			Tab:     p.TabID,
 		})
 	}

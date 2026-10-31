@@ -72,6 +72,14 @@ type Panel struct {
 	Dir string `json:"dir,omitempty"`
 }
 
+// PanelAgentVar is the panel variable that names the named agent an agent tab
+// runs. Every panel of the tab carries it, as OpenTab sets a tab's vars on
+// each; a tab holds one agent, so the tab's mark is its agent's. The default
+// agent's tab carries none (decisions.md D145). A host that reports a panel
+// it did not open, such as one served to a link, sets it from the name the
+// panel's process was started with.
+const PanelAgentVar = "revier_agent"
+
 // Runs reports whether the panel's foreground command is the program called
 // name: its argv[0], or the script an interpreter was started on - `node
 // .../bin/claude` and `python3 -m aider` are how an npm or a pip install runs

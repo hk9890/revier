@@ -31,10 +31,12 @@ usage:
 
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless
--p names one. For a project on another machine the tab is a shell there, and
---dir, a path on this machine, is dropped. With --panel in a window that is
-no project's open workspace, it opens what [terminal] outside says: a plain
-shell tab beside the window, or nothing.
+-p names one. Without -p or --panel the project is the one --dir is in, or
+without --dir the one this directory is in; a directory in no project is an
+error, which exits 3. For a project on another machine the tab is a shell
+there, and --dir, a path on this machine, is dropped. With --panel in a
+window that is no project's open workspace, it opens what [terminal] outside
+says: a plain shell tab beside the window, or nothing.
 
 exec becomes the project's shell in this terminal. It is what the shell panel
 of a link runs on the project's machine over ssh.
@@ -96,7 +98,7 @@ func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
 		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
 		return err
 	}
-	return a.newTab(ctx, "shell new", revier.PanelShell, project, panel, dir, homeTarget, here)
+	return a.newTab(ctx, "shell new", revier.PanelShell, "", project, panel, dir, homeTarget, here)
 }
 
 // homeTarget is the target `revier shell new -p <project>` opens its tab in.

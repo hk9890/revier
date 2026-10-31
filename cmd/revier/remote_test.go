@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -201,6 +202,44 @@ func TestTabAtAPanelOutsideAWorkspaceTakesTheConfiguredAction(t *testing.T) {
 	}
 	if len(rt.Tabs) != 1 {
 		t.Errorf("tabs = %+v, want the plain tab", rt.Tabs)
+	}
+}
+
+// With outside "agent", in a kitty window that is no project's workspace, the
+// agent key opens a tab of config.toml's first named agent in the window's
+// directory, a named agent's key that agent, and the shell key a plain tab.
+func TestTabAtAPanelOutsideAWorkspaceRunsTheAgentTheKeyAsksFor(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	dir := t.TempDir()
+	rt.Add("a kitty window of no project", "", revier.Panel{ID: "3", Dir: dir})
+	cfg := &config.Config{Terminal: config.Terminal{Outside: core.OutsideAgent}, Agents: []map[string]any{
+		{"name": "claude", "command": []any{"claude"}},
+		{"name": "dtop", "command": []any{"dtop", "--fast"}},
+	}}
+	a := withState(t, &app{cfg: cfg, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	ctx := context.Background()
+
+	if err := a.newAgent(ctx, "", "3", "", core.Resume{}); err != nil {
+		t.Fatalf("agent new --panel 3: %v", err)
+	}
+	if err := a.newAgent(ctx, "", "3", "", core.Resume{Agent: "dtop"}); err != nil {
+		t.Fatalf("agent new dtop --panel 3: %v", err)
+	}
+	if err := a.newShell(ctx, "", "3", ""); err != nil {
+		t.Fatalf("shell new --panel 3: %v", err)
+	}
+	var got []string
+	for _, tab := range rt.Tabs {
+		p := tab.Real.Panels[0]
+		got = append(got, fmt.Sprintf("%s %q in %s", p.Kind, p.Command, p.Dir))
+	}
+	want := []string{
+		fmt.Sprintf("agent [\"claude\"] in %s", dir),
+		fmt.Sprintf("agent [\"dtop\" \"--fast\"] in %s", dir),
+		fmt.Sprintf("shell [] in %s", dir),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("tabs =\n%q\nwant\n%q", got, want)
 	}
 }
 

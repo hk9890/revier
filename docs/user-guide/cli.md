@@ -20,6 +20,7 @@ in full.
 | `revier popup` | The TUI in a kitty window of its own. |
 | `revier list` | Print every project, its state, agents and targets. |
 | `revier new` | Write a project file for the current directory. |
+| `revier rename <old> <new>` | Give a closed project a new name. See [Projects](projects.md). |
 | `revier open` | Run-or-raise the project's workspace. |
 | `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |
@@ -32,6 +33,7 @@ in full.
 | `revier agent read` | Print an agent's last reply, or its screen. |
 | `revier agent send-keys` | Type keys into an agent, such as `esc` or `enter`. |
 | `revier agent focus` | Go to an agent's tab. |
+| `revier agent close` | End one agent: close its tab, or in the workspace's own tab its panel alone. |
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
 | `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
@@ -65,7 +67,7 @@ doctor` says why), `?` its host did not answer.
 | `0` | Success. |
 | `1` | Failure. `revier doctor` also exits `1` when a file has a problem. |
 | `2` | `revier agent wait` timed out. |
-| `3` | No project found: not from the directory, the focused window or the last project. |
+| `3` | No project found: not from the directory, the focused window or the last project. For `revier agent new` and `revier shell new` without `-p` or `--panel`: the directory is in no project. |
 | `4` | `revier keys install` or `uninstall`, or `revier term install` or `uninstall`: some key is not as asked. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |

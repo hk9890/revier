@@ -3,9 +3,10 @@
 // (decisions.md D84).
 //
 // Such a process runs under sshd and in no terminal this machine has, so no
-// runtime lists it. It carries two variables in its environment instead: the
-// workspace it was started for, and the tag the terminal that started it
-// knows it by. One instance is reported per workspace, with one panel per tag.
+// runtime lists it. It carries variables in its environment instead: the
+// workspace it was started for, the tag the terminal that started it knows it
+// by, and the named agent it runs, if any. One instance is reported per
+// workspace, with one panel per tag, marked with its named agent.
 //
 // The host lists and does nothing else. What it lists is shown in a terminal
 // elsewhere, so there is nothing here to open or to focus.
@@ -41,6 +42,11 @@ const (
 	// WorkspaceVar names the instance: the realization the process was
 	// started for, which is what that realization's Match finds.
 	WorkspaceVar = "REVIER_WORKSPACE"
+
+	// AgentVar names the named agent the process runs. The default agent
+	// and a shell carry it empty, so a name inherited from the environment
+	// `revier agent exec` ran in does not mark them.
+	AgentVar = "REVIER_AGENT"
 )
 
 // ErrListsOnly refuses an Open or a Focus.
@@ -74,14 +80,14 @@ func (h *Host) Probe(context.Context) error {
 
 type process struct {
 	pid, ppid, pgrp, tty, tpgid int
-	tag, workspace              string
+	tag, workspace, agent       string
 	cmdline                     []string
 }
 
 // Instances reads /proc once. A process of another user refuses the read of
 // its environment and is passed over, as is one that ended meanwhile.
 func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
-	scanned, err := Scan(h.root(), TagVar, WorkspaceVar)
+	scanned, err := Scan(h.root(), TagVar, WorkspaceVar, AgentVar)
 	if err != nil {
 		return nil, fmt.Errorf("proc: %w", err)
 	}
@@ -98,9 +104,11 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 		if !ok {
 			continue
 		}
-		panels[p.workspace] = append(panels[p.workspace], revier.Panel{
-			ID: revier.PanelID(tag), Kind: kindOf(p.cmdline), PID: p.pid, Command: p.cmdline,
-		})
+		panel := revier.Panel{ID: revier.PanelID(tag), Kind: kindOf(p.cmdline), PID: p.pid, Command: p.cmdline}
+		if p.agent != "" {
+			panel.Vars = map[string]string{revier.PanelAgentVar: p.agent}
+		}
+		panels[p.workspace] = append(panels[p.workspace], panel)
 	}
 	out := make([]revier.Instance, 0, len(panels))
 	for workspace, ps := range panels {
@@ -116,7 +124,7 @@ func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
 }
 
 func (h *Host) read(pid int, vars map[string]string) (process, bool) {
-	p := process{pid: pid, tag: vars[TagVar], workspace: vars[WorkspaceVar]}
+	p := process{pid: pid, tag: vars[TagVar], workspace: vars[WorkspaceVar], agent: vars[AgentVar]}
 	if p.workspace == "" {
 		return process{}, false
 	}
@@ -286,6 +294,22 @@ func ParentIn(root string, pid int) (int, bool) {
 	}
 	ppid, err := strconv.Atoi(fields[1])
 	return ppid, err == nil
+}
+
+// Dir is the working directory of the first of pids that /proc shows one
+// for, or "" where it shows none. tmux reads pane_current_path the same way:
+// the foreground process's, else the pane's own, since /proc hides the
+// directory of a process another user runs, such as sudo.
+func Dir(pids ...int) string { return DirIn("/proc", pids...) }
+
+// DirIn is Dir from the /proc tree at root, which a test replaces.
+func DirIn(root string, pids ...int) string {
+	for _, pid := range pids {
+		if dir, err := os.Readlink(filepath.Join(root, strconv.Itoa(pid), "cwd")); err == nil {
+			return dir
+		}
+	}
+	return ""
 }
 
 // Foreground reads the foreground process of the terminal pid runs in: the

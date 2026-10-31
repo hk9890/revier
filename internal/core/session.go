@@ -376,7 +376,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 						if a.Session == "" {
 							gaps.Unnamed++
 						}
-						a.Name = panel.Vars[PanelAgentVar]
+						a.Name = panel.Vars[revier.PanelAgentVar]
 						targets[len(targets)-1].Agents = append(targets[len(targets)-1].Agents, a)
 					}
 				}
@@ -410,7 +410,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 			gaps.Unnamed++
 		}
 		t := &s.Projects[a.project].Targets[a.target]
-		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[PanelAgentVar]})
+		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[revier.PanelAgentVar]})
 	}
 	return s, gaps
 }

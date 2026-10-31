@@ -867,6 +867,16 @@ key given one takes tmux wherever the list names tmux before `none`.
 Rejected: choosing tmux wherever `$TMUX` is set, which moves every command run
 in a tmux pane, and a panel no runtime holds taken as outside a workspace.
 
+### D160 — a tab asked for from a directory in no project fails
+
+`revier agent new` and `revier shell new` without `-p` or `--panel` take the
+project of `--dir`, or without it of the working directory, and fail with the
+no-project status when that directory is in none. They run in a terminal or a
+script, which has a directory; the focused window and the last project exist
+for a desktop key, which has none. The fallback started an agent in another
+project and exited 0, and a warning comes too late: the agent already runs.
+Other commands keep it.
+
 ### D161 — a harness's name for an agent is shown, and a search may find it
 
 Replaces D156. A probe may report what its harness calls the agent, as Claude
@@ -876,3 +886,14 @@ Claude Code keeps it neither unique nor fixed, and such an address would reach
 Claude agents alone. One exception: a user may ask for an agent by that name,
 so the search that finds a project by a word takes the whole name too; a part
 such as `dynatui-94` would find unrelated agents.
+
+### D164 — outside a workspace an agent key can run an agent of config.toml
+
+Extends D148. The agent key gave the shell key's plain tab, and the user's own
+fallback to an agent no longer ran. config can now say `agent`: an agent key
+opens a tab of the agent it names, the default one being config.toml's first
+`[[agent]]`, since no layout says which; with none, the plain tab, logged. It
+starts in the panel's directory, which every runtime must therefore report. A
+project template there is refused and no tab opens: no project holds the
+window, and a directory in its place would hand a program a path it never
+asked for.
