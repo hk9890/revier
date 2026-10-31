@@ -30,6 +30,9 @@ type TermKey struct {
 	// key opens; empty, with Shell false, it is the default agent.
 	Shell bool
 	Agent string
+	// Label is what config.toml calls the key, as a problem names it:
+	// terminal.agent_key, or agent "dtop" key.
+	Label string
 }
 
 // Args is the revier command the key runs, after "revier".
@@ -183,6 +186,19 @@ func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermRow
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// InstalledTermKeys is the keys of keys that `revier term install` writes:
+// every one no desktop key is on.
+func InstalledTermKeys(keys []TermKey, projects []Project, trigger Chord) []TermKey {
+	rows := wantedTermRows(keys, projects, trigger)
+	var out []TermKey
+	for i, k := range keys {
+		if rows[i].Status != TermRefused {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // termReport is the whole of the classification, over a state already read

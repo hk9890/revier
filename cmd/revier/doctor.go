@@ -38,7 +38,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// `target "worktree"`, and a target name has no length limit.
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	bad := 0
-	if problems := append(hostProblems(cfg), cfg.Problems...); len(problems) > 0 {
+	if problems := slices.Concat(hostProblems(cfg), cfg.Problems, outsideProblems(cfg, projects)); len(problems) > 0 {
 		bad++
 		_, _ = fmt.Fprintf(out, "\n%s\n", config.File(root))
 		for _, err := range problems {
@@ -107,6 +107,29 @@ func offList(cfg *config.Config, projects []core.Project) []core.Project {
 		}
 	}
 	return out
+}
+
+// outsideProblems is each terminal key that fails at every press outside a
+// workspace, because the agent it runs there cannot run in no project
+// (decisions.md D164). kitty's own new tab hides the failure, so doctor says
+// it; every other command does not, since the configuration loaded whole. A
+// key `revier term install` does not write is never pressed, so it is left
+// out; with a trigger key that does not parse, install writes none.
+func outsideProblems(cfg *config.Config, projects []core.Project) []error {
+	trigger, err := cfg.TriggerKey()
+	if err != nil {
+		return nil
+	}
+	var errs []error
+	for _, k := range core.InstalledTermKeys(cfg.TermKeys(), projects, trigger) {
+		if k.Shell {
+			continue
+		}
+		if err := cfg.OutsideKey(k.Agent).Refusal(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", k.Label, err))
+		}
+	}
+	return errs
 }
 
 // subject is what a refusal of config.toml or of a status table is about,
@@ -198,6 +221,8 @@ func advise(msg string) string {
 		return "give the target a `[target.window]` or `[target.runtime]` table"
 	case strings.Contains(msg, "error parsing regexp"):
 		return "fix the `match` pattern; the message names the part that does not parse"
+	case strings.Contains(msg, "reads a project template, and no project holds"):
+		return "drop the template from the agent's command, or set `outside` in [terminal] to \"tab\""
 	case strings.Contains(msg, "template:"):
 		return "fix the template; the message names what does not parse or evaluate"
 	case strings.Contains(msg, "name is not read"):

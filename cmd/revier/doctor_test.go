@@ -230,6 +230,75 @@ key = "ctrl+shift+d"
 	}
 }
 
+// With outside "agent", a key whose agent reads a project template fails at
+// every press outside a workspace, and kitty's own new tab hides it, so
+// doctor names the key; with outside "tab" no key runs an agent there
+// (decisions.md D164).
+func TestDoctorReportsAKeyWhoseAgentCannotRunOutsideAWorkspace(t *testing.T) {
+	agents := `
+[[agent]]
+name = "claude"
+command = ["claude", "{{.Path}}"]
+[[agent]]
+name = "dtop"
+command = ["dtop"]
+key = "ctrl+shift+d"
+[[agent]]
+name = "review"
+command = ["review", "{{.Name}}"]
+key = "ctrl+shift+y"
+`
+	doctorRoot(t, map[string]string{"sound.toml": sound})
+	root := os.Getenv("REVIER_CONFIG_HOME")
+	write := func(outside string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[terminal]\noutside = \""+outside+"\"\n"+agents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("agent")
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 1}) {
+		t.Fatalf("err = %v, want the silent non-zero end for 1 file", err)
+	}
+	report := out.String()
+	for _, want := range []string{"config.toml", "terminal.agent_key", `agent "claude": command`, `agent "review"`, "reads a project template", "fix: drop the template"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report should contain %q:\n%s", want, report)
+		}
+	}
+	if strings.Contains(report, `agent "dtop"`) {
+		t.Errorf("report names dtop, whose command reads no template:\n%s", report)
+	}
+
+	write("tab")
+	out.Reset()
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Errorf("outside tab: err = %v, want a clean report:\n%s", err, out.String())
+	}
+}
+
+// A key `revier term install` refuses, because the desktop holds its chord, is
+// never pressed in the terminal, so doctor does not report its agent.
+func TestDoctorLeavesOutAKeyTermInstallRefuses(t *testing.T) {
+	configRoot(t, `
+[ui]
+trigger_key = "ctrl+alt+r"
+[terminal]
+agent_key = ""
+outside = "agent"
+[[agent]]
+name = "review"
+command = ["review", "{{.Name}}"]
+key = "ctrl+alt+r"
+`, map[string]string{"sound.toml": sound})
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Errorf("err = %v, want a clean report:\n%s", err, out.String())
+	}
+}
+
 // A link declares its realization under [target.remote], so a link target
 // with none is never told to add the local table a line above told it to
 // move, and a local target keeps the local advice.

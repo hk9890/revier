@@ -81,7 +81,7 @@ func (c *Config) validateTerminal(refused []error) []error {
 			return
 		}
 		held[chord] = what
-		k.Chord = chord
+		k.Chord, k.Label = chord, what
 		c.termKeys = append(c.termKeys, k)
 	}
 	orDefault := func(v *string, def string) string {

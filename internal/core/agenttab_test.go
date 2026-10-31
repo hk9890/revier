@@ -611,6 +611,36 @@ func TestTabAtPanelOutsideAWorkspaceWithAgentRefusesATemplate(t *testing.T) {
 	}
 }
 
+// Refusal is the refusal a key would meet at every press outside a
+// workspace, with no press: only with outside "agent", and only for the agent
+// the key runs there.
+func TestOutsideKeyRefusalIsTheRefusalOfThePress(t *testing.T) {
+	templated := []core.NamedAgent{{Name: "claude", Command: []string{"claude", "{{.Path}}"}}, outsideAgents[1]}
+	for _, tc := range []struct {
+		key     core.OutsideKey
+		refused bool
+	}{
+		{core.OutsideKey{Outside: core.OutsideAgent, Agents: templated}, true},
+		{core.OutsideKey{Outside: core.OutsideAgent, Agent: "dtop", Agents: templated}, false},
+		{core.OutsideKey{Outside: core.OutsideAgent, Agent: "nope", Agents: templated}, true},
+		{core.OutsideKey{Outside: core.OutsideAgent}, false},
+		{core.OutsideKey{Outside: core.OutsideAgent, Agents: outsideAgents}, false},
+		{core.OutsideKey{Outside: core.OutsideTab, Agents: templated}, false},
+		{core.OutsideKey{Outside: core.OutsideNone, Agents: templated}, false},
+	} {
+		if err := tc.key.Refusal(); (err != nil) != tc.refused {
+			t.Errorf("%+v: Refusal = %v, want refused %v", tc.key, err, tc.refused)
+		}
+	}
+	refusal := (core.OutsideKey{Outside: core.OutsideAgent, Agents: templated}).Refusal()
+	if refusal == nil {
+		t.Fatal("Refusal = nil, want the refusal of a templated agent")
+	}
+	if _, err := keyOutside(t, revier.PanelAgent, "", templated); err == nil || err.Error() != refusal.Error() {
+		t.Errorf("press: err = %v, want the refusal Refusal names", err)
+	}
+}
+
 // Every failure other than a window outside a workspace is returned, so the
 // key's own fallback runs: a panel the runtime does not hold, a plain tab
 // that does not open, and no runtime at all.

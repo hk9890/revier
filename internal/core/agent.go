@@ -50,7 +50,8 @@ var (
 	ErrNoMessage = errors.New("the agent's last message cannot be read")
 )
 
-// AgentPoll is how often Wait and Prompt read an agent again. LinkPoll is
+// AgentPoll is how often Wait and Prompt read an agent again, and how often
+// StartedAgent looks a new agent up until its harness starts. LinkPoll is
 // the same for a link's agent, whose every read is an ssh to its host.
 const (
 	AgentPoll = 500 * time.Millisecond
@@ -82,8 +83,11 @@ type Agent struct {
 }
 
 // Poll is how often the agent is read again: over ssh for a link's.
-func (a Agent) Poll() time.Duration {
-	if a.link != nil {
+func (a Agent) Poll() time.Duration { return pollOf(a.link != nil) }
+
+// pollOf is how often an agent is read again, a link's or another.
+func pollOf(link bool) time.Duration {
+	if link {
 		return LinkPoll
 	}
 	return AgentPoll
@@ -425,6 +429,33 @@ func (c *Core) Wait(ctx context.Context, a Agent, until []revier.Status, poll ti
 		state = next
 	}
 	return state, nil
+}
+
+// StartedAgent is the agent addr names in p, once its harness has started.
+// The panel of a new agent tab is a shell until then, so a panel that is not
+// an agent's is looked up again, as often as Wait reads an agent of p, until
+// ctx ends, and the refusal it ended on is returned. Only a panel address is
+// refused with ErrNotAgent: an address with no agent in it fails at once.
+func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent, error) {
+	var notAgent error
+	for {
+		a, err := c.Agent(ctx, p, addr)
+		switch {
+		case errors.Is(err, ErrNotAgent):
+			notAgent = err
+		case err != nil && ctx.Err() != nil && notAgent != nil:
+			// The deadline cut the lookup short: the panel is still what the
+			// last lookup found.
+			return Agent{}, notAgent
+		default:
+			return a, err
+		}
+		select {
+		case <-ctx.Done():
+			return Agent{}, notAgent
+		case <-time.After(pollOf(p.Remote != nil)):
+		}
+	}
 }
 
 // Prompt types one line into an agent and submits it. It refuses an agent that

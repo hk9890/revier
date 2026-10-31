@@ -441,6 +441,8 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 		}
 		if ok {
 			spec, what = revier.PanelSpec{Kind: revier.PanelAgent, Title: outside.Agent, Command: agent.Command, Dir: dir}, "agent tab"
+		} else {
+			slog.Warn("tab outside a workspace", "err", "config.toml declares no [[agent]] to run; the tab is a plain shell")
 		}
 	}
 	tab := revier.Realization{Dir: dir, Panels: []revier.PanelSpec{spec}}
@@ -464,7 +466,6 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 // workspace there is no project to render it against (decisions.md D164).
 func (o OutsideKey) agent() (NamedAgent, bool, error) {
 	if o.Agent == "" && len(o.Agents) == 0 {
-		slog.Warn("tab outside a workspace", "err", "config.toml declares no [[agent]] to run; the tab is a plain shell")
 		return NamedAgent{}, false, nil
 	}
 	i := 0
@@ -478,6 +479,17 @@ func (o OutsideKey) agent() (NamedAgent, bool, error) {
 		return NamedAgent{}, false, fmt.Errorf("outside a workspace: agent %q: command %q reads a project template, and no project holds this window", agent.Name, agent.Command)
 	}
 	return agent, true, nil
+}
+
+// Refusal is why the key fails at every press outside a workspace, as agent
+// refuses it, or nil: with outside "agent", the agent it runs there reads a
+// project template, or config.toml does not declare it.
+func (o OutsideKey) Refusal() error {
+	if o.Outside != OutsideAgent {
+		return nil
+	}
+	_, _, err := o.agent()
+	return err
 }
 
 // panelDir is the directory of the panel in w's instance, or "" where the

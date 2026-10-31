@@ -241,8 +241,19 @@ func (a *app) resolveAway(ctx context.Context) (core.Project, bool) {
 }
 
 // projectForPath returns the project whose path contains dir, preferring the
-// longest match so a project nested inside another wins.
+// longest match so a project nested inside another wins. It compares the paths
+// with every symlink resolved: a shell keeps the path through a link, a tmux
+// window starts in the one behind it. Where that finds none, it compares them
+// as text, which still places a directory that does not exist yet.
 func (a *app) projectForPath(dir string) (core.Project, bool) {
+	if p, ok := a.projectContaining(resolveLinks(dir), resolveLinks); ok {
+		return p, true
+	}
+	return a.projectContaining(filepath.Clean(dir), filepath.Clean)
+}
+
+// projectContaining is projectForPath with every project's path in one form.
+func (a *app) projectContaining(dir string, form func(string) string) (core.Project, bool) {
 	best, bestLen := core.Project{}, -1
 	for _, p := range a.projects {
 		// A remote project's path is on its host; a directory here of the
@@ -250,10 +261,7 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 		if p.Remote != nil {
 			continue
 		}
-		root := filepath.Clean(p.Path)
-		if root == "" {
-			continue
-		}
+		root := form(p.Path)
 		if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
 			if len(root) > bestLen {
 				best, bestLen = p, len(root)
@@ -261,6 +269,15 @@ func (a *app) projectForPath(dir string) (core.Project, bool) {
 		}
 	}
 	return best, bestLen >= 0
+}
+
+// resolveLinks is path with every symlink resolved, or path cleaned when it
+// cannot be resolved.
+func resolveLinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
 }
 
 // commit records the project a command acted on, so the next keybinding

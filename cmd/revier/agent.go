@@ -201,7 +201,12 @@ func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.W
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	ag, err := a.startedAgent(ctx, address)
+	p, addr, err := a.addressed(address)
+	if err != nil {
+		return revier.AgentState{}, err
+	}
+	// The panel of `agent new --no-focus` is a shell until its harness starts.
+	ag, err := a.core.StartedAgent(ctx, p, addr)
 	if err != nil {
 		return revier.AgentState{}, err
 	}
@@ -210,39 +215,6 @@ func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.W
 		return state, fmt.Errorf("%s: %w", address, err)
 	}
 	return state, nil
-}
-
-// startedAgent is the agent an address names, once its harness has started.
-// The panel of `agent new --no-focus` is a shell until then, so a panel that
-// is not an agent's is looked up again until ctx ends, and the refusal it
-// ended on is returned. Only a panel address is refused with ErrNotAgent: an
-// address with no agent in it fails at once, as prompt does.
-func (a *app) startedAgent(ctx context.Context, address string) (core.Agent, error) {
-	name, _, _ := strings.Cut(address, ":")
-	poll := core.AgentPoll
-	if p, ok := a.project(revier.ProjectName(name)); ok && p.Remote != nil {
-		// A link's lookup is an ssh to its host, as each read of its wait is.
-		poll = core.LinkPoll
-	}
-	var notAgent error
-	for {
-		ag, err := a.agent(ctx, address)
-		switch {
-		case errors.Is(err, core.ErrNotAgent):
-			notAgent = err
-		case err != nil && ctx.Err() != nil && notAgent != nil:
-			// The deadline cut the lookup short: the panel is still what the
-			// last lookup found.
-			return core.Agent{}, notAgent
-		default:
-			return ag, err
-		}
-		select {
-		case <-ctx.Done():
-			return core.Agent{}, notAgent
-		case <-time.After(poll):
-		}
-	}
 }
 
 func cmdAgentPrompt(out io.Writer, args []string) error {
@@ -536,9 +508,12 @@ func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.R
 }
 
 // agentTab opens an agent tab, started as r says, through open in the
-// workspace newTab places it in.
+// workspace newTab places it in. A --panel no workspace holds resumes
+// nothing, and says so as a workspace's tab does.
 func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.Resume, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
+	inWorkspace := false
 	here := func(w core.Workspace, dir string) error {
+		inWorkspace = true
 		start := time.Now()
 		r.Dir = dir
 		outcome, err := open(w, r)
@@ -551,7 +526,11 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 		}
 		return nil
 	}
-	return a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
+	err := a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
+	if err == nil && !inWorkspace && r.Session != "" {
+		fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (no workspace holds panel %s)\n", r.Session, panel)
+	}
+	return err
 }
 
 // newTab opens a tab through here in the open workspace the core places it in.
@@ -648,12 +627,22 @@ func (d dirInNoProject) Unwrap() error { return errNoProject }
 // agent finds the agent an address names: <project>, <project>:<target> or
 // <project>:<target>:<panel>.
 func (a *app) agent(ctx context.Context, address string) (core.Agent, error) {
-	name, sel, _ := strings.Cut(address, ":")
+	p, addr, err := a.addressed(address)
+	if err != nil {
+		return core.Agent{}, err
+	}
+	return a.core.Agent(ctx, p, addr)
+}
+
+// addressed is the project an agent's address names, and the rest of the
+// address, which the core reads.
+func (a *app) addressed(address string) (core.Project, string, error) {
+	name, addr, _ := strings.Cut(address, ":")
 	p, ok := a.project(revier.ProjectName(name))
 	if !ok {
-		return core.Agent{}, fmt.Errorf("no project named %q", name)
+		return core.Project{}, "", fmt.Errorf("no project named %q", name)
 	}
-	return a.core.Agent(ctx, p, sel)
+	return p, addr, nil
 }
 
 // cmdAgentExec becomes the project's agent, for a terminal on another machine:
