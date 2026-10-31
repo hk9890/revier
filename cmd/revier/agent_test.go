@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -262,5 +263,31 @@ func TestATabOpensInTheProjectOfItsDirectory(t *testing.T) {
 	}
 	if want := []revier.TargetRef{home, home}; !slices.Equal(refs, want) {
 		t.Errorf("tabs in %v, want %v", refs, want)
+	}
+}
+
+// A directory is in the project whose path differs from it only by a
+// symlink, on either side: a shell keeps the path through the link, a tmux
+// window starts in the directory behind it.
+func TestADirectoryIsInAProjectThroughASymlink(t *testing.T) {
+	behind := t.TempDir()
+	sub := filepath.Join(behind, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(behind, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ path, dir string }{
+		{path: link, dir: behind},
+		{path: link, dir: sub},
+		{path: behind, dir: link},
+		{path: behind, dir: filepath.Join(link, "sub")},
+	} {
+		a := &app{projects: []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: c.path})}}
+		if p, ok := a.projectForPath(c.dir); !ok || p.Name != "demo" {
+			t.Errorf("project of %s with path %s = %q, %v, want demo", c.dir, c.path, p.Name, ok)
+		}
 	}
 }
