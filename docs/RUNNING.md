@@ -118,6 +118,7 @@ bindings are gone, project files and the saved session stay.
 ```bash
 ./bin/revier session save --name before-reboot   # what is open now
 ./bin/revier session list                        # id, reason, label, counts
+ls "$REVIER_STATE_HOME/sessions"                 # <id>.toml: names, conversations, dirs; never a host or argv
 tmux kill-server                                 # the private server only
 ./bin/revier session restore --dry-run           # what it would open
 ./bin/revier session restore                     # the newest whole save, in file order

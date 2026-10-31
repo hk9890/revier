@@ -13,6 +13,5 @@ boundaries, and why. How this tree relates to `docs/` is [../DOCUMENTING.md](../
 Each fact lives in exactly one of these. A document that needs a fact another
 one owns links to it.
 
-Before a change to a port or to a decision the core makes, search
-[decisions.md](decisions.md) for the concept: an entry in force may already
-settle it, or name the alternative it rejected.
+[CODING.md](../CODING.md#where-a-change-goes) says when to search
+decisions.md before a change.
