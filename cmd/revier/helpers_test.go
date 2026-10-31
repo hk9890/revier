@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,6 +26,23 @@ import (
 // TestMain keeps every test off the user's own revier files (testenv.Run).
 func TestMain(m *testing.M) {
 	os.Exit(testenv.Run(m))
+}
+
+// stderrOf runs f and returns what it wrote on stderr, and its error.
+func stderrOf(t *testing.T, f func() error) (string, error) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+	err = f()
+	_ = w.Close()
+	printed, _ := io.ReadAll(r)
+	_ = r.Close()
+	return string(printed), err
 }
 
 // output runs f with the app's output captured, and returns what it printed.

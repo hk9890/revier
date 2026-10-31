@@ -31,10 +31,16 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json [--conversations]] [name..]
+  revier list [--json [--conversations]] [--agents] [--match <word> | name..]
                                 what the TUI shows, printed once, or for the
-                                named projects; --conversations names the
-                                conversation each agent holds
+                                named projects, exiting 1 after them when a
+                                name is no project's; --match lists the
+                                projects whose name, directory, repository,
+                                name on a link's host or agent activity holds
+                                the word, or whose agent the harness names so;
+                                --agents prints one row per agent, with the
+                                address revier agent takes; --conversations
+                                names the conversation each agent holds
   revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
                                 missing directory is cloned from git_url; --attach
@@ -262,6 +268,9 @@ func outcome(err error) (status int, say bool) {
 	// The surface a signal ended has no terminal left to say it on.
 	case errors.As(err, &ended):
 		return 128 + int(ended.sig), false
+	// `revier list` has said, name by name, which projects it does not know.
+	case errors.Is(err, errNoProjectNamed):
+		return 1, false
 	// `revier doctor` is its own report; a line here would add nothing to it.
 	case errors.As(err, new(problemsFound)):
 		return 1, false

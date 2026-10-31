@@ -1,0 +1,171 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/pkg/revier"
+)
+
+// listApp is the demo project, open with an agent at work on Dtop, and tm,
+// a closed project in task-manager whose repository is taskmgr.
+func listApp(t *testing.T) *app {
+	t.Helper()
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("home", "", revier.Panel{ID: "7", Title: "claude busy Dtop authentication options"})
+	tm := core.PrepareProject(revier.Project{Name: "tm", Path: "/x/task-manager", GitURL: "git@github.com:o/taskmgr.git"})
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	return withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), tm}, stateRoot: t.TempDir(), core: c}, &state.State{})
+}
+
+// --match lists the projects a word finds, in the form the list takes
+// without it: the table's rows, or the views as --json gives them.
+func TestListMatchIsTheProjectsAWordFinds(t *testing.T) {
+	a := listApp(t)
+	ctx := context.Background()
+
+	for _, word := range []string{"task-manager", "TASKMGR", "tm"} {
+		out := output(t, a, func() error { return cmdList(ctx, a, []string{"--match", word}) })
+		if !strings.Contains(out, "\ntm ") || strings.Contains(out, "demo") {
+			t.Errorf("list --match %s = %q, want tm alone", word, out)
+		}
+	}
+	out := output(t, a, func() error { return cmdList(ctx, a, []string{"--json", "--match", "dtop"}) })
+	var views []revier.ProjectView
+	if err := json.Unmarshal([]byte(out), &views); err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Project.Name != "demo" || len(views[0].Agents) != 1 {
+		t.Errorf("list --json --match dtop = %+v, want demo's view with its agent", views)
+	}
+}
+
+func TestListMatchThatFindsNothingFails(t *testing.T) {
+	a := listApp(t)
+	err := cmdList(context.Background(), a, []string{"--match", "no-such-word-xyz"})
+	if err == nil || err.Error() != `no project matches "no-such-word-xyz"` {
+		t.Errorf("err = %v, want no project matches", err)
+	}
+}
+
+func TestListMatchTakesNoNames(t *testing.T) {
+	a := listApp(t)
+	err := cmdList(context.Background(), a, []string{"--match", "demo", "demo"})
+	if err == nil || !strings.HasPrefix(err.Error(), "usage:") {
+		t.Errorf("err = %v, want a usage error", err)
+	}
+}
+
+// Names a list does not know cost the names it knows nothing: those are
+// listed, each unknown one has its line on stderr with the project it
+// probably meant, and the exit fails, so a revier on another machine still
+// reports a missing project file.
+func TestListOfKnownAndUnknownNamesListsTheKnown(t *testing.T) {
+	a := listApp(t)
+	a.projects = append(a.projects, core.PrepareProject(revier.Project{Name: "task-manager-ui", Path: "/x/task-manager-ui"}))
+	ctx := context.Background()
+
+	for _, flags := range [][]string{{"--json"}, nil} {
+		var out bytes.Buffer
+		a.out = &out
+		args := append(flags, "demo", "taskmgr-ui", "zzzz-no-such-project")
+		printed, err := stderrOf(t, func() error { return cmdList(ctx, a, args) })
+		if !errors.Is(err, errNoProjectNamed) {
+			t.Errorf("list %q: err = %v, want errNoProjectNamed", args, err)
+		}
+		if status, say := outcome(err); status == 0 || say {
+			t.Errorf("list %q: outcome = %d, %v; want a failure main prints nothing for", args, status, say)
+		}
+		want := "revier: no project named \"taskmgr-ui\"; did you mean task-manager-ui?\n" +
+			"revier: no project named \"zzzz-no-such-project\"\n"
+		if printed != want {
+			t.Errorf("list %q: stderr = %q, want %q", args, printed, want)
+		}
+		if !strings.Contains(out.String(), "demo") || strings.Contains(out.String(), "task-manager-ui") {
+			t.Errorf("list %q: stdout = %q, want demo alone", args, out.String())
+		}
+	}
+
+	var out bytes.Buffer
+	a.out = &out
+	_, err := stderrOf(t, func() error { return cmdList(ctx, a, []string{"--json", "zzzz-no-such-project"}) })
+	if !errors.Is(err, errNoProjectNamed) || out.Len() != 0 {
+		t.Errorf("list of an unknown name alone: err = %v, stdout = %q; want the failure and nothing", err, out.String())
+	}
+}
+
+// --agents is one row per agent, with the address `revier agent` takes. A
+// link's agent is addressed by the link's name, not its label, and an agent
+// no target holds has no address, in the table or in the JSON.
+func TestListAgentsIsOneRowPerAgentWithItsAddress(t *testing.T) {
+	link := revier.Project{Name: "far", Remote: &revier.Link{Host: "buildbox", Project: "far"}}
+	views := []revier.ProjectView{
+		{Project: revier.Project{Name: "demo"}, Running: true, Agents: []revier.AgentView{
+			{Panel: "7", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: "tests", Name: "dynatui-94"}},
+			{Panel: "8", Target: "home", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Dir: "/x/demo/wt"}},
+		}},
+		{Project: link, Running: true, Agents: []revier.AgentView{
+			{Panel: "2", Target: "agent", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}},
+			{Panel: "20", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}},
+		}},
+	}
+
+	rows := agentRows(views)
+	var addresses []string
+	for _, r := range rows {
+		addresses = append(addresses, r.Address)
+	}
+	if want := []string{"demo:home:7", "demo:home:8", "far:agent:2", ""}; !slices.Equal(addresses, want) {
+		t.Errorf("addresses = %q, want %q", addresses, want)
+	}
+	encoded, err := json.Marshal(rows[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"address"`) || !strings.Contains(string(encoded), `"panel":"20"`) {
+		t.Errorf("the agent no target holds = %s, want its panel and no address", encoded)
+	}
+	if rows[0].Name != "dynatui-94" {
+		t.Errorf("rows[0].Name = %q, want the harness's name beside the address", rows[0].Name)
+	}
+
+	var out bytes.Buffer
+	a := &app{out: &out}
+	if err := a.agentTable(views); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 5 || !strings.HasPrefix(lines[1], "demo:home:7 ") || !strings.Contains(lines[1], "dynatui-94") || !strings.Contains(lines[2], "/x/demo/wt") ||
+		!strings.HasPrefix(lines[4], "- (far panel 20) ") || strings.Contains(out.String(), "@buildbox") {
+		t.Errorf("table =\n%s\nwant a header and one row per agent", out.String())
+	}
+}
+
+// `revier list --agents` lists the agents of the projects asked for, from the
+// survey.
+func TestListAgentsListsTheSurveyedAgents(t *testing.T) {
+	a := listApp(t)
+	ctx := context.Background()
+
+	out := output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "--json"}) })
+	var rows []agentRow
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Address != "demo:home:7" || rows[0].Activity != "Dtop authentication options" {
+		t.Errorf("rows = %+v, want demo's agent at demo:home:7", rows)
+	}
+	out = output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "tm"}) })
+	if out != "" {
+		t.Errorf("list --agents tm = %q, want nothing for a project with no agent", out)
+	}
+}

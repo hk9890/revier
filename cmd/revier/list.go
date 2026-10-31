@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -18,23 +21,36 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
 	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
+	match := fs.String("match", "", "only the projects this word finds")
+	agents := fs.Bool("agents", false, "one row per agent, with its address")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
+	if *match != "" && len(pos) > 0 {
+		return errors.New("usage: revier list --match <word> takes no project names")
+	}
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
 	// (decisions.md D40), and a name it does not know is an error, so a
-	// missing project file there is reported, not shown as nothing.
+	// missing project file there is reported, not shown as nothing. The
+	// names it knows are listed all the same, for the person who asked about
+	// several at once.
 	projects := a.projects
+	var unknown []string
 	if len(pos) > 0 {
 		projects = nil
 		for _, name := range pos {
 			p, ok := a.project(revier.ProjectName(name))
 			if !ok {
-				return fmt.Errorf("no project named %q", name)
+				unknown = append(unknown, strconv.Quote(name))
+				fmt.Fprintf(os.Stderr, "revier: no project named %q%s\n", name, didYouMean(a.projects, name))
+				continue
 			}
 			projects = append(projects, p)
+		}
+		if len(projects) == 0 {
+			return unknownProjects(unknown)
 		}
 	}
 
@@ -45,34 +61,137 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	if err := report.HostErr(); err != nil {
 		fmt.Fprintf(os.Stderr, "revier: warning: %v\n", err)
 	}
-	views := report.Views
 
 	// Drop attachments and bindings whose windows are gone, so state does not
 	// accumulate refs to closed windows forever. A list is the first settle
 	// of its process, so no window is new to it and it claims nothing.
 	a.core.Settle(report, a.projects, time.Now())
 
-	if *asJSON {
+	if *match != "" {
+		report.Views = slices.DeleteFunc(report.Views, func(v revier.ProjectView) bool { return !core.Matches(v, *match) })
+		if len(report.Views) == 0 {
+			return fmt.Errorf("no project matches %q", *match)
+		}
+	}
+	views := report.Views
+
+	// As with projects, the agent table says only what a panel here shows
+	// (decisions.md D104), and the JSON every agent the survey found.
+	switch {
+	case *agents && *asJSON:
+		err = a.printJSON(agentRows(views))
+	case *agents:
+		err = a.agentTable(a.core.Shown(views))
+	case *asJSON:
 		// What a save on another machine records for its link to a project
 		// here.
 		if *conversations {
 			a.core.NameConversations(ctx, report)
 		}
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(views)
+		err = a.printJSON(views)
+	default:
+		err = a.table(views)
+		// The built-in assistant is in no file and is no project of the
+		// user's, so a list of it alone still says where to add one, under
+		// its row.
+		if err == nil && !slices.ContainsFunc(a.projects, func(p core.Project) bool { return p.File != "" }) {
+			root, _ := configRootForMessage()
+			_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
+		}
 	}
-
-	if err := a.table(views); err != nil {
+	if err != nil {
 		return err
 	}
-	// The built-in assistant is in no file and is no project of the user's,
-	// so a list of it alone still says where to add one, under its row.
-	if !slices.ContainsFunc(a.projects, func(p core.Project) bool { return p.File != "" }) {
-		root, _ := configRootForMessage()
-		_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
+	return unknownProjects(unknown)
+}
+
+func (a *app) printJSON(v any) error {
+	enc := json.NewEncoder(a.out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+// agentRow is one agent as `revier list --agents --json` gives it: what a
+// script needs to reach the agent, without the project's configuration.
+type agentRow struct {
+	// Address is what `revier agent` takes; an agent no target holds has
+	// none.
+	Address string `json:"address,omitempty"`
+	// Name is what the harness calls the agent, shown beside the address
+	// (decisions.md D161), which `--match` finds the agent's project by.
+	Name     string             `json:"name,omitempty"`
+	Project  revier.ProjectName `json:"project"`
+	Target   revier.TargetName  `json:"target"`
+	Panel    revier.PanelID     `json:"panel"`
+	Status   revier.Status      `json:"status"`
+	Activity string             `json:"activity"`
+	Harness  string             `json:"harness"`
+	Dir      string             `json:"dir"`
+}
+
+// agentRows is every agent of views, project by project. A link's agent is
+// addressed by the link's name here, not by its label.
+func agentRows(views []revier.ProjectView) []agentRow {
+	rows := []agentRow{}
+	for _, v := range views {
+		for _, ag := range v.Agents {
+			row := agentRow{
+				Name: ag.State.Name, Project: v.Project.Name, Target: ag.Target, Panel: ag.Panel,
+				Status: ag.State.Status, Activity: ag.State.Activity, Harness: ag.State.Harness, Dir: ag.State.Dir,
+			}
+			if ag.Target != "" {
+				row.Address = core.Address(v.Project.Name, ag.Target, ag.Panel)
+			}
+			rows = append(rows, row)
+		}
 	}
-	return nil
+	return rows
+}
+
+// agentTable is the agents of views, one row each, as a person reads them. An
+// agent no target holds has no address, so its row names its project and
+// panel instead, for the agent list to find it by.
+func (a *app) agentTable(views []revier.ProjectView) error {
+	rows := agentRows(views)
+	if len(rows) == 0 {
+		return nil
+	}
+	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "ADDRESS\tNAME\tSTATUS\tACTIVITY\tHARNESS\tDIR")
+	for _, r := range rows {
+		address := r.Address
+		if address == "" {
+			address = fmt.Sprintf("- (%s panel %s)", r.Project, r.Panel)
+		}
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", address, dash(r.Name), r.Status, dash(r.Activity), dash(r.Harness), dash(r.Dir))
+	}
+	return w.Flush()
+}
+
+// errNoProjectNamed means a list was asked for a name that is no project's.
+// Each such name has had its line on stderr, so main prints none.
+var errNoProjectNamed = errors.New("no project named")
+
+// unknownProjects is what a list asked for the quoted names, which are no
+// project's, ends with: nil for no name.
+func unknownProjects(quoted []string) error {
+	if len(quoted) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w %s", errNoProjectNamed, strings.Join(quoted, ", "))
+}
+
+// didYouMean is what the line about a name that is no project's adds: the
+// projects it probably meant, or nothing.
+func didYouMean(projects []core.Project, name string) string {
+	var names []string
+	for _, n := range core.Closest(projects, name) {
+		names = append(names, string(n))
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "; did you mean " + strings.Join(names, ", ") + "?"
 }
 
 // table is the list as a person at this machine reads it.

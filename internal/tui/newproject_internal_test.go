@@ -34,16 +34,3 @@ func TestSameRepoIgnoresTheGitSuffixAndATrailingSlash(t *testing.T) {
 		}
 	}
 }
-
-func TestRepoName(t *testing.T) {
-	for in, want := range map[string]string{
-		"https://github.com/owner/repo":  "repo",
-		"https://github.com/owner/repo/": "repo",
-		"git@github.com:owner/repo.git":  "repo",
-		"git@host:repo.git":              "repo",
-	} {
-		if got := repoName(in); got != want {
-			t.Errorf("repoName(%q) = %q, want %q", in, got, want)
-		}
-	}
-}

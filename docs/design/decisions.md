@@ -839,14 +839,6 @@ first, so a surface prints what `revier agent` resolves; a link's agent goes
 through the target here that shows it (D84). An agent no target holds - a
 link's tab moved away, a terminal attached by hand (D95) - has no address.
 
-### D156 — a harness's name for an agent is shown, never used
-
-A probe may report what its harness calls the agent: Claude Code's session
-name, which its peer messages address. revier shows it beside the address and
-decides nothing by it: Claude Code keeps it neither unique nor fixed, and an
-address made of it would reach Claude agents alone. It comes from the listing
-the probe already reads (D55), so a survey pays nothing for it.
-
 ### D157 — the footer names what failed, and the logs screen holds the rest
 
 Extends D69. The footer is one line, and an operation's error can quote a tool
@@ -884,6 +876,16 @@ script, which has a directory; the focused window and the last project exist
 for a desktop key, which has none. The fallback started an agent in another
 project and exited 0, and a warning comes too late: the agent already runs.
 Other commands keep it.
+
+### D161 — a harness's name for an agent is shown, and a search may find it
+
+Replaces D156. A probe may report what its harness calls the agent, as Claude
+Code's session name, from the listing it already reads (D55). revier shows it
+beside the address and makes no address of it and decides nothing by it:
+Claude Code keeps it neither unique nor fixed, and such an address would reach
+Claude agents alone. One exception: a user may ask for an agent by that name,
+so the search that finds a project by a word takes the whole name too; a part
+such as `dynatui-94` would find unrelated agents.
 
 ### D164 — outside a workspace an agent key can run an agent of config.toml
 

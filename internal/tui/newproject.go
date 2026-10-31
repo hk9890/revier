@@ -391,7 +391,7 @@ func (s *createScreen) write(sf surface, dir, gitURL string) (core.Project, erro
 // newName is the folder name a name or a clone URL puts in the chosen folder.
 func (s *createScreen) newName() string {
 	if typed := s.typed(); isCloneURL(typed) {
-		return repoName(typed)
+		return core.RepoName(typed)
 	}
 	return s.typed()
 }
@@ -492,16 +492,6 @@ func isCloneURL(s string) bool {
 		}
 	}
 	return scpURL.MatchString(s)
-}
-
-// repoName is the directory git clone would make of url: its last path
-// element, without .git.
-func repoName(url string) string {
-	s := strings.TrimSuffix(strings.TrimRight(url, "/"), ".git")
-	if i := strings.LastIndexAny(s, "/:"); i >= 0 {
-		s = s[i+1:]
-	}
-	return s
 }
 
 // help is the footer of the step the screen is at.
