@@ -1,10 +1,13 @@
 package ledger_test
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,4 +253,54 @@ func TestFileRecordsAnEvent(t *testing.T) {
 	if len(got) != 1 || got[0].Kind != revier.EventGo || got[0].Project != "work" {
 		t.Errorf("events = %+v, want the one go", got)
 	}
+}
+
+// A corrupt state file is discarded, and the loss is in the log: a read hands
+// back an empty state, and a write starts from it and replaces the file, each
+// with a "state load" line that names the file, so bindings and a shutdown on
+// record do not vanish without a word.
+func TestACorruptStateFileIsLogged(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	corrupt := func(t *testing.T) string {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	loggedLoss := func(root string) bool {
+		for line := range strings.Lines(logged.String()) {
+			if strings.Contains(line, `"msg":"state load"`) && strings.Contains(line, `"level":"WARN"`) &&
+				strings.Contains(line, filepath.Join(root, "state.json")) {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("read", func(t *testing.T) {
+		root := corrupt(t)
+		if st := (ledger.File{Root: root}).State(); st == nil || st.Current != "" || len(st.Bound) != 0 {
+			t.Errorf("state = %+v, want an empty one", st)
+		}
+		if !loggedLoss(root) {
+			t.Errorf("log = %s, want a state load warning naming the file", logged.String())
+		}
+	})
+	t.Run("write", func(t *testing.T) {
+		root := corrupt(t)
+		ledger.File{Root: root}.Update(func(st *state.State) bool {
+			st.Current = "work"
+			return true
+		})
+		if !loggedLoss(root) {
+			t.Errorf("log = %s, want a state load warning naming the file", logged.String())
+		}
+		if st, err := state.Load(root); err != nil || st.Current != "work" {
+			t.Errorf("state = %+v, %v; want the write saved over the corrupt file", st, err)
+		}
+	})
 }

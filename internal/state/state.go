@@ -141,8 +141,15 @@ func Root() (string, error) {
 
 func path(stateRoot string) string { return filepath.Join(stateRoot, "state.json") }
 
+// ErrCorrupt is returned, together with an empty state, for a state file that
+// does not parse.
+var ErrCorrupt = errors.New("state file does not parse; starting from an empty state")
+
 // Load reads the state. A missing file is an empty state, not an error: the
-// first run of revier has none.
+// first run of revier has none. A file that does not parse is discarded
+// rather than fatal: Load returns an empty state and ErrCorrupt. Refusing to
+// start over it would be worse than losing what it held, the bindings and a
+// shutdown on record included, but the loss is the caller's to log.
 func Load(stateRoot string) (*State, error) {
 	b, err := os.ReadFile(path(stateRoot))
 	if err != nil {
@@ -153,10 +160,7 @@ func Load(stateRoot string) (*State, error) {
 	}
 	var s State
 	if err := json.Unmarshal(b, &s); err != nil {
-		// Corrupt state is discarded rather than fatal. It holds only a
-		// convenience - the last project and some attachments - and refusing
-		// to start over it would be worse than losing it.
-		return &State{Attached: map[revier.ProjectName][]revier.TargetRef{}}, nil
+		return &State{Attached: map[revier.ProjectName][]revier.TargetRef{}}, fmt.Errorf("%w: %s: %w", ErrCorrupt, path(stateRoot), err)
 	}
 	if s.Attached == nil {
 		s.Attached = map[revier.ProjectName][]revier.TargetRef{}
@@ -169,7 +173,9 @@ func Load(stateRoot string) (*State, error) {
 // keypress's CLI process - reads, changes and saves it, so without the lock a
 // launch one records between another's read and save is overwritten, and the
 // next press opens a duplicate window. apply runs while the lock is held, so it
-// does no I/O.
+// does no I/O. A file that does not parse is applied to as the empty state Load
+// returns, and replaced when apply changes it; the error is then Load's
+// ErrCorrupt, returned with the state after the change.
 func Update(stateRoot string, apply func(s *State) bool) (*State, error) {
 	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create state dir: %w", err)
@@ -182,16 +188,16 @@ func Update(stateRoot string, apply func(s *State) bool) (*State, error) {
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		return nil, fmt.Errorf("lock state: %w", err)
 	}
-	s, err := Load(stateRoot)
-	if err != nil {
-		return nil, err
+	s, loaded := Load(stateRoot)
+	if loaded != nil && !errors.Is(loaded, ErrCorrupt) {
+		return nil, loaded
 	}
 	if apply(s) {
 		if err := s.Save(stateRoot); err != nil {
 			return s, err
 		}
 	}
-	return s, nil
+	return s, loaded
 }
 
 // Save writes the state atomically, so a crash mid-write cannot leave a

@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,19 +42,39 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 	}
 }
 
-// Corrupt state holds only a convenience, so it is discarded rather than
-// preventing revier from starting.
-func TestLoadCorruptIsEmpty(t *testing.T) {
+// Corrupt state is discarded rather than preventing revier from starting: Load
+// hands back an empty state, and says why with ErrCorrupt, so the loss of
+// what it held can be logged.
+func TestLoadCorruptIsEmptyAndSaysSo(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s, err := state.Load(root)
-	if err != nil {
-		t.Fatalf("Load should not fail on corrupt state: %v", err)
+	if !errors.Is(err, state.ErrCorrupt) {
+		t.Errorf("err = %v, want ErrCorrupt", err)
 	}
-	if s.Current != "" {
-		t.Errorf("state = %+v", s)
+	if s == nil || s.Current != "" || s.Attached == nil {
+		t.Errorf("state = %+v, want empty with a usable map", s)
+	}
+}
+
+// An update of a corrupt state starts from the empty one and replaces the
+// file, so a hand edit gone wrong does not refuse every write after it. It
+// says so with ErrCorrupt, so the loss can be logged.
+func TestUpdateReplacesACorruptState(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := state.Update(root, func(s *state.State) bool {
+		s.Current = "demo"
+		return true
+	}); !errors.Is(err, state.ErrCorrupt) || st == nil || st.Current != "demo" {
+		t.Fatalf("Update = %+v, %v; want the state after the change and ErrCorrupt", st, err)
+	}
+	if got, err := state.Load(root); err != nil || got.Current != "demo" {
+		t.Errorf("Load = %+v, %v; want the update saved", got, err)
 	}
 }
 

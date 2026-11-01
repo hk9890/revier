@@ -76,7 +76,7 @@ doc reads what it already did.
 | `start dialog: restore`, `start dialog: pick another session`, `start dialog: start fresh` | the choice made on the TUI's first screen after a full shutdown, or with `unclean` true after an end with no shutdown |
 | `start directory` | one `WARN` when the home directory a process moves to cannot be reached, and it runs in `/` instead. Written by the surface, which always leaves, and by a command whose working directory was removed under the shell (`docs/design/decisions.md` D92) |
 | `config problem` | one `WARN` per refusal at load, with `project` and `file`; not written by `list`, which runs every refresh on a linked host |
-| `state load`, `state update` | a process could not read the state file, or could not update it; it went on with the state it read last, and with nothing remembered when it had read none |
+| `state load`, `state update` | a process could not read the state file, or could not update it; it went on with the state it read last, and with nothing remembered when it had read none. A `state load` whose `err` says the file does not parse discarded it: the process went on with an empty state, the bindings and a shutdown on record lost, and its next write replaced the file |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
 | `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |
 
