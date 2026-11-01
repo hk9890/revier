@@ -36,6 +36,10 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 		{"<Alt>+", "alt+plus"},
 		{"<Alt>-", "alt+minus"},
 		{"ctrl-minus", "ctrl+minus"},
+		{"ctrl++", "ctrl+plus"},
+		{"alt+-", "alt+minus"},
+		{"ctrl--", "ctrl+minus"},
+		{"ctrl-shift-+", "ctrl+shift+plus"},
 		{"<Mod4>q", "super+q"},
 		{"<Alt>F4", "alt+f4"},
 		{"f12", "f12"},
@@ -56,7 +60,7 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 // different chords compare equal, which reports a key as held when it is not.
 func TestParseChordRejectsWhatItCannotRead(t *testing.T) {
 	for _, in := range []string{
-		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>",
+		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "ctrl+", "<Alt>",
 		"alt-ä", "<Alt>a+b", "<Alt>page-up",
 	} {
 		if got, err := core.ParseChord(in); err == nil {

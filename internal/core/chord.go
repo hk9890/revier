@@ -106,10 +106,20 @@ func ParseChord(s string) (Chord, error) {
 		if strings.ContainsAny(raw, "<>") {
 			return "", fmt.Errorf("key %q: a modifier must come before the key", s)
 		}
+		// bubbletea names a press of + or - with a modifier by the character:
+		// "ctrl++", "alt+-". A + or - after a separator is that key, and not
+		// a separator with nothing after it.
+		head, literal := raw, ""
+		if n := len(raw); n >= 2 && strings.ContainsRune("+-", rune(raw[n-1])) && strings.ContainsRune("+-", rune(raw[n-2])) {
+			head, literal = raw[:n-1], raw[n-1:]
+		}
 		// Split rather than FieldsFunc: FieldsFunc drops empty fields, so
 		// "ctrl-" would read as the key "ctrl" instead of a chord with a
 		// missing key.
-		parts := strings.Split(strings.ReplaceAll(raw, "-", "+"), "+")
+		parts := strings.Split(strings.ReplaceAll(head, "-", "+"), "+")
+		if literal != "" {
+			parts[len(parts)-1] = literal
+		}
 		for _, p := range parts {
 			if p == "" {
 				return "", fmt.Errorf("key %q has an empty part", s)
