@@ -614,6 +614,11 @@ type Result struct {
 	// Focused the window the run moved focus to, zero when focus stayed.
 	Ran     bool
 	Focused revier.TargetRef
+	// placed is the OS window place waited for, for the instance the press
+	// opened, and sought whether it waited, found or not: the raise after the
+	// press takes the window from here, and waits no second time.
+	placed revier.TargetRef
+	sought bool
 }
 
 // goTo runs-or-raises a target. Pressing the same key twice returns to the
@@ -750,7 +755,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 				return res, err
 			}
 		}
-		c.place(ctx, real, ref)
+		res.placed, res.sought = c.place(ctx, real, ref)
 		return res, nil
 	}
 
@@ -954,13 +959,21 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // window host raises it, as it raises one already open (D19). A failure is
 // not returned, unlike a raise of an open window (D63): the launch ran, and
 // the press is one, with only the raise missing, as place says of a placement.
-func (c *Core) raiseNew(ctx context.Context, ref revier.TargetRef, name revier.TargetName) {
+// The OS window is the one place waited for, if it did; one place waited for
+// in vain is not looked for again, and place has said so in the log.
+func (c *Core) raiseNew(ctx context.Context, res Result) {
+	ref, name := res.Ref, res.Target
 	if !c.bridged(revier.Instance{Ref: ref}) {
 		return
 	}
-	osw, ok := c.windowOfNew(ctx, ref)
-	if !ok {
-		slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+	osw := res.placed
+	if !res.sought {
+		var ok bool
+		if osw, ok = c.windowOfNew(ctx, ref); !ok {
+			slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+		}
+	}
+	if osw.IsZero() {
 		return
 	}
 	if err := c.raise(ctx, osw, name); err != nil {
@@ -986,25 +999,33 @@ const placePoll = 250 * time.Millisecond
 // the alternative - failing the keypress because a geometry was refused -
 // would turn a cosmetic problem into a broken key. A window pinned by
 // maximize or tiling is refused by the host as a matter of course.
-func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.TargetRef) {
+//
+// It returns the OS window it waited for, of a runtime instance, and whether
+// it waited, found or not, so the raise after the press waits no second time.
+func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.TargetRef) (revier.TargetRef, bool) {
 	if real.Place == "" || c.Window == nil || ref.IsZero() {
-		return
+		return revier.TargetRef{}, false
 	}
 	placer, ok := c.Window.(revier.WindowPlacer)
 	if !ok {
-		return
+		return revier.TargetRef{}, false
 	}
-	target := ref
-	if ref.Host != c.Window.Name() {
-		w, ok := c.windowOfNew(ctx, ref)
-		if !ok {
-			slog.Warn("place: the window host never listed the new window", "ref", ref, "place", real.Place)
-			return
-		}
-		target = w
+	if ref.Host == c.Window.Name() {
+		c.placeOn(ctx, placer, ref, real.Place)
+		return revier.TargetRef{}, false
 	}
-	if err := placer.Place(ctx, target, strings.Fields(real.Place)); err != nil {
-		slog.Warn("place", "ref", target, "place", real.Place, "err", err)
+	w, ok := c.windowOfNew(ctx, ref)
+	if !ok {
+		slog.Warn("place: the window host never listed the new window", "ref", ref, "place", real.Place)
+		return revier.TargetRef{}, true
+	}
+	c.placeOn(ctx, placer, w, real.Place)
+	return w, true
+}
+
+func (c *Core) placeOn(ctx context.Context, placer revier.WindowPlacer, w revier.TargetRef, place string) {
+	if err := placer.Place(ctx, w, strings.Fields(place)); err != nil {
+		slog.Warn("place", "ref", w, "place", place, "err", err)
 	}
 }
 

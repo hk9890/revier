@@ -825,6 +825,37 @@ func TestOpenStartsTheWorkspaceKittyWhenNoneRuns(t *testing.T) {
 	}
 }
 
+// A kitty of the user's whose socket does not answer, as one that asks a
+// password, fails no listing: it holds no workspace a survey would lose, and
+// Open starts the workspace kitty past it. A workspace kitty that does not
+// answer, with nothing else answering, fails the listing.
+func TestAKittyOfTheUsersThatDoesNotAnswerFailsNoListing(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	h := newHost()
+	sockets := []string{"unix:/run/user/1000/kitty-4001"}
+	h.SetSockets(func() []string { return sockets })
+	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) {
+		return nil, errors.New("kitty: remote control needs a password")
+	})
+	started := false
+	h.SetStarter(func(context.Context, ...string) error {
+		started = true
+		return errors.New("no kitty in this test")
+	})
+
+	if got, err := h.Instances(context.Background()); err != nil || len(got) != 0 {
+		t.Errorf("Instances = %+v, %v, want none and no error", got, err)
+	}
+	if _, err := h.Open(context.Background(), revier.Realization{Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}}); err == nil || !started {
+		t.Errorf("Open = %v, started %v: want the workspace kitty started", err, started)
+	}
+
+	sockets = append(sockets, "unix:/run/user/1000/revier-kitty-4000")
+	if _, err := h.Instances(context.Background()); err == nil {
+		t.Error("Instances = no error while the workspace kitty does not answer, want its failure")
+	}
+}
+
 // With no runtime directory, the only socket Open could ask for is one every
 // user of the machine can connect to. It starts no kitty and says why. A
 // relative path is no runtime directory: kitty resolves it under the
