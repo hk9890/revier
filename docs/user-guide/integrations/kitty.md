@@ -85,5 +85,6 @@ term status` names them as `shadowed by kitty.conf:<line>`.
   `revier attach` in it. revier reads its agents only when it is the one
   unnamed window of its kitty process.
 
-**revier opens a second kitty instead of yours.** Your kitty has no control
-socket. Do step 1 of [Set it up](#set-it-up) and restart kitty.
+**`revier attach` and the kitty keys do not reach your kitty.** Your kitty
+has no control socket. Do step 1 of [Set it up](#set-it-up) and restart
+kitty.

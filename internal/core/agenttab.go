@@ -398,17 +398,16 @@ type OutsideKey struct {
 // workspace does, the key is not refused for that: it does what outside
 // says, a plain tab of the runtime's own shell beside the panel, a tab of the
 // agent an agent key asks for, or nothing; in the popup, always nothing, as
-// the popup holds the surface alone (decisions.md D165). Every other failure is returned,
-// so the key's own fallback runs (decisions.md D148, D164); so is an agent
+// the popup holds the surface alone (decisions.md D165). Every other failure
+// is returned, so the key's own fallback runs (D148, D164); so is an agent
 // that cannot run there, as agent says.
 //
 // A tab of kind starts in dir, else where in or the runtime starts it; each
 // only while it is a directory. A shell tab, and every tab outside a
 // workspace, start in the panel's own directory before that; an agent tab in
 // a workspace does not, so an agent pressed from a worktree starts in the
-// project, where it can enter any worktree (decisions.md D158). A key passes
-// the directory its terminal names for the panel, which can be one removed
-// since (decisions.md D153).
+// project, where it can enter any worktree (D158). A key passes the directory
+// its terminal names for the panel, which can be one removed since (D153).
 func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, kind revier.PanelKind, dir string, outside OutsideKey, in func(Workspace, string) error) error {
 	w, err := c.PanelOwner(ctx, projects, panel)
 	if !dirExists(dir) {
