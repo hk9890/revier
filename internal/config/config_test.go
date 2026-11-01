@@ -739,6 +739,40 @@ func TestValidateRejectsAShortPlacement(t *testing.T) {
 	}
 }
 
+// A match that does not compile is a second mistake in the same target, not
+// a reason to skip the placement rule: the placement rendered, so its tokens
+// are counted, and the refusal still names the key to look for.
+func TestValidateRejectsAShortPlacementBesideABadMatch(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "("},
+			Place: "10 20",
+		}},
+	}}
+	err := config.Validate(p)
+	if err == nil || !strings.Contains(err.Error(), "four tokens") {
+		t.Errorf("Validate = %v, want the placement refused", err)
+	}
+}
+
+func TestLoadProjectRefusesAShortPlacementBesideABadMatch(t *testing.T) {
+	body := strings.Replace(valid, `match = { class = "^code$" }`, `match = { class = "^code$", title = "(" }`+"\n  place = \"10 20\"", 1)
+	p := config.LoadProject(write(t, t.TempDir(), "revier.toml", body), config.Inherited{})
+	found := false
+	for i, target := range p.Targets {
+		if target.Name != "editor" {
+			continue
+		}
+		found = true
+		if err := p.TargetErr(i); err == nil || !strings.Contains(err.Error(), "four tokens") {
+			t.Errorf("target %q: err = %v, want the placement refused", target.Name, err)
+		}
+	}
+	if !found {
+		t.Fatal("no target editor; the fixture changed")
+	}
+}
+
 func TestValidateAcceptsAFullPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{

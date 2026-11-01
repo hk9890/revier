@@ -737,9 +737,9 @@ func validateTargets(p revier.Project, prepared core.Project) []error {
 			// A geometry short of its four tokens would reach the window host
 			// and be refused there, after the window had opened. place takes
 			// templates, so the tokens counted are the rendered ones; a target
-			// that did not prepare is refused by that instead, and its place
-			// may not have rendered.
-			if place := renderedPlace(prepared.Targets[i], kind); prepared.TargetErr(i) == nil && place != "" && len(strings.Fields(place)) != 4 {
+			// whose templates did not render is refused by that instead, and
+			// its place is as written.
+			if place := renderedPlace(prepared.Targets[i], kind); prepared.RenderErr(i) == nil && place != "" && len(strings.Fields(place)) != 4 {
 				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, place))
 			}
 		}
