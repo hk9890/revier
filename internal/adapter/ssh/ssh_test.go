@@ -144,11 +144,12 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 // one - the directory Claude Code installs into - is missing. The command
 // line runs in the user's login shell instead, as one word. The shell is
 // $SHELL, which sshd sets, and not ${SHELL:-sh}: the line is parsed by that
-// login shell, and fish rejects the braces. The word is double-quoted, which
-// fish and a POSIX shell read alike where they read `'\”` differently.
+// login shell, and fish rejects the braces. The word is quoted as Quote
+// quotes, which fish and a POSIX shell read alike; fish_test.go and
+// ssh_live_test.go read it through each.
 func TestACommandRunsInTheLoginShell(t *testing.T) {
-	got := ssh.Login("revier list --json 'it'\\''s' '$HOME'")
-	want := `exec "$SHELL" -lc "revier list --json 'it'\\''s' '\$HOME'"`
+	got := ssh.Login("revier list --json '$HOME'")
+	want := `exec "$SHELL" -lc 'revier list --json '\''$HOME'\'''`
 	if got != want {
 		t.Errorf("login = %s, want %s", got, want)
 	}
@@ -192,7 +193,9 @@ func TestQuoteKeepsAWordWhole(t *testing.T) {
 		"x=y":            "x=y",
 		"~/dev":          "'~/dev'",
 		"say \"hi\" now": `'say "hi" now'`,
-		"back\\slash":    `'back\slash'`,
+		"back\\slash":    `'back'\\'slash'`,
+		"trail\\":        `'trail'\\''`,
+		"caret^":         "'caret^'",
 		"user@host":      "user@host",
 		"a\nb":           "'a\nb'",
 		"glob*":          "'glob*'",

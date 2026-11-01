@@ -87,12 +87,12 @@ func flags() []string {
 // ~/.local/bin, where Claude Code installs - is missing: the remote revier
 // then found no `claude`, and every agent read as unknown. sshd always sets
 // SHELL, and it is $SHELL and not ${SHELL:-sh} because the line is parsed by
-// that login shell, and fish rejects the braces. The line stands between
-// double quotes, which POSIX shells and fish read alike: inside single quotes
-// fish reads `\'` as a quote, so the `'\”` a quoted word carries would end
-// the line early there.
+// that login shell, and fish rejects the braces. The line is one word,
+// quoted by Quote, which a POSIX shell and fish read alike: the line passes
+// through the login shell and then through $SHELL -lc, and a user's login
+// shell can be either.
 func login(line string) string {
-	return `exec "$SHELL" -lc "` + doubleQuoted(line) + `"`
+	return `exec "$SHELL" -lc ` + Quote(line)
 }
 
 // quiet is login for a command whose output is read: what the profile writes
@@ -132,13 +132,16 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 // close.
 const waitDelay = time.Second
 
-// Quote wraps s for a POSIX shell: single quotes, with each single quote in s
-// closed, escaped and reopened.
+// Quote wraps s for a POSIX shell and for fish alike: single quotes, with
+// each single quote and each backslash in s put outside them, escaped. Inside
+// single quotes a POSIX shell reads a backslash as itself and fish reads `\'`
+// and `\\` as escapes; outside them, both read `\'` and `\\` as the quote and
+// the backslash.
 func Quote(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~") {
+	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~^%") {
 		return s
 	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return "'" + strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`).Replace(s) + "'"
 }
 
 // PanelCommand is the command of a link's panel here: `revier <kind> exec`
