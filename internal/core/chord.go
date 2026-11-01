@@ -265,13 +265,14 @@ func (c Chord) Terminal(disambiguates bool) (Chord, bool) {
 
 // Typed reports whether a terminal delivers the chord as text: one character,
 // alone or with shift. Where a surface filters as you type, that is a filter
-// character and cannot also be a command.
+// character and cannot also be a command. + and - are such characters,
+// though a chord spells them by name.
 func (c Chord) Typed() bool {
 	key, found := strings.CutPrefix(string(c), "shift+")
 	if !found {
 		key = string(c)
 	}
-	return !strings.Contains(key, "+") && len([]rune(key)) == 1
+	return key == "plus" || key == "minus" || !strings.Contains(key, "+") && len([]rune(key)) == 1
 }
 
 func gnomeKeyName(key string) string {

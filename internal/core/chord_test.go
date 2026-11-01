@@ -164,10 +164,12 @@ func TestTheChordATerminalReports(t *testing.T) {
 	}
 }
 
-// Typed text is one character, alone or shifted: what a filter takes.
+// Typed text is one character, alone or shifted: what a filter takes. + and
+// - are characters too, though a chord spells them by name.
 func TestTypedChords(t *testing.T) {
 	for c, want := range map[core.Chord]bool{
 		"o": true, "shift+o": true, "ctrl+o": false, "alt+o": false, "f5": false, "shift+f5": false,
+		"plus": true, "minus": true, "shift+plus": true, "ctrl+plus": false, "alt+minus": false,
 	} {
 		if got := c.Typed(); got != want {
 			t.Errorf("Chord(%q).Typed() = %v, want %v", c, got, want)
