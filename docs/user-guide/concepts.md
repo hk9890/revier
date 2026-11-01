@@ -96,11 +96,9 @@ for this project. revier finds it, raises it, or launches it and waits for it.
 These targets are saved and restored with a session.
 
 **Use a command part** when no new window appears. revier runs your command
-and then stops: it does not wait for a window or attach one. Your command must
-do the work itself: show the right thing and raise its window.
-[Command targets](configuration.md#command-targets) says what else it must do.
-revier does not save a command target in a session, because there is nothing
-to restore.
+and then stops: it does not wait for a window or attach one.
+[Command targets](configuration.md#command-targets) says what your command
+must do.
 
 ```toml
 [[target]]
