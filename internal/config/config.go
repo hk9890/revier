@@ -571,6 +571,11 @@ func validateProject(p revier.Project) error {
 	if p.Path == "" && p.Remote == nil {
 		errs = append(errs, errors.New("project has no path"))
 	}
+	// A relative path names another directory for each working directory
+	// revier runs in. A link's path is the host's, kept as written.
+	if p.Path != "" && p.Remote == nil && !filepath.IsAbs(p.Path) {
+		errs = append(errs, fmt.Errorf("path %q is not absolute; write it in full or from ~", p.Path))
+	}
 	if err := CanAddress(p.Name); err != nil {
 		errs = append(errs, err)
 	}

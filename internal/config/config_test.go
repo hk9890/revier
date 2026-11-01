@@ -964,3 +964,21 @@ func TestABrokenActionCostsOnlyItself(t *testing.T) {
 		t.Errorf("actions = %+v, want only the first refused", cfg.Actions)
 	}
 }
+
+// A relative path names a different directory for every working directory
+// revier runs in: the clone, `mise trust` and the lookup from the working
+// directory would each act on another one. A link's path is the host's, kept
+// as written, and is not refused here.
+func TestLoadProjectRefusesARelativePath(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Replace(valid, `path = "/home/user/dev/github/revier"`, `path = "src/rel"`, 1)
+	p := config.LoadProject(write(t, dir, "revier.toml", body), config.Inherited{})
+	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), `path "src/rel" is not absolute`) {
+		t.Errorf("Invalid = %v, want the relative path refused", p.Invalid)
+	}
+
+	far := config.LoadProject(write(t, dir, "far.toml", "path = \"dev/far\"\n"+link), config.Inherited{})
+	if far.Invalid != nil {
+		t.Errorf("link Invalid = %v, want a link's path kept as written", far.Invalid)
+	}
+}
