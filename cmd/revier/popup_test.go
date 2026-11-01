@@ -15,7 +15,13 @@ import (
 func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 	argv := popupArgv("/usr/bin/revier", "demo", "")
 	want := []string{"kitty", "--class", core.PopupClass, "--title", "revier",
-		"-o", "remember_window_size=no", "-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
+		"-o", "allow_remote_control=socket-only",
+		"-o", "remember_window_size=no",
+		"-o", "hide_window_decorations=yes",
+		"-o", "map=kitty_mod+enter no_op",
+		"-o", "map=kitty_mod+n no_op",
+		"-o", "map=kitty_mod+t no_op",
+		"-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
@@ -24,8 +30,8 @@ func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 	}
 }
 
-// The surface's targets open in the popup's kitty, so its control socket is
-// the socket file revier asks every kitty for, whatever kitty.conf names. The
+// revier reaches the popup through its kitty's control socket, so that socket
+// is a socket file only the user can reach, whatever kitty.conf names. The
 // option is before -e: what follows -e is the surface's command.
 func TestPopupArgvPutsThePopupOnASocketFile(t *testing.T) {
 	argv := popupArgv("/usr/bin/revier", "demo", "unix:/run/user/1000/kitty-{kitty_pid}")

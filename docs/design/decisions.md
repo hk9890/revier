@@ -897,3 +897,14 @@ starts in the panel's directory, which every runtime must therefore report. A
 project template there is refused and no tab opens: no project holds the
 window, and a directory in its place would hand a program a path it never
 asked for.
+
+### D165 — every new kitty OS window opens in revier's workspace kitty, never the popup's
+
+Extends D76 and D110. A kitty option is its whole process's, and a workspace
+opened in the kitty it was asked from, the popup's too: the popup's options
+reached every workspace, so its title bar could not go alone. revier now
+starts one kitty for workspaces and opens every new OS window there; no key
+opens anything in the popup. The survey still reads every kitty, for D110 and
+for terminals of the user's own. That kitty never has the focus, so the window
+host raises a new workspace (D19). Rejected: a kitty per workspace, which
+costs a kitty's memory for each.

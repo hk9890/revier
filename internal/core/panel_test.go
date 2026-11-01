@@ -169,6 +169,10 @@ func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
+	var osw revier.TargetRef
+	rt.OnOpen = func(revier.Realization) {
+		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	}
 	c := &core.Core{Runtime: rt, Window: wm}
 	p := prepared(t, tabProject())
 
@@ -178,7 +182,7 @@ func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 	}
 	marked := panelMarked(t, rt, res.Ref, "home")
 
-	wm.SetFocus(wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001}))
+	wm.SetFocus(osw)
 	for range 2 {
 		if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 			t.Fatalf("Go(tickets): %v", err)

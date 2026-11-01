@@ -308,14 +308,15 @@ closes what it opened:
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above
 printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > "$S/config.toml"   # gnome raises the OS window
 ./bin/revier open demo                                    # a kitty OS window titled home
-kitten @ ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
+W=unix:$(ls "$XDG_RUNTIME_DIR"/revier-kitty-* | head -n 1)   # the workspace kitty, which revier opens every workspace in
+kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
 wctl focused --json | jq .title                           # home
 ./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home
-kitten @ close-window --match id:<id>                     # once per id the ls above printed
+kitten @ --to "$W" close-window --match id:<id>           # once per id the ls above printed
 printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
 ```
 
-Every `kitten @` command above addresses the socket of the kitty it runs
+A `kitten @` command without `--to` addresses the socket of the kitty it runs
 inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
 process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`.

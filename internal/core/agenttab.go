@@ -397,7 +397,8 @@ type OutsideKey struct {
 // starts in. Where the runtime holds the panel but no project's open
 // workspace does, the key is not refused for that: it does what outside
 // says, a plain tab of the runtime's own shell beside the panel, a tab of the
-// agent an agent key asks for, or nothing. Every other failure is returned,
+// agent an agent key asks for, or nothing; in the popup, always nothing, as
+// the popup holds the surface alone (decisions.md D165). Every other failure is returned,
 // so the key's own fallback runs (decisions.md D148, D164); so is an agent
 // that cannot run there, as agent says.
 //
@@ -427,6 +428,10 @@ func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.
 	}
 	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside.Outside), "kind", string(kind), "agent", outside.Agent, "dir", dir)
 	if outside.Outside == OutsideNone {
+		return nil
+	}
+	if inst, ok := byRef(w.snap, w.Ref); ok && inst.Class == PopupClass {
+		slog.Info("tab outside a workspace: the popup holds no tab", "ref", w.Ref)
 		return nil
 	}
 	opener, ok := c.Runtime.(revier.PanelOpener)

@@ -152,6 +152,8 @@ kitty, and GNOME with the Window Control extension. See
 [integrations/gnome.md](integrations/gnome.md).
 
 - The popup opens on the project of the window that had the focus.
+- The popup holds the TUI alone and has no title bar. kitty's keys for a new
+  window, OS window or tab, and revier's kitty keys, open nothing in it.
 - When Enter or a target key brings a window to the front, the popup hides.
   It stays when you press a key, click, scroll or raise it again before the
   window comes up, so a question you started, such as a delete, waits for
