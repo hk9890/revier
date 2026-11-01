@@ -134,10 +134,10 @@ func (r *ShutdownRecord) reach() {
 // cancel is never followed by this write. A recorded shutdown removes what a
 // surface last saw: the end is a clean one, and a file left from before it
 // would read as an end with no shutdown once the record ends (decisions.md
-// D150).
+// D150). A record that did not reach the state leaves that file: the next
+// start finds no shutdown on record and offers it.
 func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 	at := time.Now().Round(0)
-	recorded := false
 	r.c.Ledger.Update(func(st *state.State) bool {
 		if ctx.Err() != nil {
 			return false
@@ -145,10 +145,10 @@ func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		st.MarkShutDown(at, sessionID)
-		r.at, recorded = at, true
+		r.at = at
 		return true
 	})
-	if !recorded {
+	if !r.Recorded() {
 		return
 	}
 	if err := session.DropSeen(r.root); err != nil && !errors.Is(err, session.ErrNoSession) {
