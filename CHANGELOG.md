@@ -9,8 +9,8 @@ Each section is also the text of its release on the
 ## v0.24.0
 
 - **Action required: revier now needs kitty 0.42 or later.** With an older
-  kitty, a workspace does not open, and the error names the version. Update
-  kitty.
+  kitty, a workspace does not open: after 5 seconds, the error says that no
+  kitty answered and names 0.42. Update kitty.
 - **Workspaces open in a kitty of revier's own.** Before, a workspace opened
   in the kitty you ran the command in, or, when no kitty answered, in one
   revier started with your shell's environment. From the popup it opened in
@@ -19,7 +19,7 @@ Each section is also the text of its release on the
   Where systemd runs your session, it runs as the user service
   `revier-kitty`, with your desktop session's environment, so a shell's
   activated virtualenv or credentials no longer reach every project. To make
-  it read a changed `kitty.conf`, or to use an updated kitty, run
+  that service read a changed `kitty.conf`, or use an updated kitty, run
   `systemctl --user stop revier-kitty`. This closes every workspace in it.
 - **The popup has no title bar, and of kitty's keys only copy and paste work
   in it.** Before, a kitty key in the popup could open a window or a tab
@@ -35,13 +35,14 @@ Each section is also the text of its release on the
   shutdown skip it.
 - **A directory reached through a symlink is now in its project.** Before, a
   project saved under a path with a symlink, such as `~/dev` linked
-  elsewhere, was in no project from a tmux window. `revier agent new` and
+  elsewhere, was in no project from a directory with the link resolved, such
+  as a tmux window. `revier agent new` and
   `revier shell new` without `-p` then failed there.
 - **`revier agent new --resume --panel` outside a workspace warns that it did
   not resume.** Before, it dropped `--resume` without a word.
 - **`revier doctor` names a terminal key whose agent cannot run outside a
-  workspace.** With `outside = "agent"`, in kitty, such a key opened a plain
-  tab and gave no reason.
+  workspace.** With `outside = "agent"`, in kitty, such a key opens a plain
+  tab and gives no reason. Now doctor names the key and the fix.
 
 ## v0.23.0
 
