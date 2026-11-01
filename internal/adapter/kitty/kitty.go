@@ -946,9 +946,12 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	var opened []int
 	panel, err := h.openTab(ctx, socket, win, focused, r, vars, &opened)
 	if err != nil {
+		// Best effort: the launch error is the one worth reporting. The close
+		// has a bound of its own: the end of ctx may be what failed the tab.
+		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
 		for _, id := range opened {
-			// Best effort: the launch error is the one worth reporting.
-			_, _ = h.kitten(ctx, socket, "close-window", "--match", "id:"+strconv.Itoa(id))
+			_, _ = h.kitten(closing, socket, "close-window", "--match", "id:"+strconv.Itoa(id))
 		}
 		return "", err
 	}

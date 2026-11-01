@@ -1152,14 +1152,20 @@ func TestFindPanelListsNothing(t *testing.T) {
 
 // A tab whose second launch fails closes the window its first launch opened:
 // the core names that agent as not added, and it must not run on in a tab
-// without its shell.
+// without its shell. The failing step can be the end of the press's context,
+// so the close has a context of its own.
 func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
 	h := newHost()
 	rec := &recorder{}
 	raw := fixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	launches := 0
-	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+	h.SetRunner(func(ctx context.Context, socket, _ string, args ...string) ([]byte, error) {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		rec.add(socket, args)
 		switch args[0] {
 		case "ls":
@@ -1167,12 +1173,13 @@ func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
 		case "launch":
 			launches++
 			if launches == 2 {
+				cancel()
 				return nil, errors.New("kitty went away")
 			}
 		}
 		return []byte("9\n"), nil
 	})
-	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+	_, err := h.OpenTab(ctx, revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
 		Panels: []revier.PanelSpec{
 			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "b"}},
 			{Kind: revier.PanelShell},
