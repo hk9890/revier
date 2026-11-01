@@ -983,6 +983,15 @@ func TestLoadProjectRefusesARelativePath(t *testing.T) {
 	}
 }
 
+// A file named by hand is held to the naming rule `revier new` and a rename
+// apply: the project loads, listed with the reason, and nothing opens it.
+func TestLoadProjectRefusesANameWithWhitespace(t *testing.T) {
+	p := config.LoadProject(write(t, t.TempDir(), "my proj.toml", valid), config.Inherited{})
+	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), "contains whitespace") {
+		t.Errorf("Invalid = %v, want the name refused", p.Invalid)
+	}
+}
+
 // place takes templates, so its four tokens are counted in what it renders
 // to: a var that holds the whole geometry loads, and a var that adds a token
 // costs its target before the window host refuses it after the window opened.

@@ -576,6 +576,9 @@ func validateProject(p revier.Project) error {
 	if p.Path != "" && p.Remote == nil && !filepath.IsAbs(p.Path) {
 		errs = append(errs, fmt.Errorf("path %q is not absolute; write it in full or from ~", p.Path))
 	}
+	if err := ValidateName(p.Name); err != nil {
+		errs = append(errs, err)
+	}
 	if err := CanAddress(p.Name); err != nil {
 		errs = append(errs, err)
 	}
