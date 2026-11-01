@@ -27,6 +27,12 @@ var errShutdownBusy = errors.New("agents are busy; nothing saved and nothing clo
 // closed.
 var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was made; nothing saved and nothing closed. use --force to shut down anyway")
 
+// errShutdownIncomplete is a shutdown that ended with a target still open or
+// not read, or that a cancel stopped with steps left. It fails the command,
+// so `revier shutdown && poweroff` does not power off under an editor that
+// still asks about unsaved work.
+var errShutdownIncomplete = errors.New("shutdown incomplete; not safe to leave")
+
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent. It saves the session
 // first when it changed, so a restore brings back what the shutdown closed,
@@ -161,7 +167,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	// ended; the user's word for that is the cancel.
 	case cancelled && errors.Is(err, context.Canceled):
 		_, _ = fmt.Fprintln(a.out, "cancelled; nothing closed")
-		return nil
+		return errShutdownIncomplete
 	case err != nil:
 		return fmt.Errorf("%w; nothing closed", err)
 	}
@@ -182,9 +188,10 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
 	}
-	if open == 0 && (!cancelled || left == 0) {
-		_, _ = fmt.Fprintln(a.out, "shutdown complete; safe to leave")
+	if open > 0 || (cancelled && left > 0) {
+		return errShutdownIncomplete
 	}
+	_, _ = fmt.Fprintln(a.out, "shutdown complete; safe to leave")
 	return nil
 }
 
