@@ -767,7 +767,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return c.goTo(ctx, p, home.Name, bound)
 		}
 	}
-	osw, err := c.raisable(snap, inst, name)
+	osw, err := c.raisable(snap, failed, inst, name)
 	if err != nil {
 		return Result{}, err
 	}
@@ -794,9 +794,16 @@ var ErrUnraisable = errors.New("cannot raise: the window host lists no window fo
 // "is ready" notification instead of the window, which reads as a raise that
 // half worked. The error names the target, and nothing moves (decisions.md
 // D63).
-func (c *Core) raisable(snap snapshot, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
+//
+// A window host that did not answer lists no window for anything, so that
+// refusal would tell the user the window is gone. What went wrong is named
+// instead, as every refusal a host's silence causes is (D89).
+func (c *Core) raisable(snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
 	if !c.bridged(inst) {
 		return revier.TargetRef{}, nil
+	}
+	if err := failed[c.Window.Name()]; err != nil {
+		return revier.TargetRef{}, fmt.Errorf("%s: %s: %w", c.Window.Name(), name, err)
 	}
 	osw, ok := c.osWindowOf(snap, inst)
 	if !ok {
@@ -1168,16 +1175,7 @@ func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return c.focus(ctx, ref)
 	}
 	name := revier.TargetName(ref.Title)
-	// A window host that did not answer lists no window for anything, so the
-	// refusal below would tell the user the window is gone. What went wrong
-	// is named instead, as every refusal a host's silence causes is
-	// (decisions.md D89).
-	if c.bridged(inst) {
-		if err := failed[c.Window.Name()]; err != nil {
-			return fmt.Errorf("%s: %s: %w", c.Window.Name(), name, err)
-		}
-	}
-	osw, err := c.raisable(snap, inst, name)
+	osw, err := c.raisable(snap, failed, inst, name)
 	if err != nil {
 		return err
 	}

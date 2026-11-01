@@ -382,8 +382,8 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	if err != nil {
 		return Result{}, err
 	}
-	snap, err := c.answered(ctx, nameOf(c.Runtime))
-	if err != nil {
+	snap, unlisted := c.listing(ctx)
+	if err := unlisted[nameOf(c.Runtime)]; err != nil {
 		return Result{}, err
 	}
 	in, found, tab, open, err := c.container(snap, p, i, bound)
@@ -436,7 +436,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 
 	var osw revier.TargetRef
 	if !opened {
-		if osw, err = c.raisable(snap, in, t.Name); err != nil {
+		if osw, err = c.raisable(snap, unlisted, in, t.Name); err != nil {
 			return Result{}, err
 		}
 	}
