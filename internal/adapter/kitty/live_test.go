@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,29 +43,39 @@ func TestKittenRunsInAProcessGroupOfItsOwn(t *testing.T) {
 }
 
 // The workspace kitty starts through the user's service manager, so it has
-// the session's login environment whoever asks first, and detached from
-// revier where there is none. Scripts named kitty and systemd-run record how
-// they were called.
+// the session's login environment whoever asks first, as one service, so two
+// starts at once start one kitty. A start that fails because that service
+// runs already starts nothing more. Where there is no systemd-run, or it
+// fails otherwise, kitty starts detached from revier. Scripts named kitty,
+// systemd-run and systemctl record how they were called, and exit as the case
+// says.
 func TestTheWorkspaceKittyStartsThroughTheServiceManager(t *testing.T) {
+	const service = "systemd-run --user --quiet --collect --unit=revier-kitty -- %s/kitty --listen-on unix:/s"
+	const active = "systemctl --user --quiet is-active revier-kitty"
+	const detached = "kitty --detach --listen-on unix:/s"
 	for _, tc := range []struct {
-		name    string
-		systemd bool
-		want    string
+		name       string
+		systemdRun string // the exit status of systemd-run; "" for none on PATH
+		systemctl  string // the exit status of is-active
+		want       []string
 	}{
-		{"systemd-run", true, "systemd-run --user --quiet --collect -- %s/kitty --listen-on unix:/s"},
-		{"no systemd-run", false, "kitty --detach --listen-on unix:/s"},
+		{"started as a service", "0", "3", []string{service}},
+		{"no systemd-run", "", "3", []string{detached}},
+		{"the service runs already", "1", "0", []string{service, active}},
+		{"no service manager", "1", "3", []string{service, active, detached}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin, out := t.TempDir(), filepath.Join(t.TempDir(), "argv")
-			record := func(name string) {
-				script := "#!/bin/sh\necho " + name + " \"$@\" > '" + out + "'\n"
+			record := func(name, status string) {
+				script := "#!/bin/sh\necho " + name + " \"$@\" >> '" + out + "'\nexit " + status + "\n"
 				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
-			record("kitty")
-			if tc.systemd {
-				record("systemd-run")
+			record("kitty", "0")
+			record("systemctl", tc.systemctl)
+			if tc.systemdRun != "" {
+				record("systemd-run", tc.systemdRun)
 			}
 			t.Setenv("PATH", bin)
 
@@ -75,11 +86,14 @@ func TestTheWorkspaceKittyStartsThroughTheServiceManager(t *testing.T) {
 			if err != nil {
 				t.Fatalf("nothing ran: %v", err)
 			}
-			want := tc.want
-			if tc.systemd {
-				want = fmt.Sprintf(want, bin)
+			var want []string
+			for _, w := range tc.want {
+				if strings.Contains(w, "%s") {
+					w = fmt.Sprintf(w, bin)
+				}
+				want = append(want, w)
 			}
-			if got := strings.TrimSpace(string(b)); got != want {
+			if got := strings.Split(strings.TrimSpace(string(b)), "\n"); !slices.Equal(got, want) {
 				t.Errorf("ran %q, want %q", got, want)
 			}
 		})

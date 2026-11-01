@@ -660,13 +660,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
 	}
-	if err := h.setVars(ctx, socket, first, r.Vars); err != nil {
-		// The mark is best effort: an unmarked panel falls back to the guess
-		// it replaces. Failing here would leave the OS window open and unnamed
-		// to the caller, which pins nothing, and the next press would open a
-		// second one.
-		slog.Warn("panel mark", "host", h.Name(), "name", r.Name, "panel", first, "err", err)
-	}
 	for _, p := range panels[1:] {
 		args := append([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}, varArgs(r.Vars)...)
 		if p.Dir != "" {
@@ -696,22 +689,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		}
 	}
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
-}
-
-// setVars marks the first window of a new OS window with its user vars. A
-// launch takes them as --var, but the kitty process started for that window
-// takes no such option, so both paths that open it set them here, in the one
-// call set-user-vars takes every pair in.
-func (h *Host) setVars(ctx context.Context, socket string, id int, vars map[string]string) error {
-	if len(vars) == 0 {
-		return nil
-	}
-	args := []string{"set-user-vars", "--match", "id:" + strconv.Itoa(id)}
-	for _, name := range varNames(vars) {
-		args = append(args, name+"="+vars[name])
-	}
-	_, err := h.kitten(ctx, socket, args...)
-	return err
 }
 
 // varNames are the variable names in a fixed order, so a launch's arguments
@@ -747,8 +724,8 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 	if err != nil {
 		return "", 0, err
 	}
-	args := []string{"--type=os-window",
-		"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}
+	args := append([]string{"--type=os-window",
+		"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}, varArgs(r.Vars)...)
 	if p.Dir != "" {
 		args = append(args, "--cwd", p.Dir)
 	}
@@ -760,19 +737,28 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 	return socket, id, nil
 }
 
-// workspaceKitty is the socket of the first workspace kitty that answers, and
-// of one it starts when none does. The kernel lists a socket until its kitty
-// has exited, so one that is listed can be one a launch would fail on.
+// workspaceKitty is the socket of the workspace kitty, started when none
+// answers.
 func (h *Host) workspaceKitty(ctx context.Context) (string, error) {
+	if s, ok := h.answering(ctx); ok {
+		return s, nil
+	}
+	return h.startKitty(ctx)
+}
+
+// answering is the first workspace kitty socket that answers. The kernel
+// lists a socket until its kitty has exited, so one that is listed can be one
+// a launch would fail on.
+func (h *Host) answering(ctx context.Context) (string, bool) {
 	for _, s := range h.socketList() {
 		if !workspaceSocket.MatchString(s) {
 			continue
 		}
 		if _, err := h.kitten(ctx, s, "ls"); err == nil {
-			return s, nil
+			return s, true
 		}
 	}
-	return h.startKitty(ctx)
+	return "", false
 }
 
 // startKitty starts the workspace kitty and waits for its control socket. It
@@ -788,25 +774,20 @@ func (h *Host) startKitty(ctx context.Context) (string, error) {
 	if listenOn == "" {
 		return "", errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
 	}
-	before := map[string]bool{}
-	for _, s := range h.socketList() {
-		before[s] = true
-	}
 	if err := h.startProcess(ctx, "--listen-on", listenOn,
 		"-o", "allow_remote_control=socket-only",
 		"--name", workspaceName, "--start-as=hidden", "sleep", "infinity"); err != nil {
 		return "", err
 	}
-
 	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		for _, s := range h.socketList() {
-			if before[s] || !workspaceSocket.MatchString(s) {
-				continue
-			}
-			if _, err := h.kitten(ctx, s, "ls"); err == nil {
-				return s, nil
-			}
+	for {
+		if s, ok := h.answering(ctx); ok {
+			return s, nil
+		}
+		if !time.Now().Before(deadline) {
+			// kitty refuses --start-as=hidden before 0.42 and exits at once,
+			// and under the service manager it says so in the journal alone.
+			return "", fmt.Errorf("kitty: started the workspace kitty, but no control socket answered within 5s; it needs kitty %s or later, and `journalctl --user -u %s` has what it said", minKitty, workspaceUnit)
 		}
 		select {
 		case <-ctx.Done():
@@ -814,14 +795,23 @@ func (h *Host) startKitty(ctx context.Context) (string, error) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return "", errors.New("kitty: started the workspace kitty, but no control socket answered within 5s")
 }
+
+// workspaceUnit is the service the user's service manager runs the workspace
+// kitty as. One name for it makes a second start while it runs fail, so two
+// presses at once start one kitty, and names it to stop or restart.
+const workspaceUnit = "revier-kitty"
+
+// minKitty is the first kitty that starts hidden.
+const minKitty = "0.42"
 
 // startProcess starts the workspace kitty through the user's service manager
 // where there is one, so it has the session's login environment whatever
 // process asked first: started from a shell, it would hand that shell's
-// environment to every workspace after (decisions.md D166). Without
-// systemd-run it is started detached from this process.
+// environment to every workspace after (decisions.md D166). A start that
+// fails because the service runs already is one another process made. Where
+// there is no systemd-run, or it cannot start the service, kitty is started
+// detached from this process.
 func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if h.start != nil {
 		return h.start(ctx, args...)
@@ -830,18 +820,25 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("kitty: start: %w", err)
 	}
-	name, argv := kitty, append([]string{"--detach"}, args...)
 	if run, err := exec.LookPath("systemd-run"); err == nil {
-		name, argv = run, append([]string{"--user", "--quiet", "--collect", "--", kitty}, args...)
+		err := runStart(ctx, run, append([]string{"--user", "--quiet", "--collect", "--unit=" + workspaceUnit, "--", kitty}, args...)...)
+		if err == nil || runStart(ctx, "systemctl", "--user", "--quiet", "is-active", workspaceUnit) == nil {
+			return nil
+		}
+		slog.Warn("kitty: the service manager did not start the workspace kitty; starting it detached", "err", err)
 	}
-	c := exec.CommandContext(ctx, name, argv...)
+	return runStart(ctx, kitty, append([]string{"--detach"}, args...)...)
+}
+
+// runStart runs a command that starts the workspace kitty, in a process group
+// of its own: the ctrl+c a terminal sends to revier's group cancels a shutdown
+// or a restore after its step, and must not end the step's command with it.
+func runStart(ctx context.Context, name string, args ...string) error {
+	c := exec.CommandContext(ctx, name, args...)
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
-	// A process group of its own: the ctrl+c a terminal sends to revier's
-	// group cancels a shutdown or a restore after its step, and must not end
-	// the step's command with it.
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := c.Run(); err != nil {
-		return fmt.Errorf("kitty: start: %w", err)
+		return fmt.Errorf("kitty: start: %s: %w", filepath.Base(name), err)
 	}
 	return nil
 }

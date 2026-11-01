@@ -648,40 +648,10 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	}
 }
 
-// The vars the core gives an Open become user vars of the OS window's first
-// window, which is how the panel a return home lands in is found again. A
-// launch takes --var, but a kitty started for a new OS window does not, so
-// both paths set them on the window that came back.
-func TestOpenMarksTheFirstWindowWithItsVars(t *testing.T) {
-	h := newHost()
-	var calls []call
-	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
-	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
-		calls = append(calls, call{socket, args})
-		if args[0] == "launch" {
-			return []byte("7\n"), nil
-		}
-		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "tickets:demo",
-			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}}}}}})
-	})
-	if _, err := h.Open(context.Background(), revier.Realization{
-		Name: "tickets:demo", Launch: []string{"taskmgr-ui"}, Match: revier.Match{Title: "^tickets:demo$"},
-		Vars: map[string]string{"revier_home": "home"},
-	}); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	want := "set-user-vars --match id:7 revier_home=home"
-	marked := false
-	for _, c := range calls {
-		marked = marked || strings.Join(c.args, " ") == want
-	}
-	if !marked {
-		t.Errorf("calls = %+v, want %q among them", calls, want)
-	}
-}
-
-// A window split into the new OS window is a launch, and carries the vars as
-// --var; the first window is marked after it opened.
+// The vars the core gives an Open become user vars of every window it opens,
+// the first included, which is how the panel a return home lands in is found
+// again. Each launch carries them as --var, so no window opens unmarked and
+// no second call marks it.
 func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 	h := newHost()
 	var calls []string
@@ -708,41 +678,17 @@ func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	for _, want := range []string{
-		"set-user-vars --match id:7 revier_home=home",
+		"launch --type=os-window --os-window-name session:demo --os-window-title session:demo --hold --var revier_home=home claude",
 		"launch --type=window --match window_id:7 --hold --var revier_home=home",
 	} {
 		if !slices.Contains(calls, want) {
 			t.Errorf("calls = %q, want %q among them", calls, want)
 		}
 	}
-}
-
-// A mark that cannot be set does not fail the launch. The OS window is open
-// by then, and an Open that errors hands the caller nothing to pin, so the
-// next press would open a second one; an unmarked panel falls back to the
-// guess the mark replaces.
-func TestOpenReportsTheWindowWhenTheMarkFails(t *testing.T) {
-	h := newHost()
-	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
-	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
-		switch args[0] {
-		case "launch":
-			return []byte("7\n"), nil
-		case "set-user-vars":
-			return nil, errors.New("kitty: no such window")
+	for _, c := range calls {
+		if strings.HasPrefix(c, "set-user-vars") {
+			t.Errorf("calls = %q, want no second call to mark a window", calls)
 		}
-		return json.Marshal([]map[string]any{{"id": 1, "wm_name": "tickets:demo",
-			"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}}}}}})
-	})
-	ref, err := h.Open(context.Background(), revier.Realization{
-		Name: "tickets:demo", Launch: []string{"taskmgr-ui"}, Match: revier.Match{Title: "^tickets:demo$"},
-		Vars: map[string]string{"revier_home": "home"},
-	})
-	if err != nil {
-		t.Fatalf("Open: %v, want the OS window despite the mark", err)
-	}
-	if ref.ID != "/run/user/1000/revier-kitty-4000/1" || ref.Title != "tickets:demo" {
-		t.Errorf("ref = %+v, want the OS window the launch landed in", ref)
 	}
 }
 

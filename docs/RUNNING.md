@@ -302,7 +302,7 @@ belongs in a command they run, not one you run for them.
 When the user has handed over the screen, verify the kitty host on the scratch
 project. Its OS window is named after the home realization, `home`, so first
 check that no window of the user's, in any kitty, is titled `home`; the
-command below prints nothing then. The last line closes what it opened:
+command below prints nothing then. The last lines close the windows it opened:
 
 ```bash
 wctl list --json | jq '.[] | select(.title=="home") | {id, wm_class}'   # must print nothing
@@ -316,6 +316,12 @@ wctl focused --json | jq .title                           # home
 kitten @ --to "$W" close-window --match id:<id>           # once per id the ls above printed
 printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
 ```
+
+The scratch workspace opens in the user's own workspace kitty, the service
+`revier-kitty`, which keeps running after the recipe. revier starts it when
+none runs. It has the session's environment, not `$S`, so a kitty key pressed
+in the scratch workspace runs revier on the user's real configuration: do not
+press one.
 
 A `kitten @` command without `--to` addresses the socket of the kitty it runs
 inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another

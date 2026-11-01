@@ -12,13 +12,25 @@ stay out of your workspaces.
 
 revier's kitty runs in the background with no window of its own, and keeps
 running after you close the last workspace, so the next one opens at once.
-It starts with your desktop session's environment, wherever you run `revier
-open`: a shell's own settings, such as an activated virtualenv, do not reach
-your workspaces. A window you open in it yourself is no workspace.
+Where systemd runs your session, revier starts it as the user service
+`revier-kitty`, with your desktop session's environment, wherever you run
+`revier open`: a shell's own settings, such as an activated virtualenv, do not
+reach your workspaces. Without systemd, it starts with the environment of the
+command that opened the first workspace. A window you open in it yourself is
+no workspace.
+
+To make revier's kitty read a changed `kitty.conf`, or to use an updated kitty,
+stop it; the next workspace you open starts it again:
+
+```bash
+systemctl --user stop revier-kitty
+```
+
+This closes every workspace in it.
 
 ## What you need
 
-- kitty, with `kitten` on your PATH or beside the `kitty` binary.
+- kitty 0.42 or later, with `kitten` on your PATH or beside the `kitty` binary.
 - `XDG_RUNTIME_DIR` set. A desktop login sets it.
 - To raise a kitty window under Wayland, and for the popup: GNOME with `wctl`.
   See [GNOME](gnome.md).
