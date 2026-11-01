@@ -78,7 +78,7 @@ var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 // of the window it hides, and of any window opened in it without a name, as
 // one opened by hand. kitty takes a process's `--name` for those, and a
 // workspace's name would make that window a second copy of the workspace.
-// No such window is listed: none is a workspace.
+// No such window is listed: none is a workspace (decisions.md D168).
 const workspaceName = "revier-kitty"
 
 // abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
@@ -192,30 +192,18 @@ type listing struct {
 	windows []osWindow
 }
 
-// Probe reports kitty usable when kitten can be found and either a control
-// socket answers or no kitty is running at all. Open starts the workspace
-// kitty either way when none answers. A kitty running without remote control
-// has no socket and looks like no kitty.
-func (h *Host) Probe(ctx context.Context) error {
+// Probe reports kitty usable when kitty and kitten can be found: Open starts
+// the workspace kitty when none answers, and needs no other kitty. A kitty of
+// the user's whose socket does not answer, as one that asks a password,
+// costs only its own windows.
+func (h *Host) Probe(context.Context) error {
 	if _, err := kittenPath(); err != nil {
 		return err
 	}
-	socks := h.socketList()
-	if len(socks) == 0 {
-		if _, err := exec.LookPath("kitty"); err != nil {
-			return fmt.Errorf("kitty not on PATH: %w", err)
-		}
-		return nil
+	if _, err := exec.LookPath("kitty"); err != nil {
+		return fmt.Errorf("kitty not on PATH: %w", err)
 	}
-	var errs []error
-	for _, s := range socks {
-		if _, err := h.kitten(ctx, s, "ls"); err == nil {
-			return nil
-		} else {
-			errs = append(errs, err)
-		}
-	}
-	return fmt.Errorf("kitty is running but no control socket answers: %w", errors.Join(errs...))
+	return nil
 }
 
 // kittenPath finds the kitten binary. Since kitty 0.44 it is not always on

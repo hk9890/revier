@@ -397,6 +397,9 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	opened := !found
 	// withInstance says the tab opened with the instance, as a tab it lists.
 	withInstance := false
+	// opening is the press that opened the instance, whose placement the
+	// raise after this press reuses.
+	var opening Result
 	if opened {
 		res, err := c.goTo(ctx, p, t.Runtime.Inside, bound)
 		if err != nil {
@@ -405,6 +408,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		if res.Ref.IsZero() {
 			return Result{}, fmt.Errorf("%s: opened %s for tab %s, and cannot name it", c.Runtime.Name(), t.Runtime.Inside, t.Name)
 		}
+		opening = res
 		in = revier.Instance{Ref: res.Ref}
 		if slices.Contains(res.Tabs, t.Name) {
 			// The instance opened with this tab in it. It is read again to
@@ -439,7 +443,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 	// The ref is the instance that holds the tab, so the result names that
 	// instance's target: a caller binds the two, and a tab bound to it would
 	// keep raising the instance after inside is removed from the file.
-	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref, Launched: withInstance, Opened: opened}
+	res := Result{Target: t.Runtime.Inside, Tab: t.Name, Ref: in.Ref, Launched: withInstance, Opened: opened, placed: opening.placed, sought: opening.sought}
 	// An instance this press opened is reported with a failure after it, as
 	// goTo reports one it could not focus, so the activation still pins it.
 	var failed Result

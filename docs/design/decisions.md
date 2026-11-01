@@ -929,3 +929,13 @@ exited. revier now starts it through the user's service manager, so it has
 the login environment however it was asked, and starts it detached only where
 there is none. Rejected: a fixed list of variables, which drops what the
 desktop sets that revier does not know of.
+
+### D168 — a window opened by hand in the workspace kitty is no instance
+
+Extends D165 and D167. kitty gives a window opened without a name the name of
+its process, so the workspace kitty takes one of its own, and every window
+with that name is left out: its hidden window and any the user opens there.
+Listing them would put a terminal with no target beside every workspace, and
+the user who wants one opens it in a kitty of their own, which revier reads
+and can attach. Rejected: listing them as nameless windows for the core to
+pair, which costs core work for a terminal the user has elsewhere.

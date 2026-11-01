@@ -258,7 +258,7 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 	}
 	ref := res.Ref
 	if res.Opened && !ref.IsZero() && err == nil && raise {
-		c.raiseNew(ctx, ref, res.Target)
+		c.raiseNew(ctx, res)
 	}
 	if res.Launched && ref.IsZero() && err == nil {
 		at := time.Now()

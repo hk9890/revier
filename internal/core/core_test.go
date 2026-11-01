@@ -1228,6 +1228,37 @@ func TestATerminalsNewWindowIsRaisedThroughTheWindowHost(t *testing.T) {
 	}
 }
 
+// A terminal's new OS window that is placed is raised too, and the raise
+// takes the window place waited for: a press looks for it once, so a window
+// that never comes holds the press one wait and not two.
+func TestAPlacedNewWindowIsRaisedWithOneLookForIt(t *testing.T) {
+	press := func(place string) (*hosttest.Fake, revier.TargetRef) {
+		t.Helper()
+		raw := project()
+		raw.Targets[0].Runtime.Place = place
+		rt := hosttest.NewRuntime("kitty")
+		rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+		wm := hosttest.New("wm")
+		var osw revier.TargetRef
+		rt.OnOpen = func(revier.Realization) {
+			osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+		}
+		c := &core.Core{Runtime: rt, Window: wm}
+		if _, _, err := c.ActivateWaiting(context.Background(), prepared(t, raw), "home", nil); err != nil {
+			t.Fatalf("Go: %v", err)
+		}
+		return wm, osw
+	}
+	unplaced, _ := press("")
+	placed, osw := press("right top 75% 100%")
+	if !slices.Equal(placed.Focuses, []revier.TargetRef{osw}) || len(placed.Placements[osw.ID]) == 0 {
+		t.Errorf("focuses = %v, placements = %v, want %v raised and placed", placed.Focuses, placed.Placements, osw)
+	}
+	if placed.InstancesCalls != unplaced.InstancesCalls {
+		t.Errorf("the window host was listed %d times for a placed window, %d for one not placed: want one look for the window either way", placed.InstancesCalls, unplaced.InstancesCalls)
+	}
+}
+
 // A window manager reuses window ids, so the id a target was bound to can
 // come back as an unrelated window. Nothing about that failure is visible -
 // the wrong window simply comes forward - so the binding is re-checked
