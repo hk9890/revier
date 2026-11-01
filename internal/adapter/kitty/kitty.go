@@ -677,7 +677,7 @@ func (h *Host) fill(ctx context.Context, socket string, first int, r revier.Real
 		return revier.TargetRef{}, err
 	}
 	for _, p := range panels[1:] {
-		args := append([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}, varArgs(r.Vars)...)
+		args := append(append([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first)}, holdArgs(p)...), varArgs(r.Vars)...)
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
 		}
@@ -706,6 +706,17 @@ func (h *Host) fill(ctx context.Context, socket string, first int, r revier.Real
 		}
 	}
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
+}
+
+// holdArgs keeps a panel's window open after its command ends, so the output
+// stays readable. A panel with no command is kitty's own shell, and its
+// window closes when the shell exits; --hold would start a new shell at a
+// prompt in it instead (kitty 0.42 and later).
+func holdArgs(p revier.PanelSpec) []string {
+	if len(p.Command) == 0 {
+		return nil
+	}
+	return []string{"--hold"}
 }
 
 // varNames are the variable names in a fixed order, so a launch's arguments
@@ -741,8 +752,8 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 	if err != nil {
 		return "", 0, err
 	}
-	args := append([]string{"--type=os-window",
-		"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}, varArgs(r.Vars)...)
+	args := append(append([]string{"--type=os-window",
+		"--os-window-name", r.Name, "--os-window-title", r.Name}, holdArgs(p)...), varArgs(r.Vars)...)
 	if p.Dir != "" {
 		args = append(args, "--cwd", p.Dir)
 	}
@@ -948,13 +959,7 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bo
 		if i > 0 {
 			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first)}
 		}
-		// A panel with no command is kitty's own shell, and its window
-		// closes when the shell exits; --hold would keep it open, waiting
-		// for a key.
-		if len(p.Command) > 0 {
-			args = append(args, "--hold")
-		}
-		args = append(args, varArgs(vars)...)
+		args = append(append(args, holdArgs(p)...), varArgs(vars)...)
 		if keepFocus {
 			args = append(args, "--keep-focus")
 		}

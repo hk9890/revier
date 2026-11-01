@@ -412,7 +412,7 @@ func TestOpenTabMarksEveryWindowOfTheTab(t *testing.T) {
 
 // A plain shell tab, the one a key opens outside a workspace, is kitty's own
 // shell: it is launched without --hold, so its window closes when the shell
-// exits instead of waiting for a key.
+// exits instead of showing a new shell prompt.
 func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
 	if _, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
@@ -430,6 +430,52 @@ func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
 	want := []string{"launch --type=tab --location=last --match window_id:4 --keep-focus --cwd /home/user"}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A shell panel of a workspace Open builds is kitty's own shell too, as the
+// first panel and as a later one: it is launched without --hold, so `exit`
+// closes its window. A panel with a command keeps --hold, so its output stays
+// readable after it ends.
+func TestOpenHoldsOnlyAPanelWithACommand(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		panels []revier.PanelSpec
+		want   []string
+	}{
+		{"shell first", []revier.PanelSpec{{Kind: revier.PanelShell}, {Kind: revier.PanelAgent, Command: []string{"claude"}}}, []string{
+			"launch --type=os-window --os-window-name session:demo --os-window-title session:demo",
+			"launch --type=window --match window_id:7 --hold claude",
+		}},
+		{"shell later", []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}, []string{
+			"launch --type=os-window --os-window-name session:demo --os-window-title session:demo --hold claude",
+			"launch --type=window --match window_id:7",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHost()
+			var launches []string
+			h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
+			h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
+				if args[0] == "launch" {
+					launches = append(launches, strings.Join(args, " "))
+					if slices.Contains(args, "--type=os-window") {
+						return []byte("7\n"), nil
+					}
+					return []byte("8\n"), nil
+				}
+				return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+					"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}, {"id": 8}}}}}})
+			})
+			if _, err := h.Open(context.Background(), revier.Realization{
+				Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Panels: tc.panels,
+			}); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			if !slices.Equal(launches, tc.want) {
+				t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(tc.want, "\n"))
+			}
+		})
 	}
 }
 
@@ -740,7 +786,7 @@ func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 	}
 	for _, want := range []string{
 		"launch --type=os-window --os-window-name session:demo --os-window-title session:demo --hold --var revier_home=home claude",
-		"launch --type=window --match window_id:7 --hold --var revier_home=home",
+		"launch --type=window --match window_id:7 --var revier_home=home",
 	} {
 		if !slices.Contains(calls, want) {
 			t.Errorf("calls = %q, want %q among them", calls, want)
