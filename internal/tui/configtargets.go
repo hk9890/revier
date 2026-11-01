@@ -205,11 +205,17 @@ func (f targetForm) sharedAt(targets []revier.Target) (int, bool) {
 	if f.adds {
 		return len(targets), true
 	}
-	i := slices.IndexFunc(targets, func(t revier.Target) bool { return reflect.DeepEqual(t, f.base) })
+	i := targetIndex(targets, f.base)
 	if i < 0 {
 		return len(targets), false
 	}
 	return i, true
+}
+
+// targetIndex is where t is in targets, as it was read, or -1 when it is not
+// there.
+func targetIndex(targets []revier.Target, t revier.Target) int {
+	return slices.IndexFunc(targets, func(have revier.Target) bool { return reflect.DeepEqual(have, t) })
 }
 
 // saveTarget writes the form's target, and hands back the shared targets and
@@ -245,12 +251,19 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 
 // dropTarget takes the key that answers the delete question for a shared
 // target. Only y deletes, and a delete a project would not load without is
-// refused and named; ctrl+c quits before it gets here.
+// refused and named; ctrl+c quits before it gets here. A target that left
+// config.toml, or changed, while the question waited is not deleted, nor is
+// the one now in its place.
 func (cs *configScreen) dropTarget(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
-	cs.dropping = false
-	i, ok := cs.targetRow(sf)
-	if msg.String() != "y" || !ok {
+	t := *cs.drop.target
+	cs.drop = dropQuestion{}
+	if msg.String() != "y" {
+		return res
+	}
+	i := targetIndex(sf.targets, t)
+	if i < 0 {
+		res.err = fmt.Errorf("target %q is no longer in config.toml as the question read it; nothing is deleted", t.Name)
 		return res
 	}
 	var written config.TargetsWritten

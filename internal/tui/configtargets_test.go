@@ -433,3 +433,37 @@ func TestTheTargetFormRefusesATargetThatIsGone(t *testing.T) {
 		t.Errorf("the form is gone:\n%s", screen(m))
 	}
 }
+
+// y answers the question for the target it was asked about, also when
+// config.toml got a target above it while the question waited: the target
+// now under the cursor is not deleted.
+func TestTheDeleteQuestionDeletesItsTargetAfterOneIsAddedAbove(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "alt+d")
+	m = rewritten(t, m, root, notesTarget+sharedTargets)
+	if f := footer(m); !strings.Contains(f, `delete target "editor"`) {
+		t.Errorf("footer = %q, want the question about editor", f)
+	}
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); !strings.Contains(got, `name = "notes"`) || strings.Contains(got, `name = "editor"`) {
+		t.Errorf("config.toml =\n%s\nwant editor gone and notes kept\nfooter: %s", got, footer(m))
+	}
+}
+
+// A target that left config.toml while the question waited is not deleted,
+// nor is the one now in its place: the footer says it is gone.
+func TestTheDeleteQuestionRefusesATargetThatIsGone(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "alt+d")
+	without := strings.Replace(sharedTargets, editorTarget, "", 1)
+	m = rewritten(t, m, root, without)
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); got != without {
+		t.Errorf("config.toml =\n%s\nwant it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `target "editor" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the target is gone", f)
+	}
+}

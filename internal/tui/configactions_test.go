@@ -215,3 +215,45 @@ func TestTheActionFormRefusesAnActionThatIsGone(t *testing.T) {
 		t.Errorf("the form is gone, or lost what was typed:\n%s", screen(m))
 	}
 }
+
+// y answers the question for the action it was asked about, also when
+// config.toml got an action above it while the question waited: the action
+// now under the cursor is not deleted.
+func TestTheDeleteQuestionDeletesItsActionAfterOneIsAddedAbove(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 1), "alt+d")
+	lint := "[[action]]\nkey = \"ctrl+l\"\nname = \"lint\"\nrun = [\"lint\"]\n\n"
+	m = rewritten(t, m, root, lint+syncBuildConfig)
+	if f := footer(m); !strings.Contains(f, `delete action "build"`) {
+		t.Errorf("footer = %q, want the question about build", f)
+	}
+	press(m, "y")
+
+	want := lint + "[[action]]\nkey = \"ctrl+g\"\nname = \"sync\"\nrun = [\"git\", \"pull\"]\n"
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// An action that left config.toml while the question waited is not
+// deleted, nor is the one now in its place: the footer says it is gone.
+func TestTheDeleteQuestionRefusesAnActionThatIsGone(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 0), "alt+d")
+	build := "[[action]]\nkey = \"ctrl+b\"\nname = \"build\"\nrun = [\"make\"]\n"
+	m = rewritten(t, m, root, build)
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); got != build {
+		t.Errorf("config.toml = %q, want it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `action "sync" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the action is gone", f)
+	}
+}

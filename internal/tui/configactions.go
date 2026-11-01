@@ -47,13 +47,18 @@ func (f actionForm) at(actions []config.Action) (int, bool) {
 	if f.adds {
 		return len(actions), true
 	}
-	i := slices.IndexFunc(actions, func(a config.Action) bool {
-		return a.Name == f.was.Name && a.Key == f.was.Key && slices.Equal(a.Run, f.was.Run)
-	})
+	i := actionIndex(actions, f.was)
 	if i < 0 {
 		return len(actions), false
 	}
 	return i, true
+}
+
+// actionIndex is where act is in actions, or -1 when it is not there.
+func actionIndex(actions []config.Action, act config.Action) int {
+	return slices.IndexFunc(actions, func(a config.Action) bool {
+		return a.Name == act.Name && a.Key == act.Key && slices.Equal(a.Run, act.Run)
+	})
 }
 
 // actionRow is the action the config screen's cursor is on, if it is on one.
@@ -193,15 +198,20 @@ func checkAction(sf surface, act config.Action, index int) error {
 
 // dropAction takes the key that answers the delete question. Only y deletes;
 // any other key but ctrl+c, which quits before it gets here, keeps the
-// action and is not acted on.
+// action and is not acted on. An action that left config.toml while the
+// question waited is not deleted, nor is the one now in its place.
 func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
-	cs.dropping = false
-	i, ok := cs.actionRow(sf)
-	if msg.String() != "y" || !ok {
+	act := cs.drop.action
+	cs.drop = dropQuestion{}
+	if msg.String() != "y" {
 		return res
 	}
-	act := sf.actions[i]
+	i := actionIndex(sf.actions, act)
+	if i < 0 {
+		res.err = fmt.Errorf("action %q is no longer in config.toml as the question read it; nothing is deleted", act.Name)
+		return res
+	}
 	if err := cs.write(func(root string) error { return config.RemoveAction(root, i, act) }); err != nil {
 		res.err = err
 		return res
@@ -211,15 +221,12 @@ func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	return res
 }
 
-// dropPrompt is the delete question for the target or action under the
-// cursor.
+// dropPrompt is the delete question for the target or action it was asked
+// for.
 func (cs *configScreen) dropPrompt(sf surface) string {
-	question := ""
-	if i, ok := cs.actionRow(sf); ok {
-		question = fmt.Sprintf("delete action %q?", sf.actions[i].Name)
-	}
-	if i, ok := cs.targetRow(sf); ok {
-		question = fmt.Sprintf("delete target %q from every project?", sf.targets[i].Name)
+	question := fmt.Sprintf("delete action %q?", cs.drop.action.Name)
+	if t := cs.drop.target; t != nil {
+		question = fmt.Sprintf("delete target %q from every project?", t.Name)
 	}
 	return sf.theme.Attention.Render(" "+question+"  ") +
 		sf.theme.Help.Render("y: delete · any other key: keep")

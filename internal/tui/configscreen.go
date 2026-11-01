@@ -64,7 +64,16 @@ type configScreen struct {
 	chord     textinput.Model // the trigger key, while it is typed
 	aform     actionForm      // the action being added or changed, while its form is up
 	tform     targetForm      // the shared target being added or changed, while its form is up
-	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
+	drop      dropQuestion    // the target or action the delete question waits on a y for
+}
+
+// dropQuestion is the shared target or action a delete question was asked
+// for. It keeps the entry, not its place: the files read again at the focus
+// can replace the lists while it waits.
+type dropQuestion struct {
+	open   bool
+	target *revier.Target // the shared target asked for; nil for an action
+	action config.Action
 }
 
 func newConfigScreen(th theme.Theme, cfg *config.Config) configScreen {
@@ -160,7 +169,7 @@ func (cs *configScreen) open() {
 	cs.refused = ""
 	cs.aform = actionForm{}
 	cs.tform = targetForm{}
-	cs.dropping = false
+	cs.drop = dropQuestion{}
 	cs.readProblems()
 }
 
@@ -178,17 +187,16 @@ func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 			return cs.saveTarget(sf, *form.save), cmd
 		}
 		return configResult{err: form.err}, cmd
-	case cs.dropping && key.Matches(msg, sf.keys.Quit):
+	case cs.drop.open && key.Matches(msg, sf.keys.Quit):
 		return configResult{err: sf.err}, tea.Quit
-	case cs.dropping:
-		if _, onTarget := cs.targetRow(sf); onTarget {
-			return cs.dropTarget(sf, msg), nil
-		}
+	case cs.drop.open && cs.drop.target != nil:
+		return cs.dropTarget(sf, msg), nil
+	case cs.drop.open:
 		return cs.dropAction(sf, msg), nil
 	}
 	var res configResult
-	_, onAction := cs.actionRow(sf)
-	_, onTarget := cs.targetRow(sf)
+	a, onAction := cs.actionRow(sf)
+	t, onTarget := cs.targetRow(sf)
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
 		return res, tea.Quit
@@ -198,8 +206,11 @@ func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 		cs.row = max(cs.row-1, 0)
 	case key.Matches(msg, sf.keys.Down):
 		cs.row = min(cs.row+1, cs.addRow(sf))
-	case (onAction || onTarget) && key.Matches(msg, sf.keys.Delete):
-		cs.dropping = true
+	case onAction && key.Matches(msg, sf.keys.Delete):
+		cs.drop = dropQuestion{open: true, action: sf.actions[a]}
+	case onTarget && key.Matches(msg, sf.keys.Delete):
+		target := sf.targets[t]
+		cs.drop = dropQuestion{open: true, target: &target}
 	case onTarget && key.Matches(msg, sf.keys.Enter), cs.row == cs.addTargetRow(sf) && key.Matches(msg, sf.keys.Enter):
 		return res, cs.openTargetForm(sf, cs.row-int(configRows))
 	case onAction && key.Matches(msg, sf.keys.Enter), cs.row == cs.addRow(sf) && key.Matches(msg, sf.keys.Enter):
