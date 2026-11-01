@@ -908,3 +908,13 @@ opens anything in the popup. The survey still reads every kitty, for D110 and
 for terminals of the user's own. That kitty never has the focus, so the window
 host raises a new workspace (D19). Rejected: a kitty per workspace, which
 costs a kitty's memory for each.
+
+### D166 — the workspace kitty starts with the session's login environment
+
+Extends D165. A kitty window gets its kitty's environment, and the workspace
+kitty was started by whichever process opened the first workspace: a shell's
+venv or credentials then reached every project's workspace until that kitty
+exited. revier now starts it through the user's service manager, so it has
+the login environment however it was asked, and starts it detached only where
+there is none. Rejected: a fixed list of variables, which drops what the
+desktop sets that revier does not know of.

@@ -13,5 +13,11 @@ func (h *Host) SetSockets(f func() []string) { h.sockets = f }
 
 func (h *Host) SetStarter(f func(ctx context.Context, args ...string) error) { h.start = f }
 
+// StartProcess runs the real start of the workspace kitty, for the L4 test
+// that puts scripts named kitty and systemd-run first on PATH.
+func (h *Host) StartProcess(ctx context.Context, args ...string) error {
+	return h.startProcess(ctx, args...)
+}
+
 func (h *Host) SetOwnSocket(f func() string)           { h.ownSocket = f }
 func (h *Host) SetParents(f func(pid int) (int, bool)) { h.parent = f }

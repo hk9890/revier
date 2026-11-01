@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 // Discovery reads the kernel's socket table, which holds the sockets of every
@@ -81,7 +79,7 @@ func TestDiscoveryTakesTheSocketANewKittyIsStartedOn(t *testing.T) {
 			return errors.New("no kitty in this test")
 		},
 	}
-	if _, _, err := h.startKitty(context.Background(), revier.Realization{Name: "session:demo"}, revier.PanelSpec{}); err == nil {
+	if _, err := h.startKitty(context.Background()); err == nil {
 		t.Fatal("startKitty reported a kitty that the starter never started")
 	}
 	socket := strings.ReplaceAll(listenOn, "{kitty_pid}", "4000")

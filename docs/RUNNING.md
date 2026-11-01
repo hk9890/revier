@@ -301,10 +301,11 @@ belongs in a command they run, not one you run for them.
 
 When the user has handed over the screen, verify the kitty host on the scratch
 project. Its OS window is named after the home realization, `home`, so first
-check that `kitten @ ls` lists no `wm_name` `home` of the user's. The last line
-closes what it opened:
+check that no window of the user's, in any kitty, is titled `home`; the
+command below prints nothing then. The last line closes what it opened:
 
 ```bash
+wctl list --json | jq '.[] | select(.title=="home") | {id, wm_class}'   # must print nothing
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above
 printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > "$S/config.toml"   # gnome raises the OS window
 ./bin/revier open demo                                    # a kitty OS window titled home

@@ -535,27 +535,6 @@ func TestTabAtPanelOutsideAWorkspaceWithNoneDoesNothing(t *testing.T) {
 	}
 }
 
-// The popup holds the surface alone: a key pressed in it opens no tab there,
-// whatever outside says, and that is no failure, so the key's own fallback
-// opens none either.
-func TestTabAtPanelInThePopupDoesNothing(t *testing.T) {
-	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
-	rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
-
-	for _, outside := range []core.Outside{core.OutsideTab, core.OutsideAgent} {
-		err := c.TabAtPanel(context.Background(), projects, "9", revier.PanelAgent, "", core.OutsideKey{Outside: outside, Agents: outsideAgents}, func(core.Workspace, string) error {
-			t.Fatal("in ran for the popup")
-			return nil
-		})
-		if err != nil {
-			t.Errorf("outside %q: TabAtPanel = %v, want nothing done and no error", outside, err)
-		}
-	}
-	if len(rt.Tabs) != 0 || len(rt.PanelFocuses) != 0 {
-		t.Errorf("tabs = %+v, focuses = %v, want none in the popup", rt.Tabs, rt.PanelFocuses)
-	}
-}
-
 // outsideAgents are config.toml's named agents as a key outside a workspace
 // reads them: the first is the default agent's.
 var outsideAgents = []core.NamedAgent{

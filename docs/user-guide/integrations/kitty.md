@@ -10,6 +10,12 @@ a kitty you started and never in the popup's. A kitty option applies to every
 window of its kitty, so the popup's options, such as its hidden title bar,
 stay out of your workspaces.
 
+revier's kitty runs in the background with no window of its own, and keeps
+running after you close the last workspace, so the next one opens at once.
+It starts with your desktop session's environment, wherever you run `revier
+open`: a shell's own settings, such as an activated virtualenv, do not reach
+your workspaces. A window you open in it yourself is no workspace.
+
 ## What you need
 
 - kitty, with `kitten` on your PATH or beside the `kitty` binary.

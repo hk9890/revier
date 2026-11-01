@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -786,9 +787,13 @@ func TestOpenLaunchesOnlyIntoAWorkspaceKittyThatAnswers(t *testing.T) {
 }
 
 // With no workspace kitty running, Open starts one on a socket discovery
-// recognises and waits for it to answer, also while the popup's kitty
-// answers. The socket is a file in the runtime directory, which only the user
-// can enter.
+// recognises, waits for it to answer, and opens the workspace in it as it
+// opens every other: the kitty starts hidden, with no workspace of its own,
+// also while the popup's kitty answers. The socket is a file in the runtime
+// directory, which only the user can enter. The kitty's name is its own, never
+// a workspace's: a window opened in it with no name takes that name, and must
+// not be a second copy of the workspace. The window it hides is listed as no
+// instance.
 func TestOpenStartsTheWorkspaceKittyWhenNoneRuns(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	h := newHost()
@@ -805,18 +810,29 @@ func TestOpenStartsTheWorkspaceKittyWhenNoneRuns(t *testing.T) {
 		}
 		return []string{"unix:/run/user/1000/kitty-4001"}
 	})
-	var calls []call
+	hidden := map[string]any{"id": 1, "wm_name": "revier-kitty",
+		"tabs": []map[string]any{{"is_active": true, "windows": []map[string]any{{"id": 1, "is_active": true}}}}}
+	rec := &recorder{}
+	launched := 0
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
-		calls = append(calls, call{socket, args})
-		if socket == "unix:/run/user/1000/kitty-4001" && args[0] == "launch" {
-			t.Errorf("launched %q into the popup's kitty", args)
+		rec.add(socket, args)
+		if socket == "unix:/run/user/1000/kitty-4001" {
+			if args[0] == "launch" {
+				t.Errorf("launched %q into the popup's kitty", args)
+			}
+			return json.Marshal([]map[string]any{{"id": 1, "wm_name": "revier-popup"}})
 		}
 		switch args[0] {
 		case "ls":
-			return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
-				"tabs": []map[string]any{{"is_active": true, "windows": []map[string]any{{"id": 1, "is_active": true}}}}}})
+			windows := []map[string]any{hidden}
+			if launched > 0 {
+				windows = append(windows, map[string]any{"id": 2, "wm_name": "session:demo",
+					"tabs": []map[string]any{{"is_active": true, "windows": []map[string]any{{"id": 2, "is_active": true}, {"id": 3}}}}})
+			}
+			return json.Marshal(windows)
 		case "launch":
-			return []byte("2\n"), nil
+			launched++
+			return []byte(strconv.Itoa(launched+1) + "\n"), nil
 		}
 		return nil, nil
 	})
@@ -828,23 +844,38 @@ func TestOpenStartsTheWorkspaceKittyWhenNoneRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if ref.ID != "/run/user/1000/revier-kitty-5000/1" {
-		t.Errorf("ref = %+v", ref)
+	if ref.ID != "/run/user/1000/revier-kitty-5000/2" {
+		t.Errorf("ref = %+v, want the OS window launched into the workspace kitty", ref)
 	}
 	joined := strings.Join(started, " ")
-	for _, want := range []string{"--detach", "--listen-on unix:/run/user/1000/revier-kitty-{kitty_pid}", "--name session:demo", "--title session:demo", "--directory /d", "claude"} {
+	for _, want := range []string{"--listen-on unix:/run/user/1000/revier-kitty-{kitty_pid}", "--name revier-kitty", "--start-as=hidden"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("kitty started with %q, lacks %q", joined, want)
 		}
 	}
-	var split bool
-	for _, c := range calls {
-		if c.args[0] == "launch" && strings.Contains(strings.Join(c.args, " "), "--type=window") {
-			split = true
+	for _, unwanted := range []string{"session:demo", "--title", "claude"} {
+		if strings.Contains(joined, unwanted) {
+			t.Errorf("kitty started with %q, holds %q: the kitty is no workspace's", joined, unwanted)
 		}
 	}
-	if !split {
-		t.Error("the second panel was never launched into the new kitty")
+	var first, split bool
+	for _, c := range rec.all() {
+		args := strings.Join(c.args, " ")
+		first = first || c.args[0] == "launch" && strings.Contains(args, "--type=os-window --os-window-name session:demo")
+		split = split || c.args[0] == "launch" && strings.Contains(args, "--type=window")
+	}
+	if !first || !split {
+		t.Errorf("calls = %+v, want the workspace and its second panel launched into the new kitty", rec.all())
+	}
+
+	instances, err := h.Instances(context.Background())
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	for _, inst := range instances {
+		if inst.Ref.ID == "/run/user/1000/revier-kitty-5000/1" {
+			t.Errorf("instances = %+v, want the hidden window left out", instances)
+		}
 	}
 }
 

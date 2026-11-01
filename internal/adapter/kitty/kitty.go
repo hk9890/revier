@@ -22,6 +22,10 @@
 //     concurrently. That is one call per kitty process, which does not grow
 //     with the project count. A new OS window opens in one of them only: the
 //     workspace kitty this host starts, on `$XDG_RUNTIME_DIR/revier-kitty-<pid>`.
+//   - `--start-as=hidden` starts kitty with one OS window it never shows, not
+//     with none. Its `platform_window_id` is null, but so is every window's
+//     on Wayland (verified on kitty 0.49.2), so the workspace kitty is told
+//     apart by the name it gives that window.
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
@@ -68,6 +72,13 @@ var socketFile = regexp.MustCompile(`^(?:revier-)?kitty-(\d+)$`)
 // whole process's, so no OS window opens in a kitty the user or the popup
 // started: that kitty's options would reach it (decisions.md D165).
 var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
+
+// workspaceName is the workspace kitty's own name for an OS window: the one
+// of the window it hides, and of any window opened in it without a name, as
+// one opened by hand. kitty takes a process's `--name` for those, and a
+// workspace's name would make that window a second copy of the workspace.
+// No such window is listed: none is a workspace.
+const workspaceName = "revier-kitty"
 
 // abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
 // the one this host asked for up to 0.13. An abstract socket has no
@@ -426,6 +437,9 @@ func (h *Host) decode(l listing) []revier.Instance {
 	parent := h.parents()
 	out := make([]revier.Instance, 0, len(l.windows))
 	for _, w := range l.windows {
+		if w.WMName == workspaceName {
+			continue
+		}
 		// An OS window kitty opened for itself carries the default instance
 		// name, which identifies nothing: every such window has it. Reporting
 		// it as no title at all is the fact the core needs to know that this
@@ -728,93 +742,98 @@ func (h *Host) title(ctx context.Context, socket string, id int, title string) e
 // starting it when none answers, and returns the socket it lives on and the
 // id of that panel's window.
 func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	if socket, ok := h.workspaceKitty(ctx); ok {
-		args := []string{"--type=os-window",
-			"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}
-		if p.Dir != "" {
-			args = append(args, "--cwd", p.Dir)
-		}
-		args = append(args, p.Command...)
-		id, err := h.launch(ctx, socket, args...)
-		if err != nil {
-			return "", 0, err
-		}
-		return socket, id, nil
+	socket, err := h.workspaceKitty(ctx)
+	if err != nil {
+		return "", 0, err
 	}
-	return h.startKitty(ctx, r, p)
+	args := []string{"--type=os-window",
+		"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}
+	if p.Dir != "" {
+		args = append(args, "--cwd", p.Dir)
+	}
+	args = append(args, p.Command...)
+	id, err := h.launch(ctx, socket, args...)
+	if err != nil {
+		return "", 0, err
+	}
+	return socket, id, nil
 }
 
-// workspaceKitty is the socket of the first workspace kitty that answers. The
-// kernel lists a socket until its kitty has exited, so one that is listed can
-// be one a launch would fail on.
-func (h *Host) workspaceKitty(ctx context.Context) (string, bool) {
+// workspaceKitty is the socket of the first workspace kitty that answers, and
+// of one it starts when none does. The kernel lists a socket until its kitty
+// has exited, so one that is listed can be one a launch would fail on.
+func (h *Host) workspaceKitty(ctx context.Context) (string, error) {
 	for _, s := range h.socketList() {
 		if !workspaceSocket.MatchString(s) {
 			continue
 		}
 		if _, err := h.kitten(ctx, s, "ls"); err == nil {
-			return s, true
+			return s, nil
 		}
 	}
-	return "", false
+	return h.startKitty(ctx)
 }
 
-// startKitty starts the workspace kitty with the first panel and waits for its
-// control socket. `{kitty_pid}` is expanded by kitty, so the socket matches the
-// name discovery looks for. With no runtime directory there is no place that
-// is the user's alone, and no kitty is started: a socket anywhere else is one
+// startKitty starts the workspace kitty and waits for its control socket. It
+// starts hidden, with no workspace in it, so every workspace opens the same
+// way, and its hidden window keeps it running when the last workspace
+// closes. That window runs sleep: a shell's startup files can start anything.
+// `{kitty_pid}` is expanded by kitty, so the socket matches the name
+// discovery looks for. With no runtime directory there is no place that is
+// the user's alone, and no kitty is started: a socket anywhere else is one
 // another user can connect to.
-func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
+func (h *Host) startKitty(ctx context.Context) (string, error) {
 	listenOn := workspaceListenOn()
 	if listenOn == "" {
-		return "", 0, errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
+		return "", errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
 	}
 	before := map[string]bool{}
 	for _, s := range h.socketList() {
 		before[s] = true
 	}
-	args := []string{"--detach", "--listen-on", listenOn,
+	if err := h.startProcess(ctx, "--listen-on", listenOn,
 		"-o", "allow_remote_control=socket-only",
-		"--name", r.Name, "--title", r.Name, "--hold"}
-	if p.Dir != "" {
-		args = append(args, "--directory", p.Dir)
-	}
-	args = append(args, p.Command...)
-	if err := h.startProcess(ctx, args...); err != nil {
-		return "", 0, err
+		"--name", workspaceName, "--start-as=hidden", "sleep", "infinity"); err != nil {
+		return "", err
 	}
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		for _, s := range h.socketList() {
-			if before[s] {
+			if before[s] || !workspaceSocket.MatchString(s) {
 				continue
 			}
-			windows, err := h.ls(ctx, s)
-			if err != nil {
-				continue
-			}
-			for _, w := range windows {
-				if w.WMName != r.Name || len(w.Tabs) == 0 || len(w.Tabs[0].Windows) == 0 {
-					continue
-				}
-				return s, w.Tabs[0].Windows[0].ID, nil
+			if _, err := h.kitten(ctx, s, "ls"); err == nil {
+				return s, nil
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return "", 0, ctx.Err()
+			return "", ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return "", 0, fmt.Errorf("kitty: started for %q but no control socket answered within 5s", r.Name)
+	return "", errors.New("kitty: started the workspace kitty, but no control socket answered within 5s")
 }
 
+// startProcess starts the workspace kitty through the user's service manager
+// where there is one, so it has the session's login environment whatever
+// process asked first: started from a shell, it would hand that shell's
+// environment to every workspace after (decisions.md D166). Without
+// systemd-run it is started detached from this process.
 func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if h.start != nil {
 		return h.start(ctx, args...)
 	}
-	c := exec.CommandContext(ctx, "kitty", args...)
+	kitty, err := exec.LookPath("kitty")
+	if err != nil {
+		return fmt.Errorf("kitty: start: %w", err)
+	}
+	name, argv := kitty, append([]string{"--detach"}, args...)
+	if run, err := exec.LookPath("systemd-run"); err == nil {
+		name, argv = run, append([]string{"--user", "--quiet", "--collect", "--", kitty}, args...)
+	}
+	c := exec.CommandContext(ctx, name, argv...)
 	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
 	// A process group of its own: the ctrl+c a terminal sends to revier's
 	// group cancels a shutdown or a restore after its step, and must not end
