@@ -178,6 +178,8 @@ func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 			return cs.saveTarget(sf, *form.save), cmd
 		}
 		return configResult{err: form.err}, cmd
+	case cs.dropping && key.Matches(msg, sf.keys.Quit):
+		return configResult{err: sf.err}, tea.Quit
 	case cs.dropping:
 		if _, onTarget := cs.targetRow(sf); onTarget {
 			return cs.dropTarget(sf, msg), nil

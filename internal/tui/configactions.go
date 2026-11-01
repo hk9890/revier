@@ -192,7 +192,8 @@ func checkAction(sf surface, act config.Action, index int) error {
 }
 
 // dropAction takes the key that answers the delete question. Only y deletes;
-// any other key keeps the action and is not acted on.
+// any other key but ctrl+c, which quits before it gets here, keeps the
+// action and is not acted on.
 func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
 	cs.dropping = false

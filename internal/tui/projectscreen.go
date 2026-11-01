@@ -185,6 +185,8 @@ func (ps *projectScreen) key(sf surface, locked error, msg keyPress) (projectRes
 			return ps.saveTarget(sf, *form.save), cmd
 		}
 		return projectResult{err: form.err}, cmd
+	case ps.dropping && key.Matches(msg, sf.keys.Quit):
+		return projectResult{err: sf.err}, tea.Quit
 	case ps.dropping:
 		return ps.dropTarget(sf, msg), nil
 	}
