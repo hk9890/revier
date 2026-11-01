@@ -55,8 +55,9 @@ usage:
                                 one, written here under --name or the project's
                                 own
   revier go <target> [-p name] [--picker]
-                                run-or-raise a target; pressing it again returns home;
-                                --picker opens the popup when no project resolves
+                                run-or-raise a target, or run its command;
+                                pressing it again returns home; --picker opens
+                                the popup when no project resolves
   revier popup                  the TUI in a kitty window of its own, or the one open
   revier run <action> [-p name] run a configured action in the project
   revier attach [-p name]       bind the focused window to a project

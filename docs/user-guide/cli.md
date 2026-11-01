@@ -22,7 +22,7 @@ in full.
 | `revier new` | Write a project file for the current directory. |
 | `revier rename <old> <new>` | Give a closed project a new name. See [Projects](projects.md). |
 | `revier open` | Run-or-raise the project's workspace. |
-| `revier go <target>` | Run-or-raise a target. Run again, it returns to the home. This is what a desktop key runs. |
+| `revier go <target>` | Run-or-raise a target, or run its [command](configuration.md#command-targets). Run again, it returns to the home. This is what a desktop key runs. |
 | `revier attach` | Bind the focused window to the project. |
 | `revier link` | List the machines you added, list a host's projects, or link one. See [Projects on another machine](links.md). |
 | `revier run <action>` | Run an `[[action]]` in the project. |

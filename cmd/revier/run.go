@@ -8,6 +8,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+	"syscall"
+	"time"
 
 	usecase "github.com/hk9890/revier/internal/app"
 )
@@ -72,4 +75,71 @@ func runAction(out io.Writer, argv []string, dir string) error {
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, out, os.Stderr
 	return c.Run()
+}
+
+// runTargetCommand runs a command target's argv in dir to its end, for the
+// core (core.Core.Run). The command is the user's launcher: it raises what it
+// shows and detaches what lives on, so revier waits for it and reads its exit
+// status.
+//
+// It runs in a session of its own, so a ctrl+c in the terminal of the TUI
+// does not reach it. ctx ending kills the command alone, not what it started,
+// so a browser it brought up outlives a run revier gave up on. A child that
+// inherited stderr and keeps it open holds the run for WaitDelay at most, and
+// a command that exited 0 before then ran well. stdin and stdout are the null
+// device; stderr is kept to its last stderrCap bytes, for the line the error
+// reports, after ctx's error too when ctx ended the run.
+func runTargetCommand(ctx context.Context, argv []string, dir string) error {
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	c.Dir = dir
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	c.WaitDelay = time.Second
+	var stderr tail
+	c.Stderr = &stderr
+	err := c.Run()
+	var exit *exec.ExitError
+	switch {
+	case err == nil, errors.Is(err, exec.ErrWaitDelay):
+		return nil
+	case ctx.Err() != nil:
+		if line := stderr.lastLine(); line != "" {
+			return fmt.Errorf("%w: %s", ctx.Err(), line)
+		}
+		return ctx.Err()
+	case !errors.As(err, &exit):
+		return fmt.Errorf("command did not start: %w", err)
+	}
+	what := "command " + exit.String()
+	if code := exit.ExitCode(); code >= 0 {
+		what = fmt.Sprintf("command exited %d", code)
+	}
+	if line := stderr.lastLine(); line != "" {
+		return fmt.Errorf("%s: %s", what, line)
+	}
+	return errors.New(what)
+}
+
+// stderrCap is how much of a command's stderr runTargetCommand keeps.
+const stderrCap = 4 << 10
+
+// tail is the last stderrCap bytes written to it.
+type tail struct{ b []byte }
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if over := len(t.b) - stderrCap; over > 0 {
+		t.b = t.b[over:]
+	}
+	return len(p), nil
+}
+
+// lastLine is the last line that holds more than white space.
+func (t *tail) lastLine() string {
+	lines := strings.Split(string(t.b), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
 }

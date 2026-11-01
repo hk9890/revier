@@ -65,12 +65,17 @@ func validateShared(shared []map[string]any) []error {
 // validateRemoteKeys refuses a key under [target.remote] that is not one of
 // the two realizations. partsFor lifts the remote table onto the target for a
 // link, so a key beside them would silently change that target's name, key or
-// home for every link and for no local project.
+// home for every link and for no local project. A command has no remote part:
+// a link runs no command target.
 func validateRemoteKeys(name string, remote map[string]any) []error {
 	var errs []error
 	// Sorted: problemsAdded compares the joined text of two parses.
 	for _, k := range slices.Sorted(maps.Keys(remote)) {
-		if k != "window" && k != "runtime" {
+		switch k {
+		case "window", "runtime":
+		case "command":
+			errs = append(errs, fmt.Errorf("target %q: [target.remote] holds no command; a link runs no command target", name))
+		default:
 			errs = append(errs, fmt.Errorf("target %q: [target.remote] holds a window and a runtime realization; %q belongs on the target itself", name, k))
 		}
 	}
@@ -129,7 +134,9 @@ func decodeProject(data []byte, shared []map[string]any) (revier.Project, map[re
 // and [target.runtime], and one for a link under [target.remote.window] and
 // [target.remote.runtime] (decisions.md D82). Both parts together are only
 // ever written in config.toml, where one target serves every project: a
-// project file is one kind or the other, and writes the part of its kind.
+// project file is one kind or the other, and writes the part of its kind. A
+// command, [target.command], is a local part alone: a link has no command
+// target.
 //
 // partsFor is the targets of one project with the part of its kind taken as
 // the realization. A shared target with no part of that kind is not a target
@@ -148,8 +155,10 @@ func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) [
 			// The two realizations alone: any other key under [target.remote]
 			// is refused by name (validateRemoteKeys), and lifted it would
 			// change the name the refusal is laid on.
+			// A command is a local part alone, and a link drops it.
 			delete(flat, "window")
 			delete(flat, "runtime")
+			delete(flat, "command")
 			for _, k := range []string{"window", "runtime"} {
 				if v, ok := remote[k]; ok {
 					flat[k] = v
@@ -159,7 +168,8 @@ func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) [
 		name, _ := flat["name"].(string)
 		_, window := flat["window"]
 		_, runtime := flat["runtime"]
-		if !window && !runtime && !declared[name] {
+		_, command := flat["command"]
+		if !window && !runtime && !command && !declared[name] {
 			continue
 		}
 		out = append(out, flat)
@@ -188,11 +198,14 @@ func validateParts(targets []map[string]any, isLink bool) map[revier.TargetName]
 					errs = append(errs, fmt.Errorf("target %q: a link declares its realization under [target.remote.%s], because it reaches a project on another machine", shown, k))
 				}
 			}
+			if _, ok := t["command"]; ok {
+				errs = append(errs, fmt.Errorf("target %q: a link runs no command target", shown))
+			}
 			if remote, ok := t["remote"].(map[string]any); ok {
 				errs = append(errs, validateRemoteKeys(shown, remote)...)
 			}
 		} else if _, ok := t["remote"]; ok {
-			errs = append(errs, fmt.Errorf("target %q: [target.remote] is for a link, and this project is local; declare [target.window] or [target.runtime]", shown))
+			errs = append(errs, fmt.Errorf("target %q: [target.remote] is for a link, and this project is local; declare [target.window], [target.runtime] or [target.command]", shown))
 		}
 		if len(errs) > 0 {
 			out[revier.TargetName(name)] = errors.Join(append([]error{out[revier.TargetName(name)]}, errs...)...)

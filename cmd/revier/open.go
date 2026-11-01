@@ -61,7 +61,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		ctx, cancel = context.WithTimeout(context.Background(), commandWait)
 		defer cancel()
 	}
-	ref, err := a.goTarget(ctx, p, home.Name)
+	ref, _, err := a.goTarget(ctx, p, home.Name)
 	if err != nil {
 		return err
 	}

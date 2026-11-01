@@ -32,6 +32,10 @@ const (
 	// RestoreRefused is a target its project file refuses, or whose project
 	// is invalid: a mistake in a file, which revier doctor names.
 	RestoreRefused
+	// RestoreCommand is a target that runs a command now: it held a window
+	// when the session was saved, and a run is no open, so nothing restores
+	// it.
+	RestoreCommand
 )
 
 var restoreNames = map[RestoreAction]string{
@@ -41,6 +45,7 @@ var restoreNames = map[RestoreAction]string{
 	RestoreNoTarget:  "no such target",
 	RestoreNoHost:    "no host for it here",
 	RestoreRefused:   "refused by its project file; see revier doctor",
+	RestoreCommand:   "runs a command; not restored",
 }
 
 func (a RestoreAction) String() string { return restoreNames[a] }
@@ -548,6 +553,8 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 				switch {
 				case !declared:
 					step.Action = RestoreNoTarget
+				case tv.Command:
+					step.Action = RestoreCommand
 				case v.Invalid != "" || tv.Reason != "":
 					step.Action = RestoreRefused
 				case !tv.Available:

@@ -73,6 +73,9 @@ type TargetView struct {
 	// instances this survey: the target may be running or not, and a press
 	// on it is refused with this reason until the host answers again.
 	Unknown string `json:"unknown,omitempty"`
+	// Command is a target that runs a command and binds no instance: it has
+	// no Ref and no Host, and is available wherever it is not refused.
+	Command bool `json:"command,omitempty"`
 }
 
 type AgentView struct {

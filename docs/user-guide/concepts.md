@@ -4,10 +4,11 @@ Read this page once. Each word below has one meaning in the whole guide.
 
 ## One operation
 
-Every operation in revier is the same one: **run-or-raise a named target.** A
-desktop key, `revier go`, `revier open` and Enter in the TUI all do it.
+Every operation in revier is the same one: **run-or-raise a named target**,
+by revier or by a command you name. A desktop key, `revier go`, `revier open`
+and Enter in the TUI all do it.
 
-A press of a target's key does one of three things:
+A press of the key of a window or runtime target does one of three things:
 
 - **Run.** Nothing matches the target. revier launches it.
 - **Raise.** The target is open but has no focus. revier raises it.
@@ -15,6 +16,11 @@ A press of a target's key does one of three things:
   home, not to the window you were in before.
 
 A press on the home target itself only raises it.
+
+A command target is the one exception: revier does not run or raise it
+itself. A press runs your command, and the command shows the thing and raises
+its window. A second press goes home while the focus is still where the
+command left it. See [Which kind to declare](#which-kind-to-declare).
 
 ## Hosts
 
@@ -69,6 +75,51 @@ A target can have one part or both. When both hosts work, the window part
 wins, unless the target sets `prefer = "runtime"`. Targets that most projects
 share, such as an editor, go once in `config.toml`
 ([Shared targets](configuration.md#shared-targets)).
+
+A third part, `[target.command]`, takes the place of both: revier runs your
+command, and the command does what a host does for the other parts.
+
+## Which kind to declare
+
+Start from what one press of the key should do.
+
+| You want the key to... | Declare | Second press |
+|---|---|---|
+| Reach a terminal workspace or a tab in it | a target with a `runtime` part | goes home |
+| Reach a program with its own window, such as an editor or a diff viewer | a target with a `window` part | goes home |
+| Show something in a window you share with other projects, such as a browser tab group | a target with a `command` part | goes home, if the focus is still where the command left it |
+| Run a script once, with nothing to reach, such as a sync or a copy | an `[[action]]` | runs it again |
+| Start one more agent or shell beside the open workspace | nothing; use the agent or shell tab key | opens one more |
+
+**Use a window or runtime part** when the program makes its own window or tab
+for this project. revier finds it, raises it, or launches it and waits for it.
+These targets are saved and restored with a session.
+
+**Use a command part** when no new window appears. revier runs your command
+and then stops: it does not wait for a window or attach one. Your command must
+do the work itself: show the right thing and raise its window.
+[Command targets](configuration.md#command-targets) says what else it must do.
+revier does not save a command target in a session, because there is nothing
+to restore.
+
+```toml
+[[target]]
+name = "web"
+key  = "ctrl-shift-i"
+  [target.command]
+  run = ["repo-web", "{{.Name}}", "{{.GitURL}}"]
+```
+
+**Use an action** when the result is not a place to go. An action key works
+only in the TUI. Use `revier run <name>` to run one from a shell.
+
+If a command target fails, `revier go` prints the command's last error line on
+stderr. In the TUI, the footer names the failure, and the logs screen (alt+l)
+shows that line. A desktop key shows nothing, so have your command send its
+own notification.
+
+The fields of each kind are in [Targets](configuration.md#targets) and
+[Actions](configuration.md#actions).
 
 ## Home, tabs and panels
 

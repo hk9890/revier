@@ -593,6 +593,8 @@ func restoreSteps(sf surface, b *strings.Builder, steps core.Restored, w int, su
 			mark = "no host here"
 		case r.Action == core.RestoreRefused:
 			mark = "refused"
+		case r.Action == core.RestoreCommand:
+			mark = "command"
 		case !surveyed:
 			mark = ""
 		}

@@ -27,10 +27,13 @@ territory. revier is how you walk it.
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
 | **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
 
-A target is reached one way: **run-or-raise it; a second press returns to the
-project's home.** Opening a project is run-or-raise on its home target.
-Pressing the editor key is run-or-raise on its editor target. There is no
-second mechanism for a target.
+A target is reached one way: **run-or-raise it, revier's or its command's; a
+second press returns to the project's home.** Opening a project is
+run-or-raise on its home target. Pressing the editor key is run-or-raise on its
+editor target. There is no second mechanism for a target. A command target
+hands the run-or-raise to a command the user writes, for a thing that shows in
+a window shared with other projects; revier keeps the key, the project and the
+second press (D166).
 
 An agent tab or a shell tab is not a target. It is a launcher: each press opens
 one more beside the open workspace, because another agent on the same project
@@ -77,6 +80,11 @@ appears to correlate against, and the result may even be a tab rather than a
 window. Claim-on-appear runs in the TUI, the one long-lived process. No host
 reports window events, so the TUI finds the new instance by comparing one
 survey with the next (D87).
+
+A command target binds nothing. Its window is shared with other projects, so a
+binding would claim that window for one of them. revier records only the
+window the run left the focus on, which is enough to judge the second press
+(D166).
 
 Declared targets live in the project's configuration as match rules.
 Attachments live in revier's own state and last until the application
@@ -153,7 +161,7 @@ Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
 | The contents of a pane across a reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
-| Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. |
+| Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. A command target can hand a tab to a tool that drives the browser; revier still knows no tab (D166). |
 
 ## Non-goals
 
@@ -169,7 +177,8 @@ own (D135).
 ## What degrades, and how far
 
 Degradation is per target, not per feature. A target is available when a host
-that can realize it is available.
+that can realize it is available. A command target needs no host: its command
+runs on any machine, and what it can reach there is its own concern (D166).
 
 | Environment | What works |
 |---|---|
