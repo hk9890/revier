@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/panelstart"
@@ -117,6 +118,16 @@ func (h *Host) tmux(ctx context.Context, args ...string) (string, error) {
 		return "", fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
 	return out.String(), nil
+}
+
+// discard runs a best-effort cleanup of what a failed Open or OpenTab built,
+// and ignores its outcome: the error that failed the step is the one worth
+// reporting. It has a bound of its own, because the end of ctx may be what
+// failed the step, and on an ended ctx tmux would not start at all.
+func (h *Host) discard(ctx context.Context, args ...string) {
+	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_, _ = h.tmux(closing, args...)
 }
 
 // Probe reports tmux usable when the binary exists. It does not require a
@@ -340,16 +351,15 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	f := strings.SplitN(strings.TrimSpace(out), sep, 4)
 	if len(f) != 4 {
 		if len(f) > 1 && strings.HasPrefix(f[1], "$") {
-			_, _ = h.tmux(ctx, "kill-session", "-t", f[1])
+			h.discard(ctx, "kill-session", "-t", f[1])
 		}
 		return revier.TargetRef{}, fmt.Errorf("tmux new-session: unexpected %q", out)
 	}
 	serverPID, session, window, pane := f[0], f[1], f[2], f[3]
 	if err := h.name(ctx, session, window, pane, r, panels); err != nil {
-		// Best effort: the error that failed the session is the one worth
-		// reporting. Left running, a session with no name or no shell would be
-		// matched, or would hold its name against the next Open.
-		_, _ = h.tmux(ctx, "kill-session", "-t", session)
+		// Left running, a session with no name or no shell would be matched,
+		// or would hold its name against the next Open.
+		h.discard(ctx, "kill-session", "-t", session)
 		return revier.TargetRef{}, err
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(serverPID, session), Title: r.Name}, nil
@@ -480,14 +490,13 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	window := f[0]
 	if len(f) != 2 {
 		if strings.HasPrefix(window, "@") {
-			_, _ = h.tmux(ctx, "kill-window", "-t", window)
+			h.discard(ctx, "kill-window", "-t", window)
 		}
 		return "", fmt.Errorf("tmux new-window: unexpected %q", out)
 	}
 	pane := f[1]
 	if err := h.tab(ctx, window, pane, panels, vars); err != nil {
-		// Best effort: the error that failed the tab is the one worth reporting.
-		_, _ = h.tmux(ctx, "kill-window", "-t", window)
+		h.discard(ctx, "kill-window", "-t", window)
 		return "", err
 	}
 	return revier.PanelID(pane), nil

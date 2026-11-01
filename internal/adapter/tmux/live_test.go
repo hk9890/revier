@@ -1350,3 +1350,65 @@ func TestTmuxRunsInAProcessGroupOfItsOwn(t *testing.T) {
 		t.Errorf("tmux's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
 	}
 }
+
+// cancelAfter runs the real tmux of the host's socket and returns a context
+// that ends once the first `step` has run, as a press whose budget runs out in
+// the middle of an Open would.
+func cancelAfter(t *testing.T, h *tmux.Host, step string) context.Context {
+	t.Helper()
+	c, cancel := context.WithCancel(ctx(t))
+	h.SetRunner(func(c context.Context, args ...string) (string, error) {
+		out, err := exec.CommandContext(c, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...).Output()
+		if args[0] == step {
+			cancel()
+		}
+		if err != nil {
+			return "", fmt.Errorf("tmux %s: %w", strings.Join(args, " "), err)
+		}
+		return string(out), nil
+	})
+	return c
+}
+
+// sessionNames lists the sessions on the host's server, none when no server
+// runs.
+func sessionNames(t *testing.T, h *tmux.Host) []string {
+	t.Helper()
+	out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions", "-F", "#{session_name}").Output()
+	return strings.Fields(string(out))
+}
+
+// An Open that the end of its context fails after the session started kills
+// the session: left, it would be matched with no name and no shell.
+func TestOpenCutShortByItsContextLeavesNoSession(t *testing.T) {
+	h := server(t)
+	c := cancelAfter(t, h, "new-session")
+	if _, err := h.Open(c, revier.Realization{Name: "session:cut", Launch: []string{"sh", "-c", "sleep 30"}}); err == nil {
+		t.Fatal("Open succeeded on an ended context, want an error")
+	}
+	if got := sessionNames(t, h); len(got) != 0 {
+		t.Errorf("sessions = %v, want the half-built one killed", got)
+	}
+}
+
+// An OpenTab that the end of its context fails after the window opened kills
+// the window: left, it would run without its mark and be found by nothing.
+func TestOpenTabCutShortByItsContextLeavesNoWindow(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cut := cancelAfter(t, h, "new-window")
+	if _, err := h.OpenTab(cut, ref, revier.Realization{Launch: []string{"sh", "-c", "sleep 30"}}, map[string]string{"REVIER_TARGET": "notes"}); err == nil {
+		t.Fatal("OpenTab succeeded on an ended context, want an error")
+	}
+	h.SetRunner(nil)
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || len(instances[0].Panels) != 1 {
+		t.Errorf("instances = %+v, want the session with its first pane alone", instances)
+	}
+}
