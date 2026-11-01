@@ -106,9 +106,10 @@ message.
 ## Local fallback
 
 When Actions can't be used. Needs `goreleaser` v2 in PATH
-(`go install github.com/goreleaser/goreleaser/v2@latest`), a clean tree on
-the tagged commit, and `mise run quality:full` green there — that run
-substitutes for the CI provenance.
+(`go install github.com/goreleaser/goreleaser/v2@v2.19.0`, the version
+`release.yml` pins), a clean tree on the tagged commit, and
+`mise run quality:full` green there — that run substitutes for the CI
+provenance.
 
 ```bash
 scripts/release-notes vX.Y.Z > /tmp/release-notes.md
