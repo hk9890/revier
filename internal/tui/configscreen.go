@@ -485,14 +485,15 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + field
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
+	aat, _ := cs.aform.at(sf.actions)
 	for i, act := range sf.actions {
-		if cs.aform.open && cs.aform.index == i {
+		if cs.aform.open && aat == i {
 			form()
 			continue
 		}
 		row(cs.actionBase(sf)+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
 	}
-	if cs.aform.open && cs.aform.index == len(sf.actions) {
+	if cs.aform.open && aat == len(sf.actions) {
 		form()
 	} else {
 		row(cs.addRow(sf), "+", "add an action", "run in the selected project, bound to a key")
