@@ -19,8 +19,9 @@ Two passes:
    - whether `decisions.md` or the user guide makes the behaviour deliberate;
    - whether a real user would hit it.
 
-   They also repeated the repros. Pass 2 dropped three claims, dropped half of two more,
-   and changed several severities. The dropped claims are listed at the end.
+   They also repeated the repros. Pass 2 dropped two claims, dropped half of two more,
+   narrowed one, and changed several severities. The dropped claims are listed at the end.
+   26 of the 28 claims survive. Finding 26 groups four CI and build items into one claim.
 
 Every finding below survived pass 2. A finding is **reproduced** when a temporary test or a
 run showed the failure; otherwise it is **by reading**. The repro files were deleted
@@ -101,6 +102,10 @@ afterwards.
     `build` stays.
   - **Crash.** The file loses actions while the form is open on an index past the new end.
     Enter panics with `index out of range [1] with length 0` at `configactions.go:121`.
+  - **Silent add.** The list shrinks so that the form's index equals its new length, for
+    example `sync` is removed from `[sync, build]` while the form is open on `build`. Save
+    takes the `AddAction` branch: the old `build` stays and a second action is added. A fix
+    that only bounds-checks the index misses this case.
   - **Mitigation:** if the name or the key is unchanged, `checkAction` refuses the save as a
     duplicate. A silent overwrite needs both changed.
 
@@ -116,6 +121,8 @@ afterwards.
   - **Crash.** The form is open on `agent`, which has two panels, and a target is inserted
     above it. Save panics with `index out of range [0] with length 0` in `config.putPanels`:
     the form's panels point into a different target.
+  - **Silent add.** When the list shrinks so that the form's index equals its new length,
+    save takes the `AddTarget` branch and the edit is written as a new target.
 
 ### 4. kitty still queries abstract `@kitty-<pid>` sockets — by reading
 
@@ -155,7 +162,7 @@ afterwards.
   - `internal/core/agentfocus.go:71`
   - `internal/core/agenttab.go:648`
   - `internal/core/panel.go:435`
-- **Defect:** `Core.Focus` (`core.go:1153-1157`) checks the window host first, as decisions.md
+- **Defect:** `Core.Focus` (`core.go:1153-1157`) checks the window host first, as `docs/design/decisions.md`
   D89 asks. These paths do not.
 - **Failure scenario:** a kitty workspace is open and `wctl list` times out. The press is
   refused with `cannot raise: the window host lists no window for it` (`ErrUnraisable`). The
@@ -267,7 +274,7 @@ afterwards.
   - the vars read `y`;
   - the real `@revier` vars move into the title.
 
-  A tab's identity is its vars mark (decisions.md D64), so nothing matches that tab, and the
+  A tab's identity is its vars mark (`docs/design/decisions.md` D64), so nothing matches that tab, and the
   next press opens another copy.
 - **Realism:** this needs a `|` in argv[0] before the first space. No common tool does this.
 - **Test gap:** TESTING.md requires a free-text separator test.
@@ -309,7 +316,7 @@ afterwards.
 - **Where:** `internal/state/state.go:155-160`. `internal/ledger/ledger.go:64-65` logs only a
   non-nil error.
 - **Defect:** the code comment calls the discard deliberate because state is "only a
-  convenience". That is stale: state now holds `Bound` and `ShutDown` (decisions.md D141).
+  convenience". That is stale: state now holds `Bound` and `ShutDown` (`docs/design/decisions.md` D141).
   `docs/MONITORING.md:79` documents a `state load` line, which this case never writes.
 - **Failure scenario:** a hand edit or a disk fault corrupts the file. Bindings and the
   shutdown record vanish, and the next `Update` overwrites the file, with nothing in the log.
@@ -440,12 +447,12 @@ afterwards.
 - **Docs against the code.** These are true against the code:
   - OVERVIEW.md: the layout table and the search commands;
   - CODING.md, TESTING.md, MONITORING.md, RUNNING.md and RELEASING.md: the symbols, tasks,
-    paths and recipes;
+    paths and recipes, except the `state load` line of MONITORING.md (finding 18);
   - the user guide's 267 links and anchors;
   - `cli.md`'s list of commands;
   - the v0.24.0 changelog section.
 
-  The exceptions are findings 9, 22 and 23.
+  The exceptions are findings 4, 8, 9, 18, 21, 22 and 23.
 - **Test conventions.** Every package that reaches `config.Root`, `state.Root`,
   `sshconfig.Path` or `kitty.ConfigDir` has a `TestMain` with `testenv.Run`. Test file names
   and build tags agree.
