@@ -426,3 +426,23 @@ func TestAFullShutdownStillOpensItsOwnDialog(t *testing.T) {
 		t.Errorf("seen = %+v while a full shutdown is on record, want nothing written", s)
 	}
 }
+
+// A query typed before the check answers holds the dialog after an end with
+// no shutdown back, not away: it comes up at the first survey after the
+// query is cleared.
+func TestTheDialogAfterAnUncleanEndWaitsForThePlainSurface(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "x")
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Fatalf("subtitle = %q, want the dialog held back while a query is up", sub)
+	}
+
+	m, _ = press(m, "backspace")
+	m = seenSurvey(m)
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier ended without a shutdown; last changed 2026-09-15 18:20.") {
+		t.Errorf("subtitle = %q, want the dialog once the surface is plain", sub)
+	}
+}

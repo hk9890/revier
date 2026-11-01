@@ -216,7 +216,8 @@ When revier ended without a shutdown, for example because its terminal was
 killed, the next start of the TUI, or of the popup, saves what it last saw
 open as a `last seen` session, if something of it is not open now. It then
 opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
-The pane shows what that session holds. The choices are those of the dialog
+If you already typed a query or opened a screen, the dialog waits until you
+are back on the plain project list. The pane shows what that session holds. The choices are those of the dialog
 after a full shutdown. The dialog stays until you choose, and shows once: a
 later start does not offer the session again. See
 [Save and restore sessions](projects.md#save-and-restore-sessions).

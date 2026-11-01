@@ -162,58 +162,59 @@ type Model struct {
 	// The project list. Cursor, paging and filtering are the component's;
 	// the order of the rows a query leaves is ranked's, and what a row looks
 	// like is the delegate's.
-	plist     list.Model
-	filter    string // the query, held here so a refresh can re-apply it
-	keys      keyMap
-	help      help.Model
-	detail    viewport.Model
-	shown     revier.ProjectName               // the project the pane holds, so a new one starts at its top
-	tkeys     map[core.Chord]revier.TargetName // press to target name, over every project
-	unfolds   bool                             // the terminal reports key disambiguation, so a target key binds its chord as pressed
-	consoleF  bool                             // the Linux console's start of F1 to F5 came, so the next press is the key's letter
-	start     revier.ProjectName               // the project to open on, from the working directory
-	placing   bool                             // the cursor was put on the starting project; the next body sync places the list around it
-	lookup    StartLookup                      // the project to open on when start is none, asked once the surface shows
-	popup     bool                             // the surface is the popup: Esc hides it, and the next press raises it
-	endHung   func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
-	hidden    bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
-	errands   int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
-	raises    int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
-	idle      bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
-	blurred   bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
-	surveying bool                             // a survey is out, so a focus regained starts no second one
-	chain     int                              // the number of the refresh tick that is out; an older one is dropped
-	local     core.Report                      // the last survey of this machine, with no host's answer laid over
-	answers   core.RemoteAnswers               // what the linked hosts said last
-	polling   []string                         // the linked hosts that are being asked
-	rounds    map[string]time.Time             // when each linked host was last asked; one not in it is asked at the next survey
-	failed    map[string]int                   // the rounds in a row each linked host gave no answer to
-	onTop     bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
-	seen      session.Session                  // what the surface last wrote as what it saw (seen.go)
-	shrink    session.Session                  // a survey that holds less than seen, written when the next survey agrees
-	checking  bool                             // the check for an end with no shutdown is out
-	recovered bool                             // that check has answered, so what the surface sees is written
-	onRecord  bool                             // a full shutdown is on record, from state: what is seen is not written
-	input     textinput.Model                  // the filter query, with its own cursor
-	over      hovered                          // what the pointer is on
-	cell      *pointerCell                     // where the pointer last was, nil before it moved
-	body      viewport.Model                   // the scrolling window over the list
-	last      click                            // the last click on a row, for telling a double click
-	pclick    paneClick                        // the last click on a pane row, the same for the pane's targets and agents
-	aasked    revier.ProjectName               // the project whose agents' details are out, empty with none
-	aseq      int                              // the number of the last ask for details
-	atook     int                              // the number of the ask whose answer the pane holds
-	adetails  map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
-	achosen   agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
-	akept     agentKey                         // the agent the pane chose itself, kept while no other is more worth a look
-	apending  bool                             // the pane waits for when each agent spoke before it chooses among equals
-	aanswered revier.ProjectName               // the project the details the pane holds are for
-	mirror    mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
-	barMore   bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
-	press     *press                           // where the left button went down, while it is down
-	sel       selection                        // the box a drag is selecting
-	copied    int                              // the characters the last selection copied, shown until the next press
-	closeDone string                           // what the last close del asked for closed, shown until the next press
+	plist        list.Model
+	filter       string // the query, held here so a refresh can re-apply it
+	keys         keyMap
+	help         help.Model
+	detail       viewport.Model
+	shown        revier.ProjectName               // the project the pane holds, so a new one starts at its top
+	tkeys        map[core.Chord]revier.TargetName // press to target name, over every project
+	unfolds      bool                             // the terminal reports key disambiguation, so a target key binds its chord as pressed
+	consoleF     bool                             // the Linux console's start of F1 to F5 came, so the next press is the key's letter
+	start        revier.ProjectName               // the project to open on, from the working directory
+	placing      bool                             // the cursor was put on the starting project; the next body sync places the list around it
+	lookup       StartLookup                      // the project to open on when start is none, asked once the surface shows
+	popup        bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	endHung      func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
+	hidden       bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
+	errands      int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
+	raises       int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
+	idle         bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
+	blurred      bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
+	surveying    bool                             // a survey is out, so a focus regained starts no second one
+	chain        int                              // the number of the refresh tick that is out; an older one is dropped
+	local        core.Report                      // the last survey of this machine, with no host's answer laid over
+	answers      core.RemoteAnswers               // what the linked hosts said last
+	polling      []string                         // the linked hosts that are being asked
+	rounds       map[string]time.Time             // when each linked host was last asked; one not in it is asked at the next survey
+	failed       map[string]int                   // the rounds in a row each linked host gave no answer to
+	onTop        bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
+	seen         session.Session                  // what the surface last wrote as what it saw (seen.go)
+	shrink       session.Session                  // a survey that holds less than seen, written when the next survey agrees
+	checking     bool                             // the check for an end with no shutdown is out
+	recovered    bool                             // that check has answered, so what the surface sees is written
+	uncleanOffer *session.Session                 // what that check offers, until the surface is plain to show it
+	onRecord     bool                             // a full shutdown is on record, from state: what is seen is not written
+	input        textinput.Model                  // the filter query, with its own cursor
+	over         hovered                          // what the pointer is on
+	cell         *pointerCell                     // where the pointer last was, nil before it moved
+	body         viewport.Model                   // the scrolling window over the list
+	last         click                            // the last click on a row, for telling a double click
+	pclick       paneClick                        // the last click on a pane row, the same for the pane's targets and agents
+	aasked       revier.ProjectName               // the project whose agents' details are out, empty with none
+	aseq         int                              // the number of the last ask for details
+	atook        int                              // the number of the ask whose answer the pane holds
+	adetails     map[agentKey]revier.AgentDetail  // what each agent of the project shown said last
+	achosen      agentKey                         // the agent the user last put the cursor on, zero to let the pane choose
+	akept        agentKey                         // the agent the pane chose itself, kept while no other is more worth a look
+	apending     bool                             // the pane waits for when each agent spoke before it chooses among equals
+	aanswered    revier.ProjectName               // the project the details the pane holds are for
+	mirror       mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
+	barMore      bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
+	press        *press                           // where the left button went down, while it is down
+	sel          selection                        // the box a drag is selecting
+	copied       int                              // the characters the last selection copied, shown until the next press
+	closeDone    string                           // what the last close del asked for closed, shown until the next press
 	// tdeclared is every chord a target of any project declares as itself.
 	// It comes from targetKeys with the vocabulary, because the footer asks
 	// it for every target of every row it draws.
@@ -1126,7 +1127,8 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // for the newer one, so it never offers a session no shutdown on record saved.
 // A dialog under the logs screen is the dialog: Esc goes back to what it
 // became. The dialog after an end with no shutdown has no record to go with, so only
-// a choice takes it down (D150).
+// a choice takes it down (D150); held back from a surface that is not plain,
+// it too comes up at the next state read that finds the surface plain.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	m.onRecord = st.ShutDown != nil
@@ -1140,6 +1142,7 @@ func (m *Model) keep(st *state.State) {
 			m.dialog = dialogLogs
 		}
 	}
+	m.offerUnclean()
 }
 
 // under is the screen the user is on, or the one the logs screen stands
