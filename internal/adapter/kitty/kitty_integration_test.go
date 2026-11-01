@@ -509,13 +509,13 @@ func TestOpenTabRefusesAnOSWindowThatIsGone(t *testing.T) {
 	}
 }
 
-// Open is a launch sequence into the running kitty: the first panel opens the
+// Open is a launch sequence into the workspace kitty: the first panel opens the
 // OS window and carries its identity, later panels split into it. Never a
 // session file, which a running kitty answers with a second process.
 func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 	h := newHost()
 	var calls []call
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
 		calls = append(calls, call{socket, args})
 		switch args[0] {
@@ -547,7 +547,7 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if ref.ID != "@kitty-4000/3" || ref.Title != "session:demo" {
+	if ref.ID != "/run/user/1000/revier-kitty-4000/3" || ref.Title != "session:demo" {
 		t.Errorf("ref = %+v, want the OS window around window 7", ref)
 	}
 
@@ -562,7 +562,7 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 	for _, want := range []string{
 		"launch --type=os-window",
 		"--os-window-name session:demo", "--os-window-title session:demo",
-		"--os-window-class kitty", "--cwd /home/user/dev/demo", " claude",
+		"--cwd /home/user/dev/demo", " claude",
 	} {
 		if !strings.Contains(seq[0], want) {
 			t.Errorf("first launch %q lacks %q", seq[0], want)
@@ -618,7 +618,7 @@ func TestOpenBuildsTheLayoutWithLaunchSequences(t *testing.T) {
 func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	h := newHost()
 	var calls []call
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
 		calls = append(calls, call{socket, args})
 		if args[0] == "launch" {
@@ -654,7 +654,7 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 func TestOpenMarksTheFirstWindowWithItsVars(t *testing.T) {
 	h := newHost()
 	var calls []call
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
 		calls = append(calls, call{socket, args})
 		if args[0] == "launch" {
@@ -684,7 +684,7 @@ func TestOpenMarksTheFirstWindowWithItsVars(t *testing.T) {
 func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 	h := newHost()
 	var calls []string
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
 	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
 		calls = append(calls, strings.Join(args, " "))
 		if args[0] == "launch" {
@@ -722,7 +722,7 @@ func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 // guess the mark replaces.
 func TestOpenReportsTheWindowWhenTheMarkFails(t *testing.T) {
 	h := newHost()
-	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
 	h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
 		switch args[0] {
 		case "launch":
@@ -740,24 +740,28 @@ func TestOpenReportsTheWindowWhenTheMarkFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v, want the OS window despite the mark", err)
 	}
-	if ref.ID != "@kitty-4000/1" || ref.Title != "tickets:demo" {
+	if ref.ID != "/run/user/1000/revier-kitty-4000/1" || ref.Title != "tickets:demo" {
 		t.Errorf("ref = %+v, want the OS window the launch landed in", ref)
 	}
 }
 
-// KITTY_LISTEN_ON leads the socket list and outlives its kitty in every
-// process started from it. Open launches into the first socket that answers,
-// not into the first one listed, or every launch fails on the dead one.
-func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
+// Open launches into a workspace kitty that answers, never into the kitty it
+// runs in or another one listed first: that kitty's options, such as the
+// popup's hidden decorations, would reach the workspace. A workspace kitty
+// that is gone stays listed until the kernel drops its socket, and a launch
+// into it would fail.
+func TestOpenLaunchesOnlyIntoAWorkspaceKittyThatAnswers(t *testing.T) {
 	h := newHost()
 	var launches []call
-	h.SetSockets(func() []string { return []string{"unix:@kitty-stale", "unix:@kitty-4000"} })
+	h.SetSockets(func() []string {
+		return []string{"unix:/run/user/1000/kitty-4001", "unix:@kitty-4002", "unix:/run/user/1000/revier-kitty-4003", "unix:/run/user/1000/revier-kitty-4000"}
+	})
 	h.SetStarter(func(context.Context, ...string) error {
 		t.Fatal("started a kitty while one answers")
 		return nil
 	})
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
-		if socket == "unix:@kitty-stale" {
+		if socket == "unix:/run/user/1000/revier-kitty-4003" {
 			return nil, os.ErrNotExist
 		}
 		if args[0] == "launch" {
@@ -773,18 +777,19 @@ func TestOpenSkipsASocketThatDoesNotAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if len(launches) != 1 || launches[0].socket != "unix:@kitty-4000" {
-		t.Errorf("launches = %+v, want one, into the live unix:@kitty-4000", launches)
+	if len(launches) != 1 || launches[0].socket != "unix:/run/user/1000/revier-kitty-4000" {
+		t.Errorf("launches = %+v, want one, into the live workspace kitty", launches)
 	}
-	if ref.ID != "@kitty-4000/1" {
-		t.Errorf("ref = %+v, want the OS window on the live socket", ref)
+	if ref.ID != "/run/user/1000/revier-kitty-4000/1" {
+		t.Errorf("ref = %+v, want the OS window in the live workspace kitty", ref)
 	}
 }
 
-// With no kitty running, Open starts one on a socket discovery recognises and
-// waits for it to answer. The socket is a file in the runtime directory, which
-// only the user can enter.
-func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
+// With no workspace kitty running, Open starts one on a socket discovery
+// recognises and waits for it to answer, also while the popup's kitty
+// answers. The socket is a file in the runtime directory, which only the user
+// can enter.
+func TestOpenStartsTheWorkspaceKittyWhenNoneRuns(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	h := newHost()
 	var started []string
@@ -796,13 +801,16 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 	})
 	h.SetSockets(func() []string {
 		if running {
-			return []string{"unix:/run/user/1000/kitty-5000"}
+			return []string{"unix:/run/user/1000/kitty-4001", "unix:/run/user/1000/revier-kitty-5000"}
 		}
-		return nil
+		return []string{"unix:/run/user/1000/kitty-4001"}
 	})
 	var calls []call
 	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
 		calls = append(calls, call{socket, args})
+		if socket == "unix:/run/user/1000/kitty-4001" && args[0] == "launch" {
+			t.Errorf("launched %q into the popup's kitty", args)
+		}
 		switch args[0] {
 		case "ls":
 			return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
@@ -820,11 +828,11 @@ func TestOpenStartsKittyWhenNoneRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if ref.ID != "/run/user/1000/kitty-5000/1" {
+	if ref.ID != "/run/user/1000/revier-kitty-5000/1" {
 		t.Errorf("ref = %+v", ref)
 	}
 	joined := strings.Join(started, " ")
-	for _, want := range []string{"--detach", "--listen-on unix:/run/user/1000/kitty-{kitty_pid}", "--name session:demo", "--title session:demo", "--directory /d", "claude"} {
+	for _, want := range []string{"--detach", "--listen-on unix:/run/user/1000/revier-kitty-{kitty_pid}", "--name session:demo", "--title session:demo", "--directory /d", "claude"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("kitty started with %q, lacks %q", joined, want)
 		}

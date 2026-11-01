@@ -589,6 +589,10 @@ type Result struct {
 	Tabs     []revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
+	// Opened reports that the press launched the instance Ref names, which
+	// the activation raises (decisions.md D165). A tab opened in an instance
+	// that was open is not one: the press raised that instance already.
+	Opened   bool
 	ComingUp bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
@@ -651,7 +655,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 
 	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
-		res := Result{Target: name, Launched: true}
+		res := Result{Target: name, Launched: true, Opened: true}
 		if c.Window != nil {
 			res.Before = snap[c.Window.Name()]
 		}
@@ -925,6 +929,27 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 			return revier.Instance{}, false, ctx.Err()
 		case <-time.After(poll):
 		}
+	}
+}
+
+// raiseNew raises the OS window of a runtime instance a launch has just
+// opened. A terminal's own focus does not raise its OS window where the
+// compositor refuses it, kitty's on GNOME Wayland, and the workspace kitty
+// never holds the window the key was pressed in (decisions.md D165). So the
+// window host raises it, as it raises one already open (D19). A failure is
+// not returned, unlike a raise of an open window (D63): the launch ran, and
+// the press is one, with only the raise missing, as place says of a placement.
+func (c *Core) raiseNew(ctx context.Context, ref revier.TargetRef, name revier.TargetName) {
+	if !c.bridged(revier.Instance{Ref: ref}) {
+		return
+	}
+	osw, ok := c.windowOfNew(ctx, ref)
+	if !ok {
+		slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+		return
+	}
+	if err := c.raise(ctx, osw, name); err != nil {
+		slog.Warn("raise new", "ref", ref, "err", err)
 	}
 }
 

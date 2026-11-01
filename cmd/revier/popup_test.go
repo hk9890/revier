@@ -15,7 +15,12 @@ import (
 func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 	argv := popupArgv("/usr/bin/revier", "demo", "")
 	want := []string{"kitty", "--class", core.PopupClass, "--title", "revier",
-		"-o", "remember_window_size=no", "-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
+		"-o", "remember_window_size=no",
+		"-o", "hide_window_decorations=yes",
+		"-o", "map=kitty_mod+enter no_op",
+		"-o", "map=kitty_mod+n no_op",
+		"-o", "map=kitty_mod+t no_op",
+		"-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
@@ -24,13 +29,21 @@ func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 	}
 }
 
-// The surface's targets open in the popup's kitty, so its control socket is
-// the socket file revier asks every kitty for, whatever kitty.conf names. The
-// option is before -e: what follows -e is the surface's command.
+// revier reaches the popup through its kitty's control socket, so that socket
+// is a socket file only the user can reach, whatever kitty.conf names, and
+// remote control is on for it. With no socket file, kitty.conf decides both:
+// remote control on a socket it names could be open to every user. The
+// options are before -e: what follows -e is the surface's command.
 func TestPopupArgvPutsThePopupOnASocketFile(t *testing.T) {
 	argv := popupArgv("/usr/bin/revier", "demo", "unix:/run/user/1000/kitty-{kitty_pid}")
 	i := slices.Index(argv, "--listen-on")
 	if i < 0 || argv[i+1] != "unix:/run/user/1000/kitty-{kitty_pid}" || i > slices.Index(argv, "-e") {
 		t.Errorf("argv = %q, want --listen-on with the socket file, before -e", argv)
+	}
+	if j := slices.Index(argv, "allow_remote_control=socket-only"); j < 0 || j > slices.Index(argv, "-e") {
+		t.Errorf("argv = %q, want remote control on for the socket file, before -e", argv)
+	}
+	if argv := popupArgv("/usr/bin/revier", "demo", ""); slices.Contains(argv, "allow_remote_control=socket-only") {
+		t.Errorf("argv with no socket file = %q, want remote control left to kitty.conf", argv)
 	}
 }

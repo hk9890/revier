@@ -36,8 +36,8 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 }
 
 // The popup's terminal is raised by its class, as the press that raises it
-// is. One kitty process holds every window, so neither its pid nor the
-// title the runtime gives it names the popup's window.
+// is. A popup kitty an older revier started still holds workspaces, so
+// neither its pid nor the title the runtime gives it names the popup's window.
 func TestRaiseSelfRaisesThePopupByItsClass(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})

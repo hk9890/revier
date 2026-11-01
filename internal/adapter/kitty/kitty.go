@@ -20,7 +20,8 @@
 //     span several processes - every kitty started from a session file is a
 //     process of its own - so Instances queries every such socket,
 //     concurrently. That is one call per kitty process, which does not grow
-//     with the project count.
+//     with the project count. A new OS window opens in one of them only: the
+//     workspace kitty this host starts, on `$XDG_RUNTIME_DIR/revier-kitty-<pid>`.
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
@@ -56,11 +57,17 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// socketFile is the name of the control socket this host asks for when it
-// starts kitty itself, and the one kitty creates for
-// `listen_on unix:${XDG_RUNTIME_DIR}/kitty`. It is a file in the runtime
-// directory, which only the user can enter.
-var socketFile = regexp.MustCompile(`^kitty-(\d+)$`)
+// socketFile is the name of a control socket in the runtime directory, which
+// only the user can enter: the one kitty creates for
+// `listen_on unix:${XDG_RUNTIME_DIR}/kitty`, the one the popup's kitty is
+// started on, and, with `revier-` before it, the workspace kitty's.
+var socketFile = regexp.MustCompile(`^(?:revier-)?kitty-(\d+)$`)
+
+// workspaceSocket is the socket of the workspace kitty: the one kitty process
+// this host starts, and opens every new OS window in. A kitty option is its
+// whole process's, so no OS window opens in a kitty the user or the popup
+// started: that kitty's options would reach it (decisions.md D165).
+var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 
 // abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
 // the one this host asked for up to 0.13. An abstract socket has no
@@ -80,15 +87,24 @@ func runtimeDir() string {
 	return filepath.Clean(dir)
 }
 
-// ListenOn is the `--listen-on` address of a kitty that revier starts: a
-// socket file in the runtime directory, with `{kitty_pid}` for kitty to
-// expand. It is "" when there is no runtime directory.
+// ListenOn is the `--listen-on` address of the popup's kitty: a socket file in
+// the runtime directory, with `{kitty_pid}` for kitty to expand. It is ""
+// when there is no runtime directory.
 func ListenOn() string {
+	return listenOn("kitty-{kitty_pid}")
+}
+
+// workspaceListenOn is the `--listen-on` address of the workspace kitty.
+func workspaceListenOn() string {
+	return listenOn("revier-kitty-{kitty_pid}")
+}
+
+func listenOn(file string) string {
 	dir := runtimeDir()
 	if dir == "" {
 		return ""
 	}
-	return "unix:" + filepath.Join(dir, "kitty-{kitty_pid}")
+	return "unix:" + filepath.Join(dir, file)
 }
 
 // socketPID is the kitty process id a control socket carries in its name, and
@@ -165,10 +181,9 @@ type listing struct {
 }
 
 // Probe reports kitty usable when kitten can be found and either a control
-// socket answers or no kitty is running at all, in which case Open starts one.
-// A kitty running without remote control has no socket and looks like no
-// kitty; Open then starts a second process, which is the best that can be done
-// without the setting.
+// socket answers or no kitty is running at all. Open starts the workspace
+// kitty either way when none answers. A kitty running without remote control
+// has no socket and looks like no kitty.
 func (h *Host) Probe(ctx context.Context) error {
 	if _, err := kittenPath(); err != nil {
 		return err
@@ -320,8 +335,8 @@ func discover() []string {
 
 // candidates orders the control sockets of one kernel socket table. The table
 // holds a socket file by its path, and only while a process is bound to it: a
-// kitty that crashed leaves a file and no entry. own comes first so a launch
-// from inside kitty lands in that same process.
+// kitty that crashed leaves a file and no entry. own, the kitty a command
+// runs in, comes first.
 func candidates(own, table string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -709,15 +724,13 @@ func (h *Host) title(ctx context.Context, socket string, id int, title string) e
 	return err
 }
 
-// openFirst opens the OS window with its first panel and returns the socket it
-// lives on and the id of that panel's window.
+// openFirst opens the OS window with its first panel in the workspace kitty,
+// starting it when none answers, and returns the socket it lives on and the
+// id of that panel's window.
 func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	if socket, ok := h.liveSocket(ctx); ok {
-		// The class is set explicitly so the window is a kitty window whatever
-		// process it lands in: a kitty started as `--class revier-popup` would
-		// otherwise pass that class, and its window rule, on to the workspace.
+	if socket, ok := h.workspaceKitty(ctx); ok {
 		args := []string{"--type=os-window",
-			"--os-window-name", r.Name, "--os-window-title", r.Name, "--os-window-class", "kitty", "--hold"}
+			"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
 		}
@@ -731,12 +744,14 @@ func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.Pan
 	return h.startKitty(ctx, r, p)
 }
 
-// liveSocket is the first socket that answers. KITTY_LISTEN_ON leads the list,
-// and it outlives its kitty in every process started from it - a tmux server,
-// a shell restored by a session manager - so the first socket can be dead, and
-// a launch into it would fail every time.
-func (h *Host) liveSocket(ctx context.Context) (string, bool) {
+// workspaceKitty is the socket of the first workspace kitty that answers. The
+// kernel lists a socket until its kitty has exited, so one that is listed can
+// be one a launch would fail on.
+func (h *Host) workspaceKitty(ctx context.Context) (string, bool) {
 	for _, s := range h.socketList() {
+		if !workspaceSocket.MatchString(s) {
+			continue
+		}
 		if _, err := h.kitten(ctx, s, "ls"); err == nil {
 			return s, true
 		}
@@ -744,13 +759,13 @@ func (h *Host) liveSocket(ctx context.Context) (string, bool) {
 	return "", false
 }
 
-// startKitty starts a kitty process for the first panel and waits for its
+// startKitty starts the workspace kitty with the first panel and waits for its
 // control socket. `{kitty_pid}` is expanded by kitty, so the socket matches the
 // name discovery looks for. With no runtime directory there is no place that
 // is the user's alone, and no kitty is started: a socket anywhere else is one
 // another user can connect to.
 func (h *Host) startKitty(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	listenOn := ListenOn()
+	listenOn := workspaceListenOn()
 	if listenOn == "" {
 		return "", 0, errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
 	}

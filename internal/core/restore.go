@@ -204,9 +204,9 @@ func (o RestoreOpts) report(p Progress) {
 // restoreLaunch is one step of a restore, walked by ActivateWaiting. It has
 // the deadline a keypress and the bind after it have, so a host that never
 // answers costs the restore one step and not the rest of the walk. raise is
-// whether a window it binds is raised: only the return home raises, so the
-// desktop does not flip through every window a restore opens (decisions.md
-// D15).
+// whether a window it binds or a terminal window it opens is raised: only the
+// return home raises, so the desktop does not flip through every window a
+// restore opens (decisions.md D15).
 func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, raise bool) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
@@ -252,6 +252,9 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 	st := c.state()
 	res, err := c.activate(ctx, p, name, st.Bound[p.Name], st.Pending(p.Name, name, time.Now()), resumes)
 	ref := res.Ref
+	if res.Opened && !ref.IsZero() && err == nil && raise {
+		c.raiseNew(ctx, ref, res.Target)
+	}
 	if res.Launched && ref.IsZero() && err == nil {
 		at := time.Now()
 		c.update(func(st *state.State) { st.Launched(p.Name, res.Target, at) })

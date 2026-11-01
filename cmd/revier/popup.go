@@ -43,27 +43,35 @@ func cmdPopup(ctx context.Context, a *app) error {
 }
 
 // popupArgv is the kitty that runs the surface as the popup, opening on
-// start when there is one.
+// start when there is one. This kitty holds the popup alone: no target opens
+// in it, so its options reach nothing else (decisions.md D165).
 //
 // Without remember_window_size=no, the popup opens at the size of the last
 // kitty window closed; one as large as the workarea is maximized, and a
 // maximized window refuses the placement. The option also keeps the popup's
-// own size out of what the user's next kitty window opens at. env(1) marks
-// the surface as the popup's (core.PopupEnv) and names its project, empty
-// when none resolved, and nothing else: kitty's own env option would reach
-// every window launched into this kitty, which is where the surface's
-// targets open. The variable is set either way, which is what makes the
-// surface the popup.
+// own size out of what the user's next kitty window opens at. The popup has
+// no title bar, and kitty's keys for a new window, OS window and tab do
+// nothing in it. env(1) marks the surface as the popup's (core.PopupEnv) and
+// names its project, empty when none resolved, and nothing else: kitty's own
+// env option would reach every window this kitty opens. The variable is set
+// either way, which is what makes the surface the popup.
 //
 // listenOn is the control socket of this kitty, a file only the user can
-// reach, in place of the one `listen_on` in kitty.conf names: the surface's
-// targets open in this kitty, through that socket. With none, kitty.conf
-// decides.
+// reach, in place of the one `listen_on` in kitty.conf names. revier reaches
+// the popup through it to switch its list (D110) and to raise it after a
+// restore, so remote control is on for that socket alone. With none,
+// kitty.conf decides both: a socket it names may be one every user can reach.
 func popupArgv(self string, start revier.ProjectName, listenOn string) []string {
 	mark := core.PopupEnv + "=" + string(start)
 	argv := []string{"kitty", "--class", core.PopupClass, "--title", "revier"}
 	if listenOn != "" {
-		argv = append(argv, "--listen-on", listenOn)
+		argv = append(argv, "--listen-on", listenOn, "-o", "allow_remote_control=socket-only")
 	}
-	return append(argv, "-o", "remember_window_size=no", "-e", "env", mark, self)
+	return append(argv,
+		"-o", "remember_window_size=no",
+		"-o", "hide_window_decorations=yes",
+		"-o", "map=kitty_mod+enter no_op",
+		"-o", "map=kitty_mod+n no_op",
+		"-o", "map=kitty_mod+t no_op",
+		"-e", "env", mark, self)
 }

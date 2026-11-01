@@ -14,7 +14,8 @@ import (
 )
 
 // Discovery reads the kernel's socket table, which holds the sockets of every
-// user. It takes the socket files of the user's own runtime directory, and the
+// user. It takes the socket files of the user's own runtime directory, the
+// workspace kitty's among them, and the
 // abstract names a kitty started before 0.14 listens on. A path another user
 // bound is taken as written: one that only cleans to the runtime directory is
 // a file wherever its symbolic links lead.
@@ -31,19 +32,22 @@ func TestDiscoveryFindsTheSocketFilesOfTheRuntimeDirectory(t *testing.T) {
 0000000000000000: 00000002 00000000 00010000 0001 01 108 /tmp/link/../../run/user/1000/kitty-4006
 0000000000000000: 00000002 00000000 00010000 0001 01 109 /run/user/1001/../1000/kitty-4007
 0000000000000000: 00000002 00000000 00010000 0001 01 110 /run/user/1000x/kitty-4008
+0000000000000000: 00000002 00000000 00010000 0001 01 112 /run/user/1000/revier-kitty-4010
+0000000000000000: 00000002 00000000 00010000 0001 01 113 /run/user/1000/revier-kitty-x
 0000000000000000: 00000003 00000000 00000000 0001 03 111
 `
 	got := candidates("unix:/run/user/1000/kitty-4000", table)
-	want := []string{"unix:/run/user/1000/kitty-4000", "unix:/run/user/1000/kitty-4002", "unix:@kitty-4001"}
+	want := []string{"unix:/run/user/1000/kitty-4000", "unix:/run/user/1000/kitty-4002", "unix:/run/user/1000/revier-kitty-4010", "unix:@kitty-4001"}
 	if !slices.Equal(got, want) {
 		t.Errorf("candidates = %q, want %q: the socket this process was started in, then the others", got, want)
 	}
 	for socket, pid := range map[string]int{
-		"unix:/run/user/1000/kitty-4000":  4000,
-		"unix:/run/user/1000//kitty-4009": 4009,
-		"unix:@kitty-4001":                4001,
-		"unix:/run/user/1001/kitty-4003":  0,
-		"unix:/tmp/mykitty":               0,
+		"unix:/run/user/1000/kitty-4000":        4000,
+		"unix:/run/user/1000//kitty-4009":       4009,
+		"unix:/run/user/1000/revier-kitty-4010": 4010,
+		"unix:@kitty-4001":                      4001,
+		"unix:/run/user/1001/kitty-4003":        0,
+		"unix:/tmp/mykitty":                     0,
 	} {
 		if got := pidOf(socket); got != pid {
 			t.Errorf("pidOf(%q) = %d, want %d", socket, got, pid)

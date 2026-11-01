@@ -195,9 +195,9 @@ func surface(p revier.Panel) bool {
 // surface in a terminal no runtime here lists - or with no Self - is left
 // where it is, and so is one whose window the window host cannot pair with
 // it: raising a guess would raise somebody else's window. The popup's
-// terminal is raised by its class, as the press that raises it does: its
-// title is no match for the window host where one terminal process holds
-// every window.
+// terminal is raised by its class, as the press that raises it does: kitty
+// gives its OS window no name of its own, and a popup kitty an older revier
+// started still holds workspaces.
 func (c *Core) RaiseSelf(ctx context.Context) error {
 	if c.Self == nil || c.Runtime == nil {
 		return nil

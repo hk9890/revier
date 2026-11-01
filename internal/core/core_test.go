@@ -1207,6 +1207,27 @@ func TestATerminalsNewWindowIsPlacedWhileAnotherHostCannotList(t *testing.T) {
 	}
 }
 
+// A terminal's new OS window is raised through the window host, as an open
+// one is: the workspace kitty is never the window the key was pressed in, and
+// GNOME refuses that kitty the focus.
+func TestATerminalsNewWindowIsRaisedThroughTheWindowHost(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	wm := hosttest.New("wm")
+	var osw revier.TargetRef
+	rt.OnOpen = func(revier.Realization) {
+		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+
+	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{osw}) {
+		t.Errorf("window host focuses = %v, want the new OS window %v", wm.Focuses, osw)
+	}
+}
+
 // A window manager reuses window ids, so the id a target was bound to can
 // come back as an unrelated window. Nothing about that failure is visible -
 // the wrong window simply comes forward - so the binding is re-checked

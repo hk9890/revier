@@ -136,6 +136,29 @@ func TestARestoreStepDoesNotRaiseTheWindowItBinds(t *testing.T) {
 	}
 }
 
+// A terminal window a restore step opens is not raised either, though a press
+// that opens one raises it: the return home is still the one raise.
+func TestARestoreStepDoesNotRaiseTheTerminalWindowItOpens(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
+	rt.Add("session:revier", "kitty")
+	wm := hosttest.New("wm")
+	homeWm := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
+	rt.OnOpen = func(revier.Realization) {
+		wm.AddInstance(revier.Instance{Title: "notes:revier", Class: "kitty", PID: 1002})
+	}
+	c := &core.Core{Runtime: rt, Window: wm}
+	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
+
+	out, _, back := restoreOf(t, c, s)
+	if back != nil || len(out) == 0 || out[0].Err != nil || out[0].Ref.IsZero() {
+		t.Fatalf("restore = %+v, back = %v, want notes opened", out, back)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{homeWm}) {
+		t.Errorf("window focuses = %v, want the return home's alone", wm.Focuses)
+	}
+}
+
 // A restore ends on the project the save was left on.
 func TestRestoreEndsOnTheSavedCurrentProject(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")

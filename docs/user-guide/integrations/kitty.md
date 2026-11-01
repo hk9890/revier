@@ -5,6 +5,11 @@ opens each workspace as a kitty OS window, opens its tabs and split windows,
 and reads every kitty window to find the agents and their state. The popup is
 also a kitty window, whatever your runtime host is.
 
+revier opens every workspace in a kitty it starts for the workspaces, never in
+a kitty you started and never in the popup's. A kitty option applies to every
+window of its kitty, so the popup's options, such as its hidden title bar,
+stay out of your workspaces.
+
 ## What you need
 
 - kitty, with `kitten` on your PATH or beside the `kitty` binary.
@@ -23,11 +28,12 @@ also a kitty window, whatever your runtime host is.
    ```
 
 2. Restart kitty.
-3. Run `revier open demo`. The workspace opens in the kitty you ran the
-   command in. When no kitty answers, revier starts one of its own.
+3. Run `revier open demo`. The workspace opens in revier's kitty, which
+   revier starts when it is not running.
 
-Without step 1, revier still works, but it starts a kitty of its own, and
-your other kitty windows stay out of its reach.
+Without step 1, revier still opens workspaces, but your own kitty windows stay
+out of its reach: `revier attach` reads no agents in them, and the trigger key
+does not switch a TUI you run in them.
 
 ## Add tabs from a kitty key
 
@@ -79,5 +85,6 @@ term status` names them as `shadowed by kitty.conf:<line>`.
   `revier attach` in it. revier reads its agents only when it is the one
   unnamed window of its kitty process.
 
-**revier opens a second kitty instead of yours.** Your kitty has no control
-socket. Do step 1 of [Set it up](#set-it-up) and restart kitty.
+**`revier attach` reads no agents in your kitty.** Your kitty
+has no control socket. Do step 1 of [Set it up](#set-it-up) and restart
+kitty.
