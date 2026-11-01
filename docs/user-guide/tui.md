@@ -57,6 +57,7 @@ reason. When the project directory is missing and the project has a
 |---|---|
 | running | an instance is open |
 | stopped | no instance is open |
+| command | it runs a command and has no instance; see [command targets](configuration.md#command-targets) |
 | surveying | revier is still looking |
 | no host here | no host on this machine can open it; see [troubleshooting.md](troubleshooting.md#a-target-says-no-host-here) |
 | invalid | its configuration is wrong; `revier doctor` says why |
@@ -73,8 +74,8 @@ keys, so every letter goes to the query.
 | ↑ ↓, ctrl+p ctrl+n, pgup pgdown, home end | Move |
 | Tab, shift+tab | Move between the project list and the Agents |
 | alt+t | Move to the Targets |
-| Enter | A project: open its home target; with no home target, move to its Targets. A target: run or raise it. An agent: bring its tab to the front. |
-| a target's key | Run or raise that target of the selected project |
+| Enter | A project: open its home target; with no home target, move to its Targets. A target: run or raise it, or run its command. An agent: bring its tab to the front. |
+| a target's key | Run or raise that target of the selected project, or run its command |
 | an action's key | Run that action in the selected project |
 | del | Close the row: the project, the target or the agent. It asks first when this closes a whole project, a target that holds an agent, or an agent that works or waits for you. |
 | alt+del, alt+d | Delete the project file, or the target's entry in it. On a link, delete the link file alone: nothing on the host changes. When nothing of it is open, it asks `y`; when something is open, it offers to close it and then delete. An agent is in no file. |

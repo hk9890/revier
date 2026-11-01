@@ -175,7 +175,8 @@ func TestFileHandsBackTheStateReadLastWhenTheFileCannotBeRead(t *testing.T) {
 
 // A write records in the state record what it changed: a landing selects
 // the project and binds the target, a prune unbinds it, an attachment is
-// attached, and a write that changes nothing writes nothing.
+// attached, a run of a command target that moved focus is a run, once, and a
+// write that changes nothing writes nothing.
 func TestAWriteRecordsWhatItChanged(t *testing.T) {
 	root := t.TempDir()
 	record.Setup(root, "go")
@@ -191,6 +192,12 @@ func TestAWriteRecordsWhatItChanged(t *testing.T) {
 		st.Attach("work", revier.TargetRef{Host: "wm", ID: "0x2"})
 		return true
 	})
+	for range 2 {
+		l.Update(func(st *state.State) bool {
+			st.RanCommand("work", "web", revier.TargetRef{Host: "wm", ID: "0x3"})
+			return true
+		})
+	}
 	l.Update(func(st *state.State) bool {
 		retitled := ref
 		retitled.Title = "work - edited"
@@ -220,6 +227,7 @@ func TestAWriteRecordsWhatItChanged(t *testing.T) {
 		"project selected work:  ",
 		"bound work:home rt 1",
 		"attached work: wm 0x2",
+		"ran work:web wm 0x3",
 		"unbound work:home rt 1",
 	}
 	if !slices.Equal(got, want) {

@@ -20,7 +20,8 @@ import (
 // is written, in place of the old one, so the comments in an entry and the
 // values the screen does not show stay as they were. A realization is a
 // sub-table of its entry, [target.runtime] or [target.window], and each panel
-// an entry of [[target.runtime.panels]] under it.
+// an entry of [[target.runtime.panels]] under it. A command is the sub-table
+// [target.command].
 //
 // A write is refused unless every project still loads with the result:
 // a shared target is part of every project, and a change that breaks one
@@ -281,6 +282,34 @@ func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, b
 			if lines, err = putPanels(lines, i, base, o.Panels, r.new.Panels, e.PanelFrom); err != nil {
 				return nil, err
 			}
+		}
+	}
+	return putCommand(lines, i, old.Command, t.Command)
+}
+
+// putCommand writes a target's command, [target.command]: a local part
+// alone, so it has no table under [target.remote].
+func putCommand(lines []string, i int, old, c *revier.Command) ([]string, error) {
+	const path = "target.command"
+	if c == nil {
+		if old != nil {
+			lines = dropTables(lines, i, path)
+		}
+		return lines, nil
+	}
+	if old == nil {
+		old = &revier.Command{}
+	}
+	var err error
+	for _, kv := range []struct {
+		key      string
+		old, new any
+	}{
+		{"run", old.Run, c.Run},
+		{"timeout", old.Timeout, c.Timeout},
+	} {
+		if lines, err = putValue(lines, i, path, kv.key, kv.old, kv.new); err != nil {
+			return nil, err
 		}
 	}
 	return lines, nil

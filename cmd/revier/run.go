@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+	"syscall"
 
 	usecase "github.com/hk9890/revier/internal/app"
 )
@@ -72,4 +74,79 @@ func runAction(out io.Writer, argv []string, dir string) error {
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, out, os.Stderr
 	return c.Run()
+}
+
+// runTargetCommand runs a command target's argv in dir to its end, for the
+// core (core.Core.Run). The command is the user's launcher: it raises what it
+// shows and detaches what lives on, so revier waits for it and reads its exit
+// status.
+//
+// It runs in a session of its own, so a ctrl+c in the terminal of the TUI
+// does not reach it. ctx ending kills the command alone, not what it started,
+// so a browser it brought up outlives a run revier gave up on. stdin and
+// stdout are the null device. stderr is an unlinked temporary file and no
+// pipe, so the run ends when the command does, though a child it detached
+// holds stderr open, and that child can write to it for as long as it lives.
+// The error reports the last line of stderr, after ctx's error when ctx
+// killed the command.
+func runTargetCommand(ctx context.Context, argv []string, dir string) error {
+	stderr, err := os.CreateTemp("", "revier-run-*")
+	if err != nil {
+		return fmt.Errorf("command did not start: %w", err)
+	}
+	defer func() { _ = stderr.Close() }()
+	if err := os.Remove(stderr.Name()); err != nil {
+		return fmt.Errorf("command did not start: %w", err)
+	}
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	c.Dir = dir
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	c.Stderr = stderr
+	err = c.Run()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return nil
+	case !errors.As(err, &exit):
+		return fmt.Errorf("command did not start: %w", err)
+	case ctx.Err() != nil && exit.ExitCode() < 0:
+		// A signal ended the command after ctx ended: ctx killed it. A
+		// command that exited with a status as ctx ended reports the status.
+		if line := lastLine(stderr); line != "" {
+			return fmt.Errorf("%w: %s", ctx.Err(), line)
+		}
+		return ctx.Err()
+	}
+	what := "command " + exit.String()
+	if code := exit.ExitCode(); code >= 0 {
+		what = fmt.Sprintf("command exited %d", code)
+	}
+	if line := lastLine(stderr); line != "" {
+		return fmt.Errorf("%s: %s", what, line)
+	}
+	return errors.New(what)
+}
+
+// stderrCap is how much of the end of a command's stderr runTargetCommand
+// reads.
+const stderrCap = 4 << 10
+
+// lastLine is the last line in the last stderrCap bytes of f that holds more
+// than white space. A carriage return ends a line too, as a redrawn progress
+// line does.
+func lastLine(f *os.File) string {
+	info, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	off := max(0, info.Size()-stderrCap)
+	b := make([]byte, info.Size()-off)
+	n, _ := f.ReadAt(b, off)
+	lines := strings.FieldsFunc(string(b[:n]), func(r rune) bool { return r == '\n' || r == '\r' })
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
 }

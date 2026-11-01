@@ -385,6 +385,10 @@ func (m Model) detailRow(row targetRow, w int, sel, over bool) string {
 	// The two must not read alike.
 	case !t.Available && t.Reason != "":
 		state, stateStyle = "invalid", th.PathMissing
+	case t.Command:
+		// A command target runs its command on each press and holds no
+		// instance: it is never up or down, and needs no host.
+		mark, state, stateStyle = strings.Repeat(" ", lipgloss.Width(mark)), "command", th.Meta
 	case !t.Available:
 		state = "no host here"
 	case t.Unknown != "":

@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -21,7 +22,8 @@ import (
 // Enter opens a target's form: its name, key and home flag, then its runtime
 // and its window realization, each launch, match and place, the target the
 // runtime's is a tab of, the tabs it opens with and the active one, and the
-// panels of a tab as a list with a form of their own. alt+d deletes a
+// panels of a tab as a list with a form of their own, and last the command
+// a target runs in place of both (decisions.md D166). alt+d deletes a
 // target after a y. A change is written as it is saved
 // (config.AddTarget, ReplaceTarget, RemoveTarget), and the projects are
 // loaded again with it, so the surface has the new targets at once. The
@@ -45,6 +47,8 @@ const (
 	tfWindowTitle
 	tfWindowClass
 	tfWindowPlace
+	tfCommandRun
+	tfCommandTimeout
 	targetFields
 )
 
@@ -120,6 +124,10 @@ func valuesOf(t revier.Target) targetValues {
 		v.fields[tfRuntimeTabs] = joinTabs(t.Runtime.Tabs)
 		v.fields[tfRuntimeActive] = string(t.Runtime.Active)
 		v.panels = t.Runtime.Panels
+	}
+	if c := t.Command; c != nil {
+		v.fields[tfCommandRun] = joinCommand(c.Run)
+		v.fields[tfCommandTimeout] = c.Timeout
 	}
 	return v
 }
@@ -259,6 +267,9 @@ func (f targetForm) rows() []formRow {
 		formRow{kind: rowField, field: tfWindowTitle, label: "match title", note: "a regexp"},
 		formRow{kind: rowField, field: tfWindowClass, label: "match class", note: "a regexp"},
 		formRow{kind: rowField, field: tfWindowPlace, label: "place", note: "x y width height"},
+		formRow{kind: rowField, field: tfCommandRun, label: "run", section: "command",
+			note: "run in the project's directory in place of a runtime and a window"},
+		formRow{kind: rowField, field: tfCommandTimeout, label: "timeout", note: "how long a run may take, as \"10s\"; empty for " + core.RunWait.String()},
 	)
 	return out
 }
@@ -403,10 +414,39 @@ func (f targetForm) target() (revier.Target, []int, error) {
 	if t.Window, err = f.realization(f.base.Window, tfWindowName, false, nil); err != nil {
 		return t, nil, fmt.Errorf("window: %w", err)
 	}
-	if t.Runtime == nil && t.Window == nil {
-		return t, nil, errors.New("a target needs a runtime or a window")
+	if t.Command, err = f.command(); err != nil {
+		return t, nil, err
+	}
+	switch {
+	case t.Command != nil && (t.Runtime != nil || t.Window != nil):
+		return t, nil, errors.New("a target runs a command or opens a runtime or a window, not both: empty the fields of one")
+	case t.Command != nil && t.Home:
+		return t, nil, errors.New("a target that runs a command is no home: set home to no")
+	case t.Command != nil:
+		// A command needs no host, and the form does not show prefer: a
+		// target made a command here would be refused for the one it kept.
+		t.Prefer = ""
+	case t.Runtime == nil && t.Window == nil:
+		return t, nil, errors.New("a target needs a runtime, a window or a command")
 	}
 	return t, from, nil
+}
+
+// command is the command the form holds: none when both its fields are
+// empty.
+func (f targetForm) command() (*revier.Command, error) {
+	run, err := splitCommand(f.fields[tfCommandRun].Value())
+	if err != nil {
+		return nil, fmt.Errorf("command: %w", err)
+	}
+	c := revier.Command{Run: run, Timeout: strings.TrimSpace(f.fields[tfCommandTimeout].Value())}
+	if len(c.Run) == 0 && c.Timeout == "" {
+		return nil, nil
+	}
+	if _, err := core.RunTimeout(c); err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 // realization is one realization as the form holds it, from its five fields
@@ -533,6 +573,9 @@ func describeTarget(t revier.Target) string {
 	}
 	if r := t.Window; r != nil {
 		parts = append(parts, "window: "+joinCommand(r.Launch))
+	}
+	if c := t.Command; c != nil {
+		parts = append(parts, "command: "+joinCommand(c.Run))
 	}
 	if t.Home {
 		parts = append(parts, "home")

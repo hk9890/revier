@@ -4,10 +4,10 @@
 
 revier is a project-grouped control surface for running coding agents: it shows
 what every agent across every project is doing and reaches the one that needs
-you. A target is reached one way — run-or-raise it; a second press returns to
-the project's home. An agent or shell tab is a launcher: each press opens one
-more. Go, ports-and-adapters, with the policy in `internal/core` and every
-tool-specific fact behind a port in `pkg/revier`.
+you. A target is reached one way — run-or-raise it, revier's or its command's;
+a second press returns to the project's home. An agent or shell tab is a
+launcher: each press opens one more. Go, ports-and-adapters, with the policy in
+`internal/core` and every tool-specific fact behind a port in `pkg/revier`.
 
 ## Use-case routing
 

@@ -60,6 +60,13 @@ type Core struct {
 	// so the wiring supplies it; nil keeps a plan's order.
 	Self func(revier.Panel) bool
 
+	// Run runs a command target's argv in dir to its end, and returns why it
+	// failed: its exit status and what it said, or the end of ctx, wrapped
+	// as "<ctx's error>: <what it said>" when it said something. Starting a
+	// process is a fact about this machine, so the wiring supplies it; nil
+	// refuses the press of every command target.
+	Run func(ctx context.Context, argv []string, dir string) error
+
 	// Machine is this machine's name, as `uname -n` prints it: the first half
 	// of the tag a link's panel gives what it starts on a host. Empty reads
 	// it from the kernel.
@@ -249,9 +256,10 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 // resolveAt resolves the i-th target of a prepared project, returning the
 // compiled match of the realization that won.
 //
-// A tab has no instance of its own to match, and is refused here. Every lookup
-// that walks a project's targets resolves each one first, so a tab fails
-// closed in all of them; the few that serve tabs branch before this.
+// A tab and a command target have no instance of their own to match, and are
+// refused here. Every lookup that walks a project's targets resolves each one
+// first, so both fail closed in all of them; the few that serve them branch
+// before this.
 func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, revier.CompiledMatch, error) {
 	// A project its file refused as a whole, and a target its own
 	// configuration refused, resolve to nothing, here, where every lookup
@@ -266,6 +274,9 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	}
 	if p.isTab(i) {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("target %q: %w", p.Targets[i].Name, errTab)
+	}
+	if p.isCommand(i) {
+		return nil, revier.Realization{}, revier.CompiledMatch{}, fmt.Errorf("target %q: %w", p.Targets[i].Name, errCommand)
 	}
 	host, real, kind, err := c.resolve(p.Targets[i])
 	if err != nil {
@@ -599,6 +610,10 @@ type Result struct {
 	// AgentErr is why an agent tab failed to open in a workspace that did
 	// open: the launch succeeded, and the agents it names are AgentNotAdded.
 	AgentErr error
+	// Ran reports a command target whose command ran and ended well, and
+	// Focused the window the run moved focus to, zero when focus stayed.
+	Ran     bool
+	Focused revier.TargetRef
 }
 
 // goTo runs-or-raises a target. Pressing the same key twice returns to the
@@ -1604,6 +1619,21 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 				tabs.tabs = map[string]revier.TargetName{}
 			}
 			tabs.addTab(tab)
+			v.Targets = append(v.Targets, tv)
+			continue
+		}
+		// A command target needs no host and holds no instance: it is
+		// available unless its configuration refused it, and never held.
+		if p.isCommand(i) {
+			tv.Command = true
+			switch {
+			case p.Invalid != nil:
+				tv.Reason = p.Invalid.Error()
+			case p.compiled[i].err != nil:
+				tv.Reason = p.compiled[i].err.Error()
+			default:
+				tv.Available = true
+			}
 			v.Targets = append(v.Targets, tv)
 			continue
 		}

@@ -302,11 +302,10 @@ func (a *app) update(apply func(s *state.State)) {
 	})
 }
 
-// goTarget is the whole run-or-raise for one target, as core.ActivateWaiting
-// walks it.
-func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, error) {
-	ref, _, err := a.core.ActivateWaiting(ctx, p, name, nil)
-	return ref, err
+// goTarget is the whole press of one target, as core.ActivateWaiting walks
+// it: the ref it landed on, and what the press did.
+func (a *app) goTarget(ctx context.Context, p core.Project, name revier.TargetName) (revier.TargetRef, core.Result, error) {
+	return a.core.ActivateWaiting(ctx, p, name, nil)
 }
 
 // configRootForMessage is the config root, for a message that has nowhere to

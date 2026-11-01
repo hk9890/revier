@@ -50,7 +50,7 @@ doc reads what it already did.
 |---|---|
 | `command` | a CLI process ends, with `args` and `exit`. A surface that a signal ended, as a closed terminal does, has `signal` (`hangup` or `terminated`) and `exit` 128 plus its number. A surface with no `command` line was killed, or is still running. |
 | `resolve` | a command picks its project, `by` flag, directory, focused window or last project |
-| `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. |
+| `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. A command target's line has `ran` and `focused`, the window the run left the focus on, empty when the focus did not move; its toggle back has `ran` false and `landed` the home, after the line of the Go home (`docs/design/decisions.md` D166). |
 | `bind` | the wait for a launched window ends |
 | `claim` | the TUI binds or attaches a window that appeared |
 | `instances` | a `host` could not list; its targets show unknown and a press on one is refused, while the other hosts' go on (`docs/design/decisions.md` D89) |
@@ -101,6 +101,10 @@ doc reads what it already did.
   `revier state --session <id>` names why each difference between a save and
   what was open when it was made is one; `revier state --help` lists the
   reasons.
+- A `ran` line is a run of a command target that moved the focus, with the
+  `host` and `ref` the focus moved to. It is written only when that differs
+  from the run on record, and it opens nothing: `revier state` lists it as
+  done and holds no target open for it (`docs/design/decisions.md` D166).
 - A `saw` line comes from a surface alone: with no TUI or popup running, the
   record holds only what operations did. `revier list` writes no `saw`
   line, only what its prune changed in the state file.

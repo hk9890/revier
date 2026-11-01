@@ -102,6 +102,10 @@ policy:
   window is what a desktop user expects; one line of config overrides it.
 - **Toggle-back.** A press on a target that already has the focus goes to the
   project's home instead, so a key is a round trip and not a one-way jump.
+- **Command targets.** The core runs a command target's command through a
+  runner the wiring supplies, and focuses nothing: the command does. The
+  command signals nothing, so the core judges the toggle on the run it
+  recorded, not on an instance (D166).
 - **Focus after open.** Some hosts focus what they launch and some do not, so
   the core focuses on the run path (D15). Without it the raise half of
   run-or-raise holds only by accident of the host.

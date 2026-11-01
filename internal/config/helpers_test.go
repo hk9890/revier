@@ -224,3 +224,50 @@ name = "pulls"
   launch = ["chrome"]
   match = { class = "^chrome$" }
 `
+
+const targetsConfig = `[ui]
+theme = "catppuccin-mocha"
+
+# Every project has these.
+[[target]]
+name = "home"
+home = true
+key = "ctrl-shift-u"
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+  place = "right top 75% 100%"
+  tabs = ["agent"]
+
+[[target]]
+name = "editor"
+key = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"] # IntelliJ
+  match = { class = "^jetbrains-idea", title = "^{{.Name}}( |$)" }
+
+[[target]]
+name = "agent"
+  [target.runtime]
+  inside = "home"
+    # the agent
+    [[target.runtime.panels]]
+    kind = "agent"
+    title = "Claude Code"
+    command = ["claude"] # plain claude
+    [[target.runtime.panels]]
+    kind = "shell"
+    title = "shell"
+`
+
+// targetsRoot is a configuration root holding text as config.toml and one
+// project with no targets of its own, and the shared targets as read.
+func targetsRoot(t *testing.T, text string) (string, []map[string]any) {
+	t.Helper()
+	root := projectsRoot(t, text, map[string]string{"demo.toml": "path = \"/tmp/demo\"\n"})
+	cfg, _, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	return root, cfg.Targets
+}

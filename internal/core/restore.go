@@ -216,12 +216,14 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, r
 
 // ActivateWaiting is the whole run-or-raise for one target, and the one way
 // to press a target: the press with the project's bindings from the ledger,
-// then, for a detached launch, the wait that binds its window. The launch is recorded before the wait, so a press elsewhere during
-// it does not launch again, and every ref it lands on is recorded after, so
-// the next press finds the target by id whatever the application has done to
-// its title since. A zero ref with no error is a target launched and not yet
-// up. The Result is returned also when the wait failed: the launch ran, and
-// its agents came to Result.Agents.
+// then, for a detached launch, the wait that binds its window. The launch is
+// recorded before the wait, so a press elsewhere during it does not launch
+// again, and every ref it lands on is recorded after, so the next press finds
+// the target by id whatever the application has done to its title since. A
+// zero ref with no error is a target launched and not yet up, or a command
+// target that ran (Result.Ran), whose run is recorded instead. The Result is
+// returned also when the wait failed: the launch ran, and its agents came to
+// Result.Agents.
 //
 // It is one press, and a press that ran or raised something is one EventGo of
 // where it landed: the tab it made current, else the target. It is recorded
@@ -250,7 +252,10 @@ func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.Targe
 
 func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, raise bool) (revier.TargetRef, Result, error) {
 	st := c.state()
-	res, err := c.activate(ctx, p, name, st.Bound[p.Name], st.Pending(p.Name, name, time.Now()), resumes)
+	res, err := c.activate(ctx, p, name, st, resumes)
+	if res.Ran && err == nil {
+		c.update(func(st *state.State) { st.RanCommand(p.Name, res.Target, res.Focused) })
+	}
 	ref := res.Ref
 	if res.Opened && !ref.IsZero() && err == nil && raise {
 		c.raiseNew(ctx, ref, res.Target)

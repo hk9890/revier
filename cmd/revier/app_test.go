@@ -23,7 +23,7 @@ func press(t *testing.T, c *core.Core, p core.Project, root string, name revier.
 		t.Fatal(err)
 	}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, st)
-	ref, err := a.goTarget(context.Background(), p, name)
+	ref, _, err := a.goTarget(context.Background(), p, name)
 	if err != nil {
 		t.Fatalf("goTarget %s: %v", name, err)
 	}
@@ -62,7 +62,7 @@ func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
 	}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: c}, st)
 
-	if _, err := a.goTarget(context.Background(), p, "editor"); !errors.Is(err, wm.FocusErr) {
+	if _, _, err := a.goTarget(context.Background(), p, "editor"); !errors.Is(err, wm.FocusErr) {
 		t.Fatalf("err = %v, want the focus failure", err)
 	}
 	got, err := state.Load(root)

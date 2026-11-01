@@ -334,7 +334,34 @@ func overrideOf(t, shared revier.Target) (revier.Target, error) {
 	if o.Window, err = realizationOverride("window", t.Window, shared.Window); err != nil {
 		return o, err
 	}
+	if o.Command, err = commandOverride(t.Command, shared.Command); err != nil {
+		return o, err
+	}
 	return o, nil
+}
+
+// commandOverride is realizationOverride for a command.
+func commandOverride(c, shared *revier.Command) (*revier.Command, error) {
+	switch {
+	case c == nil && shared == nil:
+		return nil, nil
+	case c == nil:
+		return nil, cannotClear("command")
+	case shared == nil:
+		return c, nil
+	}
+	var o revier.Command
+	var err error
+	if o.Run, err = listOverride("command run", c.Run, shared.Run); err != nil {
+		return nil, err
+	}
+	if o.Timeout, err = differs("command timeout", c.Timeout, shared.Timeout); err != nil {
+		return nil, err
+	}
+	if o.Run == nil && o.Timeout == "" {
+		return nil, nil
+	}
+	return &o, nil
 }
 
 func realizationOverride(kind string, r, shared *revier.Realization) (*revier.Realization, error) {

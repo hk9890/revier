@@ -83,10 +83,11 @@ page.
 | `prefer` | `"window"` or `"runtime"` | `"window"` | Which realization wins when the target has both and both hosts work. |
 | `[target.window]` | table | none | How the window host (GNOME) opens and finds it. |
 | `[target.runtime]` | table | none | How the runtime host opens and finds it. |
+| `[target.command]` | table | none | A command that shows the target in place of a host. See [Command targets](#command-targets). |
 | `[target.remote.window]`, `[target.remote.runtime]` | tables | none | The same, for a link. Only in a link file and in `config.toml`. |
 
-A target needs at least one realization. A realization with no host on this
-machine reports that it is unavailable.
+A target needs at least one realization, or a command. A realization with no
+host on this machine reports that it is unavailable.
 
 ### Realization fields
 
@@ -129,11 +130,64 @@ A target can have both realizations. revier uses the window one when a window
 host works, else the runtime one. `prefer = "runtime"` reverses this when both
 work.
 
+### Command targets
+
+A command target runs your command in place of a host. Use it for a thing
+that shows in a window you share with other projects, such as a browser tab
+group: no new window appears, so revier has nothing to find or bind.
+
+```toml
+[[target]]
+name = "web"
+key  = "ctrl-shift-i"
+  [target.command]
+  run     = ["repo-web", "{{.Name}}", "{{.GitURL}}"]
+  timeout = "5s"
+```
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `run` | list of strings | required | The command, an argv list with [templates](#templates). Runs in the project's `path`. |
+| `timeout` | string | `"10s"` | How long a run may take, as a duration such as `"5s"` or `"500ms"`. More than zero, at most `"30s"`. |
+
+A press runs the command and waits for it to end. When it ends with status 0,
+the project becomes the current one, and revier notes the window the run left
+the focus on. The next press of the key goes to the project's home while that
+window still has the focus; any other press runs the command again. A run
+that leaves the focus where it was notes nothing, so the next press runs the
+command again.
+
+Your command must:
+
+- **Do the same thing each time.** A second run shows what the first run
+  showed. It does not open one more thing.
+- **Leave the focus where you land.** Raise the window that shows the thing
+  before you exit.
+- **End within its `timeout`.** Start anything long-lived, such as a browser
+  that is not running, in the background, and exit. At the timeout revier
+  stops the command, but not what it started in the background.
+- **Fail with one line.** On failure, exit with a status that is not 0 and
+  write one line to stderr. revier reports the status and the last line.
+
+The command gets no input and no terminal, and its standard output is
+discarded. Its stderr is a deleted temporary file, so a program it started in
+the background can write to stderr after the run ends; the file takes disk
+space until that program ends.
+
+A command target cannot have a `[target.window]` or `[target.runtime]` part,
+`home = true`, or `prefer`, and no tab can name it in `inside`. revier does not
+save it in a session, and a restore or a shutdown skips it. A link has no
+command target.
+
+An [action](#actions) also runs a command, but it is no target: its key works
+only in the TUI, and a second press runs it again. Use
+an action when the result is not a place to go.
+
 ### Templates
 
 revier fills in `{{...}}` before it runs a command. Templates work in
 `launch`, `name`, `dir`, `place`, `match.class`, `match.title`, a panel's
-`title` and `command`, and an action's `run`.
+`title` and `command`, a command target's `run`, and an action's `run`.
 
 | Template | Value |
 |---|---|
@@ -265,9 +319,10 @@ name = "editor"
 | Order | Shared targets first, in `config.toml` order, then the project's new targets. |
 | Removal | Not possible: every project gets every shared target that has a part for its kind. A project can change every field, its `key` included. |
 
-- `[target.window]` and `[target.runtime]` reach local projects;
-  `[target.remote.window]` and `[target.remote.runtime]` reach links. A shared
-  target with no part for a kind of project does not reach it.
+- `[target.window]`, `[target.runtime]` and `[target.command]` reach local
+  projects; `[target.remote.window]` and `[target.remote.runtime]` reach
+  links. A shared target with no part for a kind of project does not reach
+  it, so a shared command target reaches no link.
 - A shared `home` gives every project its home. Override it by name; a second
   target with `home = true` is refused.
 
@@ -319,7 +374,8 @@ configuration names them.
 ## Actions
 
 An action is a command with nothing to raise: a script, a sync, a clipboard
-copy. Only in `config.toml`.
+copy. Only in `config.toml`. For a command that shows a thing you reach with a
+desktop key, declare a [command target](#command-targets).
 
 ```toml
 [[action]]

@@ -50,6 +50,20 @@ type State struct {
 	// ShutDown is the full shutdown on record, until anything opens again:
 	// the next surface offers to restore what it closed (decisions.md D141).
 	ShutDown *ShutDown `json:"shutdown,omitempty"`
+
+	// LastRun is the last run of a command target that moved focus: the
+	// window the run left focus on, so that a second press of the target
+	// goes home while focus is still there. One slot: every other press
+	// clears it. It is kept across processes, because each desktop key
+	// press is one, and not pruned: a window that is gone cannot have focus.
+	LastRun *LastRun `json:"last_run,omitempty"`
+}
+
+// LastRun is one run of a command target, and the window it moved focus to.
+type LastRun struct {
+	Project revier.ProjectName `json:"project"`
+	Target  revier.TargetName  `json:"target"`
+	Focused revier.TargetRef   `json:"focused"`
 }
 
 // ShutDown is a full shutdown: when it saved, and the session it saved,
@@ -93,6 +107,10 @@ func (s *State) Clone() *State {
 	if s.ShutDown != nil {
 		d := *s.ShutDown
 		c.ShutDown = &d
+	}
+	if s.LastRun != nil {
+		r := *s.LastRun
+		c.LastRun = &r
 	}
 	return c
 }
@@ -233,6 +251,7 @@ func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time
 func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
 	s.ClearShutDown()
 	s.Current = p
+	s.LastRun = nil
 	s.Launch = &Launch{Project: p, Target: t, At: at}
 }
 
@@ -242,6 +261,7 @@ func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time
 func (s *State) Landed(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
 	s.ClearShutDown()
 	s.Current = p
+	s.LastRun = nil
 	s.Bind(p, t, ref)
 	if s.Launch != nil && s.Launch.Project == p && s.Launch.Target == t {
 		s.Launch = nil
@@ -261,6 +281,20 @@ func (s *State) Claim(t revier.TargetName, refs ...revier.TargetRef) {
 		}
 	}
 	s.Launch = nil
+	s.LastRun = nil
+}
+
+// RanCommand records a run of a command target that ended well, and makes
+// its project the current one. focused is the window the run moved focus to,
+// and the run is kept for the next press only when there is one. A run is no
+// open: it launches, binds and saves nothing, so it leaves the launch and the
+// shutdown on record as they are.
+func (s *State) RanCommand(p revier.ProjectName, t revier.TargetName, focused revier.TargetRef) {
+	s.Current = p
+	s.LastRun = nil
+	if !focused.IsZero() {
+		s.LastRun = &LastRun{Project: p, Target: t, Focused: focused}
+	}
 }
 
 // Attach binds an instance to a project, ignoring a duplicate.
@@ -291,6 +325,9 @@ func (s *State) Rename(from, to revier.ProjectName) {
 	}
 	if s.Launch != nil && s.Launch.Project == from {
 		s.Launch.Project = to
+	}
+	if s.LastRun != nil && s.LastRun.Project == from {
+		s.LastRun.Project = to
 	}
 }
 
