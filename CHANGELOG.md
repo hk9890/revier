@@ -12,25 +12,27 @@ Each section is also the text of its release on the
   kitty, a workspace does not open, and the error names the version. Update
   kitty.
 - **Workspaces open in a kitty of revier's own.** Before, a workspace opened
-  in the kitty you ran the command in, and from the popup it opened in the
-  popup's kitty. Now revier starts one kitty for every workspace. It has no
-  window of its own and keeps running after you close the last workspace.
+  in the kitty you ran the command in, or, when no kitty answered, in one
+  revier started with your shell's environment. From the popup it opened in
+  the popup's kitty. Now revier starts one kitty for every workspace. It has
+  no window of its own and keeps running after you close the last workspace.
   Where systemd runs your session, it runs as the user service
   `revier-kitty`, with your desktop session's environment, so a shell's
   activated virtualenv or credentials no longer reach every project. To make
   it read a changed `kitty.conf`, or to use an updated kitty, run
   `systemctl --user stop revier-kitty`. This closes every workspace in it.
-- **The popup has no title bar, and only copy and paste work in it.** Before,
-  a kitty key in the popup could open a window or a tab there. Now every
-  other kitty key, revier's and your own included, does nothing in the
-  popup.
+- **The popup has no title bar, and of kitty's keys only copy and paste work
+  in it.** Before, a kitty key in the popup could open a window or a tab
+  there. Now every other kitty key, revier's and your own included, does
+  nothing in the popup.
 - **A target can run a command in place of opening a window.** Use
   `[target.command]` for a thing that shows in a window you share with other
   projects, such as a browser tab group. Before, such a target held revier
   for its wait on every press, and a second press did not go home. Now a
   press runs the command and waits for it to end. When the command moved the
-  focus, the next press goes to the project's home. The TUI shows the target
-  as `command`. A session, a restore and a shutdown skip it.
+  focus, the next press goes to the project's home while the focus is still
+  there. The TUI shows the target as `command`. A session, a restore and a
+  shutdown skip it.
 - **A directory reached through a symlink is now in its project.** Before, a
   project saved under a path with a symlink, such as `~/dev` linked
   elsewhere, was in no project from a tmux window. `revier agent new` and
@@ -38,8 +40,8 @@ Each section is also the text of its release on the
 - **`revier agent new --resume --panel` outside a workspace warns that it did
   not resume.** Before, it dropped `--resume` without a word.
 - **`revier doctor` names a terminal key whose agent cannot run outside a
-  workspace.** With `outside = "agent"`, such a key opened a plain tab and
-  gave no reason.
+  workspace.** With `outside = "agent"`, in kitty, such a key opened a plain
+  tab and gave no reason.
 
 ## v0.23.0
 
