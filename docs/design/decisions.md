@@ -908,7 +908,6 @@ opens anything in the popup. The survey still reads every kitty, for D110 and
 for terminals of the user's own. That kitty never has the focus, so the window
 host raises a new workspace (D19). Rejected: a kitty per workspace, which
 costs a kitty's memory for each.
-||||||| parent of 58987c3 (feat(core): a command target runs its command and binds no window)
 
 ### D166 — a command target runs its command and binds nothing
 

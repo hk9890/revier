@@ -642,3 +642,24 @@ func listedTabsProject(active revier.TargetName) revier.Project {
 			}}},
 	}}
 }
+
+func keysOf(t *testing.T, binder revier.KeyBinder, projects ...core.Project) core.KeyReport {
+	t.Helper()
+	c := &core.Core{KeyBinder: binder}
+	report, err := c.Keys(context.Background(), projects, "alt+space")
+	if err != nil {
+		t.Fatalf("Keys: %v", err)
+	}
+	return report
+}
+
+func row(t *testing.T, report core.KeyReport, chord core.Chord) core.KeyRow {
+	t.Helper()
+	for _, r := range report.Rows {
+		if r.Chord == chord {
+			return r
+		}
+	}
+	t.Fatalf("no row for %q in %+v", chord, report.Rows)
+	return core.KeyRow{}
+}
