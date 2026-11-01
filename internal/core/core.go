@@ -140,6 +140,7 @@ func (c *Core) clone() *Core {
 		Probes:        c.Probes,
 		Served:        c.Served,
 		Self:          c.Self,
+		Run:           c.Run,
 		Machine:       c.Machine,
 		Remotes:       maps.Clone(c.Remotes),
 		NewRemote:     c.NewRemote,
