@@ -5,7 +5,8 @@
 // kitty windows inside it, across all of its tabs, are the panels a probe
 // reads.
 //
-// Three facts about kitty shape this adapter, all verified on kitty 0.48:
+// Four facts about kitty shape this adapter, verified on kitty 0.48 unless a
+// bullet says otherwise:
 //
 //   - `kitten @ ls` reports no OS window title. The identity revier gives an OS
 //     window is therefore its WM instance name (`--os-window-name`, read back
