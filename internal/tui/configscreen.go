@@ -468,14 +468,15 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + line
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
+	tat, _ := cs.tform.sharedAt(sf.targets)
 	for i, t := range sf.targets {
 		row(int(configRows)+i, keyLabel(t.Key), string(t.Name), describeTarget(t))
-		if cs.tform.open && cs.tform.index == i {
+		if cs.tform.open && tat == i {
 			tform()
 		}
 	}
 	row(cs.addTargetRow(sf), "+", "add a target", "every project has it")
-	if cs.tform.open && cs.tform.index == len(sf.targets) {
+	if cs.tform.open && tat == len(sf.targets) {
 		tform()
 	}
 
