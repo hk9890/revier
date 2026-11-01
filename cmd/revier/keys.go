@@ -79,8 +79,12 @@ func cmdKeys(ctx context.Context, a *app, args []string) error {
 func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("keys status", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the report as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return errors.New("usage: revier keys status [--json]")
 	}
 
 	trigger, err := a.cfg.TriggerKey()
