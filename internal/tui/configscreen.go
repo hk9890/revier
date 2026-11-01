@@ -481,15 +481,21 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + line
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
-	tat, _ := cs.tform.sharedAt(sf.targets)
+	// Where a form stands is found only while one is open: each render
+	// would otherwise compare every shared target for a form that is not
+	// there.
+	tat := -1
+	if cs.tform.open {
+		tat, _ = cs.tform.sharedAt(sf.targets)
+	}
 	for i, t := range sf.targets {
 		row(int(configRows)+i, keyLabel(t.Key), string(t.Name), describeTarget(t))
-		if cs.tform.open && tat == i {
+		if tat == i {
 			tform()
 		}
 	}
 	row(cs.addTargetRow(sf), "+", "add a target", "every project has it")
-	if cs.tform.open && tat == len(sf.targets) {
+	if tat == len(sf.targets) {
 		tform()
 	}
 
@@ -499,15 +505,18 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + field
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
-	aat, _ := cs.aform.at(sf.actions)
+	aat := -1
+	if cs.aform.open {
+		aat, _ = cs.aform.at(sf.actions)
+	}
 	for i, act := range sf.actions {
-		if cs.aform.open && aat == i {
+		if aat == i {
 			form()
 			continue
 		}
 		row(cs.actionBase(sf)+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
 	}
-	if cs.aform.open && aat == len(sf.actions) {
+	if aat == len(sf.actions) {
 		form()
 	} else {
 		row(cs.addRow(sf), "+", "add an action", "run in the selected project, bound to a key")
