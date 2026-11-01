@@ -32,8 +32,8 @@ stay out of your workspaces.
    revier starts when it is not running.
 
 Without step 1, revier still opens workspaces, but your own kitty windows stay
-out of its reach: `revier attach` reads no agents in them, the kitty keys below
-fail there, and the trigger key does not switch a TUI you run in them.
+out of its reach: `revier attach` reads no agents in them, and the trigger key
+does not switch a TUI you run in them.
 
 ## Add tabs from a kitty key
 
@@ -85,6 +85,6 @@ term status` names them as `shadowed by kitty.conf:<line>`.
   `revier attach` in it. revier reads its agents only when it is the one
   unnamed window of its kitty process.
 
-**`revier attach` and the kitty keys do not reach your kitty.** Your kitty
+**`revier attach` reads no agents in your kitty.** Your kitty
 has no control socket. Do step 1 of [Set it up](#set-it-up) and restart
 kitty.

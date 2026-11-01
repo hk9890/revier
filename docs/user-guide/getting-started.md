@@ -52,8 +52,7 @@ proves the archive matches them.
 
 - **kitty**: give kitty a control socket, as step 1 of
   [kitty](integrations/kitty.md#set-it-up) shows, then restart kitty. Without
-  it, revier still opens workspaces, in a kitty of its own, but cannot reach
-  your own kitty windows.
+  it, revier still opens workspaces, but cannot reach your own kitty windows.
 - **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
   to use tmux; see [tmux](integrations/tmux.md).
 - **herdr**: when kitty or tmux is also installed, tell revier to use herdr;

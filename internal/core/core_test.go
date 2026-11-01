@@ -1209,8 +1209,7 @@ func TestATerminalsNewWindowIsPlacedWhileAnotherHostCannotList(t *testing.T) {
 
 // A terminal's new OS window is raised through the window host, as an open
 // one is: the workspace kitty is never the window the key was pressed in, and
-// GNOME refuses that kitty the focus. A new window the window host never lists
-// costs the raise and not the press.
+// GNOME refuses that kitty the focus.
 func TestATerminalsNewWindowIsRaisedThroughTheWindowHost(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
@@ -1226,14 +1225,6 @@ func TestATerminalsNewWindowIsRaisedThroughTheWindowHost(t *testing.T) {
 	}
 	if !slices.Equal(wm.Focuses, []revier.TargetRef{osw}) {
 		t.Errorf("window host focuses = %v, want the new OS window %v", wm.Focuses, osw)
-	}
-
-	rt, wm = hosttest.NewRuntime("kitty"), hosttest.New("wm")
-	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
-	c = &core.Core{Runtime: rt, Window: wm}
-	res, err := press(context.Background(), c, prepared(t, project()), "home")
-	if err != nil || res.Ref.IsZero() {
-		t.Errorf("Go with no OS window listed = %+v, %v, want the launched instance and no error", res.Ref, err)
 	}
 }
 

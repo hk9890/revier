@@ -308,7 +308,7 @@ closes what it opened:
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above
 printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > "$S/config.toml"   # gnome raises the OS window
 ./bin/revier open demo                                    # a kitty OS window titled home
-W=unix:$(ls "$XDG_RUNTIME_DIR"/revier-kitty-* | head -n 1)   # the workspace kitty, which revier opens every workspace in
+for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && W=unix:$s; done   # the workspace kitty that answers
 kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
 wctl focused --json | jq .title                           # home
 ./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home

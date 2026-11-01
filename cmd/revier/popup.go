@@ -59,15 +59,15 @@ func cmdPopup(ctx context.Context, a *app) error {
 // listenOn is the control socket of this kitty, a file only the user can
 // reach, in place of the one `listen_on` in kitty.conf names. revier reaches
 // the popup through it to switch its list (D110) and to raise it after a
-// restore. With none, kitty.conf decides.
+// restore, so remote control is on for that socket alone. With none,
+// kitty.conf decides both: a socket it names may be one every user can reach.
 func popupArgv(self string, start revier.ProjectName, listenOn string) []string {
 	mark := core.PopupEnv + "=" + string(start)
 	argv := []string{"kitty", "--class", core.PopupClass, "--title", "revier"}
 	if listenOn != "" {
-		argv = append(argv, "--listen-on", listenOn)
+		argv = append(argv, "--listen-on", listenOn, "-o", "allow_remote_control=socket-only")
 	}
 	return append(argv,
-		"-o", "allow_remote_control=socket-only",
 		"-o", "remember_window_size=no",
 		"-o", "hide_window_decorations=yes",
 		"-o", "map=kitty_mod+enter no_op",

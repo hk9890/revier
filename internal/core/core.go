@@ -936,19 +936,21 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // opened. A terminal's own focus does not raise its OS window where the
 // compositor refuses it, kitty's on GNOME Wayland, and the workspace kitty
 // never holds the window the key was pressed in (decisions.md D165). So the
-// window host raises it, as it raises one already open (D19). A new window
-// the window host never lists is not refused, as a raise of an open one is
-// (D63): the launch ran, and only the raise is missing.
-func (c *Core) raiseNew(ctx context.Context, ref revier.TargetRef, name revier.TargetName) error {
+// window host raises it, as it raises one already open (D19). A failure is
+// not returned, unlike a raise of an open window (D63): the launch ran, and
+// the press is one, with only the raise missing, as place says of a placement.
+func (c *Core) raiseNew(ctx context.Context, ref revier.TargetRef, name revier.TargetName) {
 	if !c.bridged(revier.Instance{Ref: ref}) {
-		return nil
+		return
 	}
 	osw, ok := c.windowOfNew(ctx, ref)
 	if !ok {
 		slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
-		return nil
+		return
 	}
-	return c.raise(ctx, osw, name)
+	if err := c.raise(ctx, osw, name); err != nil {
+		slog.Warn("raise new", "ref", ref, "err", err)
+	}
 }
 
 // PlaceWait is how long placement waits for the window host to see the OS

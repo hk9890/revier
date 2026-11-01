@@ -253,7 +253,7 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 	res, err := c.activate(ctx, p, name, st.Bound[p.Name], st.Pending(p.Name, name, time.Now()), resumes)
 	ref := res.Ref
 	if res.Opened && !ref.IsZero() && err == nil && raise {
-		err = c.raiseNew(ctx, ref, res.Target)
+		c.raiseNew(ctx, ref, res.Target)
 	}
 	if res.Launched && ref.IsZero() && err == nil {
 		at := time.Now()
