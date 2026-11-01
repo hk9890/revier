@@ -3,6 +3,8 @@
 package kitty_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -35,6 +37,9 @@ var parents = map[int]int{
 // newHost is a Host that reads the process tree from parents.
 func newHost() *kitty.Host {
 	h := &kitty.Host{}
+	// A test that reaches a start without a starter of its own must not start
+	// a real kitty, which would open on the desktop of whoever runs the tests.
+	h.SetStarter(func(context.Context, ...string) error { return errors.New("kitty: no kitty starts in a test") })
 	h.SetParents(func(pid int) (int, bool) {
 		ppid, ok := parents[pid]
 		return ppid, ok

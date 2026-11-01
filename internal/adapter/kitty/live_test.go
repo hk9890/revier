@@ -1,13 +1,15 @@
 //go:build live
 
 // Layer L4: the kitten the host runs is a real process, a script first on
-// PATH. No kitty runs.
+// PATH, and so are kitty and systemd-run. No kitty runs.
 package kitty_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,5 +39,63 @@ func TestKittenRunsInAProcessGroupOfItsOwn(t *testing.T) {
 	}
 	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
 		t.Errorf("kitten's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
+	}
+}
+
+// The workspace kitty starts through the user's service manager, so it has
+// the session's login environment whoever asks first, as one service, so two
+// starts at once start one kitty. A start that fails because that service
+// runs already starts nothing more. Where there is no systemd-run, or it
+// fails otherwise, kitty starts detached from revier. Scripts named kitty,
+// systemd-run and systemctl record how they were called, and exit as the case
+// says.
+func TestTheWorkspaceKittyStartsThroughTheServiceManager(t *testing.T) {
+	const service = "systemd-run --user --quiet --collect --unit=revier-kitty -- %s/kitty --listen-on unix:/s"
+	const active = "systemctl --user --quiet is-active revier-kitty"
+	const detached = "kitty --detach --listen-on unix:/s"
+	for _, tc := range []struct {
+		name       string
+		systemdRun string // the exit status of systemd-run; "" for none on PATH
+		systemctl  string // the exit status of is-active
+		want       []string
+	}{
+		{"started as a service", "0", "3", []string{service}},
+		{"no systemd-run", "", "3", []string{detached}},
+		{"the service runs already", "1", "0", []string{service, active}},
+		{"no service manager", "1", "3", []string{service, active, detached}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bin, out := t.TempDir(), filepath.Join(t.TempDir(), "argv")
+			record := func(name, status string) {
+				script := "#!/bin/sh\necho " + name + " \"$@\" >> '" + out + "'\nexit " + status + "\n"
+				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			record("kitty", "0")
+			record("systemctl", tc.systemctl)
+			if tc.systemdRun != "" {
+				record("systemd-run", tc.systemdRun)
+			}
+			t.Setenv("PATH", bin)
+
+			if err := (&kitty.Host{}).StartProcess(context.Background(), "--listen-on", "unix:/s"); err != nil {
+				t.Fatalf("StartProcess: %v", err)
+			}
+			b, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatalf("nothing ran: %v", err)
+			}
+			var want []string
+			for _, w := range tc.want {
+				if strings.Contains(w, "%s") {
+					w = fmt.Sprintf(w, bin)
+				}
+				want = append(want, w)
+			}
+			if got := strings.Split(strings.TrimSpace(string(b)), "\n"); !slices.Equal(got, want) {
+				t.Errorf("ran %q, want %q", got, want)
+			}
+		})
 	}
 }

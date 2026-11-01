@@ -50,8 +50,9 @@ func cmdPopup(ctx context.Context, a *app) error {
 // kitty window closed; one as large as the workarea is maximized, and a
 // maximized window refuses the placement. The option also keeps the popup's
 // own size out of what the user's next kitty window opens at. The popup has
-// no title bar, and kitty's keys for a new window, OS window and tab do
-// nothing in it. env(1) marks the surface as the popup's (core.PopupEnv) and
+// no title bar, and no kitty key but copy and paste: any other, kitty's or
+// the user's or revier's own, could open a window or a tab in it. env(1)
+// marks the surface as the popup's (core.PopupEnv) and
 // names its project, empty when none resolved, and nothing else: kitty's own
 // env option would reach every window this kitty opens. The variable is set
 // either way, which is what makes the surface the popup.
@@ -70,8 +71,8 @@ func popupArgv(self string, start revier.ProjectName, listenOn string) []string 
 	return append(argv,
 		"-o", "remember_window_size=no",
 		"-o", "hide_window_decorations=yes",
-		"-o", "map=kitty_mod+enter no_op",
-		"-o", "map=kitty_mod+n no_op",
-		"-o", "map=kitty_mod+t no_op",
+		"-o", "clear_all_shortcuts=yes",
+		"-o", "map=kitty_mod+c copy_to_clipboard",
+		"-o", "map=kitty_mod+v paste_from_clipboard",
 		"-e", "env", mark, self)
 }

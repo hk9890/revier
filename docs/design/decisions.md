@@ -919,3 +919,13 @@ records no launch, claims nothing, saves nothing, and clears no shutdown
 (D141): a run is not an open. The command signals nothing, so toggle-back
 stays in the core: a second press of that project and target goes home while
 the focus authority reports that window (D16). It is no home; a link has none.
+
+### D167 — the workspace kitty starts with the session's login environment
+
+Extends D165. A kitty window gets its kitty's environment, and the workspace
+kitty was started by whichever process opened the first workspace: a shell's
+venv or credentials then reached every project's workspace until that kitty
+exited. revier now starts it through the user's service manager, so it has
+the login environment however it was asked, and starts it detached only where
+there is none. Rejected: a fixed list of variables, which drops what the
+desktop sets that revier does not know of.
