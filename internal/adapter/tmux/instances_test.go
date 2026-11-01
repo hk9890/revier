@@ -22,8 +22,8 @@ func TestInstancesCostTwoCallsWhateverTheProjectCount(t *testing.T) {
 	var sessions, panes strings.Builder
 	for i := range projects {
 		fmt.Fprintf(&sessions, "4242|$%d|1|project-%d\n", i, i)
-		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d|zsh||shell\n", i, i, 2*i, noPID)
-		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d|claude||agent\n", i, i, 2*i+1, noPID)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d||zsh shell\n", i, i, 2*i, noPID)
+		fmt.Fprintf(&panes, "$%d|@%d|%%%d|%d||claude agent\n", i, i, 2*i+1, noPID)
 	}
 	var calls []string
 	h := &tmux.Host{}

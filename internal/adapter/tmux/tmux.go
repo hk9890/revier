@@ -52,7 +52,9 @@ func IsPane(id string) bool {
 // one free-text field LAST and splits with a fixed field count, letting that
 // field absorb any separators it contains. That is why session names and pane
 // titles are fetched by two separate calls rather than one: a single line
-// cannot have two free-text fields at the end.
+// cannot have two free-text fields at the end. The pane's command is the one
+// that shares a line with its title: tmux cuts it at its first space, so a
+// space after it ends it whatever else it contains.
 const sep = "|"
 
 // nameOption is the session option that holds the name Open gave the
@@ -135,18 +137,20 @@ func (h *Host) Probe(ctx context.Context) error {
 // read from /proc: two file reads and a readlink per pane, a second readlink
 // where /proc hides the first, and no process.
 // The directory is read there and not as pane_current_path, which is free
-// text like pane_title, and a line carries one free-text field.
+// text like pane_title: a line carries one free-text field, and the command
+// before it only because it ends at a space.
 func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	sessions, named, err := h.sessions(ctx)
 	if err != nil || len(sessions) == 0 {
 		return nil, err
 	}
 
-	// pane_title is free text and comes last, so SplitN gives it whatever it
-	// contains.
+	// pane_current_command and pane_title are free text, so they come last,
+	// and SplitN gives the two whatever they contain. tmux cuts the command
+	// at its first space, so the first space after it ends it.
 	format := strings.Join([]string{
-		"#{session_id}", "#{window_id}", "#{pane_id}", "#{pane_pid}", "#{pane_current_command}",
-		"#{@" + varsOption + "}", "#{pane_title}",
+		"#{session_id}", "#{window_id}", "#{pane_id}", "#{pane_pid}",
+		"#{@" + varsOption + "}", "#{pane_current_command} #{pane_title}",
 	}, sep)
 
 	out, err := h.tmux(ctx, "list-panes", "-a", "-F", format)
@@ -162,8 +166,12 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		// A malformed line is skipped, never fatal. Panes belonging to other
 		// tools share this server, and one odd line must not blank every
 		// project revier knows about.
-		if f := strings.SplitN(line, sep, 7); len(f) == 7 {
-			lines = append(lines, f)
+		f := strings.SplitN(line, sep, 6)
+		if len(f) != 6 {
+			continue
+		}
+		if cmd, title, ok := strings.Cut(f[5], " "); ok {
+			lines = append(lines, append(f[:5], cmd, title))
 		}
 	}
 	// list-panes -a lists a window's panes once for every session the window
@@ -184,7 +192,7 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 		bySession[sessionOf(sessions[i].Ref.ID)] = &sessions[i]
 	}
 	for _, f := range lines {
-		sessionID, windowID, paneID, panePID, paneCmd, paneVars, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
+		sessionID, windowID, paneID, panePID, paneVars, paneCmd, paneTitle := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
 		inst, ok := bySession[sessionID]
 		if !ok || owner[paneID] != sessionID {
 			continue
