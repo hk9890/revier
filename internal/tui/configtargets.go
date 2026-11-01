@@ -84,7 +84,6 @@ type panelDraft struct {
 // screen, or a project's on the project screen.
 type targetForm struct {
 	open   bool
-	index  int           // the target changed, or one past the last for a new one: the project screen's
 	adds   bool          // whether the form adds a target
 	base   revier.Target // the target as read, for the values the form does not show
 	cursor int           // the row the cursor is on
@@ -191,7 +190,7 @@ func (cs *configScreen) openTargetForm(sf surface, i int) tea.Cmd {
 	if i < len(sf.targets) {
 		t = &sf.targets[i]
 	}
-	cs.tform = newTargetForm(sf.theme, i, t)
+	cs.tform = newTargetForm(sf.theme, t)
 	return cs.tform.fields[tfName].Focus()
 }
 
@@ -311,10 +310,9 @@ func (f targetForm) rows() []formRow {
 	return out
 }
 
-// newTargetForm is the form at index for t, or for a new target when t is
-// nil.
-func newTargetForm(th theme.Theme, index int, t *revier.Target) targetForm {
-	f := targetForm{open: true, index: index, adds: t == nil}
+// newTargetForm is the form for t, or for a new target when t is nil.
+func newTargetForm(th theme.Theme, t *revier.Target) targetForm {
+	f := targetForm{open: true, adds: t == nil}
 	for j := range f.fields {
 		f.fields[j] = formInput(th, "")
 	}
