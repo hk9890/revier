@@ -53,6 +53,19 @@ func TestDiscoveryFindsTheSocketFilesOfTheRuntimeDirectory(t *testing.T) {
 	}
 }
 
+// The kitty a command runs in names its socket in KITTY_LISTEN_ON. An abstract
+// name there is not taken either: once that kitty has exited, any user can
+// bind the name and answer in its place.
+func TestDiscoveryTakesNoAbstractSocketTheCommandRunsIn(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	table := "0000000000000000: 00000002 00000000 00010000 0001 01 101 /run/user/1000/kitty-4000\n"
+	got := candidates("unix:@kitty-4001", table)
+	want := []string{"unix:/run/user/1000/kitty-4000"}
+	if !slices.Equal(got, want) {
+		t.Errorf("candidates = %q, want %q", got, want)
+	}
+}
+
 // Without a runtime directory no path is the user's own, so no socket file is
 // taken. A relative one is no directory either.
 func TestDiscoveryTakesNoSocketFileWithoutARuntimeDirectory(t *testing.T) {

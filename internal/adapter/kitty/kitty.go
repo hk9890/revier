@@ -17,8 +17,9 @@
 //     `listen_on unix:${XDG_RUNTIME_DIR}/kitty` that socket is the file
 //     `$XDG_RUNTIME_DIR/kitty-<pid>` (read from kitty 0.49's kitty.conf
 //     manual; not run against a live kitty). The abstract `@kitty-<pid>` of
-//     `listen_on unix:@kitty` is not looked for: it has no permissions, so any
-//     user of the machine can bind the name and answer in kitty's place. The
+//     `listen_on unix:@kitty` is not looked for, also not when KITTY_LISTEN_ON
+//     names it: it has no permissions, so any user of the machine can bind the
+//     name and answer in kitty's place. The
 //     windows revier cares about may
 //     span several processes - every kitty started from a session file is a
 //     process of its own - so Instances queries every such socket,
@@ -332,7 +333,8 @@ func discover() []string {
 // candidates orders the control sockets of one kernel socket table. The table
 // holds a socket file by its path, and only while a process is bound to it: a
 // kitty that crashed leaves a file and no entry. own, the kitty a command
-// runs in, comes first.
+// runs in, comes first, unless it is abstract: once that kitty has exited,
+// any user can bind its name.
 func candidates(own, table string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -343,7 +345,9 @@ func candidates(own, table string) []string {
 		seen[name] = true
 		out = append(out, "unix:"+name)
 	}
-	add(strings.TrimPrefix(own, "unix:"))
+	if own := strings.TrimPrefix(own, "unix:"); !strings.HasPrefix(own, "@") {
+		add(own)
+	}
 
 	dir := runtimeDir()
 	var found []string
