@@ -211,7 +211,7 @@ func termKeyWriter() revier.TermKeyWriter { return kitty.TermKeyWriter{} }
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
 }
 
 // servedProcesses lists what `revier agent exec` started here for a terminal

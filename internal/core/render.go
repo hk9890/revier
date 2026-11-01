@@ -8,9 +8,10 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Render expands every template in a project's realizations against the
-// project itself. A host receives literal argv and literal match patterns and
-// never sees a `{{ }}`, which is what keeps templating out of every adapter.
+// Render expands every template in a project's realizations and commands
+// against the project itself. A host receives literal argv and literal match
+// patterns and never sees a `{{ }}`, which is what keeps templating out of
+// every adapter.
 //
 // The fields available are those of revier.Project: {{.Name}}, {{.Path}}, and
 // {{.Vars.<key>}}. A realization that names no Dir gets the project path, and
@@ -37,6 +38,14 @@ func Render(p revier.Project) (revier.Project, []error) {
 				break
 			}
 			*slot = &r
+		}
+		if cmd := out.Targets[i].Command; cmd != nil && errs[i] == nil {
+			run, err := expandArgv(p, cmd.Run)
+			if err != nil {
+				errs[i] = fmt.Errorf("target %q: command run%w", out.Targets[i].Name, err)
+				continue
+			}
+			out.Targets[i].Command = &revier.Command{Run: run, Timeout: cmd.Timeout}
 		}
 	}
 	return out, errs

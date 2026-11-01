@@ -47,7 +47,9 @@ Concretely, an adapter never: compiles a `Match`, reads `Target`, `Project`, or
 **`Open` must produce an instance that the same realization's `Match` finds.**
 Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
 that assign their own identity — a tmux session name, a browser `--class`. See
-`internal/adapter/tmux.Host.Open`.
+`internal/adapter/tmux.Host.Open`. A command target has no `Open` and no
+`Match`: its command does the run-or-raise, and the core runs it through
+`Core.Run` (`docs/design/decisions.md` D166).
 
 **`Instances` must cost the same whatever the project count.** It runs on every
 TUI refresh, and this repository expects roughly ninety projects.

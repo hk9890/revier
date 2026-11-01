@@ -27,10 +27,15 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	ref, err := a.goTarget(ctx, p, revier.TargetName(pos[0]))
+	ref, res, err := a.goTarget(ctx, p, revier.TargetName(pos[0]))
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(a.out, "%s: %s\n", p.Name, describe(ref))
+	landed := describe(ref)
+	if res.Ran {
+		// A command target binds nothing, so there is no instance to name.
+		landed = "ran " + string(res.Target)
+	}
+	_, _ = fmt.Fprintf(a.out, "%s: %s\n", p.Name, landed)
 	return nil
 }

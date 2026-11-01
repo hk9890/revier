@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -61,6 +62,9 @@ type compiledTarget struct {
 	// be the one.
 	windowClass revier.CompiledMatch
 	hasClass    bool
+
+	// runWait is how long a run of a command target's command may take.
+	runWait time.Duration
 
 	// err is why this target cannot be used: a template that did not
 	// render, a match that did not compile, or a rule that refused it. The
@@ -127,6 +131,16 @@ func PrepareProject(p revier.Project) Project {
 			// The realizations are as written, not as rendered: a match
 			// compiled from an unrendered pattern would match by accident.
 			compiled[i].refuse(errs[i])
+			continue
+		}
+		// A command target has no instance to match. Both its matches match
+		// nothing, so no loop over compiled matches takes an instance for it.
+		if t.Command != nil {
+			compiled[i].window, compiled[i].runtime = matchesNothing, matchesNothing
+			var err error
+			if compiled[i].runWait, err = RunTimeout(*t.Command); err != nil {
+				compiled[i].refuse(fmt.Errorf("target %q: %w", t.Name, err))
+			}
 			continue
 		}
 		var err error

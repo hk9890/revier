@@ -909,7 +909,18 @@ for terminals of the user's own. That kitty never has the focus, so the window
 host raises a new workspace (D19). Rejected: a kitty per workspace, which
 costs a kitty's memory for each.
 
-### D166 — the workspace kitty starts with the session's login environment
+### D166 — a command target runs its command and binds nothing
+
+Extends D12, D15, D21 and D145. A target may name a command in place of a
+window or runtime part, never beside one: the command does the run-or-raise
+and the focus, so it must be idempotent. revier runs it to its end within its
+timeout, waits for no window, and records the window focus moved to. It
+records no launch, claims nothing, saves nothing, and clears no shutdown
+(D141): a run is not an open. The command signals nothing, so toggle-back
+stays in the core: a second press of that project and target goes home while
+the focus authority reports that window (D16). It is no home; a link has none.
+
+### D167 — the workspace kitty starts with the session's login environment
 
 Extends D165. A kitty window gets its kitty's environment, and the workspace
 kitty was started by whichever process opened the first workspace: a shell's

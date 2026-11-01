@@ -808,7 +808,7 @@ const minKitty = "0.42"
 // startProcess starts the workspace kitty through the user's service manager
 // where there is one, so it has the session's login environment whatever
 // process asked first: started from a shell, it would hand that shell's
-// environment to every workspace after (decisions.md D166). A start that
+// environment to every workspace after (decisions.md D167). A start that
 // fails because the service runs already is one another process made. Where
 // there is no systemd-run, or it cannot start the service, kitty is started
 // detached from this process.

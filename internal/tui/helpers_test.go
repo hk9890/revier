@@ -868,3 +868,22 @@ func seenOnDisk(t *testing.T, root string) (session.Session, bool) {
 	}
 	return s, true
 }
+
+// targetsSurface is the surface over a configuration root whose config.toml
+// holds sharedTargets and one project with no target of its own, and that
+// root.
+func targetsSurface(t *testing.T) (tui.Model, string) {
+	t.Helper()
+	m, file, _ := projectSurfaceOver(t, sharedTargets, "path = \"/tmp/demo\"\n", hosttest.NewRuntime("rt"))
+	return m, filepath.Dir(filepath.Dir(file))
+}
+
+// onTargetRow opens the config screen with the cursor on the i-th shared
+// target, or on the add row past the last.
+func onTargetRow(m tui.Model, i int) tui.Model {
+	m, _ = press(m, "alt+c")
+	for range 4 + i {
+		m, _ = press(m, "down")
+	}
+	return m
+}

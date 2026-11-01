@@ -100,10 +100,10 @@ func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Proj
 }
 
 // agentTabFree refuses a new project whose agent tab would merge with a
-// shared target of its name that is no tab: one with a window, or with a
-// runtime that launches or lists tabs of its own. A shared target that starts
-// nothing merges into the tab. A shared home leaves the file with no tab of
-// its own, so no name can collide.
+// shared target of its name that is no tab: one with a window or a command,
+// or with a runtime that launches or lists tabs of its own. A shared target
+// that starts nothing merges into the tab. A shared home leaves the file with
+// no tab of its own, so no name can collide.
 func agentTabFree(shared []map[string]any) error {
 	if SharedHome(shared) {
 		return nil
@@ -118,7 +118,7 @@ func agentTabFree(shared []map[string]any) error {
 	}
 	t := targets[i]
 	starts := t.Runtime != nil && t.Runtime.Inside == "" && (len(t.Runtime.Launch) > 0 || len(t.Runtime.Tabs) > 0)
-	if t.Window != nil || starts {
+	if t.Window != nil || t.Command != nil || starts {
 		return fmt.Errorf("config.toml has a shared target named %q that is no tab, and a new project gives that name to the tab of its agent; rename the shared target", agentTab)
 	}
 	return nil
@@ -126,9 +126,13 @@ func agentTabFree(shared []map[string]any) error {
 
 // SharedHome is whether the usable shared targets give a local project its
 // home, so a new project file needs no home of its own. A home with no local
-// part is a link's alone.
+// part is a link's alone. A command target is refused as a home, so it gives
+// none.
 func SharedHome(shared []map[string]any) bool {
 	for _, t := range partsFor(shared, nil, false) {
+		if _, cmd := t["command"]; cmd {
+			continue
+		}
 		if home, _ := t["home"].(bool); home {
 			return true
 		}

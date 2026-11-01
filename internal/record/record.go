@@ -77,6 +77,7 @@ const (
 	KindUnbound         = "unbound"
 	KindAttached        = "attached"
 	KindDetached        = "detached"
+	KindRan             = "ran"
 )
 
 // Line is one line of the record. Machine is the linked host a line is

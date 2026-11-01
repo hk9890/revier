@@ -147,7 +147,9 @@ conversation yet; see [Agents](agents.md#resume-an-agent). Other
 agents start fresh in the project directory. A
 [named agent](configuration.md#named-agents) comes back as that agent; when
 its project no longer declares it, the restore skips it and says so. An
-attached window is not saved.
+attached window is not saved. A target that is now a
+[command target](configuration.md#command-targets) is skipped: the restore
+runs no command.
 In the TUI, alt+s opens the sessions screen.
 
 ## Shut everything down

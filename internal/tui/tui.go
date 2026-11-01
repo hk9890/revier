@@ -1558,8 +1558,9 @@ func (m Model) goRow(i int) tea.Cmd {
 // goTarget is one activation, the whole run-or-raise as core.ActivateWaiting
 // walks it against the state on disk: the launch is written before the wait
 // for its window, so a second press - here or on a desktop key - finds it
-// and does not launch again, and the ref it lands on is written after. The
-// wait runs in the command, off the update loop, so the surface stays live.
+// and does not launch again, and the ref it lands on is written after. A
+// command target's run is written after it ends, for the second press's
+// toggle. The wait runs in the command, off the update loop, so the surface stays live.
 // Enter on a row of the pane and a target key on the list are the same
 // operation, so they are the same command.
 func (m Model) goTarget(p core.Project, name revier.TargetName) tea.Cmd {

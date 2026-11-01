@@ -77,6 +77,7 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	s.Bind("p", "editor", ref)
 	s.Launched("p", "home", time.Now())
 	s.MarkShutDown(time.Now(), "s1")
+	s.RanCommand("p", "web", ref)
 	fields := reflect.ValueOf(*s)
 	for i := range fields.NumField() {
 		if fields.Field(i).IsZero() {
@@ -89,8 +90,8 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 		t.Fatalf("clone = %+v, want %+v", c, s)
 	}
 	other := revier.TargetRef{Host: "gnome", ID: "9"}
-	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project, c.ShutDown.Session = other, other, "q", "s2"
-	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" || s.ShutDown.Session != "s1" {
+	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project, c.ShutDown.Session, c.LastRun.Focused = other, other, "q", "s2", other
+	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" || s.ShutDown.Session != "s1" || s.LastRun.Focused != ref {
 		t.Errorf("state = %+v, launch = %+v after its clone changed, want it as it was", s, s.Launch)
 	}
 }

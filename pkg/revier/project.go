@@ -2,8 +2,9 @@
 // adapter implements and the values that cross between the core and a host.
 //
 // What each port is for is in docs/design/architecture.md. Every operation
-// revier performs is the same one: run-or-raise a named target; a second press
-// returns to the project's home.
+// revier performs is the same one: run-or-raise a named target, revier's or
+// its command's; a second press returns to the project's home (decisions.md
+// D166).
 package revier
 
 import (
@@ -49,9 +50,10 @@ type Link struct {
 
 // Home returns the project's workspace target, the one toggle-back returns to.
 // A project without a home target can still be surveyed but cannot be opened.
+// A command target is never home: it binds no instance to open in.
 func (p Project) Home() (Target, bool) {
 	for _, t := range p.Targets {
-		if t.Home {
+		if t.Home && t.Command == nil {
 			return t, true
 		}
 	}
@@ -94,6 +96,19 @@ type Target struct {
 
 	Window  *Realization `toml:"window" json:"window,omitempty"`
 	Runtime *Realization `toml:"runtime" json:"runtime,omitempty"`
+
+	// Command is a target that runs a command in place of a window or a
+	// runtime realization: the command does the run-or-raise and the focus,
+	// and binds no instance (decisions.md D166).
+	Command *Command `toml:"command" json:"command,omitempty"`
+}
+
+// Command is what a command target runs. Run is an argv, rendered as a launch
+// is, and run in the project's directory. Timeout is how long a run may take,
+// a Go duration such as "10s"; empty is the core's default.
+type Command struct {
+	Run     []string `toml:"run" json:"run,omitempty"`
+	Timeout string   `toml:"timeout" json:"timeout,omitempty"`
 }
 
 // HostKind names which side of the host split an adapter fills.

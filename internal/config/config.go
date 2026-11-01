@@ -588,8 +588,9 @@ func validateProject(p revier.Project) error {
 	for _, t := range p.Targets {
 		// A nameless target is refused and cannot be opened, so it is no
 		// home: counting it would leave the project looking whole while
-		// nothing in it can be opened or returned to.
-		if t.Home && t.Name != "" {
+		// nothing in it can be opened or returned to. A command target is
+		// refused as a home, and takes no home's place either.
+		if t.Home && t.Name != "" && t.Command == nil {
 			homes++
 		}
 	}
@@ -615,7 +616,9 @@ func validateTargets(p revier.Project) []error {
 	}{}
 
 	// The first target marked home is the project's; a later one is refused
-	// rather than making the count ambiguous for every target at once.
+	// rather than making the count ambiguous for every target at once. A
+	// command target marked home is refused by validateCommand and takes no
+	// home's place, so the real home after it stays.
 	home := false
 
 	for i, t := range p.Targets {
@@ -632,7 +635,7 @@ func validateTargets(p revier.Project) []error {
 		}
 		seenName[t.Name] = true
 
-		if t.Home {
+		if t.Home && t.Command == nil {
 			if home {
 				errs = append(errs, fmt.Errorf("target %q is marked home, and an earlier target already is; exactly one may be", t.Name))
 			}
@@ -664,8 +667,11 @@ func validateTargets(p revier.Project) []error {
 			}
 		}
 
+		if t.Command != nil {
+			errs = append(errs, validateCommand(t)...)
+		}
 		switch {
-		case t.Window != nil || t.Runtime != nil:
+		case t.Window != nil || t.Runtime != nil || t.Command != nil:
 		case p.Remote != nil:
 			// A link's part is under [target.remote]; a local part was
 			// dropped and refused by validateParts, and is not the fix.
@@ -731,6 +737,30 @@ func validateTargets(p revier.Project) []error {
 		out[i] = errors.Join(errs...)
 	}
 	return out
+}
+
+// validateCommand checks a target that runs a command (decisions.md D166).
+// The command does the run-or-raise in place of a host, so the target has no
+// realization beside it, no host to prefer, and is no home: a home is an
+// instance the others open in and a second press returns to.
+func validateCommand(t revier.Target) []error {
+	var errs []error
+	if len(t.Command.Run) == 0 {
+		errs = append(errs, fmt.Errorf("target %q command has no run argv", t.Name))
+	}
+	if t.Window != nil || t.Runtime != nil {
+		errs = append(errs, fmt.Errorf("target %q has a command and a realization; a command target has neither a window nor a runtime realization", t.Name))
+	}
+	if t.Home {
+		errs = append(errs, fmt.Errorf("target %q runs a command and is home; a home is an instance the others open in", t.Name))
+	}
+	if t.Prefer != "" {
+		errs = append(errs, fmt.Errorf("target %q runs a command and has prefer; a command needs no host", t.Name))
+	}
+	if _, err := core.RunTimeout(*t.Command); err != nil {
+		errs = append(errs, fmt.Errorf("target %q: %w", t.Name, err))
+	}
+	return errs
 }
 
 // nothingToStart refuses a realization of t with no launch and no tabs. On a
@@ -808,6 +838,8 @@ func validateTab(p revier.Project, t revier.Target) []error {
 	switch {
 	case !ok:
 		errs = append(errs, fmt.Errorf("target %q is inside %q, which the project does not declare", t.Name, r.Inside))
+	case in.Command != nil:
+		errs = append(errs, fmt.Errorf("target %q is inside %q, which runs a command and opens no tab", t.Name, r.Inside))
 	case in.Runtime == nil:
 		errs = append(errs, fmt.Errorf("target %q is inside %q, which has no runtime realization to open a tab in", t.Name, r.Inside))
 	case in.Runtime.Inside != "":

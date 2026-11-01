@@ -122,14 +122,18 @@ func logShutDown(before, after *state.ShutDown) {
 }
 
 // changes is what a write did, as lines of the state record (decisions.md
-// D151): the project it selected, each target it bound or unbound, and each
-// instance it attached or detached. Every write goes through here, so one
-// place covers a landing, a claim, an attachment, a rename and a prune, in
-// every process that writes the state.
+// D151): the project it selected, the run of a command target it recorded,
+// each target it bound or unbound, and each instance it attached or
+// detached. Every write goes through here, so one place covers a landing, a
+// claim, a run, an attachment, a rename and a prune, in every process that
+// writes the state.
 func changes(was, is *state.State) []record.Line {
 	var out []record.Line
 	if is.Current != was.Current {
 		out = append(out, record.Line{Kind: record.KindProjectSelected, Project: is.Current, From: string(was.Current)})
+	}
+	if run := is.LastRun; run != nil && (was.LastRun == nil || *run != *was.LastRun) {
+		out = append(out, record.Line{Kind: record.KindRan, Project: run.Project, Target: run.Target, Host: run.Focused.Host, Ref: run.Focused.ID})
 	}
 	for _, p := range sortedKeys(was.Bound, is.Bound) {
 		for _, t := range sortedKeys(was.Bound[p], is.Bound[p]) {

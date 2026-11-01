@@ -42,6 +42,8 @@ user guide or the code; write them there, not in `product.md`,
   `decisions.md`, and no two headings share a number. A "Replaces Dnn" is no
   citation. After a rebase onto `main`, check the number of a new entry
   against `main`'s headings.
+- After you resolve a conflict in `decisions.md`, check that no conflict
+  marker is left: `rg -n '^(<<<<<<<|\|\|\|\|\|\|\||=======|>>>>>>>)' docs`.
 - Never reuse a number.
 
 ## `docs/user-guide/`
