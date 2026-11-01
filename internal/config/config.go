@@ -626,6 +626,8 @@ func validateTargets(p revier.Project) []error {
 	// home's place, so the real home after it stays.
 	home := false
 
+	rendered, renderErrs := core.Render(p)
+
 	for i, t := range p.Targets {
 		var errs []error
 		if t.Name == "" {
@@ -729,10 +731,12 @@ func validateTargets(p revier.Project) []error {
 				// carries the identity match finds.
 				errs = append(errs, fmt.Errorf("target %q runtime realization has no name; give it the name its match finds", t.Name))
 			}
-			if r.Place != "" && len(strings.Fields(r.Place)) != 4 {
-				// A geometry short of its four tokens would reach the window
-				// host and be refused there, after the window had opened.
-				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, r.Place))
+			// A geometry short of its four tokens would reach the window host
+			// and be refused there, after the window had opened. place takes
+			// templates, so the tokens counted are the rendered ones; a place
+			// that does not render is refused by rendering instead.
+			if place := renderedPlace(rendered.Targets[i], kind); renderErrs[i] == nil && place != "" && len(strings.Fields(place)) != 4 {
+				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, place))
 			}
 		}
 		if t.Prefer != "" && t.Prefer != revier.HostWindow && t.Prefer != revier.HostRuntime {
@@ -742,6 +746,18 @@ func validateTargets(p revier.Project) []error {
 		out[i] = errors.Join(errs...)
 	}
 	return out
+}
+
+// renderedPlace is the place of t's realization of kind, as rendered.
+func renderedPlace(t revier.Target, kind revier.HostKind) string {
+	r := t.Runtime
+	if kind == revier.HostWindow {
+		r = t.Window
+	}
+	if r == nil {
+		return ""
+	}
+	return r.Place
 }
 
 // validateCommand checks a target that runs a command (decisions.md D166).

@@ -982,3 +982,39 @@ func TestLoadProjectRefusesARelativePath(t *testing.T) {
 		t.Errorf("link Invalid = %v, want a link's path kept as written", far.Invalid)
 	}
 }
+
+// place takes templates, so its four tokens are counted in what it renders
+// to: a var that holds the whole geometry loads, and a var that adds a token
+// costs its target before the window host refuses it after the window opened.
+func TestLoadProjectCountsPlaceTokensAsRendered(t *testing.T) {
+	withPlace := func(vars, place string) string {
+		body := strings.Replace(valid, `url = "https://example.invalid/pulls"`, vars, 1)
+		return strings.Replace(body, `match = { class = "^code$" }`, `match = { class = "^code$" }`+"\n  place = \""+place+"\"", 1)
+	}
+	cases := []struct {
+		name, vars, place string
+		refused           bool
+	}{
+		{"var holds four tokens", `geom = "right top 50% 100%"`, "{{.Vars.geom}}", false},
+		{"name renders to one token", `url = "u"`, "{{ .Name }} top 50% 100%", false},
+		{"var adds a token", `x = "left top"`, "{{.Vars.x}} top 50% 100%", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := config.LoadProject(write(t, t.TempDir(), "revier.toml", withPlace(tc.vars, tc.place)), config.Inherited{})
+			if p.Invalid != nil {
+				t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
+			}
+			for i, target := range p.Targets {
+				err := p.TargetErr(i)
+				want := tc.refused && target.Name == "editor"
+				if want && (err == nil || !strings.Contains(err.Error(), "four tokens")) {
+					t.Errorf("target %q: err = %v, want the placement refused", target.Name, err)
+				}
+				if !want && err != nil {
+					t.Errorf("target %q: err = %v, want it loaded", target.Name, err)
+				}
+			}
+		})
+	}
+}
