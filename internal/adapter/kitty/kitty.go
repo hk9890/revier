@@ -637,6 +637,10 @@ func isRunShell(cmdline []string) bool {
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
 // id only in a kitty that has opened nothing else.
+//
+// A step that fails after the OS window opened closes every window Open
+// opened: left running, the OS window carries r.Name and would be matched,
+// as an agent with no shell beside it.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
@@ -647,6 +651,28 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
+	opened := []int{first}
+	ref, err := h.fill(ctx, socket, first, r, panels, &opened)
+	if err != nil {
+		match := make([]string, len(opened))
+		for i, id := range opened {
+			match[i] = "id:" + strconv.Itoa(id)
+		}
+		// Best effort: the error that failed the OS window is the one worth
+		// reporting. The close has a bound of its own: the end of ctx may be
+		// what failed the OS window.
+		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_, _ = h.kitten(closing, socket, "close-window", "--match", strings.Join(match, " or "))
+		return revier.TargetRef{}, err
+	}
+	return ref, nil
+}
+
+// fill titles the first panel's window, launches every later panel into its
+// OS window with every window it opens added to opened, and returns the OS
+// window.
+func (h *Host) fill(ctx context.Context, socket string, first int, r revier.Realization, panels []revier.PanelSpec, opened *[]int) (revier.TargetRef, error) {
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
 	}
@@ -660,6 +686,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		if err != nil {
 			return revier.TargetRef{}, err
 		}
+		*opened = append(*opened, id)
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
 			return revier.TargetRef{}, err
 		}

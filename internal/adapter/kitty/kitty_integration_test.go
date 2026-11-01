@@ -649,6 +649,66 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	}
 }
 
+// An Open whose title, later launch or closing ls fails closes every window
+// it opened: left running, the half-built OS window carries the workspace's
+// name, and the next press would raise it, an agent with no shell beside it.
+// The failing step can be the end of the press's context, so the close has a
+// context of its own.
+func TestOpenClosesWhatItOpenedWhenALaterStepFails(t *testing.T) {
+	for _, tc := range []struct {
+		fail  string
+		close string
+	}{
+		{"set-window-title", "close-window --match id:7"},
+		{"launch --type=window", "close-window --match id:7"},
+		{"ls", "close-window --match id:7 or id:8"},
+	} {
+		t.Run(tc.fail, func(t *testing.T) {
+			h := newHost()
+			var calls []string
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
+			answered := false
+			h.SetRunner(func(ctx context.Context, _, _ string, args ...string) ([]byte, error) {
+				joined := strings.Join(args, " ")
+				if args[0] == "ls" && !answered {
+					answered = true
+					return []byte("[]"), nil
+				}
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				calls = append(calls, joined)
+				if strings.HasPrefix(joined, tc.fail) {
+					cancel()
+					return nil, errors.New("kitty went away")
+				}
+				if args[0] == "launch" {
+					if slices.Contains(args, "--type=os-window") {
+						return []byte("7\n"), nil
+					}
+					return []byte("8\n"), nil
+				}
+				return nil, nil
+			})
+			_, err := h.Open(ctx, revier.Realization{
+				Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Title: "agent", Command: []string{"claude"}},
+					{Kind: revier.PanelShell, Title: "shell"},
+				},
+			})
+			if err == nil || !strings.Contains(err.Error(), "kitty went away") {
+				t.Fatalf("err = %v, want the failing step's error", err)
+			}
+			if got := calls[len(calls)-1]; got != tc.close {
+				t.Errorf("last call = %q, want %q: the half-built OS window stays open\ncalls: %q", got, tc.close, calls)
+			}
+		})
+	}
+}
+
 // The vars the core gives an Open become user vars of every window it opens,
 // the first included, which is how the panel a return home lands in is found
 // again. Each launch carries them as --var, so no window opens unmarked and
