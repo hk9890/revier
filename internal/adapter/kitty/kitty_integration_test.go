@@ -67,7 +67,8 @@ func host(t *testing.T, sockets ...string) (*kitty.Host, *recorder) {
 }
 
 func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
-	h, _ := host(t, "unix:@kitty-4000")
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	h, _ := host(t, "unix:/run/user/1000/kitty-4000")
 	got, err := h.Instances(context.Background())
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
@@ -91,8 +92,8 @@ func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
 	if legacy.PID != 4000 {
 		t.Errorf("unnamed window pid = %d, want 4000: it is how the core pairs it", legacy.PID)
 	}
-	if ws.Ref.Host != "kitty" || ws.Ref.ID != "@kitty-4000/2" {
-		t.Errorf("ref = %+v, want kitty/@kitty-4000/2: the socket rides in the id", ws.Ref)
+	if ws.Ref.Host != "kitty" || ws.Ref.ID != "/run/user/1000/kitty-4000/2" {
+		t.Errorf("ref = %+v, want kitty//run/user/1000/kitty-4000/2: the socket rides in the id", ws.Ref)
 	}
 	if ws.PID != 4000 {
 		t.Errorf("pid = %d, want 4000 from the socket name", ws.PID)

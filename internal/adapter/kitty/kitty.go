@@ -16,8 +16,10 @@
 //   - Each kitty process listens on its own socket. With
 //     `listen_on unix:${XDG_RUNTIME_DIR}/kitty` that socket is the file
 //     `$XDG_RUNTIME_DIR/kitty-<pid>` (read from kitty 0.49's kitty.conf
-//     manual; not run against a live kitty), and with `listen_on unix:@kitty`
-//     it is the abstract `@kitty-<pid>`. The windows revier cares about may
+//     manual; not run against a live kitty). The abstract `@kitty-<pid>` of
+//     `listen_on unix:@kitty` is not looked for: it has no permissions, so any
+//     user of the machine can bind the name and answer in kitty's place. The
+//     windows revier cares about may
 //     span several processes - every kitty started from a session file is a
 //     process of its own - so Instances queries every such socket,
 //     concurrently. That is one call per kitty process, which does not grow
@@ -81,13 +83,6 @@ var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 // No such window is listed: none is a workspace (decisions.md D168).
 const workspaceName = "revier-kitty"
 
-// abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
-// the one this host asked for up to 0.13. An abstract socket has no
-// permissions: every user of the machine can connect to it, and can bind the
-// name. It is still found, so a kitty started before the upgrade stays
-// reachable.
-var abstractSocket = regexp.MustCompile(`^@kitty-(\d+)$`)
-
 // runtimeDir is the directory that is the user's alone, and "" when the
 // environment names none. A relative path names none: kitty resolves one
 // under the temporary directory, which every user can enter.
@@ -128,10 +123,11 @@ func listenOn(file string) string {
 // may repeat: `${XDG_RUNTIME_DIR}/kitty` has two when the variable ends in
 // one.
 func socketPID(dir, name string) (int, bool) {
-	m := abstractSocket.FindStringSubmatch(name)
-	if file, ok := strings.CutPrefix(name, dir); m == nil && dir != "" && ok && strings.HasPrefix(file, "/") {
-		m = socketFile.FindStringSubmatch(strings.TrimLeft(file, "/"))
+	file, ok := strings.CutPrefix(name, dir)
+	if dir == "" || !ok || !strings.HasPrefix(file, "/") {
+		return 0, false
 	}
+	m := socketFile.FindStringSubmatch(strings.TrimLeft(file, "/"))
 	if m == nil {
 		return 0, false
 	}

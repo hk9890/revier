@@ -13,10 +13,10 @@ import (
 
 // Discovery reads the kernel's socket table, which holds the sockets of every
 // user. It takes the socket files of the user's own runtime directory, the
-// workspace kitty's among them, and the
-// abstract names a kitty started before 0.14 listens on. A path another user
-// bound is taken as written: one that only cleans to the runtime directory is
-// a file wherever its symbolic links lead.
+// workspace kitty's among them, and nothing else. An abstract name such as
+// `@kitty-4001` has no permissions, so any user can bind it, and is not
+// taken. A path another user bound is taken as written: one that only cleans
+// to the runtime directory is a file wherever its symbolic links lead.
 func TestDiscoveryFindsTheSocketFilesOfTheRuntimeDirectory(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000/")
 	table := `Num       RefCount Protocol Flags    Type St Inode Path
@@ -35,7 +35,7 @@ func TestDiscoveryFindsTheSocketFilesOfTheRuntimeDirectory(t *testing.T) {
 0000000000000000: 00000003 00000000 00000000 0001 03 111
 `
 	got := candidates("unix:/run/user/1000/kitty-4000", table)
-	want := []string{"unix:/run/user/1000/kitty-4000", "unix:/run/user/1000/kitty-4002", "unix:/run/user/1000/revier-kitty-4010", "unix:@kitty-4001"}
+	want := []string{"unix:/run/user/1000/kitty-4000", "unix:/run/user/1000/kitty-4002", "unix:/run/user/1000/revier-kitty-4010"}
 	if !slices.Equal(got, want) {
 		t.Errorf("candidates = %q, want %q: the socket this process was started in, then the others", got, want)
 	}
@@ -43,7 +43,7 @@ func TestDiscoveryFindsTheSocketFilesOfTheRuntimeDirectory(t *testing.T) {
 		"unix:/run/user/1000/kitty-4000":        4000,
 		"unix:/run/user/1000//kitty-4009":       4009,
 		"unix:/run/user/1000/revier-kitty-4010": 4010,
-		"unix:@kitty-4001":                      4001,
+		"unix:@kitty-4001":                      0,
 		"unix:/run/user/1001/kitty-4003":        0,
 		"unix:/tmp/mykitty":                     0,
 	} {
