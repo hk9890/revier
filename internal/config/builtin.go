@@ -41,7 +41,7 @@ func Builtin(dir string, command []string) core.Project {
 	if err := validateProject(p); err != nil {
 		prepared.Invalid = fmt.Errorf("built-in project %s: %w", Assistant, err)
 	}
-	for i, err := range validateTargets(p) {
+	for i, err := range validateTargets(p, prepared) {
 		if err != nil {
 			prepared.Refuse(i, err)
 		}

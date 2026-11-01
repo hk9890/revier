@@ -466,7 +466,7 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 	// file, where the template only says that it rendered to nothing. A part
 	// of the other kind is a rule about the target too, and so is a panel
 	// that names no agent the project can run.
-	for i, err := range validateTargets(p) {
+	for i, err := range validateTargets(p, prepared) {
 		name := p.Targets[i].Name
 		if part := parts[name]; part != nil {
 			err = errors.Join(part, err)
@@ -559,7 +559,7 @@ func nameOf(path string) revier.ProjectName {
 // through.
 func Validate(p revier.Project) error {
 	errs := []error{validateProject(p)}
-	return errors.Join(append(errs, validateTargets(p)...)...)
+	return errors.Join(append(errs, validateTargets(p, core.PrepareProject(p))...)...)
 }
 
 // validateProject holds the rules that refuse the project as a whole: there is
@@ -612,7 +612,9 @@ func validateProject(p revier.Project) error {
 // target, parallel to p.Targets and nil where the target is sound. A target
 // these rules refuse loses only itself: the project keeps the others, and the
 // refused one reports why instead of disappearing (decisions.md D85).
-func validateTargets(p revier.Project) []error {
+// prepared is p as core.PrepareProject made it, for the rules that read a
+// rendered value: the load has rendered every template once already.
+func validateTargets(p revier.Project, prepared core.Project) []error {
 	out := make([]error, len(p.Targets))
 	seenName := map[revier.TargetName]bool{}
 	// Keyed by the canonical chord, not by the text. Two targets written
@@ -628,8 +630,6 @@ func validateTargets(p revier.Project) []error {
 	// command target marked home is refused by validateCommand and takes no
 	// home's place, so the real home after it stays.
 	home := false
-
-	rendered, renderErrs := core.Render(p)
 
 	for i, t := range p.Targets {
 		var errs []error
@@ -736,9 +736,10 @@ func validateTargets(p revier.Project) []error {
 			}
 			// A geometry short of its four tokens would reach the window host
 			// and be refused there, after the window had opened. place takes
-			// templates, so the tokens counted are the rendered ones; a place
-			// that does not render is refused by rendering instead.
-			if place := renderedPlace(rendered.Targets[i], kind); renderErrs[i] == nil && place != "" && len(strings.Fields(place)) != 4 {
+			// templates, so the tokens counted are the rendered ones; a target
+			// that did not prepare is refused by that instead, and its place
+			// may not have rendered.
+			if place := renderedPlace(prepared.Targets[i], kind); prepared.TargetErr(i) == nil && place != "" && len(strings.Fields(place)) != 4 {
 				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, place))
 			}
 		}
