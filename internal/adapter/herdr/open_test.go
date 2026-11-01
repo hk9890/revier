@@ -100,3 +100,40 @@ func TestOpenNamesAServerThatFailsThePing(t *testing.T) {
 		t.Errorf("Open = %v, want the failed ping", err)
 	}
 }
+
+// herdr can make the workspace and its answer be lost, the end of the context
+// while it is read: the workspace with the realization's label that was not
+// there before is closed, since the next press would raise it with herdr's
+// default shell alone in it.
+func TestOpenClosesAWorkspaceWhoseAnswerWasLost(t *testing.T) {
+	snapshots := []string{
+		`{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"home"}]}}`,
+		`{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"home"},
+			{"workspace_id":"w2","label":"other"},{"workspace_id":"w3","label":"home"}]}}`,
+	}
+	var closed []string
+	h := &herdr.Host{}
+	h.SetProcRoot(t.TempDir())
+	h.SetCaller(func(_ context.Context, method string, params any) (int, []byte, error) {
+		switch method {
+		case "ping":
+			return 9, []byte(`{"version":"0.9.5"}`), nil
+		case "session.snapshot":
+			s := snapshots[0]
+			snapshots = snapshots[1:]
+			return 9, []byte(s), nil
+		case "workspace.create":
+			return 0, nil, context.DeadlineExceeded
+		case "workspace.close":
+			closed = append(closed, params.(map[string]string)["workspace_id"])
+		}
+		return 9, []byte(`{}`), nil
+	})
+	_, err := h.Open(context.Background(), revier.Realization{Name: "home", Launch: []string{"sh"}})
+	if err == nil {
+		t.Fatal("Open succeeded with no answer to its workspace.create")
+	}
+	if !slices.Equal(closed, []string{"w3"}) {
+		t.Errorf("closed %q, want the new workspace labelled home alone", closed)
+	}
+}

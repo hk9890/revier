@@ -49,6 +49,10 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.running(ctx); err != nil {
 		return revier.TargetRef{}, err
 	}
+	before, err := h.workspaces(ctx)
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
 
 	var created struct {
 		Workspace struct {
@@ -64,6 +68,19 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	pid, err := h.request(ctx, "workspace.create", params, &created)
 	if err != nil {
+		// herdr may have made the workspace and its answer been lost, the end
+		// of ctx while it was read. A workspace with this label that was not
+		// there before is then that one: the next press would raise it with
+		// herdr's default shell alone in it.
+		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if _, snap, err := h.snapshot(closing); err == nil {
+			for _, w := range snap.Workspaces {
+				if !before[w.ID] && w.Label == r.Name {
+					_, _ = h.request(closing, "workspace.close", map[string]string{"workspace_id": w.ID}, nil)
+				}
+			}
+		}
 		return revier.TargetRef{}, err
 	}
 	workspace := created.Workspace.ID
@@ -78,6 +95,19 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	return revier.TargetRef{Host: h.Name(), ID: refID(pid, workspace), Title: r.Name}, nil
+}
+
+// workspaces is the set of the server's workspaces.
+func (h *Host) workspaces(ctx context.Context) (map[string]bool, error) {
+	_, snap, err := h.snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, w := range snap.Workspaces {
+		out[w.ID] = true
+	}
+	return out, nil
 }
 
 // fill names a new workspace and replaces its first tab, the shell herdr
