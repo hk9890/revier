@@ -17,6 +17,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -158,31 +159,61 @@ func NewID(at time.Time) string { return at.Format("2006-01-02T15-04-05") }
 // Save writes the session, and returns it as stored together with the file it
 // wrote. The id on s is ignored: Save assigns one from At, suffixing it when a
 // session of that second already exists, so two saves in one second do not
-// silently become one. It is returned rather than only written because the id
-// is what the caller has to print and the caller cannot predict the suffix.
+// silently become one, also when they run at once. It is returned rather than
+// only written because the id is what the caller has to print and the caller
+// cannot predict the suffix.
 func Save(stateRoot string, s Session) (Session, string, error) {
 	dir := Dir(stateRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	id, path := free(dir, s.At)
-	s.ID = id
-	if err := write(path, s); err != nil {
+	tmp, err := reserveTemp(dir)
+	if err != nil {
 		return Session{}, "", err
 	}
+	defer func() { _ = os.Remove(tmp) }()
+	id, path, err := claim(dir, s.At, func(id, path string) error {
+		s.ID = id
+		if err := write(tmp, s); err != nil {
+			return err
+		}
+		return os.Link(tmp, path)
+	})
+	if err != nil {
+		return Session{}, "", fmt.Errorf("save session %s: %w", id, err)
+	}
+	s.ID = id
 	return s, path, nil
 }
 
-// free is the id of a session saved at at that no file in dir has yet, and
-// its file.
-func free(dir string, at time.Time) (string, string) {
-	base := NewID(at)
-	id, path := base, filepath.Join(dir, base+".toml")
-	for n := 2; exists(path); n++ {
-		id = fmt.Sprintf("%s-%d", base, n)
-		path = filepath.Join(dir, id+".toml")
+// reserveTemp is a file of its own in dir, which List does not read, for a
+// session to be written whole into before it takes its name.
+func reserveTemp(dir string) (string, error) {
+	f, err := os.CreateTemp(dir, ".session-*")
+	if err != nil {
+		return "", fmt.Errorf("create session file: %w", err)
 	}
-	return id, path
+	return f.Name(), f.Close()
+}
+
+// claim gives a session saved at at the first id that no file in dir has, and
+// returns it with its file. put makes the file under one name, and fails with
+// fs.ErrExist when another file took that name first; the next suffix is then
+// tried. The name is taken by put's own step, a hard link, and is never
+// checked before it: between a check and a later rename a save that runs at
+// once takes the same name, and the second rename replaces the first session.
+func claim(dir string, at time.Time, put func(id, path string) error) (string, string, error) {
+	base := NewID(at)
+	for n := 1; ; n++ {
+		id := base
+		if n > 1 {
+			id = fmt.Sprintf("%s-%d", base, n)
+		}
+		path := filepath.Join(dir, id+".toml")
+		if err := put(id, path); !errors.Is(err, fs.ErrExist) {
+			return id, path, err
+		}
+	}
 }
 
 func write(path string, s Session) error {
@@ -276,9 +307,10 @@ func LoadSeen(stateRoot string) (Session, error) {
 
 // PromoteSeen moves what a surface last saw into the stored sessions, as a
 // session of its own moment, and returns it as stored together with the file
-// it is now. A move is one step, so of two surfaces that start at once one
-// takes the file and the other gets ErrNoSession: what it would offer is
-// offered already.
+// it is now. The file is taken by one move, so of two surfaces that start at
+// once one takes it and the other gets ErrNoSession: what it would offer is
+// offered already. It then takes a free name as Save does, so it replaces no
+// session saved in the same second.
 func PromoteSeen(stateRoot string) (Session, string, error) {
 	s, err := LoadSeen(stateRoot)
 	if err != nil {
@@ -288,8 +320,17 @@ func PromoteSeen(stateRoot string) (Session, string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	id, path := free(dir, s.At)
-	if err := os.Rename(SeenPath(stateRoot), path); err != nil {
+	tmp, err := reserveTemp(dir)
+	if err != nil {
+		return Session{}, "", err
+	}
+	defer func() { _ = os.Remove(tmp) }()
+	if err := os.Rename(SeenPath(stateRoot), tmp); err != nil {
+		return Session{}, "", taken(err)
+	}
+	id, path, err := claim(dir, s.At, func(_, path string) error { return os.Link(tmp, path) })
+	if err != nil {
+		_ = os.Rename(tmp, SeenPath(stateRoot))
 		return Session{}, "", taken(err)
 	}
 	s.ID = id
@@ -438,9 +479,4 @@ func (s Session) SameAs(o Session) bool {
 			return x.Name == y.Name && slices.Equal(x.Agents, y.Agents)
 		})
 	})
-}
-
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

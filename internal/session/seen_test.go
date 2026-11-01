@@ -3,6 +3,8 @@ package session_test
 
 import (
 	"errors"
+	"os"
+	"sync"
 	"testing"
 
 	"github.com/hk9890/revier/internal/session"
@@ -72,6 +74,43 @@ func TestPromoteMovesTheSeenFileOnce(t *testing.T) {
 	}
 	if err := session.DropSeen(root); !errors.Is(err, session.ErrNoSession) {
 		t.Errorf("DropSeen after it err = %v, want ErrNoSession", err)
+	}
+}
+
+// A promotion that runs beside a save of the same second keeps both: the
+// move takes a free name as the save does, and renames over no session.
+func TestPromoteBesideASaveOfItsSecondKeepsBoth(t *testing.T) {
+	for round := range 50 {
+		root := t.TempDir()
+		if err := session.SaveSeen(root, sample(12, "seen")); err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if _, _, err := session.PromoteSeen(root); err != nil {
+				t.Errorf("PromoteSeen: %v", err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if _, _, err := session.Save(root, sample(12, "saved")); err != nil {
+				t.Errorf("Save: %v", err)
+			}
+		}()
+		wg.Wait()
+		all, err := session.List(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("round %d: List = %d sessions, want the promoted one and the saved one", round, len(all))
+		}
+		entries, _ := os.ReadDir(session.Dir(root))
+		if len(entries) != 2 {
+			t.Fatalf("round %d: session directory holds %d entries, want the 2 sessions alone", round, len(entries))
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -290,6 +291,45 @@ func TestSaveInTheSameSecondKeepsBoth(t *testing.T) {
 	}
 	if len(all) != 2 {
 		t.Errorf("List = %d sessions, want 2", len(all))
+	}
+}
+
+// Saves in one second that run at once are as many sessions, and none is left
+// half-written: the name is taken by the write itself, so no save renames over
+// another that checked the same name free a moment before.
+func TestConcurrentSavesInTheSameSecondKeepEvery(t *testing.T) {
+	const saves = 4
+	for round := range 50 {
+		root := t.TempDir()
+		var wg sync.WaitGroup
+		ids := make([]string, saves)
+		for i := range saves {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stored, _, err := session.Save(root, sample(12, "concurrent"))
+				if err != nil {
+					t.Errorf("Save: %v", err)
+				}
+				ids[i] = stored.ID
+			}()
+		}
+		wg.Wait()
+		all, err := session.List(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(all) != saves {
+			t.Fatalf("round %d: List = %d sessions, want %d", round, len(all), saves)
+		}
+		slices.Sort(ids)
+		if len(slices.Compact(ids)) != saves {
+			t.Fatalf("round %d: Save returned ids %v, want %d distinct", round, ids, saves)
+		}
+		entries, _ := os.ReadDir(session.Dir(root))
+		if len(entries) != saves {
+			t.Fatalf("round %d: session directory holds %d entries, want the %d sessions alone", round, len(entries), saves)
+		}
 	}
 }
 
