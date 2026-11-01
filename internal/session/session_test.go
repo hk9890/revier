@@ -396,6 +396,28 @@ session = "first"
 	}
 }
 
+// An empty file is a name a save holds and has not filled yet, or one a crash
+// left empty: neither the list nor a restore takes it for a session.
+func TestAnEmptyFileIsNoSession(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	empty := session.NewID(at(13))
+	if err := os.WriteFile(filepath.Join(session.Dir(root), empty+".toml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if all, err := session.List(root); err != nil || len(all) != 0 {
+		t.Errorf("List = %+v, %v, want none", all, err)
+	}
+	if _, err := session.Load(root, ""); !errors.Is(err, session.ErrNoSession) || errors.Is(err, session.ErrNoWholeSession) {
+		t.Errorf("Load err = %v, want ErrNoSession and not ErrNoWholeSession", err)
+	}
+	if _, err := session.Load(root, empty); !errors.Is(err, session.ErrNoSession) {
+		t.Errorf("Load %s err = %v, want ErrNoSession", empty, err)
+	}
+}
+
 func TestListOfMissingStore(t *testing.T) {
 	all, err := session.List(filepath.Join(t.TempDir(), "never-written"))
 	if err != nil {
