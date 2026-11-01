@@ -6,6 +6,44 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.24.0
+
+- **Action required: revier now needs kitty 0.42 or later.** With an older
+  kitty, a workspace does not open: after 5 seconds, the error says that no
+  kitty answered and names 0.42. Update kitty.
+- **Workspaces open in a kitty of revier's own.** Before, a workspace opened
+  in the kitty you ran the command in, or, when no kitty answered, in one
+  revier started with your shell's environment. From the popup it opened in
+  the popup's kitty. Now revier starts one kitty for every workspace. It has
+  no window of its own and keeps running after you close the last workspace.
+  Where systemd runs your session, it runs as the user service
+  `revier-kitty`, with your desktop session's environment, so a shell's
+  activated virtualenv or credentials no longer reach every project. To make
+  that service read a changed `kitty.conf`, or use an updated kitty, run
+  `systemctl --user stop revier-kitty`. This closes every workspace in it.
+- **The popup has no title bar, and of kitty's keys only copy and paste work
+  in it.** Before, a kitty key in the popup could open a window or a tab
+  there. Now every other kitty key, revier's and your own included, does
+  nothing in the popup.
+- **A target can run a command in place of opening a window.** Use
+  `[target.command]` for a thing that shows in a window you share with other
+  projects, such as a browser tab group. Before, such a target held revier
+  for its wait on every press, and a second press did not go home. Now a
+  press runs the command and waits for it to end. When the command moved the
+  focus, the next press goes to the project's home while the focus is still
+  there. The TUI shows the target as `command`. A session, a restore and a
+  shutdown skip it.
+- **A directory reached through a symlink is now in its project.** Before, a
+  project saved under a path with a symlink, such as `~/dev` linked
+  elsewhere, was in no project from a directory with the link resolved, such
+  as a tmux window. `revier agent new` and
+  `revier shell new` without `-p` then failed there.
+- **`revier agent new --resume --panel` outside a workspace warns that it did
+  not resume.** Before, it dropped `--resume` without a word.
+- **`revier doctor` names a terminal key whose agent cannot run outside a
+  workspace.** With `outside = "agent"`, in kitty, such a key opens a plain
+  tab and gives no reason. Now doctor names the key and the fix.
+
 ## v0.23.0
 
 - **Action required: `revier agent new` and `revier shell new` without `-p`
