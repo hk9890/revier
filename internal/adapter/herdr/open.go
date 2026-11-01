@@ -2,6 +2,7 @@ package herdr
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -28,6 +30,11 @@ const maxPanes = 24
 
 // metadataSource is the source revier reports its tokens under.
 const metadataSource = "revier"
+
+// openVar is the variable Open starts a new workspace's first shell with,
+// set to a value no other Open uses, so that a workspace whose create was
+// not answered can still be told apart.
+const openVar = "REVIER_HERDR_OPEN"
 
 // Open creates a workspace for the realization, starting the server when none
 // runs yet. The workspace is labelled r.Name and carries it as its name
@@ -49,10 +56,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err := h.running(ctx); err != nil {
 		return revier.TargetRef{}, err
 	}
-	before, err := h.workspaces(ctx)
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
 
 	var created struct {
 		Workspace struct {
@@ -62,25 +65,19 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 			ID string `json:"tab_id"`
 		} `json:"tab"`
 	}
-	params := map[string]any{"label": r.Name, "focus": false}
+	mark := rand.Text()
+	params := map[string]any{"label": r.Name, "focus": false, "env": map[string]string{openVar: mark}}
 	if r.Dir != "" {
 		params["cwd"] = r.Dir
 	}
 	pid, err := h.request(ctx, "workspace.create", params, &created)
 	if err != nil {
 		// herdr may have made the workspace and its answer been lost, the end
-		// of ctx while it was read. A workspace with this label that was not
-		// there before is then that one: the next press would raise it with
+		// of ctx while it was read: the next press would raise it with
 		// herdr's default shell alone in it.
 		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if _, snap, err := h.snapshot(closing); err == nil {
-			for _, w := range snap.Workspaces {
-				if !before[w.ID] && w.Label == r.Name {
-					_, _ = h.request(closing, "workspace.close", map[string]string{"workspace_id": w.ID}, nil)
-				}
-			}
-		}
+		h.closeMarked(closing, mark)
 		return revier.TargetRef{}, err
 	}
 	workspace := created.Workspace.ID
@@ -97,17 +94,37 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	return revier.TargetRef{Host: h.Name(), ID: refID(pid, workspace), Title: r.Name}, nil
 }
 
-// workspaces is the set of the server's workspaces.
-func (h *Host) workspaces(ctx context.Context) (map[string]bool, error) {
+// closeMarked closes the workspace whose first shell carries mark in openVar:
+// the one a workspace.create made whose answer was lost. The label does not
+// tell it apart: another Open, such as a keypress beside the TUI, can make a
+// workspace with the same label meanwhile, and the user can have made one.
+// The mark is this Open's alone. A shell not yet started, or ended already,
+// leaves the workspace open: a stray workspace costs less than closing
+// another process's live one.
+func (h *Host) closeMarked(ctx context.Context, mark string) {
+	scanned, err := proc.Scan(h.root(), openVar, "HERDR_PANE_ID")
+	if err != nil {
+		return
+	}
+	var marked string
+	for _, vars := range scanned {
+		if vars[openVar] == mark {
+			marked = vars["HERDR_PANE_ID"]
+		}
+	}
+	if marked == "" {
+		return
+	}
 	_, snap, err := h.snapshot(ctx)
 	if err != nil {
-		return nil, err
+		return
 	}
-	out := map[string]bool{}
-	for _, w := range snap.Workspaces {
-		out[w.ID] = true
+	for _, p := range snap.Panes {
+		if p.ID == marked {
+			_, _ = h.request(ctx, "workspace.close", map[string]string{"workspace_id": p.WorkspaceID}, nil)
+			return
+		}
 	}
-	return out, nil
 }
 
 // fill names a new workspace and replaces its first tab, the shell herdr

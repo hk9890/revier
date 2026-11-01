@@ -23,3 +23,10 @@ func (h *Host) SetProcRoot(root string) { h.procRoot = root }
 
 // PaneProcesses is paneProcesses, for the tests outside the package.
 var PaneProcesses = paneProcesses
+
+// CloseMarked is closeMarked, for a live test that makes the workspaces
+// itself.
+func (h *Host) CloseMarked(ctx context.Context, mark string) { h.closeMarked(ctx, mark) }
+
+// OpenVar is the variable Open marks a new workspace's first shell with.
+const OpenVar = openVar
