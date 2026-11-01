@@ -11,7 +11,8 @@ import (
 
 // A command that leaves a child holding its output does not hold the call
 // past its end: the wait for the output is bounded, as the ssh and claude
-// adapters bound theirs.
+// adapters bound theirs. The command exited 0, so its change was applied and
+// the call reports no failure.
 func TestACommandWhoseChildHoldsItsOutputEnds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -20,7 +21,7 @@ func TestACommandWhoseChildHoldsItsOutputEnds(t *testing.T) {
 	if took := time.Since(start); took > 3*time.Second {
 		t.Errorf("execRun took %v, want it over within the wait delay", took)
 	}
-	if string(out) != "started\n" {
+	if string(out) != "started\n" || err != nil {
 		t.Errorf("execRun = %q, %v; want what the command wrote", out, err)
 	}
 }
