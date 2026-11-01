@@ -342,7 +342,8 @@ func (ps *projectScreen) saveTarget(sf surface, edit config.TargetEdit) projectR
 
 // dropTarget takes the key that answers the delete question. Only y deletes
 // the file's entry: a target of the project's own goes, and an override
-// leaves config.toml's target as it is there.
+// leaves config.toml's target as it is there. ctrl+c quits before it gets
+// here.
 func (ps *projectScreen) dropTarget(sf surface, msg keyPress) projectResult {
 	ps.dropping = false
 	i, ok := ps.targetRow()

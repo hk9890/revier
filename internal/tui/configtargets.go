@@ -245,7 +245,7 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 
 // dropTarget takes the key that answers the delete question for a shared
 // target. Only y deletes, and a delete a project would not load without is
-// refused and named.
+// refused and named; ctrl+c quits before it gets here.
 func (cs *configScreen) dropTarget(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
 	cs.dropping = false

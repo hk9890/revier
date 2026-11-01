@@ -446,3 +446,34 @@ func TestTheDialogAfterAnUncleanEndWaitsForThePlainSurface(t *testing.T) {
 		t.Errorf("subtitle = %q, want the dialog once the surface is plain", sub)
 	}
 }
+
+// A shutdown recorded while the dialog after an end with no shutdown is held
+// back takes its place: once the shutdown's own dialog is answered, the older
+// end is not offered after it.
+func TestAShutdownRecordedWhileTheUncleanDialogWaitsTakesItsPlace(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "x")
+	m = seenSurvey(seenSurvey(m))
+
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = press(m, "backspace")
+	m = seenSurvey(m)
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Fatalf("subtitle = %q, want the dialog of the newer shutdown", sub)
+	}
+
+	m, cmd := press(m, "esc")
+	if cmd != nil {
+		m = run(m, cmd)
+	}
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Errorf("subtitle = %q, want no offer of the end before the recorded shutdown", sub)
+	}
+}

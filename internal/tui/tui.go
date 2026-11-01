@@ -1128,10 +1128,14 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // A dialog under the logs screen is the dialog: Esc goes back to what it
 // became. The dialog after an end with no shutdown has no record to go with, so only
 // a choice takes it down (D150); held back from a surface that is not plain,
-// it too comes up at the next state read that finds the surface plain.
+// it too comes up at the next state read that finds the surface plain, unless
+// a shutdown recorded since has taken its place.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
 	m.onRecord = st.ShutDown != nil
+	if sd := st.ShutDown; sd != nil && m.uncleanOffer != nil && sd.At.After(m.uncleanOffer.At) {
+		m.uncleanOffer = nil
+	}
 	switch sd := st.ShutDown; {
 	case m.under() == dialogResume && !m.resume.unclean && sd == nil:
 		m.setUnder(dialogNone)
