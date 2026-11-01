@@ -370,7 +370,8 @@ func candidates(own, table string) []string {
 
 // list queries every socket concurrently. A socket that does not answer is a
 // kitty that is exiting, or a stale kernel entry, and holds nothing revier can
-// reach, so it is skipped; only every socket failing is reported.
+// reach, so it is skipped; only every socket failing is reported, and only
+// where a workspace kitty's is among them.
 func (h *Host) list(ctx context.Context) ([]listing, error) {
 	socks := h.socketList()
 	results := make([]listing, len(socks))
@@ -392,14 +393,19 @@ func (h *Host) list(ctx context.Context) ([]listing, error) {
 
 	out := make([]listing, 0, len(socks))
 	var failed []error
-	for i := range socks {
+	workspace := false
+	for i, s := range socks {
 		if errs[i] != nil {
 			failed = append(failed, errs[i])
+			workspace = workspace || workspaceSocket.MatchString(s)
 			continue
 		}
 		out = append(out, results[i])
 	}
-	if len(out) == 0 && len(failed) > 0 {
+	// Only kitties of the user's that do not answer, as one whose socket asks
+	// a password, are no failure: no workspace is in them that a survey would
+	// lose, and the next open starts the workspace kitty.
+	if len(out) == 0 && workspace {
 		return nil, errors.Join(failed...)
 	}
 	return out, nil

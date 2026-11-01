@@ -959,18 +959,21 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // window host raises it, as it raises one already open (D19). A failure is
 // not returned, unlike a raise of an open window (D63): the launch ran, and
 // the press is one, with only the raise missing, as place says of a placement.
-// The OS window is the one place waited for, if it did.
+// The OS window is the one place waited for, if it did; one place waited for
+// in vain is not looked for again, and place has said so in the log.
 func (c *Core) raiseNew(ctx context.Context, res Result) {
 	ref, name := res.Ref, res.Target
 	if !c.bridged(revier.Instance{Ref: ref}) {
 		return
 	}
-	osw, ok := res.placed, !res.placed.IsZero()
+	osw := res.placed
 	if !res.sought {
-		osw, ok = c.windowOfNew(ctx, ref)
+		var ok bool
+		if osw, ok = c.windowOfNew(ctx, ref); !ok {
+			slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+		}
 	}
-	if !ok {
-		slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+	if osw.IsZero() {
 		return
 	}
 	if err := c.raise(ctx, osw, name); err != nil {
@@ -1007,19 +1010,23 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 	if !ok {
 		return revier.TargetRef{}, false
 	}
-	target := ref
-	if ref.Host != c.Window.Name() {
-		w, ok := c.windowOfNew(ctx, ref)
-		if !ok {
-			slog.Warn("place: the window host never listed the new window", "ref", ref, "place", real.Place)
-			return revier.TargetRef{}, true
-		}
-		target = w
+	if ref.Host == c.Window.Name() {
+		c.placeOn(ctx, placer, ref, real.Place)
+		return revier.TargetRef{}, false
 	}
-	if err := placer.Place(ctx, target, strings.Fields(real.Place)); err != nil {
-		slog.Warn("place", "ref", target, "place", real.Place, "err", err)
+	w, ok := c.windowOfNew(ctx, ref)
+	if !ok {
+		slog.Warn("place: the window host never listed the new window", "ref", ref, "place", real.Place)
+		return revier.TargetRef{}, true
 	}
-	return target, target != ref
+	c.placeOn(ctx, placer, w, real.Place)
+	return w, true
+}
+
+func (c *Core) placeOn(ctx context.Context, placer revier.WindowPlacer, w revier.TargetRef, place string) {
+	if err := placer.Place(ctx, w, strings.Fields(place)); err != nil {
+		slog.Warn("place", "ref", w, "place", place, "err", err)
+	}
 }
 
 // windowOfNew waits for the window host to report the OS window of a runtime
