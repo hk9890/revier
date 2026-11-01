@@ -103,6 +103,16 @@ func TestACommandTargetMarkedHomeTakesNoHomesPlace(t *testing.T) {
 	}
 }
 
+// A project whose only home is a command target has no home, and is refused
+// as a project with none.
+func TestAProjectWhoseOnlyHomeIsACommandHasNoHome(t *testing.T) {
+	homeWeb := strings.Replace(web, "key = ", "home = true\nkey = ", 1)
+	p := loadDemo(t, "path = \"/home/user/dev/github/revier\"\n"+homeWeb)
+	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), "no target is marked home") {
+		t.Errorf("project refused for %v, want no home", p.Invalid)
+	}
+}
+
 // An empty run list refuses the target as a missing one does.
 func TestACommandTargetWithAnEmptyRunIsRefused(t *testing.T) {
 	p := loadDemo(t, valid+"\n[[target]]\nname = \"web\"\n  [target.command]\n  run = []\n")

@@ -44,6 +44,7 @@ func TestACommandsFailureNamesItsStatusAndItsLastLine(t *testing.T) {
 	}{
 		"last line":   {"echo out; echo first >&2; echo 'no page known' >&2; echo >&2; exit 3", "command exited 3: no page known"},
 		"no stderr":   {"exit 1", "command exited 1"},
+		"redrawn":     {`printf 'progress 10%%\rprogress 100%%\rerror: boom\r' >&2; exit 1`, "command exited 1: error: boom"},
 		"long stderr": {"i=0; while [ $i -lt 2000 ]; do echo 'noise noise noise' >&2; i=$((i+1)); done; echo last >&2; exit 2", "command exited 2: last"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -103,18 +104,32 @@ func TestTheDeadlineNamesTheLastLine(t *testing.T) {
 	}
 }
 
-// A child that holds stderr open holds the run for WaitDelay at most, and a
-// command that exited 0 ran well.
+// A child that holds stderr open does not hold the run, and it lives on
+// through a write to stderr after the run ended, as a browser that logs
+// must.
 func TestAChildHoldingStderrDoesNotHoldTheRun(t *testing.T) {
-	pidFile := filepath.Join(t.TempDir(), "child")
+	dir := t.TempDir()
+	pidFile, wrote := filepath.Join(dir, "child"), filepath.Join(dir, "wrote")
 	start := time.Now()
 
-	err := runTargetCommand(context.Background(), sh(`sleep 30 & echo $! > "$1"; exit 0`, pidFile), t.TempDir())
-	childOf(t, pidFile)
+	err := runTargetCommand(context.Background(), sh(`(sleep 1.2; echo late >&2; touch "$2"; exec sleep 30) & echo $! > "$1"; exit 0`, pidFile, wrote), t.TempDir())
+	took := time.Since(start)
+	pid := childOf(t, pidFile)
 	if err != nil {
 		t.Errorf("run = %v, want success", err)
 	}
-	if took := time.Since(start); took > 5*time.Second {
-		t.Errorf("run took %s, want it released after WaitDelay", took)
+	if took >= time.Second {
+		t.Errorf("run took %s, want it to end with the command", took)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if _, err := os.Stat(wrote); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the child wrote nothing after the run")
+		}
+	}
+	if err := syscall.Kill(pid, 0); err != nil {
+		t.Errorf("child: %v, want it alive after its write", err)
 	}
 }

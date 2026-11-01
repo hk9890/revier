@@ -106,6 +106,26 @@ name = "agent"
 		t.Error("a refused project left a file behind")
 	}
 
+	const command = `
+[[target]]
+name = "agent"
+  [target.command]
+  run = ["echo"]
+`
+	const commandHome = `
+[[target]]
+name = "build"
+home = true
+  [target.command]
+  run = ["make"]
+`
+	for name, shared := range map[string]string{"command": command, "command beside a command home": command + commandHome} {
+		root = projectsRoot(t, shared, nil)
+		if _, err := config.Create(root, "demo", "/tmp/demo", ""); err == nil || err.Error() != want {
+			t.Errorf("%s: err = %v\nwant %s", name, err, want)
+		}
+	}
+
 	const home = `
 [[target]]
 name = "home"

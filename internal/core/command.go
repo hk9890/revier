@@ -81,7 +81,8 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings,
 	if err := p.compiled[i].err; err != nil {
 		return Result{}, err
 	}
-	if home, ok := p.Home(); ok && c.stillOnRun(ctx, p.Name, name, st.LastRun) {
+	before, read := c.focusedNow(ctx)
+	if home, ok := p.Home(); ok && onRun(st.LastRun, p.Name, name, before) {
 		if coming, err := c.comingUp(ctx, p, home.Name, bound, st.Pending(p.Name, home.Name, time.Now())); err != nil || coming {
 			return Result{Target: home.Name, ComingUp: coming}, err
 		}
@@ -90,12 +91,11 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings,
 	if c.Run == nil {
 		return Result{}, fmt.Errorf("%s: no command runner is configured", name)
 	}
-	before, read := c.focusedNow(ctx)
 	wait := p.compiled[i].runWait
 	runCtx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	if err := c.Run(runCtx, p.Targets[i].Command.Run, p.Path); err != nil {
-		if errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 			// What the command said follows the deadline's text, as Run
 			// returns it.
 			said, ok := strings.CutPrefix(err.Error(), context.DeadlineExceeded.Error())
@@ -115,16 +115,13 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings,
 	return res, nil
 }
 
-// stillOnRun reports whether the last run on record is of this target of
-// this project, and the focus authority still reports the window that run
-// left focus on. A focus that cannot be read is not that window: a false
-// toggle sends the user home when they asked for the command.
-func (c *Core) stillOnRun(ctx context.Context, p revier.ProjectName, name revier.TargetName, last *state.LastRun) bool {
-	if last == nil || last.Project != p || last.Target != name || last.Focused.IsZero() {
-		return false
-	}
-	now, _ := c.focusedNow(ctx)
-	return !now.IsZero() && key(now) == key(last.Focused)
+// onRun reports whether the last run on record is of this target of this
+// project, and now, the focus the authority reports, is the window that run
+// left focus on. A focus that cannot be read is zero, and is not that window:
+// a false toggle sends the user home when they asked for the command.
+func onRun(last *state.LastRun, p revier.ProjectName, name revier.TargetName, now revier.TargetRef) bool {
+	return last != nil && last.Project == p && last.Target == name &&
+		!last.Focused.IsZero() && !now.IsZero() && key(now) == key(last.Focused)
 }
 
 // focusMoved is the focus after a run when it moved off before, the focus

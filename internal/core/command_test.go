@@ -242,6 +242,30 @@ func TestAPressOfACommandTargetRunsWhenItIsNoToggle(t *testing.T) {
 	}
 }
 
+// A press that is no toggle reads focus once before it runs: the read that
+// finds focus off the last run's window is the read the run starts from.
+func TestAPressReadsFocusOnceBeforeItRuns(t *testing.T) {
+	l := &ledger{}
+	c, wm, r, chrome := commandDesktop(l)
+	if err := wm.Focus(context.Background(), chrome); err != nil {
+		t.Fatal(err)
+	}
+	l.st.LastRun = &state.LastRun{Project: "revier", Target: "web", Focused: revier.TargetRef{Host: "wm", ID: "999"}}
+	editor := wm.Add("main.go - editor", "editor")
+	reads := -1
+	r.do = func(ctx context.Context) error {
+		reads = wm.FocusedCalls
+		return wm.Focus(ctx, editor)
+	}
+
+	if _, err := press(context.Background(), c, prepared(t, commandProject("")), "web"); err != nil {
+		t.Fatalf("press: %v", err)
+	}
+	if reads != 1 {
+		t.Errorf("focus read %d times before the run, want once", reads)
+	}
+}
+
 // A run that leaves focus where it was records no run, so the next press
 // runs again.
 func TestARunThatLeavesFocusRecordsNoRun(t *testing.T) {
@@ -358,6 +382,14 @@ func TestAFailedRunRecordsNothing(t *testing.T) {
 				return fmt.Errorf("%w: waiting for a lock", ctx.Err())
 			},
 			want: "web: command did not end within 50ms: waiting for a lock",
+		},
+		"exit as the timeout ends": {
+			timeout: "50ms",
+			do: func(ctx context.Context) error {
+				<-ctx.Done()
+				return errors.New("command exited 1: no repository page")
+			},
+			want: "web: command exited 1: no repository page",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -170,7 +170,9 @@ Your command must:
   write one line to stderr. revier reports the status and the last line.
 
 The command gets no input and no terminal, and its standard output is
-discarded.
+discarded. Its stderr is a deleted temporary file, so a program it started in
+the background can write to stderr after the run ends; the file takes disk
+space until that program ends.
 
 A command target cannot have a `[target.window]` or `[target.runtime]` part,
 `home = true`, or `prefer`, and no tab can name it in `inside`. revier does not

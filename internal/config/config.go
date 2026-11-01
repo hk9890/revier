@@ -588,8 +588,9 @@ func validateProject(p revier.Project) error {
 	for _, t := range p.Targets {
 		// A nameless target is refused and cannot be opened, so it is no
 		// home: counting it would leave the project looking whole while
-		// nothing in it can be opened or returned to.
-		if t.Home && t.Name != "" {
+		// nothing in it can be opened or returned to. A command target is
+		// refused as a home, and takes no home's place either.
+		if t.Home && t.Name != "" && t.Command == nil {
 			homes++
 		}
 	}
