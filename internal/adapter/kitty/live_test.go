@@ -99,3 +99,31 @@ func TestTheWorkspaceKittyStartsThroughTheServiceManager(t *testing.T) {
 		})
 	}
 }
+
+// kitty is usable where kitty and kitten are installed: Open starts the
+// workspace kitty itself, so a running kitty whose socket does not answer, as
+// one that asks a password, does not make revier fall back to another
+// runtime, and Probe asks no socket. Without kitty there is nothing to start.
+func TestKittyIsUsableWhereKittyAndKittenAreInstalled(t *testing.T) {
+	bin, asked := t.TempDir(), filepath.Join(t.TempDir(), "asked")
+	write := func(name, script string) {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("kitten", "echo \"$@\" >> '"+asked+"'\nexit 1\n")
+	t.Setenv("PATH", bin)
+	h := &kitty.Host{}
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/kitty-4001"} })
+
+	if err := h.Probe(context.Background()); err == nil {
+		t.Error("Probe = nil without kitty on PATH, want an error: there is no kitty to start")
+	}
+	write("kitty", "exit 0\n")
+	if err := h.Probe(context.Background()); err != nil {
+		t.Errorf("Probe = %v, want kitty usable while a socket does not answer", err)
+	}
+	if b, err := os.ReadFile(asked); err == nil {
+		t.Errorf("Probe ran kitten %q, want no socket asked", b)
+	}
+}

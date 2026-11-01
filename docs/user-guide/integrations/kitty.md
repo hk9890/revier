@@ -16,8 +16,14 @@ Where systemd runs your session, revier starts it as the user service
 `revier-kitty`, with your desktop session's environment, wherever you run
 `revier open`: a shell's own settings, such as an activated virtualenv, do not
 reach your workspaces. Without systemd, it starts with the environment of the
-command that opened the first workspace. A window you open in it yourself is
-no workspace.
+command that opened the first workspace.
+
+An OS window you open yourself in revier's kitty, with kitty's new OS window
+action, is not listed: revier shows no agents in it, `revier attach` attaches
+the window alone and reads no agents in it, and revier's kitty keys there open
+a plain kitty tab whatever `[terminal] outside` says. A split or a tab you open
+inside a workspace is part of that workspace. To work beside a workspace, add
+a tab to it with a kitty key, or use a kitty of your own.
 
 To make revier's kitty read a changed `kitty.conf`, or to use an updated kitty,
 stop it; the next workspace you open starts it again:
@@ -99,9 +105,10 @@ term status` names them as `shadowed by kitty.conf:<line>`.
   `revier session save` and `revier session restore`; see
   [Projects](../projects.md).
 - `revier open --attach` needs tmux or herdr.
-- A kitty window you opened yourself is no workspace until you run
-  `revier attach` in it. revier reads its agents only when it is the one
-  unnamed window of its kitty process.
+- A window you opened yourself in a kitty of your own is no workspace until
+  you run `revier attach` in it. revier reads its agents only when it is the
+  one unnamed window of its kitty process. In an OS window you opened in
+  revier's kitty, `revier attach` reads no agents.
 
 **`revier attach` reads no agents in your kitty.** Your kitty
 has no control socket. Do step 1 of [Set it up](#set-it-up) and restart
