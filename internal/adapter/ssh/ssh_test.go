@@ -191,6 +191,7 @@ func TestQuoteKeepsAWordWhole(t *testing.T) {
 		"demo:home":      "demo:home",
 		"C#":             "'C#'",
 		"x=y":            "x=y",
+		"=echo":          "'=echo'",
 		"~/dev":          "'~/dev'",
 		"say \"hi\" now": `'say "hi" now'`,
 		"back\\slash":    `'back'\\'slash'`,

@@ -138,7 +138,8 @@ const waitDelay = time.Second
 // and `\\` as escapes; outside them, both read `\'` and `\\` as the quote and
 // the backslash.
 func Quote(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~^%") {
+	// A leading = is zsh's EQUALS expansion: =echo becomes echo's path.
+	if s != "" && !strings.HasPrefix(s, "=") && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~^%") {
 		return s
 	}
 	return "'" + strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`).Replace(s) + "'"
