@@ -638,41 +638,58 @@ func isRunShell(cmdline []string) bool {
 // panel's window as window_id; id would be a tab id, which equals the window
 // id only in a kitty that has opened nothing else.
 //
-// A step that fails after the OS window opened closes every window Open
-// opened: left running, the OS window carries r.Name and would be matched,
-// as an agent with no shell beside it.
+// A step that fails closes the OS window Open opened, every window in it:
+// left running, it carries r.Name and would be matched, as an agent with no
+// shell beside it. It is found by that name, among the OS windows the kitty
+// did not have before: a launch that failed may have made its window all the
+// same, when the end of ctx ended kitten before kitty answered.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
 	}
-	panels := r.PanelSpecs()
-
-	socket, first, err := h.openFirst(ctx, r, panels[0])
+	socket, before, err := h.workspaceKitty(ctx)
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	opened := []int{first}
-	ref, err := h.fill(ctx, socket, first, r, panels, &opened)
+	ref, err := h.build(ctx, socket, r)
 	if err != nil {
-		match := make([]string, len(opened))
-		for i, id := range opened {
-			match[i] = "id:" + strconv.Itoa(id)
-		}
 		// Best effort: the error that failed the OS window is the one worth
 		// reporting. The close has a bound of its own: the end of ctx may be
 		// what failed the OS window.
 		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_, _ = h.kitten(closing, socket, "close-window", "--match", strings.Join(match, " or "))
+		h.closeNew(closing, socket, r.Name, before)
 		return revier.TargetRef{}, err
 	}
 	return ref, nil
 }
 
-// fill titles the first panel's window, launches every later panel into its
-// OS window with every window it opens added to opened, and returns the OS
-// window.
-func (h *Host) fill(ctx context.Context, socket string, first int, r revier.Realization, panels []revier.PanelSpec, opened *[]int) (revier.TargetRef, error) {
+// closeNew closes every window of each OS window named name that before does
+// not hold.
+func (h *Host) closeNew(ctx context.Context, socket, name string, before []osWindow) {
+	windows, err := h.ls(ctx, socket)
+	if err != nil {
+		return
+	}
+	var match []string
+	for _, w := range windows {
+		if w.WMName == name && !slices.ContainsFunc(before, func(b osWindow) bool { return b.ID == w.ID }) {
+			match = append(match, windowMatches(w)...)
+		}
+	}
+	if len(match) > 0 {
+		_, _ = h.kitten(ctx, socket, "close-window", "--match", strings.Join(match, " or "))
+	}
+}
+
+// build opens the OS window with its first panel, titles that panel's window,
+// launches every later panel into the OS window, and returns the OS window.
+func (h *Host) build(ctx context.Context, socket string, r revier.Realization) (revier.TargetRef, error) {
+	panels := r.PanelSpecs()
+	first, err := h.openFirst(ctx, socket, r, panels[0])
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
 	if err := h.title(ctx, socket, first, panels[0].Title); err != nil {
 		return revier.TargetRef{}, err
 	}
@@ -686,7 +703,6 @@ func (h *Host) fill(ctx context.Context, socket string, first int, r revier.Real
 		if err != nil {
 			return revier.TargetRef{}, err
 		}
-		*opened = append(*opened, id)
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
 			return revier.TargetRef{}, err
 		}
@@ -744,52 +760,44 @@ func (h *Host) title(ctx context.Context, socket string, id int, title string) e
 	return err
 }
 
-// openFirst opens the OS window with its first panel in the workspace kitty,
-// starting it when none answers, and returns the socket it lives on and the
-// id of that panel's window.
-func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	socket, err := h.workspaceKitty(ctx)
-	if err != nil {
-		return "", 0, err
-	}
+// openFirst opens the OS window with its first panel in the workspace kitty
+// on socket, and returns the id of that panel's window.
+func (h *Host) openFirst(ctx context.Context, socket string, r revier.Realization, p revier.PanelSpec) (int, error) {
 	args := append(append([]string{"--type=os-window",
 		"--os-window-name", r.Name, "--os-window-title", r.Name}, holdArgs(p)...), varArgs(r.Vars)...)
 	if p.Dir != "" {
 		args = append(args, "--cwd", p.Dir)
 	}
 	args = append(args, p.Command...)
-	id, err := h.launch(ctx, socket, args...)
-	if err != nil {
-		return "", 0, err
-	}
-	return socket, id, nil
+	return h.launch(ctx, socket, args...)
 }
 
 // workspaceKitty is the socket of the workspace kitty, started when none
-// answers.
-func (h *Host) workspaceKitty(ctx context.Context) (string, error) {
-	if s, ok := h.answering(ctx); ok {
-		return s, nil
+// answers, and its OS windows.
+func (h *Host) workspaceKitty(ctx context.Context) (string, []osWindow, error) {
+	if s, windows, ok := h.answering(ctx); ok {
+		return s, windows, nil
 	}
 	return h.startKitty(ctx)
 }
 
-// answering is the first workspace kitty socket that answers. The kernel
-// lists a socket until its kitty has exited, so one that is listed can be one
-// a launch would fail on.
-func (h *Host) answering(ctx context.Context) (string, bool) {
+// answering is the first workspace kitty socket that answers, and its OS
+// windows. The kernel lists a socket until its kitty has exited, so one that
+// is listed can be one a launch would fail on.
+func (h *Host) answering(ctx context.Context) (string, []osWindow, bool) {
 	for _, s := range h.socketList() {
 		if !workspaceSocket.MatchString(s) {
 			continue
 		}
-		if _, err := h.kitten(ctx, s, "ls"); err == nil {
-			return s, true
+		if windows, err := h.ls(ctx, s); err == nil {
+			return s, windows, true
 		}
 	}
-	return "", false
+	return "", nil, false
 }
 
-// startKitty starts the workspace kitty and waits for its control socket. It
+// startKitty starts the workspace kitty, waits for its control socket, and
+// returns the socket and the kitty's OS windows. It
 // starts hidden, with no workspace in it, so every workspace opens the same
 // way, and its hidden window keeps it running when the last workspace
 // closes. That window runs sleep: a shell's startup files can start anything.
@@ -797,29 +805,29 @@ func (h *Host) answering(ctx context.Context) (string, bool) {
 // discovery looks for. With no runtime directory there is no place that is
 // the user's alone, and no kitty is started: a socket anywhere else is one
 // another user can connect to.
-func (h *Host) startKitty(ctx context.Context) (string, error) {
+func (h *Host) startKitty(ctx context.Context) (string, []osWindow, error) {
 	listenOn := workspaceListenOn()
 	if listenOn == "" {
-		return "", errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
+		return "", nil, errors.New("kitty: XDG_RUNTIME_DIR is not set to an absolute path, so a new kitty has no private directory for its control socket")
 	}
 	if err := h.startProcess(ctx, "--listen-on", listenOn,
 		"-o", "allow_remote_control=socket-only",
 		"--name", workspaceName, "--start-as=hidden", "sleep", "infinity"); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if s, ok := h.answering(ctx); ok {
-			return s, nil
+		if s, windows, ok := h.answering(ctx); ok {
+			return s, windows, nil
 		}
 		if !time.Now().Before(deadline) {
 			// kitty refuses --start-as=hidden before 0.42 and exits at once,
 			// and under the service manager it says so in the journal alone.
-			return "", fmt.Errorf("kitty: started the workspace kitty, but no control socket answered within 5s; it needs kitty %s or later, and `journalctl --user -u %s` has what it said", minKitty, workspaceUnit)
+			return "", nil, fmt.Errorf("kitty: started the workspace kitty, but no control socket answered within 5s; it needs kitty %s or later, and `journalctl --user -u %s` has what it said", minKitty, workspaceUnit)
 		}
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", nil, ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
@@ -1048,13 +1056,8 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	}
 	var match []string
 	for _, w := range windows {
-		if w.ID != id {
-			continue
-		}
-		for _, t := range w.Tabs {
-			for _, win := range t.Windows {
-				match = append(match, "id:"+strconv.Itoa(win.ID))
-			}
+		if w.ID == id {
+			match = windowMatches(w)
 		}
 	}
 	if len(match) == 0 {
@@ -1062,6 +1065,18 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	}
 	_, err = h.kitten(ctx, socket, "close-window", "--match", strings.Join(match, " or "))
 	return err
+}
+
+// windowMatches are the --match terms of every kitty window of the OS window,
+// across its tabs.
+func windowMatches(w osWindow) []string {
+	var match []string
+	for _, t := range w.Tabs {
+		for _, win := range t.Windows {
+			match = append(match, "id:"+strconv.Itoa(win.ID))
+		}
+	}
+	return match
 }
 
 // ClosePanel closes one kitty window, on the socket of the process the

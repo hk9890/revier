@@ -695,48 +695,76 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	}
 }
 
-// An Open whose title, later launch or closing ls fails closes every window
-// it opened: left running, the half-built OS window carries the workspace's
-// name, and the next press would raise it, an agent with no shell beside it.
-// The failing step can be the end of the press's context, so the close has a
-// context of its own.
-func TestOpenClosesWhatItOpenedWhenALaterStepFails(t *testing.T) {
+// An Open whose launch, title or closing ls fails closes the OS window it
+// opened, every window in it: left running, the half-built OS window carries
+// the workspace's name, and the next press would raise it, an agent with no
+// shell beside it. A launch can fail after kitty made the window, when the end
+// of the press's context ends kitten before kitty's answer, so the OS window
+// is found by its name and not by the window ids Open got back. An OS window
+// of that name that was there before the launch, as one another press opened,
+// is not Open's. The failing step can be the end of the context, so the close
+// has a context of its own.
+func TestOpenClosesTheOSWindowItOpenedWhenAStepFails(t *testing.T) {
 	for _, tc := range []struct {
 		fail  string
 		close string
 	}{
+		{"launch --type=os-window", "close-window --match id:7"},
 		{"set-window-title", "close-window --match id:7"},
-		{"launch --type=window", "close-window --match id:7"},
+		{"launch --type=window", "close-window --match id:7 or id:8"},
 		{"ls", "close-window --match id:7 or id:8"},
 	} {
 		t.Run(tc.fail, func(t *testing.T) {
 			h := newHost()
-			var calls []string
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
-			answered := false
+			type osWin struct {
+				id      int
+				name    string
+				windows []int
+			}
+			kitty := []*osWin{{1, "revier-kitty", []int{1}}, {2, "session:demo", []int{5}}}
+			nextWindow := 7
+			var calls []string
+			lists, failed := 0, false
 			h.SetRunner(func(ctx context.Context, _, _ string, args ...string) ([]byte, error) {
-				joined := strings.Join(args, " ")
-				if args[0] == "ls" && !answered {
-					answered = true
-					return []byte("[]"), nil
-				}
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
+				joined := strings.Join(args, " ")
 				calls = append(calls, joined)
-				if strings.HasPrefix(joined, tc.fail) {
+				var out []byte
+				switch args[0] {
+				case "ls":
+					lists++
+					var listing []map[string]any
+					for _, w := range kitty {
+						var windows []map[string]any
+						for _, id := range w.windows {
+							windows = append(windows, map[string]any{"id": id})
+						}
+						listing = append(listing, map[string]any{"id": w.id, "wm_name": w.name,
+							"tabs": []map[string]any{{"windows": windows}}})
+					}
+					out, _ = json.Marshal(listing)
+				case "launch":
+					id := nextWindow
+					nextWindow++
+					if slices.Contains(args, "--type=os-window") {
+						kitty = append(kitty, &osWin{3, "session:demo", []int{id}})
+					} else {
+						kitty[2].windows = append(kitty[2].windows, id)
+					}
+					out = []byte(strconv.Itoa(id) + "\n")
+				}
+				// The answering ls before the launch is not the step that fails.
+				if !failed && strings.HasPrefix(joined, tc.fail) && (args[0] != "ls" || lists > 1) {
+					failed = true
 					cancel()
 					return nil, errors.New("kitty went away")
 				}
-				if args[0] == "launch" {
-					if slices.Contains(args, "--type=os-window") {
-						return []byte("7\n"), nil
-					}
-					return []byte("8\n"), nil
-				}
-				return nil, nil
+				return out, nil
 			})
 			_, err := h.Open(ctx, revier.Realization{
 				Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
