@@ -54,6 +54,7 @@ type projectScreen struct {
 	row      int                // the row the cursor is on
 	edit     textinput.Model    // a field's value, while it is typed
 	tform    targetForm         // the target being added or changed, while its form is up
+	formAt   int                // the target the form changes, or one past the last for a new one
 	dropping bool               // whether the target under the cursor waits on a y to be deleted
 }
 
@@ -185,6 +186,8 @@ func (ps *projectScreen) key(sf surface, locked error, msg keyPress) (projectRes
 			return ps.saveTarget(sf, *form.save), cmd
 		}
 		return projectResult{err: form.err}, cmd
+	case ps.dropping && key.Matches(msg, sf.keys.Quit):
+		return projectResult{err: sf.err}, tea.Quit
 	case ps.dropping:
 		return ps.dropTarget(sf, msg), nil
 	}
@@ -302,10 +305,10 @@ func (ps *projectScreen) took(sf surface, p core.Project) projectResult {
 // when i is past the last. A derived target is not in the file, so saving it
 // declares one.
 func (ps *projectScreen) openTargetForm(th theme.Theme, i int) tea.Cmd {
-	f := newTargetForm(th, i, nil)
+	f := newTargetForm(th, nil)
 	if i < len(ps.text.Targets) {
 		pt := ps.text.Targets[i]
-		f = newTargetForm(th, i, &pt.Target)
+		f = newTargetForm(th, &pt.Target)
 		if pt.Source != config.Derived {
 			f.was = pt.Target.Name
 		}
@@ -314,7 +317,7 @@ func (ps *projectScreen) openTargetForm(th theme.Theme, i int) tea.Cmd {
 			f.shared = &v
 		}
 	}
-	ps.tform = f
+	ps.tform, ps.formAt = f, i
 	return ps.tform.fields[tfName].Focus()
 }
 
@@ -340,7 +343,8 @@ func (ps *projectScreen) saveTarget(sf surface, edit config.TargetEdit) projectR
 
 // dropTarget takes the key that answers the delete question. Only y deletes
 // the file's entry: a target of the project's own goes, and an override
-// leaves config.toml's target as it is there.
+// leaves config.toml's target as it is there. ctrl+c quits before it gets
+// here.
 func (ps *projectScreen) dropTarget(sf surface, msg keyPress) projectResult {
 	ps.dropping = false
 	i, ok := ps.targetRow()
@@ -457,12 +461,12 @@ func (ps *projectScreen) screen(sf surface) (string, int) {
 	}
 	for i, pt := range ps.text.Targets {
 		row(base+i, keyLabel(pt.Target.Key), string(pt.Target.Name), sourceNote(pt.Source)+" · "+describeTarget(pt.Target))
-		if ps.tform.open && ps.tform.index == i {
+		if ps.tform.open && ps.formAt == i {
 			form()
 		}
 	}
 	row(ps.addTargetRow(), "+", "add a target", "this project only")
-	if ps.tform.open && ps.tform.index == len(ps.text.Targets) {
+	if ps.tform.open && ps.formAt == len(ps.text.Targets) {
 		form()
 	}
 

@@ -352,7 +352,7 @@ func run(out io.Writer, args []string) error {
 
 	switch cmd {
 	case "":
-		return cmdTUI(a)
+		return cmdTUI(ctx, a)
 	case "list":
 		return cmdList(ctx, a, args)
 	case "open":

@@ -65,6 +65,15 @@ jobs:
       - name: build
         run: go build -o bin/revier ./cmd/revier
 
+      # A broken .goreleaser.yaml fails here, not at release time. The version
+      # is release.yml's; bump both together.
+      - name: goreleaser check
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.19.0
+          args: check
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

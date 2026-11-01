@@ -180,6 +180,22 @@ func TestAgentWaitOnAShellTimesOutSayingSo(t *testing.T) {
 	}
 }
 
+// A timeout too large to be a duration, infinite or not a number is refused
+// before any host is asked: converted, it would end the wait at once or never.
+func TestAgentWaitRefusesATimeoutItCannotWait(t *testing.T) {
+	for _, timeout := range []string{"1e10", "inf", "NaN"} {
+		opened := false
+		open := func(context.Context, io.Writer) (*app, error) {
+			opened = true
+			return nil, errors.New("no host in this test")
+		}
+		err := agentWait(io.Discard, []string{"demo:home:1", "--until", "idle", "--timeout", timeout}, open)
+		if err == nil || !strings.Contains(err.Error(), "--timeout") || opened {
+			t.Errorf("--timeout %s: err = %v, opened = %v; want --timeout refused before any host is asked", timeout, err, opened)
+		}
+	}
+}
+
 // Only a panel address waits for its harness: a project with no agent in it
 // fails at once, as prompt does.
 func TestAgentWaitOnAProjectWithNoAgentFailsAtOnce(t *testing.T) {

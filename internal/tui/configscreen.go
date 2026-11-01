@@ -64,7 +64,16 @@ type configScreen struct {
 	chord     textinput.Model // the trigger key, while it is typed
 	aform     actionForm      // the action being added or changed, while its form is up
 	tform     targetForm      // the shared target being added or changed, while its form is up
-	dropping  bool            // whether the target or action under the cursor waits on a y to be deleted
+	drop      dropQuestion    // the target or action the delete question waits on a y for
+}
+
+// dropQuestion is the shared target or action a delete question was asked
+// for. It keeps the entry, not its place: the files read again at the focus
+// can replace the lists while it waits.
+type dropQuestion struct {
+	open   bool
+	target *revier.Target // the shared target asked for; nil for an action
+	action config.Action
 }
 
 func newConfigScreen(th theme.Theme, cfg *config.Config) configScreen {
@@ -160,7 +169,7 @@ func (cs *configScreen) open() {
 	cs.refused = ""
 	cs.aform = actionForm{}
 	cs.tform = targetForm{}
-	cs.dropping = false
+	cs.drop = dropQuestion{}
 	cs.readProblems()
 }
 
@@ -178,15 +187,16 @@ func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 			return cs.saveTarget(sf, *form.save), cmd
 		}
 		return configResult{err: form.err}, cmd
-	case cs.dropping:
-		if _, onTarget := cs.targetRow(sf); onTarget {
-			return cs.dropTarget(sf, msg), nil
-		}
+	case cs.drop.open && key.Matches(msg, sf.keys.Quit):
+		return configResult{err: sf.err}, tea.Quit
+	case cs.drop.open && cs.drop.target != nil:
+		return cs.dropTarget(sf, msg), nil
+	case cs.drop.open:
 		return cs.dropAction(sf, msg), nil
 	}
 	var res configResult
-	_, onAction := cs.actionRow(sf)
-	_, onTarget := cs.targetRow(sf)
+	a, onAction := cs.actionRow(sf)
+	t, onTarget := cs.targetRow(sf)
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
 		return res, tea.Quit
@@ -196,8 +206,11 @@ func (cs *configScreen) key(sf surface, msg keyPress) (configResult, tea.Cmd) {
 		cs.row = max(cs.row-1, 0)
 	case key.Matches(msg, sf.keys.Down):
 		cs.row = min(cs.row+1, cs.addRow(sf))
-	case (onAction || onTarget) && key.Matches(msg, sf.keys.Delete):
-		cs.dropping = true
+	case onAction && key.Matches(msg, sf.keys.Delete):
+		cs.drop = dropQuestion{open: true, action: sf.actions[a]}
+	case onTarget && key.Matches(msg, sf.keys.Delete):
+		target := sf.targets[t]
+		cs.drop = dropQuestion{open: true, target: &target}
 	case onTarget && key.Matches(msg, sf.keys.Enter), cs.row == cs.addTargetRow(sf) && key.Matches(msg, sf.keys.Enter):
 		return res, cs.openTargetForm(sf, cs.row-int(configRows))
 	case onAction && key.Matches(msg, sf.keys.Enter), cs.row == cs.addRow(sf) && key.Matches(msg, sf.keys.Enter):
@@ -468,14 +481,21 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + line
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
+	// Where a form stands is found only while one is open: each render
+	// would otherwise compare every shared target for a form that is not
+	// there.
+	tat := -1
+	if cs.tform.open {
+		tat, _ = cs.tform.sharedAt(sf.targets)
+	}
 	for i, t := range sf.targets {
 		row(int(configRows)+i, keyLabel(t.Key), string(t.Name), describeTarget(t))
-		if cs.tform.open && cs.tform.index == i {
+		if tat == i {
 			tform()
 		}
 	}
 	row(cs.addTargetRow(sf), "+", "add a target", "every project has it")
-	if cs.tform.open && cs.tform.index == len(sf.targets) {
+	if tat == len(sf.targets) {
 		tform()
 	}
 
@@ -485,14 +505,18 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 		at = strings.Count(b.String(), "\n") + field
 		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
+	aat := -1
+	if cs.aform.open {
+		aat, _ = cs.aform.at(sf.actions)
+	}
 	for i, act := range sf.actions {
-		if cs.aform.open && cs.aform.index == i {
+		if aat == i {
 			form()
 			continue
 		}
 		row(cs.actionBase(sf)+i, keyLabel(act.Key), act.Name, joinCommand(act.Run))
 	}
-	if cs.aform.open && cs.aform.index == len(sf.actions) {
+	if aat == len(sf.actions) {
 		form()
 	} else {
 		row(cs.addRow(sf), "+", "add an action", "run in the selected project, bound to a key")

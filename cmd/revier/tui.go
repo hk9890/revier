@@ -21,10 +21,12 @@ import (
 
 // cmdTUI runs the surface. Without a terminal on its output - `revier | grep`,
 // or a writer that is no file at all - it prints the table instead, so a
-// script sees what it always saw.
-func cmdTUI(a *app) error {
+// script sees what it always saw. The table is bounded by ctx, the bound
+// `revier list` has; the surface runs until the user ends it, so it ignores
+// ctx.
+func cmdTUI(ctx context.Context, a *app) error {
 	if f, ok := a.out.(*os.File); !ok || !term.IsTerminal(int(f.Fd())) {
-		return cmdList(context.Background(), a, nil)
+		return cmdList(ctx, a, nil)
 	}
 	th, err := a.cfg.Theme()
 	if err != nil {

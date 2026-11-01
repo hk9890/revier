@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -83,7 +84,7 @@ type panelDraft struct {
 // screen, or a project's on the project screen.
 type targetForm struct {
 	open   bool
-	index  int           // the target changed, or one past the last for a new one
+	adds   bool          // whether the form adds a target
 	base   revier.Target // the target as read, for the values the form does not show
 	cursor int           // the row the cursor is on
 	home   bool
@@ -189,14 +190,42 @@ func (cs *configScreen) openTargetForm(sf surface, i int) tea.Cmd {
 	if i < len(sf.targets) {
 		t = &sf.targets[i]
 	}
-	cs.tform = newTargetForm(sf.theme, i, t)
+	cs.tform = newTargetForm(sf.theme, t)
 	return cs.tform.fields[tfName].Focus()
 }
 
+// sharedAt is where the shared target the form changes is in targets now:
+// past the last for a new one. A target that is gone, or no longer as the
+// form read it, is false, and past the last too, where the screen shows its
+// form. The form keeps the target, not its place: the files read again at
+// the focus can replace the list while the form is open, and its panels
+// point into the target as read.
+func (f targetForm) sharedAt(targets []revier.Target) (int, bool) {
+	if f.adds {
+		return len(targets), true
+	}
+	i := targetIndex(targets, f.base)
+	if i < 0 {
+		return len(targets), false
+	}
+	return i, true
+}
+
+// targetIndex is where t is in targets, as it was read, or -1 when it is not
+// there.
+func targetIndex(targets []revier.Target, t revier.Target) int {
+	return slices.IndexFunc(targets, func(have revier.Target) bool { return reflect.DeepEqual(have, t) })
+}
+
 // saveTarget writes the form's target, and hands back the shared targets and
-// the projects loaded again with it.
+// the projects loaded again with it. A target changed that left config.toml
+// is not written, and the form stays.
 func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configResult {
-	i, t := cs.tform.index, edit.Target
+	i, ok := cs.tform.sharedAt(sf.targets)
+	if !ok {
+		return configResult{err: fmt.Errorf("target %q is no longer in config.toml as the form read it; Esc and open it again", cs.tform.base.Name)}
+	}
+	t := edit.Target
 	for j, other := range sf.targets {
 		if j != i && other.Name == t.Name {
 			return configResult{err: fmt.Errorf("a shared target named %q exists already", t.Name)}
@@ -204,7 +233,7 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 	}
 	var written config.TargetsWritten
 	err := cs.write(func(root string) (err error) {
-		if i == len(sf.targets) {
+		if cs.tform.adds {
 			written, err = config.AddTarget(root, sf.shared, t)
 			return err
 		}
@@ -221,12 +250,19 @@ func (cs *configScreen) saveTarget(sf surface, edit config.TargetEdit) configRes
 
 // dropTarget takes the key that answers the delete question for a shared
 // target. Only y deletes, and a delete a project would not load without is
-// refused and named.
+// refused and named; ctrl+c quits before it gets here. A target that left
+// config.toml, or changed, while the question waited is not deleted, nor is
+// the one now in its place.
 func (cs *configScreen) dropTarget(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
-	cs.dropping = false
-	i, ok := cs.targetRow(sf)
-	if msg.String() != "y" || !ok {
+	t := *cs.drop.target
+	cs.drop = dropQuestion{}
+	if msg.String() != "y" {
+		return res
+	}
+	i := targetIndex(sf.targets, t)
+	if i < 0 {
+		res.err = fmt.Errorf("target %q is no longer in config.toml as the question read it; nothing is deleted", t.Name)
 		return res
 	}
 	var written config.TargetsWritten
@@ -274,10 +310,9 @@ func (f targetForm) rows() []formRow {
 	return out
 }
 
-// newTargetForm is the form at index for t, or for a new target when t is
-// nil.
-func newTargetForm(th theme.Theme, index int, t *revier.Target) targetForm {
-	f := targetForm{open: true, index: index}
+// newTargetForm is the form for t, or for a new target when t is nil.
+func newTargetForm(th theme.Theme, t *revier.Target) targetForm {
+	f := targetForm{open: true, adds: t == nil}
 	for j := range f.fields {
 		f.fields[j] = formInput(th, "")
 	}

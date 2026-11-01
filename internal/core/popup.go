@@ -216,7 +216,7 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 					logging.Op("surface raise", start, err, "ref", inst.Ref, "popup", true)
 					return err
 				}
-				err := c.focusPanel(ctx, snap, inst.Ref, p.ID, "revier")
+				err := c.focusPanel(ctx, snap, failed, inst.Ref, p.ID, "revier")
 				logging.Op("surface raise", start, err, "ref", inst.Ref, "panel", p.ID)
 				return err
 			}

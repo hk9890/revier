@@ -963,6 +963,53 @@ func TestFreeTextContainingTheSeparatorSurvives(t *testing.T) {
 	}
 }
 
+// The program tmux names for a pane is free text too: tmux cuts its argv[0]
+// at the first space but keeps the separator. One that carries it must not
+// shift the pane's vars, a tab's whole identity, into the title.
+func TestACommandContainingTheSeparatorKeepsThePaneVars(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not installed; the test needs its exec -a")
+	}
+	h, c := server(t), ctx(t)
+	if _, err := h.Open(c, revier.Realization{
+		Name: "home", Launch: []string{"bash", "-c", "exec -a 'x|y' sleep 30"},
+		Vars: map[string]string{"tab": "agent"},
+	}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	instances, err := h.Instances(c)
+	if err != nil || len(instances) != 1 || len(instances[0].Panels) != 1 {
+		t.Fatalf("Instances = %+v, %v; want one session with one pane", instances, err)
+	}
+	pane := instances[0].Panels[0].ID.String()
+	if err := exec.Command("tmux", "-L", h.Socket, "select-pane", "-t", pane, "-T", "ttl").Run(); err != nil {
+		t.Fatalf("set pane title: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", pane, "#{pane_current_command}").Output()
+		if err == nil && strings.TrimSpace(string(out)) == "x|y" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pane_current_command = %q, %v; want x|y", out, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	again, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	p := again[0].Panels[0]
+	if p.Vars["tab"] != "agent" || len(p.Vars) != 1 {
+		t.Errorf("vars = %q, want tab=agent", p.Vars)
+	}
+	if p.Title != "ttl" {
+		t.Errorf("pane title = %q, want ttl", p.Title)
+	}
+}
+
 // A home target is its panels: each becomes a pane of the one window, in the
 // project directory, with its title and its command, and the probe can tell
 // the agent pane from the shell beside it.
@@ -1301,5 +1348,67 @@ func TestTmuxRunsInAProcessGroupOfItsOwn(t *testing.T) {
 	}
 	if pgrp, _ := strconv.Atoi(strings.TrimSpace(string(b))); pgrp == 0 || pgrp == syscall.Getpgrp() {
 		t.Errorf("tmux's process group = %d, want one other than revier's (%d)", pgrp, syscall.Getpgrp())
+	}
+}
+
+// cancelAfter runs the real tmux of the host's socket and returns a context
+// that ends once the first `step` has run, as a press whose budget runs out in
+// the middle of an Open would.
+func cancelAfter(t *testing.T, h *tmux.Host, step string) context.Context {
+	t.Helper()
+	c, cancel := context.WithCancel(ctx(t))
+	h.SetRunner(func(c context.Context, args ...string) (string, error) {
+		out, err := exec.CommandContext(c, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...).Output()
+		if args[0] == step {
+			cancel()
+		}
+		if err != nil {
+			return "", fmt.Errorf("tmux %s: %w", strings.Join(args, " "), err)
+		}
+		return string(out), nil
+	})
+	return c
+}
+
+// sessionNames lists the sessions on the host's server, none when no server
+// runs.
+func sessionNames(t *testing.T, h *tmux.Host) []string {
+	t.Helper()
+	out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions", "-F", "#{session_name}").Output()
+	return strings.Fields(string(out))
+}
+
+// An Open that the end of its context fails after the session started kills
+// the session: left, it would be matched with no name and no shell.
+func TestOpenCutShortByItsContextLeavesNoSession(t *testing.T) {
+	h := server(t)
+	c := cancelAfter(t, h, "new-session")
+	if _, err := h.Open(c, revier.Realization{Name: "session:cut", Launch: []string{"sh", "-c", "sleep 30"}}); err == nil {
+		t.Fatal("Open succeeded on an ended context, want an error")
+	}
+	if got := sessionNames(t, h); len(got) != 0 {
+		t.Errorf("sessions = %v, want the half-built one killed", got)
+	}
+}
+
+// An OpenTab that the end of its context fails after the window opened kills
+// the window: left, it would run without its mark and be found by nothing.
+func TestOpenTabCutShortByItsContextLeavesNoWindow(t *testing.T) {
+	h, c := server(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "session:demo", Launch: []string{"sh", "-c", "sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cut := cancelAfter(t, h, "new-window")
+	if _, err := h.OpenTab(cut, ref, revier.Realization{Launch: []string{"sh", "-c", "sleep 30"}}, map[string]string{"REVIER_TARGET": "notes"}); err == nil {
+		t.Fatal("OpenTab succeeded on an ended context, want an error")
+	}
+	h.SetRunner(nil)
+	instances, err := h.Instances(c)
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	if len(instances) != 1 || len(instances[0].Panels) != 1 {
+		t.Errorf("instances = %+v, want the session with its first pane alone", instances)
 	}
 }

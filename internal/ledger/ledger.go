@@ -4,6 +4,7 @@
 package ledger
 
 import (
+	"errors"
 	"log/slog"
 	"maps"
 	"slices"
@@ -21,11 +22,13 @@ import (
 // writes launches to it - a desktop key while the surface runs - and a press
 // must find them.
 //
-// State is a convenience: losing it costs a binding, not the operation. A
-// file that cannot be read is the state this process read from it last, and
-// an empty state before the first read: a surface reads the file every
-// refresh, and one failed read must not take its bindings and attached
-// windows off the screen. A failure is logged once for each cause.
+// Losing the state costs bindings and a shutdown on record, not the
+// operation. A file that cannot be read is the state this process read from
+// it last, and an empty state before the first read: a surface reads the file
+// every refresh, and one failed read must not take its bindings and attached
+// windows off the screen. A file that does not parse is discarded: it is an
+// empty state, and the next write replaces it. A failure is logged once for
+// each cause, a discarded file as a failure to load.
 type File struct {
 	Root string
 	// Written, when set, is told of every write, so a surface can take the
@@ -84,6 +87,10 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 		changed = apply(st)
 		return changed
 	})
+	if errors.Is(err, state.ErrCorrupt) {
+		logging.Repeat("state load", "state load", err, "root", f.Root)
+		err = nil
+	}
 	logging.Repeat("state update", "state update", err, "root", f.Root)
 	if err != nil && f.Failed != nil {
 		f.Failed(err)

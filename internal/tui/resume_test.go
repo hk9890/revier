@@ -426,3 +426,79 @@ func TestAFullShutdownStillOpensItsOwnDialog(t *testing.T) {
 		t.Errorf("seen = %+v while a full shutdown is on record, want nothing written", s)
 	}
 }
+
+// A query typed before the check answers holds the dialog after an end with
+// no shutdown back, not away: it comes up at the first survey after the
+// query is cleared.
+func TestTheDialogAfterAnUncleanEndWaitsForThePlainSurface(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "x")
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Fatalf("subtitle = %q, want the dialog held back while a query is up", sub)
+	}
+
+	m, _ = press(m, "backspace")
+	m = seenSurvey(m)
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier ended without a shutdown; last changed 2026-09-15 18:20.") {
+		t.Errorf("subtitle = %q, want the dialog once the surface is plain", sub)
+	}
+}
+
+// A shutdown recorded while the dialog after an end with no shutdown is held
+// back takes its place: once the shutdown's own dialog is answered, the older
+// end is not offered after it.
+func TestAShutdownRecordedWhileTheUncleanDialogWaitsTakesItsPlace(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "x")
+	m = seenSurvey(seenSurvey(m))
+
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), "")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = press(m, "backspace")
+	m = seenSurvey(m)
+	if sub := lines(m)[2]; !strings.Contains(sub, "revier was shut down at 2026-09-15 18:30.") {
+		t.Fatalf("subtitle = %q, want the dialog of the newer shutdown", sub)
+	}
+
+	m, cmd := press(m, "esc")
+	if cmd != nil {
+		m = run(m, cmd)
+	}
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Errorf("subtitle = %q, want no offer of the end before the recorded shutdown", sub)
+	}
+}
+
+// A restore made by hand while the dialog after an end with no shutdown is
+// held back takes its place: the user has handled the sessions, so the end
+// is not offered once the restore ends on the plain surface.
+func TestARestoreMadeWhileTheUncleanDialogWaitsTakesItsPlace(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	saved(t, root, "work", 10, homeOf("project-01"))
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "alt+s")
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Fatalf("subtitle = %q, want the dialog held back while the sessions screen is up", sub)
+	}
+
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
+		t.Fatalf("bar = %q, want the project list once the restore ended", bar)
+	}
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Errorf("subtitle = %q, want no offer of the end after a restore by hand", sub)
+	}
+}

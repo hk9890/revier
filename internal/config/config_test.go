@@ -739,6 +739,40 @@ func TestValidateRejectsAShortPlacement(t *testing.T) {
 	}
 }
 
+// A match that does not compile is a second mistake in the same target, not
+// a reason to skip the placement rule: the placement rendered, so its tokens
+// are counted, and the refusal still names the key to look for.
+func TestValidateRejectsAShortPlacementBesideABadMatch(t *testing.T) {
+	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Window: &revier.Realization{
+			Launch: []string{"x"}, Match: revier.Match{Title: "("},
+			Place: "10 20",
+		}},
+	}}
+	err := config.Validate(p)
+	if err == nil || !strings.Contains(err.Error(), "four tokens") {
+		t.Errorf("Validate = %v, want the placement refused", err)
+	}
+}
+
+func TestLoadProjectRefusesAShortPlacementBesideABadMatch(t *testing.T) {
+	body := strings.Replace(valid, `match = { class = "^code$" }`, `match = { class = "^code$", title = "(" }`+"\n  place = \"10 20\"", 1)
+	p := config.LoadProject(write(t, t.TempDir(), "revier.toml", body), config.Inherited{})
+	found := false
+	for i, target := range p.Targets {
+		if target.Name != "editor" {
+			continue
+		}
+		found = true
+		if err := p.TargetErr(i); err == nil || !strings.Contains(err.Error(), "four tokens") {
+			t.Errorf("target %q: err = %v, want the placement refused", target.Name, err)
+		}
+	}
+	if !found {
+		t.Fatal("no target editor; the fixture changed")
+	}
+}
+
 func TestValidateAcceptsAFullPlacement(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -962,5 +996,68 @@ func TestABrokenActionCostsOnlyItself(t *testing.T) {
 	}
 	if cfg.Actions[0].Refused == nil || cfg.Actions[1].Refused != nil {
 		t.Errorf("actions = %+v, want only the first refused", cfg.Actions)
+	}
+}
+
+// A relative path names a different directory for every working directory
+// revier runs in: the clone, `mise trust` and the lookup from the working
+// directory would each act on another one. A link's path is the host's, kept
+// as written, and is not refused here.
+func TestLoadProjectRefusesARelativePath(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Replace(valid, `path = "/home/user/dev/github/revier"`, `path = "src/rel"`, 1)
+	p := config.LoadProject(write(t, dir, "revier.toml", body), config.Inherited{})
+	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), `path "src/rel" is not absolute`) {
+		t.Errorf("Invalid = %v, want the relative path refused", p.Invalid)
+	}
+
+	far := config.LoadProject(write(t, dir, "far.toml", "path = \"dev/far\"\n"+link), config.Inherited{})
+	if far.Invalid != nil {
+		t.Errorf("link Invalid = %v, want a link's path kept as written", far.Invalid)
+	}
+}
+
+// A file named by hand is held to the naming rule `revier new` and a rename
+// apply: the project loads, listed with the reason, and nothing opens it.
+func TestLoadProjectRefusesANameWithWhitespace(t *testing.T) {
+	p := config.LoadProject(write(t, t.TempDir(), "my proj.toml", valid), config.Inherited{})
+	if p.Invalid == nil || !strings.Contains(p.Invalid.Error(), "contains whitespace") {
+		t.Errorf("Invalid = %v, want the name refused", p.Invalid)
+	}
+}
+
+// place takes templates, so its four tokens are counted in what it renders
+// to: a var that holds the whole geometry loads, and a var that adds a token
+// costs its target before the window host refuses it after the window opened.
+func TestLoadProjectCountsPlaceTokensAsRendered(t *testing.T) {
+	withPlace := func(vars, place string) string {
+		body := strings.Replace(valid, `url = "https://example.invalid/pulls"`, vars, 1)
+		return strings.Replace(body, `match = { class = "^code$" }`, `match = { class = "^code$" }`+"\n  place = \""+place+"\"", 1)
+	}
+	cases := []struct {
+		name, vars, place string
+		refused           bool
+	}{
+		{"var holds four tokens", `geom = "right top 50% 100%"`, "{{.Vars.geom}}", false},
+		{"name renders to one token", `url = "u"`, "{{ .Name }} top 50% 100%", false},
+		{"var adds a token", `x = "left top"`, "{{.Vars.x}} top 50% 100%", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := config.LoadProject(write(t, t.TempDir(), "revier.toml", withPlace(tc.vars, tc.place)), config.Inherited{})
+			if p.Invalid != nil {
+				t.Fatalf("Invalid = %v, want the project to load", p.Invalid)
+			}
+			for i, target := range p.Targets {
+				err := p.TargetErr(i)
+				want := tc.refused && target.Name == "editor"
+				if want && (err == nil || !strings.Contains(err.Error(), "four tokens")) {
+					t.Errorf("target %q: err = %v, want the placement refused", target.Name, err)
+				}
+				if !want && err != nil {
+					t.Errorf("target %q: err = %v, want it loaded", target.Name, err)
+				}
+			}
+		})
 	}
 }

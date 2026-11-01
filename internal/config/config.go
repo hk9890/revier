@@ -466,7 +466,7 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 	// file, where the template only says that it rendered to nothing. A part
 	// of the other kind is a rule about the target too, and so is a panel
 	// that names no agent the project can run.
-	for i, err := range validateTargets(p) {
+	for i, err := range validateTargets(p, prepared) {
 		name := p.Targets[i].Name
 		if part := parts[name]; part != nil {
 			err = errors.Join(part, err)
@@ -559,7 +559,7 @@ func nameOf(path string) revier.ProjectName {
 // through.
 func Validate(p revier.Project) error {
 	errs := []error{validateProject(p)}
-	return errors.Join(append(errs, validateTargets(p)...)...)
+	return errors.Join(append(errs, validateTargets(p, core.PrepareProject(p))...)...)
 }
 
 // validateProject holds the rules that refuse the project as a whole: there is
@@ -570,6 +570,14 @@ func validateProject(p revier.Project) error {
 
 	if p.Path == "" && p.Remote == nil {
 		errs = append(errs, errors.New("project has no path"))
+	}
+	// A relative path names another directory for each working directory
+	// revier runs in. A link's path is the host's, kept as written.
+	if p.Path != "" && p.Remote == nil && !filepath.IsAbs(p.Path) {
+		errs = append(errs, fmt.Errorf("path %q is not absolute; write it in full or from ~", p.Path))
+	}
+	if err := ValidateName(p.Name); err != nil {
+		errs = append(errs, err)
 	}
 	if err := CanAddress(p.Name); err != nil {
 		errs = append(errs, err)
@@ -604,7 +612,9 @@ func validateProject(p revier.Project) error {
 // target, parallel to p.Targets and nil where the target is sound. A target
 // these rules refuse loses only itself: the project keeps the others, and the
 // refused one reports why instead of disappearing (decisions.md D85).
-func validateTargets(p revier.Project) []error {
+// prepared is p as core.PrepareProject made it, for the rules that read a
+// rendered value: the load has rendered every template once already.
+func validateTargets(p revier.Project, prepared core.Project) []error {
 	out := make([]error, len(p.Targets))
 	seenName := map[revier.TargetName]bool{}
 	// Keyed by the canonical chord, not by the text. Two targets written
@@ -724,10 +734,13 @@ func validateTargets(p revier.Project) []error {
 				// carries the identity match finds.
 				errs = append(errs, fmt.Errorf("target %q runtime realization has no name; give it the name its match finds", t.Name))
 			}
-			if r.Place != "" && len(strings.Fields(r.Place)) != 4 {
-				// A geometry short of its four tokens would reach the window
-				// host and be refused there, after the window had opened.
-				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, r.Place))
+			// A geometry short of its four tokens would reach the window host
+			// and be refused there, after the window had opened. place takes
+			// templates, so the tokens counted are the rendered ones; a target
+			// whose templates did not render is refused by that instead, and
+			// its place is as written.
+			if place := renderedPlace(prepared.Targets[i], kind); prepared.RenderErr(i) == nil && place != "" && len(strings.Fields(place)) != 4 {
+				errs = append(errs, fmt.Errorf("target %q %s realization: place needs four tokens, x y width height, got %q", t.Name, kind, place))
 			}
 		}
 		if t.Prefer != "" && t.Prefer != revier.HostWindow && t.Prefer != revier.HostRuntime {
@@ -737,6 +750,18 @@ func validateTargets(p revier.Project) []error {
 		out[i] = errors.Join(errs...)
 	}
 	return out
+}
+
+// renderedPlace is the place of t's realization of kind, as rendered.
+func renderedPlace(t revier.Target, kind revier.HostKind) string {
+	r := t.Runtime
+	if kind == revier.HostWindow {
+		r = t.Window
+	}
+	if r == nil {
+		return ""
+	}
+	return r.Place
 }
 
 // validateCommand checks a target that runs a command (decisions.md D166).

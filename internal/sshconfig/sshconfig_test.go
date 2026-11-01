@@ -44,8 +44,29 @@ Host *
 	}
 }
 
-// An Include is followed, a relative one against the file's own directory,
-// so hosts split across files are all offered.
+// A relative Include in an included file is against the directory of the
+// user's configuration file, as ssh_config(5) reads it, and not against the
+// included file's own directory.
+func TestARelativeIncludeInAnIncludedFileIsAgainstTheConfigurationDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "conf.d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "conf.d"), "work", "Include hosts\nHost farbox\n")
+	write(t, dir, "hosts", "Host labbox\n")
+	path := write(t, dir, "config", "Include conf.d/work\nHost buildbox\n")
+
+	hosts, err := sshconfig.Hosts(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"labbox", "farbox", "buildbox"}; !slices.Equal(hosts, want) {
+		t.Errorf("hosts = %v, want %v", hosts, want)
+	}
+}
+
+// An Include is followed, a relative one against the configuration file's
+// directory, so hosts split across files are all offered.
 func TestHostsFollowIncludes(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "conf.d"), 0o755); err != nil {

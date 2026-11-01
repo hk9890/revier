@@ -100,3 +100,70 @@ func TestOpenNamesAServerThatFailsThePing(t *testing.T) {
 		t.Errorf("Open = %v, want the failed ping", err)
 	}
 }
+
+// Open asks for nothing between the ping that finds the server running and
+// the workspace.create: no listing slows the press or fails it.
+func TestOpenListsNoWorkspacesBeforeItCreatesOne(t *testing.T) {
+	var asked []string
+	h := &herdr.Host{}
+	h.SetProcRoot(t.TempDir())
+	h.SetCaller(func(_ context.Context, method string, _ any) (int, []byte, error) {
+		asked = append(asked, method)
+		if method == "ping" {
+			return 9, []byte(`{"version":"0.9.5"}`), nil
+		}
+		return 9, []byte(`{}`), nil
+	})
+	_, _ = h.Open(context.Background(), revier.Realization{Name: "home", Launch: []string{"sh"}})
+	create := slices.Index(asked, "workspace.create")
+	if create < 0 || slices.Contains(asked[:create], "session.snapshot") {
+		t.Errorf("asked %q, want no session.snapshot before workspace.create", asked)
+	}
+}
+
+// herdr can make the workspace and its answer be lost, the end of the context
+// while it is read. The workspace whose first shell carries what this Open
+// gave the create is closed, since the next press would raise it with herdr's
+// default shell alone in it. A workspace with the same label that another
+// Open made meanwhile, or that was there before, stays.
+func TestOpenClosesTheWorkspaceWhoseAnswerWasLostAlone(t *testing.T) {
+	root := t.TempDir()
+	var closed []string
+	created := false
+	h := &herdr.Host{}
+	h.SetProcRoot(root)
+	h.SetCaller(func(_ context.Context, method string, params any) (int, []byte, error) {
+		switch method {
+		case "ping":
+			return 9, []byte(`{"version":"0.9.5"}`), nil
+		case "session.snapshot":
+			if !created {
+				return 9, []byte(`{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"home"}],
+					"panes":[{"pane_id":"w1:p1","workspace_id":"w1"}]}}`), nil
+			}
+			return 9, []byte(`{"snapshot":{"workspaces":[{"workspace_id":"w1","label":"home"},
+				{"workspace_id":"w2","label":"home"},{"workspace_id":"w3","label":"home"}],
+				"panes":[{"pane_id":"w1:p1","workspace_id":"w1"},{"pane_id":"w2:p1","workspace_id":"w2"},
+				{"pane_id":"w3:p1","workspace_id":"w3"}]}}`), nil
+		case "workspace.create":
+			created = true
+			env, _ := params.(map[string]any)["env"].(map[string]string)
+			for k, v := range env {
+				writeProc(t, root, 300, 9, k+"="+v, "HERDR_PANE_ID=w3:p1")
+				writeProc(t, root, 200, 9, k+"=another-open", "HERDR_PANE_ID=w2:p1")
+			}
+			writeProc(t, root, 100, 9, "HERDR_PANE_ID=w1:p1")
+			return 0, nil, context.DeadlineExceeded
+		case "workspace.close":
+			closed = append(closed, params.(map[string]string)["workspace_id"])
+		}
+		return 9, []byte(`{}`), nil
+	})
+	_, err := h.Open(context.Background(), revier.Realization{Name: "home", Launch: []string{"sh"}})
+	if err == nil {
+		t.Fatal("Open succeeded with no answer to its workspace.create")
+	}
+	if !slices.Equal(closed, []string{"w3"}) {
+		t.Errorf("closed %q, want the workspace this Open made alone", closed)
+	}
+}

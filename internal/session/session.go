@@ -17,6 +17,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -158,31 +159,51 @@ func NewID(at time.Time) string { return at.Format("2006-01-02T15-04-05") }
 // Save writes the session, and returns it as stored together with the file it
 // wrote. The id on s is ignored: Save assigns one from At, suffixing it when a
 // session of that second already exists, so two saves in one second do not
-// silently become one. It is returned rather than only written because the id
-// is what the caller has to print and the caller cannot predict the suffix.
+// silently become one, also when they run at once. It is returned rather than
+// only written because the id is what the caller has to print and the caller
+// cannot predict the suffix.
 func Save(stateRoot string, s Session) (Session, string, error) {
 	dir := Dir(stateRoot)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	id, path := free(dir, s.At)
+	id, path, err := claim(dir, s.At)
+	if err != nil {
+		return Session{}, "", fmt.Errorf("save session %s: %w", id, err)
+	}
 	s.ID = id
 	if err := write(path, s); err != nil {
+		_ = os.Remove(path)
 		return Session{}, "", err
 	}
 	return s, path, nil
 }
 
-// free is the id of a session saved at at that no file in dir has yet, and
-// its file.
-func free(dir string, at time.Time) (string, string) {
+// claim gives a session saved at at the first id that no file in dir has, and
+// returns it with its file, created empty: the caller fills it by a rename
+// over it, and removes it when it cannot. The name is taken by the create
+// itself, which fails when another file holds it, and is never checked before
+// it: between a check and a later rename a save that runs at once takes the
+// same name, and the second rename replaces the first session. A create takes
+// it on every filesystem, where a hard link does not. List reads an empty file
+// as no session, so a reader in between sees none.
+func claim(dir string, at time.Time) (string, string, error) {
 	base := NewID(at)
-	id, path := base, filepath.Join(dir, base+".toml")
-	for n := 2; exists(path); n++ {
-		id = fmt.Sprintf("%s-%d", base, n)
-		path = filepath.Join(dir, id+".toml")
+	for n := 1; ; n++ {
+		id := base
+		if n > 1 {
+			id = fmt.Sprintf("%s-%d", base, n)
+		}
+		path := filepath.Join(dir, id+".toml")
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return id, path, err
+		}
+		return id, path, f.Close()
 	}
-	return id, path
 }
 
 func write(path string, s Session) error {
@@ -190,8 +211,9 @@ func write(path string, s Session) error {
 	if err := toml.NewEncoder(&b).Encode(s); err != nil {
 		return fmt.Errorf("encode session: %w", err)
 	}
-	// Whole or not at all: Rename writes every stored session through here,
-	// and a session cut short by a crash is one List drops without a word.
+	// Whole or not at all: Save and Rename write every stored session through
+	// here, and a session cut short by a crash is one List drops without a
+	// word.
 	if err := fsutil.WriteFile(path, []byte(b.String()), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
@@ -276,9 +298,10 @@ func LoadSeen(stateRoot string) (Session, error) {
 
 // PromoteSeen moves what a surface last saw into the stored sessions, as a
 // session of its own moment, and returns it as stored together with the file
-// it is now. A move is one step, so of two surfaces that start at once one
-// takes the file and the other gets ErrNoSession: what it would offer is
-// offered already.
+// it is now. It takes a free name as Save does, so it replaces no session
+// saved in the same second, and moves the file onto it in one step, so of two
+// surfaces that start at once one takes it and the other gets ErrNoSession:
+// what it would offer is offered already.
 func PromoteSeen(stateRoot string) (Session, string, error) {
 	s, err := LoadSeen(stateRoot)
 	if err != nil {
@@ -288,8 +311,12 @@ func PromoteSeen(stateRoot string) (Session, string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Session{}, "", fmt.Errorf("create session directory: %w", err)
 	}
-	id, path := free(dir, s.At)
+	id, path, err := claim(dir, s.At)
+	if err != nil {
+		return Session{}, "", fmt.Errorf("promote what was last seen to %s: %w", id, err)
+	}
 	if err := os.Rename(SeenPath(stateRoot), path); err != nil {
+		_ = os.Remove(path)
 		return Session{}, "", taken(err)
 	}
 	s.ID = id
@@ -362,6 +389,8 @@ func Newest(all []Session) (Session, bool) {
 
 // List reads every stored session, newest first. A file that does not parse is
 // skipped rather than fatal: one hand-edited session must not hide the rest.
+// An empty file is skipped too: it is a name a save holds and has not filled
+// yet, or one a crash left empty.
 func List(stateRoot string) ([]Session, error) {
 	entries, err := os.ReadDir(Dir(stateRoot))
 	if err != nil {
@@ -375,8 +404,12 @@ func List(stateRoot string) ([]Session, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
+		data, err := os.ReadFile(filepath.Join(Dir(stateRoot), e.Name()))
+		if err != nil || len(data) == 0 {
+			continue
+		}
 		var s Session
-		if _, err := toml.DecodeFile(filepath.Join(Dir(stateRoot), e.Name()), &s); err != nil {
+		if _, err := toml.Decode(string(data), &s); err != nil {
 			continue
 		}
 		if s.ID == "" {
@@ -438,9 +471,4 @@ func (s Session) SameAs(o Session) bool {
 			return x.Name == y.Name && slices.Equal(x.Agents, y.Agents)
 		})
 	})
-}
-
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

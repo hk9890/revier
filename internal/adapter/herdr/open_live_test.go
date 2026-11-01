@@ -267,3 +267,46 @@ func TestOpenStartsTheServerWhenNoneRuns(t *testing.T) {
 		t.Errorf("instances = %+v, %v; want the workspace Open made", got, err)
 	}
 }
+
+// herdr starts a new workspace's first shell with the variables the create
+// names, so the mark an Open gives its create finds its workspace alone, and
+// not one another Open made under the same label.
+func TestTheMarkOfAnOpenClosesItsWorkspaceAlone(t *testing.T) {
+	h, c := server(t), ctx(t)
+	for _, mark := range []string{"mine", "another-open"} {
+		params := map[string]any{"label": "home", "focus": false, "env": map[string]string{herdr.OpenVar: mark}}
+		if err := h.Request(c, "workspace.create", params, nil); err != nil {
+			t.Fatalf("workspace.create: %v", err)
+		}
+	}
+	workspaces := func() []string {
+		var res struct {
+			Snapshot struct {
+				Workspaces []struct {
+					ID string `json:"workspace_id"`
+				} `json:"workspaces"`
+			} `json:"snapshot"`
+		}
+		if err := h.Request(c, "session.snapshot", struct{}{}, &res); err != nil {
+			t.Fatalf("session.snapshot: %v", err)
+		}
+		var ids []string
+		for _, w := range res.Snapshot.Workspaces {
+			ids = append(ids, w.ID)
+		}
+		return ids
+	}
+	made := workspaces()
+	if len(made) != 2 {
+		t.Fatalf("workspaces = %q, want the two made", made)
+	}
+	// The shell herdr starts may not have read its environment in yet.
+	deadline := time.Now().Add(5 * time.Second)
+	for len(workspaces()) == 2 && time.Now().Before(deadline) {
+		h.CloseMarked(c, "mine")
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := workspaces(); !slices.Equal(got, made[1:]) {
+		t.Errorf("workspaces = %q, want %q, the other Open's, alone", got, made[1:])
+	}
+}

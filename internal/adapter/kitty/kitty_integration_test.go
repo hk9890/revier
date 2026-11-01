@@ -67,7 +67,8 @@ func host(t *testing.T, sockets ...string) (*kitty.Host, *recorder) {
 }
 
 func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
-	h, _ := host(t, "unix:@kitty-4000")
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	h, _ := host(t, "unix:/run/user/1000/kitty-4000")
 	got, err := h.Instances(context.Background())
 	if err != nil {
 		t.Fatalf("Instances: %v", err)
@@ -91,8 +92,8 @@ func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
 	if legacy.PID != 4000 {
 		t.Errorf("unnamed window pid = %d, want 4000: it is how the core pairs it", legacy.PID)
 	}
-	if ws.Ref.Host != "kitty" || ws.Ref.ID != "@kitty-4000/2" {
-		t.Errorf("ref = %+v, want kitty/@kitty-4000/2: the socket rides in the id", ws.Ref)
+	if ws.Ref.Host != "kitty" || ws.Ref.ID != "/run/user/1000/kitty-4000/2" {
+		t.Errorf("ref = %+v, want kitty//run/user/1000/kitty-4000/2: the socket rides in the id", ws.Ref)
 	}
 	if ws.PID != 4000 {
 		t.Errorf("pid = %d, want 4000 from the socket name", ws.PID)
@@ -411,7 +412,7 @@ func TestOpenTabMarksEveryWindowOfTheTab(t *testing.T) {
 
 // A plain shell tab, the one a key opens outside a workspace, is kitty's own
 // shell: it is launched without --hold, so its window closes when the shell
-// exits instead of waiting for a key.
+// exits instead of showing a new shell prompt.
 func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
 	if _, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
@@ -429,6 +430,52 @@ func TestOpenTabOfAPlainShellDoesNotHold(t *testing.T) {
 	want := []string{"launch --type=tab --location=last --match window_id:4 --keep-focus --cwd /home/user"}
 	if !slices.Equal(launches, want) {
 		t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A shell panel of a workspace Open builds is kitty's own shell too, as the
+// first panel and as a later one: it is launched without --hold, so `exit`
+// closes its window. A panel with a command keeps --hold, so its output stays
+// readable after it ends.
+func TestOpenHoldsOnlyAPanelWithACommand(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		panels []revier.PanelSpec
+		want   []string
+	}{
+		{"shell first", []revier.PanelSpec{{Kind: revier.PanelShell}, {Kind: revier.PanelAgent, Command: []string{"claude"}}}, []string{
+			"launch --type=os-window --os-window-name session:demo --os-window-title session:demo",
+			"launch --type=window --match window_id:7 --hold claude",
+		}},
+		{"shell later", []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}, []string{
+			"launch --type=os-window --os-window-name session:demo --os-window-title session:demo --hold claude",
+			"launch --type=window --match window_id:7",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHost()
+			var launches []string
+			h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
+			h.SetRunner(func(_ context.Context, _, _ string, args ...string) ([]byte, error) {
+				if args[0] == "launch" {
+					launches = append(launches, strings.Join(args, " "))
+					if slices.Contains(args, "--type=os-window") {
+						return []byte("7\n"), nil
+					}
+					return []byte("8\n"), nil
+				}
+				return json.Marshal([]map[string]any{{"id": 1, "wm_name": "session:demo",
+					"tabs": []map[string]any{{"windows": []map[string]any{{"id": 7}, {"id": 8}}}}}})
+			})
+			if _, err := h.Open(context.Background(), revier.Realization{
+				Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Panels: tc.panels,
+			}); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			if !slices.Equal(launches, tc.want) {
+				t.Errorf("launches =\n%s\nwant\n%s", strings.Join(launches, "\n"), strings.Join(tc.want, "\n"))
+			}
+		})
 	}
 }
 
@@ -648,6 +695,94 @@ func TestOpenWithoutPanelsLaunchesTheArgv(t *testing.T) {
 	}
 }
 
+// An Open whose launch, title or closing ls fails closes the OS window it
+// opened, every window in it: left running, the half-built OS window carries
+// the workspace's name, and the next press would raise it, an agent with no
+// shell beside it. A launch can fail after kitty made the window, when the end
+// of the press's context ends kitten before kitty's answer, so the OS window
+// is found by its name and not by the window ids Open got back. An OS window
+// of that name that was there before the launch, as one another press opened,
+// is not Open's. The failing step can be the end of the context, so the close
+// has a context of its own.
+func TestOpenClosesTheOSWindowItOpenedWhenAStepFails(t *testing.T) {
+	for _, tc := range []struct {
+		fail  string
+		close string
+	}{
+		{"launch --type=os-window", "close-window --match id:7"},
+		{"set-window-title", "close-window --match id:7"},
+		{"launch --type=window", "close-window --match id:7 or id:8"},
+		{"ls", "close-window --match id:7 or id:8"},
+	} {
+		t.Run(tc.fail, func(t *testing.T) {
+			h := newHost()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
+			type osWin struct {
+				id      int
+				name    string
+				windows []int
+			}
+			kitty := []*osWin{{1, "revier-kitty", []int{1}}, {2, "session:demo", []int{5}}}
+			nextWindow := 7
+			var calls []string
+			lists, failed := 0, false
+			h.SetRunner(func(ctx context.Context, _, _ string, args ...string) ([]byte, error) {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				joined := strings.Join(args, " ")
+				calls = append(calls, joined)
+				var out []byte
+				switch args[0] {
+				case "ls":
+					lists++
+					var listing []map[string]any
+					for _, w := range kitty {
+						var windows []map[string]any
+						for _, id := range w.windows {
+							windows = append(windows, map[string]any{"id": id})
+						}
+						listing = append(listing, map[string]any{"id": w.id, "wm_name": w.name,
+							"tabs": []map[string]any{{"windows": windows}}})
+					}
+					out, _ = json.Marshal(listing)
+				case "launch":
+					id := nextWindow
+					nextWindow++
+					if slices.Contains(args, "--type=os-window") {
+						kitty = append(kitty, &osWin{3, "session:demo", []int{id}})
+					} else {
+						kitty[2].windows = append(kitty[2].windows, id)
+					}
+					out = []byte(strconv.Itoa(id) + "\n")
+				}
+				// The answering ls before the launch is not the step that fails.
+				if !failed && strings.HasPrefix(joined, tc.fail) && (args[0] != "ls" || lists > 1) {
+					failed = true
+					cancel()
+					return nil, errors.New("kitty went away")
+				}
+				return out, nil
+			})
+			_, err := h.Open(ctx, revier.Realization{
+				Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+				Panels: []revier.PanelSpec{
+					{Kind: revier.PanelAgent, Title: "agent", Command: []string{"claude"}},
+					{Kind: revier.PanelShell, Title: "shell"},
+				},
+			})
+			if err == nil || !strings.Contains(err.Error(), "kitty went away") {
+				t.Fatalf("err = %v, want the failing step's error", err)
+			}
+			if got := calls[len(calls)-1]; got != tc.close {
+				t.Errorf("last call = %q, want %q: the half-built OS window stays open\ncalls: %q", got, tc.close, calls)
+			}
+		})
+	}
+}
+
 // The vars the core gives an Open become user vars of every window it opens,
 // the first included, which is how the panel a return home lands in is found
 // again. Each launch carries them as --var, so no window opens unmarked and
@@ -679,7 +814,7 @@ func TestOpenMarksEveryWindowWithItsVars(t *testing.T) {
 	}
 	for _, want := range []string{
 		"launch --type=os-window --os-window-name session:demo --os-window-title session:demo --hold --var revier_home=home claude",
-		"launch --type=window --match window_id:7 --hold --var revier_home=home",
+		"launch --type=window --match window_id:7 --var revier_home=home",
 	} {
 		if !slices.Contains(calls, want) {
 			t.Errorf("calls = %q, want %q among them", calls, want)
@@ -1017,14 +1152,20 @@ func TestFindPanelListsNothing(t *testing.T) {
 
 // A tab whose second launch fails closes the window its first launch opened:
 // the core names that agent as not added, and it must not run on in a tab
-// without its shell.
+// without its shell. The failing step can be the end of the press's context,
+// so the close has a context of its own.
 func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
 	h := newHost()
 	rec := &recorder{}
 	raw := fixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
 	launches := 0
-	h.SetRunner(func(_ context.Context, socket, _ string, args ...string) ([]byte, error) {
+	h.SetRunner(func(ctx context.Context, socket, _ string, args ...string) ([]byte, error) {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		rec.add(socket, args)
 		switch args[0] {
 		case "ls":
@@ -1032,12 +1173,13 @@ func TestOpenTabClosesWhatItOpenedWhenALaunchFails(t *testing.T) {
 		case "launch":
 			launches++
 			if launches == 2 {
+				cancel()
 				return nil, errors.New("kitty went away")
 			}
 		}
 		return []byte("9\n"), nil
 	})
-	_, err := h.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
+	_, err := h.OpenTab(ctx, revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}, revier.Realization{
 		Panels: []revier.PanelSpec{
 			{Kind: revier.PanelAgent, Command: []string{"claude", "--resume", "b"}},
 			{Kind: revier.PanelShell},
