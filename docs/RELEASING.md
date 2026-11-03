@@ -11,6 +11,11 @@ One setting that looks wrong and is not: cosign is pinned to **v2.6.5**
 because v3 defaults to `--new-bundle-format`, which the `--output-signature`
 and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 
+GoReleaser is pinned in three places: `release.yml`, the `goreleaser check`
+step of `.github/workflows/ci.yml`, and the `go install` line of
+[Local fallback](#local-fallback). Bump all three in one change; no check
+compares them.
+
 ## Cut a release
 
 `mise run quality:full` gates every step. Drive the binary per
