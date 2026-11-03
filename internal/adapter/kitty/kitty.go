@@ -512,7 +512,7 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 	if pid == 0 {
 		pid = w.PID
 	}
-	vars := w.UserVars
+	vars := maps.Clone(w.UserVars)
 	delete(vars, openVar)
 	return revier.Panel{
 		ID:      revier.PanelID(strconv.Itoa(w.ID)),
@@ -654,10 +654,11 @@ func isRunShell(cmdline []string) bool {
 //
 // A step that fails closes the OS window Open opened, every window in it:
 // left running, it carries r.Name and would be matched, as an agent with no
-// shell beside it. It is found by its mark: a launch that failed may have made
-// its window all the same, when the end of ctx ended kitten before kitty
-// answered, and another Open of the same realization can make an OS window of
-// the same name meanwhile.
+// shell beside it. It is the OS window that holds a window with Open's mark: a
+// launch that failed may have made its window all the same, when the end of
+// ctx ended kitten before kitty answered, and another Open of the same
+// realization can make an OS window of the same name meanwhile. A window
+// opened in it by hand goes with it.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
@@ -671,18 +672,41 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err != nil {
 		// Best effort: the error that failed the OS window is the one worth
 		// reporting.
-		h.closeMarked(ctx, socket, mark)
+		h.closeMarked(ctx, socket, mark, true)
 		return revier.TargetRef{}, err
 	}
 	return ref, nil
 }
 
-// closeMarked closes every window that carries mark in openVar. The close has
-// a bound of its own: the end of ctx may be what failed the step.
-func (h *Host) closeMarked(ctx context.Context, socket, mark string) {
+// closeMarked closes every window that carries mark in openVar, and with
+// whole every other window of an OS window that holds one too. Where the
+// listing fails, the marked windows still close. The close has a bound of its
+// own: the end of ctx may be what failed the step.
+func (h *Host) closeMarked(ctx context.Context, socket, mark string, whole bool) {
 	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_, _ = h.kitten(closing, socket, "close-window", "--match", "var:"+openVar+"="+mark)
+	match := []string{"var:" + openVar + "=^" + mark + "$"}
+	if whole {
+		windows, _ := h.ls(closing, socket)
+		for _, w := range windows {
+			if holdsMark(w, mark) {
+				match = append(match, windowMatches(w)...)
+			}
+		}
+	}
+	_, _ = h.kitten(closing, socket, "close-window", "--match", strings.Join(match, " or "))
+}
+
+// holdsMark says whether a window of the OS window carries mark in openVar.
+func holdsMark(w osWindow, mark string) bool {
+	for _, t := range w.Tabs {
+		for _, win := range t.Windows {
+			if win.UserVars[openVar] == mark {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // newMark is a value for openVar that no other Open or OpenTab uses.
@@ -961,7 +985,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	panel, err := h.openTab(ctx, socket, win, focused, r, vars, mark)
 	if err != nil {
 		// Best effort: the launch error is the one worth reporting.
-		h.closeMarked(ctx, socket, mark)
+		h.closeMarked(ctx, socket, mark, false)
 		return "", err
 	}
 	return panel, nil

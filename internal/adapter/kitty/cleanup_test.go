@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -95,7 +96,8 @@ func (k *statefulKitty) launch(args []string) int {
 }
 
 // close closes the windows a match of `id:` and `var:` terms joined by "or"
-// names.
+// names. A `var:` term names a window that has the var, with a value the
+// term's regular expression finds, unanchored, as kitty reads it.
 func (k *statefulKitty) close(match string) {
 	matches := func(x fakeWindow) bool {
 		for _, term := range strings.Split(match, " or ") {
@@ -103,8 +105,8 @@ func (k *statefulKitty) close(match string) {
 				return true
 			}
 			if v, ok := strings.CutPrefix(term, "var:"); ok {
-				name, value, _ := strings.Cut(v, "=")
-				if x.vars[name] == value {
+				name, pattern, _ := strings.Cut(v, "=")
+				if value, ok := x.vars[name]; ok && regexp.MustCompile(pattern).MatchString(value) {
 					return true
 				}
 			}
@@ -172,7 +174,7 @@ func TestOpenClosesTheOSWindowItOpenedWhenAStepFails(t *testing.T) {
 				if args[0] == "launch" && slices.Contains(args, "--type=os-window") {
 					// Another press opens the same workspace meanwhile.
 					k.osWindows = append(k.osWindows, &fakeOSWindow{id: 3, name: "session:demo",
-						windows: []fakeWindow{{id: 6, vars: map[string]string{"REVIER_KITTY_OPEN": "other"}}}})
+						windows: []fakeWindow{{id: 6, vars: map[string]string{"REVIER_KITTY_OPEN": "MM"}}}})
 				}
 				return k.run(ctx, socket, stdin, args...)
 			})
@@ -191,6 +193,46 @@ func TestOpenClosesTheOSWindowItOpenedWhenAStepFails(t *testing.T) {
 				t.Errorf("windows left = %v, want %v: Open's own closed, and no other's\ncalls: %q", got, want, k.calls)
 			}
 		})
+	}
+}
+
+// A window opened by hand in the OS window a failed Open half built goes with
+// it: left running, it keeps the OS window and its name, and the next press
+// would raise the half-built workspace.
+func TestAFailedOpenClosesAWindowOpenedByHandInItsOSWindow(t *testing.T) {
+	h := newHost()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.SetSockets(func() []string { return []string{"unix:/run/user/1000/revier-kitty-4000"} })
+	k := &statefulKitty{nextWindow: 7, osWindows: []*fakeOSWindow{
+		{id: 1, name: "revier-kitty", windows: []fakeWindow{{id: 1}}},
+	}}
+	k.fail = func(args []string) bool {
+		if !slices.Contains(args, "--type=window") {
+			return false
+		}
+		cancel()
+		return true
+	}
+	h.SetRunner(func(ctx context.Context, socket, stdin string, args ...string) ([]byte, error) {
+		if args[0] == "set-window-title" {
+			// The user opens a window in the new OS window meanwhile.
+			k.osWindows[1].windows = append(k.osWindows[1].windows, fakeWindow{id: 50})
+		}
+		return k.run(ctx, socket, stdin, args...)
+	})
+	_, err := h.Open(ctx, revier.Realization{
+		Name: "session:demo", Match: revier.Match{Title: "^session:demo$"},
+		Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Title: "agent", Command: []string{"claude"}},
+			{Kind: revier.PanelShell, Title: "shell"},
+		},
+	})
+	if err == nil {
+		t.Fatal("Open succeeded, want the failing launch's error")
+	}
+	if got, want := k.windowIDs(), map[int][]int{1: {1}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("windows left = %v, want %v: the half-built OS window closed whole\ncalls: %q", got, want, k.calls)
 	}
 }
 
