@@ -11,6 +11,8 @@ func (h *Host) SetRunner(f func(ctx context.Context, socket, stdin string, args 
 
 func (h *Host) SetSockets(f func() []string) { h.sockets = f }
 
+func (h *Host) SetMark(f func() string) { h.mark = f }
+
 func (h *Host) SetStarter(f func(ctx context.Context, args ...string) error) { h.start = f }
 
 // StartProcess runs the real start of the workspace kitty, for the L4 test

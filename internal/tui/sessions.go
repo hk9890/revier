@@ -197,10 +197,15 @@ func (m Model) nameSession() (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// saved takes a save's answer.
+// saved takes a save's answer. A dialog after an end with no shutdown still
+// held back goes once the save is made: it would offer an older session than
+// the one just saved, which a start does not (decisions.md D150).
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.saved(m.stateRoot, *m.theme, msg); err != nil {
 		m.err = err
+	}
+	if msg.err == nil {
+		m.uncleanOffer = nil
 	}
 	return m, nil
 }
