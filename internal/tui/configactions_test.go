@@ -133,3 +133,127 @@ func TestTheConfigScreenRefusesATakenKey(t *testing.T) {
 		}
 	}
 }
+
+const syncBuildConfig = `[[action]]
+key = "ctrl+g"
+name = "sync"
+run = ["git", "pull"]
+
+[[action]]
+key = "ctrl+b"
+name = "build"
+run = ["make"]
+`
+
+var buildAction = config.Action{Key: "ctrl+b", Name: "build", Run: []string{"make"}}
+
+// renamedBuild is the action form, open on build, given a new name and key
+// and saved.
+func renamedBuild(m tui.Model) tui.Model {
+	m = typeInto(clearField(m), "compile")
+	m, _ = press(m, "tab")
+	m, _ = press(m, "tab")
+	m = typeInto(clearField(m), "alt+y")
+	m, _ = press(m, "enter")
+	return m
+}
+
+// The form saves to the action it was opened on, also when config.toml got
+// an action above it while the surface was away: the action now at the
+// form's old place is not overwritten.
+func TestTheActionFormSavesToItsActionAfterOneIsAddedAbove(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 1), "enter")
+	lint := "[[action]]\nkey = \"ctrl+l\"\nname = \"lint\"\nrun = [\"lint\"]\n\n"
+	m = rewritten(t, m, root, lint+syncBuildConfig)
+	renamedBuild(m)
+
+	want := lint + strings.Replace(strings.Replace(syncBuildConfig, `"ctrl+b"`, `"alt+y"`, 1), `"build"`, `"compile"`, 1)
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// The form saves to the action it was opened on when the list shrank to the
+// form's old place: the edit is not added as a second action.
+func TestTheActionFormSavesToItsActionAfterOneAboveIsRemoved(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 1), "enter")
+	build := "[[action]]\nkey = \"ctrl+b\"\nname = \"build\"\nrun = [\"make\"]\n"
+	m = rewritten(t, m, root, build)
+	renamedBuild(m)
+
+	if got, want := fileText(t, config.File(root)), "[[action]]\nkey = \"alt+y\"\nname = \"compile\"\nrun = [\"make\"]\n"; got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// An action that left config.toml while its form was open is not written:
+// the footer says so, and the form stays with what was typed.
+func TestTheActionFormRefusesAnActionThatIsGone(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 1), "enter")
+	m = rewritten(t, m, root, "")
+	m = renamedBuild(m)
+
+	if got := fileText(t, config.File(root)); got != "" {
+		t.Errorf("config.toml = %q, want it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `action "build" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the action is gone", f)
+	}
+	if !strings.Contains(screen(m), "compile") {
+		t.Errorf("the form is gone, or lost what was typed:\n%s", screen(m))
+	}
+}
+
+// y answers the question for the action it was asked about, also when
+// config.toml got an action above it while the question waited: the action
+// now under the cursor is not deleted.
+func TestTheDeleteQuestionDeletesItsActionAfterOneIsAddedAbove(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 1), "alt+d")
+	lint := "[[action]]\nkey = \"ctrl+l\"\nname = \"lint\"\nrun = [\"lint\"]\n\n"
+	m = rewritten(t, m, root, lint+syncBuildConfig)
+	if f := footer(m); !strings.Contains(f, `delete action "build"`) {
+		t.Errorf("footer = %q, want the question about build", f)
+	}
+	press(m, "y")
+
+	want := lint + "[[action]]\nkey = \"ctrl+g\"\nname = \"sync\"\nrun = [\"git\", \"pull\"]\n"
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// An action that left config.toml while the question waited is not
+// deleted, nor is the one now in its place: the footer says it is gone.
+func TestTheDeleteQuestionRefusesAnActionThatIsGone(t *testing.T) {
+	root := configRoot(t, syncBuildConfig)
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction, buildAction}), 120, 30)
+
+	m, _ = press(onActionRow(m, 0), "alt+d")
+	build := "[[action]]\nkey = \"ctrl+b\"\nname = \"build\"\nrun = [\"make\"]\n"
+	m = rewritten(t, m, root, build)
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); got != build {
+		t.Errorf("config.toml = %q, want it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `action "sync" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the action is gone", f)
+	}
+}

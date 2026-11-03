@@ -50,8 +50,12 @@ func cmdSession(ctx context.Context, a *app, args []string) error {
 func cmdSessionSave(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("session save", flag.ContinueOnError)
 	name := fs.String("name", "", "label this session")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return errors.New("usage: revier session save [--name <label>]")
 	}
 	report, err := a.core.Survey(ctx, a.projects)
 	if err != nil {
@@ -200,8 +204,12 @@ func printRestored(out io.Writer, rs core.Restored) error {
 func cmdSessionList(a *app, args []string) error {
 	fs := flag.NewFlagSet("session list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the sessions as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return errors.New("usage: revier session list [--json]")
 	}
 	all, err := session.List(a.stateRoot)
 	if err != nil {

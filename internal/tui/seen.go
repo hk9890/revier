@@ -91,7 +91,7 @@ func (m Model) recover() tea.Cmd {
 
 // takeRecovered takes the check's answer: what was last seen is written from
 // now on, and an end that lost something is offered on the start dialog
-// over the plain surface. What was last seen is written again whole, since
+// once the surface is plain. What was last seen is written again whole, since
 // the check may have taken the file. A check that failed is asked again at
 // the next survey, and nothing is written until one answers: a write would
 // replace what the end before left with what is open now.
@@ -102,7 +102,18 @@ func (m *Model) takeRecovered(msg recoveredMsg) {
 		return
 	}
 	m.recovered, m.seen = true, session.Session{}
-	if msg.ok && m.plain() {
-		m.openUnclean(msg.offer)
+	if msg.ok {
+		m.uncleanOffer = &msg.offer
+		m.offerUnclean()
+	}
+}
+
+// offerUnclean puts the dialog after an end with no shutdown up once the
+// surface is plain. A screen, a query, a question or a walk the user is in
+// holds it back, not away: the next state read offers it again.
+func (m *Model) offerUnclean() {
+	if m.uncleanOffer != nil && m.plain() {
+		m.openUnclean(*m.uncleanOffer)
+		m.uncleanOffer = nil
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,6 +175,9 @@ func agentWait(out io.Writer, args []string, open func(context.Context, io.Write
 	}
 	if *timeout < 0 {
 		return fmt.Errorf("--timeout must not be negative")
+	}
+	if math.IsNaN(*timeout) || *timeout >= time.Duration(math.MaxInt64).Seconds() {
+		return fmt.Errorf("--timeout %g is not a number of seconds revier can wait; 0 waits for good", *timeout)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	if *timeout > 0 {

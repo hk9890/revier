@@ -71,6 +71,11 @@ type compiledTarget struct {
 	// target keeps its place in the project so the surface can name it and
 	// say why, and every lookup fails closed on it through resolveAt.
 	err error
+
+	// renderErr is the template failure alone, for the rules that read a
+	// rendered value: a target whose templates did not render carries them
+	// as written.
+	renderErr error
 }
 
 // refuse records why a target cannot be used and leaves it matching nothing.
@@ -87,6 +92,11 @@ func (c *compiledTarget) refuse(err error) {
 
 // TargetErr is why the i-th target cannot be used, or nil when it can.
 func (p Project) TargetErr(i int) error { return p.compiled[i].err }
+
+// RenderErr is why the i-th target's templates did not render, or nil when
+// they did. A target that rendered and then failed to compile has its
+// realizations rendered all the same.
+func (p Project) RenderErr(i int) error { return p.compiled[i].renderErr }
 
 // Refuse records that a rule refused the i-th target. config calls it for the
 // rules it checks before a project is prepared, so that a refusal and a
@@ -131,6 +141,7 @@ func PrepareProject(p revier.Project) Project {
 			// The realizations are as written, not as rendered: a match
 			// compiled from an unrendered pattern would match by accident.
 			compiled[i].refuse(errs[i])
+			compiled[i].renderErr = errs[i]
 			continue
 		}
 		// A command target has no instance to match. Both its matches match

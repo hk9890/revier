@@ -93,13 +93,17 @@ func shutDownState() *state.State {
 
 // ctrl+c on `revier shutdown` lets the step that runs finish, reaches no
 // other, says how much it left, and takes the full shutdown off the record:
-// what it did not reach is still open.
+// what it did not reach is still open, so the command fails.
 func TestACtrlCStopsTheShutdownAfterTheStepThatRuns(t *testing.T) {
 	a, rt := demoDesktop(t, &state.State{}, "home", "diff")
 	cancel, _ := interruptedBy(t)
 	rt.OnClose = func(revier.TargetRef) { cancel() }
 
-	out := output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	var err error
+	out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })
+	if !errors.Is(err, errShutdownIncomplete) {
+		t.Errorf("err = %v, want the shutdown incomplete", err)
+	}
 	if len(rt.Closed) != 1 {
 		t.Errorf("closed %v, want the step that ran alone", rt.Closed)
 	}
@@ -149,14 +153,15 @@ func TestASecondCtrlCTakesTheFullShutdownOffTheRecord(t *testing.T) {
 		}
 	}
 
-	output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	output(t, a, func() error { _ = cmdShutdown(context.Background(), a, nil); return nil })
 	if want := []bool{true, false}; !slices.Equal(onRecord, want) {
 		t.Errorf("on record before and after the second ctrl+c = %v, want %v", onRecord, want)
 	}
 }
 
 // A second ctrl+c before `revier shutdown` wrote its record takes nothing
-// back: the record of an earlier full shutdown stays.
+// back: the record of an earlier full shutdown stays. The command fails, as
+// nothing closed.
 func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
 	a, rt := demoDesktop(t, shutDownState(), "home", "diff")
 	earlier := *a.core.Ledger.State().ShutDown
@@ -171,9 +176,13 @@ func TestASecondCtrlCBeforeTheRecordKeepsAnEarlierOne(t *testing.T) {
 		}
 	}
 
-	output(t, a, func() error { return cmdShutdown(context.Background(), a, nil) })
+	var err error
+	output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })
 	if listed < 2 {
 		t.Fatalf("the runtime was listed %d times, want the recheck to list it", listed)
+	}
+	if !errors.Is(err, errShutdownIncomplete) {
+		t.Errorf("err = %v, want the shutdown incomplete", err)
 	}
 	if len(rt.Closed) != 0 {
 		t.Errorf("closed %v, want nothing", rt.Closed)

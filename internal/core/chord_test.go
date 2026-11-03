@@ -36,6 +36,10 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 		{"<Alt>+", "alt+plus"},
 		{"<Alt>-", "alt+minus"},
 		{"ctrl-minus", "ctrl+minus"},
+		{"ctrl++", "ctrl+plus"},
+		{"alt+-", "alt+minus"},
+		{"ctrl--", "ctrl+minus"},
+		{"ctrl-shift-+", "ctrl+shift+plus"},
 		{"<Mod4>q", "super+q"},
 		{"<Alt>F4", "alt+f4"},
 		{"f12", "f12"},
@@ -56,7 +60,7 @@ func TestParseChordAcceptsEverySpelling(t *testing.T) {
 // different chords compare equal, which reports a key as held when it is not.
 func TestParseChordRejectsWhatItCannotRead(t *testing.T) {
 	for _, in := range []string{
-		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "<Alt>",
+		"", "   ", "<Hyper", "u<Alt>", "<Nonsense>u", "ctrl-", "ctrl+", "<Alt>",
 		"alt-ä", "<Alt>a+b", "<Alt>page-up",
 	} {
 		if got, err := core.ParseChord(in); err == nil {
@@ -160,10 +164,12 @@ func TestTheChordATerminalReports(t *testing.T) {
 	}
 }
 
-// Typed text is one character, alone or shifted: what a filter takes.
+// Typed text is one character, alone or shifted: what a filter takes. + and
+// - are characters too, though a chord spells them by name.
 func TestTypedChords(t *testing.T) {
 	for c, want := range map[core.Chord]bool{
 		"o": true, "shift+o": true, "ctrl+o": false, "alt+o": false, "f5": false, "shift+f5": false,
+		"plus": true, "minus": true, "shift+plus": true, "ctrl+plus": false, "alt+minus": false,
 	} {
 		if got := c.Typed(); got != want {
 			t.Errorf("Chord(%q).Typed() = %v, want %v", c, got, want)

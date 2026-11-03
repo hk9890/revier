@@ -240,6 +240,7 @@ type Workspace struct {
 	Target  revier.TargetName
 	Ref     revier.TargetRef
 	snap    snapshot
+	failed  hostErrs
 }
 
 // AddressIn is the address of the panel a tab opened in the workspace w: the
@@ -279,15 +280,15 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 	if err != nil {
 		return Workspace{}, err
 	}
-	snap, err := c.answered(ctx, host.Name())
-	if err != nil {
+	snap, failed := c.listing(ctx)
+	if err := failed[host.Name()]; err != nil {
 		return Workspace{}, err
 	}
 	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
 		return Workspace{}, fmt.Errorf("%s:%s: %w", p.Name, name, ErrNotOpen)
 	}
-	return Workspace{Project: p, Target: name, Ref: inst.Ref, snap: snap}, nil
+	return Workspace{Project: p, Target: name, Ref: inst.Ref, snap: snap, failed: failed}, nil
 }
 
 // PanelOwner finds the project, target and open instance that hold a panel,
@@ -313,13 +314,14 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 	if c.Runtime == nil {
 		return Workspace{}, fmt.Errorf("%w: no runtime holds panels", ErrNoHost)
 	}
-	snap, err := c.answered(ctx, c.Runtime.Name())
-	if err != nil {
+	snap, failed := c.listing(ctx)
+	if err := failed[c.Runtime.Name()]; err != nil {
 		return Workspace{}, err
 	}
 	instances := snap[c.Runtime.Name()]
 	var ref revier.TargetRef
 	if finder, ok := c.Runtime.(revier.PanelFinder); ok {
+		var err error
 		if ref, err = finder.FindPanel(instances, panel); err != nil {
 			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.Runtime.Name(), panel, err)
 		}
@@ -350,7 +352,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 			if inst, ok := c.locate(snap, p, i, host, m, bound[p.Name][t.Name]); !ok || key(inst.Ref) != key(ref) {
 				continue
 			}
-			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap}
+			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap, failed: failed}
 			layout, err := c.layout(p, real)
 			if err != nil {
 				continue
@@ -364,7 +366,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if owner.Ref.IsZero() {
-		return Workspace{Ref: ref, snap: snap}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
+		return Workspace{Ref: ref, snap: snap, failed: failed}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 	}
 	return owner, nil
 }
@@ -645,7 +647,7 @@ func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revie
 	if focus {
 		inst, _ := byRef(w.snap, w.Ref)
 		var err error
-		if osw, err = c.raisable(w.snap, inst, w.Target); err != nil {
+		if osw, err = c.raisable(w.snap, w.failed, inst, w.Target); err != nil {
 			return "", err
 		}
 	}

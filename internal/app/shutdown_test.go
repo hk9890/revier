@@ -143,16 +143,25 @@ func (l unsaved) Update(apply func(*state.State) bool) *state.State {
 
 // A full shutdown whose record did not reach the state still closes, but is
 // not on record: the surface would quit into a start that offers nothing.
+// What a surface last saw stays, since the next start finds no shutdown on
+// record and offers it as an end with no shutdown.
 func TestAFullShutdownWhoseRecordWasNotSavedIsNotRecorded(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	c = c.WithLedger(unsaved{c.Ledger.(*ledger)})
-	record := app.NewShutdownRecord(c, t.TempDir())
+	root := t.TempDir()
+	if err := session.SaveSeen(root, session.Session{Projects: []session.Project{{Name: "project-00"}}}); err != nil {
+		t.Fatal(err)
+	}
+	record := app.NewShutdownRecord(c, root)
 
 	if _, err := app.Shutdown(context.Background(), c, c.ShutdownPlan(report, "", core.ShutdownAll), 0, core.ShutdownOpts{Projects: projects}, saving(c, t.TempDir()), record); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
 	if record.Recorded() || len(rt.Closed) == 0 {
 		t.Errorf("recorded %v, closed %v; want the closes made and nothing recorded", record.Recorded(), rt.Closed)
+	}
+	if _, err := session.LoadSeen(root); err != nil {
+		t.Errorf("last seen after the shutdown: %v, want it kept", err)
 	}
 }
 

@@ -344,3 +344,126 @@ func TestTheConfigScreenDeletesASharedTarget(t *testing.T) {
 		t.Errorf("config screen still lists editor:\n%s", screen(m))
 	}
 }
+
+// notesTarget is a shared target that config.toml gets above the others
+// while the surface is away.
+const notesTarget = `[[target]]
+name = "notes"
+  [target.window]
+  launch = ["notes"]
+  match = { class = "^notes$" }
+
+`
+
+// editorTarget is the editor of sharedTargets, as its text stands there.
+const editorTarget = `[[target]]
+name = "editor"
+key = "ctrl-shift-o"
+  [target.window]
+  launch = ["idea", "{{.Path}}"] # IntelliJ
+  match = { class = "^jetbrains-idea" }
+
+`
+
+// The form saves to the target it was opened on, also when config.toml got a
+// target above it while the surface was away: the target now at the form's
+// old place is not written over.
+func TestTheTargetFormSavesToItsTargetAfterOneIsAddedAbove(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "enter")
+	m = rewritten(t, m, root, notesTarget+sharedTargets)
+	m = downs(m, 13) // the window's command
+	m = typeInto(clearField(m), "code {{.Path}}")
+	m, _ = press(m, "enter")
+
+	want := notesTarget + strings.Replace(sharedTargets, `launch = ["idea", "{{.Path}}"]`, `launch = ["code", "{{.Path}}"]`, 1)
+	if got := fileText(t, config.File(root)); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s\nfooter: %s", got, want, footer(m))
+	}
+}
+
+// The panels the form holds are written to the target they came from: a
+// target with panels renamed and saved after another was added above it
+// does not write them into the target now at its old place.
+func TestTheTargetFormSavesItsPanelsAfterATargetIsAddedAbove(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 2), "enter")
+	noTabs := notesTarget + strings.Replace(sharedTargets, "  tabs = [\"agent\"]\n", "", 1)
+	m = rewritten(t, m, root, noTabs)
+	m = typeInto(clearField(m), "helper")
+	m, _ = press(m, "enter")
+
+	if got, want := fileText(t, config.File(root)), strings.Replace(noTabs, `name = "agent"`, `name = "helper"`, 1); got != want {
+		t.Errorf("config.toml =\n%s\nwant\n%s\nfooter: %s", got, want, footer(m))
+	}
+}
+
+// The form saves to the target it was opened on when the list shrank to the
+// form's old place: the edit is not taken for a new target.
+func TestTheTargetFormSavesToItsTargetAfterOneAboveIsRemoved(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 2), "enter")
+	m = rewritten(t, m, root, strings.Replace(sharedTargets, editorTarget, "", 1))
+	m = downs(m, 1) // the key
+	m = typeInto(m, "ctrl-shift-a")
+	m, _ = press(m, "enter")
+
+	got := fileText(t, config.File(root))
+	if !strings.Contains(got, `key = "ctrl-shift-a"`) || strings.Count(got, `name = "agent"`) != 1 {
+		t.Errorf("config.toml =\n%s\nwant agent's key written to agent\nfooter: %s", got, footer(m))
+	}
+}
+
+// A target that left config.toml while its form was open is not written: the
+// footer says so, and the form stays.
+func TestTheTargetFormRefusesATargetThatIsGone(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "enter")
+	without := strings.Replace(sharedTargets, editorTarget, "", 1)
+	m = rewritten(t, m, root, without)
+	m, _ = press(m, "enter")
+
+	if got := fileText(t, config.File(root)); got != without {
+		t.Errorf("config.toml =\n%s\nwant it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `target "editor" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the target is gone", f)
+	}
+	if !strings.Contains(screen(m), "jetbrains-idea") {
+		t.Errorf("the form is gone:\n%s", screen(m))
+	}
+}
+
+// y answers the question for the target it was asked about, also when
+// config.toml got a target above it while the question waited: the target
+// now under the cursor is not deleted.
+func TestTheDeleteQuestionDeletesItsTargetAfterOneIsAddedAbove(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "alt+d")
+	m = rewritten(t, m, root, notesTarget+sharedTargets)
+	if f := footer(m); !strings.Contains(f, `delete target "editor"`) {
+		t.Errorf("footer = %q, want the question about editor", f)
+	}
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); !strings.Contains(got, `name = "notes"`) || strings.Contains(got, `name = "editor"`) {
+		t.Errorf("config.toml =\n%s\nwant editor gone and notes kept\nfooter: %s", got, footer(m))
+	}
+}
+
+// A target that left config.toml while the question waited is not deleted,
+// nor is the one now in its place: the footer says it is gone.
+func TestTheDeleteQuestionRefusesATargetThatIsGone(t *testing.T) {
+	m, root := targetsSurface(t)
+	m, _ = press(onTargetRow(m, 1), "alt+d")
+	without := strings.Replace(sharedTargets, editorTarget, "", 1)
+	m = rewritten(t, m, root, without)
+	m, _ = press(m, "y")
+
+	if got := fileText(t, config.File(root)); got != without {
+		t.Errorf("config.toml =\n%s\nwant it untouched", got)
+	}
+	if f := footer(m); !strings.Contains(f, `target "editor" is no longer in config.toml`) {
+		t.Errorf("footer = %q, want it to say the target is gone", f)
+	}
+}

@@ -565,6 +565,20 @@ func configRoot(t *testing.T, text string) string {
 
 func screen(m tui.Model) string { return strings.Join(lines(m), "\n") }
 
+// rewritten writes text as config.toml while the surface is away, as the
+// assistant beside it does, and is the surface once the focus is back and
+// the files are read again.
+func rewritten(t *testing.T, m tui.Model, root, text string) tui.Model {
+	t.Helper()
+	if err := os.WriteFile(config.File(root), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	m, cmd := update(m, tea.FocusMsg{})
+	m, _ = deliver(m, cmd)
+	return m
+}
+
 const sharedTargets = `[[target]]
 name = "home"
 home = true

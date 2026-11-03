@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
@@ -306,5 +307,47 @@ func TestTheWheelHoldsStillWhileADeleteIsAsked(t *testing.T) {
 	}
 	if f := footer(m); !strings.Contains(f, "delete alpha?") {
 		t.Errorf("footer = %q, want the question still open", f)
+	}
+}
+
+// ctrl+c quits at a delete question, as it does on every screen: it does not
+// only answer no.
+func TestCtrlCQuitsAtADeleteQuestion(t *testing.T) {
+	asked := map[string]func(t *testing.T) tui.Model{
+		"a project": func(t *testing.T) tui.Model {
+			_, m, _ := fileWorld(t, "alpha")
+			m, _ = press(m, "alt+d")
+			return m
+		},
+		"a shared target": func(t *testing.T) tui.Model {
+			m, _ := targetsSurface(t)
+			m, _ = press(onTargetRow(m, 1), "alt+d")
+			return m
+		},
+		"an action": func(t *testing.T) tui.Model {
+			configRoot(t, syncConfig)
+			_, _, c, projects := world(t, 1)
+			m := resize(refreshed(t, c, projects, stateWith(t, nil), []config.Action{syncAction}), 120, 30)
+			m, _ = press(onActionRow(m, 0), "alt+d")
+			return m
+		},
+		"a project's target": func(t *testing.T) tui.Model {
+			m, _, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))
+			m, _ = press(m, "alt+e")
+			m = downs(m, 4) // editor, overridden
+			m, _ = press(m, "alt+d")
+			return m
+		},
+	}
+	for what, ask := range asked {
+		t.Run(what, func(t *testing.T) {
+			m := ask(t)
+			if f := footer(m); !strings.Contains(f, "y: ") {
+				t.Fatalf("footer = %q, want the question", f)
+			}
+			if _, cmd := send(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd == nil || cmd() != (tea.QuitMsg{}) {
+				t.Error("ctrl+c at the question did not quit")
+			}
+		})
 	}
 }

@@ -71,8 +71,29 @@ func TestAPressIsReadAsItsCanonicalChord(t *testing.T) {
 		{tea.KeyPressMsg{Code: 'e', Mod: tea.ModAlt}, "alt+e"},
 		{tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModAlt}, "alt+space"},
 		{tea.KeyPressMsg{Code: tea.KeyF5}, "f5"},
+		{tea.KeyPressMsg{Code: '-', Mod: tea.ModAlt}, "alt+minus"},
 	} {
 		got, ok := pressed(fold(tc.msg))
+		if !ok || got != tc.want {
+			t.Errorf("pressed(%q) = %q, %v; want %q", tc.msg, got, ok, tc.want)
+		}
+	}
+}
+
+// bubbletea names a press of + or - with a modifier by the character, and
+// "ctrl++" or "alt+-" is the chord of the key plus or minus, as a project
+// file spells it. ctrl+plus has no legacy byte, so it reaches the surface
+// only as pressed, where the terminal disambiguates (Model.unfolded).
+func TestAPressOfPlusOrMinusIsItsNamedChord(t *testing.T) {
+	for _, tc := range []struct {
+		msg  tea.KeyPressMsg
+		want core.Chord
+	}{
+		{tea.KeyPressMsg{Code: '+', Mod: tea.ModCtrl}, "ctrl+plus"},
+		{tea.KeyPressMsg{Code: '-', Mod: tea.ModCtrl}, "ctrl+minus"},
+		{tea.KeyPressMsg{Code: '-', Mod: tea.ModAlt}, "alt+minus"},
+	} {
+		got, ok := pressed(pressedKey(tc.msg))
 		if !ok || got != tc.want {
 			t.Errorf("pressed(%q) = %q, %v; want %q", tc.msg, got, ok, tc.want)
 		}

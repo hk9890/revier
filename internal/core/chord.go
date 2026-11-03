@@ -106,10 +106,20 @@ func ParseChord(s string) (Chord, error) {
 		if strings.ContainsAny(raw, "<>") {
 			return "", fmt.Errorf("key %q: a modifier must come before the key", s)
 		}
+		// bubbletea names a press of + or - with a modifier by the character:
+		// "ctrl++", "alt+-". A + or - after a separator is that key, and not
+		// a separator with nothing after it.
+		head, literal := raw, ""
+		if n := len(raw); n >= 2 && strings.ContainsRune("+-", rune(raw[n-1])) && strings.ContainsRune("+-", rune(raw[n-2])) {
+			head, literal = raw[:n-1], raw[n-1:]
+		}
 		// Split rather than FieldsFunc: FieldsFunc drops empty fields, so
 		// "ctrl-" would read as the key "ctrl" instead of a chord with a
 		// missing key.
-		parts := strings.Split(strings.ReplaceAll(raw, "-", "+"), "+")
+		parts := strings.Split(strings.ReplaceAll(head, "-", "+"), "+")
+		if literal != "" {
+			parts[len(parts)-1] = literal
+		}
 		for _, p := range parts {
 			if p == "" {
 				return "", fmt.Errorf("key %q has an empty part", s)
@@ -255,13 +265,14 @@ func (c Chord) Terminal(disambiguates bool) (Chord, bool) {
 
 // Typed reports whether a terminal delivers the chord as text: one character,
 // alone or with shift. Where a surface filters as you type, that is a filter
-// character and cannot also be a command.
+// character and cannot also be a command. + and - are such characters,
+// though a chord spells them by name.
 func (c Chord) Typed() bool {
 	key, found := strings.CutPrefix(string(c), "shift+")
 	if !found {
 		key = string(c)
 	}
-	return !strings.Contains(key, "+") && len([]rune(key)) == 1
+	return key == "plus" || key == "minus" || !strings.Contains(key, "+") && len([]rune(key)) == 1
 }
 
 func gnomeKeyName(key string) string {

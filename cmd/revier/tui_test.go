@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -15,6 +16,9 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The surface opens on the project of the directory it was started in, and
@@ -203,4 +207,32 @@ func TestASignalEndsTheSurfaceUnderACommandThatGoesOn(t *testing.T) {
 	}()
 	first := tea.Exec(holds{t: t, release: release}, func(error) tea.Msg { return nil })
 	wantSignal(t, runSurface(program{first: first}, tea.WithInput(in), tea.WithOutput(io.Discard)), syscall.SIGHUP)
+}
+
+// boundedRuntime records whether the survey listed it under a deadline.
+type boundedRuntime struct {
+	*hosttest.FakeRuntime
+	bounded bool
+}
+
+func (r *boundedRuntime) Instances(ctx context.Context) ([]revier.Instance, error) {
+	_, r.bounded = ctx.Deadline()
+	return r.FakeRuntime.Instances(ctx)
+}
+
+// `revier | grep` prints the table under the bound `revier list` has: a
+// linked host whose remote revier hangs must not block the pipe for good.
+func TestThePipedTableHasTheBoundOfList(t *testing.T) {
+	rt := &boundedRuntime{FakeRuntime: hosttest.NewRuntime("tmux")}
+	a := tuiApp(t.TempDir())
+	a.stateRoot = t.TempDir()
+	a.core = &core.Core{Runtime: rt}
+	withState(t, a, &state.State{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
+	defer cancel()
+	output(t, a, func() error { return cmdTUI(ctx, a) })
+	if !rt.bounded {
+		t.Error("the piped table surveyed with no deadline")
+	}
 }

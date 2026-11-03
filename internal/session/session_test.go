@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -293,6 +294,45 @@ func TestSaveInTheSameSecondKeepsBoth(t *testing.T) {
 	}
 }
 
+// Saves in one second that run at once are as many sessions, and none is left
+// half-written: the name is taken by the write itself, so no save renames over
+// another that checked the same name free a moment before.
+func TestConcurrentSavesInTheSameSecondKeepEvery(t *testing.T) {
+	const saves = 4
+	for round := range 50 {
+		root := t.TempDir()
+		var wg sync.WaitGroup
+		ids := make([]string, saves)
+		for i := range saves {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stored, _, err := session.Save(root, sample(12, "concurrent"))
+				if err != nil {
+					t.Errorf("Save: %v", err)
+				}
+				ids[i] = stored.ID
+			}()
+		}
+		wg.Wait()
+		all, err := session.List(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(all) != saves {
+			t.Fatalf("round %d: List = %d sessions, want %d", round, len(all), saves)
+		}
+		slices.Sort(ids)
+		if len(slices.Compact(ids)) != saves {
+			t.Fatalf("round %d: Save returned ids %v, want %d distinct", round, ids, saves)
+		}
+		entries, _ := os.ReadDir(session.Dir(root))
+		if len(entries) != saves {
+			t.Fatalf("round %d: session directory holds %d entries, want the %d sessions alone", round, len(entries), saves)
+		}
+	}
+}
+
 // A store that was never written to is a normal outcome, not a failure: the
 // first restore on a machine that never saved.
 func TestLoadFromEmptyStore(t *testing.T) {
@@ -353,6 +393,28 @@ session = "first"
 	}
 	if len(all) != 1 || all[0].Targets() != 1 || all[0].Conversations() != 0 {
 		t.Errorf("List = %+v, want the one session with its target and no conversation", all)
+	}
+}
+
+// An empty file is a name a save holds and has not filled yet, or one a crash
+// left empty: neither the list nor a restore takes it for a session.
+func TestAnEmptyFileIsNoSession(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(session.Dir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	empty := session.NewID(at(13))
+	if err := os.WriteFile(filepath.Join(session.Dir(root), empty+".toml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if all, err := session.List(root); err != nil || len(all) != 0 {
+		t.Errorf("List = %+v, %v, want none", all, err)
+	}
+	if _, err := session.Load(root, ""); !errors.Is(err, session.ErrNoSession) || errors.Is(err, session.ErrNoWholeSession) {
+		t.Errorf("Load err = %v, want ErrNoSession and not ErrNoWholeSession", err)
+	}
+	if _, err := session.Load(root, empty); !errors.Is(err, session.ErrNoSession) {
+		t.Errorf("Load %s err = %v, want ErrNoSession", empty, err)
 	}
 }
 

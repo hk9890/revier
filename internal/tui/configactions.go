@@ -29,12 +29,36 @@ const (
 	actionFields
 )
 
-// actionForm is an action being added or changed.
+// actionForm is an action being added or changed. It keeps the action it
+// changes, not its place: the files read again at the focus can replace the
+// list while the form is open.
 type actionForm struct {
 	open   bool
-	index  int // the action changed, or len(actions) for a new one
-	field  int // the field the cursor is in
+	adds   bool
+	was    config.Action // the action changed, when the form does not add one
+	field  int           // the field the cursor is in
 	fields [actionFields]textinput.Model
+}
+
+// at is where the form's action is in actions now: past the last for a new
+// one. An action changed that is gone is false, and past the last too, where
+// the screen shows its form.
+func (f actionForm) at(actions []config.Action) (int, bool) {
+	if f.adds {
+		return len(actions), true
+	}
+	i := actionIndex(actions, f.was)
+	if i < 0 {
+		return len(actions), false
+	}
+	return i, true
+}
+
+// actionIndex is where act is in actions, or -1 when it is not there.
+func actionIndex(actions []config.Action, act config.Action) int {
+	return slices.IndexFunc(actions, func(a config.Action) bool {
+		return a.Name == act.Name && a.Key == act.Key && slices.Equal(a.Run, act.Run)
+	})
 }
 
 // actionRow is the action the config screen's cursor is on, if it is on one.
@@ -52,12 +76,13 @@ func (cs *configScreen) actionBase(sf surface) int { return cs.addTargetRow(sf) 
 // openActionForm opens the form for action i, or for a new action when i is
 // past the last.
 func (cs *configScreen) openActionForm(sf surface, i int) tea.Cmd {
-	f := actionForm{open: true, index: i}
+	f := actionForm{open: true, adds: i >= len(sf.actions)}
 	for j, placeholder := range [actionFields]string{"sync", "git pull", "ctrl+g"} {
 		f.fields[j] = formInput(sf.theme, placeholder)
 	}
-	if i < len(sf.actions) {
+	if !f.adds {
 		act := sf.actions[i]
+		f.was = act
 		f.fields[fieldName].SetValue(act.Name)
 		f.fields[fieldCommand].SetValue(joinCommand(act.Run))
 		f.fields[fieldKey].SetValue(act.Key)
@@ -98,9 +123,14 @@ func (cs *configScreen) moveField(step int) tea.Cmd {
 }
 
 // saveAction writes the form's action, and hands the actions back to be
-// bound.
+// bound. An action changed that left config.toml is not written, and the
+// form stays.
 func (cs *configScreen) saveAction(sf surface) configResult {
 	f := cs.aform
+	i, ok := f.at(sf.actions)
+	if !ok {
+		return configResult{err: fmt.Errorf("action %q is no longer in config.toml as the form read it; Esc and open it again", f.was.Name)}
+	}
 	run, err := splitCommand(f.fields[fieldCommand].Value())
 	if err != nil {
 		return configResult{err: err}
@@ -110,22 +140,22 @@ func (cs *configScreen) saveAction(sf surface) configResult {
 		Name: strings.TrimSpace(f.fields[fieldName].Value()),
 		Run:  run,
 	}
-	if err := checkAction(sf, act, f.index); err != nil {
+	if err := checkAction(sf, act, i); err != nil {
 		return configResult{err: err}
 	}
 	actions := slices.Clone(sf.actions)
-	if f.index == len(actions) {
+	if f.adds {
 		err = cs.write(func(root string) error { return config.AddAction(root, sf.actions, act) })
 		actions = append(actions, act)
 	} else {
-		err = cs.write(func(root string) error { return config.ReplaceAction(root, f.index, sf.actions[f.index], act) })
-		actions[f.index] = act
+		err = cs.write(func(root string) error { return config.ReplaceAction(root, i, sf.actions[i], act) })
+		actions[i] = act
 	}
 	if err != nil {
 		return configResult{err: err}
 	}
 	cs.aform = actionForm{}
-	cs.row = cs.actionBase(sf) + f.index
+	cs.row = cs.actionBase(sf) + i
 	return configResult{actions: &actions}
 }
 
@@ -167,15 +197,21 @@ func checkAction(sf surface, act config.Action, index int) error {
 }
 
 // dropAction takes the key that answers the delete question. Only y deletes;
-// any other key keeps the action and is not acted on.
+// any other key but ctrl+c, which quits before it gets here, keeps the
+// action and is not acted on. An action that left config.toml while the
+// question waited is not deleted, nor is the one now in its place.
 func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	res := configResult{err: sf.err}
-	cs.dropping = false
-	i, ok := cs.actionRow(sf)
-	if msg.String() != "y" || !ok {
+	act := cs.drop.action
+	cs.drop = dropQuestion{}
+	if msg.String() != "y" {
 		return res
 	}
-	act := sf.actions[i]
+	i := actionIndex(sf.actions, act)
+	if i < 0 {
+		res.err = fmt.Errorf("action %q is no longer in config.toml as the question read it; nothing is deleted", act.Name)
+		return res
+	}
 	if err := cs.write(func(root string) error { return config.RemoveAction(root, i, act) }); err != nil {
 		res.err = err
 		return res
@@ -185,15 +221,12 @@ func (cs *configScreen) dropAction(sf surface, msg keyPress) configResult {
 	return res
 }
 
-// dropPrompt is the delete question for the target or action under the
-// cursor.
+// dropPrompt is the delete question for the target or action it was asked
+// for.
 func (cs *configScreen) dropPrompt(sf surface) string {
-	question := ""
-	if i, ok := cs.actionRow(sf); ok {
-		question = fmt.Sprintf("delete action %q?", sf.actions[i].Name)
-	}
-	if i, ok := cs.targetRow(sf); ok {
-		question = fmt.Sprintf("delete target %q from every project?", sf.targets[i].Name)
+	question := fmt.Sprintf("delete action %q?", cs.drop.action.Name)
+	if t := cs.drop.target; t != nil {
+		question = fmt.Sprintf("delete target %q from every project?", t.Name)
 	}
 	return sf.theme.Attention.Render(" "+question+"  ") +
 		sf.theme.Help.Render("y: delete · any other key: keep")

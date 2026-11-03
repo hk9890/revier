@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/app"
@@ -232,12 +233,16 @@ func (m Model) targetOpen(project revier.ProjectName, tv revier.TargetView) (boo
 	return !tv.Ref.IsZero() || (bound && m.core.HostHere(ref.Host)), nil
 }
 
-// confirmDelete takes the key that answers the question. Only "y" deletes;
-// every other key keeps the project and is not acted on, so a stray Enter
-// cannot fall through and open what the user just declined to delete.
+// confirmDelete takes the key that answers the question. Only "y" deletes,
+// and ctrl+c quits, as on every screen; every other key keeps the project and
+// is not acted on, so a stray Enter cannot fall through and open what the
+// user just declined to delete.
 func (m Model) confirmDelete(msg keyPress) (tea.Model, tea.Cmd) {
 	name, target := m.confirm, m.ctarget
 	m.confirm, m.ctarget = "", ""
+	if key.Matches(msg, m.keys.Quit) {
+		return m, tea.Quit
+	}
 	if msg.String() != "y" {
 		return m, nil
 	}

@@ -197,10 +197,15 @@ func (m Model) nameSession() (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// saved takes a save's answer.
+// saved takes a save's answer. A dialog after an end with no shutdown still
+// held back goes once the save is made: it would offer an older session than
+// the one just saved, which a start does not (decisions.md D150).
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.saved(m.stateRoot, *m.theme, msg); err != nil {
 		m.err = err
+	}
+	if msg.err == nil {
+		m.uncleanOffer = nil
 	}
 	return m, nil
 }
@@ -210,12 +215,15 @@ func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 // what did not open in the footer. Then it raises the surface: each window
 // the restore opened came up over it, so it comes back once, at the end. The
 // raise follows the result rather than coming before it, so a slow host
-// holds neither the result nor the input.
+// holds neither the result nor the input. A dialog after an end with no
+// shutdown still held back goes: the user has acted on the sessions, and the
+// plain surface the restore ends on must not offer it after the fact.
 func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.restored(msg); err != nil {
 		m.err = err
 	}
 	m.dialog = dialogNone
+	m.uncleanOffer = nil
 	if msg.err != nil {
 		return m, nil
 	}

@@ -3,10 +3,12 @@ package gnome
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
@@ -148,7 +150,12 @@ func execRun(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	var out, errb bytes.Buffer
 	c := exec.CommandContext(ctx, bin, args...)
 	c.Stdout, c.Stderr = &out, &errb
-	if err := procgroup.Run(c); err != nil {
+	// The context ends the command alone, and a child it left holding its
+	// output would hold the wait past the context, so that wait is bounded.
+	c.WaitDelay = time.Second
+	// Wait reports that bounded wait as ErrWaitDelay only for a command that
+	// exited 0: its change was applied, so the call succeeded.
+	if err := procgroup.Run(c); err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return out.Bytes(), fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil

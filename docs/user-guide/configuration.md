@@ -56,7 +56,7 @@ board = "https://github.com/example/shop/projects/1"
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `path` | string | required | The project's directory. A leading `~` is your home directory. |
+| `path` | string | required | The project's directory, written in full or from `~`, your home directory. revier refuses a relative path. |
 | `git_url` | string | none | The repository `path` is a clone of. When `path` is missing, opening the project clones it. No whitespace, no shell metacharacters, no user or token in an `http(s)` URL. |
 | `[vars]` | table of strings | none | Your own values for [templates](#templates): `{{.Vars.board}}`. |
 | `[[target]]` | array of tables | none | The project's [targets](#targets). |
@@ -64,8 +64,8 @@ board = "https://github.com/example/shop/projects/1"
 
 - Do not write `name =` at the top level. The file name is the project's name.
 - A project name has no whitespace, no control character, no `/` and no `:`.
-  `revier new` and a rename refuse such a name; a file you name yourself must
-  follow the same rule.
+  `revier new` and a rename refuse such a name, and revier refuses a project
+  whose file you named so yourself.
 - A project needs exactly one target with `home = true`. With a
   [shared](#shared-targets) home, `path` alone is a complete project. A home
   with an agent tab is in [Tabs](#tabs).

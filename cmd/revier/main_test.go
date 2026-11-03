@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -59,6 +60,30 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(filepath.Join(root, "projects")); len(entries) > 0 {
 		t.Errorf("a refused command wrote %d project files", len(entries))
+	}
+}
+
+// A subcommand refuses an argument it takes no place for, as a command does:
+// `revier session save before-reboot` would otherwise save an unnamed session.
+// The app has no key binder and a scratch kitty directory, so nothing here
+// reaches the desktop or the user's terminal.
+func TestASubcommandRefusesAnExtraArgument(t *testing.T) {
+	a, _ := termApp(t, "", "")
+	a.stateRoot = t.TempDir()
+	ctx := context.Background()
+	for name, call := range map[string]func() error{
+		"session save":   func() error { return cmdSessionSave(ctx, a, []string{"before-reboot"}) },
+		"session list":   func() error { return cmdSessionList(a, []string{"extra"}) },
+		"keys status":    func() error { return cmdKeysStatus(ctx, a, []string{"extra"}) },
+		"keys install":   func() error { return cmdKeysApply(ctx, a, "install", []string{"extra"}) },
+		"keys uninstall": func() error { return cmdKeysApply(ctx, a, "uninstall", []string{"extra"}) },
+		"term status":    func() error { return cmdTermStatus(ctx, a, []string{"extra"}) },
+		"term install":   func() error { return cmdTermApply(ctx, a, "install", []string{"extra"}) },
+		"term uninstall": func() error { return cmdTermApply(ctx, a, "uninstall", []string{"extra"}) },
+	} {
+		if err := call(); err == nil || !strings.Contains(err.Error(), "usage: revier "+name) {
+			t.Errorf("revier %s extra: err = %v, want the usage", name, err)
+		}
 	}
 }
 

@@ -25,6 +25,23 @@ func TestAShutdownSaysWhenItWaitsAndWhenItIsComplete(t *testing.T) {
 	}
 }
 
+// A target still open after the wait, as an editor that asks about unsaved
+// work is, fails `revier shutdown`: `revier shutdown && poweroff` must not
+// power off under it.
+func TestAShutdownThatLeavesATargetOpenFails(t *testing.T) {
+	a, rt := demoDesktop(t, &state.State{}, "home")
+	rt.Refuses = map[string]bool{rt.Add("diff", "").ID: true}
+
+	var err error
+	out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })
+	if !errors.Is(err, errShutdownIncomplete) {
+		t.Errorf("err = %v, want the shutdown incomplete", err)
+	}
+	if !strings.Contains(out, "closed 1, 1 still open") || strings.Contains(out, "safe to leave") {
+		t.Errorf("output = %q, want the target still open and no safe to leave said", out)
+	}
+}
+
 // A step that did not close keeps `revier shutdown` from saying it is
 // complete.
 func TestAShutdownWithAStepThatFailedIsNotComplete(t *testing.T) {

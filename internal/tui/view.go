@@ -461,7 +461,7 @@ func (m Model) footerPrompt() (string, bool) {
 		return m.theme.Meta.Render(" " + m.shut.walk.line()), true
 	case m.confirm != "":
 		return m.deletePrompt(), true
-	case m.dialog == dialogConfig && m.config.dropping:
+	case m.dialog == dialogConfig && m.config.drop.open:
 		return m.config.dropPrompt(m.surface()), true
 	case m.dialog == dialogProject && m.proj.dropping:
 		return m.proj.dropPrompt(*m.theme), true

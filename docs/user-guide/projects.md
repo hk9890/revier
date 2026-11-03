@@ -175,7 +175,8 @@ A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line
 on the screen. A shutdown then waits for what it closed to go, and says
 `waiting for 3 to close`. When nothing failed, stayed open or was left by a
-cancel, its last line is `shutdown complete; safe to leave`.
+cancel, its last line is `shutdown complete; safe to leave`. Otherwise it
+exits `1`, so `revier shutdown && poweroff` powers off only when it is safe.
 
 To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
 the rest is not reached, and revier prints how many steps it left. A full

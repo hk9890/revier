@@ -40,6 +40,7 @@ func newHost() *kitty.Host {
 	// A test that reaches a start without a starter of its own must not start
 	// a real kitty, which would open on the desktop of whoever runs the tests.
 	h.SetStarter(func(context.Context, ...string) error { return errors.New("kitty: no kitty starts in a test") })
+	h.SetMark(func() string { return "M" })
 	h.SetParents(func(pid int) (int, bool) {
 		ppid, ok := parents[pid]
 		return ppid, ok

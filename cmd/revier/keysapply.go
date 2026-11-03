@@ -25,8 +25,15 @@ func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error 
 	fs.BoolVar(&dryRun, "dry-run", false, "print what would happen and change nothing")
 	fs.BoolVar(&dryRun, "n", false, "print what would happen and change nothing (shorthand)")
 	asJSON := fs.Bool("json", false, "emit the plan as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		if sub == "uninstall" {
+			return fmt.Errorf("usage: revier keys uninstall [-n] [--json]")
+		}
+		return fmt.Errorf("usage: revier keys install [--force] [-n] [--json]")
 	}
 	if sub == "uninstall" && *force {
 		// Nothing to force: uninstall removes what revier wrote and never

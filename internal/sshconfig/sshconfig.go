@@ -30,8 +30,8 @@ func Path() (string, error) {
 // A `Host` line names one or more; a pattern - with a `*`, a `?` or a `!` -
 // is a rule and not a destination, and is left out. `Include` lines are
 // followed: a leading `~` is the home directory, as ssh reads it, and a
-// relative one is against the file's own directory. A file that does not
-// exist names nothing.
+// relative one is against the directory of the file at path, as Read says.
+// A file that does not exist names nothing.
 func Hosts(path string) ([]string, error) {
 	f, err := Read(path)
 	if err != nil {
@@ -82,11 +82,16 @@ type line struct {
 // not exist is an empty File. An Include that cannot be read is left out, as
 // ssh leaves it out, and the rest is read: the File holds every line that
 // could be read, and the error is the first Include that could not.
+//
+// A relative Include is against the directory of the file at path, the
+// user's configuration file, in every file it includes too: ssh_config(5)
+// reads one in a user configuration file against ~/.ssh, the directory of
+// ~/.ssh/config.
 func Read(path string) (File, error) {
-	return read(path, 0)
+	return read(path, filepath.Dir(path), 0)
 }
 
-func read(path string, depth int) (File, error) {
+func read(path, dir string, depth int) (File, error) {
 	if depth > includeDepth {
 		return File{}, nil
 	}
@@ -116,7 +121,7 @@ func read(path string, depth int) (File, error) {
 			for _, pattern := range l.fields {
 				pattern = expandHome(pattern)
 				if !filepath.IsAbs(pattern) {
-					pattern = filepath.Join(filepath.Dir(path), pattern)
+					pattern = filepath.Join(dir, pattern)
 				}
 				matches, err := filepath.Glob(pattern)
 				if err != nil {
@@ -124,7 +129,7 @@ func read(path string, depth int) (File, error) {
 					continue
 				}
 				for _, included := range matches {
-					inc, err := read(included, depth+1)
+					inc, err := read(included, dir, depth+1)
 					unread = cmp.Or(unread, err)
 					l.included = append(l.included, inc)
 				}

@@ -57,8 +57,12 @@ func cmdTerm(ctx context.Context, a *app, args []string) error {
 func cmdTermStatus(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("term status", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the report as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier term status [--json]")
 	}
 	trigger, err := a.cfg.TriggerKey()
 	if err != nil {
@@ -163,8 +167,12 @@ func cmdTermApply(ctx context.Context, a *app, sub string, args []string) error 
 	fs.BoolVar(&dryRun, "dry-run", false, "print what would happen and change nothing")
 	fs.BoolVar(&dryRun, "n", false, "print what would happen and change nothing (shorthand)")
 	asJSON := fs.Bool("json", false, "emit the plan as JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if len(pos) > 0 {
+		return fmt.Errorf("usage: revier term %s [-n] [--json]", sub)
 	}
 	trigger, err := a.cfg.TriggerKey()
 	if err != nil {

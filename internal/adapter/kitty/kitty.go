@@ -16,8 +16,11 @@
 //   - Each kitty process listens on its own socket. With
 //     `listen_on unix:${XDG_RUNTIME_DIR}/kitty` that socket is the file
 //     `$XDG_RUNTIME_DIR/kitty-<pid>` (read from kitty 0.49's kitty.conf
-//     manual; not run against a live kitty), and with `listen_on unix:@kitty`
-//     it is the abstract `@kitty-<pid>`. The windows revier cares about may
+//     manual; not run against a live kitty). The abstract `@kitty-<pid>` of
+//     `listen_on unix:@kitty` is not looked for, also not when KITTY_LISTEN_ON
+//     names it: it has no permissions, so any user of the machine can bind the
+//     name and answer in kitty's place. The
+//     windows revier cares about may
 //     span several processes - every kitty started from a session file is a
 //     process of its own - so Instances queries every such socket,
 //     concurrently. That is one call per kitty process, which does not grow
@@ -40,6 +43,7 @@ package kitty
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,12 +85,11 @@ var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 // No such window is listed: none is a workspace (decisions.md D168).
 const workspaceName = "revier-kitty"
 
-// abstractSocket is the socket kitty creates for `listen_on unix:@kitty`, and
-// the one this host asked for up to 0.13. An abstract socket has no
-// permissions: every user of the machine can connect to it, and can bind the
-// name. It is still found, so a kitty started before the upgrade stays
-// reachable.
-var abstractSocket = regexp.MustCompile(`^@kitty-(\d+)$`)
+// openVar is the user var every window an Open or an OpenTab launches carries,
+// set to a value no other Open or OpenTab uses, so that the windows of a step
+// that failed can be told apart, also one whose launch was not answered. It
+// is no panel variable, and a listing leaves it out.
+const openVar = "REVIER_KITTY_OPEN"
 
 // runtimeDir is the directory that is the user's alone, and "" when the
 // environment names none. A relative path names none: kitty resolves one
@@ -128,10 +131,11 @@ func listenOn(file string) string {
 // may repeat: `${XDG_RUNTIME_DIR}/kitty` has two when the variable ends in
 // one.
 func socketPID(dir, name string) (int, bool) {
-	m := abstractSocket.FindStringSubmatch(name)
-	if file, ok := strings.CutPrefix(name, dir); m == nil && dir != "" && ok && strings.HasPrefix(file, "/") {
-		m = socketFile.FindStringSubmatch(strings.TrimLeft(file, "/"))
+	file, ok := strings.CutPrefix(name, dir)
+	if dir == "" || !ok || !strings.HasPrefix(file, "/") {
+		return 0, false
 	}
+	m := socketFile.FindStringSubmatch(strings.TrimLeft(file, "/"))
 	if m == nil {
 		return 0, false
 	}
@@ -147,6 +151,7 @@ type Host struct {
 	start     func(ctx context.Context, args ...string) error
 	ownSocket func() string
 	parent    func(pid int) (int, bool)
+	mark      func() string
 }
 
 func (h *Host) Name() string { return "kitty" }
@@ -336,7 +341,8 @@ func discover() []string {
 // candidates orders the control sockets of one kernel socket table. The table
 // holds a socket file by its path, and only while a process is bound to it: a
 // kitty that crashed leaves a file and no entry. own, the kitty a command
-// runs in, comes first.
+// runs in, comes first, unless it is abstract: once that kitty has exited,
+// any user can bind its name.
 func candidates(own, table string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -347,7 +353,9 @@ func candidates(own, table string) []string {
 		seen[name] = true
 		out = append(out, "unix:"+name)
 	}
-	add(strings.TrimPrefix(own, "unix:"))
+	if own := strings.TrimPrefix(own, "unix:"); !strings.HasPrefix(own, "@") {
+		add(own)
+	}
 
 	dir := runtimeDir()
 	var found []string
@@ -504,11 +512,13 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 	if pid == 0 {
 		pid = w.PID
 	}
+	vars := maps.Clone(w.UserVars)
+	delete(vars, openVar)
 	return revier.Panel{
 		ID:      revier.PanelID(strconv.Itoa(w.ID)),
 		Kind:    kind,
 		Title:   w.Title,
-		Vars:    w.UserVars,
+		Vars:    vars,
 		PID:     pid,
 		Command: cmd,
 		Dir:     dirOf(w, pid),
@@ -641,13 +651,81 @@ func isRunShell(cmdline []string) bool {
 // A launch's --match selects a tab, so the OS window is named by the first
 // panel's window as window_id; id would be a tab id, which equals the window
 // id only in a kitty that has opened nothing else.
+//
+// A step that fails closes the OS window Open opened, every window in it:
+// left running, it carries r.Name and would be matched, as an agent with no
+// shell beside it. It is the OS window that holds a window with Open's mark: a
+// launch that failed may have made its window all the same, when the end of
+// ctx ended kitten before kitty answered, and another Open of the same
+// realization can make an OS window of the same name meanwhile. A window
+// opened in it by hand goes with it.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" {
 		return revier.TargetRef{}, fmt.Errorf("kitty: realization has no name to give the OS window")
 	}
-	panels := r.PanelSpecs()
+	socket, err := h.workspaceKitty(ctx)
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
+	mark := h.newMark()
+	ref, err := h.build(ctx, socket, r, mark)
+	if err != nil {
+		// Best effort: the error that failed the OS window is the one worth
+		// reporting.
+		h.closeMarked(ctx, socket, mark, true)
+		return revier.TargetRef{}, err
+	}
+	return ref, nil
+}
 
-	socket, first, err := h.openFirst(ctx, r, panels[0])
+// closeMarked closes every window that carries mark in openVar, and with
+// whole every other window of an OS window that holds one too. Where the
+// listing fails, the marked windows still close. The close has a bound of its
+// own: the end of ctx may be what failed the step.
+func (h *Host) closeMarked(ctx context.Context, socket, mark string, whole bool) {
+	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	match := []string{"var:" + openVar + "=^" + mark + "$"}
+	if whole {
+		windows, _ := h.ls(closing, socket)
+		for _, w := range windows {
+			if holdsMark(w, mark) {
+				match = append(match, windowMatches(w)...)
+			}
+		}
+	}
+	_, _ = h.kitten(closing, socket, "close-window", "--match", strings.Join(match, " or "))
+}
+
+// holdsMark says whether a window of the OS window carries mark in openVar.
+func holdsMark(w osWindow, mark string) bool {
+	for _, t := range w.Tabs {
+		for _, win := range t.Windows {
+			if win.UserVars[openVar] == mark {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// newMark is a value for openVar that no other Open or OpenTab uses.
+func (h *Host) newMark() string {
+	if h.mark != nil {
+		return h.mark()
+	}
+	return rand.Text()
+}
+
+// markArgs are the launch options that give a new window the mark of the Open
+// or OpenTab that launches it.
+func markArgs(mark string) []string { return []string{"--var", openVar + "=" + mark} }
+
+// build opens the OS window with its first panel, titles that panel's window,
+// launches every later panel into the OS window, and returns the OS window.
+func (h *Host) build(ctx context.Context, socket string, r revier.Realization, mark string) (revier.TargetRef, error) {
+	panels := r.PanelSpecs()
+	first, err := h.openFirst(ctx, socket, r, panels[0], mark)
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
@@ -655,7 +733,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	for _, p := range panels[1:] {
-		args := append([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first), "--hold"}, varArgs(r.Vars)...)
+		args := slices.Concat([]string{"--type=window", "--match", "window_id:" + strconv.Itoa(first)}, holdArgs(p), varArgs(r.Vars), markArgs(mark))
 		if p.Dir != "" {
 			args = append(args, "--cwd", p.Dir)
 		}
@@ -685,6 +763,17 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	return revier.TargetRef{}, fmt.Errorf("kitty: launched window %d is not in any OS window", first)
 }
 
+// holdArgs keeps a panel's window open after its command ends, so the output
+// stays readable. A panel with no command is kitty's own shell, and its
+// window closes when the shell exits; --hold would start a new shell at a
+// prompt in it instead (kitty 0.42 and later).
+func holdArgs(p revier.PanelSpec) []string {
+	if len(p.Command) == 0 {
+		return nil
+	}
+	return []string{"--hold"}
+}
+
 // varNames are the variable names in a fixed order, so a launch's arguments
 // and a set-user-vars call are the same from one run to the next.
 func varNames(vars map[string]string) []string { return slices.Sorted(maps.Keys(vars)) }
@@ -710,25 +799,16 @@ func (h *Host) title(ctx context.Context, socket string, id int, title string) e
 	return err
 }
 
-// openFirst opens the OS window with its first panel in the workspace kitty,
-// starting it when none answers, and returns the socket it lives on and the
-// id of that panel's window.
-func (h *Host) openFirst(ctx context.Context, r revier.Realization, p revier.PanelSpec) (string, int, error) {
-	socket, err := h.workspaceKitty(ctx)
-	if err != nil {
-		return "", 0, err
-	}
-	args := append([]string{"--type=os-window",
-		"--os-window-name", r.Name, "--os-window-title", r.Name, "--hold"}, varArgs(r.Vars)...)
+// openFirst opens the OS window with its first panel in the workspace kitty
+// on socket, and returns the id of that panel's window.
+func (h *Host) openFirst(ctx context.Context, socket string, r revier.Realization, p revier.PanelSpec, mark string) (int, error) {
+	args := slices.Concat([]string{"--type=os-window",
+		"--os-window-name", r.Name, "--os-window-title", r.Name}, holdArgs(p), varArgs(r.Vars), markArgs(mark))
 	if p.Dir != "" {
 		args = append(args, "--cwd", p.Dir)
 	}
 	args = append(args, p.Command...)
-	id, err := h.launch(ctx, socket, args...)
-	if err != nil {
-		return "", 0, err
-	}
-	return socket, id, nil
+	return h.launch(ctx, socket, args...)
 }
 
 // workspaceKitty is the socket of the workspace kitty, started when none
@@ -893,30 +973,28 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (socket string,
 // window the tab opens in shows the new tab, where it is not the focused one:
 // kitty has no command that puts a tab back without asking for the focus.
 //
-// A launch or a title that fails closes the windows the tab already opened:
-// the core names the agent of a failed tab as not added, and it must not be
-// running in a tab without its shell.
+// A launch or a title that fails closes the windows the tab opened, found by
+// their mark as Open's are: the core names the agent of a failed tab as not
+// added, and it must not be running in a tab without its shell.
 func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	socket, win, focused, err := h.active(ctx, ref)
 	if err != nil {
 		return "", err
 	}
-	var opened []int
-	panel, err := h.openTab(ctx, socket, win, focused, r, vars, &opened)
+	mark := h.newMark()
+	panel, err := h.openTab(ctx, socket, win, focused, r, vars, mark)
 	if err != nil {
-		for _, id := range opened {
-			// Best effort: the launch error is the one worth reporting.
-			_, _ = h.kitten(ctx, socket, "close-window", "--match", "id:"+strconv.Itoa(id))
-		}
+		// Best effort: the launch error is the one worth reporting.
+		h.closeMarked(ctx, socket, mark, false)
 		return "", err
 	}
 	return panel, nil
 }
 
 // openTab is OpenTab's launches into the OS window whose current window is
-// win, with every window it opens added to opened. keepFocus says kitty holds
-// the keyboard, and has to be told to leave it where it is.
-func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bool, r revier.Realization, vars map[string]string, opened *[]int) (revier.PanelID, error) {
+// win, each window marked with mark. keepFocus says kitty holds the keyboard,
+// and has to be told to leave it where it is.
+func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bool, r revier.Realization, vars map[string]string, mark string) (revier.PanelID, error) {
 	panels := r.PanelSpecs()
 
 	first := 0
@@ -925,13 +1003,7 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bo
 		if i > 0 {
 			args = []string{"--type=window", "--match", "window_id:" + strconv.Itoa(first)}
 		}
-		// A panel with no command is kitty's own shell, and its window
-		// closes when the shell exits; --hold would keep it open, waiting
-		// for a key.
-		if len(p.Command) > 0 {
-			args = append(args, "--hold")
-		}
-		args = append(args, varArgs(vars)...)
+		args = slices.Concat(args, holdArgs(p), varArgs(vars), markArgs(mark))
 		if keepFocus {
 			args = append(args, "--keep-focus")
 		}
@@ -943,7 +1015,6 @@ func (h *Host) openTab(ctx context.Context, socket string, win int, keepFocus bo
 		if err != nil {
 			return "", err
 		}
-		*opened = append(*opened, id)
 		if err := h.title(ctx, socket, id, p.Title); err != nil {
 			return "", err
 		}
@@ -1020,13 +1091,8 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	}
 	var match []string
 	for _, w := range windows {
-		if w.ID != id {
-			continue
-		}
-		for _, t := range w.Tabs {
-			for _, win := range t.Windows {
-				match = append(match, "id:"+strconv.Itoa(win.ID))
-			}
+		if w.ID == id {
+			match = windowMatches(w)
 		}
 	}
 	if len(match) == 0 {
@@ -1034,6 +1100,18 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 	}
 	_, err = h.kitten(ctx, socket, "close-window", "--match", strings.Join(match, " or "))
 	return err
+}
+
+// windowMatches are the --match terms of every kitty window of the OS window,
+// across its tabs.
+func windowMatches(w osWindow) []string {
+	var match []string
+	for _, t := range w.Tabs {
+		for _, win := range t.Windows {
+			match = append(match, "id:"+strconv.Itoa(win.ID))
+		}
+	}
+	return match
 }
 
 // ClosePanel closes one kitty window, on the socket of the process the
