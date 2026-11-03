@@ -32,3 +32,21 @@ func TestAPanesProcessIsTheTopmostWithItsIdAndSocket(t *testing.T) {
 		t.Errorf("panes = %v, want %v", got, want)
 	}
 }
+
+// Among topmost processes that are all children of the server, or none of
+// them, the lowest pid is the pane's: the one started first.
+func TestAPanesProcessIsTheLowestPidAmongEqualCandidates(t *testing.T) {
+	root := t.TempDir()
+	const sock = "/run/herdr.sock"
+	writeProc(t, root, 100, 1, "HOME=/home/u")                                     // the server
+	writeProc(t, root, 202, 1, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)   // outlived a handoff
+	writeProc(t, root, 201, 1, "HERDR_PANE_ID=w1:p1", "HERDR_SOCKET_PATH="+sock)   // left by an earlier server
+	writeProc(t, root, 212, 100, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock) // the server's child
+	writeProc(t, root, 211, 100, "HERDR_PANE_ID=w1:p2", "HERDR_SOCKET_PATH="+sock) // the server's child too
+
+	got := herdr.PaneProcesses(root, sock, 100)
+	want := map[string]int{"w1:p1": 201, "w1:p2": 211}
+	if !maps.Equal(got, want) {
+		t.Errorf("panes = %v, want %v", got, want)
+	}
+}
