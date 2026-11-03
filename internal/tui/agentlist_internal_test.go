@@ -56,3 +56,29 @@ func TestTheAgentListFiltersAndHandsBackWithNoRootModel(t *testing.T) {
 		t.Errorf("result = %+v, want Esc with no query to leave", res)
 	}
 }
+
+// The age column says each moment in its largest whole unit, and moves to the
+// next unit exactly at its boundary: a day old reads 1d, not 24h.
+func TestTheAgeColumnChangesUnitAtEachBoundary(t *testing.T) {
+	now := time.Date(2026, 1, 2, 12, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		ago  time.Duration
+		want string
+	}{
+		{0, "now"},
+		{59 * time.Second, "now"},
+		{time.Minute, "1m"},
+		{59*time.Minute + 59*time.Second, "59m"},
+		{time.Hour, "1h"},
+		{23*time.Hour + 59*time.Minute, "23h"},
+		{24 * time.Hour, "1d"},
+		{49 * time.Hour, "2d"},
+	} {
+		if got := shortAgo(now, now.Add(-c.ago)); got != c.want {
+			t.Errorf("shortAgo(%v ago) = %q, want %q", c.ago, got, c.want)
+		}
+	}
+	if got := shortAgo(now, time.Time{}); got != "" {
+		t.Errorf("shortAgo(zero) = %q, want no age", got)
+	}
+}

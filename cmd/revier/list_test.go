@@ -169,3 +169,34 @@ func TestListAgentsListsTheSurveyedAgents(t *testing.T) {
 		t.Errorf("list --agents tm = %q, want nothing for a project with no agent", out)
 	}
 }
+
+// Each target in the list's targets column carries one mark that says why it
+// is the way it is: a refusal and a missing host are both unavailable, and
+// only the mark tells the user which of the two to go and fix.
+func TestTheTargetsColumnMarksWhyEachTargetIsTheWayItIs(t *testing.T) {
+	running := revier.TargetRef{Host: "tmux", ID: "%1", Title: "home"}
+	cases := []struct {
+		name string
+		t    revier.TargetView
+		want string
+	}{
+		{"refused by its configuration", revier.TargetView{Name: "a", Reason: "bad match"}, "!a"},
+		{"no host can realize it", revier.TargetView{Name: "a"}, "xa"},
+		{"its host could not list", revier.TargetView{Name: "a", Available: true, Unknown: "tmux: no server"}, "?a"},
+		{"running", revier.TargetView{Name: "a", Available: true, Ref: running}, "*a"},
+		{"closed", revier.TargetView{Name: "a", Available: true}, " a"},
+		{"attached, named by its title", revier.TargetView{Available: true, Attached: true, Ref: running}, "*(home)"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := targetSummary(revier.ProjectView{Targets: []revier.TargetView{c.t}})
+			if got != c.want {
+				t.Errorf("targetSummary = %q, want %q", got, c.want)
+			}
+		})
+	}
+	both := revier.ProjectView{Targets: []revier.TargetView{{Name: "a"}, {Name: "b", Available: true, Ref: running}}}
+	if got := targetSummary(both); got != "xa *b" {
+		t.Errorf("two targets = %q, want %q", got, "xa *b")
+	}
+}

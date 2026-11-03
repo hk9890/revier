@@ -291,3 +291,21 @@ func TestAnotherProjectStartsWithThePaneQueryEmpty(t *testing.T) {
 		t.Errorf("the agent query outlived its project:\n%s", body)
 	}
 }
+
+// A press on a row of the Agents section that is not there, as a press that
+// raced a refresh which removed agents names, does nothing: the refresh
+// already took that agent away.
+func TestAPressOnAnAgentRowThatIsGoneDoesNothing(t *testing.T) {
+	rt, m := agentWorld(t)
+	if m.GoAgentRow(1) == nil {
+		t.Fatal("the second agent of demo ran nothing; the world has changed under this test")
+	}
+	for _, i := range []int{-1, 2, 99} {
+		if cmd := m.GoAgentRow(i); cmd != nil {
+			t.Errorf("row %d ran a command, want none", i)
+		}
+	}
+	if len(rt.PanelFocuses) != 0 {
+		t.Errorf("panel focuses = %v, want none", rt.PanelFocuses)
+	}
+}

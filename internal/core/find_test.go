@@ -79,3 +79,16 @@ func TestRepoName(t *testing.T) {
 		}
 	}
 }
+
+// Closest names at most three projects, the nearest first, however many a
+// name could have meant.
+func TestClosestNamesAtMostTheThreeNearest(t *testing.T) {
+	var projects []core.Project
+	for _, name := range []string{"abcd4444", "abcd1", "abcd333", "abcd22"} {
+		projects = append(projects, core.Project{Project: revier.Project{Name: revier.ProjectName(name)}})
+	}
+	want := []revier.ProjectName{"abcd1", "abcd22", "abcd333"}
+	if got := core.Closest(projects, "abcd"); !slices.Equal(got, want) {
+		t.Errorf("Closest(abcd) = %q, want %q", got, want)
+	}
+}

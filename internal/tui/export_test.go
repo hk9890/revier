@@ -119,3 +119,8 @@ func (m Model) Cloned(p core.Project, err error) (Model, tea.Cmd) {
 	next, cmd := m.Update(clonedMsg{project: p, home: home.Name, err: err})
 	return next.(Model), cmd
 }
+
+// GoAgentRow exposes what Enter on, or a click of, row i of the Agents
+// section runs, so a test can name a row that is no longer there: a press
+// that raced a refresh which removed agents.
+func (m Model) GoAgentRow(i int) tea.Cmd { return m.goAgentRow(i) }
