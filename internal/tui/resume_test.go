@@ -502,3 +502,30 @@ func TestARestoreMadeWhileTheUncleanDialogWaitsTakesItsPlace(t *testing.T) {
 		t.Errorf("subtitle = %q, want no offer of the end after a restore by hand", sub)
 	}
 }
+
+// A save made by hand while the dialog after an end with no shutdown is held
+// back takes its place: the end would offer an older session than the one just
+// saved, which a start does not.
+func TestASaveMadeWhileTheUncleanDialogWaitsTakesItsPlace(t *testing.T) {
+	root := t.TempDir()
+	uncleanEnd(t, root)
+	m, _ := seenWorld(t, root)
+	m, _ = press(m, "alt+s")
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Fatalf("subtitle = %q, want the dialog held back while the sessions screen is up", sub)
+	}
+
+	m, _ = press(m, "alt+s")
+	m = typeInto(m, "work")
+	m, cmd := press(m, "enter")
+	m = run(m, cmd)
+	if row := rows(m)[0]; !strings.Contains(row, "work") {
+		t.Fatalf("row = %q, want the new session", row)
+	}
+	m, _ = press(m, "esc")
+	m = seenSurvey(seenSurvey(m))
+	if sub := lines(m)[2]; strings.Contains(sub, "revier ended without a shutdown") {
+		t.Errorf("subtitle = %q, want no offer of the end after a save by hand", sub)
+	}
+}

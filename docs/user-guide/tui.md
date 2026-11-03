@@ -218,8 +218,10 @@ open as a `last seen` session, if something of it is not open now. It then
 opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
 If you already typed a query or opened a screen, the dialog waits until you
 are back on the plain project list. The pane shows what that session holds.
-The choices are those of the dialog after a full shutdown. If you restore a
-session from the sessions screen while the dialog waits, it does not show.
+The choices are those of the dialog after a full shutdown. If you restore or
+save a session from the sessions screen while the dialog waits, it does not
+show. If `revier shutdown` runs elsewhere meanwhile, the dialog after that
+shutdown shows in its place.
 The dialog stays until you choose, and shows once: a later start does not
 offer the session again. See
 [Save and restore sessions](projects.md#save-and-restore-sessions).
