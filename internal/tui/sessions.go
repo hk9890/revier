@@ -203,9 +203,10 @@ func (m Model) nameSession() (tea.Model, tea.Cmd) {
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.saved(m.stateRoot, *m.theme, msg); err != nil {
 		m.err = err
-		return m, nil
 	}
-	m.uncleanOffer = nil
+	if msg.err == nil {
+		m.uncleanOffer = nil
+	}
 	return m, nil
 }
 
