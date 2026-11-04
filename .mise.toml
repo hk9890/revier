@@ -88,9 +88,9 @@ depends = ["test", "test:integration", "test:live"]
 description = "Coverage per package, then the 25 least-covered functions. Reports; gates nothing."
 run = """
 set -e
-trap 'rm -f coverage.out' EXIT
+trap 'rm -f coverage.out' EXIT INT TERM
 go test -tags=integration -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | awk '$1 != "total:" {print}' | sort -k3 -n | head -25
+go tool cover -func=coverage.out | awk '$1 != "total:" {print}' | LC_ALL=C sort -k3 -n | head -25
 go tool cover -func=coverage.out | grep total:
 """
 
