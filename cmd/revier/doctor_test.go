@@ -20,6 +20,12 @@ func TestAContinuationLineHasNoLabel(t *testing.T) {
 	}
 }
 
+// soundAt is the sound project at path, so two fixtures that are not meant to
+// name one directory do not draw the warning for it.
+func soundAt(path string) string {
+	return strings.Replace(sound, `path = "/tmp/sound"`, `path = "`+path+`"`, 1)
+}
+
 // doctorRoot writes a configuration root and points revier at it.
 func doctorRoot(t *testing.T, files map[string]string) {
 	t.Helper()
@@ -32,14 +38,11 @@ func doctorRoot(t *testing.T, files map[string]string) {
 func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 	// Each project has a directory of its own, so no warning is mixed in
 	// with the problems.
-	at := func(body, path string) string {
-		return strings.Replace(body, `path = "/tmp/sound"`, `path = "`+path+`"`, 1)
-	}
 	doctorRoot(t, map[string]string{
 		"sound.toml":    sound,
-		"nohome.toml":   at(strings.Replace(sound, "home = true\n", "", 1), "/tmp/nohome"),
+		"nohome.toml":   strings.Replace(soundAt("/tmp/nohome"), "home = true\n", "", 1),
 		"bad.toml":      "path = \"/p\"\nthis is not toml\n",
-		"template.toml": at(strings.Replace(sound, `launch = ["sh"]`, `launch = ["sh", "{{.Path)}}"]`, 1), "/tmp/template"),
+		"template.toml": strings.Replace(soundAt("/tmp/template"), `launch = ["sh"]`, `launch = ["sh", "{{.Path)}}"]`, 1),
 	})
 
 	var out strings.Builder
@@ -162,7 +165,7 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 func TestDoctorReportsStatusProblemsUnderTheirFile(t *testing.T) {
 	doctorRoot(t, map[string]string{
 		"sound.toml": sound,
-		"tables.toml": sound + `
+		"tables.toml": soundAt("/tmp/tables") + `
 [[status]]
 at = "rule-left"
 run = ["true"]
@@ -408,34 +411,57 @@ func TestDoctorWarnsWhenLocalProjectsShareADirectory(t *testing.T) {
 	if err := os.Symlink(dir, alias); err != nil {
 		t.Fatal(err)
 	}
-	at := func(path string) string {
-		return strings.Replace(sound, `path = "/tmp/sound"`, `path = "`+path+`"`, 1)
+	lib := filepath.Join(home, "dev", "lib")
+	if err := os.Mkdir(lib, 0o755); err != nil {
+		t.Fatal(err)
 	}
 	doctorRoot(t, map[string]string{
-		"app.toml":       at(dir),
-		"tilde.toml":     at("~/dev/app/"),
-		"alias.toml":     at(alias),
-		"missing.toml":   at(filepath.Join(home, "missing")),
-		"elsewhere.toml": at(filepath.Join(home, "missing", "..", "elsewhere")),
+		"app.toml":     soundAt(dir),
+		"tilde.toml":   soundAt("~/dev/app/"),
+		"alias.toml":   soundAt(alias),
+		"missing.toml": soundAt(home + "/gone/../missing"),
+		"again.toml":   soundAt(home + "/missing/"),
+		"other.toml":   soundAt(filepath.Join(home, "other")),
+		"lib.toml":     soundAt(lib),
+		// The kernel reads the .. after the link: this is dev/lib.
+		"up.toml": soundAt(alias + "/../lib"),
 	})
+	// doctor prints the directory with every link resolved, and the
+	// temporary directory can sit under one.
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	projects := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
 
 	var out strings.Builder
 	if err := cmdDoctor(&out, nil); err != nil {
 		t.Fatalf("cmdDoctor: %v, want a clean end: a warning is not a problem", err)
 	}
-	want := "warning: 3 project files name one directory, " + dir + "; keep one file, delete the others:\n" +
+	want := "warning: 3 project files name one directory, " + real + "; keep one file, delete the others:\n" +
 		"  " + filepath.Join(projects, "alias.toml") + "\n" +
 		"  " + filepath.Join(projects, "app.toml") + "\n" +
 		"  " + filepath.Join(projects, "tilde.toml") + "\n"
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("report should contain %q:\n%s", want, out.String())
 	}
-	if !strings.Contains(out.String(), "5 projects, 0 files with problems") {
+	missing := "warning: 2 project files name one directory, " + filepath.Join(home, "missing") + "; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "again.toml") + "\n" +
+		"  " + filepath.Join(projects, "missing.toml") + "\n"
+	if !strings.Contains(out.String(), missing) {
+		t.Errorf("paths that do not exist are compared cleaned; report should contain %q:\n%s", missing, out.String())
+	}
+	up := "warning: 2 project files name one directory, " + filepath.Join(filepath.Dir(real), "lib") + "; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "lib.toml") + "\n" +
+		"  " + filepath.Join(projects, "up.toml") + "\n"
+	if !strings.Contains(out.String(), up) {
+		t.Errorf("a .. after a link is read as the kernel reads it; report should contain %q:\n%s", up, out.String())
+	}
+	if !strings.Contains(out.String(), "8 projects, 0 files with problems") {
 		t.Errorf("every file should load whole:\n%s", out.String())
 	}
-	if n := strings.Count(out.String(), "warning:"); n != 1 {
-		t.Errorf("%d warnings, want 1: a path that does not exist is compared cleaned, and matches no other:\n%s", n, out.String())
+	if n := strings.Count(out.String(), "warning:"); n != 3 {
+		t.Errorf("%d warnings, want 3: other.toml matches no other file:\n%s", n, out.String())
 	}
 }
 

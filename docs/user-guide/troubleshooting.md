@@ -21,8 +21,8 @@ where it knows the fix.
 
 It also warns when two project files name one checkout: local projects whose
 paths are one directory, or links to one project on one host. Both files
-load, and each shows its own agents, so keep one file and delete the others.
-A warning does not change the exit status.
+load as separate projects, so the work of one checkout splits across two
+names. A warning does not change the exit status.
 
 A mistake stops only the part it is in; see
 [configuration.md](configuration.md#mistakes). When every other command

@@ -63,7 +63,8 @@ usage:
   revier attach [-p name]       bind the focused window to a project
   revier status [-p name]       which project this directory resolves to
   revier doctor                 every project file that did not load whole, and
-                                what to do about each problem
+                                what to do about each problem; warns about
+                                project files that name one checkout
   revier assist [-p name] [--print-brief | --reference | --exec [--resume id]]
                                 hand this terminal to Claude Code, briefed to
                                 configure revier and to find what is wrong with

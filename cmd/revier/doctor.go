@@ -11,11 +11,12 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // cmdDoctor reports every project file that did not load whole, and what to do
 // about each problem. It also warns about project files that name one
-// checkout, which load whole and split its work across two names.
+// checkout, which split its work across two names.
 //
 // It exists because loading stopped refusing. A refusal used to be unmissable:
 // it was printed by whichever command the user ran next, and nothing ran until
@@ -92,8 +93,8 @@ func cmdDoctor(out io.Writer, args []string) error {
 			_, _ = fmt.Fprintf(out, "  %s (%s)\n", p.File, p.Remote.Host)
 		}
 	}
-	// A warning, not a problem: each file loads whole, and the exit status
-	// stays what the problems make it.
+	// A warning, not a problem: the exit status stays what the problems make
+	// it.
 	for _, d := range duplicates(projects) {
 		_, _ = fmt.Fprintf(out, "warning: %s name %s; keep one file, delete the others:\n", core.Count(len(d.files), "project file"), d.what)
 		for _, file := range d.files {
@@ -129,46 +130,40 @@ type duplicate struct {
 // duplicates is each group of local projects whose paths resolve to one
 // directory, and each group of links that name one project on one host. A
 // local project and a link are never compared: the path of a link is the
-// path on its host, so the same text there is normal.
+// path on its host, so the same text there is normal. A relative path is
+// left out: the directory it names depends on where doctor runs.
 func duplicates(projects []core.Project) []duplicate {
-	var keys []string
-	groups := map[string]*duplicate{}
-	add := func(key, what, file string) {
-		g, ok := groups[key]
+	type key struct {
+		link revier.Link
+		dir  string
+	}
+	var keys []key
+	groups := map[key]*duplicate{}
+	add := func(k key, what, file string) {
+		g, ok := groups[k]
 		if !ok {
 			g = &duplicate{what: what}
-			groups[key] = g
-			keys = append(keys, key)
+			groups[k] = g
+			keys = append(keys, k)
 		}
 		g.files = append(g.files, file)
 	}
 	for _, p := range projects {
 		switch {
 		case p.Remote != nil:
-			add("link\x00"+p.Remote.Host+"\x00"+string(p.Remote.Project),
-				fmt.Sprintf("one project, %s on %s", p.Remote.Project, p.Remote.Host), p.File)
-		case p.Path != "":
-			dir := realDir(p.Path)
-			add("local\x00"+dir, "one directory, "+dir, p.File)
+			add(key{link: *p.Remote}, fmt.Sprintf("one project, %s on %s", p.Remote.Project, p.Remote.Host), p.File)
+		case filepath.IsAbs(p.Path):
+			dir := resolveLinks(p.Path)
+			add(key{dir: dir}, "one directory, "+dir, p.File)
 		}
 	}
 	var out []duplicate
-	for _, key := range keys {
-		if g := groups[key]; len(g.files) > 1 {
+	for _, k := range keys {
+		if g := groups[k]; len(g.files) > 1 {
 			out = append(out, *g)
 		}
 	}
 	return out
-}
-
-// realDir is the directory a local project's path names, through any
-// symbolic link. A path that does not exist resolves to itself, cleaned.
-func realDir(path string) string {
-	path = filepath.Clean(path)
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		return real
-	}
-	return path
 }
 
 // outsideProblems is each terminal key that fails at every press outside a
