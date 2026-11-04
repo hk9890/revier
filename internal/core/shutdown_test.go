@@ -191,7 +191,8 @@ func TestShutdownNamesAWindowThatStayed(t *testing.T) {
 }
 
 // A window can go some time after its close was asked for. The shutdown keeps
-// listing until the wait ends, so a window that goes within it is closed.
+// listing until the window goes or the wait ends, so a window that goes within
+// it is closed.
 func TestShutdownCountsAWindowThatGoesDuringTheWaitAsClosed(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	report := survey(t, c, projects, nil)
