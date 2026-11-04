@@ -177,6 +177,22 @@ func partsFor(targets []map[string]any, declared map[string]bool, isLink bool) [
 	return out
 }
 
+// localOnly is the shared targets a link does not get, by name, and true for
+// a command target (core.Project.LocalOnly). A target the link writes itself
+// is its own, whatever config.toml holds of it.
+func localOnly(shared []map[string]any, link revier.Project) map[revier.TargetName]bool {
+	out := map[revier.TargetName]bool{}
+	for _, t := range shared {
+		name, _ := t["name"].(string)
+		if _, has := link.Target(revier.TargetName(name)); has {
+			continue
+		}
+		_, command := t["command"]
+		out[revier.TargetName(name)] = command
+	}
+	return out
+}
+
 // validateParts refuses a target that writes the part of the other kind: a
 // realization nothing would ever read is a target that silently does
 // nothing, which is exactly what loading catches. The refusals are by target

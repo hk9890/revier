@@ -454,6 +454,9 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 	named := nameAgents(&p, agents, declared)
 	prepared := core.PrepareProject(p)
 	prepared.File = path
+	if p.Remote != nil {
+		prepared.LocalOnly = localOnly(inh.Targets, p)
+	}
 	prepared.Status, prepared.StatusRefused = projectStatuses(data)
 	var unrendered []error
 	prepared.Agents, unrendered = renderAgents(p, agents)

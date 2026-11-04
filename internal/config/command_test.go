@@ -168,6 +168,9 @@ func TestASharedCommandTargetReachesNoLink(t *testing.T) {
 		if has == (p.Remote != nil) {
 			t.Errorf("%s: has web = %v, want it on the local project alone", p.Name, has)
 		}
+		if command, local := p.LocalOnly["web"]; local != (p.Remote != nil) || command != local {
+			t.Errorf("%s: local-only web = %v, %v; want it recorded as a command on the link alone", p.Name, command, local)
+		}
 	}
 }
 

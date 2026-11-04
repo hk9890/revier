@@ -202,6 +202,9 @@ func parseAddress(p Project, addr string) (address, error) {
 		return a, nil
 	}
 	a.where += ":" + addr
+	if _, local := p.LocalOnly[a.target]; local {
+		return address{}, p.noTarget(a.target)
+	}
 	if _, ok := p.index(a.target); !ok {
 		return address{}, fmt.Errorf("%s has no target %q: an agent's address is <project>, <project>:<target> or <project>:<target>:<panel>", p.Name, target)
 	}

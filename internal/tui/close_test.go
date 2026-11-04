@@ -210,19 +210,35 @@ func TestDelInsideTheQueryDeletesACharacter(t *testing.T) {
 	}
 }
 
-// del on what is not open says so and closes nothing.
+// del on what is not open says so, names the key that deletes the project
+// file instead, and closes nothing.
 func TestDelOnWhatIsNotOpenSaysSo(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
+	inFiles(projects)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
 
 	m, _ = press(m, "down")
 	m, cmd := press(m, "delete")
 	m = run(m, cmd)
-	if f := footer(m); !strings.Contains(f, "project-00: nothing of it is open here") {
-		t.Errorf("footer = %q, want nothing to close", f)
+	if f := footer(m); !strings.Contains(f, "project-00: nothing of it is open here; alt+del deletes its project file") {
+		t.Errorf("footer = %q, want nothing to close and the way to delete", f)
 	}
 	if len(rt.Closed) != 0 {
 		t.Errorf("runtime closed %v, want nothing", rt.Closed)
+	}
+}
+
+// A project in no file has nothing for alt+del to delete, so del on it names
+// no such key.
+func TestDelOnWhatIsNotOpenAndInNoFileNamesNoDelete(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+
+	m, _ = press(m, "down")
+	m, cmd := press(m, "delete")
+	m = run(m, cmd)
+	if f := footer(m); !strings.Contains(f, "project-00: nothing of it is open here") || strings.Contains(f, "alt+del") {
+		t.Errorf("footer = %q, want nothing to close and no delete", f)
 	}
 }
 

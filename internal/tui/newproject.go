@@ -356,10 +356,24 @@ func (s *createScreen) addFolder(sf surface, dir string) createResult {
 	return res
 }
 
-// sameRepo is url without what two spellings of one repository differ by: a
-// trailing separator and the .git suffix.
+// sameRepo is url without what two spellings of one repository differ by:
+// the scheme, the user, the colon of git's scp-like form, the case of the
+// host, the slashes around the path and the .git suffix. What is left is the
+// host and the path, so git@github.com:o/widget.git and
+// https://github.com/o/widget are one. The scp-like form is git's: a colon
+// with no slash before it, the user optional.
 func sameRepo(url string) string {
-	return strings.TrimSuffix(strings.TrimRight(url, "/"), ".git")
+	rest := url
+	if _, after, scheme := strings.Cut(url, "://"); scheme {
+		rest = after
+	} else if colon := strings.Index(url, ":"); colon > 0 && !strings.Contains(url[:colon], "/") {
+		rest = url[:colon] + "/" + url[colon+1:]
+	}
+	host, path, _ := strings.Cut(rest, "/")
+	if _, after, user := strings.Cut(host, "@"); user {
+		host = after
+	}
+	return strings.ToLower(host) + "/" + strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 }
 
 func nameFree(projects []core.Project, name revier.ProjectName) error {

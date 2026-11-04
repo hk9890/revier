@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -120,11 +121,15 @@ func TestAnOverrideDoesNotReachAnotherProject(t *testing.T) {
 }
 
 // A shared target with no remote part is local-only, so a link is left with
-// the derived home and its tab onto the host alone (decisions.md D82).
+// the derived home and its tab onto the host alone (decisions.md D82). The
+// one it lacks is recorded, for a press on it to say why.
 func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"far": "[remote]\nhost = \"buildbox\"\n"})[0]
 	if got := names(p); !slices.Equal(got, []revier.TargetName{"home", "agent"}) {
 		t.Fatalf("targets = %v, want the derived home and its tab alone", got)
+	}
+	if want := map[revier.TargetName]bool{"editor": false}; !maps.Equal(p.LocalOnly, want) {
+		t.Errorf("local-only = %v, want %v", p.LocalOnly, want)
 	}
 	if panels := target(t, p, "agent").Runtime.Panels; len(panels) != 2 || len(panels[0].Command) != 0 {
 		t.Errorf("agent panels = %v, want the derived agent and shell, not the shared ones", panels)

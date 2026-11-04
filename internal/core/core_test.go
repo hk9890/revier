@@ -191,6 +191,27 @@ func TestGoRejectsUnknownTarget(t *testing.T) {
 	}
 }
 
+// A link that lacks a shared target of config.toml says why, else the press
+// points at the project file, where the target never was.
+func TestGoOnALinkSaysWhyItLacksASharedTarget(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
+	p := linkProject(t)
+	p.LocalOnly = map[revier.TargetName]bool{"editor": false, "web": true}
+	for name, want := range map[revier.TargetName]string{
+		"editor": "no such target: editor; far is a link, and the shared target editor has no [target.remote] part",
+		"web":    "no such target: web; far is a link, and a link runs no command target",
+		"absent": "no such target: absent",
+	} {
+		_, err := press(context.Background(), c, p, name)
+		if !errors.Is(err, core.ErrNoTarget) || err.Error() != want {
+			t.Errorf("%s: err = %v, want %q", name, err, want)
+		}
+	}
+	if _, err := c.Agent(context.Background(), p, "editor"); err == nil || !strings.Contains(err.Error(), "the shared target editor has no [target.remote] part") {
+		t.Errorf("agent address far:editor: err = %v, want why far lacks editor", err)
+	}
+}
+
 // A match that constrains nothing would select whichever instance the host
 // happened to list first, so the target that declares one is refused. The
 // refusal is that target's: the project keeps every other target.

@@ -270,7 +270,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)
 	if !ok {
-		return Workspace{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return Workspace{}, p.noTarget(name)
 	}
 	if t := p.Targets[i]; panelTab(p.Project, t) {
 		name = t.Runtime.Inside
@@ -286,7 +286,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 	}
 	inst, found := c.locate(snap, p, i, host, m, bound[name])
 	if !found {
-		return Workspace{}, fmt.Errorf("%s:%s: %w", p.Name, name, ErrNotOpen)
+		return Workspace{}, fmt.Errorf("%s:%s: %w; revier go %s -p %s opens it", p.Name, name, ErrNotOpen, name, p.Name)
 	}
 	return Workspace{Project: p, Target: name, Ref: inst.Ref, snap: snap, failed: failed}, nil
 }

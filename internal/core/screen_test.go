@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
@@ -40,6 +41,25 @@ func TestScreenOfAnAgentElsewhereIsNoScreen(t *testing.T) {
 		agent := revier.AgentView{Ref: revier.TargetRef{Host: "proc", ID: "1"}, Panel: "7"}
 		if _, err := c.Screen(context.Background(), agent, false); !errors.Is(err, core.ErrNoScreen) {
 			t.Errorf("%s: err = %v, want ErrNoScreen", name, err)
+		}
+	}
+	if len(rt.ScreenReads) != 0 {
+		t.Errorf("reads = %+v, want none", rt.ScreenReads)
+	}
+}
+
+// An agent this machine serves to a terminal elsewhere is drawn by that
+// terminal, and the refusal names its machine, so the reader knows where to
+// read it. A machine's name may hold a dot.
+func TestScreenOfAServedAgentNamesTheMachineOfItsPanel(t *testing.T) {
+	served := hosttest.New("proc")
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, Served: served}
+	for tag, machine := range map[revier.PanelID]string{"box.4242": "box", "box.lan.4242": "box.lan"} {
+		agent := revier.AgentView{Ref: revier.TargetRef{Host: "proc", ID: "session:revier"}, Panel: tag}
+		_, err := c.Screen(context.Background(), agent, false)
+		if want := "its panel is on " + machine + "; read it there"; !errors.Is(err, core.ErrNoScreen) || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want ErrNoScreen saying %q", tag, err, want)
 		}
 	}
 	if len(rt.ScreenReads) != 0 {
