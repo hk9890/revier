@@ -152,7 +152,7 @@ func TestALinkedHostsAnswerDoesNotConfirmAShrink(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	c.Remotes = map[string]revier.Remote{"buildbox": remote}
 	projects := append(remoteOnDisk(t, "alpha"), local...)
-	m, now := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	m, now := clocked(tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
 	m = resize(m, 150, 30)
 	// One survey here and one round to buildbox, with every command they
 	// answer with run, so what they keep is written.

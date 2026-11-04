@@ -29,7 +29,7 @@ func column(t *testing.T, row, word string) int {
 // The pane's targets and attached windows share one grid: the state glyph
 // starts in the same cell in both.
 func TestThePaneLinesUpTargetsAndAttachedWindows(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	g := m.theme.Glyphs
 	const w = 60
 	target := m.detailRow(targetRow{target: revier.TargetView{
@@ -74,7 +74,7 @@ func TestANarrowAgentRowKeepsTheName(t *testing.T) {
 // No row is wider than the pane, however long its title, so a click and the
 // hover land on the row drawn under the pointer.
 func TestAPaneRowFitsThePane(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	title := strings.Repeat("a very long window title ", 4)
 	long := newAgentItem(revier.AgentView{Target: "a-long-target-name", Panel: "1234", State: revier.AgentState{
 		Harness: "cursor-agent-with-a-long-name", Name: "a-long-session-name", Activity: title, Dir: "/p/" + title,
@@ -114,7 +114,7 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 		}
 	}
 
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = upper
 	it := newAgentItem(revier.AgentView{State: revier.AgentState{Harness: "claude", Activity: "— wide dash, then words"}}, revier.Project{Name: "alpha"}, revier.AgentDetail{}, time.Now())
 	matches := ranked(ungrouped)("then", []string{it.filterValue(true)})[0].MatchedIndexes
@@ -127,7 +127,7 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 // worktree, and the name, in the list and in the pane, which leaves the
 // project out.
 func TestTheMatchedLettersAreLitOnTheSecondLine(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = lipgloss.NewStyle().Transform(strings.ToUpper)
 	it := newAgentItem(revier.AgentView{State: revier.AgentState{
 		Harness: "claude", Name: "revier-c0", Activity: "one", Dir: "/p/revier/.claude/worktrees/delete-key"}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, time.Now())

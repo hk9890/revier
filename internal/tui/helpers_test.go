@@ -84,7 +84,7 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 // machine's own speed: one that moves time takes clocked's hand.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m, _ := clocked(tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors())
+	m, _ := clocked(tui.NewWithoutWaits(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors())
 	return survey(m)
 }
 
@@ -192,7 +192,7 @@ func barLine(m tui.Model) string { return lines(m)[0] }
 
 func query(m tui.Model) string { return lines(m)[2] }
 
-func ruleLine(m tui.Model) string { return lines(m)[3] }
+func ruleLine(m tui.Model) string { return lines(m)[chromeLines-1] }
 
 // footer is the last content line: the key legend, or the last failure.
 func footer(m tui.Model) string {
@@ -725,7 +725,7 @@ func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRunt
 		t.Fatal(err)
 	}
 	stateRoot := stateWith(t, nil)
-	m, _ := clocked(tui.New(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), ""))
+	m, _ := clocked(tui.NewWithoutWaits(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), ""))
 	next, _ := m.Update(m.Survey()())
 	return resize(next.(tui.Model), 140, 60), file, stateRoot
 }
@@ -830,6 +830,8 @@ func saved(t *testing.T, root, name string, minute int, projects ...session.Proj
 }
 
 // fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
+// The model has no close wait, and the shutdown lists the hosts once after
+// its steps, so a window that refuses to close is found still open.
 func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {
 	t.Helper()
 	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
@@ -852,13 +854,13 @@ func shutDownOnRecord(t *testing.T, root string) *state.ShutDown {
 // seenWorld is world(t, 2) on a surface over root that refreshes at once, so
 // a test runs what each survey answers with: the check for an end with no
 // shutdown, and the write of what it saw. project-01's workspace holds no
-// agent, so no mirror's tick holds a test up for its second.
+// agent, which the seen and record tests count on.
 func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
 	t.Helper()
 	rt, _, c, projects := world(t, 2)
 	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
 	rt.Add("session:project-01", "kitty")
-	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	m, _ := clocked(tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
 	return resize(m, 150, 30), rt
 }
 

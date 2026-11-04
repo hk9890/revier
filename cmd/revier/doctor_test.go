@@ -20,6 +20,12 @@ func TestAContinuationLineHasNoLabel(t *testing.T) {
 	}
 }
 
+// soundAt is the sound project at path, so two fixtures that are not meant to
+// name one directory do not draw the warning for it.
+func soundAt(path string) string {
+	return strings.Replace(sound, `path = "/tmp/sound"`, `path = "`+path+`"`, 1)
+}
+
 // doctorRoot writes a configuration root and points revier at it.
 func doctorRoot(t *testing.T, files map[string]string) {
 	t.Helper()
@@ -30,11 +36,13 @@ func doctorRoot(t *testing.T, files map[string]string) {
 // so a script can act on it. It is the one place the reasons are read in full,
 // now that no other command refuses to run over them (decisions.md D85).
 func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
+	// Each project has a directory of its own, so no warning is mixed in
+	// with the problems.
 	doctorRoot(t, map[string]string{
 		"sound.toml":    sound,
-		"nohome.toml":   strings.Replace(sound, "home = true\n", "", 1),
+		"nohome.toml":   strings.Replace(soundAt("/tmp/nohome"), "home = true\n", "", 1),
 		"bad.toml":      "path = \"/p\"\nthis is not toml\n",
-		"template.toml": strings.Replace(sound, `launch = ["sh"]`, `launch = ["sh", "{{.Path)}}"]`, 1),
+		"template.toml": strings.Replace(soundAt("/tmp/template"), `launch = ["sh"]`, `launch = ["sh", "{{.Path)}}"]`, 1),
 	})
 
 	var out strings.Builder
@@ -157,7 +165,7 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 func TestDoctorReportsStatusProblemsUnderTheirFile(t *testing.T) {
 	doctorRoot(t, map[string]string{
 		"sound.toml": sound,
-		"tables.toml": sound + `
+		"tables.toml": soundAt("/tmp/tables") + `
 [[status]]
 at = "rule-left"
 run = ["true"]
@@ -386,5 +394,101 @@ func TestDoctorColumnsARefusalWithNoColonByItsName(t *testing.T) {
 	}
 	if n := strings.Count(out.String(), "runs nothing"); n != 1 {
 		t.Errorf("the refusal is printed %d times, want once:\n%s", n, out.String())
+	}
+}
+
+// Two local project files whose paths resolve to one directory, through a
+// tilde, a trailing slash or a symbolic link, split one checkout's work across
+// two project names. Each file loads whole, so doctor warns and ends clean.
+func TestDoctorWarnsWhenLocalProjectsShareADirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, "dev", "app")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(home, "app")
+	if err := os.Symlink(dir, alias); err != nil {
+		t.Fatal(err)
+	}
+	lib := filepath.Join(home, "dev", "lib")
+	if err := os.Mkdir(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doctorRoot(t, map[string]string{
+		"app.toml":     soundAt(dir),
+		"tilde.toml":   soundAt("~/dev/app/"),
+		"alias.toml":   soundAt(alias),
+		"missing.toml": soundAt(home + "/gone/../missing"),
+		"again.toml":   soundAt(home + "/missing/"),
+		"other.toml":   soundAt(filepath.Join(home, "other")),
+		"lib.toml":     soundAt(lib),
+		// The kernel reads the .. after the link: this is dev/lib.
+		"up.toml": soundAt(alias + "/../lib"),
+	})
+	// doctor prints the directory with every link resolved, and the
+	// temporary directory can sit under one.
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projects := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v, want a clean end: a warning is not a problem", err)
+	}
+	want := "warning: 3 project files name one directory, " + real + "; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "alias.toml") + "\n" +
+		"  " + filepath.Join(projects, "app.toml") + "\n" +
+		"  " + filepath.Join(projects, "tilde.toml") + "\n"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("report should contain %q:\n%s", want, out.String())
+	}
+	missing := "warning: 2 project files name one directory, " + filepath.Join(home, "missing") + "; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "again.toml") + "\n" +
+		"  " + filepath.Join(projects, "missing.toml") + "\n"
+	if !strings.Contains(out.String(), missing) {
+		t.Errorf("paths that do not exist are compared cleaned; report should contain %q:\n%s", missing, out.String())
+	}
+	up := "warning: 2 project files name one directory, " + filepath.Join(filepath.Dir(real), "lib") + "; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "lib.toml") + "\n" +
+		"  " + filepath.Join(projects, "up.toml") + "\n"
+	if !strings.Contains(out.String(), up) {
+		t.Errorf("a .. after a link is read as the kernel reads it; report should contain %q:\n%s", up, out.String())
+	}
+	if !strings.Contains(out.String(), "8 projects, 0 files with problems") {
+		t.Errorf("every file should load whole:\n%s", out.String())
+	}
+	if n := strings.Count(out.String(), "warning:"); n != 3 {
+		t.Errorf("%d warnings, want 3: other.toml matches no other file:\n%s", n, out.String())
+	}
+}
+
+// Two links that name one project on one host are one remote checkout under
+// two names. A local project with the same path text as a link is normal: the
+// link's path is the one on its host.
+func TestDoctorWarnsWhenLinksShareARemoteProject(t *testing.T) {
+	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
+	doctorRoot(t, map[string]string{
+		"far.toml":       "path = \"/tmp/sound\"\n[remote]\nhost = \"farbox\"\nproject = \"far\"\n",
+		"alias.toml":     "[remote]\nhost = \"farbox\"\nproject = \"far\"\n",
+		"elsewhere.toml": "[remote]\nhost = \"nearbox\"\nproject = \"far\"\n",
+		"sound.toml":     sound,
+	})
+	projects := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects")
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v, want a clean end: a warning is not a problem", err)
+	}
+	want := "warning: 2 project files name one project, far on farbox; keep one file, delete the others:\n" +
+		"  " + filepath.Join(projects, "alias.toml") + "\n" +
+		"  " + filepath.Join(projects, "far.toml") + "\n"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("report should contain %q:\n%s", want, out.String())
+	}
+	if n := strings.Count(out.String(), "warning:"); n != 1 {
+		t.Errorf("%d warnings, want 1: only the two links to far on farbox:\n%s", n, out.String())
 	}
 }

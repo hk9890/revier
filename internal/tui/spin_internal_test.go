@@ -13,7 +13,7 @@ import (
 )
 
 func spinModel(status revier.Status) Model {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.views = []revier.ProjectView{{Agents: []revier.AgentView{{State: revier.AgentState{Status: status}}}}}
 	m.spinning = true
 	return m

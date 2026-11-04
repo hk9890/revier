@@ -124,7 +124,7 @@ func TestALaunchComingUpKeepsTheRefresh(t *testing.T) {
 	_, wm, c, projects := world(t, 2)
 	wm.Add("revier", core.PopupClass)
 	root := stateWith(t, nil)
-	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	st, _ := state.Load(root)
 	st.Launch = &state.Launch{Project: "project-00", At: time.Now()}
@@ -149,7 +149,7 @@ func TestALaunchComingUpKeepsTheRefresh(t *testing.T) {
 func TestALaunchPastItsWindowKeepsNoRefresh(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
-	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
 	m = survey(m)
 	st, _ := state.Load(root)
 	st.Launch = &state.Launch{Project: "not-here", At: time.Now().Add(-time.Hour)}
@@ -170,7 +170,7 @@ func TestTheRaiseDropsTheSlowTickThatWasOut(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
 	_, wm, c, projects := world(t, 3)
 	wm.Add("revier", core.PopupClass)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	m, _ = update(m, tea.BlurMsg{})
 	m, _ = update(m, m.Survey()())
@@ -260,7 +260,7 @@ func TestABlurReportWithAMouseReportBehindItIsTheBlur(t *testing.T) {
 func TestAGoFromThePopupHidesIt(t *testing.T) {
 	_, wm, c, projects := world(t, 2)
 	popup := wm.Add("revier", core.PopupClass)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor
@@ -296,7 +296,7 @@ func TestAGoFromThePopupHidesIt(t *testing.T) {
 func TestALateGoDoesNotHideAPopupRaisedSinceThePress(t *testing.T) {
 	_, wm, c, projects := world(t, 2)
 	wm.Add("revier", core.PopupClass)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down") // editor
@@ -317,7 +317,7 @@ func TestALateGoDoesNotHideAPopupPressedSinceThePress(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
 	c.Window.(*hosttest.Fake).Add("revier", core.PopupClass)
 	projects, _ := onDisk(t, []string{"alpha", "beta"}, nil, nil)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	m, slow := press(m, "enter")
 	if slow == nil {
@@ -344,7 +344,7 @@ func TestALateGoDoesNotHideAPopupScrolledOrRefocusedSinceThePress(t *testing.T) 
 		t.Run(name, func(t *testing.T) {
 			_, wm, c, projects := world(t, 2)
 			wm.Add("revier", core.PopupClass)
-			m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+			m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 			m = survey(m)
 			m, slow := press(m, "enter")
 			if slow == nil {
@@ -364,7 +364,7 @@ func TestALateGoDoesNotHideAPopupScrolledOrRefocusedSinceThePress(t *testing.T) 
 // quits instead.
 func TestAGoFromAPopupThatCannotHideStays(t *testing.T) {
 	_, _, c, projects := world(t, 2) // no popup window: the hide fails
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup().StaticCursors()
 	m = survey(m)
 	m, _ = press(m, "alt+t")
 	m, _ = press(m, "down")
