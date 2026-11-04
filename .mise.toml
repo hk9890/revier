@@ -85,13 +85,13 @@ CGO_ENABLED = "1"
 depends = ["test", "test:integration", "test:live"]
 
 [tasks."test:coverage:summary"]
-description = "Per-package coverage, least-covered first. Reports; gates nothing."
+description = "Coverage per package, then the 25 least-covered functions. Reports; gates nothing."
 run = """
 set -e
-go test -tags=integration -coverprofile=coverage.out -covermode=atomic ./... >/dev/null 2>&1 || true
+trap 'rm -f coverage.out' EXIT
+go test -tags=integration -coverprofile=coverage.out -covermode=atomic ./...
 go tool cover -func=coverage.out | awk '$1 != "total:" {print}' | sort -k3 -n | head -25
 go tool cover -func=coverage.out | grep total:
-rm -f coverage.out
 """
 [tasks."test:coverage:summary".env]
 CGO_ENABLED = "1"
