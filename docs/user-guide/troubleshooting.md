@@ -19,6 +19,11 @@ where it knows the fix.
 1 project, 1 file with problems
 ```
 
+It also warns when two project files name one checkout: local projects whose
+paths are one directory, or links to one project on one host. Both files
+load, and each shows its own agents, so keep one file and delete the others.
+A warning does not change the exit status.
+
 A mistake stops only the part it is in; see
 [configuration.md](configuration.md#mistakes). When every other command
 fails, `revier doctor` still prints the error, and `revier assist` still
