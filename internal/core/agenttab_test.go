@@ -155,8 +155,8 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
-	if _, err := c.AgentWorkspace(context.Background(), p, "home"); !errors.Is(err, core.ErrNotOpen) {
-		t.Errorf("closed workspace: err = %v, want ErrNotOpen", err)
+	if _, err := c.AgentWorkspace(context.Background(), p, "home"); !errors.Is(err, core.ErrNotOpen) || !strings.Contains(err.Error(), "revier go home -p revier opens it") {
+		t.Errorf("closed workspace: err = %v, want ErrNotOpen and the command that opens it", err)
 	}
 	rt.Add("notes:revier", "")
 	outcome, err := newAgent(t, c, p, "notes", core.Resume{})
