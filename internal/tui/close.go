@@ -133,6 +133,9 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	}
 	if len(msg.plan) == 0 {
 		m.err = fmt.Errorf("%s: nothing of it is open here", msg.label)
+		if p, ok := m.project(msg.project); ok && p.File != "" && msg.row == (core.CloseRow{}) {
+			m.err = fmt.Errorf("%w; alt+del deletes its project file", m.err)
+		}
 		return m, nil
 	}
 	m.shut = shutdown{
